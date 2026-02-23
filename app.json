@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "MyApp",
+    "slug": "myapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "myapp",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.myapp",
+      "buildNumber": "1",
+      "userInterfaceStyle": "light",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show nearby beauty service providers.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIUserInterfaceStyle": "Light"
+      }
+    },
+    "android": {
+      "package": "com.yourcompany.myapp",
+      "versionCode": 1,
+      "userInterfaceStyle": "light",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "PLACEHOLDER_FOR_ANDROID_GOOGLE_MAPS_KEY"
+        }
+      }
+    },
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "plugins": [
+      "expo-video",
+      "expo-font",
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "794155f1-c80c-4a8d-bb26-e1a26b239b3a"
+      }
+    }
+  }
+}
