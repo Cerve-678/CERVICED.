@@ -22,7 +22,7 @@ import { ThemedBackground } from '../components/ThemedBackground';
 import { BellIcon } from '../components/IconLibrary';
 import { NotificationService } from '../services/notificationService';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { StackActions } from '@react-navigation/native';
+
 import { HomeScreenProps } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
@@ -174,19 +174,24 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         openReschedule,
       });
 
-      // Close popup modal first
-      setShowMessagePopup(false);
-      setSelectedNotification(null);
-
       // BookingsScreen auto-detects the correct tab (past vs upcoming) from the booking data
       const bookingsParams = notification.bookingId
         ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
         : undefined;
 
+      // Keep modal visible for 3 seconds before navigating
       setTimeout(() => {
-        navigation.dispatch(StackActions.replace('Bookings', bookingsParams));
-        if (__DEV__) console.log('Navigation to Bookings executed successfully');
-      }, 300);
+        setShowMessagePopup(false);
+        setSelectedNotification(null);
+
+        setTimeout(() => {
+          navigation.goBack();
+          setTimeout(() => {
+            navigation.navigate('Bookings', bookingsParams);
+            if (__DEV__) console.log('Navigation to Bookings executed successfully');
+          }, 100);
+        }, 300);
+      }, 3000);
     } else if (notification.type === 'new_provider') {
       if (__DEV__) console.log('Navigating to ProviderProfile');
       if (__DEV__) console.log('Provider ID:', notification.providerId);
@@ -196,24 +201,32 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return;
       }
 
-      setShowMessagePopup(false);
-      setSelectedNotification(null);
-
+      // Keep modal visible for 3 seconds before navigating
       setTimeout(() => {
-        navigation.dispatch(
-          StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' })
-        );
-        if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
-      }, 300);
+        setShowMessagePopup(false);
+        setSelectedNotification(null);
+
+        setTimeout(() => {
+          navigation.goBack();
+          setTimeout(() => {
+            navigation.navigate('ProviderProfile', { providerId: notification.providerId!, source: 'notification' });
+            if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
+          }, 100);
+        }, 300);
+      }, 3000);
     } else if (notification.type === 'promotion') {
       if (__DEV__) console.log('Navigating to Home');
-      setShowMessagePopup(false);
-      setSelectedNotification(null);
 
+      // Keep modal visible for 3 seconds before navigating
       setTimeout(() => {
-        navigation.goBack();
-        if (__DEV__) console.log('Navigation to Home executed');
-      }, 300);
+        setShowMessagePopup(false);
+        setSelectedNotification(null);
+
+        setTimeout(() => {
+          navigation.goBack();
+          if (__DEV__) console.log('Navigation to Home executed');
+        }, 300);
+      }, 3000);
     }
   }, [navigation]);
 
