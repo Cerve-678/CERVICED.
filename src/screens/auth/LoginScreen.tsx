@@ -1,6 +1,8 @@
 // src/screens/auth/LoginScreen.tsx
 import React, { useState, useCallback } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,17 +14,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { validateEmail } from '../../utils/validation';
+import { supabase } from '../../lib/supabase';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const { login } = useAuth();
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -30,6 +31,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const glassStyle = (active?: boolean) => ({
     backgroundColor: active
@@ -67,31 +69,24 @@ export default function LoginScreen({ navigation }: Props) {
     return <Text style={[styles.errorText, { color: isDarkMode ? '#FF453A' : '#FF3B30' }]}>{errors[field]}</Text>;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const errs = validate();
     setErrors(errs);
     setTouched({ email: true, password: true });
     if (Object.keys(errs).length > 0) return;
 
-    login({
-      name: email.split('@')[0] ?? '',
-      email,
-      phone: '',
-      dob: '',
-      accountType: 'user',
-      loginMethod: 'email',
-    });
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setIsLoading(false);
+
+    if (error) {
+      Alert.alert('Login failed', error.message);
+    }
+    // On success, AuthContext.onAuthStateChange fires automatically and navigates the user in
   };
 
   const handleSocialLogin = (provider: string) => {
-    login({
-      name: `${provider} User`,
-      email: `${provider.toLowerCase()}@user.com`,
-      phone: '',
-      dob: '',
-      accountType: 'user',
-      loginMethod: provider.toLowerCase(),
-    });
+    Alert.alert('Coming soon', `${provider} login will be available soon.`);
   };
 
   return (
@@ -164,10 +159,15 @@ export default function LoginScreen({ navigation }: Props) {
               style={[styles.submitBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
               onPress={handleLogin}
               activeOpacity={0.8}
+              disabled={isLoading}
             >
-              <Text style={[styles.submitText, { color: isDarkMode ? '#fff' : theme.text }]}>
-                LOG IN
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color={isDarkMode ? '#fff' : theme.text} />
+              ) : (
+                <Text style={[styles.submitText, { color: isDarkMode ? '#fff' : theme.text }]}>
+                  LOG IN
+                </Text>
+              )}
             </TouchableOpacity>
 
             {/* Divider */}

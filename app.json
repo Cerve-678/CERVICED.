@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MyApp",
-    "slug": "myapp",
+    "name": "CERVICED",
+    "slug": "cerviced",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "scheme": "myapp",
+    "scheme": "cerviced",
     "assetBundlePatterns": [
       "**/*"
     ],

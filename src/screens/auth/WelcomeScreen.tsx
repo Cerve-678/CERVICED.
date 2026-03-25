@@ -1,6 +1,7 @@
 // src/screens/auth/WelcomeScreen.tsx
 import React from 'react';
 import {
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,7 +10,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useAuth } from '../../contexts/AuthContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -18,7 +18,6 @@ type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { theme, isDarkMode } = useTheme();
-  const { login } = useAuth();
   const insets = useSafeAreaInsets();
 
   const glassStyle = () => ({
@@ -32,14 +31,7 @@ export default function WelcomeScreen({ navigation }: Props) {
   });
 
   const handleSocialLogin = (provider: string) => {
-    login({
-      name: `${provider} User`,
-      email: `${provider.toLowerCase()}@user.com`,
-      phone: '',
-      dob: '',
-      accountType: 'user',
-      loginMethod: provider.toLowerCase(),
-    });
+    Alert.alert('Coming soon', `${provider} login will be available soon.`);
   };
 
   return (

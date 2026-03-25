@@ -18,6 +18,7 @@ export type RootStackParamList = {
   SignUpStep2: undefined;
   SignUpStep3: undefined;
   SignUpStep4: undefined;
+  EmailVerification: { email: string };
 };
 // Home Stack
 export type HomeStackParamList = {

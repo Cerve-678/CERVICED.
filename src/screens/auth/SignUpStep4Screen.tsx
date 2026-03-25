@@ -1,6 +1,8 @@
 // src/screens/auth/SignUpStep4Screen.tsx
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,10 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import { useAuth } from '../../contexts/AuthContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
-import { storage, STORAGE_KEYS } from '../../utils/storage';
+import { supabase } from '../../lib/supabase';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -25,8 +26,8 @@ const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETI
 export default function SignUpStep4Screen({ navigation }: Props) {
   const { theme, isDarkMode } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
-  const { login } = useAuth();
   const insets = useSafeAreaInsets();
+  const [isLoading, setIsLoading] = useState(false);
 
   const [selectedInterests, setSelectedInterests] = useState<string[]>(data.serviceInterests);
 
@@ -52,30 +53,58 @@ export default function SignUpStep4Screen({ navigation }: Props) {
 
   const handleComplete = async () => {
     updateData({ serviceInterests: selectedInterests });
+    setIsLoading(true);
 
-    const userData = isUser
-      ? {
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          dob: `${data.dobYear}-${data.dobMonth.padStart(2, '0')}-${data.dobDay.padStart(2, '0')}`,
-          accountType: 'user' as const,
-          loginMethod: 'email',
-        }
-      : {
-          name: data.name,
-          email: data.businessEmail,
-          phone: data.phone,
-          dob: '',
-          accountType: 'provider' as const,
-          loginMethod: 'email',
-          businessName: data.businessName,
-          businessEmail: data.businessEmail,
-        };
+    const isUser = data.accountType === 'user';
+    const signUpEmail = isUser ? data.email : data.businessEmail;
+    const dob = isUser
+      ? `${data.dobYear}-${data.dobMonth.padStart(2, '0')}-${data.dobDay.padStart(2, '0')}`
+      : '';
 
-    await storage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, true);
-    login(userData);
+    // 1. Create auth account — Supabase sends verification email automatically
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      email: signUpEmail.trim(),
+      password: data.password,
+      options: {
+        data: {
+          name: data.name,
+          phone: data.phone,
+          role: data.accountType,
+          dob,
+          business_name: data.businessName || null,
+          business_email: data.businessEmail || null,
+          service_interests: selectedInterests,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setIsLoading(false);
+      Alert.alert('Sign up failed', signUpError.message);
+      return;
+    }
+
+    // 2. Insert public profile row
+    if (authData.user) {
+      await supabase.from('users').upsert({
+        id: authData.user.id,
+        email: signUpEmail.trim(),
+        name: data.name,
+        phone: data.phone,
+        dob: dob || null,
+        role: data.accountType,
+        login_method: 'email',
+        service_interests: selectedInterests,
+        business_name: data.businessName || null,
+        business_email: data.businessEmail || null,
+      }, { onConflict: 'id' });
+    }
+
+    setIsLoading(false);
     resetData();
+
+    // 3. Navigate to email verification screen
+    navigation.navigate('EmailVerification', { email: signUpEmail.trim() });
   };
 
   return (
@@ -162,13 +191,18 @@ export default function SignUpStep4Screen({ navigation }: Props) {
             style={[styles.completeBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
             onPress={handleComplete}
             activeOpacity={0.8}
+            disabled={isLoading}
           >
-            <Text style={[styles.completeBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-              GET STARTED
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator color={isDarkMode ? '#fff' : theme.text} />
+            ) : (
+              <Text style={[styles.completeBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
+                GET STARTED
+              </Text>
+            )}
           </TouchableOpacity>
 
-          {isUser && (
+          {isUser && !isLoading && (
             <TouchableOpacity
               style={styles.skipBtn}
               onPress={handleComplete}
