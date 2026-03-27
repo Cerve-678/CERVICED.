@@ -51,6 +51,25 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     );
   };
 
+  const getFriendlyError = (message: string): string => {
+    const msg = message.toLowerCase();
+    if (msg.includes('user already registered') || msg.includes('already been registered') || msg.includes('already exists'))
+      return 'An account with this email already exists. Try logging in instead.';
+    if (msg.includes('invalid email') || msg.includes('unable to validate email'))
+      return 'That email address doesn\'t look right. Please check it and try again.';
+    if (msg.includes('password') && msg.includes('weak'))
+      return 'Your password isn\'t strong enough. Try mixing letters, numbers, and symbols.';
+    if (msg.includes('password') && (msg.includes('short') || msg.includes('characters')))
+      return 'Your password needs to be at least 8 characters long.';
+    if (msg.includes('rate limit') || msg.includes('too many'))
+      return 'Too many attempts. Please wait a moment and try again.';
+    if (msg.includes('network') || msg.includes('fetch') || msg.includes('connect'))
+      return 'No internet connection. Please check your network and try again.';
+    if (msg.includes('signup') && msg.includes('disabled'))
+      return 'New sign ups are temporarily unavailable. Please try again later.';
+    return 'Something went wrong. Please try again.';
+  };
+
   const handleComplete = async () => {
     updateData({ serviceInterests: selectedInterests });
     setIsLoading(true);
@@ -61,50 +80,44 @@ export default function SignUpStep4Screen({ navigation }: Props) {
       ? `${data.dobYear}-${data.dobMonth.padStart(2, '0')}-${data.dobDay.padStart(2, '0')}`
       : '';
 
-    // 1. Create auth account — Supabase sends verification email automatically
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: signUpEmail.trim(),
-      password: data.password,
-      options: {
-        data: {
-          name: data.name,
-          phone: data.phone,
-          role: data.accountType,
-          dob,
-          business_name: data.businessName || null,
-          business_email: data.businessEmail || null,
-          service_interests: selectedInterests,
-        },
-      },
-    });
-
-    if (signUpError) {
-      setIsLoading(false);
-      Alert.alert('Sign up failed', signUpError.message);
-      return;
-    }
-
-    // 2. Insert public profile row
-    if (authData.user) {
-      await supabase.from('users').upsert({
-        id: authData.user.id,
+    try {
+      // 1. Create auth account — Supabase sends verification email automatically
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: signUpEmail.trim(),
-        name: data.name,
-        phone: data.phone,
-        dob: dob || null,
-        role: data.accountType,
-        login_method: 'email',
-        service_interests: selectedInterests,
-        business_name: data.businessName || null,
-        business_email: data.businessEmail || null,
-      }, { onConflict: 'id' });
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
+            phone: data.phone,
+            role: data.accountType,
+            dob,
+            business_name: data.businessName || null,
+            business_email: data.businessEmail || null,
+            service_interests: selectedInterests,
+          },
+        },
+      });
+
+      if (signUpError) {
+        Alert.alert('Oops!', getFriendlyError(signUpError.message));
+        return;
+      }
+
+      // Supabase returns no error but empty identities for already-registered emails
+      if ((authData?.user?.identities?.length ?? 0) === 0) {
+        Alert.alert('Oops!', 'An account with this email already exists. Try logging in instead.');
+        return;
+      }
+
+      resetData();
+
+      // 2. Navigate to email verification screen
+      navigation.navigate('EmailVerification', { email: signUpEmail.trim() });
+    } catch (e: any) {
+      Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
-    resetData();
-
-    // 3. Navigate to email verification screen
-    navigation.navigate('EmailVerification', { email: signUpEmail.trim() });
   };
 
   return (

@@ -25,7 +25,8 @@ import { useCart } from '../contexts/CartContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import TabIcon from '../components/TabIcon';
-import { sampleProviders } from '../services/ProviderDataService';
+import { getProviders } from '../services/databaseService';
+import type { DbProvider } from '../types/database';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 
 // Types
@@ -206,6 +207,40 @@ export default function SearchScreen({ navigation, route }: Props) {
   const [selectedSort, setSelectedSort] = useState<string>('Available Slots');
   const [selectedLocation, setSelectedLocation] = useState<string>('All Locations');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [providerData, setProviderData] = useState<ProviderCardData[]>([]);
+
+  function mapDbToCardData(p: DbProvider, index: number): ProviderCardData {
+    const priceRanges = ['£25-£50', '£40-£75', '£50-£100', '£60-£120', '£75-£150'];
+    return {
+      id: p.slug,
+      name: p.display_name,
+      service: p.service_category,
+      logo: p.logo_url ? { uri: p.logo_url } : null,
+      location: p.location_text ?? 'London',
+      totalSlots: 0,
+      bookedSlots: 0,
+      isAvailable: true,
+      distance: '',
+      rating: p.rating,
+      reviewCount: p.review_count,
+      estimatedWait: '10-15 min',
+      priceRange: priceRanges[index % priceRanges.length] || '£50-£100',
+      specialties: getSpecialtiesForService(p.service_category),
+      availability: 'Slots Available',
+    };
+  }
+
+  function getSpecialtiesForService(service: string): string[] {
+    const specialtyMap: Record<string, string[]> = {
+      'HAIR': ['Braids', 'Weaves', 'Wigs'],
+      'NAILS': ['Acrylics', 'Gel', 'Nail Art'],
+      'MUA': ['Bridal', 'Editorial', 'Glam'],
+      'LASHES': ['Classic', 'Volume', 'Hybrid'],
+      'BROWS': ['Microblading', 'Lamination', 'Tinting'],
+      'AESTHETICS': ['Facials', 'Peels', 'Injectables'],
+    };
+    return specialtyMap[service] ?? ['Beauty', 'Style'];
+  }
 
   // Memoize theme values to prevent re-renders
   const themeColors = useMemo(() => ({
@@ -244,59 +279,12 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   const { addToCart } = useCart();
 
-  // Calculate availability based on slots
-  const calculateAvailability = (totalSlots: number, bookedSlots: number): 'Slots Available' | 'Slots Limited' | 'No Slots' => {
-    const availableSlots = totalSlots - bookedSlots;
-    const percentageAvailable = (availableSlots / totalSlots) * 100;
-
-    if (percentageAvailable >= 50) {
-      return 'Slots Available';
-    } else if (percentageAvailable > 0) {
-      return 'Slots Limited';
-    } else {
-      return 'No Slots';
-    }
-  };
-
-  // Mock provider data with availability status
-  const providerData = useMemo((): ProviderCardData[] => {
-    const priceRanges = ['£25-£50', '£40-£75', '£50-£100', '£60-£120', '£75-£150'];
-    return sampleProviders.map((provider, index) => {
-      const totalSlots = provider.totalSlots || 20;
-      const bookedSlots = provider.bookedSlots || 0;
-      const availability = calculateAvailability(totalSlots, bookedSlots);
-
-      return {
-        id: provider.id,
-        name: provider.name,
-        service: provider.service,
-        logo: provider.logo,
-        location: provider.location || 'Central London',
-        totalSlots,
-        bookedSlots,
-        isAvailable: availability !== 'No Slots',
-        distance: `${(Math.random() * 5 + 0.5).toFixed(1)} mi`,
-        rating: (Math.random() * 0.5 + 4.5).toFixed(1) as unknown as number,
-        reviewCount: Math.floor(Math.random() * 500 + 50),
-        estimatedWait: availability === 'Slots Available' ? '10-15 min' : availability === 'Slots Limited' ? '20-30 min' : '45+ min',
-        priceRange: priceRanges[index % priceRanges.length] || '£50-£100',
-        specialties: getSpecialtiesForService(provider.service),
-        availability,
-      } as ProviderCardData;
-    });
+  // Fetch providers from Supabase on mount
+  React.useEffect(() => {
+    getProviders().then(data => {
+      setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i)));
+    }).catch(() => setProviderData([]));
   }, []);
-
-  function getSpecialtiesForService(service: string): string[] {
-    const specialtyMap: Record<string, string[]> = {
-      'HAIR': ['Braids', 'Weaves', 'Wigs'],
-      'NAILS': ['Acrylics', 'Gel', 'Nail Art'],
-      'MUA': ['Bridal', 'Editorial', 'Glam'],
-      'LASHES': ['Classic', 'Volume', 'Hybrid'],
-      'BROWS': ['Microblading', 'Lamination', 'Tinting'],
-      'AESTHETICS': ['Facials', 'Peels', 'Injectables'],
-    };
-    return specialtyMap[service] || ['Beauty', 'Style'];
-  }
 
   // Get unique locations for filter
   const uniqueLocations = useMemo(() => {
@@ -352,9 +340,9 @@ export default function SearchScreen({ navigation, route }: Props) {
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    getProviders().then(data => {
+      setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i)));
+    }).catch(() => setProviderData([])).finally(() => setRefreshing(false));
   }, []);
 
   const handleProviderPress = useCallback((provider: ProviderCardData) => {

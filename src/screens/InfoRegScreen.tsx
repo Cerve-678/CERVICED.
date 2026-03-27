@@ -33,6 +33,12 @@ import { BellIcon } from '../components/IconLibrary';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 
+// Auth
+import { useAuth } from '../contexts/AuthContext';
+
+// Supabase registration service
+import { saveProviderToSupabase } from '../services/providerRegistrationService';
+
 // Navigation types
 import { ProfileStackParamList } from '../navigation/types';
 
@@ -305,7 +311,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -1121,13 +1127,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     loadSavedData();
   }, []);
 
+  const { user } = useAuth();
+
   // Modal states
   const [showGradientPicker, setShowGradientPicker] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAccentColorPicker, setShowAccentColorPicker] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(true);
+  const [showTransferModal, setShowTransferModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [currentCategory, setCurrentCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string>('');
@@ -1143,14 +1152,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setProviderData({ ...providerData, logo: result.assets[0].uri });
     }
   };
 
@@ -1289,20 +1297,26 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Services', 'Please add at least one service category.');
       return;
     }
+    if (!user?.id) {
+      Alert.alert('Not Logged In', 'Please log in to save your profile.');
+      return;
+    }
 
-    // Save to AsyncStorage for persistence
+    setIsSubmitting(true);
     try {
-      await AsyncStorage.setItem('@provider_reg_data', JSON.stringify(providerData));
+      await saveProviderToSupabase(user.id, providerData);
       Alert.alert(
         'Profile Saved!',
-        'Your provider profile has been updated successfully.',
-        [{ text: 'OK' }]
+        'Your provider profile has been saved successfully.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
-    } catch (e) {
-      console.error('Error saving provider data:', e);
-      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    } catch (e: any) {
+      console.error('Error saving provider profile:', e);
+      Alert.alert('Error', e?.message || 'Failed to save profile. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [providerData]);
+  }, [providerData, user]);
 
   // Get adaptive accent color - now uses user-selected accent color
   const adaptiveAccentColor = useMemo(() => {
@@ -1824,10 +1838,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
             {/* Submit Button */}
             <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }]}
+              style={[styles.submitButton, { backgroundColor: adaptiveAccentColor, opacity: isSubmitting ? 0.6 : 1 }]}
               onPress={handleSubmit}
+              disabled={isSubmitting}
             >
-              <Text style={styles.submitButtonText}>Submit for Review</Text>
+              <Text style={styles.submitButtonText}>
+                {isSubmitting ? 'Saving...' : 'Submit for Review'}
+              </Text>
             </TouchableOpacity>
 
             {/* Preview Button */}

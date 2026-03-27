@@ -15,6 +15,9 @@ import SignUpStep2Screen from '../screens/auth/SignUpStep2Screen';
 import SignUpStep3Screen from '../screens/auth/SignUpStep3Screen';
 import SignUpStep4Screen from '../screens/auth/SignUpStep4Screen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
+import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -59,6 +62,9 @@ export default function RootNavigation() {
             <Stack.Screen name="SignUpStep3" component={SignUpStep3Screen} />
             <Stack.Screen name="SignUpStep4" component={SignUpStep4Screen} />
             <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPasswordOTP" component={ResetPasswordOTPScreen} />
+            <Stack.Screen name="NewPassword" component={NewPasswordScreen} />
           </>
         )}
       </Stack.Navigator>

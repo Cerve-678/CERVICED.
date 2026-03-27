@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useBooking, ConfirmedBooking, BookingStatus, PaymentStatus } from '../contexts/BookingContext';
 import AppBackground from '../components/AppBackground';
 import { ProviderHomeScreenProps } from '../navigation/types';
+import { supabase } from '../lib/supabase';
+import { getProviderBookings, getMyProviderProfile } from '../services/databaseService';
+import type { BookingWithAddOns } from '../types/database';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -112,228 +114,7 @@ function getBookingRef(id: string): string {
   return id.replace(/-/g, '').substring(0, 10).toUpperCase();
 }
 
-// ====================== MOCK DATA ======================
 
-function generateMockBookings(providerName: string): ConfirmedBooking[] {
-  const today = new Date();
-  const todayStr = formatDateString(today);
-
-  // Tomorrow
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const tomorrowStr = formatDateString(tomorrow);
-
-  // Day after tomorrow
-  const dayAfter = new Date(today);
-  dayAfter.setDate(today.getDate() + 2);
-  const dayAfterStr = formatDateString(dayAfter);
-
-  // 3 days from now
-  const threeDays = new Date(today);
-  threeDays.setDate(today.getDate() + 3);
-  const threeDaysStr = formatDateString(threeDays);
-
-  const mockBase = {
-    cartItemId: 'mock_cart_1',
-    providerName,
-    providerImage: null,
-    providerService: 'Nails',
-    serviceDescription: '',
-    quantity: 1,
-    address: '23 High Street, London, E1 6AN',
-    coordinates: { latitude: 51.5074, longitude: -0.1278 },
-    phone: '07700 900000',
-    serviceCharge: 2.99,
-    paymentStatus: PaymentStatus.DEPOSIT_PAID,
-    paymentMethod: 'Card',
-    paymentConfirmedAt: new Date(today.getTime() - 86400000 * 3).toISOString(),
-    updatedAt: new Date().toISOString(),
-    confirmedAt: new Date(today.getTime() - 86400000 * 3).toISOString(),
-  };
-
-  return [
-    // ---- TODAY: 3 bookings ----
-    {
-      ...mockBase,
-      id: 'mock-bk-001-today-a',
-      serviceName: 'Full Set Acrylic French Tip Stilettos',
-      price: 55,
-      duration: '2hrs',
-      bookingDate: todayStr,
-      bookingTime: '10:00 AM',
-      endTime: '12:00 PM',
-      status: BookingStatus.COMPLETED,
-      customerName: 'Lisa Walkers',
-      customerEmail: 'lisa.w@email.com',
-      customerPhone: '07700 900001',
-      paymentType: 'deposit' as const,
-      amountPaid: 20,
-      depositAmount: 20,
-      remainingBalance: 50,
-      notes: 'I want a quiet appointment',
-      addOns: [{ id: 1, name: 'Extra long', price: 15 }],
-      createdAt: new Date(today.getTime() - 86400000 * 5).toISOString(),
-      bookingInstructions: 'Client is required to come without any full set nail extension',
-    },
-    {
-      ...mockBase,
-      id: 'mock-bk-002-today-b',
-      serviceName: 'Gel Manicure',
-      price: 35,
-      duration: '1hr',
-      bookingDate: todayStr,
-      bookingTime: '1:30 PM',
-      endTime: '2:30 PM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Sarah Mitchell',
-      customerEmail: 'sarah.m@email.com',
-      customerPhone: '07700 900002',
-      paymentType: 'full' as const,
-      amountPaid: 37.99,
-      depositAmount: 0,
-      remainingBalance: 0,
-      paymentStatus: PaymentStatus.PAID_IN_FULL,
-      notes: 'Nude pink please!',
-      addOns: [],
-      createdAt: new Date(today.getTime() - 86400000 * 2).toISOString(),
-      bookingInstructions: 'Please arrive 10 minutes early.',
-    },
-    {
-      ...mockBase,
-      id: 'mock-bk-003-today-c',
-      serviceName: 'Full Set Acrylic French Tip Stilettos',
-      price: 55,
-      duration: '2hrs',
-      bookingDate: todayStr,
-      bookingTime: '3:30 PM',
-      endTime: '5:30 PM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Kennith Walkers',
-      customerEmail: 'kennith.w@email.com',
-      customerPhone: '07700 900003',
-      paymentType: 'deposit' as const,
-      amountPaid: 20,
-      depositAmount: 20,
-      remainingBalance: 50,
-      notes: 'I want a quiet appointment',
-      addOns: [{ id: 1, name: 'Extra long', price: 15 }],
-      createdAt: new Date(today.getTime() - 86400000 * 4).toISOString(),
-      bookingInstructions: 'Please arrive 10 minutes early. Bring your booking confirmation.',
-    },
-
-    // ---- TOMORROW: 2 bookings ----
-    {
-      ...mockBase,
-      id: 'mock-bk-004-tmrw-a',
-      serviceName: 'Infill Acrylic',
-      price: 40,
-      duration: '1hr 30min',
-      bookingDate: tomorrowStr,
-      bookingTime: '11:00 AM',
-      endTime: '12:30 PM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Amara Johnson',
-      customerEmail: 'amara.j@email.com',
-      customerPhone: '07700 900004',
-      paymentType: 'deposit' as const,
-      amountPaid: 15,
-      depositAmount: 15,
-      remainingBalance: 27.99,
-      notes: 'Same shape as last time',
-      addOns: [{ id: 2, name: 'Nail art (2 nails)', price: 5 }],
-      createdAt: new Date(today.getTime() - 86400000 * 1).toISOString(),
-      bookingInstructions: 'Please arrive 5 minutes early.',
-    },
-    {
-      ...mockBase,
-      id: 'mock-bk-005-tmrw-b',
-      serviceName: 'Gel Pedicure',
-      price: 45,
-      duration: '1hr 15min',
-      bookingDate: tomorrowStr,
-      bookingTime: '2:00 PM',
-      endTime: '3:15 PM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Priya Patel',
-      customerEmail: 'priya.p@email.com',
-      customerPhone: '07700 900005',
-      paymentType: 'full' as const,
-      amountPaid: 47.99,
-      depositAmount: 0,
-      remainingBalance: 0,
-      paymentStatus: PaymentStatus.PAID_IN_FULL,
-      addOns: [],
-      createdAt: new Date(today.getTime() - 86400000 * 1).toISOString(),
-    },
-
-    // ---- DAY AFTER TOMORROW: 1 booking ----
-    {
-      ...mockBase,
-      id: 'mock-bk-006-day3-a',
-      serviceName: 'Builder Gel Overlay',
-      price: 50,
-      duration: '1hr 45min',
-      bookingDate: dayAfterStr,
-      bookingTime: '10:30 AM',
-      endTime: '12:15 PM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Chloe Williams',
-      customerEmail: 'chloe.w@email.com',
-      customerPhone: '07700 900006',
-      paymentType: 'deposit' as const,
-      amountPaid: 18,
-      depositAmount: 18,
-      remainingBalance: 34.99,
-      notes: 'Natural look, short length',
-      addOns: [{ id: 3, name: 'Cuticle treatment', price: 5 }],
-      createdAt: new Date(today.getTime() - 86400000 * 1).toISOString(),
-    },
-
-    // ---- 3 DAYS OUT: 2 bookings ----
-    {
-      ...mockBase,
-      id: 'mock-bk-007-day4-a',
-      serviceName: 'Acrylic Removal + Gel Manicure',
-      price: 50,
-      duration: '2hrs',
-      bookingDate: threeDaysStr,
-      bookingTime: '9:00 AM',
-      endTime: '11:00 AM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Jade Thompson',
-      customerEmail: 'jade.t@email.com',
-      customerPhone: '07700 900007',
-      paymentType: 'deposit' as const,
-      amountPaid: 15,
-      depositAmount: 15,
-      remainingBalance: 37.99,
-      addOns: [],
-      createdAt: new Date().toISOString(),
-    },
-    {
-      ...mockBase,
-      id: 'mock-bk-008-day4-b',
-      serviceName: 'Full Set Gel X',
-      price: 60,
-      duration: '2hrs',
-      bookingDate: threeDaysStr,
-      bookingTime: '12:00 PM',
-      endTime: '2:00 PM',
-      status: BookingStatus.UPCOMING,
-      customerName: 'Destiny Brown',
-      customerEmail: 'destiny.b@email.com',
-      customerPhone: '07700 900008',
-      paymentType: 'deposit' as const,
-      amountPaid: 22,
-      depositAmount: 22,
-      remainingBalance: 43,
-      notes: 'Chrome finish on all nails',
-      addOns: [{ id: 4, name: 'Chrome powder', price: 10 }, { id: 5, name: 'Extra long', price: 15 }],
-      createdAt: new Date().toISOString(),
-      bookingInstructions: 'Please bring reference photos if possible.',
-    },
-  ] as ConfirmedBooking[];
-}
 
 function generateDayTabs(): Array<{ label: string; dateString: string }> {
   const tabs: Array<{ label: string; dateString: string }> = [];
@@ -344,7 +125,7 @@ function generateDayTabs(): Array<{ label: string; dateString: string }> {
     let label: string;
     if (i === 0) label = 'Today';
     else if (i === 1) label = 'Tomorrow';
-    else label = DAY_NAMES_FULL[date.getDay()];
+    else label = DAY_NAMES_FULL[date.getDay()] ?? '';
     tabs.push({ label, dateString: formatDateString(date) });
   }
   return tabs;
@@ -554,12 +335,65 @@ function BookingCard({
   );
 }
 
+// ====================== SUPABASE MAPPER ======================
+
+function mapDbToProviderBooking(db: BookingWithAddOns): ConfirmedBooking {
+  const toDisplayTime = (t: string): string => {
+    const parts = t.split(':');
+    let h = parseInt(parts[0] ?? '0');
+    const m = parseInt(parts[1] ?? '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${m.toString().padStart(2, '0')} ${period}`;
+  };
+  const mapStatus = (s: string): BookingStatus => {
+    switch (s) {
+      case 'in_progress': return BookingStatus.IN_PROGRESS;
+      case 'completed':   return BookingStatus.COMPLETED;
+      case 'cancelled':   return BookingStatus.CANCELLED;
+      case 'no_show':     return BookingStatus.NO_SHOW;
+      default:            return BookingStatus.UPCOMING;
+    }
+  };
+  const startDisplay = toDisplayTime(db.booking_time);
+  return {
+    id: db.id,
+    cartItemId: db.id,
+    providerName: db.provider_name_snapshot,
+    providerImage: db.provider_logo_snapshot ?? null,
+    providerService: '',
+    serviceName: db.service_name_snapshot,
+    serviceDescription: '',
+    price: db.base_price,
+    duration: '',
+    quantity: 1,
+    bookingDate: db.booking_date,
+    bookingTime: startDisplay,
+    endTime: startDisplay,
+    status: mapStatus(db.status),
+    address: db.provider_address_snapshot ?? '',
+    coordinates: { latitude: 0, longitude: 0 },
+    phone: db.provider_phone_snapshot ?? '',
+    customerName: db.customer_name ?? '',
+    customerEmail: db.customer_email ?? '',
+    customerPhone: db.customer_phone ?? '',
+    paymentType: (db.payment_type ?? 'full') as 'full' | 'deposit',
+    amountPaid: db.amount_paid,
+    depositAmount: db.deposit_amount ?? 0,
+    remainingBalance: db.remaining_balance ?? 0,
+    serviceCharge: db.service_charge ?? 2.99,
+    paymentStatus: PaymentStatus.PAID_IN_FULL,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
+  };
+}
+
 // ====================== MAIN COMPONENT ======================
 
 export default function ProviderHomeScreen({ navigation }: Props) {
   const { theme, isDarkMode } = useTheme();
-  const { user } = useAuth();
-  const { bookings } = useBooking();
+  useBooking(); // keep context subscribed for status updates
 
   const today = new Date();
   const todayStr = formatDateString(today);
@@ -580,22 +414,45 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
   const dayTabsScrollRef = useRef<ScrollView>(null);
 
-  // Filter bookings for this provider (falls back to mock data for demo)
-  const providerBookings = useMemo(() => {
-    const providerName = user?.businessName || user?.name || '';
-    if (!providerName) {
-      // No provider name — use mock data so the screen isn't empty
-      return bookings.length > 0 ? bookings : generateMockBookings('Demo Provider');
-    }
-    const real = bookings.filter(
-      (b) => b.providerName.toLowerCase() === providerName.toLowerCase()
-    );
-    // If the provider has no real bookings yet, show mock data
-    if (real.length === 0) {
-      return generateMockBookings(providerName);
-    }
-    return real;
-  }, [bookings, user]);
+  // Live provider bookings from Supabase
+  const [liveProviderBookings, setLiveProviderBookings] = useState<ConfirmedBooking[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const loadBookings = async () => {
+      try {
+        const rows = await getProviderBookings();
+        if (!cancelled && rows.length > 0) {
+          setLiveProviderBookings(rows.map(mapDbToProviderBooking));
+        }
+      } catch (_) { /* silent — falls back to mock */ }
+    };
+
+    loadBookings();
+
+    // Realtime — re-fetch when any booking for this provider changes
+    getMyProviderProfile().then(profile => {
+      if (!profile || cancelled) return;
+      channel = supabase
+        .channel('provider-home-bookings')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bookings', filter: `provider_id=eq.${profile.id}` },
+          () => { loadBookings(); }
+        )
+        .subscribe();
+    }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Bookings sourced exclusively from Supabase
+  const providerBookings = useMemo(() => liveProviderBookings, [liveProviderBookings]);
 
   // Booking counts by date (heat map)
   const bookingCountsByDate = useMemo(() => {
@@ -661,7 +518,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
   const handleBookingPress = useCallback(
     (booking: ConfirmedBooking) => {
-      navigation.navigate('BookingDetail', { bookingId: booking.id });
+      navigation.navigate('BookingDetail', { bookingId: booking.id, booking });
     },
     [navigation]
   );

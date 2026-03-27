@@ -9,13 +9,17 @@ import {
   Dimensions,
   FlatList,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { loadProviderFromSupabase } from '../services/providerRegistrationService';
 import AppBackground from '../components/AppBackground';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -56,7 +60,9 @@ interface Props {
 
 export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { theme, isDarkMode } = useTheme();
+  const { user } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showFullAbout, setShowFullAbout] = useState(false);
 
@@ -64,24 +70,33 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       const load = async () => {
+        setIsLoading(true);
         try {
-          const stored = await AsyncStorage.getItem('@provider_reg_data');
-          if (stored) {
-            const parsed: ProviderRegistrationData = JSON.parse(stored);
-            setProviderData(parsed);
+          let parsed: ProviderRegistrationData | null = null;
+
+          if (user?.id) {
+            parsed = await loadProviderFromSupabase(user.id);
+          } else {
+            // Fallback: read from AsyncStorage cache
+            const stored = await AsyncStorage.getItem('@provider_reg_data');
+            if (stored) parsed = JSON.parse(stored) as ProviderRegistrationData;
+          }
+
+          setProviderData(parsed);
+          if (parsed) {
             const cats = Object.keys(parsed.categories);
             if (cats.length > 0 && !cats.includes(selectedCategory)) {
               setSelectedCategory(cats[0]);
             }
-          } else {
-            setProviderData(null);
           }
         } catch (e) {
           console.error('Error loading provider data:', e);
+        } finally {
+          setIsLoading(false);
         }
       };
       load();
-    }, [])
+    }, [user?.id])
   );
 
   const categoryNames = useMemo(() => {
@@ -110,13 +125,26 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('EditProfile');
   }, [navigation]);
 
+  // Loading state — waiting for Supabase
+  if (isLoading) {
+    return (
+      <AppBackground>
+        <SafeAreaView style={styles.container} edges={['top']}>
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color="#a342c3" />
+          </View>
+        </SafeAreaView>
+      </AppBackground>
+    );
+  }
+
   // Empty state — no profile submitted yet
   if (!providerData) {
     return (
       <AppBackground>
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyIcon, { color: theme.text + '30' }]}>{'🏪'}</Text>
+            <Ionicons name="storefront-outline" size={72} color={theme.text + '30'} style={{ marginBottom: 16 }} />
             <Text style={[styles.emptyTitle, { color: theme.text }]}>
               Set Up Your Profile
             </Text>
@@ -390,10 +418,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
-  },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 20,
   },
   emptyTitle: {
     fontSize: 22,

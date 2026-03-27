@@ -4,6 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
+import { supabase } from '../lib/supabase';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus } from '../services/databaseService';
+import type { BookingWithAddOns } from '../types/database';
 
 export enum BookingStatus {
   UPCOMING = 'upcoming',
@@ -361,6 +364,74 @@ const getFullProviderName = (shortName: string): string => {
   return nameMap[shortName] || shortName;
 };
 
+// Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display
+const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
+  const toDisplayTime = (t: string): string => {
+    const parts = t.split(':');
+    let h = parseInt(parts[0] ?? '0');
+    const m = parseInt(parts[1] ?? '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${m.toString().padStart(2, '0')} ${period}`;
+  };
+  const mapSt = (s: string): BookingStatus => {
+    switch (s) {
+      case 'completed': return BookingStatus.COMPLETED;
+      case 'cancelled': return BookingStatus.CANCELLED;
+      case 'in_progress': return BookingStatus.IN_PROGRESS;
+      case 'no_show': return BookingStatus.NO_SHOW;
+      default: return BookingStatus.UPCOMING;
+    }
+  };
+  const mapPay = (s: string): PaymentStatus => {
+    switch (s) {
+      case 'fully_paid': return PaymentStatus.PAID_IN_FULL;
+      case 'deposit_paid': return PaymentStatus.DEPOSIT_PAID;
+      case 'refunded': return PaymentStatus.REFUNDED;
+      case 'failed': return PaymentStatus.FAILED;
+      default: return PaymentStatus.PENDING;
+    }
+  };
+  const startTime = toDisplayTime(db.booking_time);
+  return {
+    id: db.id,
+    cartItemId: db.id,
+    providerName: db.provider_name_snapshot,
+    providerImage: db.provider_logo_snapshot ?? null,
+    providerService: '',
+    serviceName: db.service_name_snapshot,
+    serviceDescription: '',
+    price: db.base_price,
+    duration: '',
+    quantity: 1,
+    bookingDate: db.booking_date,
+    bookingTime: startTime,
+    endTime: startTime,
+    status: mapSt(db.status),
+    address: db.provider_address_snapshot ?? '',
+    coordinates: { latitude: 0, longitude: 0 },
+    phone: db.provider_phone_snapshot ?? '',
+    customerName: db.customer_name ?? '',
+    customerEmail: db.customer_email ?? '',
+    customerPhone: db.customer_phone ?? '',
+    notes: db.notes ?? undefined,
+    addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({
+      id: idx,
+      name: a.name_snapshot,
+      price: a.price_snapshot,
+    })),
+    paymentType: db.payment_type as 'full' | 'deposit',
+    amountPaid: db.amount_paid,
+    depositAmount: db.deposit_amount ?? 0,
+    remainingBalance: db.remaining_balance ?? 0,
+    serviceCharge: db.service_charge ?? 2.99,
+    paymentStatus: mapPay(db.payment_status),
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
+  };
+};
+
 // ==================== PROVIDER COMPONENT ====================
 
 export const BookingProvider = ({ children }: { children: ReactNode }) => {
@@ -444,8 +515,25 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings));
         
       } else {
-        if (__DEV__) console.log('No bookings in storage');
-        setBookings([]);
+        if (__DEV__) console.log('No bookings in storage — trying Supabase fallback...');
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const dbBookings = await getMyBookings();
+            if (dbBookings.length > 0) {
+              const mapped = dbBookings.map(mapDbBookingToConfirmed);
+              setBookings(mapped);
+              await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
+              if (__DEV__) console.log('Loaded', mapped.length, 'bookings from Supabase');
+            } else {
+              setBookings([]);
+            }
+          } else {
+            setBookings([]);
+          }
+        } catch (_) {
+          setBookings([]);
+        }
       }
     } catch (error) {
       console.error('❌ Failed to load bookings:', error);
@@ -763,6 +851,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
+      // Sync cancellation to Supabase (silent — local cancel already done)
+      try {
+        await dbUpdateBookingStatus(bookingId, 'cancelled');
+      } catch (_) {}
+
       // Create cancellation notification
       await NotificationService.addBookingCancelled(
         booking.id,
@@ -786,6 +879,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         b.id === bookingId ? { ...b, status, updatedAt: new Date().toISOString() } : b
       );
       await saveBookings(updatedBookings);
+      // Sync to Supabase — map context BookingStatus enum → DB status string
+      const dbStatusMap: Record<string, string> = {
+        [BookingStatus.UPCOMING]:     'confirmed',
+        [BookingStatus.IN_PROGRESS]:  'in_progress',
+        [BookingStatus.COMPLETED]:    'completed',
+        [BookingStatus.CANCELLED]:    'cancelled',
+        [BookingStatus.NO_SHOW]:      'no_show',
+      };
+      const dbStatus = dbStatusMap[status];
+      if (dbStatus) {
+        dbUpdateBookingStatus(bookingId, dbStatus as any).catch(() => {});
+      }
     } catch (error) {
       console.error('❌ Failed to update booking status:', error);
       throw error;
@@ -942,6 +1047,77 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       const updatedBookings = [...bookings, ...newBookings];
       await saveBookings(updatedBookings);
+
+      // Persist to Supabase (silent fail — local booking already saved above)
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          for (const item of cartItems) {
+            const apt = appointmentData.find(a => a.cartItemId === item.id);
+            if (!apt) continue;
+
+            const providerId = await getProviderIdByDisplayName(item.providerName);
+            if (!providerId) continue; // provider not yet in Supabase — skip silently
+
+            // Convert "10:00 AM" → "10:00:00" for Postgres TIME type
+            const tMatch = apt.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+            if (!tMatch) continue;
+            let h = parseInt(tMatch[1] ?? '0');
+            const m = parseInt(tMatch[2] ?? '0');
+            const per = (tMatch[3] ?? 'AM').toUpperCase();
+            if (per === 'PM' && h !== 12) h += 12;
+            else if (per === 'AM' && h === 12) h = 0;
+            const pgTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+
+            const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
+            const logoUrl = typeof item.providerImage === 'string' ? item.providerImage : null;
+            const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
+
+            await dbCreateBooking(
+              {
+                user_id: user.id,
+                provider_id: providerId,
+                service_id: null,
+                status: 'confirmed',
+                booking_date: apt.date,
+                booking_time: pgTime,
+                end_time: null,
+                notes: apt.notes ?? null,
+                booking_instructions: null,
+                payment_type: apt.paymentType,
+                base_price: item.price,
+                add_ons_total: addOnsTotal,
+                service_charge: apt.serviceCharge,
+                deposit_amount: apt.depositAmount,
+                amount_paid: apt.amountPaid,
+                remaining_balance: apt.remainingBalance,
+                payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
+                payment_method: null,
+                payment_intent_id: null,
+                is_group_booking: cartItems.length > 1,
+                group_booking_id: null,
+                group_booking_count: cartItems.length,
+                provider_name_snapshot: item.providerName,
+                service_name_snapshot: item.serviceName,
+                provider_logo_snapshot: logoUrl,
+                provider_address_snapshot: apt.address || null,
+                provider_phone_snapshot: apt.phone || null,
+                provider_coordinates: null,
+                customer_name: apt.customerName,
+                customer_email: apt.customerEmail,
+                customer_phone: apt.customerPhone,
+              },
+              (item.addOns ?? []).map(a => ({
+                add_on_id: String(a.id),
+                name_snapshot: a.name,
+                price_snapshot: a.price,
+              }))
+            );
+          }
+        }
+      } catch (_) {
+        // Silent — local booking already saved
+      }
 
       // ✅ NEW - Create notifications for each booking
       for (const booking of newBookings) {

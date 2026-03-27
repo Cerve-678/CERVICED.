@@ -1,4 +1,4 @@
-// src/screens/auth/EmailVerificationScreen.tsx
+// src/screens/auth/ResetPasswordOTPScreen.tsx
 import React, { useState, useRef } from 'react';
 import {
   ActivityIndicator,
@@ -15,19 +15,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { EmailIcon } from '../../components/IconLibrary';
-import { useAuth } from '../../contexts/AuthContext';
-import type { UserData } from '../../contexts/AuthContext';
+import { KeyIcon } from '../../components/IconLibrary';
 import { supabase } from '../../lib/supabase';
-import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
 import type { StackScreenProps } from '@react-navigation/stack';
-
 import type { RootStackParamList } from '../../navigation/types';
 
-type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
+type Props = StackScreenProps<RootStackParamList, 'ResetPasswordOTP'>;
 
-export default function EmailVerificationScreen({ navigation, route }: Props) {
-  const { login } = useAuth();
+export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const email = route.params?.email ?? '';
@@ -46,7 +41,6 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   });
 
   const handleOtpChange = (value: string, index: number) => {
-    // Handle paste of full 6-digit code
     if (value.length === 6) {
       const digits = value.split('').slice(0, 6);
       setOtp(digits);
@@ -74,78 +68,24 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       return;
     }
     setIsVerifying(true);
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email',
-      });
-      if (error) {
-        Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
-        return;
-      }
-
-      const session = data?.session;
-      if (!session) {
-        Alert.alert('Verification failed', 'Could not sign in. Please try resending the code.');
-        return;
-      }
-
-      const meta = session.user.user_metadata as Record<string, any>;
-      const dob = meta['dob'] ?? '';
-
-      // Upsert the user profile row now that the session is active and RLS will pass
-      const { error: upsertError } = await supabase.from('users').upsert({
-        id: session.user.id,
-        email: session.user.email ?? email,
-        name: meta['name'] ?? '',
-        phone: meta['phone'] ?? '',
-        dob: dob || null,
-        role: meta['role'] ?? 'user',
-        login_method: 'email',
-        service_interests: meta['service_interests'] ?? [],
-        business_name: meta['business_name'] ?? null,
-        business_email: meta['business_email'] ?? null,
-      }, { onConflict: 'id' });
-
-      if (upsertError) {
-        console.warn('Profile upsert error:', upsertError.message);
-      }
-
-      // Send welcome email (non-blocking)
-      const toEmail = meta['role'] === 'provider'
-        ? (meta['business_email'] || session.user.email!)
-        : session.user.email!;
-      const template = meta['role'] === 'provider'
-        ? providerWelcomeEmail({ name: meta['name'] ?? '', ...(meta['business_name'] ? { businessName: meta['business_name'] } : {}) })
-        : clientWelcomeEmail({ name: meta['name'] ?? '' });
-      sendEmail(toEmail, template.subject, template.html).catch(() => { /* Non-fatal */ });
-
-      // Explicitly log in — onAuthStateChange may fire after screen unmounts so we
-      // also call login() directly to guarantee immediate navigation.
-      const userData: UserData = {
-        id: session.user.id,
-        name: meta['name'] ?? '',
-        email: session.user.email ?? email,
-        phone: meta['phone'] ?? '',
-        dob: dob,
-        accountType: (meta['role'] as any) ?? 'user',
-        loginMethod: 'email',
-        businessName: meta['business_name'] ?? undefined,
-        businessEmail: meta['business_email'] ?? undefined,
-      };
-      login(userData);
-    } catch (err: any) {
-      console.error('OTP verification error:', err);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    } finally {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery',
+    });
+    if (error) {
       setIsVerifying(false);
+      Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
+      return;
     }
+    setIsVerifying(false);
+    // Session is now set — navigate to new password screen
+    navigation.navigate('NewPassword');
   };
 
   const handleResend = async () => {
     setResending(true);
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
     setResending(false);
     if (error) {
       Alert.alert('Error', error.message);
@@ -164,19 +104,14 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
-          {/* Icon */}
-          <EmailIcon size={64} color="#a342c3" style={{ marginBottom: 24 }} />
+          <KeyIcon size={64} color="#a342c3" style={{ marginBottom: 24 }} />
 
-          {/* Title */}
-          <Text style={[styles.title, { color: theme.text }]}>Check your email</Text>
-
-          {/* Subtitle */}
+          <Text style={[styles.title, { color: theme.text }]}>Enter reset code</Text>
           <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
             We sent a 6-digit code to
           </Text>
           <Text style={[styles.email, { color: theme.text }]}>{email}</Text>
 
-          {/* OTP Input */}
           <View style={styles.otpRow}>
             {otp.map((digit, index) => (
               <TextInput
@@ -202,7 +137,6 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
             ))}
           </View>
 
-          {/* Verify button */}
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
             onPress={handleVerify}
@@ -213,12 +147,11 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
               <ActivityIndicator color={isDarkMode ? '#fff' : theme.text} />
             ) : (
               <Text style={[styles.primaryBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-                VERIFY EMAIL
+                VERIFY CODE
               </Text>
             )}
           </TouchableOpacity>
 
-          {/* Resend */}
           <TouchableOpacity
             style={[styles.resendBtn, glassStyle()]}
             onPress={handleResend}
@@ -232,7 +165,6 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
             )}
           </TouchableOpacity>
 
-          {/* Back to login */}
           <TouchableOpacity
             style={styles.backLink}
             onPress={() => navigation.navigate('Login')}
@@ -256,6 +188,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   title: {
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',
@@ -263,11 +196,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
+  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 4 },
   email: {
     fontSize: 16,
     fontWeight: '700',
@@ -315,10 +244,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0.5,
   },
-  backLink: {
-    paddingVertical: 8,
-  },
-  backLinkText: {
-    fontSize: 14,
-  },
+  backLink: { paddingVertical: 8 },
+  backLinkText: { fontSize: 14 },
 });

@@ -173,14 +173,6 @@ const handlePayment = useCallback(async () => {
   setIsProcessing(true);
   try {
     if (__DEV__) {
-      console.log(`[${timestamp()}] STARTING PAYMENT SIMULATION (2s delay)...`);
-    }
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    if (__DEV__) {
-      console.log(`[${timestamp()}] PAYMENT SIMULATION COMPLETE`);
-    }
-
-    if (__DEV__) {
       console.log(`\n[${timestamp()}] Calling onPaymentSuccess...`);
     }
     const startTime = Date.now();
@@ -1006,7 +998,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Navigation handlers - BACK TO HOME
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 800));
     setRefreshing(false);
   }, []);
 

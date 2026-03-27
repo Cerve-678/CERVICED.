@@ -21,6 +21,8 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { HomeStackParamList } from '../navigation/types';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark } from '../services/databaseService';
+import type { DbProvider } from '../types/database';
 import Icon from '../components/IconLibrary';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -45,136 +47,17 @@ interface Provider {
   rating: number;
 }
 
-const allProviders: Provider[] = [
-  {
-    id: 'styled-by-kathrine',
-    name: 'Styled by Kathrine',
-    service: 'HAIR',
-    logo: require('../../assets/logos/styledbykathrine.png'),
-    location: 'North West London',
-    rating: 5.0,
-  },
-  {
-    id: 'hair-by-jennifer',
-    name: 'Hair by Jennifer',
-    service: 'HAIR',
-    logo: require('../../assets/logos/hairbyjennifer.png'),
-    location: 'Central London',
-    rating: 4.9,
-  },
-  {
-    id: 'diva-nails',
-    name: 'Diva Nails',
-    service: 'NAILS',
-    logo: require('../../assets/logos/divanails.png'),
-    location: 'South London',
-    rating: 5.0,
-  },
-  {
-    id: 'makeup-by-mya',
-    name: 'Makeup by Mya',
-    service: 'MUA',
-    logo: require('../../assets/logos/makeupbymya.png'),
-    location: 'East London',
-    rating: 4.8,
-  },
-  {
-    id: 'your-lashed',
-    name: 'Your Lashed',
-    service: 'LASHES',
-    logo: require('../../assets/logos/yourlashed.png'),
-    location: 'West London',
-    rating: 4.9,
-  },
-  {
-    id: 'vikki-laid',
-    name: 'Vikki Laid',
-    service: 'HAIR',
-    logo: require('../../assets/logos/vikkilaid.png'),
-    location: 'North London',
-    rating: 4.7,
-  },
-  {
-    id: 'kiki-nails',
-    name: 'Kiki Nails',
-    service: 'NAILS',
-    logo: require('../../assets/logos/kikisnails.png'),
-    location: 'Central London',
-    rating: 4.8,
-  },
-  {
-    id: 'jana-aesthetics',
-    name: 'Jana Aesthetics',
-    service: 'AESTHETICS',
-    logo: require('../../assets/logos/janaaesthetics.png'),
-    location: 'West London',
-    rating: 4.9,
-  },
-  {
-    id: 'her-brows',
-    name: 'Her Brows',
-    service: 'BROWS',
-    logo: require('../../assets/logos/herbrows.png'),
-    location: 'South East London',
-    rating: 4.8,
-  },
-  {
-    id: 'rosemay-aesthetics',
-    name: 'RoseMay Aesthetics',
-    service: 'AESTHETICS',
-    logo: require('../../assets/logos/RoseMayAesthetics.png'),
-    location: 'North London',
-    rating: 4.9,
-  },
-  {
-    id: 'fillerbyjess',
-    name: 'Filler by Jess',
-    service: 'AESTHETICS',
-    logo: require('../../assets/logos/fillerbyjess.png'),
-    location: 'Central London',
-    rating: 4.7,
-  },
-  {
-    id: 'eyebrowdeluxe',
-    name: 'Eyebrow Deluxe',
-    service: 'BROWS',
-    logo: require('../../assets/logos/eyebrowdeluxe.png'),
-    location: 'East London',
-    rating: 4.8,
-  },
-  {
-    id: 'lashesgalore',
-    name: 'Lashes Galore',
-    service: 'LASHES',
-    logo: require('../../assets/logos/lashesgalore.png'),
-    location: 'South London',
-    rating: 4.9,
-  },
-  {
-    id: 'zeenail-artist',
-    name: 'Zee Nail Artist',
-    service: 'NAILS',
-    logo: require('../../assets/logos/ZeeNail Artist.png'),
-    location: 'East London',
-    rating: 4.8,
-  },
-  {
-    id: 'painted-by-zoe',
-    name: 'Painted by Zoe',
-    service: 'MUA',
-    logo: require('../../assets/logos/paintedbyZoe.png'),
-    location: 'West London',
-    rating: 4.9,
-  },
-  {
-    id: 'braided-slick',
-    name: 'Braided Slick',
-    service: 'HAIR',
-    logo: require('../../assets/logos/braided slick.png'),
-    location: 'North West London',
-    rating: 5.0,
-  },
-];
+/** Map a Supabase DbProvider row to the local Provider shape used in this screen */
+function mapDbProvider(p: DbProvider): Provider {
+  return {
+    id: p.id,
+    name: p.display_name,
+    service: p.service_category,
+    logo: p.logo_url ? { uri: p.logo_url } : null,
+    location: p.location_text ?? '',
+    rating: p.rating,
+  };
+}
 
 // Service Tab Button Component with Haptic Feedback and Subtle Animation
 interface ServiceTabProps {
@@ -269,15 +152,12 @@ function ServiceTab({ service, isSelected, onPress, onBack, theme, isDarkMode, s
 
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
   const { theme, isDarkMode } = useTheme();
-  const { bookmarkedIds, removeBookmark, loadBookmarks } = useBookmarkStore();
+  const { removeBookmark, loadBookmarks } = useBookmarkStore();
   const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState<ServiceType>('ALL');
+  const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
 
-  // Get unique bookmarked providers
-  const uniqueBookmarkIds = [...new Set(bookmarkedIds)];
-  const bookmarkedProviders = allProviders.filter(provider =>
-    uniqueBookmarkIds.includes(provider.id)
-  );
+  const bookmarkedProviders = liveProviders;
 
   const filteredProviders = selectedService === 'ALL'
     ? bookmarkedProviders
@@ -315,7 +195,10 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         try {
           setLoading(true);
           await loadBookmarks();
-          if (__DEV__) console.log('Loaded bookmark IDs:', bookmarkedIds);
+          // Fetch real bookmarked providers from Supabase
+          const supabaseData = await getBookmarkedProviders();
+          setLiveProviders(supabaseData.map(mapDbProvider));
+          if (__DEV__) console.log('Loaded bookmarks:', supabaseData.length, 'from Supabase');
         } catch (error) {
           console.error('Failed to load bookmarks:', error);
         } finally {
@@ -328,6 +211,11 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   const handleRemoveBookmark = async (providerId: string) => {
     try {
+      // Remove from Supabase (no-op if unauthenticated)
+      await dbRemoveBookmark(providerId).catch(() => {});
+      // Optimistic update for live Supabase state
+      setLiveProviders(prev => prev.filter(p => p.id !== providerId));
+      // Also update MMKV store for slug-based lookups
       await removeBookmark(providerId);
     } catch (error) {
       console.error('Failed to remove bookmark:', error);

@@ -7,7 +7,7 @@ import { ProviderTabParamList } from './types';
 import BeccaNavigator from './Tabs/BeccaNavigator';
 import ProviderHomeNavigator from './Tabs/ProviderHomeNavigator';
 import ProviderServicesNavigator from './Tabs/ProviderServicesNavigator';
-import ProfileNavigator from './Tabs/ProfileNavigator';
+import ProviderAccountNavigator from './Tabs/ProviderAccountNavigator';
 
 // Components
 import TabIcon from '../components/TabIcon';
@@ -61,7 +61,7 @@ export default function ProviderTabNavigation() {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileNavigator}
+        component={ProviderAccountNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon name="user" focused={focused} color={theme.text} size={26} />

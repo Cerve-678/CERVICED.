@@ -19,6 +19,9 @@ export type RootStackParamList = {
   SignUpStep3: undefined;
   SignUpStep4: undefined;
   EmailVerification: { email: string };
+  ForgotPassword: undefined;
+  ResetPasswordOTP: { email: string };
+  NewPassword: undefined;
 };
 // Home Stack
 export type HomeStackParamList = {
@@ -77,7 +80,7 @@ export type ProfileStackParamList = {
 // Provider Home Stack (Calendar/Scheduling)
 export type ProviderHomeStackParamList = {
   ProviderHomeMain: undefined;
-  BookingDetail: { bookingId: string };
+  BookingDetail: { bookingId: string; booking?: any };
   Notifications: undefined;
   DevSettings: undefined;
 };
@@ -89,12 +92,20 @@ export type ProviderServicesStackParamList = {
   DevSettings: undefined;
 };
 
+// Provider Account Stack (settings for provider users)
+export type ProviderAccountStackParamList = {
+  ProviderAccountMain: undefined;
+  EditProfile: { transferProviderId?: string } | undefined;
+  Notifications: undefined;
+  DevSettings: undefined;
+};
+
 // Provider Tab Navigator
 export type ProviderTabParamList = {
   Becca: NavigatorScreenParams<BeccaStackParamList>;
   ProviderHome: NavigatorScreenParams<ProviderHomeStackParamList>;
   MyServices: NavigatorScreenParams<ProviderServicesStackParamList>;
-  Profile: NavigatorScreenParams<ProfileStackParamList>;
+  Profile: NavigatorScreenParams<ProviderAccountStackParamList>;
 };
 
 // Tab Navigator

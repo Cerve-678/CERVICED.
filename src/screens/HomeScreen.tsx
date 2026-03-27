@@ -35,6 +35,8 @@ import { useBooking } from '../contexts/BookingContext';
 import userLearningService from '../services/userLearningService';
 import { HairTypeSelector } from '../components/HairTypeSelector';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { getProviders } from '../services/databaseService';
+import type { DbProvider } from '../types/database';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -89,130 +91,6 @@ interface ServiceButtonProps {
   onBack?: () => void;
   showBackArrow?: boolean;
 }
-
-// UBER-STYLE SLUGIFIED IDs: business names converted to URL-safe slugs
-const sampleProviders: Provider[] = [
-  {
-    id: 'diva-nails',
-    name: 'Diva Nails',
-    service: 'NAILS',
-    logo: require('../../assets/logos/divanails.png'),
-  },
-  {
-    id: 'jana-aesthetics',
-    name: 'Jana Aesthetics',
-    service: 'AESTHETICS',
-    logo: require('../../assets/logos/janaaesthetics.png'),
-  },
-  {
-    id: 'her-brows',
-    name: 'Her Brows',
-    service: 'BROWS',
-    logo: require('../../assets/logos/herbrows.png'),
-  },
-  {
-    id: 'kiki-nails',
-    name: 'Kiki Nails',
-    service: 'NAILS',
-    logo: require('../../assets/logos/kikisnails.png'),
-  },
-  {
-    id: 'makeup-by-mya',
-    name: 'Makeup by Mya',
-    service: 'MUA',
-    logo: require('../../assets/logos/makeupbymya.png'),
-  },
-  {
-    id: 'styled-by-kathrine',
-    name: 'Styled by Kathrine',
-    service: 'HAIR',
-    logo: require('../../assets/logos/styledbykathrine.png'),
-  },
-  {
-    id: 'vikki-laid',
-    name: 'Vikki Laid',
-    service: 'HAIR',
-    logo: require('../../assets/logos/vikkilaid.png'),
-  },
-  {
-    id: 'hair-by-jennifer',
-    name: 'Hair by Jennifer',
-    service: 'HAIR',
-    logo: require('../../assets/logos/hairbyjennifer.png'),
-  },
-  {
-    id: 'your-lashed',
-    name: 'Your Lashed',
-    service: 'LASHES',
-    logo: require('../../assets/logos/yourlashed.png'),
-  },
-  {
-    id: 'rosemay-aesthetics',
-    name: 'RoseMay Aesthetics',
-    service: 'AESTHETICS',
-    logo: require('../../assets/logos/RoseMayAesthetics.png'),
-  },
-  {
-    id: 'fillerbyjess',
-    name: 'Filler by Jess',
-    service: 'AESTHETICS',
-    logo: require('../../assets/logos/fillerbyjess.png'),
-  },
-  {
-    id: 'eyebrowdeluxe',
-    name: 'Eyebrow Deluxe',
-    service: 'BROWS',
-    logo: require('../../assets/logos/eyebrowdeluxe.png'),
-  },
-  {
-    id: 'lashesgalore',
-    name: 'Lashes Galore',
-    service: 'LASHES',
-    logo: require('../../assets/logos/lashesgalore.png'),
-  },
-  {
-    id: 'zeenail-artist',
-    name: 'Zee Nail Artist',
-    service: 'NAILS',
-    logo: require('../../assets/logos/ZeeNail Artist.png'),
-  },
-  {
-    id: 'painted-by-zoe',
-    name: 'Painted by Zoe',
-    service: 'MUA',
-    logo: require('../../assets/logos/paintedbyZoe.png'),
-  },
-  {
-    id: 'braided-slick',
-    name: 'Braided Slick',
-    service: 'HAIR',
-    logo: require('../../assets/logos/braided slick.png'),
-  },
-  {
-    id: 'lash-bae',
-    name: 'Lash Bae',
-    service: 'LASHES',
-    logo: require('../../assets/logos/LashBae.png'),
-  },
-  {
-    id: 'gents-grooming',
-    name: 'Gents Grooming',
-    service: 'MALE',
-    logo: require('../../assets/logos/hairbyjennifer.png'),
-  },
-  {
-    id: 'little-stars-salon',
-    name: 'Little Stars Salon',
-    service: 'KIDS',
-    logo: require('../../assets/logos/styledbykathrine.png'),
-  },
-  {
-    id: 'kids-beauty-zone',
-    name: 'Kids Beauty Zone',
-    service: 'KIDS',
-    logo: require('../../assets/logos/yourlashed.png'),
-  },
-];
 
 const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle }) => {
   const { theme } = useTheme();
@@ -277,6 +155,9 @@ export default function HomeScreen() {
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
   });
 
+  // Live providers from Supabase; starts empty until data loads
+  const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
+
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [showHairTypeSelector, setShowHairTypeSelector] = useState(false);
   const [selectedHairType, setSelectedHairType] = useState<any>(null);
@@ -294,109 +175,8 @@ export default function HomeScreen() {
     serviceType: 'all',
   });
 
-  // Sample offers data with service categories
-  const allOffers: Offer[] = useMemo(() => [
-    {
-      id: 'offer-1',
-      title: '20% OFF First Visit',
-      description: 'New clients only - All services',
-      discount: '20%',
-      validUntil: '2026-02-28',
-      providerName: 'Diva Nails',
-      logo: require('../../assets/logos/divanails.png'),
-      service: 'NAILS',
-    },
-    {
-      id: 'offer-2',
-      title: 'Free Brow Shaping',
-      description: 'With any facial treatment',
-      discount: 'FREE',
-      validUntil: '2026-02-15',
-      providerName: 'Her Brows',
-      logo: require('../../assets/logos/herbrows.png'),
-      service: 'BROWS',
-    },
-    {
-      id: 'offer-3',
-      title: 'Valentine\'s Special',
-      description: 'Couples package discount',
-      discount: '30%',
-      validUntil: '2026-02-14',
-      providerName: 'Jana Aesthetics',
-      logo: require('../../assets/logos/janaaesthetics.png'),
-      service: 'AESTHETICS',
-    },
-    {
-      id: 'offer-4',
-      title: 'Blowout Bundle',
-      description: 'Book 3 blowouts, get 1 free',
-      discount: 'BUY 3 GET 1',
-      validUntil: '2026-03-15',
-      providerName: 'Hair by Jennifer',
-      logo: require('../../assets/logos/hairbyjennifer.png'),
-      service: 'HAIR',
-    },
-    {
-      id: 'offer-5',
-      title: 'Lash Extension Special',
-      description: 'Full set with free fill',
-      discount: '25%',
-      validUntil: '2026-02-20',
-      providerName: 'Your Lashed',
-      logo: require('../../assets/logos/yourlashed.png'),
-      service: 'LASHES',
-    },
-    {
-      id: 'offer-6',
-      title: 'Gel Manicure Deal',
-      description: 'Includes nail art & design',
-      discount: '15%',
-      validUntil: '2026-03-01',
-      providerName: 'Kiki Nails',
-      logo: require('../../assets/logos/kikisnails.png'),
-      service: 'NAILS',
-    },
-    {
-      id: 'offer-7',
-      title: 'Bridal Makeup Package',
-      description: 'Trial + wedding day',
-      discount: '20%',
-      validUntil: '2026-04-30',
-      providerName: 'Makeup by Mya',
-      logo: require('../../assets/logos/makeupbymya.png'),
-      service: 'MUA',
-    },
-    {
-      id: 'offer-8',
-      title: 'Men\'s Grooming Package',
-      description: 'Haircut + Beard Trim',
-      discount: '25%',
-      validUntil: '2026-03-31',
-      providerName: 'Gents Grooming',
-      logo: require('../../assets/logos/hairbyjennifer.png'),
-      service: 'MALE',
-    },
-    {
-      id: 'offer-10',
-      title: 'Kids First Haircut',
-      description: 'Certificate & photo included',
-      discount: '20%',
-      validUntil: '2026-04-15',
-      providerName: 'Little Stars Salon',
-      logo: require('../../assets/logos/styledbykathrine.png'),
-      service: 'KIDS',
-    },
-    {
-      id: 'offer-11',
-      title: 'Kids Party Package',
-      description: 'Makeup & nails for 5 kids',
-      discount: '30%',
-      validUntil: '2026-05-01',
-      providerName: 'Kids Beauty Zone',
-      logo: require('../../assets/logos/yourlashed.png'),
-      service: 'KIDS',
-    },
-  ], []);
+  // Offers from Supabase (empty until backend provides them)
+  const allOffers: Offer[] = useMemo(() => [], []);
 
   // Filter offers by selected tab
   const filteredOffers = useMemo(() => {
@@ -411,14 +191,14 @@ export default function HomeScreen() {
     const uniqueProviders = new Map<string, Provider>();
 
     bookings.forEach(booking => {
-      const provider = sampleProviders.find(p => p.name === booking.providerName);
+      const provider = liveProviders.find(p => p.name === booking.providerName);
       if (provider && !uniqueProviders.has(provider.id)) {
         uniqueProviders.set(provider.id, provider);
       }
     });
 
     return Array.from(uniqueProviders.values());
-  }, [bookings]);
+  }, [bookings, liveProviders]);
 
   // Load unread notification count
   const loadUnreadCount = useCallback(async () => {
@@ -442,53 +222,49 @@ export default function HomeScreen() {
 
   // Personalized providers data using user learning - each section gets different providers
   const [providersData, setProvidersData] = useState({
-    yourProviders: sampleProviders.slice(0, 4), // Diva Nails, Jana Aesthetics, Her Brows, Kiki Nails
-    recommended: [
-      // Varied recommendations across different services
-      sampleProviders.find(p => p.id === 'makeup-by-mya')!, // MUA
-      sampleProviders.find(p => p.id === 'diva-nails')!, // NAILS
-      sampleProviders.find(p => p.id === 'your-lashed')!, // LASHES
-      sampleProviders.find(p => p.id === 'hair-by-jennifer')!, // HAIR
-      sampleProviders.find(p => p.id === 'jana-aesthetics')!, // AESTHETICS
-      sampleProviders.find(p => p.id === 'lash-bae')!, // LASHES
-    ].filter(Boolean), // Filter out any undefined
-    hairProviders: sampleProviders.filter(p => p.service === 'HAIR'),
-    nailProviders: sampleProviders.filter(p => p.service === 'NAILS'),
-    lashProviders: sampleProviders.filter(p => p.service === 'LASHES'),
-    muaProviders: sampleProviders.filter(p => p.service === 'MUA'),
-    browProviders: sampleProviders.filter(p => p.service === 'BROWS'),
-    aestheticsProviders: sampleProviders.filter(p => p.service === 'AESTHETICS'),
-    // Male providers: Zee Nails has a male services tab
-    maleProviders: [
-      ...sampleProviders.filter(p => p.service === 'MALE'),
-      sampleProviders.find(p => p.id === 'zeenail-artist')!,
-    ].filter(Boolean),
-    // Kids providers: Braided Slick has a kids services tab
-    kidsProviders: [
-      ...sampleProviders.filter(p => p.service === 'KIDS'),
-      sampleProviders.find(p => p.id === 'braided-slick')!,
-    ].filter(Boolean),
+    yourProviders: [] as Provider[],
+    recommended: [] as Provider[],
+    hairProviders: [] as Provider[],
+    nailProviders: [] as Provider[],
+    lashProviders: [] as Provider[],
+    muaProviders: [] as Provider[],
+    browProviders: [] as Provider[],
+    aestheticsProviders: [] as Provider[],
+    maleProviders: [] as Provider[],
+    kidsProviders: [] as Provider[],
   });
 
-  // Load bookmarks from storage on mount only
+  // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
     loadBookmarks();
     userLearningService.initialize().catch(error => {
       console.error('Failed to initialize learning service:', error);
       // Silent failure — degrades gracefully to default recommendations
     });
+
+    // Fetch live providers — shows empty state if DB has no data
+    getProviders().then(data => {
+      setLiveProviders(data.map((p: DbProvider) => ({
+        id: p.slug,
+        name: p.display_name,
+        service: p.service_category,
+        logo: p.logo_url ? { uri: p.logo_url } : null,
+      })));
+    }).catch(() => {
+      // Silent failure — keeps empty provider list
+    });
   }, []); // Only run once on mount
 
-  // Update provider data whenever bookmarkedIds changes (reactive to bookmark changes)
+  // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
     const updateProviderData = async () => {
       try {
-        // Get bookmarked providers from store
-        const bookmarkedProviders = sampleProviders.filter(p => bookmarkedIds.includes(p.id));
+        // Get bookmarked providers from store — cross-reference against live providers
+        const bookmarkedProviders = liveProviders.filter(p => bookmarkedIds.includes(p.id));
 
         // Get personalized recommendations
         const personalizedRecommended = await userLearningService.getPersonalizedProviders(
-          sampleProviders,
+          liveProviders,
           3
         );
 
@@ -496,35 +272,29 @@ export default function HomeScreen() {
         const yourProviderIds = new Set(bookmarkedProviders.map(p => p.id));
         const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
 
-        // Default recommended providers: Varied across different services
+        // Default recommended: first provider from each service type
         const defaultRecommended = [
-          sampleProviders.find(p => p.id === 'makeup-by-mya')!, // MUA
-          sampleProviders.find(p => p.id === 'diva-nails')!, // NAILS
-          sampleProviders.find(p => p.id === 'your-lashed')!, // LASHES
-          sampleProviders.find(p => p.id === 'hair-by-jennifer')!, // HAIR
-          sampleProviders.find(p => p.id === 'jana-aesthetics')!, // AESTHETICS
-          sampleProviders.find(p => p.id === 'lash-bae')!, // LASHES
-        ].filter(p => p && !yourProviderIds.has(p.id));
+          liveProviders.find(p => p.service === 'MUA'),
+          liveProviders.find(p => p.service === 'NAILS'),
+          liveProviders.find(p => p.service === 'LASHES'),
+          liveProviders.find(p => p.service === 'HAIR'),
+          liveProviders.find(p => p.service === 'AESTHETICS'),
+          liveProviders.find(p => p.service === 'BROWS'),
+        ].filter(p => p && !yourProviderIds.has(p!.id)) as Provider[];
 
         setProvidersData({
           yourProviders: bookmarkedProviders.length > 0 ? bookmarkedProviders : [],
           recommended: recommendedFiltered.length > 0 ? recommendedFiltered : defaultRecommended,
-          hairProviders: sampleProviders.filter(p => p.service === 'HAIR'),
-          nailProviders: sampleProviders.filter(p => p.service === 'NAILS'),
-          lashProviders: sampleProviders.filter(p => p.service === 'LASHES'),
-          muaProviders: sampleProviders.filter(p => p.service === 'MUA'),
-          browProviders: sampleProviders.filter(p => p.service === 'BROWS'),
-          aestheticsProviders: sampleProviders.filter(p => p.service === 'AESTHETICS'),
-          // Male providers: Zee Nails has a male services tab
-          maleProviders: [
-            ...sampleProviders.filter(p => p.service === 'MALE'),
-            sampleProviders.find(p => p.id === 'zeenail-artist')!,
-          ].filter(Boolean),
-          // Kids providers: Braided Slick has a kids services tab
-          kidsProviders: [
-            ...sampleProviders.filter(p => p.service === 'KIDS'),
-            sampleProviders.find(p => p.id === 'braided-slick')!,
-          ].filter(Boolean),
+          hairProviders: liveProviders.filter(p => p.service === 'HAIR'),
+          nailProviders: liveProviders.filter(p => p.service === 'NAILS'),
+          lashProviders: liveProviders.filter(p => p.service === 'LASHES'),
+          muaProviders: liveProviders.filter(p => p.service === 'MUA'),
+          browProviders: liveProviders.filter(p => p.service === 'BROWS'),
+          aestheticsProviders: liveProviders.filter(p => p.service === 'AESTHETICS'),
+          // Male providers
+          maleProviders: liveProviders.filter(p => p.service === 'MALE'),
+          // Kids providers
+          kidsProviders: liveProviders.filter(p => p.service === 'KIDS'),
         });
       } catch (error) {
         console.error('Failed to update provider data:', error);
@@ -533,7 +303,7 @@ export default function HomeScreen() {
     };
 
     updateProviderData();
-  }, [bookmarkedIds]); // React to bookmark changes - but loadBookmarks() is NOT called here
+  }, [bookmarkedIds, liveProviders]); // React to both bookmark changes and live data updates
 
   const allCategorizedProviders = useMemo(() => {
     if (!viewAllProviders) return {};
@@ -610,16 +380,7 @@ export default function HomeScreen() {
         providers = providersData.kidsProviders;
         break;
       default:
-        providers = sampleProviders;
-    }
-
-    while (providers.length < 12) {
-      providers.push({
-        id: `placeholder-${providers.length}`,
-        logo: null,
-        name: 'COMING SOON',
-        service: selectedService,
-      });
+        providers = liveProviders;
     }
 
     return {
@@ -1520,7 +1281,7 @@ export default function HomeScreen() {
                 style={styles.categoryScroll}
                 nestedScrollEnabled={true}
               >
-                {sampleProviders.slice(0, 10).map(provider => (
+                {liveProviders.slice(0, 10).map(provider => (
                   <TouchableOpacity
                     key={`near-${provider.id}`}
                     style={styles.roundCard}
@@ -1539,9 +1300,7 @@ export default function HomeScreen() {
                     <Text style={[styles.roundCardName, { color: theme.text }]} numberOfLines={1}>
                       {provider.name}
                     </Text>
-                    <Text style={[styles.distanceBadge, { color: theme.text }]}>
-                      {(Math.random() * 5 + 0.5).toFixed(1)} mi
-                    </Text>
+
                   </TouchableOpacity>
                 ))}
               </ScrollView>

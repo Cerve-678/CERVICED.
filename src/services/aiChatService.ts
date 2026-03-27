@@ -1,5 +1,17 @@
 // AI Chat Service for Becca AI Assistant
-import { sampleProviders, Provider } from './ProviderDataService';
+import type { Provider } from './ProviderDataService';
+import { getProviders } from './databaseService';
+import type { DbProvider } from '../types/database';
+
+function dbToProvider(p: DbProvider): Provider {
+  return {
+    id: p.slug,
+    name: p.display_name,
+    service: p.service_category,
+    logo: p.logo_url ? { uri: p.logo_url } : null,
+    location: p.location_text ?? undefined,
+  };
+}
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -78,8 +90,9 @@ class AIChatService {
   }
 
   // Get providers by service type
-  private getProvidersByService(serviceType: string): Provider[] {
-    return sampleProviders.filter(provider => provider.service === serviceType);
+  private async getProvidersByService(serviceType: string): Promise<Provider[]> {
+    const data = await getProviders(serviceType);
+    return data.map(dbToProvider);
   }
 
   // Analyze uploaded image for beauty service matching
@@ -125,7 +138,7 @@ class AIChatService {
 
       // If we detected a service from the image, show providers
       if (serviceType) {
-        const providers = this.getProvidersByService(serviceType);
+        const providers = await this.getProvidersByService(serviceType);
         providerRecommendations = providers;
         responseText += `I can see you're interested in ${serviceType.toLowerCase()} services. Here are our best providers who can achieve this look:\n\n`;
         providers.slice(0, 3).forEach((provider, index) => {
@@ -157,7 +170,7 @@ class AIChatService {
     }
     // Generate response based on intent and service type
     else if (intent === 'book' && serviceType) {
-      const providers = this.getProvidersByService(serviceType);
+      const providers = await this.getProvidersByService(serviceType);
       providerRecommendations = providers;
 
       responseText = `I found ${providers.length} amazing ${serviceType.toLowerCase()} ${providers.length === 1 ? 'provider' : 'providers'} for you! `;
@@ -200,7 +213,7 @@ class AIChatService {
       }
 
     } else if (intent === 'search' && serviceType) {
-      const providers = this.getProvidersByService(serviceType);
+      const providers = await this.getProvidersByService(serviceType);
       providerRecommendations = providers;
 
       responseText = `Perfect! I can help you find the best ${serviceType.toLowerCase()} services. `;
@@ -245,21 +258,12 @@ class AIChatService {
       responseText += `✨ Aesthetics - Facials & skincare\n\n`;
       responseText += `What service are you interested in?`;
 
-      // Get sample providers for each service to show their logos
-      const nailsProvider = sampleProviders.find(p => p.service === 'NAILS');
-      const hairProvider = sampleProviders.find(p => p.service === 'HAIR');
-      const muaProvider = sampleProviders.find(p => p.service === 'MUA');
-      const lashesProvider = sampleProviders.find(p => p.service === 'LASHES');
-      const browsProvider = sampleProviders.find(p => p.service === 'BROWS');
-      const aestheticsProvider = sampleProviders.find(p => p.service === 'AESTHETICS');
-
       suggestions = [
         {
           id: 'explore-nails',
           text: 'Nails',
           action: 'message',
           data: { message: 'Show me nail services' },
-          icon: nailsProvider?.logo,
           serviceType: 'NAILS'
         },
         {
@@ -267,7 +271,6 @@ class AIChatService {
           text: 'Hair',
           action: 'message',
           data: { message: 'I need a hairstylist' },
-          icon: hairProvider?.logo,
           serviceType: 'HAIR'
         },
         {
@@ -275,7 +278,6 @@ class AIChatService {
           text: 'Lashes',
           action: 'message',
           data: { message: 'I want lash extensions' },
-          icon: lashesProvider?.logo,
           serviceType: 'LASHES'
         },
         {
@@ -283,7 +285,6 @@ class AIChatService {
           text: 'Brows',
           action: 'message',
           data: { message: 'Looking for brow services' },
-          icon: browsProvider?.logo,
           serviceType: 'BROWS'
         },
         {
@@ -291,7 +292,6 @@ class AIChatService {
           text: 'Makeup',
           action: 'message',
           data: { message: 'Looking for makeup artist' },
-          icon: muaProvider?.logo,
           serviceType: 'MUA'
         },
         {
@@ -299,7 +299,6 @@ class AIChatService {
           text: 'Aesthetics',
           action: 'message',
           data: { message: 'Show me aesthetic services' },
-          icon: aestheticsProvider?.logo,
           serviceType: 'AESTHETICS'
         }
       ];
@@ -340,10 +339,11 @@ class AIChatService {
       responseText = `I can help you find beauty services near your location! 📍\n\n`;
       responseText += `Here are all available providers in your area:\n\n`;
 
-      // Show all providers as if they're "nearby"
-      providerRecommendations = sampleProviders;
-      sampleProviders.forEach((provider, index) => {
-        responseText += `${index + 1}. ${provider.name} - ${provider.service}\n`;
+      // Show all providers from Supabase as nearby
+      const allProviders = await getProviders();
+      providerRecommendations = allProviders.map(dbToProvider);
+      allProviders.forEach((p, index) => {
+        responseText += `${index + 1}. ${p.display_name} - ${p.service_category}\n`;
       });
       responseText += `\nTap on any provider to view their profile, location, and book.`;
 
@@ -373,17 +373,12 @@ class AIChatService {
       responseText = `Hi! I'm Becca, your beauty booking assistant! 💜\n\n`;
       responseText += `I can help you find and book amazing beauty services. What are you looking for today?`;
 
-      const hairProvider = sampleProviders.find(p => p.service === 'HAIR');
-      const nailsProvider = sampleProviders.find(p => p.service === 'NAILS');
-      const muaProvider = sampleProviders.find(p => p.service === 'MUA');
-
       suggestions = [
         {
           id: 'hair',
           text: 'Hair',
           action: 'message',
           data: { message: 'I need hair services' },
-          icon: hairProvider?.logo,
           serviceType: 'HAIR'
         },
         {
@@ -391,7 +386,6 @@ class AIChatService {
           text: 'Nails',
           action: 'message',
           data: { message: 'I want a manicure' },
-          icon: nailsProvider?.logo,
           serviceType: 'NAILS'
         },
         {

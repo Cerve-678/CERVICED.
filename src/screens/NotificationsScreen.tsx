@@ -21,6 +21,9 @@ import { useFont } from '../contexts/FontContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { BellIcon } from '../components/IconLibrary';
 import { NotificationService } from '../services/notificationService';
+import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../services/databaseService';
+import { supabase } from '../lib/supabase';
+import type { DbNotification } from '../types/database';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 import { HomeScreenProps } from '../navigation/types';
@@ -61,21 +64,64 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Map Supabase DbNotification → local Notification shape
+  const mapDbNotification = (db: DbNotification): Notification => ({
+    id: db.id,
+    type: db.type as Notification['type'],
+    title: db.title,
+    message: db.message,
+    timestamp: db.created_at,
+    read: db.is_read,
+    priority: db.priority as Notification['priority'],
+    actionable: db.is_actionable,
+    provider: '',
+    service: '',
+    bookingId: db.booking_id ?? undefined,
+    providerId: db.provider_id ?? undefined,
+  });
+
   // ✅ Load notifications on mount and when screen focuses
   useEffect(() => {
     loadNotifications();
-    
-    // Set up interval to refresh notifications
-    const interval = setInterval(() => {
-      loadNotifications();
-    }, 5000); // Refresh every 5 seconds
-    
-    return () => clearInterval(interval);
+
+    // Realtime subscription — new notifications pop in instantly
+    const channel = supabase
+      .channel('notifications-screen')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const n = mapDbNotification(payload.new as DbNotification);
+          setNotifications(prev => [n, ...prev]);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications' },
+        (payload) => {
+          const updated = mapDbNotification(payload.new as DbNotification);
+          setNotifications(prev =>
+            prev.map(n => n.id === updated.id ? updated : n)
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const loadNotifications = async () => {
     try {
       setLoadError(null);
+      // Try Supabase first; fall back to AsyncStorage NotificationService
+      try {
+        const dbRows = await getMyNotifications();
+        if (dbRows.length > 0) {
+          setNotifications(dbRows.map(mapDbNotification));
+          return;
+        }
+      } catch (_) { /* no-op */ }
+      // Fallback — local AsyncStorage notifications
       const stored = await NotificationService.getAllNotifications();
       setNotifications(stored);
     } catch (error) {
@@ -106,10 +152,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Mark single notification as read
   const markAsRead = useCallback(async (notificationId: string) => {
     try {
-      await NotificationService.markAsRead(notificationId);
-      setNotifications(prev => 
+      // Optimistic local update
+      setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
+      // Sync to Supabase (silent fail)
+      markNotificationRead(notificationId).catch(() => {});
+      // Also sync to local AsyncStorage service (for fallback path)
+      NotificationService.markAsRead(notificationId).catch(() => {});
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -118,11 +168,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Mark all as read
   const markAllAsRead = useCallback(async () => {
     try {
-      const allIds = notifications.map(n => n.id);
-      for (const id of allIds) {
-        await NotificationService.markAsRead(id);
-      }
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      // Sync to Supabase (silent fail)
+      markAllNotificationsRead().catch(() => {});
+      // Also sync AsyncStorage
+      notifications.forEach(n => NotificationService.markAsRead(n.id).catch(() => {}));
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }

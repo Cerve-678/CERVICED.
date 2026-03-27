@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
 import {
   View,
@@ -39,6 +39,8 @@ import { HomeStackParamList } from '../navigation/types';
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { getProviderBySlug, getProviderReviews } from '../services/databaseService';
+import type { ProviderWithServices } from '../types/database';
 
 type ProviderProfileScreenProps = StackScreenProps<HomeStackParamList, 'ProviderProfile'>;
 
@@ -85,804 +87,6 @@ interface ServiceData {
   addOns?: AddOnData[]; // Optional per-service add-ons
 }
 
-// COMPLETE provider data with all your providers
-const getProviderData = (providerId: string): ProviderData => {
-  const providers: Record<string, ProviderData> = {
-    'styled-by-kathrine': {
-      id: 'styled-by-kathrine',
-      providerName: 'KATHRINE',
-      providerService: 'HAIR',
-      providerLogo: require('../../assets/logos/styledbykathrine.png'),
-      location: 'North West London',
-      rating: 5.0,
-      slotsText: 'Slots out every 30th of the month',
-      aboutText: `Hey doll! Thank you for visiting KATHRINE's booking page!
-
-By making a booking with me, you accept my terms and conditions.
-
-LOCATION: North West London
-DEPOSITS: £20 non-refundable deposit required
-PAYMENT: Cash on the day of appointment
-
-Please ensure your hair is clean and detangled before your appointment.`,
-      gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
-      categories: {
-        Installs: [
-          {
-            id: 1,
-            name: 'Pre-bought frontal/closure unit',
-            price: 90,
-            duration: '2 hours',
-            description: 'ONLY APPLIES FOR FACTORY READY MADE WIGS NOT WIGS BY OTHER STYLISTS.',
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-          {
-            id: 2,
-            name: 'Mini frontal (customised closure wig)',
-            price: 100,
-            duration: '2 hours',
-            description:
-              'This service includes: customisation of a 4x4 closure or 5x5 mini frontal.',
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-          {
-            id: 3,
-            name: 'Lace frontal unit (wig)',
-            price: 110,
-            duration: '2.5 hours',
-            description:
-              'Includes: bleaching of knots, plucking and full customisation, installation, basic styling',
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-        ],
-        Ponytails: [
-          {
-            id: 4,
-            name: 'High/Mid/Low Ponytail/Bun',
-            price: 75,
-            duration: '2 hours',
-            description: "For ponytail: 1/2 bundles. DM me if you'd like to purchase hair from me.",
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-          {
-            id: 5,
-            name: 'Middle Part Ponytail/Bun',
-            price: 75,
-            duration: '2 hours',
-            description: 'Perfect middle part styling with secure installation.',
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-        ],
-        'Natural Hair': [
-          {
-            id: 6,
-            name: 'Silk Press',
-            price: 60,
-            duration: '45 minutes',
-            description: 'Professional silk press for smooth, sleek natural hair',
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-        ],
-        'Sew Ins': [
-          {
-            id: 7,
-            name: 'Sew Ins',
-            price: 110,
-            duration: '3 hours',
-            description: 'Full sew-in installation with professional techniques',
-            image: require('../../assets/logos/styledbykathrine.png'),
-          },
-        ],
-      },
-    },
-
-    'hair-by-jennifer': {
-      id: 'hair-by-jennifer',
-      providerName: 'JENNIFER',
-      providerService: 'HAIR',
-      providerLogo: require('../../assets/logos/hairbyjennifer.png'),
-      location: 'Central London',
-      rating: 4.9,
-      slotsText: 'Slots out every 28th of the month',
-      aboutText: `Hey doll! Thank you for visiting JENNIFER's booking page!
-
-Creative hair styling and coloring specialist with years of experience.
-
-LOCATION: Central London
-DEPOSITS: £15 non-refundable deposit required
-SPECIALITY: Color transformations and cuts`,
-      gradient: ['#FF4500', '#FF6347', '#DC143C'],
-      categories: {
-        'Cut & Style': [
-          {
-            id: 1,
-            name: 'Hair Cut & Style',
-            price: 85,
-            duration: '1.5 hours',
-            description: 'Professional cut and styling with consultation',
-            image: require('../../assets/logos/hairbyjennifer.png'),
-          },
-          {
-            id: 2,
-            name: 'Trim & Refresh',
-            price: 45,
-            duration: '45 minutes',
-            description: 'Quick trim and style refresh',
-            image: require('../../assets/logos/hairbyjennifer.png'),
-          },
-        ],
-        'Color Services': [
-          {
-            id: 3,
-            name: 'Full Color',
-            price: 120,
-            duration: '3 hours',
-            description: 'Complete color transformation with premium products',
-            image: require('../../assets/logos/hairbyjennifer.png'),
-          },
-          {
-            id: 4,
-            name: 'Highlights',
-            price: 100,
-            duration: '2.5 hours',
-            description: 'Professional highlighting technique',
-            image: require('../../assets/logos/hairbyjennifer.png'),
-          },
-        ],
-        Treatments: [
-          {
-            id: 5,
-            name: 'Deep Conditioning',
-            price: 35,
-            duration: '30 minutes',
-            description: 'Intensive moisture therapy for damaged hair',
-            image: require('../../assets/logos/hairbyjennifer.png'),
-          },
-        ],
-      },
-    },
-
-    'diva-nails': {
-      id: 'diva-nails',
-      providerName: 'DIVANA',
-      providerService: 'NAILS',
-      providerLogo: require('../../assets/logos/divanails.png'),
-      location: 'South London',
-      rating: 5.0,
-      slotsText: 'Slots out every 15th of the month',
-      aboutText: `Hey doll! Thank you for visiting DIVANA's booking page!
-
-Premium nail art and manicure services with attention to detail.
-
-LOCATION: South London
-DEPOSITS: £10 non-refundable deposit required
-SPECIALTY: Nail art and gel extensions`,
-      gradient: ['#FF69B4', '#FFB6C1', '#FFC1CC'],
-      categories: {
-        Manicures: [
-          {
-            id: 1,
-            name: 'Classic Manicure',
-            price: 25,
-            duration: '45 minutes',
-            description: 'Traditional manicure with polish',
-            image: require('../../assets/logos/divanails.png'),
-          },
-          {
-            id: 2,
-            name: 'Gel Manicure',
-            price: 45,
-            duration: '1 hour',
-            description: 'Long-lasting gel manicure with perfect finish',
-            image: require('../../assets/logos/divanails.png'),
-          },
-        ],
-        Extensions: [
-          {
-            id: 3,
-            name: 'Gel Extensions',
-            price: 55,
-            duration: '1.5 hours',
-            description: 'Natural looking gel nail extensions',
-            image: require('../../assets/logos/divanails.png'),
-          },
-          {
-            id: 4,
-            name: 'Acrylic Extensions',
-            price: 50,
-            duration: '1.5 hours',
-            description: 'Durable acrylic nail extensions',
-            image: require('../../assets/logos/divanails.png'),
-          },
-        ],
-        'Nail Art': [
-          {
-            id: 5,
-            name: 'Custom Nail Art',
-            price: 65,
-            duration: '2 hours',
-            description: 'Intricate hand-painted designs',
-            image: require('../../assets/logos/divanails.png'),
-          },
-        ],
-      },
-    },
-
-    'makeup-by-mya': {
-      id: 'makeup-by-mya',
-      providerName: 'MYA',
-      providerService: 'MUA',
-      providerLogo: require('../../assets/logos/makeupbymya.png'),
-      location: 'East London',
-      rating: 4.8,
-      slotsText: 'Slots out every 10th of the month',
-      aboutText: `Hey doll! Thank you for visiting MYA's booking page!
-
-Professional makeup artist specializing in special events and photography.
-
-LOCATION: East London
-DEPOSITS: £20 non-refundable deposit
-SPECIALTY: Bridal and event makeup`,
-      gradient: ['#E6E6FA', '#DDA0DD', '#DA70D6'],
-      categories: {
-        'Event Makeup': [
-          {
-            id: 1,
-            name: 'Bridal Makeup',
-            price: 120,
-            duration: '2 hours',
-            description: 'Complete bridal makeup with trial session',
-            image: require('../../assets/logos/makeupbymya.png'),
-          },
-          {
-            id: 2,
-            name: 'Special Event',
-            price: 75,
-            duration: '1.5 hours',
-            description: 'Professional makeup for special occasions',
-            image: require('../../assets/logos/makeupbymya.png'),
-          },
-        ],
-        Photography: [
-          {
-            id: 3,
-            name: 'Photoshoot Makeup',
-            price: 85,
-            duration: '1.5 hours',
-            description: 'Camera-ready makeup for photoshoots',
-            image: require('../../assets/logos/makeupbymya.png'),
-          },
-        ],
-      },
-    },
-
-    'your-lashed': {
-      id: 'your-lashed',
-      providerName: 'LASHED',
-      providerService: 'LASHES',
-      providerLogo: require('../../assets/logos/yourlashed.png'),
-      location: 'West London',
-      rating: 4.9,
-      slotsText: 'Slots out every 12th of the month',
-      aboutText: `Hey doll! Thank you for visiting YOUR LASHED booking page!
-
-Expert eyelash extensions and treatments for stunning results.
-
-LOCATION: West London
-DEPOSITS: £15 non-refundable deposit
-SPECIALTY: Volume lash extensions`,
-      gradient: ['#708090', '#778899', '#B0C4DE'],
-      categories: {
-        'Classic Lashes': [
-          {
-            id: 1,
-            name: 'Classic Full Set',
-            price: 55,
-            duration: '2 hours',
-            description: 'Natural-looking classic lash extensions',
-            image: require('../../assets/logos/yourlashed.png'),
-          },
-          {
-            id: 2,
-            name: 'Classic Infill',
-            price: 35,
-            duration: '1 hour',
-            description: 'Maintenance for classic lashes',
-            image: require('../../assets/logos/yourlashed.png'),
-          },
-        ],
-        'Volume Lashes': [
-          {
-            id: 3,
-            name: 'Volume Full Set',
-            price: 75,
-            duration: '2.5 hours',
-            description: 'Dramatic volume lash extensions',
-            image: require('../../assets/logos/yourlashed.png'),
-          },
-          {
-            id: 4,
-            name: 'Volume Infill',
-            price: 45,
-            duration: '1.5 hours',
-            description: 'Volume lash maintenance',
-            image: require('../../assets/logos/yourlashed.png'),
-          },
-        ],
-        Treatments: [
-          {
-            id: 5,
-            name: 'Lash Lift & Tint',
-            price: 40,
-            duration: '1 hour',
-            description: 'Natural lash enhancement with lift and tint',
-            image: require('../../assets/logos/yourlashed.png'),
-          },
-        ],
-      },
-    },
-
-    'vikki-laid': {
-      id: 'vikki-laid',
-      providerName: 'VIKKI',
-      providerService: 'HAIR',
-      providerLogo: require('../../assets/logos/vikkilaid.png'),
-      location: 'North London',
-      rating: 4.7,
-      slotsText: 'Slots out every 20th of the month',
-      aboutText: `Hey doll! Thank you for visiting VIKKI's booking page!
-
-Modern hair styling and cutting techniques with contemporary flair.
-
-LOCATION: North London
-DEPOSITS: £18 non-refundable deposit
-SPECIALTY: Trendy cuts and styling`,
-      gradient: ['#5fd5dcff', '#bd66ff9c', '#33CCCC'],
-      categories: {
-        'Modern Cuts': [
-          {
-            id: 1,
-            name: 'Trendy Cut & Style',
-            price: 70,
-            duration: '1.5 hours',
-            description: 'Contemporary hair cutting with modern styling',
-            image: require('../../assets/logos/vikkilaid.png'),
-          },
-          {
-            id: 2,
-            name: 'Bob Cut',
-            price: 65,
-            duration: '1 hour',
-            description: 'Classic and modern bob variations',
-            image: require('../../assets/logos/vikkilaid.png'),
-          },
-        ],
-        Styling: [
-          {
-            id: 3,
-            name: 'Blowout',
-            price: 35,
-            duration: '45 minutes',
-            description: 'Professional blowout with heat protection',
-            image: require('../../assets/logos/vikkilaid.png'),
-          },
-        ],
-      },
-    },
-
-    'kiki-nails': {
-      id: 'kiki-nails',
-      providerName: 'KIKI',
-      providerService: 'NAILS',
-      providerLogo: require('../../assets/logos/kikisnails.png'),
-      location: 'Central London',
-      rating: 4.8,
-      slotsText: 'Slots out every 18th of the month',
-      aboutText: `Hey doll! Thank you for visiting KIKI's booking page!
-
-Creative nail designs and professional manicure services.
-
-LOCATION: Central London
-DEPOSITS: £12 non-refundable deposit
-SPECIALTY: Creative nail designs`,
-      gradient: ['#1B4332', '#2D5A3D', '#40916C'], // Deep forest green gradient
-      categories: {
-        'Basic Services': [
-          {
-            id: 1,
-            name: 'Basic Manicure',
-            price: 30,
-            duration: '45 minutes',
-            description: 'Essential nail care with polish',
-            image: require('../../assets/logos/kikisnails.png'),
-          },
-          {
-            id: 2,
-            name: 'Gel Polish',
-            price: 40,
-            duration: '1 hour',
-            description: 'Long-lasting gel polish application',
-            image: require('../../assets/logos/kikisnails.png'),
-          },
-        ],
-        'Creative Designs': [
-          {
-            id: 3,
-            name: 'Artistic Nail Design',
-            price: 60,
-            duration: '1.5 hours',
-            description: 'Unique hand-painted nail art',
-            image: require('../../assets/logos/kikisnails.png'),
-          },
-        ],
-      },
-    },
-
-    'jana-aesthetics': {
-      id: 'jana-aesthetics',
-      providerName: 'JANA',
-      providerService: 'AESTHETICS',
-      providerLogo: require('../../assets/logos/janaaesthetics.png'),
-      location: 'West London',
-      rating: 4.9,
-      slotsText: 'Slots out every 25th of the month',
-      aboutText: `Hey doll! Thank you for visiting JANA's booking page!
-
-Professional aesthetics and skincare treatments for radiant skin.
-
-LOCATION: West London
-DEPOSITS: £25 non-refundable deposit
-SPECIALTY: Anti-aging treatments`,
-      gradient: ['#FFE4B5', '#FFDAB9', '#FFB347'], // Jana gets Kiki's old gradient
-      categories: {
-        'Facial Treatments': [
-          {
-            id: 1,
-            name: 'HydraFacial',
-            price: 120,
-            duration: '1 hour',
-            description: 'Deep cleansing and hydrating facial treatment',
-            image: require('../../assets/logos/janaaesthetics.png'),
-          },
-          {
-            id: 2,
-            name: 'Anti-Aging Facial',
-            price: 95,
-            duration: '1.5 hours',
-            description: 'Rejuvenating treatment for mature skin',
-            image: require('../../assets/logos/janaaesthetics.png'),
-          },
-        ],
-        Injectables: [
-          {
-            id: 3,
-            name: 'Consultation',
-            price: 50,
-            duration: '30 minutes',
-            description: 'Professional aesthetic consultation',
-            image: require('../../assets/logos/janaaesthetics.png'),
-          },
-        ],
-      },
-    },
-
-    'her-brows': {
-      id: 'her-brows',
-      providerName: 'HER BROWS',
-      providerService: 'BROWS',
-      providerLogo: require('../../assets/logos/herbrows.png'),
-      location: 'South East London',
-      rating: 4.8,
-      slotsText: 'Slots out every 14th of the month',
-      aboutText: `Hey doll! Thank you for visiting HER BROWS booking page!
-
-Specialist in eyebrow shaping, threading, and microblading.
-
-LOCATION: South East London
-DEPOSITS: £15 non-refundable deposit
-SPECIALTY: Microblading and brow shaping`,
-      gradient: ['#D4A574', '#C8956D', '#B8755A'], // More visible brown-pink gradient
-      categories: {
-        'Brow Shaping': [
-          {
-            id: 1,
-            name: 'Eyebrow Threading',
-            price: 20,
-            duration: '30 minutes',
-            description: 'Precise eyebrow shaping with threading',
-            image: require('../../assets/logos/herbrows.png'),
-          },
-          {
-            id: 2,
-            name: 'Brow Wax & Shape',
-            price: 25,
-            duration: '30 minutes',
-            description: 'Professional waxing and shaping',
-            image: require('../../assets/logos/herbrows.png'),
-          },
-        ],
-        'Brow Enhancement': [
-          {
-            id: 3,
-            name: 'Brow Tint',
-            price: 15,
-            duration: '20 minutes',
-            description: 'Semi-permanent brow tinting',
-            image: require('../../assets/logos/herbrows.png'),
-          },
-          {
-            id: 4,
-            name: 'Microblading',
-            price: 250,
-            duration: '3 hours',
-            description: 'Semi-permanent brow tattooing technique',
-            image: require('../../assets/logos/herbrows.png'),
-          },
-        ],
-      },
-    },
-    'rosemay-aesthetics': {
-      id: 'rosemay-aesthetics',
-      providerName: 'ROSEMAY AESTHETICS',
-      providerService: 'AESTHETICS',
-      providerLogo: require('../../assets/logos/RoseMayAesthetics.png'),
-      location: 'North London',
-      rating: 4.9,
-      slotsText: 'Book your consultation today',
-      aboutText: `Premium aesthetics clinic specializing in dermal fillers, anti-wrinkle treatments, and skin rejuvenation.
-
-LOCATION: North London
-DEPOSITS: £50 non-refundable deposit required
-PAYMENT: Card or cash accepted
-
-Our expert practitioners use the latest techniques to help you achieve natural-looking results.`,
-      gradient: ['#8d59acff', '#c069c4ff', '#aba0a1ff'],
-      categories: {
-        'Dermal Fillers': [
-          { id: 1, name: 'Lip Enhancement', price: 280, duration: '45 mins', description: 'Natural-looking lip volume and definition', image: require('../../assets/logos/RoseMayAesthetics.png') },
-          { id: 2, name: 'Cheek Augmentation', price: 350, duration: '45-60 mins', description: 'Add volume and lift to cheeks', image: require('../../assets/logos/RoseMayAesthetics.png') },
-          { id: 3, name: 'Jawline Contouring', price: 400, duration: '45-60 mins', description: 'Define and sculpt your jawline', image: require('../../assets/logos/RoseMayAesthetics.png') },
-        ],
-        'Anti-Wrinkle': [
-          { id: 4, name: 'Forehead Lines', price: 180, duration: '30 mins', description: 'Smooth forehead wrinkles', image: require('../../assets/logos/RoseMayAesthetics.png') },
-          { id: 5, name: 'Crows Feet', price: 180, duration: '30 mins', description: 'Reduce eye area lines', image: require('../../assets/logos/RoseMayAesthetics.png') },
-          { id: 6, name: 'Full Face', price: 350, duration: '45 mins', description: 'Complete facial rejuvenation', image: require('../../assets/logos/RoseMayAesthetics.png') },
-        ],
-        'Skin Boosters': [
-          { id: 7, name: 'Profhilo', price: 220, duration: '30 mins', description: 'Hydrate and firm skin', image: require('../../assets/logos/RoseMayAesthetics.png') },
-          { id: 8, name: 'Skin Booster', price: 280, duration: '45 mins', description: 'Deep skin hydration treatment', image: require('../../assets/logos/RoseMayAesthetics.png') },
-        ],
-      },
-    },
-    'fillerbyjess': {
-      id: 'fillerbyjess',
-      providerName: 'FILLER BY JESS',
-      providerService: 'AESTHETICS',
-      providerLogo: require('../../assets/logos/fillerbyjess.png'),
-      location: 'Central London',
-      rating: 4.7,
-      slotsText: 'Limited slots available',
-      aboutText: `Expert aesthetic practitioner specializing in advanced filler techniques.
-
-LOCATION: Central London
-DEPOSITS: £60 non-refundable deposit required
-PAYMENT: Card payment preferred
-
-Jess brings years of experience in facial aesthetics to deliver stunning, natural results tailored to your unique features.`,
-      gradient: ['#413c40ff', '#5e5b55ff', '#e4a8efff'],
-      categories: {
-        'Lip Treatments': [
-          { id: 1, name: 'Advanced Lip Filler', price: 300, duration: '60 mins', description: 'Expert lip enhancement with precise technique', image: require('../../assets/logos/fillerbyjess.png') },
-          { id: 2, name: 'Lip Flip', price: 120, duration: '20 mins', description: 'Subtle lip enhancement', image: require('../../assets/logos/fillerbyjess.png') },
-        ],
-        'Facial Contouring': [
-          { id: 3, name: 'Cheek Augmentation', price: 350, duration: '45 mins', description: 'Restore volume and lift to cheeks', image: require('../../assets/logos/fillerbyjess.png') },
-          { id: 4, name: 'Non-Surgical Rhinoplasty', price: 380, duration: '45 mins', description: 'Reshape nose without surgery', image: require('../../assets/logos/fillerbyjess.png') },
-          { id: 5, name: 'Jawline Contouring', price: 400, duration: '45 mins', description: 'Define and sculpt your jawline', image: require('../../assets/logos/fillerbyjess.png') },
-        ],
-        'Consultation': [
-          { id: 6, name: 'Free Consultation', price: 0, duration: '30 mins', description: 'Discuss your aesthetic goals', image: require('../../assets/logos/fillerbyjess.png') },
-        ],
-      },
-    },
-    'eyebrowdeluxe': {
-      id: 'eyebrowdeluxe',
-      providerName: 'EYEBROW DELUXE',
-      providerService: 'BROWS',
-      providerLogo: require('../../assets/logos/eyebrowdeluxe.png'),
-      location: 'East London',
-      rating: 4.8,
-      slotsText: 'Same day appointments available',
-      aboutText: `London's premier eyebrow studio offering expert shaping, tinting, lamination, and microblading.
-
-LOCATION: East London
-DEPOSITS: £30 deposit for microblading
-PAYMENT: Cash or card accepted
-
-Transform your brows with our skilled technicians.`,
-      gradient: ['#830c53ff', '#f6bbe9ff', '#572862ff'],
-      categories: {
-        'Brow Services': [
-          { id: 1, name: 'Microblading', price: 350, duration: '2-2.5 hours', description: 'Semi-permanent brow tattoo for natural fullness', image: require('../../assets/logos/eyebrowdeluxe.png') },
-          { id: 2, name: 'Brow Lamination', price: 45, duration: '45 mins', description: 'Fluffy, full brows that last 6-8 weeks', image: require('../../assets/logos/eyebrowdeluxe.png') },
-          { id: 3, name: 'HD Brows', price: 40, duration: '45 mins', description: 'Custom brow shaping and tinting', image: require('../../assets/logos/eyebrowdeluxe.png') },
-          { id: 4, name: 'Brow Tinting', price: 18, duration: '20 mins', description: 'Define and darken your natural brows', image: require('../../assets/logos/eyebrowdeluxe.png') },
-        ],
-        'Combo Packages': [
-          { id: 5, name: 'Lamination + Tint', price: 55, duration: '60 mins', description: 'Full brow transformation', image: require('../../assets/logos/eyebrowdeluxe.png') },
-          { id: 6, name: 'HD Brows + Tint', price: 50, duration: '60 mins', description: 'Shape and color perfection', image: require('../../assets/logos/eyebrowdeluxe.png') },
-        ],
-      },
-    },
-    'lashesgalore': {
-      id: 'lashesgalore',
-      providerName: 'LASHES GALORE',
-      providerService: 'LASHES',
-      providerLogo: require('../../assets/logos/lashesgalore.png'),
-      location: 'South London',
-      rating: 4.9,
-      slotsText: 'Booking up fast - reserve your spot',
-      aboutText: `Specialist lash studio offering classic, volume, and hybrid lash extensions.
-
-LOCATION: South London
-DEPOSITS: £25 non-refundable deposit required
-PAYMENT: Cash or card accepted
-
-Our certified technicians create customized lash looks that enhance your natural beauty.`,
-      gradient: ['#8ba4e9ff', '#073784ff', '#37106aff'],
-      categories: {
-        'Lash Extensions': [
-          { id: 1, name: 'Classic Lash Extensions', price: 80, duration: '2 hours', description: 'Natural-looking individual lash extensions', image: require('../../assets/logos/lashesgalore.png') },
-          { id: 2, name: 'Volume Lash Extensions', price: 120, duration: '2.5 hours', description: 'Fuller, more dramatic lash look', image: require('../../assets/logos/lashesgalore.png') },
-          { id: 3, name: 'Mega Volume Lashes', price: 150, duration: '3 hours', description: 'Ultra-full, glamorous lash extensions', image: require('../../assets/logos/lashesgalore.png') },
-          { id: 4, name: 'Hybrid Lashes', price: 100, duration: '2.5 hours', description: 'Perfect blend of classic and volume', image: require('../../assets/logos/lashesgalore.png') },
-        ],
-        'Lash Treatments': [
-          { id: 5, name: 'Lash Lift & Tint', price: 50, duration: '1 hour', description: 'Curl and darken your natural lashes', image: require('../../assets/logos/lashesgalore.png') },
-          { id: 6, name: 'Lash Removal', price: 20, duration: '30 mins', description: 'Safe lash extension removal', image: require('../../assets/logos/lashesgalore.png') },
-        ],
-        'Infills': [
-          { id: 7, name: '2-Week Infill', price: 45, duration: '1 hour', description: 'Maintain your lash extensions', image: require('../../assets/logos/lashesgalore.png') },
-          { id: 8, name: '3-Week Infill', price: 60, duration: '1.5 hours', description: 'Refresh your lash set', image: require('../../assets/logos/lashesgalore.png') },
-        ],
-      },
-    },
-
-    'zeenail-artist': {
-      id: 'zeenail-artist',
-      providerName: 'ZEE NAIL ARTIST',
-      providerService: 'NAILS',
-      providerLogo: require('../../assets/logos/ZeeNail Artist.png'),
-      location: 'East London',
-      rating: 4.8,
-      slotsText: 'Slots out every 15th of the month',
-      aboutText: `Hey doll! Thank you for visiting ZEE's booking page!
-
-Nail artist specializing in creative nail designs and nail art.
-
-By making a booking with me, you accept my terms and conditions.`,
-      gradient: ['#2f0846ff', '#a282d6ff', '#2e0f70ff'] as [string, string, ...string[]],
-      categories: {
-        'Acrylic Extensions': [
-          { id: 1, name: 'Acrylic Extensions', price: 70, duration: '2.5 hours', description: 'Consists of an inspired full set acrylic.', image: require('../../assets/logos/ZeeNail Artist.png') },
-          { id: 2, name: 'Freestyle Sets', price: 80, duration: '2.5 hours', description: 'Freestyle can consist of gems and multiple designs on different nails such as ombre etc.', image: require('../../assets/logos/ZeeNail Artist.png') },
-          { id: 3, name: 'French Tips', price: 70, duration: '2.5 hours', description: 'Classic French tip sets with any colour accent.', image: require('../../assets/logos/ZeeNail Artist.png') },
-        ],
-        'Gel & Biab': [
-          { id: 4, name: 'Gel Manicure', price: 80, duration: '1 hour', description: 'Long-lasting gel manicure with a glossy finish.', image: require('../../assets/logos/ZeeNail Artist.png') },
-          { id: 5, name: 'Biab Manicure', price: 35, duration: '45 mins', description: 'Builder in a bottle manicure (BIAB) for strength and shine.', image: require('../../assets/logos/ZeeNail Artist.png') },
-        ],
-        'Male Pedicure': [
-          { id: 6, name: 'Hands Only Manicure', price: 15, duration: '1 hour', description: 'Professional hand care and manicure service.', image: require('../../assets/logos/ZeeNail Artist.png') },
-          { id: 7, name: 'Feet Only Pedicure', price: 20, duration: '1.5 hours', description: 'Complete foot care and pedicure treatment.', image: require('../../assets/logos/ZeeNail Artist.png') },
-          { id: 8, name: 'Hands and Feet Combination', price: 55, duration: '2.5 hours', description: 'Full manicure and pedicure package.', image: require('../../assets/logos/ZeeNail Artist.png') },
-        ],
-        'Combinations': [
-          { id: 9, name: 'Hands and Feet Combo', price: 55, duration: '2.5 hours', description: 'Ultimate pampering for hands and feet.', image: require('../../assets/logos/ZeeNail Artist.png') },
-        ],
-      },
-    },
-
-    'painted-by-zoe': {
-      id: 'painted-by-zoe',
-      providerName: 'PAINTED BY ZOE',
-      providerService: 'MUA',
-      providerLogo: require('../../assets/logos/paintedbyZoe.png'),
-      location: 'West London',
-      rating: 4.9,
-      slotsText: 'Slots out every 5th of the month',
-      aboutText: `Hey doll! Thank you for visiting ZOE's booking page!
-
-Professional makeup artist specializing in bridal, events, and editorial looks.
-
-By making a booking with me, you accept my terms and conditions.`,
-      gradient: ['#de981fff', '#e8d950e2', '#a7680bb8'] as [string, string, ...string[]],
-      categories: {
-        'Makeup Services': [
-          { id: 1, name: 'Bridal Makeup', price: 150, duration: '2.5 hours', description: 'Complete bridal makeup with trial', image: require('../../assets/logos/paintedbyZoe.png') },
-          { id: 2, name: 'Special Event Makeup', price: 80, duration: '1.5 hours', description: 'Glamorous makeup for special occasions', image: require('../../assets/logos/paintedbyZoe.png') },
-          { id: 3, name: 'Editorial Makeup', price: 120, duration: '2 hours', description: 'High-fashion editorial looks', image: require('../../assets/logos/paintedbyZoe.png') },
-          { id: 4, name: 'Natural Everyday Makeup', price: 50, duration: '1 hour', description: 'Soft, natural makeup look', image: require('../../assets/logos/paintedbyZoe.png') },
-        ],
-        'Makeup Lessons': [ 
-          { id: 5, name: 'Makeup Tutorial', price: 100, duration: '2 hours', description: 'Learn professional makeup techniques', image: require('../../assets/logos/paintedbyZoe.png') },
-          { id: 6, name: 'Bridal Makeup Trial', price: 75, duration: '1.5 hours', description: 'Test your bridal look before the big day', image: require('../../assets/logos/paintedbyZoe.png') },
-        ],
-      },
-    },
-
-    'braided-slick': {
-      id: 'braided-slick',
-      providerName: 'BRAIDED SLICK',
-      providerService: 'HAIR',
-      providerLogo: require('../../assets/logos/braided slick.png'),
-      location: 'North West London',
-      rating: 5.0,
-      slotsText: 'Slots out every 20th of the month',
-      aboutText: `Hey doll! Thank you for visiting BRAIDED SLICK's booking page!
-
-Specialist in braids, cornrows, and protective hairstyles for all hair types.
-
-By making a booking with me, you accept my terms and conditions.`,
-      gradient: ['#8c5c0eff', '#311f00ff', '#6f430eff'] as [string, string, ...string[]],
-      categories: {
-        'Braids': [
-          { id: 1, name: 'Box Braids', price: 120, duration: '4 hours', description: 'Classic box braids in various sizes', image: require('../../assets/logos/braided slick.png') },
-          { id: 2, name: 'Knotless Braids', price: 150, duration: '5 hours', description: 'Pain-free knotless braiding technique', image: require('../../assets/logos/braided slick.png') },
-          { id: 3, name: 'Cornrows', price: 80, duration: '2.5 hours', description: 'Traditional cornrow styles', image: require('../../assets/logos/braided slick.png') },
-          { id: 4, name: 'Feed-In Braids', price: 100, duration: '3.5 hours', description: 'Natural-looking feed-in technique', image: require('../../assets/logos/braided slick.png') },
-        ],
-        'Protective Styles': [
-          { id: 5, name: 'Faux Locs', price: 140, duration: '4.5 hours', description: 'Beautiful faux loc installation', image: require('../../assets/logos/braided slick.png') },
-          { id: 6, name: 'Passion Twists', price: 130, duration: '4 hours', description: 'Trendy passion twist styles', image: require('../../assets/logos/braided slick.png') },
-          { id: 7, name: 'Senegalese Twists', price: 110, duration: '3.5 hours', description: 'Elegant Senegalese twists', image: require('../../assets/logos/braided slick.png') },
-        ],
-        'Braid Maintenance': [
-          { id: 8, name: 'Braid Touch-Up', price: 60, duration: '2 hours', description: 'Refresh and maintain your braids', image: require('../../assets/logos/braided slick.png') },
-          { id: 9, name: 'Braid Takedown', price: 40, duration: '1.5 hours', description: 'Gentle braid removal service', image: require('../../assets/logos/braided slick.png') },
-        ],
-        'Kids Braiding': [
-          { id: 10, name: 'Kids Box Braids', price: 60, duration: '2.5 hours', description: 'Gentle box braids for children (ages 4-12)', image: require('../../assets/logos/braided slick.png') },
-          { id: 11, name: 'Kids Cornrows', price: 45, duration: '1.5 hours', description: 'Fun cornrow styles for kids with gentle technique', image: require('../../assets/logos/braided slick.png') },
-          { id: 12, name: 'Kids Braids with Beads', price: 55, duration: '2 hours', description: 'Colorful braids with beads for playful look', image: require('../../assets/logos/braided slick.png') },
-        ],
-      },
-    },
-
-    'lash-bae': {
-      id: 'lash-bae',
-      providerName: 'LASH BAE',
-      providerService: 'LASHES',
-      providerLogo: require('../../assets/logos/LashBae.png'),
-      location: 'Central London',
-      rating: 4.9,
-      slotsText: 'Slots out every 12th of the month',
-      aboutText: `Hey doll! Thank you for visiting LASH BAE's booking page!
-
-Expert lash technician specializing in classic, freestyle, volume, Russian volume, and hybrid lash extensions. Creating stunning lash looks that enhance your natural beauty with precision and care.
-
-LOCATION: Central London
-
-By making a booking with me, you accept my terms and conditions.`,
-      gradient: ['#dc8fedb5', '#e0d3e0ff', '#2d2d2d'] as [string, string, ...string[]],
-      categories: {
-        'Classic Lashes': [
-          { id: 1, name: 'Classic Lash Extensions', price: 85, duration: '2 hours', description: 'Natural-looking individual lash extensions for everyday wear.', image: require('../../assets/logos/LashBae.png') },
-        ],
-        'Freestyle & Volume': [
-          { id: 2, name: 'Freestyle Lash Extensions', price: 120, duration: '2.5 hours', description: 'Customized lash design with varying lengths and curls.', image: require('../../assets/logos/LashBae.png') },
-          { id: 3, name: 'Volume Lash Extensions', price: 150, duration: '3 hours', description: 'Dramatic volume lashes for a fuller look.', image: require('../../assets/logos/LashBae.png') },
-          { id: 4, name: 'Russian Volume Lash Extensions', price: 180, duration: '3.5 hours', description: 'Lightweight, multi-dimensional lashes for a fluffy effect.', image: require('../../assets/logos/LashBae.png') },
-        ],
-        'Hybrid Lashes': [
-          { id: 5, name: 'Hybrid Lash Extensions', price: 150, duration: '3 hours', description: 'A mix of classic and volume techniques for a textured look.', image: require('../../assets/logos/LashBae.png') },
-        ],
-      },
-    },
-  };
-
-  return providers[providerId] || providers['styled-by-kathrine']!;
-};
 
 // Get service-specific gradient - Memoized
 const getServiceGradient = (image: any): [string, string, ...string[]] => {
@@ -897,6 +101,57 @@ const getServiceGradient = (image: any): [string, string, ...string[]] => {
     return ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)'];
   }
 };
+
+// ─── Duration formatter ────────────────────────────────────────────────────
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h} hour${h > 1 ? 's' : ''}`;
+}
+
+// ─── Map Supabase ProviderWithServices → local ProviderData ─────────────────
+function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
+  const categories: Record<string, ServiceData[]> = {};
+  p.services.forEach((s, idx) => {
+    const key = s.category_name;
+    if (!categories[key]) categories[key] = [];
+    categories[key].push({
+      id: idx,
+      name: s.name,
+      price: Number(s.price),
+      duration: formatDuration(s.duration_minutes),
+      description: s.description ?? '',
+      image: null,
+      images: s.images
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(img => ({ uri: img.url })),
+      addOns: s.add_ons
+        .filter(a => a.is_active)
+        .map((a, ai) => ({
+          id: ai,
+          name: a.name,
+          price: Number(a.price),
+          description: a.description ?? '',
+        })),
+    });
+  });
+
+  return {
+    id: p.slug,
+    providerName: p.display_name.toUpperCase(),
+    providerService: p.service_category,
+    providerLogo: p.logo_url ? { uri: p.logo_url } : require('../../assets/logos/styledbykathrine.png'),
+    location: p.location_text ?? '',
+    rating: Number(p.rating),
+    slotsText: p.slots_text ?? '',
+    aboutText: p.about_text ?? '',
+    gradient: (p.gradient && p.gradient.length >= 2
+      ? p.gradient
+      : ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
+    categories,
+  };
+}
 
 // Get adaptive accent color based on gradient - Enhanced for better contrast - Memoized
 const getAdaptiveAccentColor = (gradient: [string, string, ...string[]]): string => {
@@ -1266,47 +521,10 @@ const AddOnsModal: React.FC<AddOnsModalProps> = React.memo(
       Array<{ id: number; name: string; price: number }>
     >([]);
 
-    // Default add-ons as fallback when provider hasn't set custom ones
-    const defaultAddOns = useMemo(
-      () => [
-        {
-          id: 1,
-          name: 'Premium Products',
-          price: 5,
-          description: 'High-quality premium products for enhanced results',
-        },
-        {
-          id: 2,
-          name: 'Express Service',
-          price: 10,
-          description: 'Priority booking with reduced waiting time',
-        },
-        {
-          id: 3,
-          name: 'Aftercare Kit',
-          price: 8,
-          description: 'Complete aftercare package for maintenance',
-        },
-        {
-          id: 4,
-          name: 'Deep Conditioning Treatment',
-          price: 15,
-          description: 'Additional nourishing treatment',
-        },
-        {
-          id: 5,
-          name: 'Style Consultation',
-          price: 12,
-          description: '15-minute styling consultation',
-        },
-      ],
-      []
-    );
-
-    // Use service-specific add-ons if provider has configured them, otherwise use defaults
+    // Use service-specific add-ons only (no default fallback to generic ones)
     const availableAddOns = useMemo(
-      () => (service?.addOns && service.addOns.length > 0) ? service.addOns : defaultAddOns,
-      [service, defaultAddOns]
+      () => service?.addOns ?? [],
+      [service]
     );
 
     const toggleAddOn = useCallback((addOn: { id: number; name: string; price: number }) => {
@@ -1678,49 +896,56 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   });
 
   const providerId = route.params?.providerId || 'styled-by-kathrine';
-  const provider = useMemo(() => {
-    const data = getProviderData(providerId);
-    if (!data) {
-      console.error('Provider not found:', providerId);
-      // Return fallback provider with proper type
-      return {
-        id: 'styled-by-kathrine',
-        providerName: 'KATHRINE',
-        providerService: 'HAIR',
-        providerLogo: require('../../assets/logos/styledbykathrine.png'),
-        location: 'North West London',
-        rating: 5.0,
-        slotsText: 'Slots out every 30th',
-        aboutText: 'Professional hair services',
-        gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'] as [string, string, ...string[]],
-        categories: {},
-      } as ProviderData;
-    }
-    return data;
+  // Provider state — seeded with local hardcoded data, overridden by Supabase if available
+  const [provider, setProvider] = useState<ProviderData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [reviews, setReviews] = useState<{ id: number | string; name: string; rating: number; comment: string; date: string }[]>([]);
+
+  // Fetch live data from Supabase
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getProviderBySlug(providerId)
+      .then(async data => {
+        if (cancelled || !data) return;
+        setProvider(mapDbProviderToProviderData(data));
+        // Fetch real reviews using the Supabase UUID
+        try {
+          const dbReviews = await getProviderReviews(data.id);
+          if (!cancelled) {
+            setReviews(dbReviews.map(r => ({
+              id: r.id,
+              name: r.user?.name ?? 'Anonymous',
+              rating: r.rating,
+              comment: r.comment ?? '',
+              date: new Date(r.created_at).toLocaleDateString('en-GB', {
+                day: 'numeric', month: 'short', year: 'numeric',
+              }),
+            })));
+          }
+        } catch { /* silent */ }
+      })
+      .catch(() => { /* provider not found — loading=false, provider remains null */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [providerId]);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
 
-  // Find this early return (around line 615):
-  if (!provider) {
-    return (
-      <View style={styles.loading}>
-        <Text>Provider not found</Text>
-      </View>
-    );
-  }
-
-  // Removed debug logs to prevent infinite render loop
-  // console.log('=== PROVIDER PROFILE DEBUG ===');
-  // console.log('Received providerId:', providerId);
-  // console.log('Found provider:', provider?.providerName);
-  // console.log('Current cart items:', totalItems);
-  // console.log('===============================');
-
   const [selectedCategory, setSelectedCategory] = useState(() =>
     provider ? Object.keys(provider.categories)[0] || '' : ''
   );
+
+  // When Supabase data loads and updates provider, reset to first available category
+  useEffect(() => {
+    if (!provider) return;
+    const firstCat = Object.keys(provider.categories)[0] || '';
+    setSelectedCategory(prev =>
+      prev && provider.categories[prev] ? prev : firstCat
+    );
+  }, [provider]);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [showFullAbout, setShowFullAbout] = useState(false);
@@ -1744,8 +969,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
   // Get adaptive accent color for this provider - memoized
   const adaptiveAccentColor = useMemo(
-    () => getAdaptiveAccentColor(provider.gradient),
-    [provider.gradient]
+    () => getAdaptiveAccentColor(provider?.gradient ?? []),
+    [provider?.gradient]
   );
 
   // Show notification popup from right
@@ -1920,7 +1145,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
-      headerTitle: isScrolled ? `@${provider.providerName}` : 'Provider Profile',
+      headerTitle: isScrolled && provider ? `@${provider.providerName}` : 'Provider Profile',
       headerTitleStyle: {
         fontFamily: 'BakbakOne-Regular',
         fontSize: 18,
@@ -1961,8 +1186,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         <View style={styles.headerBackgroundContainer}>
           <LinearGradient
             colors={[
-              provider.gradient[0], // Exact match with main gradient start
-              provider.gradient[0], // Keep same color for header area
+              provider?.gradient[0] ?? '#a342c3',
+              provider?.gradient[0] ?? '#a342c3',
             ]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
@@ -2155,55 +1380,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   }
 }, [hideSuccessMessage, navigation]);
 
-  // Mock reviews data - memoized
-  const reviews = useMemo(
-    () => [
-      {
-        id: 1,
-        name: 'Sarah M.',
-        rating: 5,
-        comment: 'Amazing work! Professional service and great attention to detail.',
-        date: '2 days ago',
-      },
-      {
-        id: 2,
-        name: 'Jessica L.',
-        rating: 5,
-        comment: 'Love the results! Will definitely be booking again.',
-        date: '1 week ago',
-      },
-      {
-        id: 3,
-        name: 'Amanda K.',
-        rating: 4,
-        comment: 'Great experience overall. Very satisfied with the service.',
-        date: '2 weeks ago',
-      },
-    ],
-    []
-  );
+  // reviews is now state — seeded with defaults above, overwritten by Supabase fetch in useEffect
 
   const notificationMessage = useMemo(() => {
   if (notificationMessageType === 'bell') {
-    // Get full provider name based on ID
-    const fullNames: Record<string, string> = {
-      'styled-by-kathrine': 'Styled by Kathrine',
-      'hair-by-jennifer': 'Hair by Jennifer',
-      'diva-nails': 'Diva Nails',
-      'makeup-by-mya': 'Makeup by Mya',
-      'your-lashed': 'Your Lashed',
-      'vikki-laid': 'Vikki Laid',
-      'kiki-nails': 'Kiki Nails',
-      'jana-aesthetics': 'Jana Aesthetics',
-      'her-brows': 'Her Brows',
-      'zeenail-artist': 'Zee Nail Artist',
-      'painted-by-zoe': 'Painted by Zoe',
-      'braided-slick': 'Braided Slick',
-      'lash-bae': 'Lash Bae',
-    };
-    
-    const fullName = fullNames[providerId] || provider.providerName;
-    
+    const fullName = provider?.providerName ?? 'this provider';
     return isNotificationsEnabled 
       ? `Notifications enabled for\n${fullName}` 
       : `Notifications disabled for\n${fullName}`;
@@ -2212,12 +1393,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       ? `Added to your\nproviders list` 
       : `Removed from your\nproviders list`;
   }
-}, [notificationMessageType, isNotificationsEnabled, providerIsBookmarked, provider.providerName, providerId]);
+}, [notificationMessageType, isNotificationsEnabled, providerIsBookmarked, provider?.providerName, providerId]);
 
-  if (!fontsLoaded || !provider) {
+  if (!fontsLoaded || loading || !provider) {
     return (
       <View style={styles.loading}>
-        <Text>Loading...</Text>
+        <Text>{loading ? 'Loading...' : 'Provider not found'}</Text>
       </View>
     );
   }
@@ -2272,9 +1453,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           isVisible={showReviewsModal}
           onClose={() => setShowReviewsModal(false)}
           reviews={reviews}
-          providerName={provider.providerName}
+          providerName={provider?.providerName ?? ''}
           adaptiveAccentColor={adaptiveAccentColor}
-          providerGradient={provider.gradient}
+          providerGradient={provider?.gradient ?? ['#FF6B6B', '#4ECDC4']}
         />
 
         <SafeAreaView style={styles.safeArea} edges={['bottom']}>

@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { ExploreStackParamList } from '../navigation/types';
 import { useCart } from '../contexts/CartContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -29,13 +30,10 @@ import { PortfolioCard } from '../components/PortfolioCard';
 import { ImageDetailModal } from '../components/ImageDetailModal';
 import { CreateEventModal } from '../components/CreateEventModal';
 
-// Data
+// Data types
 import { PortfolioItem, ServiceCategory } from '../data/providerProfiles';
-import {
-  getAllPortfolioItems,
-  getPortfolioByCategory,
-  searchPortfolio,
-} from '../data/portfolioFeed';
+import { getPortfolioItems, searchPortfolio as dbSearchPortfolio } from '../services/databaseService';
+import type { PortfolioItemWithProvider } from '../types/database';
 
 // Stores
 import { useBookmarkStore } from '../stores/useBookmarkStore';
@@ -43,17 +41,7 @@ import { usePlannerStore } from '../stores/usePlannerStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Navigation Types
-type ExploreNavParamList = {
-  ExploreMain: undefined;
-  ProviderProfile: {
-    providerLogo: any;
-    providerName: string;
-    providerService: string;
-  };
-  EventDetail: { eventId: string };
-  BookmarkedProviders: undefined;
-};
+// Navigation type — use the global stack type from types.ts
 
 // ============================================================================
 // SUB-TAB SELECTOR
@@ -172,9 +160,7 @@ const EventCard = memo<EventCardProps>(({ event, onPress }) => {
   const totalTasks = event.tasks.length;
   const progress = totalTasks > 0 ? completedTasks / totalTasks : 0;
 
-  const goalImage = event.goalImageId
-    ? getAllPortfolioItems().find(i => i.id === event.goalImageId)
-    : null;
+  const goalImage = null; // goal images are resolved from Supabase IDs stored in plans
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -237,7 +223,7 @@ EventCard.displayName = 'EventCard';
 // MAIN EXPLORE SCREEN
 // ============================================================================
 const ExploreScreen = memo(() => {
-  const navigation = useNavigation<NavigationProp<ExploreNavParamList>>();
+  const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const { theme, isDarkMode } = useTheme();
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
@@ -258,6 +244,21 @@ const ExploreScreen = memo(() => {
   const { events, activeEventId, addTask, setActiveEvent, loadEvents } = usePlannerStore();
   const { loadSavedPortfolio } = useBookmarkStore();
 
+  // Portfolio items from Supabase
+  const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+
+  // Map a Supabase portfolio row to the local PortfolioItem shape
+  const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => ({
+    id: item.id,
+    image: { uri: item.image_url },
+    caption: item.caption ?? '',
+    category: (item.category?.toUpperCase() as ServiceCategory) ?? 'NAILS',
+    aspectRatio: item.aspect_ratio,
+    providerId: item.provider?.slug ?? item.provider_id,
+    tags: item.tags ?? [],
+    price: item.price != null ? `£${item.price}` : undefined,
+  }), []);
+
   // Load stores on mount
   useEffect(() => {
     loadEvents();
@@ -276,15 +277,27 @@ const ExploreScreen = memo(() => {
     Lashes: 'LASHES',
   }), []);
 
-  // Filtered portfolio data
-  const filteredPortfolio = useMemo(() => {
-    if (searchQuery.trim()) {
-      return searchPortfolio(searchQuery);
-    } else if (selectedFilter !== 'All' && filterMap[selectedFilter]) {
-      return getPortfolioByCategory(filterMap[selectedFilter]!);
-    }
-    return getAllPortfolioItems();
-  }, [selectedFilter, searchQuery, filterMap]);
+  // Fetch portfolio from Supabase whenever filter or search changes
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        let data: PortfolioItemWithProvider[];
+        if (searchQuery.trim()) {
+          data = await dbSearchPortfolio(searchQuery);
+        } else if (selectedFilter !== 'All' && filterMap[selectedFilter]) {
+          data = await getPortfolioItems(filterMap[selectedFilter]);
+        } else {
+          data = await getPortfolioItems();
+        }
+        if (!cancelled) setPortfolioItems(data.map(mapDbPortfolioItem));
+      } catch {
+        if (!cancelled) setPortfolioItems([]);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [selectedFilter, searchQuery, filterMap, mapDbPortfolioItem]);
 
   // Column width for masonry
   const columnWidth = useMemo(() => {
@@ -311,18 +324,17 @@ const ExploreScreen = memo(() => {
   }, []);
 
   const handleViewProfile = useCallback(
-    (_providerId: string, providerName: string, providerService: string, providerLogo: any) => {
+    (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
       navigation.navigate('ProviderProfile', {
-        providerLogo,
-        providerName,
-        providerService,
+        providerId,
+        source: 'explore',
       });
     },
     [navigation]
   );
 
   const handleBookNow = useCallback(
-    (_providerId: string, providerName: string, providerService: string, providerLogo: any) => {
+    (providerId: string, providerName: string, providerService: string, providerLogo: any) => {
       addToCart({
         providerName,
         providerImage: providerLogo,
@@ -337,9 +349,8 @@ const ExploreScreen = memo(() => {
         quantity: 1,
       });
       navigation.navigate('ProviderProfile', {
-        providerLogo,
-        providerName,
-        providerService,
+        providerId,
+        source: 'explore',
       });
     },
     [addToCart, navigation]
@@ -472,14 +483,14 @@ const ExploreScreen = memo(() => {
 
             {/* Masonry Grid */}
             <MasonryGrid
-              data={filteredPortfolio}
+              data={portfolioItems}
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
               keyExtractor={item => item.id}
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridCount, { color: theme.secondaryText }]}>
-                    {filteredPortfolio.length} looks
+                    {portfolioItems.length} looks
                   </Text>
                 </View>
               }

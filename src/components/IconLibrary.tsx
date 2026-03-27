@@ -53,6 +53,9 @@ const iconPaths = {
   'storefront': 'M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2h1v6h10v-6h4v6h2v-6h1zm-9 4H6v-4h6v4z',
   'grid-layout': 'M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z',
   'chevron-right': 'M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z',
+  'lock': 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z',
+  'key': 'M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z',
+  'shield-check': 'M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z',
 };
 
 export default function Icon({ name, size = 24, color = '#666', style }: IconProps) {
@@ -94,6 +97,9 @@ export const SearchIcon = (props: Omit<IconProps, 'name'>) => <Icon name="magnif
 export const SlidersIcon = (props: Omit<IconProps, 'name'>) => <Icon name="sliders" {...props} />;
 export const HeartIcon = (props: Omit<IconProps, 'name'>) => <Icon name="heart" {...props} />;
 export const BookmarkIcon = (props: Omit<IconProps, 'name'>) => <Icon name="bookmark" {...props} />;
+export const LockIcon = (props: Omit<IconProps, 'name'>) => <Icon name="lock" {...props} />;
+export const KeyIcon = (props: Omit<IconProps, 'name'>) => <Icon name="key" {...props} />;
+export const ShieldCheckIcon = (props: Omit<IconProps, 'name'>) => <Icon name="shield-check" {...props} />;
 export const Brightness6Icon = (props: Omit<IconProps, 'name'>) => <Icon name="brightness-6" {...props} />;
 export const FormatSizeIcon = (props: Omit<IconProps, 'name'>) => <Icon name="format-size" {...props} />;
 export const ContrastIcon = (props: Omit<IconProps, 'name'>) => <Icon name="contrast" {...props} />;

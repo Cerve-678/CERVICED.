@@ -37,18 +37,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        await loadUserProfile(session);
-      } else {
+    // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
+    // so we only use it as the single source of truth — no separate getSession() call.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
+      if (event === 'PASSWORD_RECOVERY') {
+        setSession(session);
         setIsLoading(false);
+        return;
       }
-    });
-
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // Stale/invalid refresh token — sign out silently so the user sees the login screen
+      // instead of a console error loop.
+      if (event === 'TOKEN_REFRESHED' && !session) {
+        await supabase.auth.signOut().catch(() => {});
+        setUser(null);
+        setIsLoggedIn(false);
+        setSession(null);
+        setIsLoading(false);
+        return;
+      }
       setSession(session);
       if (session?.user) {
         await loadUserProfile(session);
@@ -70,11 +77,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
         return;
       }
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('id', session.user.id)
         .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        // PGRST116 = row not found, which is fine for new users
+        console.warn('Error fetching profile:', profileError.message);
+      }
 
       if (profile) {
         const userData: UserData = {
@@ -92,23 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData);
         setIsLoggedIn(true);
       } else {
-        // Profile row doesn't exist yet (created by DB trigger shortly after signUp)
-        // Build minimal profile from session data
-        const meta = session.user.user_metadata;
-        const userData: UserData = {
-          id: session.user.id,
-          name: meta?.name ?? '',
-          email: session.user.email ?? '',
-          phone: meta?.phone ?? '',
-          dob: meta?.dob ?? '',
-          accountType: (meta?.role as AccountType) ?? 'user',
-          loginMethod: 'email',
-          businessName: meta?.business_name,
-          businessEmail: meta?.business_email,
-          needsEmailVerification: !session.user.email_confirmed_at,
-        };
-        setUser(userData);
-        setIsLoggedIn(true);
+        // No profile row in DB — user was deleted or never completed registration.
+        // Sign out so they are routed to the login screen, not shown a ghost account.
+        await supabase.auth.signOut().catch(() => {});
+        setUser(null);
+        setIsLoggedIn(false);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -127,21 +127,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = async (partial: Partial<UserData>) => {
-    if (!user) return;
+    if (!user || !session) return;
     const updated = { ...user, ...partial };
     setUser(updated);
-    // Sync changes to DB
-    await supabase.from('users').update({
+    const { error } = await supabase.from('users').update({
       name: updated.name,
       phone: updated.phone,
     }).eq('id', updated.id);
+    if (error) console.warn('updateUser DB error:', error.message);
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    // Clear state immediately so the navigator switches to auth screens right away
     setUser(null);
     setIsLoggedIn(false);
     setSession(null);
+    // Fire Supabase signOut in the background
+    supabase.auth.signOut().catch(err => console.warn('signOut error:', err));
   };
 
   return (

@@ -34,11 +34,15 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
-  const { bookingId } = route.params;
+  const { bookingId, booking: passedBooking } = route.params;
   const { theme, isDarkMode } = useTheme();
   const { getBookingById, updateBookingStatus, cancelBooking } = useBooking();
 
-  const booking = useMemo(() => getBookingById(bookingId), [bookingId, getBookingById]);
+  // Use the passed booking directly (provider flow) or fall back to context lookup (user flow)
+  const booking = useMemo(
+    () => passedBooking ?? getBookingById(bookingId),
+    [passedBooking, bookingId, getBookingById]
+  );
 
   const handleStatusChange = useCallback(
     async (newStatus: BookingStatus) => {

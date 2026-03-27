@@ -154,6 +154,15 @@ export default function LoginScreen({ navigation }: Props) {
               {renderError('password')}
             </View>
 
+            {/* Forgot password */}
+            <TouchableOpacity
+              style={styles.forgotLink}
+              onPress={() => navigation.navigate('ForgotPassword')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.forgotLinkText, { color: theme.accent }]}>Forgot password?</Text>
+            </TouchableOpacity>
+
             {/* Submit */}
             <TouchableOpacity
               style={[styles.submitBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
@@ -262,6 +271,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 6,
     marginLeft: 4,
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginBottom: 12,
+    marginTop: -4,
+  },
+  forgotLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   submitBtn: {
     borderRadius: 100,

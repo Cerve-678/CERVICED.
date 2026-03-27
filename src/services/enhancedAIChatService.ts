@@ -1,6 +1,18 @@
 // Enhanced AI Chat Service for Becca - Stage 1: Tier 1 Features
-import { sampleProviders, Provider } from './ProviderDataService';
+import type { Provider } from './ProviderDataService';
+import { getProviders } from './databaseService';
+import type { DbProvider } from '../types/database';
 import { ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
+
+function dbToProvider(p: DbProvider): Provider {
+  return {
+    id: p.slug,
+    name: p.display_name,
+    service: p.service_category,
+    logo: p.logo_url ? { uri: p.logo_url } : null,
+    location: p.location_text ?? undefined,
+  };
+}
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -361,7 +373,7 @@ class EnhancedAIChatService {
     }
     // ==================== FEATURE 3 & 4: PRICE FILTERING + SERVICE MATCHING ====================
     else if ((intent === 'search' || intent === 'book') && serviceMatch.category) {
-      let providers = sampleProviders.filter(p => p.service === serviceMatch.category);
+      let providers = (await getProviders(serviceMatch.category)).map(dbToProvider);
 
       // Apply price filter if specified
       if (priceFilter) {

@@ -78,76 +78,17 @@ const doTimesOverlap = (
   return start1 < end2 && start2 < end1;
 };
 
-// Default provider schedules based on existing hardcoded rules
-const getDefaultProviderSchedule = (providerName: string): ProviderAvailability['baseSchedule'] => {
+// Standard schedule for all providers — real schedules come from Supabase provider settings
+const getDefaultProviderSchedule = (_providerName: string): ProviderAvailability['baseSchedule'] => {
   const standardHours = [
     '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
     '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM'
   ];
-
-  const weekdaySchedule: { [key: number]: string[] } = {};
-  const weekendSchedule: { [key: number]: string[] } = {};
-
-  // Build schedule based on provider-specific rules
-  const normalizedName = providerName.toUpperCase();
-
+  const schedule: { [key: number]: string[] } = {};
   for (let day = 0; day < 7; day++) {
-    const isWeekend = day === 0 || day === 6;
-    let availableHours = [...standardHours];
-
-    // Apply provider-specific restrictions
-    if (normalizedName.includes('KATHRINE') || normalizedName.includes('STYLED BY KATHRINE')) {
-      availableHours = availableHours.filter(time => time !== '12:00 PM');
-      if (isWeekend) {
-        availableHours = availableHours.filter(time => !['9:00 AM', '6:00 PM'].includes(time));
-      }
-    } else if (normalizedName.includes('DIVA') || normalizedName.includes('DIVA NAILS')) {
-      availableHours = availableHours.filter(time => !['12:00 PM', '1:00 PM'].includes(time));
-    } else if (normalizedName.includes('LASHED') || normalizedName.includes('YOUR LASHED')) {
-      if (isWeekend) {
-        availableHours = availableHours.filter(time => time !== '9:00 AM');
-      }
-    } else if (normalizedName.includes('VIKKI')) {
-      availableHours = ['10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM', '4:00 PM'];
-    } else if (normalizedName.includes('MYA') || normalizedName.includes('MAKEUP BY MYA')) {
-      availableHours = availableHours.filter(time => time !== '1:00 PM');
-    } else if (normalizedName.includes('JENNIFER') || normalizedName.includes('HAIR BY JENNIFER')) {
-      availableHours = availableHours.filter(time => time !== '12:00 PM');
-    } else if (normalizedName.includes('JANA')) {
-      availableHours = availableHours.filter(time => !['12:00 PM', '1:00 PM'].includes(time));
-    } else if (normalizedName.includes('HER BROWS')) {
-      if (isWeekend) {
-        availableHours = availableHours.filter(time => time !== '6:00 PM');
-      }
-    } else if (normalizedName.includes('KIKI')) {
-      availableHours = availableHours.filter(time => time !== '1:00 PM');
-    } else if (normalizedName.includes('ROSEMAY')) {
-      availableHours = availableHours.filter(time => !['12:00 PM', '1:00 PM'].includes(time));
-    } else if (normalizedName.includes('FILLER BY JESS')) {
-      availableHours = availableHours.filter(time => !['12:00 PM', '1:00 PM'].includes(time));
-    } else if (normalizedName.includes('EYEBROW DELUXE')) {
-      if (isWeekend) {
-        availableHours = availableHours.filter(time => time !== '6:00 PM');
-      }
-    } else if (normalizedName.includes('LASHES GALORE')) {
-      if (isWeekend) {
-        availableHours = availableHours.filter(time => time !== '9:00 AM');
-      }
-    } else if (normalizedName.includes('ZEE NAIL')) {
-      availableHours = availableHours.filter(time => time !== '1:00 PM');
-    } else if (normalizedName.includes('PAINTED BY ZOE')) {
-      availableHours = availableHours.filter(time => time !== '12:00 PM');
-    } else if (normalizedName.includes('BRAIDED SLICK')) {
-      availableHours = availableHours.filter(time => time !== '12:00 PM');
-      if (isWeekend) {
-        availableHours = availableHours.filter(time => time !== '9:00 AM');
-      }
-    }
-
-    weekdaySchedule[day] = availableHours;
+    schedule[day] = [...standardHours];
   }
-
-  return weekdaySchedule;
+  return schedule;
 };
 
 export const AvailabilityService = {

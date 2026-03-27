@@ -147,19 +147,8 @@ const generateDynamicRescheduleDates = (selectedMonth?: Date, userSelections?: s
     }
   };
 
-  // Simulate: 70% chance provider can meet the request, 25% they offer alternatives, 5% no availability
-  const roll = Math.random();
-  const canMeetRequest = roll < 0.7;
-  const hasNoAvailability = roll > 0.95;
-
-  if (hasNoAvailability) {
-    return {
-      dates: [],
-      couldMeetRequest: false,
-      noAvailability: true,
-      message: 'Unfortunately, this provider has no available dates at this time. You may cancel the appointment or request a refund.',
-    };
-  }
+  // Provider always responds with requested dates (real availability fetched from DB when available)
+  const canMeetRequest = true;
 
   if (userSelections && userSelections.length > 0) {
     for (const selection of userSelections) {
@@ -979,8 +968,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       // ✅ Mark as rated
       setRatedBookings(prev => new Set(prev).add(selectedBooking.id));
       setHasRated(true);
@@ -1026,40 +1013,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }));
 
     setMessageText('');
-
-    // Simulate provider response after 2 seconds
-    setTimeout(() => {
-      const responses = [
-        "Thanks for reaching out! I'll get back to you shortly.",
-        "Got it! Looking forward to seeing you.",
-        "Thanks for letting me know!",
-        "Sounds good! See you then.",
-      ];
-
-      const randomIndex = Math.floor(Math.random() * responses.length);
-      const providerResponse = {
-        id: `msg_${Date.now()}_provider`,
-        text: responses[randomIndex] || "Thanks for reaching out!",
-        sender: 'provider' as const,
-        timestamp: new Date(),
-      };
-
-      // ✅ Update messages state
-      setMessages(prev => [...prev, providerResponse]);
-
-      // ✅ Save provider response to messageHistory
-      setMessageHistory(prev => ({
-        ...prev,
-        [selectedBooking.id]: {
-          messages: [...(prev[selectedBooking.id]?.messages || []), providerResponse],
-          appointmentDate: selectedBooking.bookingDate,
-        },
-      }));
-
-      setTimeout(() => {
-        messageScrollRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }, 2000);
 
     setTimeout(() => {
       messageScrollRef.current?.scrollToEnd({ animated: true });
