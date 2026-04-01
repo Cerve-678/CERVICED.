@@ -21,9 +21,11 @@ export type PaymentStatus =
   | 'pending' | 'deposit_paid' | 'fully_paid' | 'refunded' | 'failed';
 
 export type NotificationType =
-  | 'booking_confirmed' | 'booking_reminder' | 'payment_success'
-  | 'booking_cancelled' | 'new_provider' | 'reschedule_request'
-  | 'reschedule_response' | 'reschedule_confirmed' | 'promotion' | 'review_request';
+  | 'booking_pending'    | 'booking_confirmed'  | 'booking_declined'
+  | 'booking_cancelled'  | 'booking_reminder'   | 'booking_in_progress'
+  | 'no_show'            | 'payment_success'    | 'new_provider'
+  | 'reschedule_request' | 'reschedule_response'| 'reschedule_confirmed'
+  | 'review_request'     | 'review_received'    | 'promotion';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 

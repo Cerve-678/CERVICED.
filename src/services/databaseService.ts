@@ -16,6 +16,7 @@ import type {
   ProviderWithServices,
   PortfolioItemWithProvider,
   NotificationWithContext,
+  NotificationType,
   ReviewWithUser,
   DbReview,
   DbEventPlan,
@@ -249,6 +250,90 @@ export async function createBooking(
   booking: Omit<DbBooking, 'id' | 'created_at' | 'updated_at' | 'confirmed_at'>,
   addOnIds: { add_on_id: string; name_snapshot: string; price_snapshot: number }[]
 ): Promise<DbBooking> {
+  // ── Validation ──────────────────────────────────────────
+  // 1. Booking date must not be in the past
+  const todayStr = new Date().toISOString().split('T')[0] ?? '';
+  if (booking.booking_date < todayStr) {
+    throw new Error('Booking date cannot be in the past.');
+  }
+
+  // 2. Provider must be open on that day of the week
+  const bookingDayOfWeek = new Date(booking.booking_date + 'T12:00:00').getDay(); // 0=Sun
+  const { data: availability } = await supabase
+    .from('provider_availability')
+    .select('open_time, close_time, is_closed')
+    .eq('provider_id', booking.provider_id)
+    .eq('day_of_week', bookingDayOfWeek)
+    .maybeSingle();
+
+  if (availability?.is_closed) {
+    throw new Error('The provider is not available on that day.');
+  }
+
+  // 3. Date must not be a blocked date
+  const { data: blocked } = await supabase
+    .from('provider_blocked_dates')
+    .select('id')
+    .eq('provider_id', booking.provider_id)
+    .eq('blocked_date', booking.booking_date)
+    .maybeSingle();
+
+  if (blocked) {
+    throw new Error('The provider is unavailable on that date.');
+  }
+
+  // 4. No overlapping confirmed/pending bookings for same provider + date
+  //    Determine the service duration (default 60 min if unknown)
+  let durationMinutes = 60;
+  if (booking.service_id) {
+    const { data: service } = await supabase
+      .from('services')
+      .select('duration_minutes')
+      .eq('id', booking.service_id)
+      .maybeSingle();
+    if (service?.duration_minutes) durationMinutes = service.duration_minutes;
+  }
+
+  const timeParts = booking.booking_time.split(':');
+  const h = Number(timeParts[0] ?? 0);
+  const m = Number(timeParts[1] ?? 0);
+  const startMins = h * 60 + m;
+  const endMins = startMins + durationMinutes;
+
+  const { data: conflicts } = await supabase
+    .from('bookings')
+    .select('booking_time, end_time, service_id')
+    .eq('provider_id', booking.provider_id)
+    .eq('booking_date', booking.booking_date)
+    .in('status', ['pending', 'confirmed']);
+
+  if (conflicts) {
+    for (const existing of conflicts) {
+      const existParts = existing.booking_time.split(':');
+      const existStart = Number(existParts[0] ?? 0) * 60 + Number(existParts[1] ?? 0);
+
+      // Determine existing booking's end time
+      let existEnd = existStart + 60; // fallback
+      if (existing.end_time) {
+        const endParts = existing.end_time.split(':');
+        existEnd = Number(endParts[0] ?? 0) * 60 + Number(endParts[1] ?? 0);
+      } else if (existing.service_id) {
+        const { data: svc } = await supabase
+          .from('services')
+          .select('duration_minutes')
+          .eq('id', existing.service_id)
+          .maybeSingle();
+        if (svc?.duration_minutes) existEnd = existStart + svc.duration_minutes;
+      }
+
+      // Overlap check: two intervals overlap if one starts before the other ends
+      if (startMins < existEnd && endMins > existStart) {
+        throw new Error('That time slot is already booked. Please choose a different time.');
+      }
+    }
+  }
+  // ── End Validation ──────────────────────────────────────
+
   const { data, error } = await supabase
     .from('bookings')
     .insert(booking)
@@ -363,6 +448,36 @@ export async function markAllNotificationsRead(): Promise<void> {
   if (error) throw error;
 }
 
+/** Insert a notification for a provider (looks up their user_id from the providers table) */
+export async function insertProviderNotification(params: {
+  provider_id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  priority?: 'high' | 'medium' | 'low';
+  is_actionable?: boolean;
+  booking_id?: string;
+}): Promise<void> {
+  const { data: provider } = await supabase
+    .from('providers')
+    .select('user_id')
+    .eq('id', params.provider_id)
+    .single();
+
+  if (!provider?.user_id) return; // provider not found or no linked user
+
+  await supabase.from('notifications').insert({
+    user_id: provider.user_id,
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    priority: params.priority ?? 'medium',
+    is_actionable: params.is_actionable ?? false,
+    booking_id: params.booking_id ?? null,
+    provider_id: params.provider_id,
+  });
+}
+
 /** Count unread notifications */
 export async function getUnreadNotificationCount(): Promise<number> {
   const { count, error } = await supabase
@@ -398,16 +513,14 @@ export async function submitReview(review: {
   booking_id: string;
   provider_id: string;
   service_id: string | null;
+  user_id: string;
   rating: number;
   comment?: string;
   tip_amount?: number;
 }): Promise<DbReview> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
   const { data, error } = await supabase
     .from('reviews')
-    .insert({ ...review, user_id: user.id })
+    .insert(review)
     .select()
     .single();
 

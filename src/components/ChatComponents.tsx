@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, TextInput, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { ChatMessage, ChatSuggestion } from '../services/enhancedAIChatService';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
@@ -187,7 +188,7 @@ export function ChatInput({
       >
         <View style={styles.inputRow}>
           <TouchableOpacity style={styles.imageButton} onPress={onImagePick} activeOpacity={0.6}>
-            <Text style={styles.imageButtonIcon}>📷</Text>
+            <Ionicons name="image-outline" size={24} color="#a342c3" />
           </TouchableOpacity>
 
           <View style={[styles.textInputContainer, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F2F2F7' }]}>

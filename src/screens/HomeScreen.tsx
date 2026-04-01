@@ -46,6 +46,42 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
 
+// ── Skeleton Loader ─────────────────────────────────────────────────────────
+function SkeletonSection({ isDarkMode, cardWidth, cardHeight, borderRadius = 16, count = 4 }: {
+  isDarkMode: boolean; cardWidth: number; cardHeight: number; borderRadius?: number; count?: number;
+}) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  return (
+    <View style={{ flexDirection: 'row', paddingLeft: 2 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: cardWidth,
+            height: cardHeight,
+            borderRadius,
+            backgroundColor: base,
+            opacity,
+            marginRight: 16,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 // FILTER TYPES
 interface FilterOptions {
   sortBy: 'recommended' | 'nearest' | 'highest-rated' | 'available-now';
@@ -157,6 +193,7 @@ export default function HomeScreen() {
 
   // Live providers from Supabase; starts empty until data loads
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [showHairTypeSelector, setShowHairTypeSelector] = useState(false);
@@ -250,8 +287,10 @@ export default function HomeScreen() {
         service: p.service_category,
         logo: p.logo_url ? { uri: p.logo_url } : null,
       })));
+      setProvidersLoading(false);
     }).catch(() => {
       // Silent failure — keeps empty provider list
+      setProvidersLoading(false);
     });
   }, []); // Only run once on mount
 
@@ -1094,7 +1133,9 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {viewAllRecommended ? (
+              {providersLoading ? (
+                <SkeletonSection isDarkMode={isDarkMode} cardWidth={176} cardHeight={64} borderRadius={16} />
+              ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>
                   {recommendedProvidersList.map((provider, index) => (
                     <View key={`recommended-expanded-${index}-${provider.id}`} style={styles.gridItem}>
@@ -1142,7 +1183,9 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {viewAllProviders ? (
+              {providersLoading ? (
+                <SkeletonSection isDarkMode={isDarkMode} cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
+              ) : viewAllProviders ? (
                 <View>
                   {Object.entries(allCategorizedProviders).map(([category, providers]) => {
                     if (!providers || providers.length === 0) return null;
@@ -1275,35 +1318,38 @@ export default function HomeScreen() {
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>NEAR ME</Text>
               </View>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.categoryScroll}
-                nestedScrollEnabled={true}
-              >
-                {liveProviders.slice(0, 10).map(provider => (
-                  <TouchableOpacity
-                    key={`near-${provider.id}`}
-                    style={styles.roundCard}
-                    onPress={() => navigateToProvider(provider)}
-                    activeOpacity={0.7}
-                  >
-                    <BlurView intensity={40} tint={theme.blurTint} style={styles.roundCardBlur}>
-                      {provider.logo && (
-                        <Image
-                          source={provider.logo}
-                          style={styles.roundCardImage}
-                          resizeMode="cover"
-                        />
-                      )}
-                    </BlurView>
-                    <Text style={[styles.roundCardName, { color: theme.text }]} numberOfLines={1}>
-                      {provider.name}
-                    </Text>
-
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {providersLoading ? (
+                <SkeletonSection isDarkMode={isDarkMode} cardWidth={100} cardHeight={100} borderRadius={50} count={5} />
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
+                >
+                  {liveProviders.slice(0, 10).map(provider => (
+                    <TouchableOpacity
+                      key={`near-${provider.id}`}
+                      style={styles.roundCard}
+                      onPress={() => navigateToProvider(provider)}
+                      activeOpacity={0.7}
+                    >
+                      <BlurView intensity={40} tint={theme.blurTint} style={styles.roundCardBlur}>
+                        {provider.logo && (
+                          <Image
+                            source={provider.logo}
+                            style={styles.roundCardImage}
+                            resizeMode="cover"
+                          />
+                        )}
+                      </BlurView>
+                      <Text style={[styles.roundCardName, { color: theme.text }]} numberOfLines={1}>
+                        {provider.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             {/* Kids Services Section */}

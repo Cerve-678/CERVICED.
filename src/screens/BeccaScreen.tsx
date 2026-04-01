@@ -19,21 +19,17 @@ import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { BeccaScreenProps } from '../navigation/types';
 import enhancedAIChatService, { ChatMessage, ChatSuggestion } from '../services/enhancedAIChatService';
+import beccaStorageService, { StoredSession } from '../services/beccaStorageService';
 import { ChatBubble, Suggestions, ProviderRecommendations, ChatInput } from '../components/ChatComponents';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useBooking } from '../contexts/BookingContext';
+import { useAuth } from '../contexts/AuthContext';
 
 // ==================== TYPES ====================
 
-interface SavedChat {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  createdAt: Date;
-  preview: string;
-}
+// (SavedChat replaced by StoredSession from beccaStorageService)
 
 // ==================== TYPING DOTS ====================
 
@@ -91,6 +87,7 @@ function TypingDots() {
 export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'>) {
   const { theme, isDarkMode } = useTheme();
   const { bookings } = useBooking();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -98,8 +95,10 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Chat history
-  const [savedChats, setSavedChats] = useState<SavedChat[]>([]);
+  const [sessions, setSessions] = useState<StoredSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const buildWelcomeMessage = useCallback((): ChatMessage => {
     const upcomingCount = bookings.filter(b => b.status === 'upcoming').length;
@@ -110,7 +109,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     welcomeText += 'I can help you find and book amazing beauty services. What are you looking for today?';
 
     return {
-      id: '0',
+      id: `welcome-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       role: 'assistant',
       content: welcomeText,
       timestamp: new Date(),
@@ -128,6 +127,16 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     setMessages([buildWelcomeMessage()]);
   }, [bookings, buildWelcomeMessage]);
 
+  // Load sessions from Supabase on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    setHistoryLoading(true);
+    beccaStorageService.loadSessions(user.id)
+      .then(setSessions)
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, [user?.id]);
+
   // Scroll to bottom
   useEffect(() => {
     setTimeout(() => {
@@ -135,43 +144,25 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     }, 100);
   }, [messages]);
 
-  // Save current chat to history before starting new
-  const saveCurrentChat = useCallback(() => {
-    // Only save if there are user messages (not just the welcome)
-    const userMessages = messages.filter(m => m.role === 'user');
-    if (userMessages.length === 0) return;
-
-    const firstUserMsg = userMessages[0];
-    const title = firstUserMsg.content.length > 40
-      ? firstUserMsg.content.substring(0, 40) + '...'
-      : firstUserMsg.content;
-
-    const lastMsg = messages[messages.length - 1];
-    const preview = lastMsg.content.length > 60
-      ? lastMsg.content.substring(0, 60) + '...'
-      : lastMsg.content;
-
-    const newChat: SavedChat = {
-      id: Date.now().toString(),
-      title,
-      messages: [...messages],
-      createdAt: new Date(),
-      preview,
-    };
-
-    setSavedChats(prev => [newChat, ...prev].slice(0, 20)); // Keep last 20 chats
-  }, [messages]);
+  // Save current chat title/preview into sessions list (for UI update)
+  const refreshSessions = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const updated = await beccaStorageService.loadSessions(user.id);
+      setSessions(updated);
+    } catch (_) {}
+  }, [user?.id]);
 
   const handleImagePick = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload images.');
+        Alert.alert('Permission Required', 'Please allow access to your photo library in Settings.');
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -180,8 +171,8 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
       if (!result.canceled && result.assets[0]) {
         setSelectedImage(result.assets[0].uri);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message ?? 'Failed to open photo library.');
     }
   };
 
@@ -203,6 +194,26 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     setSelectedImage(null);
     setIsTyping(true);
 
+    // Create session on first user message
+    let sessionId = currentSessionId;
+    if (!sessionId && user?.id) {
+      try {
+        const title = userMessage.content.length > 40
+          ? userMessage.content.substring(0, 40) + '...'
+          : userMessage.content;
+        sessionId = await beccaStorageService.createSession(user.id, title, userMessage.content.substring(0, 80));
+        setCurrentSessionId(sessionId);
+        // Save welcome message too
+        const welcome = messages[0];
+        if (welcome) await beccaStorageService.saveMessage(sessionId, welcome);
+      } catch (_) {}
+    }
+
+    // Save user message
+    if (sessionId) {
+      beccaStorageService.saveMessage(sessionId, userMessage).catch(() => {});
+    }
+
     setTimeout(async () => {
       const response = await enhancedAIChatService.generateResponse(
         textToSend || 'What can you tell me about this?',
@@ -210,16 +221,27 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
       );
       setMessages(prev => [...prev, response]);
       setIsTyping(false);
+
+      // Save assistant response
+      if (sessionId) {
+        beccaStorageService.saveMessage(sessionId, response).catch(() => {});
+        // Update session preview with last assistant message
+        const preview = response.content.length > 80 ? response.content.substring(0, 80) + '...' : response.content;
+        const title = messages.find(m => m.role === 'user')?.content ?? userMessage.content;
+        const shortTitle = title.length > 40 ? title.substring(0, 40) + '...' : title;
+        beccaStorageService.updateSession(sessionId, shortTitle, preview).catch(() => {});
+        refreshSessions();
+      }
     }, 800);
   };
 
   const handleNewChat = () => {
-    Alert.alert('New Chat', 'Start a new conversation? Current chat will be saved.', [
+    Alert.alert('New Chat', 'Start a new conversation?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'New Chat',
         onPress: () => {
-          saveCurrentChat();
+          setCurrentSessionId(null);
           setMessages([buildWelcomeMessage()]);
           setInputText('');
           setSelectedImage(null);
@@ -229,14 +251,28 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     ]);
   };
 
-  const handleLoadChat = (chat: SavedChat) => {
-    saveCurrentChat();
-    setMessages(chat.messages);
+  const handleLoadChat = async (session: StoredSession) => {
     setShowHistory(false);
+    try {
+      const msgs = await beccaStorageService.loadMessages(session.id);
+      setMessages(msgs.length > 0 ? msgs : [buildWelcomeMessage()]);
+      setCurrentSessionId(session.id);
+      enhancedAIChatService.resetConversation();
+    } catch (_) {
+      Alert.alert('Error', 'Could not load chat.');
+    }
   };
 
-  const handleDeleteChat = (chatId: string) => {
-    setSavedChats(prev => prev.filter(c => c.id !== chatId));
+  const handleDeleteChat = async (sessionId: string) => {
+    try {
+      await beccaStorageService.deleteSession(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      if (currentSessionId === sessionId) {
+        setCurrentSessionId(null);
+        setMessages([buildWelcomeMessage()]);
+        enhancedAIChatService.resetConversation();
+      }
+    } catch (_) {}
   };
 
   const handleSuggestionPress = (suggestion: ChatSuggestion) => {
@@ -362,39 +398,52 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
               </TouchableOpacity>
             </View>
 
-            {savedChats.length === 0 ? (
+            {historyLoading ? (
+              <View style={styles.historyEmpty}>
+                <Text style={[styles.historyEmptyText, { color: theme.secondaryText }]}>Loading...</Text>
+              </View>
+            ) : sessions.length === 0 ? (
               <View style={styles.historyEmpty}>
                 <Text style={[styles.historyEmptyText, { color: theme.secondaryText }]}>
-                  No saved chats yet. Start a new conversation and it will appear here.
+                  No saved chats yet. Start a conversation and it will appear here.
                 </Text>
               </View>
             ) : (
               <FlatList
-                data={savedChats}
+                data={sessions}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.historyList}
                 renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[styles.historyItem, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F8F8F8' }]}
-                    onPress={() => handleLoadChat(item)}
-                    activeOpacity={0.7}
+                  <View
+                    style={[
+                      styles.historyItem,
+                      { backgroundColor: item.id === currentSessionId
+                          ? (isDarkMode ? 'rgba(229,128,232,0.12)' : 'rgba(163,66,195,0.08)')
+                          : (isDarkMode ? '#2C2C2E' : '#F8F8F8') },
+                    ]}
                   >
-                    <View style={styles.historyItemContent}>
-                      <Text style={[styles.historyItemTitle, { color: theme.text }]} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={[styles.historyItemPreview, { color: theme.secondaryText }]} numberOfLines={2}>
-                        {item.preview}
-                      </Text>
-                      <Text style={[styles.historyItemDate, { color: theme.secondaryText }]}>
-                        {new Date(item.createdAt).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </Text>
-                    </View>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => handleLoadChat(item)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.historyItemContent}>
+                        <Text style={[styles.historyItemTitle, { color: theme.text }]} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={[styles.historyItemPreview, { color: theme.secondaryText }]} numberOfLines={2}>
+                          {item.preview}
+                        </Text>
+                        <Text style={[styles.historyItemDate, { color: theme.secondaryText }]}>
+                          {new Date(item.updated_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.historyDeleteBtn}
                       onPress={() => handleDeleteChat(item.id)}
@@ -402,7 +451,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
                     >
                       <Text style={styles.historyDeleteText}>✕</Text>
                     </TouchableOpacity>
-                  </TouchableOpacity>
+                  </View>
                 )}
               />
             )}

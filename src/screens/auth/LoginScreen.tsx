@@ -75,14 +75,18 @@ export default function LoginScreen({ navigation }: Props) {
     setTouched({ email: true, password: true });
     if (Object.keys(errs).length > 0) return;
 
+    console.log('[Login] Attempting signInWithPassword for:', email.trim());
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    console.log('[Login] signInWithPassword result — error:', error?.message ?? 'none', '| session:', data?.session?.user?.id ?? 'no session');
     setIsLoading(false);
 
     if (error) {
       Alert.alert('Login failed', error.message);
+      return;
     }
-    // On success, AuthContext.onAuthStateChange fires automatically and navigates the user in
+    // On success, AuthContext.onAuthStateChange fires and navigates the user in
+    console.log('[Login] Success — waiting for onAuthStateChange...');
   };
 
   const handleSocialLogin = (provider: string) => {

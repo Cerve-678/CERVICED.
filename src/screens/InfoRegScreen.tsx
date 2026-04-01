@@ -28,6 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Icon imports
 import { BellIcon } from '../components/IconLibrary';
+import { Ionicons } from '@expo/vector-icons';
 
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
@@ -311,7 +312,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
@@ -1152,13 +1153,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets[0]) {
+      setProviderData(prev => ({ ...prev, logo: result.assets[0].uri }));
     }
   };
 
@@ -1444,12 +1446,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   />
                 ) : (
                   <View style={styles.logoPlaceholder}>
-                    <Text style={styles.logoPlaceholderIcon}>📷</Text>
+                    <Ionicons name="camera-outline" size={28} color="#a342c3" />
                     <Text style={styles.logoPlaceholderText}>Add Logo</Text>
                   </View>
                 )}
                 <View style={styles.logoEditBadge}>
-                  <Text style={styles.logoEditIcon}>✎</Text>
+                  <Ionicons name="pencil-outline" size={14} color="#fff" />
                 </View>
               </TouchableOpacity>
             </View>

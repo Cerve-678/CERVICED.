@@ -683,55 +683,10 @@ interface ReviewsModalProps {
 
 const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
   ({ isVisible, onClose, reviews, providerName, adaptiveAccentColor, providerGradient }) => {
-    // Extended reviews data for the modal
-    const allReviews = useMemo(
-      () => [
-        ...reviews,
-        {
-          id: 4,
-          name: 'Maya P.',
-          rating: 5,
-          comment:
-            'Absolutely phenomenal service! The attention to detail is incredible and the results exceeded my expectations. Will definitely be returning!',
-          date: '3 weeks ago',
-        },
-        {
-          id: 5,
-          name: 'Claire W.',
-          rating: 4,
-          comment:
-            'Great experience overall. Professional environment and skilled work. Minor delay but worth the wait.',
-          date: '1 month ago',
-        },
-        {
-          id: 6,
-          name: 'Zara K.',
-          rating: 5,
-          comment:
-            "Best service I've had in London! The quality is outstanding and the staff is so friendly and accommodating.",
-          date: '1 month ago',
-        },
-        {
-          id: 7,
-          name: 'Nina L.',
-          rating: 5,
-          comment:
-            'Incredible work! Very professional and the results lasted much longer than expected. Highly recommend!',
-          date: '6 weeks ago',
-        },
-        {
-          id: 8,
-          name: 'Emma D.',
-          rating: 4,
-          comment:
-            'Really happy with the service. Good value for money and excellent customer care throughout.',
-          date: '2 months ago',
-        },
-      ],
-      [reviews]
-    );
+    const allReviews = reviews;
 
     const averageRating = useMemo(() => {
+      if (allReviews.length === 0) return '0.0';
       const total = allReviews.reduce((sum, review) => sum + review.rating, 0);
       return (total / allReviews.length).toFixed(1);
     }, [allReviews]);
@@ -886,6 +841,66 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
     );
   }
 );
+
+// ── Provider Profile Skeleton ────────────────────────────────────────────────
+function ProviderProfileSkeleton() {
+  const { isDarkMode } = useTheme();
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const base = isDarkMode ? '#3A3A3C' : '#D1D1D6';
+  const bg = isDarkMode ? '#1C1C1E' : '#F2F2F7';
+
+  return (
+    <View style={{ flex: 1, backgroundColor: bg }}>
+      {/* Header / logo area */}
+      <Animated.View style={{ height: 220, backgroundColor: base, opacity }} />
+      {/* Avatar circle overlapping header */}
+      <View style={{ alignItems: 'center', marginTop: -40 }}>
+        <Animated.View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: base, opacity }} />
+      </View>
+      {/* Name + service lines */}
+      <View style={{ alignItems: 'center', marginTop: 14, gap: 10, paddingHorizontal: 40 }}>
+        <Animated.View style={{ width: '55%', height: 18, borderRadius: 9, backgroundColor: base, opacity }} />
+        <Animated.View style={{ width: '35%', height: 13, borderRadius: 6, backgroundColor: base, opacity }} />
+      </View>
+      {/* Stats row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 24, marginTop: 20, paddingHorizontal: 24 }}>
+        {[80, 80, 80].map((w, i) => (
+          <Animated.View key={i} style={{ width: w, height: 36, borderRadius: 10, backgroundColor: base, opacity }} />
+        ))}
+      </View>
+      {/* Tab row */}
+      <View style={{ flexDirection: 'row', gap: 12, marginTop: 24, paddingHorizontal: 20 }}>
+        {[80, 70, 90, 60].map((w, i) => (
+          <Animated.View key={i} style={{ width: w, height: 32, borderRadius: 16, backgroundColor: base, opacity }} />
+        ))}
+      </View>
+      {/* Service item rows */}
+      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
+        {[1, 2, 3].map(i => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Animated.View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: base, opacity }} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <Animated.View style={{ width: '60%', height: 14, borderRadius: 7, backgroundColor: base, opacity }} />
+              <Animated.View style={{ width: '40%', height: 12, borderRadius: 6, backgroundColor: base, opacity }} />
+            </View>
+            <Animated.View style={{ width: 60, height: 28, borderRadius: 14, backgroundColor: base, opacity }} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigation, route }) => {
@@ -1396,11 +1411,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 }, [notificationMessageType, isNotificationsEnabled, providerIsBookmarked, provider?.providerName, providerId]);
 
   if (!fontsLoaded || loading || !provider) {
-    return (
-      <View style={styles.loading}>
-        <Text>{loading ? 'Loading...' : 'Provider not found'}</Text>
-      </View>
-    );
+    // Show skeleton while loading, error text only when not found
+    if (!loading && !provider) {
+      return (
+        <View style={styles.loading}>
+          <Text>Provider not found</Text>
+        </View>
+      );
+    }
+    return <ProviderProfileSkeleton />;
   }
 
   return (

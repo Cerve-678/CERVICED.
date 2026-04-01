@@ -97,6 +97,9 @@ export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
   EditProfile: { transferProviderId?: string } | undefined;
   Notifications: undefined;
+  BookingHistory: undefined;
+  BookingDetail: { bookingId: string; booking?: any };
+  ChangeCredentials: undefined;
   DevSettings: undefined;
 };
 

@@ -76,10 +76,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
           if (user?.id) {
             parsed = await loadProviderFromSupabase(user.id);
-          } else {
-            // Fallback: read from AsyncStorage cache
-            const stored = await AsyncStorage.getItem('@provider_reg_data');
-            if (stored) parsed = JSON.parse(stored) as ProviderRegistrationData;
           }
 
           setProviderData(parsed);

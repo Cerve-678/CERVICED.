@@ -33,9 +33,12 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Notification {
   id: string;
-  type: 'booking_confirmed' | 'booking_reminder' | 'payment_success' | 'booking_cancelled' |
-        'new_provider' | 'reschedule_request' | 'reschedule_provider_response' |
-        'reschedule_confirmed' | 'promotion' | 'review_request';
+  type: 'booking_pending'   | 'booking_confirmed'   | 'booking_declined'
+      | 'booking_cancelled'  | 'booking_reminder'    | 'booking_in_progress'
+      | 'no_show'            | 'payment_success'     | 'new_provider'
+      | 'reschedule_request' | 'reschedule_response' | 'reschedule_provider_response'
+      | 'reschedule_confirmed'| 'review_request'     | 'review_received'
+      | 'promotion';
   title: string;
   message: string;
   timestamp: string;
@@ -50,6 +53,53 @@ interface Notification {
   providerId?: string; // For new_provider notifications
 }
 
+// ── Skeleton Notification Row ───────────────────────────────────
+// Needs React, useRef, useEffect, Animated, View, StyleSheet from RN (already imported)
+function SkeletonNotifRow({ isDarkMode }: { isDarkMode: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  const bg = isDarkMode ? 'rgba(28,28,30,0.95)' : '#fff';
+  return (
+    <View style={[notifSkeletonStyles.row, { backgroundColor: bg }]}>
+      <Animated.View style={[notifSkeletonStyles.icon, { backgroundColor: base, opacity }]} />
+      <View style={notifSkeletonStyles.content}>
+        <Animated.View style={[notifSkeletonStyles.line, { width: '60%', backgroundColor: base, opacity }]} />
+        <Animated.View style={[notifSkeletonStyles.line, { width: '80%', backgroundColor: base, opacity }]} />
+        <Animated.View style={[notifSkeletonStyles.line, { width: '30%', backgroundColor: base, opacity }]} />
+      </View>
+    </View>
+  );
+}
+const notifSkeletonStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  icon: { width: 44, height: 44, borderRadius: 22 },
+  content: { flex: 1, marginLeft: 12, gap: 8 },
+  line: { height: 12, borderRadius: 6 },
+});
+
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode } = useTheme();
   const { textStyles } = useFont();
@@ -63,6 +113,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const [showMessagePopup, setShowMessagePopup] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   // Map Supabase DbNotification → local Notification shape
   const mapDbNotification = (db: DbNotification): Notification => ({
@@ -113,20 +164,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const loadNotifications = async () => {
     try {
       setLoadError(null);
-      // Try Supabase first; fall back to AsyncStorage NotificationService
-      try {
-        const dbRows = await getMyNotifications();
-        if (dbRows.length > 0) {
-          setNotifications(dbRows.map(mapDbNotification));
-          return;
-        }
-      } catch (_) { /* no-op */ }
-      // Fallback — local AsyncStorage notifications
-      const stored = await NotificationService.getAllNotifications();
-      setNotifications(stored);
+      const dbRows = await getMyNotifications();
+      setNotifications(dbRows.map(mapDbNotification));
     } catch (error) {
       console.error('Failed to load notifications:', error);
       setLoadError('Failed to load notifications. Pull down to retry.');
+    } finally {
+      setNotificationsLoading(false);
     }
   };
 
@@ -158,8 +202,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       );
       // Sync to Supabase (silent fail)
       markNotificationRead(notificationId).catch(() => {});
-      // Also sync to local AsyncStorage service (for fallback path)
-      NotificationService.markAsRead(notificationId).catch(() => {});
     } catch (error) {
       console.error('Failed to mark as read:', error);
     }
@@ -171,8 +213,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       // Sync to Supabase (silent fail)
       markAllNotificationsRead().catch(() => {});
-      // Also sync AsyncStorage
-      notifications.forEach(n => NotificationService.markAsRead(n.id).catch(() => {}));
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -181,8 +221,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Delete notification (no confirmation for swipe)
   const deleteNotification = useCallback(async (notificationId: string) => {
     try {
-      await NotificationService.deleteNotification(notificationId);
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      // Delete from Supabase (silent fail)
+      supabase.from('notifications').delete().eq('id', notificationId).then(() => {});
     } catch (error) {
       console.error('Failed to delete notification:', error);
     }
@@ -207,11 +248,16 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     if (__DEV__) console.log('Booking ID:', notification.bookingId);
 
     // Navigate based on notification type
-    if (notification.type === 'booking_confirmed' ||
+    if (notification.type === 'booking_pending' ||
+        notification.type === 'booking_confirmed' ||
+        notification.type === 'booking_declined' ||
+        notification.type === 'booking_in_progress' ||
+        notification.type === 'no_show' ||
         notification.type === 'booking_reminder' ||
         notification.type === 'booking_cancelled' ||
         notification.type === 'payment_success' ||
         notification.type === 'review_request' ||
+        notification.type === 'review_received' ||
         notification.type === 'reschedule_request' ||
         notification.type === 'reschedule_provider_response' ||
         notification.type === 'reschedule_confirmed') {
@@ -282,16 +328,21 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Format timestamp (relative time)
   const formatTimestamp = (timestamp: string) => {
+    if (!timestamp) return '';
     const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '';
     const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return 'Just now';
+    const diffMs = now.getTime() - date.getTime();
+    const diffInMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffInHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInHours < 48) return 'Yesterday';
-    
-    const days = Math.floor(diffInHours / 24);
-    return `${days}d ago`;
+    if (diffInDays === 1) return 'Yesterday';
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -303,12 +354,14 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setRefreshing(false);
   }, []);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || notificationsLoading) {
     return (
       <ThemedBackground style={styles.background}>
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.loading}>
-            <Text style={{ color: theme.text }}>Loading...</Text>
+          <View style={{ paddingTop: 16 }}>
+            {[1, 2, 3, 4, 5, 6].map(k => (
+              <SkeletonNotifRow key={k} isDarkMode={isDarkMode} />
+            ))}
           </View>
         </SafeAreaView>
       </ThemedBackground>
@@ -317,20 +370,28 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Bell color logic based on notification type
   const getBellColor = (type: string) => {
-    if (['booking_cancelled', 'reschedule_request'].includes(type)) return '#FF1744';
-    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed'].includes(type)) return '#4CAF50';
-    if (['promotion', 'reschedule_provider_response'].includes(type)) return '#9C27B0';
+    if (['booking_cancelled', 'booking_declined', 'no_show'].includes(type)) return '#FF1744';
+    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress'].includes(type)) return '#4CAF50';
+    if (['booking_pending', 'reschedule_request', 'reschedule_response', 'reschedule_provider_response'].includes(type)) return '#FF9500';
+    if (['review_received', 'review_request'].includes(type)) return '#FFD700';
+    if (['promotion', 'new_provider'].includes(type)) return '#9C27B0';
     return '#FF9800';
   };
 
   // ✅ Get action button text based on notification type
   const getActionButtonText = (type: string) => {
     switch (type) {
+      case 'booking_pending':
+        return 'View Booking';
       case 'booking_confirmed':
       case 'booking_reminder':
+      case 'booking_in_progress':
         return 'View Booking';
+      case 'booking_declined':
       case 'booking_cancelled':
         return 'View Past Bookings';
+      case 'no_show':
+        return 'View Booking';
       case 'payment_success':
         return 'View Booking';
       case 'reschedule_request':
@@ -344,6 +405,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Shop Now';
       case 'review_request':
         return 'Rate Now';
+      case 'review_received':
+        return 'View Review';
       default:
         return 'View';
     }

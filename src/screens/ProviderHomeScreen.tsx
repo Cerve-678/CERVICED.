@@ -349,6 +349,7 @@ function mapDbToProviderBooking(db: BookingWithAddOns): ConfirmedBooking {
   };
   const mapStatus = (s: string): BookingStatus => {
     switch (s) {
+      case 'pending':     return BookingStatus.PENDING;
       case 'in_progress': return BookingStatus.IN_PROGRESS;
       case 'completed':   return BookingStatus.COMPLETED;
       case 'cancelled':   return BookingStatus.CANCELLED;
@@ -472,13 +473,25 @@ export default function ProviderHomeScreen({ navigation }: Props) {
       .sort((a, b) => parseTimeToMinutes(a.bookingTime) - parseTimeToMinutes(b.bookingTime));
   }, [providerBookings, selectedDateStr]);
 
+  // Pending bookings for selected day (need confirmation)
+  const pendingDayBookings = useMemo(
+    () => dayBookings.filter((b) => b.status === BookingStatus.PENDING),
+    [dayBookings]
+  );
+
+  // Confirmed/active bookings for selected day
+  const confirmedDayBookings = useMemo(
+    () => dayBookings.filter((b) => b.status !== BookingStatus.PENDING),
+    [dayBookings]
+  );
+
   // NOW booking — first upcoming / in-progress booking for today
   const nowBooking = useMemo(() => {
     if (selectedDayIndex !== 0) return null;
     const now = new Date();
     const nowMinutes = now.getHours() * 60 + now.getMinutes();
     return (
-      dayBookings.find((b) => {
+      confirmedDayBookings.find((b) => {
         if (b.status === BookingStatus.IN_PROGRESS) return true;
         if (b.status === BookingStatus.UPCOMING) {
           return parseTimeToMinutes(b.bookingTime) >= nowMinutes;
@@ -486,7 +499,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
         return false;
       }) || null
     );
-  }, [dayBookings, selectedDayIndex]);
+  }, [confirmedDayBookings, selectedDayIndex]);
 
   // Month grid cells
   const monthCells = useMemo(() => {
@@ -498,14 +511,14 @@ export default function ProviderHomeScreen({ navigation }: Props) {
   // Split bookings into current (up to NOW) and next
   const { currentBookings, nextBookings } = useMemo(() => {
     if (selectedDayIndex !== 0 || !nowBooking) {
-      return { currentBookings: [] as ConfirmedBooking[], nextBookings: dayBookings };
+      return { currentBookings: [] as ConfirmedBooking[], nextBookings: confirmedDayBookings };
     }
-    const nowIndex = dayBookings.findIndex((b) => b.id === nowBooking.id);
+    const nowIndex = confirmedDayBookings.findIndex((b) => b.id === nowBooking.id);
     return {
-      currentBookings: dayBookings.slice(0, nowIndex + 1),
-      nextBookings: dayBookings.slice(nowIndex + 1),
+      currentBookings: confirmedDayBookings.slice(0, nowIndex + 1),
+      nextBookings: confirmedDayBookings.slice(nowIndex + 1),
     };
-  }, [dayBookings, nowBooking, selectedDayIndex]);
+  }, [confirmedDayBookings, nowBooking, selectedDayIndex]);
 
   // Handlers
   const toggleExpand = useCallback((bookingId: string) => {
@@ -679,8 +692,32 @@ export default function ProviderHomeScreen({ navigation }: Props) {
             </LinearGradient>
           )}
 
+          {/* Pending confirmation section */}
+          {pendingDayBookings.length > 0 && (
+            <>
+              <View style={styles.pendingSectionHeader}>
+                <View style={styles.pendingDot} />
+                <Text style={styles.pendingSectionLabel}>AWAITING CONFIRMATION</Text>
+              </View>
+              {pendingDayBookings.map((booking) => (
+                <BookingCard
+                  key={booking.id}
+                  booking={booking}
+                  expansionState={expansionStates[booking.id] || 0}
+                  onToggleExpand={() => toggleExpand(booking.id)}
+                  onPress={() => handleBookingPress(booking)}
+                  isDarkMode={isDarkMode}
+                  theme={theme}
+                />
+              ))}
+              {confirmedDayBookings.length > 0 && (
+                <View style={styles.pendingSectionDivider} />
+              )}
+            </>
+          )}
+
           {/* "Upcoming" label on Today when there's no NOW booking */}
-          {selectedDayIndex === 0 && dayBookings.length > 0 && !nowBooking && (
+          {selectedDayIndex === 0 && confirmedDayBookings.length > 0 && !nowBooking && (
             <Text style={[styles.sectionLabel, { color: theme.text + '66' }]}>Upcoming</Text>
           )}
 
@@ -716,7 +753,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           ))}
 
           {/* Empty state */}
-          {dayBookings.length === 0 && (
+          {dayBookings.length === 0 && pendingDayBookings.length === 0 && (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateTitle, { color: theme.text + '44' }]}>
                 No appointments
@@ -815,6 +852,32 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 12,
     marginLeft: 4,
+  },
+
+  // Pending section
+  pendingSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  pendingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF9500',
+    marginRight: 8,
+  },
+  pendingSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FF9500',
+    letterSpacing: 0.8,
+  },
+  pendingSectionDivider: {
+    height: 1,
+    backgroundColor: 'rgba(142,142,147,0.2)',
+    marginVertical: 16,
   },
 
   // Next separator

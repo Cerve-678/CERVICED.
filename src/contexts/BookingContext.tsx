@@ -5,10 +5,11 @@ import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 
 export enum BookingStatus {
+  PENDING = 'pending',
   UPCOMING = 'upcoming',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
@@ -365,7 +366,7 @@ const getFullProviderName = (shortName: string): string => {
 };
 
 // Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display
-const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
+export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
   const toDisplayTime = (t: string): string => {
     const parts = t.split(':');
     let h = parseInt(parts[0] ?? '0');
@@ -377,6 +378,7 @@ const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
   };
   const mapSt = (s: string): BookingStatus => {
     switch (s) {
+      case 'pending': return BookingStatus.PENDING;
       case 'completed': return BookingStatus.COMPLETED;
       case 'cancelled': return BookingStatus.CANCELLED;
       case 'in_progress': return BookingStatus.IN_PROGRESS;
@@ -550,6 +552,36 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [loadBookings]);
 
+  // Realtime: re-fetch bookings whenever a booking row changes for the current user
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+
+      channel = supabase
+        .channel('booking-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'bookings',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            // A booking was inserted/updated — reload to reflect latest status
+            loadBookings().catch(() => {});
+          }
+        )
+        .subscribe();
+    });
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [loadBookings]);
+
   const saveBookings = useCallback(async (bookingsToSave: ConfirmedBooking[]) => {
     try {
       if (__DEV__) console.log('Saving', bookingsToSave.length, 'bookings...');
@@ -674,6 +706,21 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         bookingId,
         'reschedule_pending'
       );
+
+      // Notify provider in Supabase
+      const rescheduleProviderId = await getProviderIdByDisplayName(booking.providerName);
+      if (rescheduleProviderId) {
+        const dateList = preferredDates.slice(0, 3).join(', ');
+        insertProviderNotification({
+          provider_id: rescheduleProviderId,
+          type: 'reschedule_request',
+          title: 'Reschedule Request',
+          message: `${booking.customerName || 'A client'} wants to reschedule their ${booking.serviceName} appointment. Preferred dates: ${dateList}.`,
+          priority: 'high',
+          is_actionable: true,
+          booking_id: bookingId,
+        }).catch(() => {});
+      }
 
       if (__DEV__) console.log('Step 1 Complete: Status=PENDING, waiting for provider response');
     } catch (error) {
@@ -817,6 +864,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         'upcoming'
       );
 
+      // Notify provider in Supabase
+      const confirmedProviderId = await getProviderIdByDisplayName(booking.providerName);
+      if (confirmedProviderId) {
+        insertProviderNotification({
+          provider_id: confirmedProviderId,
+          type: 'reschedule_confirmed',
+          title: 'Reschedule Confirmed',
+          message: `${booking.customerName || 'A client'} confirmed their ${booking.serviceName} for ${newDate} at ${newTime}.`,
+          priority: 'medium',
+          is_actionable: true,
+          booking_id: bookingId,
+        }).catch(() => {});
+      }
+
       if (__DEV__) console.log('Step 3 Complete: Status=UPCOMING, 24hr cooldown active, total reschedules:', rescheduleCount);
     } catch (error) {
       console.error('❌ Failed to confirm reschedule:', error);
@@ -830,41 +891,37 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       // ✅ FIX: Read fresh from AsyncStorage to avoid stale closure issues
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (!stored) throw new Error('No bookings found in storage');
-
-      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+      const currentBookings: ConfirmedBooking[] = stored ? JSON.parse(stored) : [];
       const booking = currentBookings.find(b => b.id === bookingId);
 
-      if (!booking) throw new Error('Booking not found');
+      if (booking) {
+        // Booking is in local state — update locally then sync
+        const updatedBookings = currentBookings.map(b =>
+          b.id === bookingId
+            ? {
+                ...b,
+                status: BookingStatus.CANCELLED,
+                isPendingReschedule: false,
+                updatedAt: new Date().toISOString(),
+              }
+            : b
+        );
+        await saveBookings(updatedBookings);
 
-      // ✅ FIX: Map over fresh bookings from storage
-      const updatedBookings = currentBookings.map(b =>
-        b.id === bookingId
-          ? {
-              ...b,
-              status: BookingStatus.CANCELLED,
-              isPendingReschedule: false,
-              updatedAt: new Date().toISOString(),
-            }
-          : b
-      );
+        await NotificationService.addBookingCancelled(
+          booking.id,
+          booking.providerName,
+          booking.serviceName,
+          booking.bookingDate,
+          booking.bookingTime,
+          booking.providerImage
+        );
+      }
 
-      await saveBookings(updatedBookings);
-
-      // Sync cancellation to Supabase (silent — local cancel already done)
+      // Always sync cancellation to Supabase
       try {
         await dbUpdateBookingStatus(bookingId, 'cancelled');
       } catch (_) {}
-
-      // Create cancellation notification
-      await NotificationService.addBookingCancelled(
-        booking.id,
-        booking.providerName,
-        booking.serviceName,
-        booking.bookingDate,
-        booking.bookingTime,
-        booking.providerImage
-      );
 
       if (__DEV__) console.log('Booking cancelled successfully');
     } catch (error) {
@@ -881,6 +938,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       await saveBookings(updatedBookings);
       // Sync to Supabase — map context BookingStatus enum → DB status string
       const dbStatusMap: Record<string, string> = {
+        [BookingStatus.PENDING]:      'pending',
         [BookingStatus.UPCOMING]:     'confirmed',
         [BookingStatus.IN_PROGRESS]:  'in_progress',
         [BookingStatus.COMPLETED]:    'completed',
@@ -966,7 +1024,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const endTime = calculateEndTime(appointment.time, item.duration);
         const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
         const now = new Date();
-        const initialStatus = bookingDateTime > now ? BookingStatus.UPCOMING : BookingStatus.COMPLETED;
+        const initialStatus = BookingStatus.PENDING;
 
         // Calculate payment breakdown for receipt
         const baseServicePrice = item.price;
@@ -1057,7 +1115,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             if (!apt) continue;
 
             const providerId = await getProviderIdByDisplayName(item.providerName);
-            if (!providerId) continue; // provider not yet in Supabase — skip silently
+            if (!providerId) {
+              console.warn('[BookingContext] ⚠️ Could not find provider in Supabase. providerName:', JSON.stringify(item.providerName), '— booking NOT saved to DB. Check your providers table display_name column.');
+              continue;
+            }
 
             // Convert "10:00 AM" → "10:00:00" for Postgres TIME type
             const tMatch = apt.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
@@ -1078,7 +1139,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 user_id: user.id,
                 provider_id: providerId,
                 service_id: null,
-                status: 'confirmed',
+                status: 'pending',
                 booking_date: apt.date,
                 booking_time: pgTime,
                 end_time: null,
@@ -1196,6 +1257,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         return false;
       }
 
+      // Always show pending-confirmation bookings in upcoming list
+      if (b.status === BookingStatus.PENDING) return true;
+
       try {
         const bookingDateTime = createBookingDateTime(b.bookingDate, b.bookingTime);
         return bookingDateTime > now;
@@ -1253,7 +1317,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     .slice(0, 3);
 
   const allTodayBookingsCompleted = todayBookings.length > 0 &&
-    todayBookings.every(b => b.status === BookingStatus.COMPLETED);
+    todayBookings.every(b =>
+      b.status === BookingStatus.COMPLETED
+    ) &&
+    todayBookings.every(b =>
+      b.status !== BookingStatus.PENDING &&
+      b.status !== BookingStatus.UPCOMING &&
+      b.status !== BookingStatus.IN_PROGRESS
+    );
 
   const value: BookingContextType = {
     bookings,

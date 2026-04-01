@@ -11,7 +11,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.myapp",
+      "bundleIdentifier": "com.cerviced.app",
       "buildNumber": "1",
       "userInterfaceStyle": "light",
       "infoPlist": {
@@ -21,12 +21,14 @@
       }
     },
     "android": {
-      "package": "com.yourcompany.myapp",
+      "package": "com.cerviced.app",
       "versionCode": 1,
       "userInterfaceStyle": "light",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
       ],
       "config": {
         "googleMaps": {
@@ -41,7 +43,14 @@
     "plugins": [
       "expo-video",
       "expo-font",
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#FF9500",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -49,8 +58,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "794155f1-c80c-4a8d-bb26-e1a26b239b3a"
+        "projectId": "624d44eb-1d17-4c9a-b782-3675ee5e7863"
       }
-    }
+    },
+    "owner": "umbrellacollective"
   }
 }

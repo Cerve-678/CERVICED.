@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { Session } from '@supabase/supabase-js';import AsyncStorage from '@react-native-async-storage/async-storage';import { supabase } from '../lib/supabase';
+import { registerForPushNotifications, unregisterPushToken } from '../services/pushNotificationService';
 
 export type AccountType = 'user' | 'provider';
 
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
     // so we only use it as the single source of truth — no separate getSession() call.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
         setSession(session);
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserProfile = async (session: Session) => {
     try {
+      console.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
       // Block unverified users from being logged in
       if (!session.user.email_confirmed_at) {
         setIsLoggedIn(false);
@@ -89,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (profile) {
+        console.log('[AuthContext] profile found — role:', profile.role);
         const userData: UserData = {
           id: profile.id,
           name: profile.name ?? '',
@@ -103,7 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(userData);
         setIsLoggedIn(true);
+        console.log('[AuthContext] setIsLoggedIn(true) — navigating in');
+        // Register for push notifications — fire and forget, never block login
+        registerForPushNotifications().catch(() => {});
       } else {
+        console.log('[AuthContext] no profile row found — signing out');
         // No profile row in DB — user was deleted or never completed registration.
         // Sign out so they are routed to the login screen, not shown a ghost account.
         await supabase.auth.signOut().catch(() => {});
@@ -142,6 +149,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setIsLoggedIn(false);
     setSession(null);
+    // Clear all user-specific AsyncStorage keys so they don't bleed into the next account
+    await AsyncStorage.multiRemove([
+      '@app_notifications',
+      '@user_learning_data',
+      '@provider_reg_data',
+      'bookmarked_videos',
+      'saved_portfolio_items',
+      'planner_events',
+      '@bookings',
+    ]).catch(() => {});
+    // Remove push token so this device stops receiving notifications for this account
+    await unregisterPushToken().catch(() => {});
     // Fire Supabase signOut in the background
     supabase.auth.signOut().catch(err => console.warn('signOut error:', err));
   };

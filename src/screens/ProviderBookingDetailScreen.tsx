@@ -18,6 +18,7 @@ import { ProviderHomeScreenProps } from '../navigation/types';
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
 const STATUS_COLORS: Record<string, string> = {
+  [BookingStatus.PENDING]: '#FF9500',
   [BookingStatus.UPCOMING]: '#007AFF',
   [BookingStatus.IN_PROGRESS]: '#34C759',
   [BookingStatus.COMPLETED]: '#8E8E93',
@@ -26,6 +27,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  [BookingStatus.PENDING]: 'Pending Confirmation',
   [BookingStatus.UPCOMING]: 'Upcoming',
   [BookingStatus.IN_PROGRESS]: 'In Progress',
   [BookingStatus.COMPLETED]: 'Completed',
@@ -57,13 +59,51 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             text: 'Confirm',
             onPress: async () => {
               await updateBookingStatus(booking.id, newStatus);
+              navigation.goBack();
             },
           },
         ]
       );
     },
-    [booking, updateBookingStatus]
+    [booking, updateBookingStatus, navigation]
   );
+
+  const handleConfirm = useCallback(async () => {
+    if (!booking) return;
+    Alert.alert(
+      'Confirm Booking?',
+      'The client will be notified that their booking is confirmed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            await updateBookingStatus(booking.id, BookingStatus.UPCOMING);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  }, [booking, updateBookingStatus, navigation]);
+
+  const handleDecline = useCallback(async () => {
+    if (!booking) return;
+    Alert.alert(
+      'Decline Booking?',
+      'The client will be notified. This action cannot be undone.',
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Decline',
+          style: 'destructive',
+          onPress: async () => {
+            await cancelBooking(booking.id);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
+  }, [booking, cancelBooking, navigation]);
 
   const handleCancel = useCallback(async () => {
     if (!booking) return;
@@ -108,6 +148,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const statusColor = STATUS_COLORS[booking.status] || '#007AFF';
   const isActive = booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS;
+  const isPendingConfirmation = booking.status === BookingStatus.PENDING;
   const isPending = booking.isPendingReschedule;
 
   return (
@@ -216,6 +257,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         )}
 
         {/* Action Buttons */}
+        {isPendingConfirmation && (
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#34C759' }]}
+              onPress={handleConfirm}
+            >
+              <Text style={styles.actionButtonText}>Confirm Booking</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: '#FF3B30' }]}
+              onPress={handleDecline}
+            >
+              <Text style={styles.actionButtonText}>Decline Booking</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {isActive && (
           <View style={styles.actions}>
             {booking.status === BookingStatus.UPCOMING && (

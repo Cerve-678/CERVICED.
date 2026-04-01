@@ -111,28 +111,20 @@ export default function ProviderAccountScreen({ navigation }: any) {
             theme={theme}
           />
           <Row
-            icon="cash-outline"
-            title="Earnings & Payouts"
-            subtitle="View revenue, set up payouts"
-            onPress={() => Alert.alert('Coming Soon', 'Earnings dashboard is coming soon.')}
+            icon="time-outline"
+            title="Booking History"
+            subtitle="View all past bookings"
+            onPress={() => navigation.navigate('BookingHistory')}
             theme={theme}
           />
-          <Row
-            icon="megaphone-outline"
-            title="Promotions"
-            subtitle="Create discounts for clients"
-            onPress={() => Alert.alert('Coming Soon', 'Promotions management is coming soon.')}
-            theme={theme}
-          />
-
           {/* ── Account ── */}
           <Text style={[styles.sectionTitle, { color: theme.accent }]}>Account</Text>
 
           <Row
             icon="mail-outline"
-            title="Email & Password"
-            subtitle={user?.email ?? 'Update credentials'}
-            onPress={handleChangePassword}
+            title="Change Password"
+            subtitle="Change your login credentials"
+            onPress={() => navigation.navigate('ChangeCredentials')}
             theme={theme}
           />
           <Row
@@ -224,8 +216,9 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   scroll: {
+    flexGrow: 1,
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 120,
     paddingTop: 12,
   },
   sectionTitle: {

@@ -95,6 +95,40 @@ const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
 });
 SubTabBar.displayName = 'SubTabBar';
 
+// ── Skeleton Masonry Grid ────────────────────────────────────────────────
+function SkeletonMasonryGrid({ isDarkMode }: { isDarkMode: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  const colWidth = (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
+  const leftHeights = [200, 140, 180, 120, 160];
+  const rightHeights = [160, 210, 130, 175, 150];
+  return (
+    <View style={{ flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.sm, marginTop: 12 }}>
+      <View style={{ flex: 1, gap: spacing.sm }}>
+        {leftHeights.map((h, i) => (
+          <Animated.View key={i} style={{ width: colWidth, height: h, borderRadius: 12, backgroundColor: base, opacity }} />
+        ))}
+      </View>
+      <View style={{ flex: 1, gap: spacing.sm }}>
+        {rightHeights.map((h, i) => (
+          <Animated.View key={i} style={{ width: colWidth, height: h, borderRadius: 12, backgroundColor: base, opacity }} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 // ============================================================================
 // FILTER CHIP
 // ============================================================================
@@ -246,6 +280,7 @@ const ExploreScreen = memo(() => {
 
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
 
   // Map a Supabase portfolio row to the local PortfolioItem shape
   const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => ({
@@ -280,6 +315,7 @@ const ExploreScreen = memo(() => {
   // Fetch portfolio from Supabase whenever filter or search changes
   useEffect(() => {
     let cancelled = false;
+    setPortfolioLoading(true);
     const load = async () => {
       try {
         let data: PortfolioItemWithProvider[];
@@ -290,9 +326,15 @@ const ExploreScreen = memo(() => {
         } else {
           data = await getPortfolioItems();
         }
-        if (!cancelled) setPortfolioItems(data.map(mapDbPortfolioItem));
+        if (!cancelled) {
+          setPortfolioItems(data.map(mapDbPortfolioItem));
+          setPortfolioLoading(false);
+        }
       } catch {
-        if (!cancelled) setPortfolioItems([]);
+        if (!cancelled) {
+          setPortfolioItems([]);
+          setPortfolioLoading(false);
+        }
       }
     };
     load();
@@ -482,6 +524,9 @@ const ExploreScreen = memo(() => {
             </View>
 
             {/* Masonry Grid */}
+            {portfolioLoading ? (
+              <SkeletonMasonryGrid isDarkMode={isDarkMode} />
+            ) : (
             <MasonryGrid
               data={portfolioItems}
               renderItem={renderPortfolioCard}
@@ -504,6 +549,7 @@ const ExploreScreen = memo(() => {
                 </View>
               }
             />
+            )}
           </>
         )}
 

@@ -33,6 +33,7 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+supabase/push_webhook_trigger.sql
 
 # typescript
 *.tsbuildinfo

@@ -149,7 +149,7 @@ export default function UserProfileScreen({ navigation }: any) {
         <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>EMAIL & PASSWORD</Text>
+              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>CHANGE PASSWORD</Text>
               <TouchableOpacity onPress={() => setShowEmailModal(false)}>
                 <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
               </TouchableOpacity>
@@ -349,7 +349,7 @@ export default function UserProfileScreen({ navigation }: any) {
 
             <SettingsOption
               icon="email"
-              title="Email & Password"
+              title="Change Password"
               subtitle="Update credentials"
               onPress={() => setShowEmailModal(true)}
               disabled={!isLoggedIn}

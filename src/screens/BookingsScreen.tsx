@@ -30,6 +30,8 @@ import * as Location from 'expo-location';
 import { useFont } from '../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking } from '../services/databaseService';
 import AppBackground from '../components/AppBackground';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { HomeScreenProps } from '../navigation/types';
@@ -387,6 +389,7 @@ const BookingCard = React.memo<BookingCardProps>(
     const showStatusBadge =
       booking.status === BookingStatus.CANCELLED ||
       booking.status === BookingStatus.NO_SHOW ||
+      booking.status === BookingStatus.PENDING ||
       booking.isPendingReschedule;
 
     const wasRescheduled = !!booking.rescheduleRequest?.originalDate && !booking.isPendingReschedule;
@@ -396,6 +399,7 @@ const BookingCard = React.memo<BookingCardProps>(
         const hasProviderResponse = !!(booking as any).rescheduleRequest?.providerAvailableDates;
         return hasProviderResponse ? 'AVAILABLE' : 'PENDING';
       }
+      if (booking.status === BookingStatus.PENDING) return 'AWAITING CONFIRMATION';
       if (booking.status === BookingStatus.CANCELLED) return 'CANCELLED';
       if (booking.status === BookingStatus.NO_SHOW) return 'NO SHOW';
       return '';
@@ -403,6 +407,7 @@ const BookingCard = React.memo<BookingCardProps>(
 
     const badgeColor = useMemo(() => {
       if (booking.isPendingReschedule) return '#9C27B0';
+      if (booking.status === BookingStatus.PENDING) return '#FF9500';
       return statusColors[booking.status as keyof typeof statusColors] || '#9E9E9E';
     }, [booking.isPendingReschedule, booking.status]);
 
@@ -473,6 +478,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   useFont();
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => createStyles(theme, isDarkMode), [theme, isDarkMode]);
+  const { user } = useAuth();
   const { addToCart, items: cartItems } = useCart();
   
   const {
@@ -965,10 +971,32 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('Rating Required', 'Please select a rating before submitting.');
       return;
     }
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to submit a review.');
+      return;
+    }
 
     setIsLoading(true);
     try {
-      // ✅ Mark as rated
+      // Look up Supabase provider UUID by display name
+      const providerId = await getProviderIdByDisplayName(selectedBooking.providerName);
+
+      if (providerId) {
+        // Check not already reviewed
+        const alreadyReviewed = await hasReviewedBooking(selectedBooking.id);
+        if (!alreadyReviewed) {
+          await submitReview({
+            booking_id: selectedBooking.id,
+            provider_id: providerId,
+            service_id: null,
+            user_id: user.id,
+            rating,
+            comment: reviewText.trim() || undefined,
+          });
+        }
+      }
+
+      // Mark as rated in local state
       setRatedBookings(prev => new Set(prev).add(selectedBooking.id));
       setHasRated(true);
       setIsLoading(false);
@@ -977,8 +1005,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setShowRatingModal(false);
         setRating(0);
         setReviewText('');
-
-        // ✅ Re-enable main scroll and modal scroll immediately after closing
         setTimeout(() => {
           mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
           modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -988,7 +1014,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       Alert.alert('Error', 'Failed to submit rating.');
       setIsLoading(false);
     }
-  }, [selectedBooking, rating]);
+  }, [selectedBooking, rating, reviewText, user]);
 
   const handleSendMessage = useCallback(() => {
     if (!messageText.trim() || !selectedBooking) return;

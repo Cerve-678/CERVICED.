@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useLayoutEffect, useRef } from 'react';
+import React, { useState, useCallback, useLayoutEffect, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,6 +58,55 @@ function mapDbProvider(p: DbProvider): Provider {
     rating: p.rating,
   };
 }
+
+// ── Skeleton Loader ───────────────────────────────────────────────
+function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  const bg = isDarkMode ? 'rgba(28,28,30,0.95)' : '#fff';
+  return (
+    <View style={[skeletonStyles.card, { backgroundColor: bg }]}>
+      <Animated.View style={[skeletonStyles.avatar, { backgroundColor: base, opacity }]} />
+      <View style={skeletonStyles.info}>
+        <Animated.View style={[skeletonStyles.line, { width: '55%', backgroundColor: base, opacity }]} />
+        <Animated.View style={[skeletonStyles.line, { width: '35%', backgroundColor: base, opacity }]} />
+        <Animated.View style={[skeletonStyles.line, { width: '45%', backgroundColor: base, opacity }]} />
+      </View>
+      <Animated.View style={[skeletonStyles.badge, { backgroundColor: base, opacity }]} />
+    </View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  avatar: { width: 56, height: 56, borderRadius: 28 },
+  info: { flex: 1, marginLeft: 14, gap: 8 },
+  line: { height: 12, borderRadius: 6 },
+  badge: { width: 52, height: 28, borderRadius: 14, marginLeft: 8 },
+});
 
 // Service Tab Button Component with Haptic Feedback and Subtle Animation
 interface ServiceTabProps {
@@ -231,8 +280,10 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       <ThemedBackground>
         <StatusBar barStyle={theme.statusBar} />
         <SafeAreaView style={styles.container}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.accent} />
+          <View style={{ paddingTop: 60 }}>
+            {[1, 2, 3, 4, 5].map(k => (
+              <SkeletonProviderCard key={k} isDarkMode={isDarkMode} />
+            ))}
           </View>
         </SafeAreaView>
       </ThemedBackground>
