@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -335,6 +336,47 @@ function BookingCard({
   );
 }
 
+// ====================== SKELETON CARD ======================
+
+function SkeletonBookingCard({ isDarkMode }: { isDarkMode: boolean }) {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.85] });
+  const bg = isDarkMode ? '#2C2C2E' : '#E5E5EA';
+  const highlight = isDarkMode ? '#3A3A3C' : '#F2F2F7';
+  return (
+    <Animated.View style={[skeletonStyles.card, { backgroundColor: bg, opacity }]}>
+      <View style={[skeletonStyles.statusBar, { backgroundColor: highlight }]} />
+      <View style={skeletonStyles.row}>
+        <View style={[skeletonStyles.circle, { backgroundColor: highlight }]} />
+        <View style={skeletonStyles.lines}>
+          <View style={[skeletonStyles.lineWide, { backgroundColor: highlight }]} />
+          <View style={[skeletonStyles.lineNarrow, { backgroundColor: highlight }]} />
+        </View>
+        <View style={[skeletonStyles.time, { backgroundColor: highlight }]} />
+      </View>
+    </Animated.View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  card: { borderRadius: 14, marginHorizontal: 16, marginBottom: 10, padding: 14, overflow: 'hidden' },
+  statusBar: { height: 4, width: 48, borderRadius: 2, marginBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  circle: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+  lines: { flex: 1, gap: 8 },
+  lineWide: { height: 13, borderRadius: 6, width: '70%' },
+  lineNarrow: { height: 11, borderRadius: 6, width: '45%' },
+  time: { width: 52, height: 32, borderRadius: 8 },
+});
+
 // ====================== SUPABASE MAPPER ======================
 
 function mapDbToProviderBooking(db: BookingWithAddOns): ConfirmedBooking {
@@ -417,21 +459,25 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
   // Live provider bookings from Supabase
   const [liveProviderBookings, setLiveProviderBookings] = useState<ConfirmedBooking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const loadBookings = async () => {
+    const loadBookings = async (showLoading = false) => {
+      if (showLoading) setBookingsLoading(true);
       try {
         const rows = await getProviderBookings();
-        if (!cancelled && rows.length > 0) {
+        if (!cancelled) {
           setLiveProviderBookings(rows.map(mapDbToProviderBooking));
         }
-      } catch (_) { /* silent — falls back to mock */ }
+      } catch (_) { /* silent */ } finally {
+        if (!cancelled) setBookingsLoading(false);
+      }
     };
 
-    loadBookings();
+    loadBookings(true);
 
     // Realtime — re-fetch when any booking for this provider changes
     getMyProviderProfile().then(profile => {
@@ -441,7 +487,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings', filter: `provider_id=eq.${profile.id}` },
-          () => { loadBookings(); }
+          () => { loadBookings(false); }
         )
         .subscribe();
     }).catch(() => {});
@@ -692,8 +738,17 @@ export default function ProviderHomeScreen({ navigation }: Props) {
             </LinearGradient>
           )}
 
+          {/* Skeleton loading state */}
+          {bookingsLoading && (
+            <>
+              {[1, 2, 3].map(k => (
+                <SkeletonBookingCard key={k} isDarkMode={isDarkMode} />
+              ))}
+            </>
+          )}
+
           {/* Pending confirmation section */}
-          {pendingDayBookings.length > 0 && (
+          {!bookingsLoading && pendingDayBookings.length > 0 && (
             <>
               <View style={styles.pendingSectionHeader}>
                 <View style={styles.pendingDot} />
@@ -717,12 +772,12 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           )}
 
           {/* "Upcoming" label on Today when there's no NOW booking */}
-          {selectedDayIndex === 0 && confirmedDayBookings.length > 0 && !nowBooking && (
+          {!bookingsLoading && selectedDayIndex === 0 && confirmedDayBookings.length > 0 && !nowBooking && (
             <Text style={[styles.sectionLabel, { color: theme.text + '66' }]}>Upcoming</Text>
           )}
 
           {/* Current bookings (up to the NOW booking) */}
-          {currentBookings.map((booking) => (
+          {!bookingsLoading && currentBookings.map((booking) => (
             <BookingCard
               key={booking.id}
               booking={booking}
@@ -735,12 +790,12 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           ))}
 
           {/* "Next" separator */}
-          {currentBookings.length > 0 && nextBookings.length > 0 && (
+          {!bookingsLoading && currentBookings.length > 0 && nextBookings.length > 0 && (
             <Text style={[styles.nextSeparator, { color: theme.text + '55' }]}>Next</Text>
           )}
 
           {/* Remaining bookings */}
-          {nextBookings.map((booking) => (
+          {!bookingsLoading && nextBookings.map((booking) => (
             <BookingCard
               key={booking.id}
               booking={booking}
@@ -753,7 +808,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           ))}
 
           {/* Empty state */}
-          {dayBookings.length === 0 && pendingDayBookings.length === 0 && (
+          {!bookingsLoading && dayBookings.length === 0 && pendingDayBookings.length === 0 && (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyStateTitle, { color: theme.text + '44' }]}>
                 No appointments

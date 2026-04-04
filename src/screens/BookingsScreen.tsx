@@ -429,7 +429,7 @@ const BookingCard = React.memo<BookingCardProps>(
             ]}
           >
             <View style={styles.providerImageWrapper}>
-              <Image source={booking.providerImage} style={styles.providerLogo} resizeMode="cover" />
+              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.providerLogo} resizeMode="cover" />
               {/* Green dot for recently added bookings */}
               {isRecentlyAdded && booking.status === BookingStatus.UPCOMING && (
                 <View style={styles.recentlyAddedDot} />
@@ -2081,7 +2081,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           {/* Header */}
                           <View style={styles.modalHeader}>
                             <Image
-                              source={selectedBooking.providerImage}
+                              source={typeof selectedBooking.providerImage === 'string' ? { uri: selectedBooking.providerImage } : selectedBooking.providerImage}
                               style={styles.modalProviderImage}
                               resizeMode="cover"
                             />
