@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   Alert,
   Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBooking, BookingStatus, ConfirmedBooking } from '../contexts/BookingContext';
 import AppBackground from '../components/AppBackground';
 import { ProviderHomeScreenProps } from '../navigation/types';
+import { supabase } from '../lib/supabase';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -40,11 +42,58 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const { theme, isDarkMode } = useTheme();
   const { getBookingById, updateBookingStatus, cancelBooking } = useBooking();
 
-  // Use the passed booking directly (provider flow) or fall back to context lookup (user flow)
-  const booking = useMemo(
+  const contextBooking = useMemo(
     () => passedBooking ?? getBookingById(bookingId),
     [passedBooking, bookingId, getBookingById]
   );
+
+  const [fetchedBooking, setFetchedBooking] = useState<ConfirmedBooking | null>(null);
+  const [fetching, setFetching] = useState(false);
+
+  // If booking not in local context, fetch directly from Supabase (provider flow from notification)
+  useEffect(() => {
+    if (contextBooking || !bookingId) return;
+    setFetching(true);
+    supabase
+      .from('bookings')
+      .select('*, add_ons: booking_add_ons(*)')
+      .eq('id', bookingId)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) { setFetching(false); return; }
+        const d = data as any;
+        const mapped: ConfirmedBooking = {
+          id: d.id,
+          providerId: d.provider_id,
+          providerName: d.provider_name_snapshot ?? '',
+          providerImage: d.provider_logo_snapshot ?? '',
+          serviceName: d.service_name_snapshot ?? '',
+          duration: '',
+          price: d.base_price ?? 0,
+          bookingDate: d.booking_date ?? '',
+          bookingTime: d.booking_time ? d.booking_time.slice(0, 5) : '',
+          endTime: d.end_time ? d.end_time.slice(0, 5) : '',
+          address: d.provider_address_snapshot ?? '',
+          status: d.status as BookingStatus,
+          paymentType: d.payment_type ?? 'full',
+          amountPaid: d.amount_paid ?? 0,
+          depositAmount: d.deposit_amount ?? 0,
+          remainingBalance: d.remaining_balance ?? 0,
+          serviceCharge: d.service_charge ?? 0,
+          customerName: d.customer_name ?? '',
+          customerEmail: d.customer_email ?? '',
+          customerPhone: d.customer_phone ?? '',
+          isPendingReschedule: false,
+          addOns: (d.add_ons ?? []).map((a: any) => ({ name: a.name_snapshot, price: a.price_snapshot })),
+          groupBookingId: d.group_booking_id ?? undefined,
+          notes: d.notes ?? undefined,
+        };
+        setFetchedBooking(mapped);
+        setFetching(false);
+      });
+  }, [bookingId, contextBooking]);
+
+  const booking = contextBooking ?? fetchedBooking;
 
   const handleStatusChange = useCallback(
     async (newStatus: BookingStatus) => {
@@ -133,6 +182,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!booking?.customerEmail) return;
     Linking.openURL(`mailto:${booking.customerEmail}`);
   }, [booking]);
+
+  if (fetching) {
+    return (
+      <AppBackground>
+        <SafeAreaView style={styles.container}>
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color="#a342c3" />
+          </View>
+        </SafeAreaView>
+      </AppBackground>
+    );
+  }
 
   if (!booking) {
     return (

@@ -20,10 +20,21 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ztrfpfvvejzaysrelmfm.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0cmZwZnZ2ZWp6YXlzcmVsbWZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNDkwNzYsImV4cCI6MjA4OTkyNTA3Nn0.ZTBga3-C1dZ-WQIw2rniyqv29So7L9y6rxk2omn4SjI"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6761615066",
+        "ascApiKeyId": "57BA74VGL6",
+        "ascApiKeyIssuerId": "7ea93d11-20d3-42ad-8ba1-90d102fa703d",
+        "ascApiKeyPath": "/Users/mac/cerviced/CERVICED./AuthKey_57BA74VGL6.p8"
+      }
+    }
   }
 }

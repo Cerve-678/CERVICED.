@@ -28,6 +28,8 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 import { HomeScreenProps } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { CommonActions } from '@react-navigation/native';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -241,11 +243,21 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setSelectedNotification(null);
   }, []);
 
+  const { user } = useAuth();
+  const isProvider = user?.accountType === 'provider';
+  // Use a ref so the callback always reads the latest value, never stale
+  const isProviderRef = useRef(false);
+  isProviderRef.current = isProvider;
+
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
     if (__DEV__) console.log('[NotificationsScreen] handleNotificationAction called');
     if (__DEV__) console.log('Notification type:', notification.type);
     if (__DEV__) console.log('Booking ID:', notification.bookingId);
+
+    // Close modal immediately so the user gets instant feedback
+    setShowMessagePopup(false);
+    setSelectedNotification(null);
 
     // Navigate based on notification type
     if (notification.type === 'booking_pending' ||
@@ -265,29 +277,33 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       const openReschedule = notification.type === 'reschedule_request' ||
                             notification.type === 'reschedule_provider_response';
 
-      if (__DEV__) console.log('Navigating to Bookings with params:', {
-        openBookingId: notification.bookingId,
-        openReschedule,
-      });
-
-      // BookingsScreen auto-detects the correct tab (past vs upcoming) from the booking data
-      const bookingsParams = notification.bookingId
-        ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
-        : undefined;
-
-      // Keep modal visible for 3 seconds before navigating
       setTimeout(() => {
-        setShowMessagePopup(false);
-        setSelectedNotification(null);
-
-        setTimeout(() => {
+        if (isProviderRef.current) {
+          // Provider: dismiss the modal first, then navigate to BookingDetail
+          if (notification.bookingId) {
+            const bookingId = notification.bookingId;
+            // Dismiss Notifications modal
+            navigation.dispatch(CommonActions.goBack());
+            // After modal dismiss animation, push BookingDetail in same stack
+            setTimeout(() => {
+              navigation.dispatch(
+                CommonActions.navigate({ name: 'BookingDetail', params: { bookingId } })
+              );
+              if (__DEV__) console.log('Provider — navigating to BookingDetail:', bookingId);
+            }, 500);
+          }
+        } else {
+          // Client: go back to tab then open Bookings screen
+          const bookingsParams = notification.bookingId
+            ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
+            : undefined;
           navigation.goBack();
           setTimeout(() => {
             navigation.navigate('Bookings', bookingsParams);
-            if (__DEV__) console.log('Navigation to Bookings executed successfully');
-          }, 100);
-        }, 300);
-      }, 3000);
+            if (__DEV__) console.log('Client — navigating to Bookings:', bookingsParams);
+          }, 400);
+        }
+      }, 300);
     } else if (notification.type === 'new_provider') {
       if (__DEV__) console.log('Navigating to ProviderProfile');
       if (__DEV__) console.log('Provider ID:', notification.providerId);
@@ -297,32 +313,19 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return;
       }
 
-      // Keep modal visible for 3 seconds before navigating
       setTimeout(() => {
-        setShowMessagePopup(false);
-        setSelectedNotification(null);
-
+        navigation.goBack();
         setTimeout(() => {
-          navigation.goBack();
-          setTimeout(() => {
-            navigation.navigate('ProviderProfile', { providerId: notification.providerId!, source: 'notification' });
-            if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
-          }, 100);
-        }, 300);
-      }, 3000);
+          navigation.navigate('ProviderProfile', { providerId: notification.providerId!, source: 'notification' });
+          if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
+        }, 100);
+      }, 300);
     } else if (notification.type === 'promotion') {
       if (__DEV__) console.log('Navigating to Home');
-
-      // Keep modal visible for 3 seconds before navigating
       setTimeout(() => {
-        setShowMessagePopup(false);
-        setSelectedNotification(null);
-
-        setTimeout(() => {
-          navigation.goBack();
-          if (__DEV__) console.log('Navigation to Home executed');
-        }, 300);
-      }, 3000);
+        navigation.goBack();
+        if (__DEV__) console.log('Navigation to Home executed');
+      }, 300);
     }
   }, [navigation]);
 
