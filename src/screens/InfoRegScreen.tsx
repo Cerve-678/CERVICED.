@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  ActivityIndicator,
   NativeSyntheticEvent,
   TextInputFocusEventData,
 } from 'react-native';
@@ -39,6 +40,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Supabase registration service
 import { saveProviderToSupabase } from '../services/providerRegistrationService';
+import { transferFromAcuity } from '../services/acuityTransferService';
 
 // Navigation types
 import { ProfileStackParamList } from '../navigation/types';
@@ -594,7 +596,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
 interface TransferDataModalProps {
   visible: boolean;
   onClose: () => void;
-  onTransfer: (providerId: string) => void;
+  onTransfer: (url: string) => Promise<void>;
   onSkip: () => void;
 }
 
@@ -604,7 +606,33 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   onTransfer,
   onSkip,
 }) => {
-  const [providerId, setProviderId] = useState('');
+  const [acuityUrl, setAcuityUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const handleTransferPress = async () => {
+    const trimmed = acuityUrl.trim();
+    if (!trimmed) {
+      setErrorMsg('Please paste your Acuity Scheduling link first.');
+      return;
+    }
+    if (!trimmed.startsWith('http')) {
+      setErrorMsg('Please paste the full URL starting with https://');
+      return;
+    }
+    setErrorMsg('');
+    setIsLoading(true);
+    setStatusMsg('Fetching your Acuity page…');
+    try {
+      setStatusMsg('Reading your services…');
+      await onTransfer(trimmed);
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'Something went wrong. Please try again.');
+      setIsLoading(false);
+      setStatusMsg('');
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
@@ -614,36 +642,48 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
             colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)']}
             style={styles.transferGradient}
           />
-          <Text style={styles.transferTitle}>Transfer Existing Data?</Text>
+          <Text style={styles.transferTitle}>Import from Acuity</Text>
           <Text style={styles.transferSubtitle}>
-            Do you already have services listed elsewhere? We can help transfer your data.
+            Paste your Acuity Scheduling link and we'll automatically import your services, prices, and business info.
           </Text>
 
           <BlurView intensity={15} tint="light" style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
-              value={providerId}
-              onChangeText={setProviderId}
-              placeholder="Enter your existing provider ID or URL"
+              value={acuityUrl}
+              onChangeText={(text) => { setAcuityUrl(text); setErrorMsg(''); }}
+              placeholder="https://acuityscheduling.com/schedule.php?owner=…"
               placeholderTextColor="rgba(0,0,0,0.4)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              editable={!isLoading}
             />
           </BlurView>
 
+          {errorMsg ? (
+            <Text style={styles.transferError}>{errorMsg}</Text>
+          ) : null}
+
+          {isLoading ? (
+            <View style={styles.transferLoadingRow}>
+              <ActivityIndicator size="small" color="#7B1FA2" />
+              <Text style={styles.transferLoadingText}>{statusMsg}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.transferButtons}>
             <TouchableOpacity
-              style={styles.transferButton}
-              onPress={() => {
-                if (providerId.trim()) {
-                  onTransfer(providerId.trim());
-                } else {
-                  Alert.alert('Missing ID', 'Please enter a provider ID or URL to transfer data.');
-                }
-              }}
+              style={[styles.transferButton, isLoading && { opacity: 0.5 }]}
+              onPress={handleTransferPress}
+              disabled={isLoading}
             >
-              <Text style={styles.transferButtonText}>Transfer Data</Text>
+              <Text style={styles.transferButtonText}>
+                {isLoading ? 'Importing…' : 'Import My Profile'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
-              <Text style={styles.skipButtonText}>Start Fresh</Text>
+            <TouchableOpacity style={styles.skipButton} onPress={onSkip} disabled={isLoading}>
+              <Text style={styles.skipButtonText}>Start Fresh Instead</Text>
             </TouchableOpacity>
           </View>
         </BlurView>
@@ -1164,16 +1204,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }
   };
 
-  // Handle data transfer
-  const handleTransferData = useCallback((providerId: string) => {
-    // In a real app, this would fetch data from the API
+  // Handle data transfer from Acuity Scheduling URL
+  const handleTransferData = useCallback(async (url: string) => {
+    const extracted = await transferFromAcuity(url);
+    setProviderData(extracted);
+    const firstCat = Object.keys(extracted.categories)[0];
+    if (firstCat) setSelectedCategory(firstCat);
+    setShowTransferModal(false);
     Alert.alert(
-      'Transfer Started',
-      `We're fetching your data from ${providerId}. This may take a moment.`,
-      [{ text: 'OK', onPress: () => setShowTransferModal(false) }]
+      'Import Complete!',
+      `We found ${Object.values(extracted.categories).flat().length} services from your Acuity profile. Review and save when ready.`
     );
-    // Simulate transfer - in real app, fetch from API
-    // For now, just close the modal
   }, []);
 
   // Add service category
@@ -2505,6 +2546,25 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: '#000',
+  },
+  transferError: {
+    fontSize: 13,
+    color: '#D32F2F',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  transferLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  transferLoadingText: {
+    fontSize: 13,
+    color: '#7B1FA2',
+    fontStyle: 'italic',
   },
 
   // Buttons
