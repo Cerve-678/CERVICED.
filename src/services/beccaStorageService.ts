@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, ensureFreshSession } from '../lib/supabase';
 import { ChatMessage } from './enhancedAIChatService';
 
 export interface StoredSession {
@@ -39,6 +39,7 @@ const beccaStorageService = {
   },
 
   async createSession(userId: string, title: string, preview: string): Promise<string> {
+    await ensureFreshSession();
     const { data, error } = await supabase
       .from('becca_chat_sessions')
       .insert({ user_id: userId, title, preview })
@@ -49,6 +50,7 @@ const beccaStorageService = {
   },
 
   async updateSession(sessionId: string, title: string, preview: string): Promise<void> {
+    await ensureFreshSession();
     await supabase
       .from('becca_chat_sessions')
       .update({ title, preview, updated_at: new Date().toISOString() })
@@ -56,6 +58,7 @@ const beccaStorageService = {
   },
 
   async saveMessage(sessionId: string, message: ChatMessage): Promise<void> {
+    await ensureFreshSession();
     const { suggestions, providerRecommendations, imageUri, ..._ } = message as any;
     const metadata: Record<string, any> = {};
     if (suggestions) metadata['suggestions'] = suggestions;
@@ -73,6 +76,7 @@ const beccaStorageService = {
   },
 
   async deleteSession(sessionId: string): Promise<void> {
+    await ensureFreshSession();
     await supabase.from('becca_chat_sessions').delete().eq('id', sessionId);
   },
 };

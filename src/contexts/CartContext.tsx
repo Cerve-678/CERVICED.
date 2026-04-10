@@ -6,6 +6,7 @@ export interface CartItem {
   id: string;
   providerName: string;
   providerImage: any;
+  providerId?: string;
   providerService: string;
   serviceName: string;
   serviceDescription: string;
@@ -55,6 +56,7 @@ export interface CartContextType {
 export interface AddToCartParams {
   providerName: string;
   providerImage: any;
+  providerId?: string;
   providerService: string;
   service: {
     id: string | number;
@@ -168,6 +170,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         const { 
           providerName, 
           providerImage, 
+          providerId,
           providerService, 
           service, 
           quantity = 1,
@@ -199,6 +202,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             id: itemId,
             providerName: String(providerName || 'Unknown Provider'),
             providerImage: providerImage || null,
+            providerId: providerId,
             providerService: String(providerService || 'General'),
             serviceName: String(safeGet(service, 'name', 'Unknown Service')),
             serviceDescription: String(safeGet(service, 'description', '')),

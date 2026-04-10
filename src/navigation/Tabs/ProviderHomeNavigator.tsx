@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderHomeScreen from '../../screens/ProviderHomeScreen';
 import ProviderBookingDetailScreen from '../../screens/ProviderBookingDetailScreen';
+import BookingChatScreen from '../../screens/BookingChatScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
 import { ProviderHomeStackParamList } from '../types';
@@ -35,6 +36,19 @@ export default function ProviderHomeNavigator() {
             color: theme.text,
           },
         }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="BookingChat"
+        component={BookingChatScreen}
+        options={({ route }) => ({
+          title: (route.params as any).otherPartyName ?? 'Chat',
+          presentation: 'card',
+          headerBackTitle: 'Booking',
+          headerStyle: { backgroundColor: theme.background },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text },
+        })}
       />
 
       <ProviderHomeStack.Group screenOptions={{

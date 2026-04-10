@@ -234,6 +234,7 @@ export interface DbNotification {
   is_actionable: boolean;
   booking_id: string | null;
   provider_id: string | null;
+  target_role: 'user' | 'provider';
   metadata: Json;
   created_at: string;
 }
@@ -338,6 +339,7 @@ export interface PortfolioItemWithProvider extends DbPortfolioItem {
 /** Booking with add-ons — used by BookingsScreen and ProviderHomeScreen */
 export interface BookingWithAddOns extends DbBooking {
   add_ons: DbBookingAddOn[];
+  provider_info?: { service_category: string } | null;
 }
 
 /** Review with user name — used by ProviderProfileScreen */

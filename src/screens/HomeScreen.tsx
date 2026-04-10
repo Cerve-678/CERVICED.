@@ -28,14 +28,16 @@ import { HomeStackParamList } from '../navigation/types';
 
 // Import your icons from IconLibrary
 import Icon, { BellIcon, SearchIcon } from '../components/IconLibrary';
-import { NotificationService } from '../services/notificationService';
-import { useTheme } from '../contexts/ThemeContext';
+import { getProviders, getUnreadNotificationCount } from '../services/databaseService';
+import { supabase } from '../lib/supabase';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useBooking } from '../contexts/BookingContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useFont } from '../contexts/FontContext';
 import userLearningService from '../services/userLearningService';
 import { HairTypeSelector } from '../components/HairTypeSelector';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { getProviders } from '../services/databaseService';
 import type { DbProvider } from '../types/database';
 
 // Enable LayoutAnimation on Android
@@ -237,11 +239,12 @@ export default function HomeScreen() {
     return Array.from(uniqueProviders.values());
   }, [bookings, liveProviders]);
 
-  // Load unread notification count
+  // Load unread notification count from Supabase (single source of truth)
+  // NotificationService (AsyncStorage) is a legacy local store that can double-count
+  // and never reflects reads done in NotificationsScreen.
   const loadUnreadCount = useCallback(async () => {
     try {
-      const notifications = await NotificationService.getAllNotifications();
-      const unread = notifications.filter(n => !n.read).length;
+      const unread = await getUnreadNotificationCount();
       setUnreadCount(unread);
     } catch (error) {
       console.error('Failed to load unread count:', error);
@@ -252,6 +255,29 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadUnreadCount();
+
+      // Realtime subscription — update badge instantly when a notification is
+      // inserted or marked read without needing to leave and return to HomeScreen.
+      const channel = supabase
+        .channel('home-notif-badge')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications' },
+          () => { loadUnreadCount(); }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'notifications' },
+          () => { loadUnreadCount(); }
+        )
+        .on(
+          'postgres_changes',
+          { event: 'DELETE', schema: 'public', table: 'notifications' },
+          () => { loadUnreadCount(); }
+        )
+        .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
     }, [loadUnreadCount])
   );
 

@@ -20,6 +20,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { loadProviderFromSupabase } from '../services/providerRegistrationService';
+import { getMyProviderProfile, getProviderReviews } from '../services/databaseService';
+import { ReviewWithUser } from '../types/database';
 import AppBackground from '../components/AppBackground';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -65,6 +67,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showFullAbout, setShowFullAbout] = useState(false);
+  const [reviews, setReviews] = useState<ReviewWithUser[]>([]);
 
   // Reload data every time screen comes into focus
   useFocusEffect(
@@ -85,6 +88,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               setSelectedCategory(cats[0]);
             }
           }
+
+          // Fetch own reviews
+          try {
+            const providerRow = await getMyProviderProfile();
+            if (providerRow?.id) {
+              const fetchedReviews = await getProviderReviews(providerRow.id);
+              setReviews(fetchedReviews);
+            }
+          } catch (_) {}
         } catch (e) {
           console.error('Error loading provider data:', e);
         } finally {
@@ -389,6 +401,44 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             <Text style={styles.contactText}>Location: {providerData.location}</Text>
             <Text style={styles.contactText}>Service: {serviceType}</Text>
           </BlurView>
+
+          {/* Reviews Section */}
+          {reviews.length > 0 && (
+            <BlurView intensity={50} tint="light" style={styles.contactCard}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
+              <Text style={styles.sectionTitle}>Reviews ({reviews.length})</Text>
+              {reviews.map((review) => (
+                <View key={review.id} style={{ marginBottom: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)', paddingBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ fontWeight: '600', color: '#333', flex: 1 }}>
+                      {review.user?.name ?? 'Anonymous'}
+                    </Text>
+                    <View style={{ flexDirection: 'row' }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons
+                          key={star}
+                          name={star <= review.rating ? 'star' : 'star-outline'}
+                          size={14}
+                          color="#FFB800"
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  {review.comment ? (
+                    <Text style={{ color: '#555', fontSize: 13, lineHeight: 18 }}>{review.comment}</Text>
+                  ) : null}
+                  <Text style={{ color: '#888', fontSize: 11, marginTop: 4 }}>
+                    {new Date(review.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              ))}
+            </BlurView>
+          )}
 
           <View style={{ height: 120 }} />
         </ScrollView>

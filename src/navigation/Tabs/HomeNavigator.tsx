@@ -4,6 +4,7 @@ import HomeScreen from '../../screens/HomeScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
 import SearchScreen from '../../screens/SearchScreen';
 import BookingsScreen from '../../screens/BookingsScreen';
+import BookingChatScreen from '../../screens/BookingChatScreen';
 import BookmarkedProvidersScreen from '../../screens/BookmarkedProvidersScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import CartScreen from '../../screens/CartScreen';
@@ -114,6 +115,20 @@ export default function HomeNavigator() {
             color: theme.text,
           },
         }}
+      />
+
+      {/* Chat for a specific booking */}
+      <HomeStack.Screen
+        name="BookingChat"
+        component={BookingChatScreen}
+        options={({ route }) => ({
+          title: (route.params as any).otherPartyName ?? 'Chat',
+          presentation: 'card',
+          headerBackTitle: 'Back',
+          headerStyle: { backgroundColor: theme.background },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text },
+        })}
       />
 
       {/* SWIPE-DOWN MODAL - Notifications (formSheet style on iOS) */}

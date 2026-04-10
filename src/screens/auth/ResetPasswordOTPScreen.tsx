@@ -1,5 +1,5 @@
 // src/screens/auth/ResetPasswordOTPScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyIcon } from '../../components/IconLibrary';
 import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -31,6 +32,16 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Reset loading states whenever screen comes into focus.
+  // This handles the case where the screen stays mounted in the nav stack
+  // with a stuck spinner — same effect as closing and reopening the app.
+  useFocusEffect(
+    useCallback(() => {
+      setIsVerifying(false);
+      setResending(false);
+    }, [])
+  );
 
   const glassStyle = () => ({
     backgroundColor: isDarkMode ? 'rgba(58,58,60,0.6)' : 'rgba(255,255,255,0.15)',
@@ -68,31 +79,46 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
       return;
     }
     setIsVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'recovery',
-    });
-    if (error) {
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.verifyOtp({ email, token, type: 'recovery' }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
+      if (error) {
+        Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
+        return;
+      }
+      // Session is now set — navigate to new password screen
+      navigation.navigate('NewPassword');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
       setIsVerifying(false);
-      Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
-      return;
     }
-    setIsVerifying(false);
-    // Session is now set — navigate to new password screen
-    navigation.navigate('NewPassword');
   };
 
   const handleResend = async () => {
     setResending(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    setResending(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
-      Alert.alert('Sent!', 'A new code has been sent to your email.');
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.resetPasswordForEmail(email),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+        Alert.alert('Sent!', 'A new code has been sent to your email.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setResending(false);
     }
   };
 

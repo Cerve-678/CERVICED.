@@ -52,7 +52,7 @@ const Row = React.memo(({ icon, title, subtitle, onPress, theme, destructive }: 
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function ProviderAccountScreen({ navigation }: any) {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
   const { isDarkMode, toggleTheme, theme } = useTheme();
   const [changingPassword, setChangingPassword] = useState(false);
 
@@ -153,6 +153,42 @@ export default function ProviderAccountScreen({ navigation }: any) {
               thumbColor="#fff"
             />
           </View>
+
+          {/* ── Switch Role ── */}
+          <Text style={[styles.sectionTitle, { color: theme.accent }]}>Account Type</Text>
+
+          <TouchableOpacity
+            style={[styles.switchRoleButton, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
+            onPress={() =>
+              Alert.alert(
+                'Switch to User Account',
+                'You will be switched to your personal user account. Your provider profile is saved and you can switch back any time.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Switch',
+                    onPress: async () => {
+                      try {
+                        await switchRole('user');
+                      } catch (e: any) {
+                        Alert.alert('Error', e.message ?? 'Could not switch account type.');
+                      }
+                    },
+                  },
+                ]
+              )
+            }
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: theme.accent + '20' }]}>
+              <Ionicons name="person-outline" size={22} color={theme.accent} />
+            </View>
+            <View style={styles.switchRoleText}>
+              <Text style={[styles.rowTitle, { color: theme.text }]}>Switch to User Account</Text>
+              <Text style={[styles.rowSub, { color: theme.secondaryText }]}>Browse and book services as a client</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.secondaryText} />
+          </TouchableOpacity>
 
           {/* ── Support ── */}
           <Text style={[styles.sectionTitle, { color: theme.accent }]}>Support</Text>
@@ -256,4 +292,15 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '600' },
   rowSub: { fontSize: 12, marginTop: 1 },
   logoutSection: { marginTop: 12 },
+  switchRoleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+    gap: 12,
+  },
+  switchRoleText: { flex: 1 },
 });

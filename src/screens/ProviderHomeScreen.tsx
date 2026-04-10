@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Dimensions,
   Platform,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBooking, ConfirmedBooking, BookingStatus, PaymentStatus } from '../contexts/BookingContext';
 import AppBackground from '../components/AppBackground';
@@ -446,6 +448,13 @@ export default function ProviderHomeScreen({ navigation }: Props) {
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const selectedDateStr = dayTabs[selectedDayIndex]?.dateString || todayStr;
 
+  // When the provider taps a calendar date beyond the 7-day tabs, store it here.
+  // null = use the day-tab date; non-null = override with this future date.
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<string | null>(null);
+
+  // The date whose bookings are actually shown in the list
+  const effectiveDateStr = calendarSelectedDate ?? selectedDateStr;
+
   // Expansion states per booking
   const [expansionStates, setExpansionStates] = useState<Record<string, ExpansionState>>({});
 
@@ -460,34 +469,38 @@ export default function ProviderHomeScreen({ navigation }: Props) {
   // Live provider bookings from Supabase
   const [liveProviderBookings, setLiveProviderBookings] = useState<ConfirmedBooking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Stable load function used by initial load, realtime, pull-to-refresh, and focus
+  const loadBookings = useCallback(async (opts: { showSkeleton?: boolean; showRefresh?: boolean } = {}) => {
+    if (opts.showSkeleton) setBookingsLoading(true);
+    if (opts.showRefresh) setRefreshing(true);
+    try {
+      const rows = await getProviderBookings();
+      setLiveProviderBookings(rows.map(mapDbToProviderBooking));
+    } catch (_) { /* silent */ } finally {
+      setBookingsLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Initial load + realtime subscription
   useEffect(() => {
     let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const loadBookings = async (showLoading = false) => {
-      if (showLoading) setBookingsLoading(true);
-      try {
-        const rows = await getProviderBookings();
-        if (!cancelled) {
-          setLiveProviderBookings(rows.map(mapDbToProviderBooking));
-        }
-      } catch (_) { /* silent */ } finally {
-        if (!cancelled) setBookingsLoading(false);
-      }
-    };
-
-    loadBookings(true);
+    loadBookings({ showSkeleton: true });
 
     // Realtime — re-fetch when any booking for this provider changes
+    const channelId = `provider-home-${Date.now()}`;
     getMyProviderProfile().then(profile => {
       if (!profile || cancelled) return;
       channel = supabase
-        .channel('provider-home-bookings')
+        .channel(channelId)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings', filter: `provider_id=eq.${profile.id}` },
-          () => { loadBookings(false); }
+          () => { if (!cancelled) loadBookings({}); }
         )
         .subscribe();
     }).catch(() => {});
@@ -496,7 +509,18 @@ export default function ProviderHomeScreen({ navigation }: Props) {
       cancelled = true;
       if (channel) supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadBookings]);
+
+  // Reload silently whenever the tab comes back into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadBookings({});
+    }, [loadBookings])
+  );
+
+  const handleRefresh = useCallback(() => {
+    loadBookings({ showRefresh: true });
+  }, [loadBookings]);
 
   // Bookings sourced exclusively from Supabase
   const providerBookings = useMemo(() => liveProviderBookings, [liveProviderBookings]);
@@ -515,9 +539,9 @@ export default function ProviderHomeScreen({ navigation }: Props) {
   // Bookings for selected day
   const dayBookings = useMemo(() => {
     return providerBookings
-      .filter((b) => b.bookingDate === selectedDateStr)
+      .filter((b) => b.bookingDate === effectiveDateStr)
       .sort((a, b) => parseTimeToMinutes(a.bookingTime) - parseTimeToMinutes(b.bookingTime));
-  }, [providerBookings, selectedDateStr]);
+  }, [providerBookings, effectiveDateStr]);
 
   // Pending bookings for selected day (need confirmation)
   const pendingDayBookings = useMemo(
@@ -594,7 +618,12 @@ export default function ProviderHomeScreen({ navigation }: Props) {
     (dateString: string) => {
       const tabIndex = dayTabs.findIndex((t) => t.dateString === dateString);
       if (tabIndex >= 0) {
+        // Within the 7-day tab range — select the tab normally
         setSelectedDayIndex(tabIndex);
+        setCalendarSelectedDate(null);
+      } else {
+        // Beyond the 7-day window — store as a calendar override date
+        setCalendarSelectedDate(dateString);
       }
       setShowMonthView(false);
     },
@@ -650,7 +679,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                 }
                 const count = bookingCountsByDate[cell.dateString] || 0;
                 const isToday = cell.dateString === todayStr;
-                const isSelected = cell.dateString === selectedDateStr;
+                const isSelected = cell.dateString === effectiveDateStr;
                 const heatBg = getHeatColor(count, isDarkMode);
 
                 return (
@@ -699,15 +728,15 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           {dayTabs.map((tab, index) => (
             <TouchableOpacity
               key={tab.dateString}
-              style={[styles.dayTab, selectedDayIndex === index && styles.dayTabSelected]}
-              onPress={() => setSelectedDayIndex(index)}
+              style={[styles.dayTab, !calendarSelectedDate && selectedDayIndex === index && styles.dayTabSelected]}
+              onPress={() => { setSelectedDayIndex(index); setCalendarSelectedDate(null); }}
               activeOpacity={0.7}
             >
               <Text
                 style={[
                   styles.dayTabText,
-                  { color: selectedDayIndex === index ? theme.text : theme.text + '55' },
-                  selectedDayIndex === index && styles.dayTabTextSelected,
+                  { color: (!calendarSelectedDate && selectedDayIndex === index) ? theme.text : theme.text + '55' },
+                  (!calendarSelectedDate && selectedDayIndex === index) && styles.dayTabTextSelected,
                 ]}
               >
                 {tab.label}
@@ -716,11 +745,47 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           ))}
         </ScrollView>
 
+        {/* Future date override banner — shown when a calendar date beyond the 7-day tabs is selected */}
+        {calendarSelectedDate && (
+          <TouchableOpacity
+            onPress={() => setCalendarSelectedDate(null)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginHorizontal: 16,
+              marginBottom: 8,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              borderRadius: 10,
+              backgroundColor: isDarkMode ? 'rgba(163,66,195,0.18)' : 'rgba(163,66,195,0.10)',
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: '#a342c3', fontSize: 13, fontWeight: '600', marginRight: 6 }}>←</Text>
+            <Text style={{ color: '#a342c3', fontSize: 13, fontWeight: '600' }}>
+              {(() => {
+                const [y, m, d] = calendarSelectedDate.split('-').map(Number);
+                const date = new Date(y!, m! - 1, d!);
+                return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              })()}
+            </Text>
+            <Text style={{ color: '#a342c3', fontSize: 12, marginLeft: 8, opacity: 0.8 }}>tap to go back</Text>
+          </TouchableOpacity>
+        )}
+
         {/* ==================== SCROLLABLE BOOKING LIST ==================== */}
         <ScrollView
           style={styles.mainScroll}
           contentContainerStyle={styles.mainScrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#a342c3"
+              colors={['#a342c3']}
+            />
+          }
         >
           {/* NOW Banner */}
           {selectedDayIndex === 0 && nowBooking && (
@@ -814,7 +879,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                 No appointments
               </Text>
               <Text style={[styles.emptyStateSubtitle, { color: theme.text + '30' }]}>
-                {selectedDayIndex === 0 ? "You're free today" : 'This day is free'}
+                {calendarSelectedDate ? 'No bookings on this day' : selectedDayIndex === 0 ? "You're free today" : 'This day is free'}
               </Text>
             </View>
           )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,8 @@ import {
   ImageBackground,
   StatusBar,
   Modal,
-  TextInput
+  TextInput,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -17,6 +18,7 @@ import Icon from '../components/IconLibrary';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { supabase } from '../lib/supabase';
 
 interface SettingsOptionProps {
   icon: string;
@@ -55,9 +57,21 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, disabled, t
 });
 
 export default function UserProfileScreen({ navigation }: any) {
-  const { isLoggedIn, logout } = useAuth();
+  const { isLoggedIn, logout, user, switchRole, session } = useAuth();
   const { isDarkMode, toggleTheme, theme: currentTheme } = useTheme();
   
+  const [hasProviderProfile, setHasProviderProfile] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('providers')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setHasProviderProfile(!!data));
+  }, [user?.id]);
+
   // Modal states
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showBeautyModal, setShowBeautyModal] = useState(false);
@@ -73,179 +87,50 @@ export default function UserProfileScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const handleLogout = () => {
     if (__DEV__) console.log('User logged out');
     logout();
   };
+
+  const handlePasswordUpdate = async () => {
+    if (!newPassword) return Alert.alert('Required', 'Please enter a new password.');
+    if (newPassword.length < 8) return Alert.alert('Too short', 'Password must be at least 8 characters.');
+    if (newPassword !== confirmPassword) return Alert.alert('Mismatch', 'Passwords do not match.');
+    if (!session) return Alert.alert('Session expired', 'Please log out and log back in, then try again.');
+
+    setPasswordLoading(true);
+    try {
+      const response = await Promise.race([
+        fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+          },
+          body: JSON.stringify({ password: newPassword }),
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json?.message ?? json?.msg ?? 'Failed to update password.');
+
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowEmailModal(false);
+      Alert.alert('Success', 'Your password has been updated.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to update password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
   
-  // Profile Info Modal
-  const ProfileInfoModal = () => (
-    <Modal
-      visible={showProfileModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowProfileModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>PROFILE INFO</Text>
-              <TouchableOpacity onPress={() => setShowProfileModal(false)}>
-                <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>NAME</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="SARAH JOHNSON"
-                    placeholderTextColor={currentTheme.secondaryText}
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>PHONE NUMBER</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="+44 7700 900000"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    keyboardType="phone-pad"
-                  />
-                </BlurView>
-              </View>
-
-              <TouchableOpacity style={styles.saveButton}>
-                <BlurView intensity={60} tint={currentTheme.blurTint} style={styles.saveButtonBlur}>
-                  <Text style={[styles.saveButtonText, { color: currentTheme.text }]}>SAVE CHANGES</Text>
-                </BlurView>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-
-  // Email & Password Modal
-  const EmailPasswordModal = () => (
-    <Modal
-      visible={showEmailModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowEmailModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>CHANGE PASSWORD</Text>
-              <TouchableOpacity onPress={() => setShowEmailModal(false)}>
-                <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>EMAIL</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="JOHN@EXAMPLE.COM"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>CURRENT PASSWORD</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                    placeholder="••••••••••"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    secureTextEntry
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>NEW PASSWORD</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    placeholder="••••••••••"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    secureTextEntry
-                  />
-                </BlurView>
-              </View>
-
-              <TouchableOpacity style={styles.saveButton}>
-                <BlurView intensity={60} tint={currentTheme.blurTint} style={styles.saveButtonBlur}>
-                  <Text style={[styles.saveButtonText, { color: currentTheme.text }]}>UPDATE CREDENTIALS</Text>
-                </BlurView>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-
-  // About Modal
-  const AboutModal = () => (
-    <Modal
-      visible={showAboutModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowAboutModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>ABOUT CERVICED</Text>
-              <TouchableOpacity onPress={() => setShowAboutModal(false)}>
-                <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[styles.aboutText, { color: currentTheme.text }]}>
-                Cerviced is your premier beauty services platform connecting users with top-tier beauty professionals.
-              </Text>
-              <Text style={[styles.aboutText, { color: currentTheme.text }]}>
-                Version 1.0.0
-              </Text>
-              <Text style={[styles.aboutText, { color: currentTheme.text }]}>
-                © 2025 Cerviced. All rights reserved.
-              </Text>
-            </ScrollView>
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
@@ -454,13 +339,40 @@ export default function UserProfileScreen({ navigation }: any) {
 
             <TouchableOpacity
               style={[styles.becomeProviderButton, { backgroundColor: currentTheme.accent }]}
-              onPress={() => navigation.navigate('InfoReg')}
+              onPress={() => {
+                if (!user) return;
+                if (hasProviderProfile) {
+                  Alert.alert(
+                    'Switch to Provider Account',
+                    'Switch back to your provider account to manage bookings and services.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Switch',
+                        onPress: async () => {
+                          try {
+                            await switchRole('provider');
+                          } catch (e: any) {
+                            Alert.alert('Error', e.message ?? 'Could not switch account type.');
+                          }
+                        },
+                      },
+                    ]
+                  );
+                } else {
+                  navigation.navigate('InfoReg');
+                }
+              }}
               activeOpacity={0.8}
             >
               <Icon name="storefront" size={24} color="#fff" />
               <View style={styles.becomeProviderText}>
-                <Text style={styles.becomeProviderTitle}>Become a Provider</Text>
-                <Text style={styles.becomeProviderSubtitle}>List your services on Cerviced</Text>
+                <Text style={styles.becomeProviderTitle}>
+                  {hasProviderProfile ? 'Switch to Provider Account' : 'Become a Provider'}
+                </Text>
+                <Text style={styles.becomeProviderSubtitle}>
+                  {hasProviderProfile ? 'Go back to managing your services' : 'List your services on Cerviced'}
+                </Text>
               </View>
               <Icon name="chevron-right" size={24} color="#fff" />
             </TouchableOpacity>
@@ -517,9 +429,149 @@ export default function UserProfileScreen({ navigation }: any) {
         </ScrollView>
 
         {/* Modals */}
-        <ProfileInfoModal />
-        <EmailPasswordModal />
-        <AboutModal />
+        <Modal
+          visible={showProfileModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowProfileModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: currentTheme.text }]}>PROFILE INFO</Text>
+                  <TouchableOpacity onPress={() => setShowProfileModal(false)}>
+                    <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.label, { color: currentTheme.text }]}>NAME</Text>
+                    <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
+                      <TextInput
+                        style={[styles.textInput, { color: currentTheme.text }]}
+                        value={name}
+                        onChangeText={setName}
+                        placeholder="SARAH JOHNSON"
+                        placeholderTextColor={currentTheme.secondaryText}
+                      />
+                    </BlurView>
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.label, { color: currentTheme.text }]}>PHONE NUMBER</Text>
+                    <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
+                      <TextInput
+                        style={[styles.textInput, { color: currentTheme.text }]}
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholder="+44 7700 900000"
+                        placeholderTextColor={currentTheme.secondaryText}
+                        keyboardType="phone-pad"
+                      />
+                    </BlurView>
+                  </View>
+                  <TouchableOpacity style={styles.saveButton}>
+                    <BlurView intensity={60} tint={currentTheme.blurTint} style={styles.saveButtonBlur}>
+                      <Text style={[styles.saveButtonText, { color: currentTheme.text }]}>SAVE CHANGES</Text>
+                    </BlurView>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </BlurView>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={showEmailModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowEmailModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: currentTheme.text }]}>CHANGE PASSWORD</Text>
+                  <TouchableOpacity onPress={() => setShowEmailModal(false)}>
+                    <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.label, { color: currentTheme.text }]}>NEW PASSWORD</Text>
+                    <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
+                      <TextInput
+                        style={[styles.textInput, { color: currentTheme.text }]}
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                        placeholder="Min. 8 characters"
+                        placeholderTextColor={currentTheme.secondaryText}
+                        secureTextEntry
+                        autoCapitalize="none"
+                      />
+                    </BlurView>
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={[styles.label, { color: currentTheme.text }]}>CONFIRM NEW PASSWORD</Text>
+                    <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
+                      <TextInput
+                        style={[styles.textInput, { color: currentTheme.text }]}
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        placeholder="Repeat new password"
+                        placeholderTextColor={currentTheme.secondaryText}
+                        secureTextEntry
+                        autoCapitalize="none"
+                      />
+                    </BlurView>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.saveButton, passwordLoading && { opacity: 0.6 }]}
+                    onPress={handlePasswordUpdate}
+                    disabled={passwordLoading}
+                  >
+                    <BlurView intensity={60} tint={currentTheme.blurTint} style={styles.saveButtonBlur}>
+                      <Text style={[styles.saveButtonText, { color: currentTheme.text }]}>
+                        {passwordLoading ? 'UPDATING...' : 'UPDATE PASSWORD'}
+                      </Text>
+                    </BlurView>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </BlurView>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={showAboutModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAboutModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: currentTheme.text }]}>ABOUT CERVICED</Text>
+                  <TouchableOpacity onPress={() => setShowAboutModal(false)}>
+                    <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={[styles.aboutText, { color: currentTheme.text }]}>
+                    Cerviced is your premier beauty services platform connecting users with top-tier beauty professionals.
+                  </Text>
+                  <Text style={[styles.aboutText, { color: currentTheme.text }]}>
+                    Version 1.0.0
+                  </Text>
+                  <Text style={[styles.aboutText, { color: currentTheme.text }]}>
+                    © 2025 Cerviced. All rights reserved.
+                  </Text>
+                </ScrollView>
+              </View>
+            </BlurView>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedBackground>
   );

@@ -1,5 +1,5 @@
 // src/screens/auth/EmailVerificationScreen.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,17 +17,17 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { EmailIcon } from '../../components/IconLibrary';
 import { useAuth } from '../../contexts/AuthContext';
-import type { UserData } from '../../contexts/AuthContext';
+import type { UserData } from '../../contexts/AuthContext'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { supabase } from '../../lib/supabase';
 import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
-
 import type { RootStackParamList } from '../../navigation/types';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
 export default function EmailVerificationScreen({ navigation, route }: Props) {
-  const { login } = useAuth();
+  const { login: _login } = useAuth(); // kept for potential direct use
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
   const email = route.params?.email ?? '';
@@ -36,6 +36,16 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Reset loading states whenever screen comes into focus.
+  // This handles the case where the screen stays mounted in the nav stack
+  // with a stuck spinner — same effect as closing and reopening the app.
+  useFocusEffect(
+    useCallback(() => {
+      setIsVerifying(false);
+      setResending(false);
+    }, [])
+  );
 
   const glassStyle = () => ({
     backgroundColor: isDarkMode ? 'rgba(58,58,60,0.6)' : 'rgba(255,255,255,0.15)',
@@ -75,11 +85,12 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
     }
     setIsVerifying(true);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token,
-        type: 'email',
-      });
+      const { data, error } = await Promise.race([
+        supabase.auth.verifyOtp({ email, token, type: 'email' }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
       if (error) {
         Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
         return;
@@ -95,7 +106,8 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       const dob = meta['dob'] ?? '';
 
       // Upsert the user profile row now that the session is active and RLS will pass
-      const { error: upsertError } = await supabase.from('users').upsert({
+      const { error: upsertError } = await Promise.race([
+        supabase.from('users').upsert({
         id: session.user.id,
         email: session.user.email ?? email,
         name: meta['name'] ?? '',
@@ -106,7 +118,14 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         service_interests: meta['service_interests'] ?? [],
         business_name: meta['business_name'] ?? null,
         business_email: meta['business_email'] ?? null,
-      }, { onConflict: 'id' });
+      }, { onConflict: 'id' }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('profile_upsert_timeout')), 10000)
+        ),
+      ]).catch((e: any) => {
+        if (e?.message !== 'profile_upsert_timeout') console.warn('Profile upsert error:', e?.message);
+        return { error: e };
+      });
 
       if (upsertError) {
         console.warn('Profile upsert error:', upsertError.message);
@@ -134,7 +153,13 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         businessName: meta['business_name'] ?? undefined,
         businessEmail: meta['business_email'] ?? undefined,
       };
-      login(userData);
+      // Pass session tokens directly to AccountSetupScreen so it can call
+      // setSession() explicitly — avoids depending on AsyncStorage timing.
+      navigation.navigate('AccountSetup', {
+        userData,
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token,
+      });
     } catch (err: any) {
       console.error('OTP verification error:', err);
       Alert.alert('Error', 'Something went wrong. Please try again.');
@@ -145,14 +170,24 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
 
   const handleResend = async () => {
     setResending(true);
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
-    setResending(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
-      Alert.alert('Sent!', 'A new code has been sent to your email.');
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.resend({ type: 'signup', email }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
+        setOtp(['', '', '', '', '', '']);
+        inputRefs.current[0]?.focus();
+        Alert.alert('Sent!', 'A new code has been sent to your email.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setResending(false);
     }
   };
 

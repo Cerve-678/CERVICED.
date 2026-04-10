@@ -5,7 +5,7 @@ import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, createRescheduleRequest as dbCreateRescheduleRequest, getPendingRescheduleRequest, confirmRescheduleSlot as dbConfirmRescheduleSlot, insertUserRescheduleNotification, insertCurrentUserNotification } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 
 export enum BookingStatus {
@@ -58,6 +58,8 @@ export interface PaymentBreakdown {
 
 export interface ConfirmedBooking {
   id: string;
+  /** Supabase UUID — set after the booking is persisted to the DB. Use this for all Supabase operations. */
+  dbId?: string | undefined;
   cartItemId: string;
   providerName: string;
   providerImage: any;
@@ -170,6 +172,7 @@ export interface BookingContextType {
   requestReschedule: (bookingId: string, preferredDates: string[]) => Promise<void>;
   providerRespondToReschedule: (bookingId: string, availableDates: AvailableDate[]) => Promise<void>;
   confirmReschedule: (bookingId: string, newDate: string, newTime: string) => Promise<void>;
+  syncPendingReschedules: () => Promise<void>;
 }
 
 export interface AppointmentData {
@@ -191,6 +194,7 @@ export interface AppointmentData {
 }
 
 const STORAGE_KEY = '@bookings';
+const STORAGE_OWNER_KEY = '@bookings_owner'; // tracks which user's bookings are cached
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
@@ -401,7 +405,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     cartItemId: db.id,
     providerName: db.provider_name_snapshot,
     providerImage: db.provider_logo_snapshot ?? null,
-    providerService: '',
+    providerService: db.provider_info?.service_category ?? '',
     serviceName: db.service_name_snapshot,
     serviceDescription: '',
     price: db.base_price,
@@ -444,6 +448,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     try {
       if (__DEV__) console.log('Loading bookings from storage...');
       setIsLoading(true);
+
+      // Clear cached bookings if they belong to a different account
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const cachedOwner = await AsyncStorage.getItem(STORAGE_OWNER_KEY);
+      if (currentUser && cachedOwner && cachedOwner !== currentUser.id) {
+        console.warn('[BookingContext] Cached bookings belong to a different user — clearing stale data');
+        await AsyncStorage.multiRemove([STORAGE_KEY, STORAGE_OWNER_KEY]);
+      }
+
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       
       if (stored) {
@@ -521,7 +534,13 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            const dbBookings = await getMyBookings();
+            // Race against an 8 s timeout so a slow network never leaves isLoading stuck
+            const dbBookings = await Promise.race([
+              getMyBookings(),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('bookings_timeout')), 8000)
+              ),
+            ]);
             if (dbBookings.length > 0) {
               const mapped = dbBookings.map(mapDbBookingToConfirmed);
               setBookings(mapped);
@@ -585,7 +604,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const saveBookings = useCallback(async (bookingsToSave: ConfirmedBooking[]) => {
     try {
       if (__DEV__) console.log('Saving', bookingsToSave.length, 'bookings...');
+      const { data: { user } } = await supabase.auth.getUser();
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(bookingsToSave));
+      if (user) await AsyncStorage.setItem(STORAGE_OWNER_KEY, user.id);
       setBookings(bookingsToSave);
       if (__DEV__) console.log('Bookings saved successfully');
     } catch (error) {
@@ -708,6 +729,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       );
 
       // Notify provider in Supabase
+      // Use the Supabase UUID for all DB operations — the local id is not a valid DB foreign key
+      const supabaseBookingId = booking.dbId;
+      if (supabaseBookingId) {
+        dbCreateRescheduleRequest(
+          supabaseBookingId,
+          originalDate,
+          originalTime,
+          preferredDates,
+        ).catch((e) => { if (__DEV__) console.warn('dbCreateRescheduleRequest failed:', e); });
+      } else {
+        if (__DEV__) console.warn('[requestReschedule] No dbId on booking — reschedule not written to Supabase. Was the booking synced to DB?');
+      }
+
       const rescheduleProviderId = await getProviderIdByDisplayName(booking.providerName);
       if (rescheduleProviderId) {
         const dateList = preferredDates.slice(0, 3).join(', ');
@@ -718,9 +752,17 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           message: `${booking.customerName || 'A client'} wants to reschedule their ${booking.serviceName} appointment. Preferred dates: ${dateList}.`,
           priority: 'high',
           is_actionable: true,
-          booking_id: bookingId,
-        }).catch(() => {});
+          booking_id: supabaseBookingId, // must be the Supabase UUID or omit
+        }).catch((e) => { if (__DEV__) console.warn('insertProviderNotification (reschedule) failed:', e); });
       }
+
+      // Confirm to the user (in-app + push) that their request was sent
+      insertCurrentUserNotification({
+        type: 'reschedule_request',
+        title: 'Reschedule Requested',
+        message: `Your reschedule request for ${booking.serviceName} with ${booking.providerName} has been sent. We'll notify you when they respond.`,
+        ...(supabaseBookingId ? { bookingId: supabaseBookingId } : {}),
+      }).catch((e) => { if (__DEV__) console.warn('insertCurrentUserNotification (reschedule_request) failed:', e); });
 
       if (__DEV__) console.log('Step 1 Complete: Status=PENDING, waiting for provider response');
     } catch (error) {
@@ -874,8 +916,32 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           message: `${booking.customerName || 'A client'} confirmed their ${booking.serviceName} for ${newDate} at ${newTime}.`,
           priority: 'medium',
           is_actionable: true,
-          booking_id: bookingId,
+          booking_id: booking.dbId,
         }).catch(() => {});
+      }
+
+      // Confirm to the user (in-app + push) that their reschedule is confirmed
+      insertCurrentUserNotification({
+        type: 'reschedule_confirmed',
+        title: 'Reschedule Confirmed',
+        message: `Your ${booking.serviceName} with ${booking.providerName} has been rescheduled to ${newDate} at ${newTime}.`,
+        ...(booking.dbId ? { bookingId: booking.dbId } : {}),
+      }).catch((e) => { if (__DEV__) console.warn('insertCurrentUserNotification (reschedule_confirmed) failed:', e); });
+
+      // Update the booking date/time in Supabase and close the reschedule request
+      const supabaseBookingIdForConfirm = booking.dbId;
+      if (supabaseBookingIdForConfirm) {
+        try {
+          const req = await getPendingRescheduleRequest(supabaseBookingIdForConfirm);
+          if (req) {
+            await dbConfirmRescheduleSlot(supabaseBookingIdForConfirm, req.id, newDate, newTime);
+          } else {
+            await supabase.from('bookings').update({
+              booking_date: newDate,
+              booking_time: newTime.length === 5 ? newTime + ':00' : newTime,
+            }).eq('id', supabaseBookingIdForConfirm);
+          }
+        } catch (_) {}
       }
 
       if (__DEV__) console.log('Step 3 Complete: Status=UPCOMING, 24hr cooldown active, total reschedules:', rescheduleCount);
@@ -918,9 +984,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         );
       }
 
-      // Always sync cancellation to Supabase
+      // Always sync cancellation to Supabase — use Supabase UUID if available
       try {
-        await dbUpdateBookingStatus(bookingId, 'cancelled');
+        const supabaseId = booking?.dbId ?? bookingId;
+        await dbUpdateBookingStatus(supabaseId, 'cancelled');
       } catch (_) {}
 
       if (__DEV__) console.log('Booking cancelled successfully');
@@ -936,7 +1003,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         b.id === bookingId ? { ...b, status, updatedAt: new Date().toISOString() } : b
       );
       await saveBookings(updatedBookings);
-      // Sync to Supabase — map context BookingStatus enum → DB status string
+      // Sync to Supabase — use Supabase UUID (dbId) not the local generated id
+      const targetBooking = bookings.find(b => b.id === bookingId);
+      const supabaseId = targetBooking?.dbId ?? bookingId;
       const dbStatusMap: Record<string, string> = {
         [BookingStatus.PENDING]:      'pending',
         [BookingStatus.UPCOMING]:     'confirmed',
@@ -947,7 +1016,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       };
       const dbStatus = dbStatusMap[status];
       if (dbStatus) {
-        dbUpdateBookingStatus(bookingId, dbStatus as any).catch(() => {});
+        dbUpdateBookingStatus(supabaseId, dbStatus as any).catch(() => {});
       }
     } catch (error) {
       console.error('❌ Failed to update booking status:', error);
@@ -1106,78 +1175,121 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const updatedBookings = [...bookings, ...newBookings];
       await saveBookings(updatedBookings);
 
-      // Persist to Supabase (silent fail — local booking already saved above)
+      // Persist to Supabase — track failures so user can be alerted
+      const dbFailedServices: string[] = [];
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          let anyDbIdSet = false;
           for (const item of cartItems) {
             const apt = appointmentData.find(a => a.cartItemId === item.id);
             if (!apt) continue;
 
-            const providerId = await getProviderIdByDisplayName(item.providerName);
-            if (!providerId) {
-              console.warn('[BookingContext] ⚠️ Could not find provider in Supabase. providerName:', JSON.stringify(item.providerName), '— booking NOT saved to DB. Check your providers table display_name column.');
-              continue;
+            try {
+              const providerId = await getProviderIdByDisplayName(item.providerName);
+              if (!providerId) {
+                console.warn('[BookingContext] ⚠️ Could not find provider in Supabase. providerName:', JSON.stringify(item.providerName), '— booking NOT saved to DB. Check your providers table display_name column.');
+                dbFailedServices.push(item.serviceName);
+                continue;
+              }
+
+              // Convert "10:00 AM" → "10:00:00" for Postgres TIME type
+              const tMatch = apt.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+              if (!tMatch) { dbFailedServices.push(item.serviceName); continue; }
+              let h = parseInt(tMatch[1] ?? '0');
+              const m = parseInt(tMatch[2] ?? '0');
+              const per = (tMatch[3] ?? 'AM').toUpperCase();
+              if (per === 'PM' && h !== 12) h += 12;
+              else if (per === 'AM' && h === 12) h = 0;
+              const pgTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+
+              // Compute end_time for Postgres
+              const localEndTime = calculateEndTime(apt.time, item.duration);
+              const etMatch = localEndTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+              let pgEndTime: string | null = null;
+              if (etMatch) {
+                let eh = parseInt(etMatch[1] ?? '0');
+                const em = parseInt(etMatch[2] ?? '0');
+                const eper = (etMatch[3] ?? 'AM').toUpperCase();
+                if (eper === 'PM' && eh !== 12) eh += 12;
+                else if (eper === 'AM' && eh === 12) eh = 0;
+                pgEndTime = `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}:00`;
+              }
+
+              const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
+              const logoUrl = typeof item.providerImage === 'string'
+                ? item.providerImage
+                : (item.providerImage?.uri ?? null);
+              const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
+
+              const dbBooking = await dbCreateBooking(
+                {
+                  user_id: user.id,
+                  provider_id: providerId,
+                  service_id: null,
+                  status: 'pending',
+                  booking_date: apt.date,
+                  booking_time: pgTime,
+                  end_time: pgEndTime,
+                  notes: apt.notes ?? null,
+                  booking_instructions: null,
+                  payment_type: apt.paymentType,
+                  base_price: item.price,
+                  add_ons_total: addOnsTotal,
+                  service_charge: apt.serviceCharge,
+                  deposit_amount: apt.depositAmount,
+                  amount_paid: apt.amountPaid,
+                  remaining_balance: apt.remainingBalance,
+                  payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
+                  payment_method: null,
+                  payment_intent_id: null,
+                  is_group_booking: cartItems.length > 1,
+                  group_booking_id: null,
+                  group_booking_count: cartItems.length,
+                  provider_name_snapshot: item.providerName,
+                  service_name_snapshot: item.serviceName,
+                  provider_logo_snapshot: logoUrl,
+                  provider_address_snapshot: apt.address || null,
+                  provider_phone_snapshot: apt.phone || null,
+                  provider_coordinates: null,
+                  customer_name: apt.customerName,
+                  customer_email: apt.customerEmail,
+                  customer_phone: apt.customerPhone,
+                },
+                (item.addOns ?? []).map(a => ({
+                  add_on_id: null, // local add-on IDs are array indexes, not Supabase UUIDs
+                  name_snapshot: a.name,
+                  price_snapshot: a.price,
+                }))
+              );
+              // Store the Supabase UUID back on the local booking so future DB operations use the real ID
+              const localBooking = newBookings.find(b => b.cartItemId === item.id);
+              if (localBooking && dbBooking?.id) {
+                localBooking.dbId = dbBooking.id;
+                anyDbIdSet = true;
+              }
+            } catch (itemErr) {
+              console.error('[BookingContext] DB save failed for', item.serviceName, itemErr);
+              dbFailedServices.push(item.serviceName);
             }
-
-            // Convert "10:00 AM" → "10:00:00" for Postgres TIME type
-            const tMatch = apt.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-            if (!tMatch) continue;
-            let h = parseInt(tMatch[1] ?? '0');
-            const m = parseInt(tMatch[2] ?? '0');
-            const per = (tMatch[3] ?? 'AM').toUpperCase();
-            if (per === 'PM' && h !== 12) h += 12;
-            else if (per === 'AM' && h === 12) h = 0;
-            const pgTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
-
-            const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
-            const logoUrl = typeof item.providerImage === 'string' ? item.providerImage : null;
-            const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
-
-            await dbCreateBooking(
-              {
-                user_id: user.id,
-                provider_id: providerId,
-                service_id: null,
-                status: 'pending',
-                booking_date: apt.date,
-                booking_time: pgTime,
-                end_time: null,
-                notes: apt.notes ?? null,
-                booking_instructions: null,
-                payment_type: apt.paymentType,
-                base_price: item.price,
-                add_ons_total: addOnsTotal,
-                service_charge: apt.serviceCharge,
-                deposit_amount: apt.depositAmount,
-                amount_paid: apt.amountPaid,
-                remaining_balance: apt.remainingBalance,
-                payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
-                payment_method: null,
-                payment_intent_id: null,
-                is_group_booking: cartItems.length > 1,
-                group_booking_id: null,
-                group_booking_count: cartItems.length,
-                provider_name_snapshot: item.providerName,
-                service_name_snapshot: item.serviceName,
-                provider_logo_snapshot: logoUrl,
-                provider_address_snapshot: apt.address || null,
-                provider_phone_snapshot: apt.phone || null,
-                provider_coordinates: null,
-                customer_name: apt.customerName,
-                customer_email: apt.customerEmail,
-                customer_phone: apt.customerPhone,
-              },
-              (item.addOns ?? []).map(a => ({
-                add_on_id: String(a.id),
-                name_snapshot: a.name,
-                price_snapshot: a.price,
-              }))
-            );
+          }
+          // Persist the Supabase UUIDs (dbId) back into AsyncStorage
+          if (anyDbIdSet) {
+            await saveBookings([...bookings, ...newBookings]);
           }
         }
-      } catch (_) {
-        // Silent — local booking already saved
+      } catch (authErr) {
+        console.warn('[BookingContext] Could not get auth user for DB sync:', authErr);
+      }
+
+      if (dbFailedServices.length > 0) {
+        const { Alert } = require('react-native');
+        Alert.alert(
+          'Sync Issue',
+          `Your payment was processed but we had trouble saving ${dbFailedServices.join(', ')} to the server. ` +
+          'Your booking is saved on this device. Please contact support if it disappears.',
+          [{ text: 'OK' }]
+        );
       }
 
       // ✅ NEW - Create notifications for each booking
@@ -1326,6 +1438,67 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       b.status !== BookingStatus.IN_PROGRESS
     );
 
+  /**
+   * For any booking in AsyncStorage with isPendingReschedule=true and no providerAvailableDates,
+   * check Supabase for a provider_responded reschedule request. If found, update AsyncStorage
+   * so the user sees the provider's available slots when they open their bookings.
+   */
+  const syncPendingReschedules = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) return;
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+      const pendingOnes = currentBookings.filter(
+        b => b.isPendingReschedule && !b.rescheduleRequest?.providerAvailableDates
+      );
+      if (pendingOnes.length === 0) return;
+
+      let changed = false;
+      const updated = [...currentBookings];
+
+      for (const booking of pendingOnes) {
+        // Must use Supabase UUID (dbId) to query booking_reschedule_requests
+        const supabaseId = booking.dbId;
+        if (!supabaseId) continue; // no Supabase UUID means the booking was never synced to DB
+        try {
+          const req = await getPendingRescheduleRequest(supabaseId);
+          if (!req) continue;
+          if (req.status === 'provider_responded' && req.provider_available_slots?.length) {
+            const idx = updated.findIndex(b => b.id === booking.id);
+            if (idx === -1) continue;
+            updated[idx] = {
+              ...updated[idx],
+              isPendingReschedule: true,
+              rescheduleRequest: {
+                ...updated[idx].rescheduleRequest,
+                providerAvailableDates: req.provider_available_slots,
+                providerRespondedAt: new Date().toISOString(),
+              },
+            };
+            changed = true;
+          } else if (req.status === 'rejected') {
+            // Provider declined — clear pending state and notify user
+            const idx = updated.findIndex(b => b.id === booking.id);
+            if (idx === -1) continue;
+            updated[idx] = {
+              ...updated[idx],
+              isPendingReschedule: false,
+            };
+            changed = true;
+            await NotificationService.addRescheduleRequest(
+              booking.providerName,
+              booking.serviceName,
+              booking.providerImage,
+              booking.id,
+              'reschedule_pending', // reuse closest type; UI will show as declined
+            ).catch(() => {});
+          }
+        } catch (_) {}
+      }
+      if (changed) await saveBookings(updated);
+    } catch (_) {}
+  }, [saveBookings]);
+
   const value: BookingContextType = {
     bookings,
     confirmedBookings: bookings,
@@ -1349,6 +1522,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
+    syncPendingReschedules,
   };
 
   return (

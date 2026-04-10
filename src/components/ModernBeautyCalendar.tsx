@@ -2,7 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { AvailabilityService } from '../services/AvailabilityService';
-                                                    
+import { getAvailableSlots as dbGetAvailableSlots } from '../services/databaseService';
+
+// Convert "HH:MM" (24h) → "H:MM AM/PM" (12h) to match the rest of the booking flow
+const to12h = (slot: string): string => {
+  const [hStr, mStr] = slot.split(':');
+  let h = parseInt(hStr ?? '0', 10);
+  const m = mStr ?? '00';
+  const period = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${period}`;
+};
+
 type TimeSlot = string;
 
 type DayData = {
@@ -30,6 +42,7 @@ type ModernBeautyCalendarProps = {
   onTimeSelect: (time: string) => void;
   selectedTime?: string;
   providerName?: string;
+  providerId?: string; // Supabase UUID — used for accurate DB slot lookup
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
   style?: ViewStyle;
 };
@@ -40,6 +53,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   onTimeSelect,
   selectedTime,
   providerName,
+  providerId,
   serviceDuration,
   style = {}
 }) => {
@@ -53,7 +67,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
   useEffect(() => {
     generateWeeklyAvailability();
-  }, [currentWeek, providerName, serviceDuration]);
+  }, [currentWeek, providerName, providerId, serviceDuration]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -82,26 +96,33 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         continue;
       }
 
-      // Use AvailabilityService to get slots filtered by existing bookings
-      if (providerName) {
+      // Use DB-backed slot lookup when providerId (UUID) is available for accurate results
+      if (providerId) {
         try {
-          const availableTimeSlots = await AvailabilityService.getAvailableSlots(
-            providerName,
-            dateString,
-            serviceDuration
-          );
-          // Only include slots that are not already booked
-          const openSlots = availableTimeSlots
-            .filter(slot => !slot.isBooked)
-            .map(slot => slot.time);
+          const rawSlots = await dbGetAvailableSlots(providerId, dateString);
+          // Convert 24h "HH:MM" → 12h "H:MM AM/PM" to match the rest of the booking flow
+          const openSlots = rawSlots.map(to12h);
 
-          slots[dateString] = {
-            available: openSlots.length,
-            status: openSlots.length > 0 ? 'available' : 'closed',
-            times: openSlots
-          };
+          if (openSlots.length > 0) {
+            // Provider has a schedule set up — use their exact DB slots
+            slots[dateString] = {
+              available: openSlots.length,
+              status: 'available',
+              times: openSlots
+            };
+          } else {
+            // No provider_availability rows yet — fall back to default schedule
+            // so the calendar remains usable while the provider sets up their hours
+            const dayOfWeek = date.getDay();
+            const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
+            slots[dateString] = {
+              available: times.length,
+              status: times.length > 0 ? 'available' : 'closed',
+              times
+            };
+          }
         } catch (error) {
-          // Fallback to base schedule without booking filter
+          // Network/DB error — fall back to default schedule
           const dayOfWeek = date.getDay();
           const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
           slots[dateString] = {
@@ -144,7 +165,23 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     ];
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
+    // For today, filter out time slots that have already passed (+ 30-min buffer)
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isToday = dateString === todayStr;
+    const nowMinutes = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : 0;
+
     return beautyHours.filter(time => {
+      // Filter past slots for today
+      if (isToday) {
+        const [timePart, period] = time.split(' ');
+        const [hStr, mStr] = (timePart ?? '').split(':');
+        let h = parseInt(hStr ?? '0');
+        const m = parseInt(mStr ?? '0');
+        if (period === 'PM' && h !== 12) h += 12;
+        else if (period === 'AM' && h === 12) h = 0;
+        if (h * 60 + m <= nowMinutes + 30) return false;
+      }
+
       let isAvailable = true;
       switch (providerName) {
         case 'KATHRINE':

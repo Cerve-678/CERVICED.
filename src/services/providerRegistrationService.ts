@@ -1,6 +1,6 @@
 // src/services/providerRegistrationService.ts
 // Phase 2: Provider registration — save to and load from Supabase
-import { supabase } from '../lib/supabase';
+import { supabase, ensureFreshSession } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -119,6 +119,8 @@ export async function saveProviderToSupabase(
   userId: string,
   data: ProviderRegistrationData
 ): Promise<void> {
+  await ensureFreshSession();
+
   // 1. Upload logo if it's a local file
   let logoUrl: string | null = data.logo;
   if (data.logo && isLocalUri(data.logo)) {
@@ -195,7 +197,11 @@ export async function saveProviderToSupabase(
   await supabase.from('services').delete().eq('provider_id', providerId);
 
   // 5. Insert services, images, and add-ons
+  // Build a resolved copy of categories with Supabase URLs replacing local URIs
+  const resolvedCategories: typeof data.categories = {};
+
   for (const [categoryName, services] of Object.entries(data.categories)) {
+    resolvedCategories[categoryName] = [];
     for (let sortOrder = 0; sortOrder < services.length; sortOrder++) {
       const svc = services[sortOrder];
       if (!svc) continue;
@@ -217,6 +223,7 @@ export async function saveProviderToSupabase(
       if (svcError) throw new Error(`Service insert failed: ${svcError.message}`);
 
       const serviceId = svcRow.id;
+      const resolvedImageUrls: string[] = [];
 
       // Upload & insert service images
       for (let i = 0; i < svc.images.length; i++) {
@@ -230,6 +237,7 @@ export async function saveProviderToSupabase(
             imgUri
           );
         }
+        resolvedImageUrls.push(imgUrl);
         await supabase.from('service_images').insert({
           service_id: serviceId,
           url: imgUrl,
@@ -246,11 +254,16 @@ export async function saveProviderToSupabase(
           is_active: true,
         });
       }
+
+      (resolvedCategories[categoryName] as ServiceData[]).push({
+        ...svc,
+        images: resolvedImageUrls,
+      });
     }
   }
 
-  // 6. Refresh AsyncStorage cache with resolved URLs
-  const cached: ProviderRegistrationData = { ...data, logo: logoUrl };
+  // 6. Refresh AsyncStorage cache with fully resolved URLs (logo + service images)
+  const cached: ProviderRegistrationData = { ...data, logo: logoUrl, categories: resolvedCategories };
   await AsyncStorage.setItem('@provider_reg_data', JSON.stringify(cached));
 }
 

@@ -505,6 +505,7 @@ interface ServiceCardProps {
     currentNotes: string
   ) => void;
   providerName: string;
+  providerId?: string;
   allCartItems: CartItem[]; // ADD THIS LINE
 }
 
@@ -516,6 +517,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     onRemove,
     onShowNotes,
     providerName,
+    providerId,
     allCartItems,
   }) => {
     const { theme, isDarkMode } = useTheme();
@@ -761,6 +763,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 onTimeSelect={handleTimeSelect}
                 selectedTime={serviceBooking.selectedTime}
                 providerName={providerName}
+                providerId={providerId}
                 serviceDuration={duration}
               />
             </View>
@@ -1088,7 +1091,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setReviewName(user?.name || '');
     setReviewEmail(user?.email || '');
     setReviewPhone(user?.phone || '');
-    setSaveAsDefault(false);
+    // Pre-check "Save as Default" if user already has contact details saved
+    setSaveAsDefault(!!(user?.phone && user?.name));
     setShowReviewModal(true);
   } catch (error) {
     console.error('Checkout error:', error);
@@ -1779,10 +1783,10 @@ const handlePaymentSuccess = useCallback(async () => {
                           );
                         })()}
 
-                        <TouchableOpacity onPress={() => navigateToProvider(providerName)}>
+                        <TouchableOpacity onPress={() => navigateToProvider(providerName, providerItems[0]?.providerId)}>
                           <View style={styles.providerLogoContainer}>
                             <Image
-                              source={getProviderLogo(providerName)}
+                              source={providerItems[0]?.providerImage || getProviderLogo(providerName)}
                               style={styles.providerLogo}
                               onError={error => {
                                 console.warn('Provider logo failed to load:', error);
@@ -1826,6 +1830,7 @@ const handlePaymentSuccess = useCallback(async () => {
                                 onRemove={removeFromCart}
                                 onShowNotes={handleShowNotes}
                                 providerName={providerName}
+                                providerId={item.providerId}
                                 allCartItems={items}
                               />
                               {/* Visual Separator */}

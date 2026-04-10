@@ -19,6 +19,7 @@ export type RootStackParamList = {
   SignUpStep3: undefined;
   SignUpStep4: undefined;
   EmailVerification: { email: string };
+  AccountSetup: { userData: import('../contexts/AuthContext').UserData; accessToken: string; refreshToken: string };
   ForgotPassword: undefined;
   ResetPasswordOTP: { email: string };
   NewPassword: undefined;
@@ -33,6 +34,7 @@ export type HomeStackParamList = {
   Notifications: undefined;
   CartMain: undefined;
   DevSettings: undefined;
+  BookingChat: { bookingId: string; senderRole: 'customer' | 'provider'; otherPartyName: string };
 };
 
 // Explore Stack
@@ -81,6 +83,7 @@ export type ProfileStackParamList = {
 export type ProviderHomeStackParamList = {
   ProviderHomeMain: undefined;
   BookingDetail: { bookingId: string; booking?: any };
+  BookingChat: { bookingId: string; senderRole: 'customer' | 'provider'; otherPartyName: string };
   Notifications: undefined;
   DevSettings: undefined;
 };

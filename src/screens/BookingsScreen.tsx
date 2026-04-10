@@ -35,6 +35,7 @@ import { submitReview, getProviderIdByDisplayName, hasReviewedBooking } from '..
 import AppBackground from '../components/AppBackground';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { HomeScreenProps } from '../navigation/types';
+import { useFocusEffect } from '@react-navigation/native';
 
 // ==================== TYPES ====================
 
@@ -490,10 +491,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     allTodayBookingsCompleted,
     cancelBooking,
     requestReschedule,
-    providerRespondToReschedule,
     confirmReschedule,
     canReschedule,
     reloadBookings,
+    syncPendingReschedules,
   } = useBooking();
 
   const filteredPastBookings = useMemo(() => pastBookings.filter(b => !b.isPendingReschedule), [pastBookings]);
@@ -504,9 +505,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const mainScrollRef = useRef<ScrollView>(null);
   const modalScrollRef = useRef<ScrollView>(null);
   const bookingsListRef = useRef<FlatList>(null);
-
-  // ✅ Track active reschedule timeouts per booking to prevent interference
-  const rescheduleTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const [activeFilters, setActiveFilters] = useState<Set<'all' | 'past'>>(new Set());
 
@@ -580,6 +578,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }>>([]);
 
   // ==================== HELPER FUNCTIONS ====================
+
+  // Sync pending reschedule requests from Supabase when the screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      syncPendingReschedules().catch(() => {});
+    }, [syncPendingReschedules])
+  );
 
   const getStatusColor = useCallback((status: string, isPending?: boolean) => {
     if (isPending) return '#9C27B0';
@@ -791,14 +796,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     try {
       const bookingId = selectedBooking.id;
 
-      // ✅ Clear any pending reschedule timeout for this booking
-      const existingTimeout = rescheduleTimeoutsRef.current.get(bookingId);
-      if (existingTimeout) {
-        if (__DEV__) console.log(`[Booking ${bookingId}] Clearing reschedule timeout (booking cancelled)`);
-        clearTimeout(existingTimeout);
-        rescheduleTimeoutsRef.current.delete(bookingId);
-      }
-
       await cancelBooking(bookingId);
       setModalVisible(false);
       setShowCancelModal(false);
@@ -874,14 +871,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         await confirmReschedule(bookingId, date, time);
         if (__DEV__) console.log(`[${providerName}] Step 3 Complete: Booking ${bookingId} Status=UPCOMING`);
 
-        // ✅ Clear any pending timeout for this booking since reschedule is complete
-        const existingTimeout = rescheduleTimeoutsRef.current.get(bookingId);
-        if (existingTimeout) {
-          if (__DEV__) console.log(`[${providerName}] Clearing timeout for booking ${bookingId} (confirmed)`);
-          clearTimeout(existingTimeout);
-          rescheduleTimeoutsRef.current.delete(bookingId);
-        }
-
         setSuccessMessage('Your appointment has been rescheduled successfully!');
         setSuccessIcon('✓');
         setShowSuccessModal(true);
@@ -894,10 +883,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         const bookingId = selectedBooking.id;
         const providerName = selectedBooking.providerName;
 
-        // ✅ Capture current month and user selections for THIS specific booking's timeout
-        const currentMonth = new Date(selectedRescheduleMonth);
-        const capturedSelections = [...selectedDates];
-
         if (__DEV__) console.log(`[${providerName}] Step 1: User requesting reschedule for booking ${bookingId}`);
         await requestReschedule(bookingId, selectedDates);
         if (__DEV__) console.log(`[${providerName}] Step 1 Complete: Booking ${bookingId} Status=PENDING`);
@@ -905,57 +890,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setSuccessMessage(`Reschedule request sent! ${providerName} will respond with available dates.`);
         setSuccessIcon('✓');
         setShowSuccessModal(true);
-
-        // ✅ Clear any existing timeout for this booking to prevent interference
-        const existingTimeout = rescheduleTimeoutsRef.current.get(bookingId);
-        if (existingTimeout) {
-          if (__DEV__) console.log(`[${providerName}] Clearing previous timeout for booking ${bookingId}`);
-          clearTimeout(existingTimeout);
-          rescheduleTimeoutsRef.current.delete(bookingId);
-        }
-
-        // ✅ Create new booking-specific timeout with captured month (no shared state)
-        const rescheduleTimeout = setTimeout(async () => {
-          if (__DEV__) console.log(`[${providerName}] Step 2: 30s elapsed for booking ${bookingId}, provider responding...`);
-
-          // ✅ Use captured month and selections from when timeout was created
-          const response = generateDynamicRescheduleDates(currentMonth, capturedSelections);
-
-          // Store the provider's response message
-          setProviderResponseMessage(response.message);
-          setProviderNoAvailability(response.noAvailability);
-
-          if (response.noAvailability) {
-            if (__DEV__) console.log(`[${providerName}] No availability for booking ${bookingId}`);
-            // Still call respond so the booking status updates
-            try {
-              await providerRespondToReschedule(bookingId, []);
-            } catch (error) {
-              console.error(`❌ [${providerName}] Error for booking ${bookingId}:`, error);
-            }
-          } else {
-            const mockAvailableDates = response.dates
-              .filter((d): d is { date: string; times: string[] } => d.date !== undefined);
-
-            try {
-              await providerRespondToReschedule(bookingId, mockAvailableDates);
-              if (__DEV__) console.log(`[${providerName}] Step 2 Complete: Booking ${bookingId} Status=AVAILABLE (met request: ${response.couldMeetRequest})`);
-            } catch (error) {
-              console.error(`[${providerName}] Error for booking ${bookingId}:`, error);
-            }
-          }
-
-          // Clean up
-          {
-            // Clean up timeout reference after completion
-            rescheduleTimeoutsRef.current.delete(bookingId);
-            if (__DEV__) console.log(`[${providerName}] Timeout cleaned up for booking ${bookingId}`);
-          }
-        }, 30000) as any; // 30 seconds
-
-        // ✅ Store timeout reference for this specific booking
-        rescheduleTimeoutsRef.current.set(bookingId, rescheduleTimeout);
-        if (__DEV__) console.log(`[${providerName}] Timeout registered for booking ${bookingId}`);
       }
     } catch (error: any) {
       console.error('❌ Reschedule error:', error);
@@ -963,7 +897,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBooking, selectedDates, selectedRescheduleMonth, requestReschedule, confirmReschedule, providerRespondToReschedule]);
+  }, [selectedBooking, selectedDates, requestReschedule, confirmReschedule]);
 
   // ✅ FIXED: Rating locks after first submission + re-enable scrolling
   const handleRatingSubmit = useCallback(async () => {
@@ -1212,18 +1146,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     return () => {
       isMounted = false;
       clearInterval(locationInterval);
-    };
-  }, []);
-
-  // ✅ Cleanup all reschedule timeouts on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (__DEV__) console.log('Cleaning up all reschedule timeouts');
-      rescheduleTimeoutsRef.current.forEach((timeout, bookingId) => {
-        if (__DEV__) console.log(`Clearing timeout for booking ${bookingId}`);
-        clearTimeout(timeout);
-      });
-      rescheduleTimeoutsRef.current.clear();
     };
   }, []);
 
@@ -2491,13 +2413,16 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         <TouchableOpacity
                                           style={styles.modalMessageButtonLarge}
                                           onPress={() => {
+                                            if (!selectedBooking.dbId) {
+                                              Alert.alert('Not available', 'This booking has not been synced yet. Please try again shortly.');
+                                              return;
+                                            }
                                             setModalVisible(false);
-                                            setShowMessageModal(true);
-                                            // ✅ FIX: Re-enable scrolling when opening message modal
-                                            setTimeout(() => {
-                                              mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
-                                              modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
-                                            }, 100);
+                                            navigation.navigate('BookingChat', {
+                                              bookingId: selectedBooking.dbId,
+                                              senderRole: 'customer',
+                                              otherPartyName: selectedBooking.providerName,
+                                            });
                                           }}
                                           activeOpacity={0.7}
                                         >

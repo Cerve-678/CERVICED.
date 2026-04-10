@@ -1,5 +1,5 @@
 // src/screens/auth/ForgotPasswordScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { LockIcon } from '../../components/IconLibrary';
 import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -28,6 +29,12 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(false);
+    }, [])
+  );
+
   const handleSend = async () => {
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
@@ -35,13 +42,23 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(trimmed);
-    setLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.resetPasswordForEmail(trimmed),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+      navigation.navigate('ResetPasswordOTP', { email: trimmed });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    navigation.navigate('ResetPasswordOTP', { email: trimmed });
   };
 
   return (

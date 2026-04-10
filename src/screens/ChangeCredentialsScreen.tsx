@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { supabase } from '../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 
 // ── Input component ──────────────────────────────────────────────────────────
 
@@ -96,6 +97,12 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      setPasswordLoading(false);
+    }, [])
+  );
+
   // ── Password update ──────────────────────────────────────────────────────
 
   const handlePasswordUpdate = async () => {
@@ -113,15 +120,20 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
       const accessToken = session.access_token;
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
       const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-      const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'apikey': supabaseAnonKey,
-        },
-        body: JSON.stringify({ password: newPassword }),
-      });
+      const response = await Promise.race([
+        fetch(`${supabaseUrl}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': supabaseAnonKey,
+          },
+          body: JSON.stringify({ password: newPassword }),
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
       const json = await response.json();
       if (!response.ok) throw new Error(json?.message ?? json?.msg ?? 'Failed to update password.');
 

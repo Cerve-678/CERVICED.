@@ -7,7 +7,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
+import { supabase, ensureFreshSession } from '../lib/supabase';
 
 // Show banner + play sound even when the app is foregrounded
 Notifications.setNotificationHandler({
@@ -63,6 +63,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     if (__DEV__) console.log('[Push] Token obtained:', token);
 
     // Save token to the current user's row in Supabase
+    await ensureFreshSession().catch(() => {});
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { error } = await supabase

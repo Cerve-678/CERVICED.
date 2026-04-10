@@ -17,6 +17,7 @@ import {
   Keyboard,
   NativeSyntheticEvent,
   TextInputFocusEventData,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -38,7 +39,7 @@ import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
 
 // Supabase registration service
-import { saveProviderToSupabase } from '../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, getCachedProviderData } from '../services/providerRegistrationService';
 
 // Navigation types
 import { ProfileStackParamList } from '../navigation/types';
@@ -1111,26 +1112,49 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     categories: {},
   });
 
-  // Load saved provider data on mount
+  const { user, switchRole } = useAuth();
+  const [dataLoading, setDataLoading] = useState(true);
+  // true when an existing profile was loaded from Supabase (edit), false for new creation
+  const isEditingExisting = useRef(false);
+  // Load saved provider data on mount — try Supabase first (authoritative),
+  // fall back to AsyncStorage cache so edits aren't lost on bad network.
   useEffect(() => {
     const loadSavedData = async () => {
       try {
-        const stored = await AsyncStorage.getItem('@provider_reg_data');
-        if (stored) {
-          const parsed = JSON.parse(stored) as ProviderRegistrationData;
-          setProviderData(parsed);
-          setShowTransferModal(false); // Skip transfer modal if data already exists
+        setDataLoading(true);
+        // Use Supabase as the source of truth so all fields (logo, services,
+        // categories) are pre-filled when the provider opens Edit Profile.
+        const supabaseData = user?.id
+          ? await loadProviderFromSupabase(user.id)
+          : await getCachedProviderData();
+
+        if (supabaseData) {
+          isEditingExisting.current = true;
+          setProviderData(supabaseData);
+          setShowTransferModal(false);
+        } else {
+          // Nothing in Supabase — try the local AsyncStorage cache
+          const stored = await AsyncStorage.getItem('@provider_reg_data');
+          if (stored) {
+            const parsed = JSON.parse(stored) as ProviderRegistrationData;
+            setProviderData(parsed);
+            setShowTransferModal(false);
+          }
         }
       } catch (e) {
         console.error('Error loading provider data:', e);
+        // Last-ditch: try local cache
+        try {
+          const stored = await AsyncStorage.getItem('@provider_reg_data');
+          if (stored) setProviderData(JSON.parse(stored) as ProviderRegistrationData);
+        } catch {}
+      } finally {
+        setDataLoading(false);
       }
     };
     loadSavedData();
-  }, []);
+  }, [user?.id]);
 
-  const { user } = useAuth();
-
-  // Modal states
   const [showGradientPicker, setShowGradientPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAccentColorPicker, setShowAccentColorPicker] = useState(false);
@@ -1307,14 +1331,43 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setIsSubmitting(true);
     try {
       await saveProviderToSupabase(user.id, providerData);
+      // Show success first, THEN switch role when the user taps the button.
+      // This gives clear feedback and lets the RootNavigation effect fire
+      // after the provider tab navigator has fully mounted.
+      const isEdit = isEditingExisting.current;
       Alert.alert(
-        'Profile Saved!',
-        'Your provider profile has been saved successfully.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        isEdit ? 'Profile Updated! ✅' : 'Profile Created! 🎉',
+        isEdit
+          ? 'Your provider profile has been updated successfully.'
+          : 'Your provider profile has been submitted for review.',
+        [{
+          text: 'View My Profile',
+          onPress: () => {
+            if (user?.accountType === 'provider') {
+              // Already on provider tabs (signed up as provider) — just go back
+              // to the ProviderAccountMain screen.
+              navigation.goBack();
+            } else {
+              // Was a user — switch role, RootNavigation will redirect to Profile tab.
+              switchRole('provider').catch((e: any) => {
+                Alert.alert('Error', e?.message || 'Failed to switch role.');
+              });
+            }
+          },
+        }]
       );
     } catch (e: any) {
       console.error('Error saving provider profile:', e);
-      Alert.alert('Error', e?.message || 'Failed to save profile. Please try again.');
+      const msg: string = e?.message || '';
+      if (msg.toLowerCase().includes('session') || msg.toLowerCase().includes('log in')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again.',
+          [{ text: 'OK', onPress: () => navigation.navigate('Login' as any) }]
+        );
+      } else {
+        Alert.alert('Error', msg || 'Failed to save profile. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1327,11 +1380,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   const categoryNames = Object.keys(providerData.categories);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || dataLoading) {
     return (
-      <View style={styles.loading}>
-        <Text>Loading...</Text>
-      </View>
+      <ThemedBackground style={styles.loading}>
+        <ActivityIndicator size="large" color={theme.accent} />
+        <Text style={{ color: theme.secondaryText, marginTop: 12, fontSize: 14 }}>
+          Loading your profile...
+        </Text>
+      </ThemedBackground>
     );
   }
 

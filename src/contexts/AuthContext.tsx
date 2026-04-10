@@ -26,6 +26,7 @@ interface AuthContextType {
   login: (userData?: UserData) => void;
   logout: () => Promise<void>;
   updateUser: (partial: Partial<UserData>) => Promise<void>;
+  switchRole: (role: AccountType) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,37 +38,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
-    // so we only use it as the single source of truth — no separate getSession() call.
+    let loadingResolved = false;
+    const resolveLoading = () => {
+      if (!loadingResolved) {
+        loadingResolved = true;
+        setIsLoading(false);
+      }
+    };
+
+    // ── FAST PATH ──────────────────────────────────────────────────────────
+    // Read the raw session straight from AsyncStorage (what Supabase stores).
+    // If we find a saved session we immediately show the app — the user never
+    // waits for a network token-refresh on startup.
+    AsyncStorage.getItem('supabase.auth.token')
+      .then((raw) => {
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          const cachedSession: Session | null =
+            parsed?.currentSession ?? parsed ?? null;
+          if (cachedSession?.user?.email_confirmed_at && cachedSession.user.id) {
+            console.log('[AuthContext] Fast-path: seeding from cache for', cachedSession.user.id);
+            const u = cachedSession.user;
+            const meta = u.user_metadata ?? {};
+            setUser({
+              id: u.id,
+              name: meta.name ?? '',
+              email: u.email ?? '',
+              phone: meta.phone ?? '',
+              dob: meta.dob ?? '',
+              accountType: (meta.role as AccountType) ?? 'user',
+              loginMethod: meta.login_method ?? 'email',
+            });
+            setIsLoggedIn(true);
+            setSession(cachedSession);
+            resolveLoading(); // app is visible immediately
+          }
+        } catch (_) {}
+      })
+      .catch(() => {});
+
+    // ── SAFETY NET ─────────────────────────────────────────────────────────
+    // If neither the cache read nor onAuthStateChange resolves within 10 s,
+    // force the loading screen away so the user can at least see login.
+    const safetyTimer = setTimeout(() => {
+      console.warn('[AuthContext] Safety timeout — forced isLoading to false');
+      resolveLoading();
+    }, 10000);
+
+    // ── AUTHORITATIVE PATH ─────────────────────────────────────────────────
+    // onAuthStateChange fires INITIAL_SESSION (with a fresh token if needed)
+    // and keeps running for all future auth events.  It may be slow on first
+    // open if the token is expired — but because we already showed the app
+    // via the fast path above, the user sees no spinner.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      clearTimeout(safetyTimer);
       console.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
-      // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
+
       if (event === 'PASSWORD_RECOVERY') {
         setSession(session);
-        setIsLoading(false);
+        resolveLoading();
         return;
       }
-      // Stale/invalid refresh token — sign out silently so the user sees the login screen
-      // instead of a console error loop.
+
       if (event === 'TOKEN_REFRESHED' && !session) {
         await supabase.auth.signOut().catch(() => {});
         setUser(null);
         setIsLoggedIn(false);
         setSession(null);
-        setIsLoading(false);
+        resolveLoading();
         return;
       }
+
       setSession(session);
       if (session?.user) {
-        await loadUserProfile(session);
+        await loadUserProfile(session); // updates user/isLoggedIn, calls resolveLoading inside
       } else {
         setUser(null);
         setIsLoggedIn(false);
-        setIsLoading(false);
+        resolveLoading();
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserProfile = async (session: Session) => {
@@ -79,11 +135,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
         return;
       }
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+      // Race the DB fetch against a 6 s timeout — if the network is slow on startup
+      // we still let the user in using their session metadata.
+      let profile: any = null;
+      let profileError: any = null;
+      try {
+        const result = await Promise.race([
+          supabase.from('users').select('*').eq('id', session.user.id).single(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('profile_timeout')), 6000)
+          ),
+        ]);
+        profile = result.data;
+        profileError = result.error;
+      } catch (fetchErr: any) {
+        if (fetchErr?.message === 'profile_timeout') {
+          console.warn('[AuthContext] Profile DB fetch timed out — logging in with session data');
+          // Let the user in with what we know from the session so the app doesn\'t hang.
+          setUser({
+            id: session.user.id,
+            name: session.user.user_metadata?.name ?? '',
+            email: session.user.email ?? '',
+            phone: '',
+            dob: '',
+            accountType: 'user',
+            loginMethod: 'email',
+          });
+          setIsLoggedIn(true);
+          return; // finally will still run
+        }
+        throw fetchErr; // unexpected error — re-throw to outer catch
+      }
 
       if (profileError && profileError.code !== 'PGRST116') {
         // PGRST116 = row not found, which is fine for new users
@@ -121,6 +203,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error loading user profile:', error);
       setIsLoggedIn(false);
     } finally {
+      // Always clear the loading spinner — fast-path may have already done this,
+      // but calling it again is safe (it's idempotent).
       setIsLoading(false);
     }
   };
@@ -144,6 +228,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) console.warn('updateUser DB error:', error.message);
   };
 
+  const switchRole = async (role: AccountType) => {
+    if (!user) return;
+    const { error } = await supabase.from('users').update({ role }).eq('id', user.id);
+    if (error) throw new Error(error.message);
+    setUser({ ...user, accountType: role });
+  };
+
   const logout = async () => {
     // Clear state immediately so the navigator switches to auth screens right away
     setUser(null);
@@ -158,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'saved_portfolio_items',
       'planner_events',
       '@bookings',
+      '@bookings_owner',
     ]).catch(() => {});
     // Remove push token so this device stops receiving notifications for this account
     await unregisterPushToken().catch(() => {});
@@ -166,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, isLoading, user, session, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ isLoggedIn, isLoading, user, session, login, logout, updateUser, switchRole }}>
       {children}
     </AuthContext.Provider>
   );

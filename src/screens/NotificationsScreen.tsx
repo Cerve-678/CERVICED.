@@ -144,7 +144,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications' },
         (payload) => {
-          const n = mapDbNotification(payload.new as DbNotification);
+          const raw = payload.new as DbNotification;
+          const expectedRole = isProviderRef.current ? 'provider' : 'user';
+          if (raw.target_role && raw.target_role !== expectedRole) return;
+          const n = mapDbNotification(raw);
           setNotifications(prev => [n, ...prev]);
         }
       )
@@ -166,7 +169,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const loadNotifications = async () => {
     try {
       setLoadError(null);
-      const dbRows = await getMyNotifications();
+      const role = user?.accountType === 'provider' ? 'provider' : 'user';
+      const dbRows = await getMyNotifications(role);
       setNotifications(dbRows.map(mapDbNotification));
     } catch (error) {
       console.error('Failed to load notifications:', error);
@@ -184,7 +188,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'bookings':
         return notifications.filter(n => 
           ['booking_confirmed', 'booking_reminder', 'booking_cancelled', 
-           'reschedule_request', 'reschedule_provider_response', 'reschedule_confirmed'].includes(n.type)
+           'reschedule_request', 'reschedule_response', 'reschedule_confirmed'].includes(n.type)
         );
       case 'promotions':
         return notifications.filter(n => 
@@ -214,7 +218,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     try {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       // Sync to Supabase (silent fail)
-      markAllNotificationsRead().catch(() => {});
+      const role = isProviderRef.current ? 'provider' : 'user';
+      markAllNotificationsRead(role).catch(() => {});
     } catch (error) {
       console.error('Failed to mark all as read:', error);
     }
@@ -271,11 +276,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'review_request' ||
         notification.type === 'review_received' ||
         notification.type === 'reschedule_request' ||
-        notification.type === 'reschedule_provider_response' ||
+        notification.type === 'reschedule_response' ||
         notification.type === 'reschedule_confirmed') {
 
       const openReschedule = notification.type === 'reschedule_request' ||
-                            notification.type === 'reschedule_provider_response';
+                            notification.type === 'reschedule_response';
 
       setTimeout(() => {
         if (isProviderRef.current) {

@@ -40,6 +40,7 @@ import { HomeStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { getProviderBySlug, getProviderReviews } from '../services/databaseService';
+import { supabase } from '../lib/supabase';
 import type { ProviderWithServices } from '../types/database';
 
 type ProviderProfileScreenProps = StackScreenProps<HomeStackParamList, 'ProviderProfile'>;
@@ -178,10 +179,11 @@ const getAdaptiveAccentColor = (gradient: [string, string, ...string[]]): string
 interface ServiceImageCarouselProps {
   images: any[];
   size?: number;
+  onPress?: (startIndex: number) => void;
 }
 
 const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
-  ({ images, size = 60 }) => {
+  ({ images, size = 60, onPress }) => {
     const [activeIndex, setActiveIndex] = useState(0);
 
     const handleScroll = useCallback((event: any) => {
@@ -191,13 +193,14 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
     }, [size]);
 
     if (images.length <= 1) {
-      // Single image, render normally
       return (
-        <Image
-          source={images[0]}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
-          resizeMode="cover"
-        />
+        <TouchableOpacity activeOpacity={0.85} onPress={() => onPress?.(0)}>
+          <Image
+            source={images[0]}
+            style={{ width: size, height: size, borderRadius: size / 2 }}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
       );
     }
 
@@ -211,12 +214,14 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
           onScroll={handleScroll}
           scrollEventThrottle={16}
           keyExtractor={(_item, index) => `img-${index}`}
-          renderItem={({ item }) => (
-            <Image
-              source={item}
-              style={{ width: size, height: size, borderRadius: size / 2 }}
-              resizeMode="cover"
-            />
+          renderItem={({ item, index }) => (
+            <TouchableOpacity activeOpacity={0.85} onPress={() => onPress?.(index)}>
+              <Image
+                source={item}
+                style={{ width: size, height: size, borderRadius: size / 2 }}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
           )}
           style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}
           nestedScrollEnabled={true}
@@ -242,6 +247,81 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
     );
   }
 );
+
+// ─── Fullscreen Service Image Viewer ────────────────────────────────────────
+interface FullscreenImageViewerProps {
+  visible: boolean;
+  images: any[];
+  startIndex: number;
+  serviceName: string;
+  onClose: () => void;
+}
+const FullscreenImageViewer: React.FC<FullscreenImageViewerProps> = ({ visible, images, startIndex, serviceName, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(startIndex);
+  const flatListRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(startIndex);
+      // Scroll to the tapped image after mount
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index: startIndex, animated: false });
+      }, 50);
+    }
+  }, [visible, startIndex]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }}>
+        {/* Close button */}
+        <TouchableOpacity
+          onPress={onClose}
+          style={{ position: 'absolute', top: 56, right: 20, zIndex: 10, padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20 }}
+        >
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '600' }}>✕</Text>
+        </TouchableOpacity>
+        {/* Service name */}
+        <View style={{ position: 'absolute', top: 56, left: 20, zIndex: 10 }}>
+          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>{serviceName}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{currentIndex + 1} / {images.length}</Text>
+        </View>
+        {/* Image pager */}
+        <FlatList
+          ref={flatListRef}
+          data={images}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={startIndex}
+          getItemLayout={(_data, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+          onMomentumScrollEnd={e => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+            setCurrentIndex(index);
+          }}
+          keyExtractor={(_item, index) => `full-${index}`}
+          renderItem={({ item }) => (
+            <View style={{ width: screenWidth, justifyContent: 'center', alignItems: 'center' }}>
+              <Image
+                source={item}
+                style={{ width: screenWidth, height: screenWidth }}
+                resizeMode="contain"
+              />
+            </View>
+          )}
+          style={{ flex: 1 }}
+        />
+        {/* Dot indicators */}
+        {images.length > 1 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingBottom: 48 }}>
+            {images.map((_: any, i: number) => (
+              <View key={i} style={{ width: currentIndex === i ? 10 : 6, height: 6, borderRadius: 3, backgroundColor: currentIndex === i ? '#fff' : 'rgba(255,255,255,0.35)' }} />
+            ))}
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+};
 
 // Enhanced Tab Component with Animations and Visual Feedback - Properly Typed
 interface CategoryTabItemProps {
@@ -913,6 +993,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   const providerId = route.params?.providerId || 'styled-by-kathrine';
   // Provider state — seeded with local hardcoded data, overridden by Supabase if available
   const [provider, setProvider] = useState<ProviderData | null>(null);
+  const [providerUserId, setProviderUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [reviews, setReviews] = useState<{ id: number | string; name: string; rating: number; comment: string; date: string }[]>([]);
@@ -925,6 +1006,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       .then(async data => {
         if (cancelled || !data) return;
         setProvider(mapDbProviderToProviderData(data));
+        setProviderUserId((data as any).user_id ?? null);
         // Fetch real reviews using the Supabase UUID
         try {
           const dbReviews = await getProviderReviews(data.id);
@@ -977,6 +1059,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   } | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceData | null>(null);
   const [notificationMessageType, setNotificationMessageType] = useState<'bell' | 'bookmark'>('bell');
+
+  // Fullscreen image viewer state
+  const [fullscreenImages, setFullscreenImages] = useState<any[]>([]);
+  const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
+  const [fullscreenServiceName, setFullscreenServiceName] = useState('');
+  const [showFullscreenImages, setShowFullscreenImages] = useState(false);
+
+  const openFullscreen = useCallback((images: any[], startIndex: number, serviceName: string) => {
+    setFullscreenImages(images);
+    setFullscreenStartIndex(startIndex);
+    setFullscreenServiceName(serviceName);
+    setShowFullscreenImages(true);
+  }, []);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(new Animated.Value(100)).current;
@@ -1281,6 +1376,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         const cartItem = {
           providerName: provider.providerName,
           providerImage: provider.providerLogo,
+          providerId: provider.id,
           providerService: provider.providerService,
           service: {
             id: service.id,
@@ -1319,9 +1415,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     [provider, addToCart, showSuccessMessageWithAnimation, hideSuccessMessage, navigation]
   );
 
-  const handleBook = useCallback((service: ServiceData) => {
+  const handleBook = useCallback(async (service: ServiceData) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
+      // Block self-booking: provider switched to customer viewing their own profile
+      if (providerUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && user.id === providerUserId) {
+          Alert.alert("Can't Book Your Own Service", 'You cannot book a service from your own provider account.');
+          return;
+        }
+      }
       // Regular Book opens add-ons modal first
       setSelectedService(service);
       setShowAddOnsModal(true);
@@ -1329,7 +1433,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       console.error('Error opening add-ons modal:', error);
       Alert.alert('Error', 'Failed to open booking options. Please try again.');
     }
-  }, []);
+  }, [providerUserId]);
 
   const handleAddToCartWithAddOns = useCallback(
     (service: ServiceData, selectedAddOns: Array<{ id: number; name: string; price: number }>) => {
@@ -1343,6 +1447,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         const cartItem = {
           providerName: provider.providerName,
           providerImage: provider.providerLogo,
+          providerId: provider.id,
           providerService: provider.providerService,
           service: {
             id: service.id,
@@ -1465,6 +1570,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           service={selectedService}
           onAddToCart={handleAddToCartWithAddOns}
           adaptiveAccentColor={adaptiveAccentColor}
+        />
+
+        {/* Fullscreen Image Viewer */}
+        <FullscreenImageViewer
+          visible={showFullscreenImages}
+          images={fullscreenImages}
+          startIndex={fullscreenStartIndex}
+          serviceName={fullscreenServiceName}
+          onClose={() => setShowFullscreenImages(false)}
         />
 
         {/* Reviews Modal */}
@@ -1630,8 +1744,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                       />
                       <View style={styles.serviceItem}>
                         <View style={styles.serviceImageContainer}>
-                          {service.images && service.images.length > 1 ? (
-                            <ServiceImageCarousel images={service.images} size={60} />
+                          {service.images && service.images.length >= 1 ? (
+                            <ServiceImageCarousel
+                              images={service.images}
+                              size={60}
+                              onPress={(idx) => openFullscreen(service.images!, idx, service.name)}
+                            />
                           ) : (
                             <>
                               <Image

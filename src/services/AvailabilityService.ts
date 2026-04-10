@@ -155,6 +155,11 @@ export const AvailabilityService = {
         return [];
       }
 
+      // For today, calculate how many minutes have passed so we can skip slots already gone
+      const todayDateStr = new Date().toISOString().split('T')[0];
+      const isToday = date === todayDateStr; // string compare avoids timezone offset issues
+      const nowMinutes = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : 0;
+
       // Get provider's base schedule
       const baseSchedule = getDefaultProviderSchedule(providerName);
       const baseSlots = baseSchedule[dayOfWeek] || [];
@@ -170,7 +175,16 @@ export const AvailabilityService = {
       const durationMinutes = serviceDuration ? parseDurationToMinutes(serviceDuration) : 60;
 
       // Filter available slots
-      const availableSlots: TimeSlot[] = baseSlots.map(time => {
+      const availableSlots: TimeSlot[] = baseSlots
+        .filter(time => {
+          // Skip slots that have already passed today (add 30-min buffer so they can't book a slot starting right now)
+          if (isToday) {
+            const slotMinutes = parseTimeToMinutes(time);
+            if (slotMinutes <= nowMinutes + 30) return false;
+          }
+          return true;
+        })
+        .map(time => {
         const slotStartMinutes = parseTimeToMinutes(time);
         const slotEndMinutes = slotStartMinutes + durationMinutes;
 

@@ -101,6 +101,28 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const buildWelcomeMessage = useCallback((): ChatMessage => {
+    const isProvider = user?.accountType === 'provider';
+
+    if (isProvider) {
+      const pendingCount = bookings.filter(b => b.status === 'pending').length;
+      let welcomeText = "Hi! I'm Becca, your business assistant!\n\n";
+      if (pendingCount > 0) {
+        welcomeText += `You have ${pendingCount} booking${pendingCount > 1 ? 's' : ''} awaiting confirmation. `;
+      }
+      welcomeText += "I can help you manage your clients, answer questions, and grow your business.";
+      return {
+        id: `welcome-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        role: 'assistant',
+        content: welcomeText,
+        timestamp: new Date(),
+        suggestions: [
+          { id: 'my-bookings', text: 'My Bookings', action: 'navigate', data: { screen: 'Bookings' } },
+          { id: 'business-tips', text: 'Business Tips', action: 'message', data: { message: 'Give me tips to grow my beauty business' } },
+          { id: 'client-faq', text: 'Client FAQ', action: 'message', data: { message: 'What do clients commonly ask about beauty services?' } },
+        ],
+      };
+    }
+
     const upcomingCount = bookings.filter(b => b.status === 'upcoming').length;
     let welcomeText = "Hi! I'm Becca, your beauty booking assistant!\n\n";
     if (upcomingCount > 0) {
@@ -119,7 +141,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
         { id: 'browse', text: 'Browse All Services', action: 'message', data: { message: 'Show me all services' } },
       ],
     };
-  }, [bookings]);
+  }, [bookings, user?.accountType]);
 
   // Initialize
   useEffect(() => {

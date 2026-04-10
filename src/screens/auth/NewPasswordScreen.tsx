@@ -1,5 +1,5 @@
 // src/screens/auth/NewPasswordScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { ShieldCheckIcon } from '../../components/IconLibrary';
 import { supabase } from '../../lib/supabase';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 
@@ -30,6 +31,12 @@ export default function NewPasswordScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(false);
+    }, [])
+  );
 
   const inputStyle = [
     styles.input,
@@ -50,17 +57,31 @@ export default function NewPasswordScreen({ navigation }: Props) {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.updateUser({ password }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 15000)
+        ),
+      ]);
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+      // Sign out so the user logs in fresh with new password
+      // Non-fatal timeout — if signOut hangs, still proceed to login screen
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+      ]);
+      Alert.alert('Password updated!', 'Please log in with your new password.', [
+        { text: 'OK', onPress: () => navigation.navigate('Login') },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    // Sign out so the user logs in fresh with new password
-    await supabase.auth.signOut();
-    Alert.alert('Password updated!', 'Please log in with your new password.', [
-      { text: 'OK', onPress: () => navigation.navigate('Login') },
-    ]);
   };
 
   return (
