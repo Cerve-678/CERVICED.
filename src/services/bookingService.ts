@@ -152,11 +152,17 @@ export const PROVIDER_LOCATIONS: Record<string, {
   },
 };
 
+export interface DepositPolicy {
+  type: 'percentage' | 'fixed';
+  amount: number;
+}
+
 export interface ServiceBookingData {
   selectedDate: string;
   selectedTime: string;
   notes: string;
   isDepositOnly?: boolean;
+  depositPolicy?: DepositPolicy;
 }
 
 export interface PaymentInfo {
@@ -311,9 +317,10 @@ export class BookingService {
       let remainingBalance: number;
 
       if (booking.isDepositOnly) {
-        // Deposit payment (20% of total including service charge)
+        // Deposit payment — use provider's actual policy if available, otherwise default 20%
         paymentType = 'deposit';
-        depositAmount = this.calculateDeposit(totalWithServiceCharge, DEPOSIT_PERCENTAGE);
+        const policy: DepositPolicy | number = booking.depositPolicy ?? DEPOSIT_PERCENTAGE;
+        depositAmount = this.calculateDeposit(totalWithServiceCharge, policy);
         amountPaid = depositAmount;
         remainingBalance = Math.round((totalWithServiceCharge - depositAmount) * 100) / 100;
       } else {
@@ -374,17 +381,26 @@ export class BookingService {
   }
 
   /**
-   * Calculate deposit amount (default 20%)
+   * Calculate deposit amount.
+   * Accepts either a legacy percentage number (default 20) or a DepositPolicy object.
+   * For 'fixed' type, the deposit is the fixed amount (capped at totalAmount).
+   * For 'percentage' type, the deposit is that percentage of totalAmount.
    */
-  static calculateDeposit(totalAmount: number, percentage: number = DEPOSIT_PERCENTAGE): number {
-    return Math.round((totalAmount * percentage) / 100 * 100) / 100;
+  static calculateDeposit(totalAmount: number, policyOrPercentage: DepositPolicy | number = DEPOSIT_PERCENTAGE): number {
+    if (typeof policyOrPercentage === 'number') {
+      return Math.round((totalAmount * policyOrPercentage) / 100 * 100) / 100;
+    }
+    if (policyOrPercentage.type === 'fixed') {
+      return Math.round(Math.min(policyOrPercentage.amount, totalAmount) * 100) / 100;
+    }
+    return Math.round((totalAmount * policyOrPercentage.amount) / 100 * 100) / 100;
   }
 
   /**
    * Calculate remaining balance after deposit
    */
-  static calculateRemainingBalance(totalAmount: number, percentage: number = DEPOSIT_PERCENTAGE): number {
-    const deposit = this.calculateDeposit(totalAmount, percentage);
+  static calculateRemainingBalance(totalAmount: number, policyOrPercentage: DepositPolicy | number = DEPOSIT_PERCENTAGE): number {
+    const deposit = this.calculateDeposit(totalAmount, policyOrPercentage);
     return Math.round((totalAmount - deposit) * 100) / 100;
   }
 

@@ -633,3 +633,52 @@ export async function getAvailableSlots(
 
   return slots;
 }
+
+// ─────────────────────────────────────────────────────────
+// DEPOSIT POLICIES
+// ─────────────────────────────────────────────────────────
+
+export interface ProviderDepositPolicy {
+  depositType: 'percentage' | 'fixed';
+  depositAmount: number;
+  depositAvailable: boolean;
+}
+
+/** Fetch deposit policies for multiple providers by display name (batch). Falls back to 20% default if no policy set. */
+export async function getProviderDepositPoliciesByDisplayNames(
+  displayNames: string[]
+): Promise<Record<string, ProviderDepositPolicy>> {
+  if (displayNames.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('providers')
+    .select('display_name, booking_policies')
+    .in('display_name', displayNames);
+
+  if (error || !data) return {};
+
+  const defaultPolicy: ProviderDepositPolicy = { depositType: 'percentage', depositAmount: 20, depositAvailable: true };
+  const result: Record<string, ProviderDepositPolicy> = {};
+
+  for (const p of data) {
+    const policies = p.booking_policies as {
+      depositRequired?: boolean;
+      depositType?: string;
+      depositAmount?: string;
+      depositNote?: string;
+    } | null;
+
+    if (policies && policies.depositAmount) {
+      const depositType: 'percentage' | 'fixed' = policies.depositType === 'fixed' ? 'fixed' : 'percentage';
+      const depositAmount = Number(policies.depositAmount);
+      result[p.display_name] = {
+        depositType,
+        depositAmount: depositAmount > 0 ? depositAmount : 20,
+        depositAvailable: true,
+      };
+    } else {
+      result[p.display_name] = { ...defaultPolicy };
+    }
+  }
+  return result;
+}

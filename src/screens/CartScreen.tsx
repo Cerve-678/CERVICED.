@@ -20,7 +20,11 @@ import { useFonts } from 'expo-font';
 import { useNavigation } from '@react-navigation/native';
 import { useCart, CartItem } from '../contexts/CartContext';
 import { useBooking, AppointmentData } from '../contexts/BookingContext';
-import { BookingService } from '../services/bookingService';
+import { BookingService, DepositPolicy } from '../services/bookingService';
+import {
+  getProviderDepositPoliciesByDisplayNames,
+  ProviderDepositPolicy,
+} from '../services/databaseService';
 import { NotificationService } from '../services/notificationService';
 import type { CartScreenProps } from '../navigation/types';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -38,6 +42,7 @@ interface ServiceBooking {
   selectedTime: string;
   notes: string;
   isDepositOnly?: boolean; // ADD THIS
+  depositPolicy?: DepositPolicy;
 }
 
 // Effective Item for Payment Modal
@@ -506,6 +511,7 @@ interface ServiceCardProps {
   ) => void;
   providerName: string;
   allCartItems: CartItem[]; // ADD THIS LINE
+  depositPolicy?: ProviderDepositPolicy;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
@@ -517,6 +523,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     onShowNotes,
     providerName,
     allCartItems,
+    depositPolicy,
   }) => {
     const { theme, isDarkMode } = useTheme();
     const [showCalendar, setShowCalendar] = useState(false);
@@ -536,12 +543,25 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       }
     }, [item?.price, item?.addOns]);
 
+    const depositPolicyArg = useMemo((): DepositPolicy | number => {
+      if (!depositPolicy) return 20;
+      return { type: depositPolicy.depositType, amount: depositPolicy.depositAmount };
+    }, [depositPolicy]);
+
     const effectivePrice = useMemo(() => {
       if (serviceBooking.isDepositOnly) {
-        return BookingService.calculateDeposit(totalPrice);
+        return BookingService.calculateDeposit(totalPrice, depositPolicyArg);
       }
       return totalPrice;
-    }, [totalPrice, serviceBooking.isDepositOnly]);
+    }, [totalPrice, serviceBooking.isDepositOnly, depositPolicyArg]);
+
+    const depositLabel = useMemo(() => {
+      if (!depositPolicy) return 'Pay Deposit Only (20%)';
+      if (depositPolicy.depositType === 'fixed') {
+        return `Pay Deposit Only (£${depositPolicy.depositAmount} flat)`;
+      }
+      return `Pay Deposit Only (${depositPolicy.depositAmount}%)`;
+    }, [depositPolicy]);
 
     const handleDateSelect = useCallback(
       (date: string) => {
@@ -582,12 +602,15 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           onUpdateBooking(item.id, {
             ...serviceBooking,
             isDepositOnly: isDeposit,
+            depositPolicy: isDeposit && depositPolicy
+              ? { type: depositPolicy.depositType, amount: depositPolicy.depositAmount }
+              : undefined,
           });
         } catch (error) {
           console.error('Error updating deposit toggle:', error);
         }
       },
-      [item.id, serviceBooking, onUpdateBooking]
+      [item.id, serviceBooking, onUpdateBooking, depositPolicy]
     );
 
     const handleRemove = useCallback(async () => {
@@ -734,7 +757,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                     serviceBooking.isDepositOnly && styles.depositOptionTextActive,
                   ]}
                 >
-                  Pay Deposit Only (20%)
+                  {depositLabel}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -742,10 +765,10 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             {serviceBooking.isDepositOnly && (
               <View style={styles.depositInfo}>
                 <Text style={styles.depositInfoText}>
-                  Deposit: £{BookingService.calculateDeposit(totalPrice).toFixed(2)}
+                  Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
                 <Text style={styles.depositRemainingText}>
-                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice).toFixed(2)} (pay
+                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} (pay
                   at appointment)
                 </Text>
               </View>
@@ -826,6 +849,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   // State management
   const [serviceBookings, setServiceBookings] = useState<Record<string, ServiceBooking>>({});
+  const [providerDepositPolicies, setProviderDepositPolicies] = useState<Record<string, ProviderDepositPolicy>>({});
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [currentNotesItem, setCurrentNotesItem] = useState<{
@@ -881,6 +905,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
   }, [items, totalPrice]);
 
+  // Fetch deposit policies for all providers in the cart whenever items change
+  useEffect(() => {
+    if (items.length === 0) { setProviderDepositPolicies({}); return; }
+    const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
+    getProviderDepositPoliciesByDisplayNames(names)
+      .then(policies => setProviderDepositPolicies(policies))
+      .catch(() => {}); // silently fall back to default 20% on error
+  }, [items]);
+
   // Compute effective total considering per-service deposits - FIXED NESTED HOOK
   const effectiveTotal = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -891,12 +924,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         return s + (Number(addOn?.price) || 0);
       }, 0);
       const itemTotalPrice = basePrice + addOnsTotal;
-      const effectiveItemPrice = booking.isDepositOnly
-        ? BookingService.calculateDeposit(itemTotalPrice)
-        : itemTotalPrice;
+      let effectiveItemPrice: number;
+      if (booking.isDepositOnly) {
+        const provName = item.providerDisplayName ?? item.providerName;
+        const pol = providerDepositPolicies[provName];
+        const policyArg: DepositPolicy | number = pol
+          ? { type: pol.depositType, amount: pol.depositAmount }
+          : 20;
+        effectiveItemPrice = BookingService.calculateDeposit(itemTotalPrice, policyArg);
+      } else {
+        effectiveItemPrice = itemTotalPrice;
+      }
       return sum + effectiveItemPrice;
     }, 0);
-  }, [items, serviceBookings]);
+  }, [items, serviceBookings, providerDepositPolicies]);
 
   const effectiveFinalTotal = useMemo(
     () => effectiveTotal + getServiceFee(),
@@ -912,12 +953,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         return s + (Number(addOn?.price) || 0);
       }, 0);
       const itemTotalPrice = basePrice + addOnsTotal;
-      const effectivePrice = booking.isDepositOnly
-        ? BookingService.calculateDeposit(itemTotalPrice)
-        : itemTotalPrice;
+      let effectivePrice: number;
+      if (booking.isDepositOnly) {
+        const provName = item.providerDisplayName ?? item.providerName;
+        const pol = providerDepositPolicies[provName];
+        const policyArg: DepositPolicy | number = pol
+          ? { type: pol.depositType, amount: pol.depositAmount }
+          : 20;
+        effectivePrice = BookingService.calculateDeposit(itemTotalPrice, policyArg);
+      } else {
+        effectivePrice = itemTotalPrice;
+      }
       return { item, effectivePrice, isDeposit: !!booking.isDepositOnly };
     });
-  }, [items, serviceBookings]);
+  }, [items, serviceBookings, providerDepositPolicies]);
 
   // Booking state management
   const updateServiceBooking = useCallback((itemId: string, updates: ServiceBooking) => {
@@ -1827,6 +1876,7 @@ const handlePaymentSuccess = useCallback(async () => {
                                 onShowNotes={handleShowNotes}
                                 providerName={providerName}
                                 allCartItems={items}
+                                depositPolicy={providerDepositPolicies[providerName]}
                               />
                               {/* Visual Separator */}
                               {index < providerItems.length - 1 && (
