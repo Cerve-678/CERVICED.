@@ -5,7 +5,7 @@ import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
 
@@ -1039,6 +1039,39 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(`Booking conflict detected: ${conflictMessages}`);
       }
 
+      // ── Fetch provider cap settings and enforce max-per-day ──────────────────
+      const providerCapCache: Record<string, { auto_accept: boolean; max_per_day: number }> = {};
+      const providerIdCache: Record<string, string | null> = {};
+
+      for (const item of cartItems) {
+        const name = item.providerName;
+        if (providerIdCache[name] === undefined) {
+          providerIdCache[name] = await getProviderIdByDisplayName(name).catch(() => null);
+        }
+        const pid = providerIdCache[name];
+        if (pid && !providerCapCache[name]) {
+          providerCapCache[name] = await getProviderBookingCapSettings(pid).catch(
+            () => ({ auto_accept: false, max_per_day: 0 })
+          );
+        }
+        if (!providerCapCache[name]) {
+          providerCapCache[name] = { auto_accept: false, max_per_day: 0 };
+        }
+      }
+
+      for (const item of cartItems) {
+        const apt = appointmentData.find(a => a.cartItemId === item.id);
+        const pid = providerIdCache[item.providerName];
+        const caps = providerCapCache[item.providerName];
+        if (apt && pid && caps && caps.max_per_day > 0) {
+          const existingCount = await countProviderBookingsOnDate(pid, apt.date);
+          if (existingCount >= caps.max_per_day) {
+            const displayName = item.providerDisplayName ?? item.providerName;
+            throw new Error(`${displayName} is fully booked on that date. Please choose a different day.`);
+          }
+        }
+      }
+
       // Fetch real provider locations from DB before building appointment records
       const uniqueProviderNames = [...new Set(cartItems.map(i => i.providerDisplayName ?? i.providerName))];
       const providerLocations: Record<string, import('../services/databaseService').ProviderLocationData> = await getProviderLocationsByDisplayNames(uniqueProviderNames).catch(() => ({}));
@@ -1057,7 +1090,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const endTime = calculateEndTime(appointment.time, item.duration);
         const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
         const now = new Date();
-        const initialStatus = BookingStatus.PENDING;
+        const initialStatus = providerCapCache[item.providerName]?.auto_accept
+          ? BookingStatus.UPCOMING
+          : BookingStatus.PENDING;
 
         // Calculate payment breakdown for receipt
         const baseServicePrice = item.price;
@@ -1175,7 +1210,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             const logoUrl = typeof item.providerImage === 'string' ? item.providerImage : null;
             const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
 
-            await dbCreateBooking(
+            const newDbBooking = await dbCreateBooking(
               {
                 user_id: user.id,
                 provider_id: providerId,
@@ -1224,6 +1259,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               }))
             );
 
+            // Auto-confirm if provider has auto_accept_bookings enabled
+            if (providerCapCache[item.providerName]?.auto_accept && newDbBooking?.id) {
+              await dbUpdateBookingStatus(newDbBooking.id, 'confirmed');
+            }
             // Confirmation email — fire and forget, never blocks booking
             if (apt.customerEmail) {
               const { subject, html } = bookingConfirmationEmail({

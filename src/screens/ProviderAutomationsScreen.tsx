@@ -12,7 +12,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
-import { updateProviderAutoAccept, updateProviderScheduleSettings, getMyProviderProfile } from '../services/databaseService';
+import {
+  updateProviderAutoAccept,
+  updateProviderScheduleSettings,
+  updateProviderMaxBookingsPerDay,
+  getMyProviderProfile,
+} from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 
@@ -253,6 +258,11 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           buffer_mins:            parseInt(d.bufferMins, 10)           || 0,
           min_booking_notice_hrs: parseInt(d.minBookingNoticeHrs, 10)  || 0,
         }));
+        // Persist daily cap to providers table (0 = unlimited)
+        const capInt = d.maxBookingsPerDay === 'unlimited'
+          ? 0
+          : parseInt(d.maxBookingsPerDay, 10) || 0;
+        saves.push(updateProviderMaxBookingsPerDay(providerId, capInt));
       }
       await Promise.all(saves);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -263,7 +273,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [d]);
+  }, [d, providerId]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
     setD(prev => ({ ...prev, [key]: val }));

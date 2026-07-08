@@ -105,7 +105,6 @@ export interface DbProvider {
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   full_address: string | null;
   address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
-  // Discoverability — power search, Becca, and personalised feeds
   style_tags: string[] | null;
   occasion_tags: string[] | null;
   expertise_tags: string[] | null;
@@ -113,6 +112,7 @@ export interface DbProvider {
   inclusive_flags: string[] | null;
   price_tier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
   auto_accept_bookings: boolean;
+  max_bookings_per_day: number;
   booking_window_days: number;
   slot_interval_mins: number;
   buffer_mins: number;
