@@ -81,6 +81,12 @@ export interface DbProvider {
   is_active: boolean;
   is_featured: boolean;
   is_verified: boolean;
+  auto_accept_bookings: boolean;
+  max_bookings_per_day: number;
+  booking_window_days: number;
+  slot_interval_mins: number;
+  buffer_mins: number;
+  min_booking_notice_hrs: number;
   created_at: string;
   updated_at: string;
 }

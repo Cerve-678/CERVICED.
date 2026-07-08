@@ -633,3 +633,85 @@ export async function getAvailableSlots(
 
   return slots;
 }
+
+// ─────────────────────────────────────────────────────────
+// PROVIDER AUTOMATION SETTINGS
+// ─────────────────────────────────────────────────────────
+
+/** Update whether a provider auto-accepts new bookings */
+export async function updateProviderAutoAccept(
+  providerId: string,
+  autoAccept: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update({ auto_accept_bookings: autoAccept })
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+/** Update scheduling rule settings for a provider */
+export async function updateProviderScheduleSettings(
+  providerId: string,
+  settings: {
+    booking_window_days: number;
+    slot_interval_mins: number;
+    buffer_mins: number;
+    min_booking_notice_hrs: number;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update(settings)
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+/** Update the maximum number of confirmed bookings a provider accepts per day (0 = unlimited) */
+export async function updateProviderMaxBookingsPerDay(
+  providerId: string,
+  maxPerDay: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update({ max_bookings_per_day: maxPerDay })
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+/**
+ * Fetch a provider's auto-accept flag and daily booking cap.
+ * Returns defaults (false, 0) on any error so callers can treat it as safe.
+ */
+export async function getProviderBookingCapSettings(
+  providerId: string,
+): Promise<{ auto_accept: boolean; max_per_day: number }> {
+  const { data, error } = await supabase
+    .from('providers')
+    .select('auto_accept_bookings, max_bookings_per_day')
+    .eq('id', providerId)
+    .single();
+  if (error || !data) return { auto_accept: false, max_per_day: 0 };
+  return {
+    auto_accept: (data as any).auto_accept_bookings ?? false,
+    max_per_day: (data as any).max_bookings_per_day ?? 0,
+  };
+}
+
+/**
+ * Count non-cancelled, non-no_show bookings for a provider on a given date.
+ * Used to enforce max_bookings_per_day.
+ */
+export async function countProviderBookingsOnDate(
+  providerId: string,
+  date: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .eq('provider_id', providerId)
+    .eq('booking_date', date)
+    .not('status', 'in', '("cancelled","no_show")');
+  if (error) throw error;
+  return count ?? 0;
+}

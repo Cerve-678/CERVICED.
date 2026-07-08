@@ -5,7 +5,7 @@ import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, getProviderBookingCapSettings, countProviderBookingsOnDate } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 
 export enum BookingStatus {
@@ -1010,6 +1010,43 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(`Booking conflict detected: ${conflictMessages}`);
       }
 
+      // ── Fetch provider cap settings and enforce max-per-day ──────────────────
+      // Keyed by item.providerName (same key used by getProviderIdByDisplayName below)
+      const providerCapCache: Record<string, { auto_accept: boolean; max_per_day: number }> = {};
+      const providerIdCache: Record<string, string | null> = {};
+
+      for (const item of cartItems) {
+        const name = item.providerName;
+        if (providerIdCache[name] === undefined) {
+          providerIdCache[name] = await getProviderIdByDisplayName(name).catch(() => null);
+        }
+        const pid = providerIdCache[name];
+        if (pid && !providerCapCache[name]) {
+          providerCapCache[name] = await getProviderBookingCapSettings(pid).catch(
+            () => ({ auto_accept: false, max_per_day: 0 })
+          );
+        }
+        if (!providerCapCache[name]) {
+          providerCapCache[name] = { auto_accept: false, max_per_day: 0 };
+        }
+      }
+
+      // Max-per-day check — runs before any booking is created so the error
+      // propagates through the outer try and surfaces to the caller.
+      for (const item of cartItems) {
+        const apt = appointmentData.find(a => a.cartItemId === item.id);
+        const pid = providerIdCache[item.providerName];
+        const caps = providerCapCache[item.providerName];
+        if (apt && pid && caps && caps.max_per_day > 0) {
+          const existingCount = await countProviderBookingsOnDate(pid, apt.date);
+          if (existingCount >= caps.max_per_day) {
+            const displayName = item.providerDisplayName ?? item.providerName;
+            throw new Error(`${displayName} is fully booked on that date. Please choose a different day.`);
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       const groupBookingId = `group_${Date.now()}`;
       const isGroupBooking = cartItems.length > 1;
 
@@ -1024,7 +1061,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const endTime = calculateEndTime(appointment.time, item.duration);
         const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
         const now = new Date();
-        const initialStatus = BookingStatus.PENDING;
+        const initialStatus = providerCapCache[item.providerName]?.auto_accept
+          ? BookingStatus.UPCOMING
+          : BookingStatus.PENDING;
 
         // Calculate payment breakdown for receipt
         const baseServicePrice = item.price;
@@ -1134,7 +1173,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             const logoUrl = typeof item.providerImage === 'string' ? item.providerImage : null;
             const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
 
-            await dbCreateBooking(
+            const newDbBooking = await dbCreateBooking(
               {
                 user_id: user.id,
                 provider_id: providerId,
@@ -1174,6 +1213,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 price_snapshot: a.price,
               }))
             );
+
+            // Auto-confirm: if provider has auto_accept_bookings enabled, advance
+            // the DB booking from 'pending' → 'confirmed' immediately.
+            if (providerCapCache[item.providerName]?.auto_accept && newDbBooking?.id) {
+              await dbUpdateBookingStatus(newDbBooking.id, 'confirmed');
+            }
           }
         }
       } catch (_) {
