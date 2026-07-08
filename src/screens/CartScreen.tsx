@@ -32,7 +32,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { getMobileProviderDisplayNames } from '../services/databaseService';
+import { getMobileProviderDisplayNames, getProviderSchedulingConstraints } from '../services/databaseService';
 import { supabase } from '../lib/supabase';
 
 // ─── Design tokens — matches app-wide palette ─────────────────────────────────
@@ -75,6 +75,8 @@ interface CalendarProps {
   selectedTime: string;
   providerName: string;
   serviceDuration?: string;
+  maxDate?: Date;
+  minBookingNoticeHrs?: number;
 }
 
 const FallbackCalendar: React.FC<CalendarProps> = ({
@@ -548,6 +550,30 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const [showCalendar, setShowCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Scheduling constraints fetched once per provider
+    const [constraints, setConstraints] = useState<{
+      minBookingNoticeHrs: number;
+      bookingWindowDays: number;
+    }>({ minBookingNoticeHrs: 0, bookingWindowDays: 60 });
+    const constraintsFetched = useRef(false);
+
+    // Fetch constraints the first time the calendar is opened
+    useEffect(() => {
+      if (!showCalendar || constraintsFetched.current) return;
+      constraintsFetched.current = true;
+      getProviderSchedulingConstraints(providerName).then(setConstraints).catch(() => {
+        // keep defaults on error
+      });
+    }, [showCalendar, providerName]);
+
+    // Compute maxDate from booking window (0 = no limit)
+    const maxDate = useMemo<Date | undefined>(() => {
+      if (!constraints.bookingWindowDays) return undefined;
+      const d = new Date();
+      d.setDate(d.getDate() + constraints.bookingWindowDays);
+      return d;
+    }, [constraints.bookingWindowDays]);
+
     // Calculate total price safely with null checks
     const totalPrice = useMemo(() => {
       try {
@@ -793,6 +819,11 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           {/* Calendar */}
           {showCalendar && (
             <View style={styles.calendarContainer}>
+              {constraints.minBookingNoticeHrs > 0 && (
+                <Text style={[styles.noticeText, { color: theme.secondaryText }]}>
+                  {`${constraints.minBookingNoticeHrs}h notice required`}
+                </Text>
+              )}
               <ModernBeautyCalendar
                 selectedDate={serviceBooking.selectedDate}
                 onDateSelect={handleDateSelect}
@@ -800,6 +831,8 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 selectedTime={serviceBooking.selectedTime}
                 providerName={providerName}
                 serviceDuration={duration}
+                maxDate={maxDate}
+                minBookingNoticeHrs={constraints.minBookingNoticeHrs}
               />
             </View>
           )}
@@ -2403,6 +2436,12 @@ const styles = StyleSheet.create({
   // Calendar Container
   calendarContainer: {
     marginBottom: spacing.sm,
+  },
+  noticeText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 4,
+    opacity: 0.75,
   },
 
   // Fallback Calendar

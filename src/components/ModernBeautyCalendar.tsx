@@ -35,6 +35,26 @@ type ModernBeautyCalendarProps = {
   providerName?: string;
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
   style?: ViewStyle;
+  /** Last date clients can book (today + bookingWindowDays). Undefined = no limit. */
+  maxDate?: Date;
+  /** Minimum hours of notice required. Slots sooner than this are filtered out. */
+  minBookingNoticeHrs?: number;
+};
+
+// Parse "9:00 AM" / "10:30 PM" style time string to total minutes since midnight
+const parseSlotTimeToMinutes = (timeStr: string): number => {
+  const clean = timeStr.trim().toUpperCase();
+  const isPM = clean.includes('PM');
+  const isAM = clean.includes('AM');
+  const timeOnly = clean.replace(/\s*(AM|PM)/gi, '').trim();
+  const parts = timeOnly.split(':');
+  if (parts.length !== 2) return 0;
+  let h = parseInt(parts[0] ?? '0', 10);
+  const m = parseInt(parts[1] ?? '0', 10);
+  if (isNaN(h) || isNaN(m)) return 0;
+  if (isPM && h !== 12) h += 12;
+  else if (isAM && h === 12) h = 0;
+  return h * 60 + m;
 };
 
 export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
@@ -44,7 +64,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   selectedTime,
   providerName,
   serviceDuration,
-  style = {}
+  style = {},
+  maxDate,
+  minBookingNoticeHrs = 0,
 }) => {
   const { theme, isDarkMode } = useTheme();
   const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
@@ -56,7 +78,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
   useEffect(() => {
     generateWeeklyAvailability();
-  }, [currentWeek, providerName, serviceDuration]);
+  }, [currentWeek, providerName, serviceDuration, maxDate, minBookingNoticeHrs]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -74,6 +96,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const startOfWeek = getStartOfWeek(currentWeek);
     const slots: SlotsMap = {};
 
+    // Earliest datetime a slot can start (enforces minBookingNoticeHrs)
+    const earliestAllowedMs = minBookingNoticeHrs > 0
+      ? Date.now() + minBookingNoticeHrs * 60 * 60 * 1000
+      : null;
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
@@ -85,6 +112,26 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         continue;
       }
 
+      // Enforce booking window: dates beyond maxDate are unavailable
+      if (maxDate !== undefined) {
+        const maxDateMidnight = new Date(maxDate);
+        maxDateMidnight.setHours(23, 59, 59, 999);
+        if (date > maxDateMidnight) {
+          slots[dateString] = { available: 0, status: 'unavailable', times: [] };
+          continue;
+        }
+      }
+
+      // Helper to apply notice-hour filter to a list of time strings
+      const applyNoticeFilter = (times: string[]): string[] => {
+        if (!earliestAllowedMs) return times;
+        return times.filter(time => {
+          const slotDate = new Date(`${dateString}T00:00:00`);
+          slotDate.setMinutes(parseSlotTimeToMinutes(time));
+          return slotDate.getTime() >= earliestAllowedMs;
+        });
+      };
+
       // Use AvailabilityService to get slots filtered by existing bookings
       if (providerName) {
         try {
@@ -93,10 +140,12 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             dateString,
             serviceDuration
           );
-          // Only include slots that are not already booked
-          const openSlots = availableTimeSlots
-            .filter(slot => !slot.isBooked)
-            .map(slot => slot.time);
+          // Only include slots that are not already booked and satisfy notice window
+          const openSlots = applyNoticeFilter(
+            availableTimeSlots
+              .filter(slot => !slot.isBooked)
+              .map(slot => slot.time)
+          );
 
           slots[dateString] = {
             available: openSlots.length,
@@ -106,7 +155,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         } catch (error) {
           // Fallback to base schedule without booking filter
           const dayOfWeek = date.getDay();
-          const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
+          const times = applyNoticeFilter(generateBeautyTimeSlots(dateString, dayOfWeek, providerName));
           slots[dateString] = {
             available: times.length,
             status: times.length > 0 ? 'available' : 'closed',
@@ -116,7 +165,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       } else {
         // No provider specified, use default slots
         const dayOfWeek = date.getDay();
-        const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
+        const times = applyNoticeFilter(generateBeautyTimeSlots(dateString, dayOfWeek, providerName));
         slots[dateString] = {
           available: times.length,
           status: times.length > 0 ? 'available' : 'closed',
@@ -186,6 +235,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (date < today) return; // Don't allow past dates
+
+    // Don't allow dates beyond the booking window
+    if (maxDate !== undefined) {
+      const maxDateMidnight = new Date(maxDate);
+      maxDateMidnight.setHours(23, 59, 59, 999);
+      if (date > maxDateMidnight) return;
+    }
 
     // Set the week to contain this date
     setCurrentWeek(date);
@@ -324,24 +380,32 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 const isToday    = date.toDateString() === new Date().toDateString();
                 const isSelected = selectedDate === dateString;
                 const hasSlots   = !isPast && monthAvailability[dateString] === true;
+                const isBeyondMax = maxDate !== undefined && (() => {
+                  const maxMidnight = new Date(maxDate);
+                  maxMidnight.setHours(23, 59, 59, 999);
+                  return date > maxMidnight;
+                })();
+                const isDisabled = isPast || isBeyondMax;
 
                 return (
                   <TouchableOpacity
                     key={`day-${index}`}
                     style={[
                       styles.calendarDay,
-                      isSelected && { backgroundColor: ACCENT },
-                      isToday && !isSelected && { borderWidth: 1.5, borderColor: ACCENT },
-                      isPast && styles.calendarDayPast,
+                      isToday && [styles.calendarDayToday, { borderColor: theme.accent }],
+                      isSelected && { backgroundColor: theme.accent },
+                      isDisabled && styles.calendarDayPast
                     ]}
                     onPress={() => handleCalendarDaySelect(date)}
-                    disabled={isPast}
-                    activeOpacity={0.7}
+                    disabled={isDisabled}
                   >
-                    <Text style={[
-                      styles.calendarDayText,
-                      { color: isSelected ? '#fff' : isPast ? popupSub : popupText },
-                    ]}>
+                    <Text
+                      style={[
+                        styles.calendarDayText,
+                        { color: isSelected ? '#fff' : theme.text },
+                        isDisabled && { color: theme.secondaryText }
+                      ]}
+                    >
                       {date.getDate()}
                     </Text>
                     {/* Availability dot */}

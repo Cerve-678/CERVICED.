@@ -2111,3 +2111,26 @@ export async function getProviderDepositPoliciesByDisplayNames(
   }
   return result;
 }
+
+// ─────────────────────────────────────────────────────────
+// SCHEDULING CONSTRAINTS
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Fetch the scheduling constraints configured by a provider.
+ * Returns sensible defaults when the provider is not found.
+ */
+export async function getProviderSchedulingConstraints(displayName: string): Promise<{
+  minBookingNoticeHrs: number;
+  bookingWindowDays: number;
+}> {
+  const { data } = await supabase
+    .from('providers')
+    .select('min_booking_notice_hrs, booking_window_days')
+    .eq('display_name', displayName)
+    .maybeSingle();
+  return {
+    minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
+    bookingWindowDays: (data as any)?.booking_window_days ?? 60,
+  };
+}
