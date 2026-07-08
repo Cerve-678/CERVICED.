@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import { PortfolioItem, ServiceCategory } from '../data/providerProfiles';
-import { getProviderForItem } from '../data/portfolioFeed';
+import { PortfolioItem } from '../data/providerProfiles';
 
 export interface PlanTask {
   id: string;
@@ -9,6 +8,7 @@ export interface PlanTask {
   serviceName: string;
   providerName?: string;
   providerId?: string;
+  portfolioImageUri?: string;
   scheduledDate?: string;
   status: 'planned' | 'scheduled' | 'booked' | 'completed';
   notes?: string;
@@ -26,6 +26,7 @@ export interface PlanEvent {
   name: string;
   date: string;
   goalImageId?: string;
+  goalImageUri?: string;
   tasks: PlanTask[];
   checklist: ChecklistItem[];
   createdAt: string;
@@ -36,7 +37,7 @@ interface PlannerStore {
   activeEventId: string | null;
 
   // Event CRUD
-  createEvent: (name: string, date: string, goalImageId?: string) => Promise<PlanEvent>;
+  createEvent: (name: string, date: string, goalImageId?: string, goalImageUri?: string) => Promise<PlanEvent>;
   updateEvent: (eventId: string, updates: Partial<PlanEvent>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
   setActiveEvent: (eventId: string | null) => void;
@@ -127,12 +128,13 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
   events: [],
   activeEventId: null,
 
-  createEvent: async (name, date, goalImageId) => {
+  createEvent: async (name, date, goalImageId, goalImageUri) => {
     const newEvent: PlanEvent = {
       id: generateId(),
       name,
       date,
       ...(goalImageId != null ? { goalImageId } : {}),
+      ...(goalImageUri != null ? { goalImageUri } : {}),
       tasks: [],
       checklist: [],
       createdAt: new Date().toISOString(),
@@ -191,13 +193,17 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
   },
 
   addTask: async (eventId, portfolioItem) => {
-    const provider = getProviderForItem(portfolioItem);
+    const imageUri = portfolioItem.imageUri
+      ?? (typeof portfolioItem.image === 'object' && portfolioItem.image !== null && 'uri' in portfolioItem.image
+          ? (portfolioItem.image as { uri: string }).uri
+          : undefined);
     const newTask: PlanTask = {
       id: generateId(),
       portfolioItemId: portfolioItem.id,
       serviceName: portfolioItem.caption,
-      ...(provider?.name != null ? { providerName: provider.name } : {}),
-      ...(provider?.id != null ? { providerId: provider.id } : {}),
+      ...(portfolioItem.providerName != null ? { providerName: portfolioItem.providerName } : {}),
+      ...(portfolioItem.providerSlug != null ? { providerId: portfolioItem.providerSlug } : {}),
+      ...(imageUri != null ? { portfolioImageUri: imageUri } : {}),
       status: 'planned',
     };
 

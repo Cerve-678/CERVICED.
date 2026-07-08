@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ImageBackground,
   ScrollView,
   TouchableOpacity,
   FlatList,
@@ -32,16 +31,31 @@ import { NotificationService } from '../services/notificationService';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useBooking } from '../contexts/BookingContext';
+import { useAuth } from '../contexts/AuthContext';
 import userLearningService from '../services/userLearningService';
 import { HairTypeSelector } from '../components/HairTypeSelector';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { getProviders } from '../services/databaseService';
-import type { DbProvider } from '../types/database';
+import { getProviders, getActivePromotions } from '../services/databaseService';
+import type { DbProvider, DbPromotionWithProvider } from '../types/database';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// ─── Design tokens — mirrors ProviderHomeScreen palette ──────────────────────
+const L = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
+  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
+};
+const D = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
+  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
+};
 
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
@@ -106,7 +120,8 @@ interface Offer {
 
 // Provider type definition
 interface Provider {
-  id: string;
+  id: string;   // UUID — used for bookmark matching
+  slug: string; // slug — used for navigation to ProviderProfile
   name: string;
   service: string;
   logo: any;
@@ -129,11 +144,12 @@ interface ServiceButtonProps {
 }
 
 const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle }) => {
-  const { theme } = useTheme();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
 
   return (
-    <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.7}>
-      <BlurView intensity={40} tint={theme.blurTint} style={blurStyle}>
+    <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.75}>
+      <View style={[blurStyle, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
         {provider.logo ? (
           <Image
             source={provider.logo}
@@ -142,35 +158,32 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurSt
             fadeDuration={0}
           />
         ) : (
-          <View style={styles.placeholderCard}>
-            <Text style={[styles.placeholderText, { color: theme.text }]}>Coming Soon</Text>
+          <View style={[styles.placeholderCard, { backgroundColor: P.surface }]}>
+            <Text style={[styles.placeholderText, { color: P.sub }]}>{provider.service}</Text>
           </View>
         )}
-      </BlurView>
+      </View>
+      <Text style={[styles.providerCardName, { color: P.text }]} numberOfLines={1}>{provider.name}</Text>
+      <Text style={[styles.providerCardSub, { color: P.sub }]} numberOfLines={1}>{provider.service}</Text>
     </TouchableOpacity>
   );
 });
 
-const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress, onBack, showBackArrow }) => {
-  const { theme, isDarkMode } = useTheme();
+const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress }) => {
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
 
   return (
     <TouchableOpacity style={styles.serviceButton} onPress={onPress} activeOpacity={0.7}>
       <View style={[
         styles.glassCard,
         {
-          backgroundColor: isSelected
-            ? (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.35)')
-            : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.15)'),
-          borderTopColor: isSelected
-            ? (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.9)')
-            : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
-          borderLeftColor: isSelected
-            ? (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)')
-            : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.5)')
+          backgroundColor: isSelected ? P.accent : P.surface,
+          borderColor: P.border,
+          borderWidth: StyleSheet.hairlineWidth,
         }
       ]}>
-        <Text style={[styles.serviceText, { color: theme.text }]}>{service}</Text>
+        <Text style={[styles.serviceText, { color: isSelected ? P.ice : P.text }]}>{service}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -179,7 +192,9 @@ const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress, 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { theme, isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
   const { bookings } = useBooking();
+  const { user } = useAuth();
   const { bookmarkedIds, loadBookmarks } = useBookmarkStore();
   const insets = useSafeAreaInsets();
 
@@ -212,8 +227,21 @@ export default function HomeScreen() {
     serviceType: 'all',
   });
 
-  // Offers from Supabase (empty until backend provides them)
-  const allOffers: Offer[] = useMemo(() => [], []);
+  // Offers from Supabase — live promotions data
+  const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
+
+  const allOffers: Offer[] = useMemo(() =>
+    rawPromotions.map(p => ({
+      id: p.id,
+      title: p.title,
+      description: p.description ?? '',
+      discount: p.discount_text ?? (p.discount_percent ? `${p.discount_percent}% OFF` : p.discount_amount ? `£${p.discount_amount} OFF` : 'OFFER'),
+      validUntil: p.valid_until,
+      providerName: p.providers?.display_name ?? 'Provider',
+      logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
+      ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
+    })),
+  [rawPromotions]);
 
   // Filter offers by selected tab
   const filteredOffers = useMemo(() => {
@@ -255,7 +283,7 @@ export default function HomeScreen() {
     }, [loadUnreadCount])
   );
 
-  const services = useMemo(() => ['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS'], []);
+  const [services, setServices] = useState(['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS']);
 
   // Personalized providers data using user learning - each section gets different providers
   const [providersData, setProvidersData] = useState({
@@ -274,23 +302,49 @@ export default function HomeScreen() {
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
     loadBookmarks();
-    userLearningService.initialize().catch(error => {
-      console.error('Failed to initialize learning service:', error);
-      // Silent failure — degrades gracefully to default recommendations
-    });
+
+    // Inject beauty profile so provider scoring uses static preferences from day one
+    if (user) {
+      const u = user as any;
+      userLearningService.setUserProfile({
+        serviceInterests:    u.serviceInterests    || [],
+        hairType:            u.hairType            || '',
+        styleVibe:           u.styleVibe           || '',
+        treatmentHistory:    u.treatmentHistory    || [],
+        maintenanceFrequency: u.maintenanceFrequency || '',
+      });
+    }
+
+    userLearningService.initialize()
+      .then(() =>
+        userLearningService.getOrderedServiceCategories(
+          ['HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS']
+        )
+      )
+      .then(ordered => setServices(ordered))
+      .catch(() => {
+        // Silent failure — keeps default service order
+      });
 
     // Fetch live providers — shows empty state if DB has no data
     getProviders().then(data => {
       setLiveProviders(data.map((p: DbProvider) => ({
-        id: p.slug,
+        id: p.id,     // UUID — matches bookmarkedIds from Supabase
+        slug: p.slug, // slug — used for navigation
         name: p.display_name,
         service: p.service_category,
         logo: p.logo_url ? { uri: p.logo_url } : null,
       })));
       setProvidersLoading(false);
     }).catch(() => {
-      // Silent failure — keeps empty provider list
       setProvidersLoading(false);
+    });
+
+    // Fetch active promotions
+    getActivePromotions().then(data => {
+      setRawPromotions(data);
+    }).catch(() => {
+      // Silent failure — keeps empty offers list
     });
   }, []); // Only run once on mount
 
@@ -466,14 +520,8 @@ export default function HomeScreen() {
         timestamp: new Date().toISOString(),
       });
 
-      if (__DEV__) console.log('=== NAVIGATION DEBUG ===');
-      if (__DEV__) console.log('Provider name:', provider.name);
-      if (__DEV__) console.log('Provider ID (Uber-style):', provider.id);
-      if (__DEV__) console.log('Navigation target: ProviderProfile');
-      if (__DEV__) console.log('========================');
-
       navigation.navigate('ProviderProfile', {
-        providerId: provider.id,
+        providerId: provider.slug,
         source: 'home',
       });
     },
@@ -565,7 +613,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <ThemedBackground style={styles.background}>
+    <View style={[styles.background, { backgroundColor: P.bg }]}>
       <ScrollView
         ref={scrollViewRef}
         style={styles.container}
@@ -579,40 +627,38 @@ export default function HomeScreen() {
         nestedScrollEnabled={true}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <View style={styles.welcomeSection}>
-              <Text style={[styles.welcomeText, { color: theme.accent }]}>WELCOME TO</Text>
-              <Text style={[styles.brandText, { color: theme.text }]}>CERVICED</Text>
-            </View>
-            <View style={styles.headerIcons}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={navigateToSearch}
-                activeOpacity={0.7}
-              >
-                <SearchIcon size={22} color={theme.text} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={navigateToNotifications}
-                activeOpacity={0.7}
-              >
-                <BellIcon size={22} color={theme.text} />
-                {unreadCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.bookingsButton}
-                onPress={navigateToBookings}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.bookingsButtonText}>Bookings</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={[styles.header, { borderBottomColor: P.border, paddingTop: insets.top + 8 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.brandText, { color: P.text }]}>CERVICED</Text>
+            <Text style={[styles.welcomeText, { color: P.sub }]}>Find your next appointment</Text>
+          </View>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity
+              style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
+              onPress={navigateToSearch}
+              activeOpacity={0.7}
+            >
+              <SearchIcon size={18} color={P.sub} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
+              onPress={navigateToNotifications}
+              activeOpacity={0.7}
+            >
+              <BellIcon size={18} color={P.sub} />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.bookingsChip, { backgroundColor: P.accent }]}
+              onPress={navigateToBookings}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.bookingsChipText, { color: P.ice }]}>Bookings</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -620,9 +666,9 @@ export default function HomeScreen() {
         {!selectedService && providersData.yourProviders.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>YOUR PROVIDERS</Text>
+              <Text style={[styles.sectionTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
               <TouchableOpacity onPress={navigateToBookmarks}>
-                <Text style={[styles.viewAll, { color: theme.text }]}>VIEW ALL {'>'}</Text>
+                <Text style={[styles.viewAll, { color: P.sub }]}>VIEW ALL {'>'}</Text>
               </TouchableOpacity>
             </View>
 
@@ -655,18 +701,18 @@ export default function HomeScreen() {
                   onPress={handleBackPress}
                   activeOpacity={0.7}
                 >
-                  <BlurView intensity={35} tint={theme.blurTint} style={styles.backButtonSmallBlur}>
-                    <Text style={[styles.backButtonSmallText, { color: theme.text }]}>←</Text>
-                  </BlurView>
+                  <View style={[styles.backButtonSmallBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <Text style={[styles.backButtonSmallText, { color: P.text }]}>←</Text>
+                  </View>
                 </TouchableOpacity>
               ) : null}
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              <Text style={[styles.sectionTitle, { color: P.text }]}>
                 CHOOSE YOUR SERVICE
               </Text>
             </View>
             {!selectedService && (
               <TouchableOpacity onPress={toggleViewAllServices}>
-                <Text style={[styles.viewAll, { color: theme.text }]}>
+                <Text style={[styles.viewAll, { color: P.sub }]}>
                   {viewAllServices ? 'VIEW LESS <' : 'VIEW ALL >'}
                 </Text>
               </TouchableOpacity>
@@ -686,8 +732,8 @@ export default function HomeScreen() {
                     }}
                   />
                   {selectedHairType && (
-                    <View style={styles.hairTypeBadge}>
-                      <Text style={[styles.hairTypeBadgeText, { color: theme.text }]}>
+                    <View style={[styles.hairTypeBadge, { backgroundColor: P.iconBg }]}>
+                      <Text style={[styles.hairTypeBadgeText, { color: P.text }]}>
                         {selectedHairType.name}
                       </Text>
                     </View>
@@ -699,7 +745,7 @@ export default function HomeScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.filterButtonBlur}>
-                      <Text style={[styles.filterButtonText, { color: theme.text }]}>
+                      <Text style={styles.filterButtonText}>
                         FILTERS {filtersExpanded ? '▲' : '▼'}
                       </Text>
                     </View>
@@ -709,14 +755,14 @@ export default function HomeScreen() {
                 {/* Collapsible Filter Section */}
                 {filtersExpanded && (
                   <View style={styles.filterDropdown}>
-                    <BlurView intensity={40} tint={theme.blurTint} style={[styles.filterDropdownBlur, { backgroundColor: theme.cardBackground }]}>
+                    <View style={[styles.filterDropdownBlur, { backgroundColor: P.card, borderColor: P.border }]}>
                       <ScrollView
                         showsVerticalScrollIndicator={false}
                         nestedScrollEnabled={true}
                       >
                         {/* Header with Reset */}
                         <View style={styles.filterDropdownHeader}>
-                          <Text style={[styles.filterDropdownTitle, { color: theme.text }]}>FILTER OPTIONS</Text>
+                          <Text style={[styles.filterDropdownTitle, { color: P.text }]}>FILTER OPTIONS</Text>
                           <TouchableOpacity onPress={resetFilters}>
                             <Text style={styles.resetText}>RESET</Text>
                           </TouchableOpacity>
@@ -725,7 +771,7 @@ export default function HomeScreen() {
                         {/* Hair Type Selector for HAIR service */}
                         {selectedService === 'HAIR' && (
                           <View style={styles.filterSection}>
-                            <Text style={[styles.filterSectionTitle, { color: theme.text }]}>HAIR TYPE</Text>
+                            <Text style={[styles.filterSectionTitle, { color: P.text }]}>HAIR TYPE</Text>
                             <HairTypeSelector
                               onSelect={(hairType) => {
                                 setSelectedHairType(hairType);
@@ -741,7 +787,7 @@ export default function HomeScreen() {
 
                         {/* Sort By */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: theme.text }]}>SORT BY</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>SORT BY</Text>
                           <View style={styles.filterChipsRow}>
                             {['recommended', 'rating', 'price-low', 'price-high', 'distance'].map((sort) => {
                               const labels = {
@@ -758,12 +804,9 @@ export default function HomeScreen() {
                                   style={[
                                     styles.filterChip,
                                     {
-                                      backgroundColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.3)' : 'rgba(218, 112, 214, 0.2)')
-                                        : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.5)'),
-                                      borderTopColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.6)' : 'rgba(163, 66, 195, 0.6)')
-                                        : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
+                                      backgroundColor: isActive ? P.iconBg : P.surface,
+                                      borderColor: isActive ? P.accent : P.border,
+                                      borderWidth: StyleSheet.hairlineWidth,
                                     }
                                   ]}
                                   onPress={() => updateFilter('sortBy', sort)}
@@ -772,7 +815,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? theme.accent : theme.text,
+                                        color: isActive ? P.accent : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -787,7 +830,7 @@ export default function HomeScreen() {
 
                         {/* Price Range */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: theme.text }]}>PRICE RANGE</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>PRICE RANGE</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: '<£30', value: { min: 0, max: 30 } },
@@ -804,12 +847,9 @@ export default function HomeScreen() {
                                   style={[
                                     styles.filterChip,
                                     {
-                                      backgroundColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.3)' : 'rgba(218, 112, 214, 0.2)')
-                                        : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.5)'),
-                                      borderTopColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.6)' : 'rgba(163, 66, 195, 0.6)')
-                                        : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
+                                      backgroundColor: isActive ? P.iconBg : P.surface,
+                                      borderColor: isActive ? P.accent : P.border,
+                                      borderWidth: StyleSheet.hairlineWidth,
                                     }
                                   ]}
                                   onPress={() => updateFilter('priceRange', range.value)}
@@ -818,7 +858,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? theme.accent : theme.text,
+                                        color: isActive ? P.accent : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -833,7 +873,7 @@ export default function HomeScreen() {
 
                         {/* Rating */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: theme.text }]}>MINIMUM RATING</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>MINIMUM RATING</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: '4.5+★', value: 4.5 },
@@ -848,12 +888,9 @@ export default function HomeScreen() {
                                   style={[
                                     styles.filterChip,
                                     {
-                                      backgroundColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.3)' : 'rgba(218, 112, 214, 0.2)')
-                                        : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.5)'),
-                                      borderTopColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.6)' : 'rgba(163, 66, 195, 0.6)')
-                                        : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
+                                      backgroundColor: isActive ? P.iconBg : P.surface,
+                                      borderColor: isActive ? P.accent : P.border,
+                                      borderWidth: StyleSheet.hairlineWidth,
                                     }
                                   ]}
                                   onPress={() => updateFilter('rating', rating.value)}
@@ -862,7 +899,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? theme.accent : theme.text,
+                                        color: isActive ? P.accent : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -877,7 +914,7 @@ export default function HomeScreen() {
 
                         {/* Distance */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: theme.text }]}>DISTANCE</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>DISTANCE</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: '<1mi', value: 1 },
@@ -892,12 +929,9 @@ export default function HomeScreen() {
                                   style={[
                                     styles.filterChip,
                                     {
-                                      backgroundColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.3)' : 'rgba(218, 112, 214, 0.2)')
-                                        : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.5)'),
-                                      borderTopColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.6)' : 'rgba(163, 66, 195, 0.6)')
-                                        : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
+                                      backgroundColor: isActive ? P.iconBg : P.surface,
+                                      borderColor: isActive ? P.accent : P.border,
+                                      borderWidth: StyleSheet.hairlineWidth,
                                     }
                                   ]}
                                   onPress={() => updateFilter('distance', distance.value)}
@@ -906,7 +940,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? theme.accent : theme.text,
+                                        color: isActive ? P.accent : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -921,7 +955,7 @@ export default function HomeScreen() {
 
                         {/* Availability */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: theme.text }]}>AVAILABILITY</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>AVAILABILITY</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: 'Today', value: 'today' as const },
@@ -935,12 +969,9 @@ export default function HomeScreen() {
                                   style={[
                                     styles.filterChip,
                                     {
-                                      backgroundColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.3)' : 'rgba(218, 112, 214, 0.2)')
-                                        : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.5)'),
-                                      borderTopColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.6)' : 'rgba(163, 66, 195, 0.6)')
-                                        : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
+                                      backgroundColor: isActive ? P.iconBg : P.surface,
+                                      borderColor: isActive ? P.accent : P.border,
+                                      borderWidth: StyleSheet.hairlineWidth,
                                     }
                                   ]}
                                   onPress={() => updateFilter('availability', avail.value)}
@@ -949,7 +980,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? theme.accent : theme.text,
+                                        color: isActive ? P.accent : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -964,7 +995,7 @@ export default function HomeScreen() {
 
                         {/* Service Type */}
                         <View style={styles.filterSection}>
-                          <Text style={[styles.filterSectionTitle, { color: theme.text }]}>SERVICE TYPE</Text>
+                          <Text style={[styles.filterSectionTitle, { color: P.text }]}>SERVICE TYPE</Text>
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: 'All', value: 'all' as const },
@@ -979,12 +1010,9 @@ export default function HomeScreen() {
                                   style={[
                                     styles.filterChip,
                                     {
-                                      backgroundColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.3)' : 'rgba(218, 112, 214, 0.2)')
-                                        : (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.5)'),
-                                      borderTopColor: isActive
-                                        ? (isDarkMode ? 'rgba(229, 128, 232, 0.6)' : 'rgba(163, 66, 195, 0.6)')
-                                        : (isDarkMode ? theme.border : 'rgba(255, 255, 255, 0.7)'),
+                                      backgroundColor: isActive ? P.iconBg : P.surface,
+                                      borderColor: isActive ? P.accent : P.border,
+                                      borderWidth: StyleSheet.hairlineWidth,
                                     }
                                   ]}
                                   onPress={() => updateFilter('serviceType', type.value)}
@@ -993,7 +1021,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? theme.accent : theme.text,
+                                        color: isActive ? P.accent : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1006,7 +1034,7 @@ export default function HomeScreen() {
                           </View>
                         </View>
                       </ScrollView>
-                    </BlurView>
+                    </View>
                   </View>
                 )}
               </>
@@ -1020,11 +1048,11 @@ export default function HomeScreen() {
                     onPress={() => handleServicePress(service)}
                     activeOpacity={0.7}
                   >
-                    <BlurView intensity={40} tint={theme.blurTint} style={styles.quadrantCardBlur}>
-                      <Text style={[styles.quadrantServiceName, { color: theme.text }]}>
+                    <View style={[styles.quadrantCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                      <Text style={[styles.quadrantServiceName, { color: P.text }]}>
                         {service}
                       </Text>
-                    </BlurView>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1084,7 +1112,7 @@ export default function HomeScreen() {
             {previouslyBookedProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>BOOK AGAIN</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>BOOK AGAIN</Text>
                 </View>
 
                 <ScrollView
@@ -1100,7 +1128,7 @@ export default function HomeScreen() {
                       onPress={() => navigateToProvider(provider)}
                       activeOpacity={0.7}
                     >
-                      <BlurView intensity={40} tint={theme.blurTint} style={styles.roundCardBlur}>
+                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                         {provider.logo && (
                           <Image
                             source={provider.logo}
@@ -1108,8 +1136,8 @@ export default function HomeScreen() {
                             resizeMode="cover"
                           />
                         )}
-                      </BlurView>
-                      <Text style={[styles.roundCardName, { color: theme.text }]} numberOfLines={1}>
+                      </View>
+                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
                         {provider.name}
                       </Text>
                     </TouchableOpacity>
@@ -1121,13 +1149,13 @@ export default function HomeScreen() {
             {/* Recommended Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>RECOMMENDED FOR YOU</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>RECOMMENDED FOR YOU</Text>
                 <TouchableOpacity
                   onPress={toggleViewAllRecommended}
                   style={styles.viewAllButton}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.viewAll, { color: theme.text }]}>
+                  <Text style={[styles.viewAll, { color: P.sub }]}>
                     {viewAllRecommended ? 'VIEW LESS <' : 'VIEW ALL >'}
                   </Text>
                 </TouchableOpacity>
@@ -1171,13 +1199,13 @@ export default function HomeScreen() {
             {/* Provider of the Week */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>PROVIDER OF THE WEEK</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>PROVIDER OF THE WEEK</Text>
                 <TouchableOpacity
                   onPress={toggleViewAllProviders}
                   style={styles.viewAllButton}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.viewAll, { color: theme.text }]}>
+                  <Text style={[styles.viewAll, { color: P.sub }]}>
                     {viewAllProviders ? 'VIEW LESS <' : 'VIEW ALL >'}
                   </Text>
                 </TouchableOpacity>
@@ -1192,7 +1220,7 @@ export default function HomeScreen() {
 
                     return (
                       <View key={category} style={styles.categorySection}>
-                        <Text style={[styles.categoryLabel, { color: theme.text }]}>{category}</Text>
+                        <Text style={[styles.categoryLabel, { color: P.text }]}>{category}</Text>
                         <ScrollView
                           horizontal
                           showsHorizontalScrollIndicator={false}
@@ -1217,7 +1245,7 @@ export default function HomeScreen() {
                 <View>
                   {providersData.hairProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: theme.text }]}>HAIR</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -1239,7 +1267,7 @@ export default function HomeScreen() {
 
                   {providersData.nailProviders.length > 0 && (
                     <View>
-                      <Text style={[styles.categoryLabel, { color: theme.text }]}>NAILS</Text>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAILS</Text>
                       <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -1266,13 +1294,13 @@ export default function HomeScreen() {
             {providersData.maleProviders && providersData.maleProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>MALE SERVICES</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
                   <TouchableOpacity
                     onPress={toggleViewAllMaleServices}
                     style={styles.viewAllButton}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.viewAll, { color: theme.text }]}>
+                    <Text style={[styles.viewAll, { color: P.sub }]}>
                       {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
                     </Text>
                   </TouchableOpacity>
@@ -1315,7 +1343,7 @@ export default function HomeScreen() {
             {/* Near Me Section - Location-based providers */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>NEAR ME</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>NEAR ME</Text>
               </View>
 
               {providersLoading ? (
@@ -1334,7 +1362,7 @@ export default function HomeScreen() {
                       onPress={() => navigateToProvider(provider)}
                       activeOpacity={0.7}
                     >
-                      <BlurView intensity={40} tint={theme.blurTint} style={styles.roundCardBlur}>
+                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                         {provider.logo && (
                           <Image
                             source={provider.logo}
@@ -1342,8 +1370,8 @@ export default function HomeScreen() {
                             resizeMode="cover"
                           />
                         )}
-                      </BlurView>
-                      <Text style={[styles.roundCardName, { color: theme.text }]} numberOfLines={1}>
+                      </View>
+                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
                         {provider.name}
                       </Text>
                     </TouchableOpacity>
@@ -1356,13 +1384,13 @@ export default function HomeScreen() {
             {providersData.kidsProviders && providersData.kidsProviders.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: theme.text }]}>KIDS SERVICES</Text>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>
                   <TouchableOpacity
                     onPress={toggleViewAllKidsServices}
                     style={styles.viewAllButton}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.viewAll, { color: theme.text }]}>
+                    <Text style={[styles.viewAll, { color: P.sub }]}>
                       {viewAllKidsServices ? 'VIEW LESS <' : 'VIEW ALL >'}
                     </Text>
                   </TouchableOpacity>
@@ -1402,12 +1430,12 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* Current Offers Section */}
-            <View style={styles.section}>
+            {/* Current Offers Section — only rendered when there are live promotions */}
+            {currentOffers.length > 0 && <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>CURRENT OFFERS</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>CURRENT OFFERS</Text>
                 <TouchableOpacity onPress={toggleViewAllOffers}>
-                  <Text style={[styles.viewAll, { color: theme.text }]}>VIEW ALL {'>'}</Text>
+                  <Text style={[styles.viewAll, { color: P.sub }]}>VIEW ALL {'>'}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1423,27 +1451,27 @@ export default function HomeScreen() {
                     style={styles.offerCard}
                     activeOpacity={0.7}
                   >
-                    <BlurView intensity={40} tint={theme.blurTint} style={styles.offerCardBlur}>
-                      <View style={styles.offerDiscountBadge}>
-                        <Text style={styles.offerDiscountText}>{offer.discount}</Text>
+                    <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                      <View style={[styles.offerDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
+                        <Text style={[styles.offerDiscountText, { color: P.ice }]}>{offer.discount}</Text>
                       </View>
-                      <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" />
+                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
-                        <Text style={[styles.offerTitle, { color: theme.text }]} numberOfLines={2}>
+                        <Text style={[styles.offerTitle, { color: P.text }]} numberOfLines={2}>
                           {offer.title}
                         </Text>
-                        <Text style={[styles.offerDescription, { color: theme.text }]} numberOfLines={2}>
+                        <Text style={[styles.offerDescription, { color: P.sub }]} numberOfLines={2}>
                           {offer.description}
                         </Text>
-                        <Text style={[styles.offerValidText, { color: theme.text }]} numberOfLines={1}>
+                        <Text style={[styles.offerValidText, { color: P.sub }]} numberOfLines={1}>
                           Exp {new Date(offer.validUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </Text>
                       </View>
-                    </BlurView>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </View>
+            </View>}
           </>
         )}
 
@@ -1462,9 +1490,9 @@ export default function HomeScreen() {
           <View style={styles.modalContainer}>
             {/* Modal Header */}
             <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>ALL OFFERS</Text>
-              <TouchableOpacity onPress={toggleViewAllOffers} style={styles.modalCloseButton}>
-                <Text style={[styles.modalCloseText, { color: theme.text }]}>✕</Text>
+              <Text style={[styles.modalTitle, { color: P.text }]}>ALL OFFERS</Text>
+              <TouchableOpacity onPress={toggleViewAllOffers} style={[styles.modalCloseButton, { backgroundColor: P.surface, borderColor: P.border }]}>
+                <Text style={[styles.modalCloseText, { color: P.sub }]}>✕</Text>
               </TouchableOpacity>
             </View>
 
@@ -1490,7 +1518,7 @@ export default function HomeScreen() {
                 >
                   <Text style={[
                     styles.modalTabText,
-                    { color: selectedOfferTab === tab ? theme.accent : theme.text }
+                    { color: selectedOfferTab === tab ? P.accent : P.sub }
                   ]}>
                     {tab}
                   </Text>
@@ -1511,23 +1539,23 @@ export default function HomeScreen() {
                     style={styles.modalOfferCard}
                     activeOpacity={0.7}
                   >
-                    <BlurView intensity={40} tint={theme.blurTint} style={styles.modalOfferCardBlur}>
-                      <View style={styles.modalOfferDiscountBadge}>
-                        <Text style={styles.offerDiscountText}>{offer.discount}</Text>
+                    <View style={[styles.modalOfferCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                      <View style={[styles.modalOfferDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
+                        <Text style={[styles.offerDiscountText, { color: P.ice }]}>{offer.discount}</Text>
                       </View>
-                      <Image source={offer.logo} style={styles.modalOfferLogo} resizeMode="cover" />
+                      {offer.logo ? <Image source={offer.logo} style={styles.modalOfferLogo} resizeMode="cover" /> : <View style={styles.modalOfferLogo} />}
                       <View style={styles.modalOfferContent}>
-                        <Text style={[styles.modalOfferTitle, { color: theme.text }]} numberOfLines={2}>
+                        <Text style={[styles.modalOfferTitle, { color: P.text }]} numberOfLines={2}>
                           {offer.title}
                         </Text>
-                        <Text style={[styles.modalOfferDescription, { color: theme.text }]} numberOfLines={2}>
+                        <Text style={[styles.modalOfferDescription, { color: P.sub }]} numberOfLines={2}>
                           {offer.description}
                         </Text>
-                        <Text style={[styles.modalOfferValidText, { color: theme.text }]} numberOfLines={1}>
+                        <Text style={[styles.modalOfferValidText, { color: P.sub }]} numberOfLines={1}>
                           Exp {new Date(offer.validUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </Text>
                       </View>
-                    </BlurView>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1535,7 +1563,7 @@ export default function HomeScreen() {
           </View>
         </ThemedBackground>
       </Modal>
-    </ThemedBackground>
+    </View>
   );
 }
 
@@ -1560,54 +1588,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    paddingTop: 80, // 8px × 10
-    paddingBottom: 32, // 8px × 4
-  },
-  headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16, // 8px × 2
-  },
-  welcomeSection: {
-    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   welcomeText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    color: '#DA70D6',
-    letterSpacing: 1.5,
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: 2,
   },
   brandText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 30,
-    letterSpacing: 2,
-    marginTop: -2,
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   headerIcons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
+  },
+  bookingsChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+  },
+  bookingsChipText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   notificationBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
+    top: -4,
+    right: -4,
     backgroundColor: '#FF1744',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -1619,22 +1644,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  bookingsButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(218,112,214,0.2)',
-    borderRadius: 25,
-  },
-  bookingsButtonText: {
-    fontSize: 12,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#DA70D6',
-  },
   section: {
-    marginBottom: 16, // 8px × 2 (reduced from 24)
-    paddingBottom: 16, // 8px × 2 (reduced from 24)
-    borderBottomWidth: 0.5,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(126,102,103,0.10)',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1654,12 +1668,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   backButtonSmallBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
     width: 36,
     height: 36,
     alignItems: 'center',
@@ -1671,7 +1679,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   hairTypeBadge: {
-    backgroundColor: 'rgba(218, 112, 214, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1712,13 +1719,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   gridCardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 14,
     height: 120,
     overflow: 'hidden',
   },
@@ -1726,15 +1727,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   glassCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.7)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: Platform.OS === 'android' ? 20 : 24,
-    height: Platform.OS === 'android' ? 28 : 32,
+    borderRadius: 14,
+    paddingHorizontal: Platform.OS === 'android' ? 18 : 22,
+    height: Platform.OS === 'android' ? 30 : 34,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -1755,22 +1750,19 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   filterButtonBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 15,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.7)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(126,102,103,0.14)',
+    backgroundColor: 'rgba(126,102,103,0.08)',
+    paddingHorizontal: 18,
+    paddingVertical: 7,
     overflow: 'hidden',
   },
   filterButtonText: {
-    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    color: '#7E6667',
   },
   filteredProvidersSection: {
     flex: 1,
@@ -1778,19 +1770,13 @@ const styles = StyleSheet.create({
     minHeight: 500,
   },
   brandCard: {
-    marginRight: 16, // 8px × 2
-    width: 176, // 8px × 22
+    marginRight: 12,
+    width: 160,
   },
   brandCardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    width: 176, // 8px × 22
-    height: 64, // 8px × 8
+    borderRadius: 12,
+    width: 160,
+    height: 70,
     overflow: 'hidden',
   },
   providerImage: {
@@ -1806,9 +1792,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   placeholderText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    opacity: 0.5,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  providerCardName: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 5,
+    letterSpacing: 0.1,
+  },
+  providerCardSub: {
+    fontSize: 11,
+    fontWeight: '400',
+    marginTop: 1,
+    opacity: 0.8,
   },
   categoryLabel: {
     fontFamily: 'BakbakOne-Regular',
@@ -1828,16 +1827,9 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   providerBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.9)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.7)',
-    borderRightColor: 'rgba(255, 255, 255, 0.3)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 16,
     width: 282,
     height: 147,
-    position: 'relative',
     overflow: 'hidden',
   },
   bottomPadding: {
@@ -1862,13 +1854,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   columnProviderBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.9)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.7)',
-    borderRightColor: 'rgba(255, 255, 255, 0.3)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 14,
     width: '100%',
     height: 147,
     overflow: 'hidden',
@@ -1880,13 +1866,8 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   filterDropdownBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.3)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 20,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 20,
     overflow: 'hidden',
   },
@@ -1905,9 +1886,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   resetText: {
-    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    color: '#DA70D6',
+    color: '#AF9197',
     fontWeight: '600',
   },
   filterSection: {
@@ -1925,46 +1905,31 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterChip: {
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     borderRadius: 100,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 14,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.7)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
-  filterChipActive: {
-    backgroundColor: 'rgba(218, 112, 214, 0.3)',
-    borderTopColor: 'rgba(163, 66, 195, 0.7)',
-    borderLeftColor: 'rgba(163, 66, 195, 0.6)',
-    borderRightColor: 'rgba(163, 66, 195, 0.3)',
-    borderBottomColor: 'rgba(163, 66, 195, 0.3)',
-  },
+  filterChipActive: {},
   filterChipText: {
-    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    color: '#333',
     fontWeight: '500',
   },
   filterChipTextActive: {
-    color: '#a342c3',
+    color: '#AF9197',
     fontWeight: '700',
   },
   ViewAllButton: {
-    backgroundColor: '#DA70D6',
-    borderRadius: 20,
-    paddingVertical: 12,
+    backgroundColor: '#AF9197',
+    borderRadius: 16,
+    paddingVertical: 10,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewAllButtonText: {
     color: '#fff',
-    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '700',
   },
   // Round card styles for "Book Again" section
   roundCard: {
@@ -1977,12 +1942,6 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
   roundCardImage: {
     width: '100%',
@@ -1990,7 +1949,6 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   roundCardName: {
-    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     marginTop: 8,
     textAlign: 'center',
@@ -2010,30 +1968,23 @@ const styles = StyleSheet.create({
     width: 280,
   },
   offerCardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 14,
     overflow: 'hidden',
     flexDirection: 'row',
-    padding: 16,
+    padding: 14,
   },
   offerDiscountBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#E8E8E8',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    top: 10,
+    right: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 20,
-    borderWidth: 2,
-    borderColor: '#000',
   },
   offerDiscountText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    color: '#000',
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   offerContent: {
     flex: 1,
@@ -2061,8 +2012,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   offerValidText: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -2085,18 +2034,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   quadrantCardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.9)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.7)',
-    borderRightColor: 'rgba(255, 255, 255, 0.3)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
-    height: 40,
+    borderRadius: 14,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   quadrantServiceName: {
     fontFamily: 'BakbakOne-Regular',
@@ -2138,7 +2081,7 @@ const styles = StyleSheet.create({
   },
   serviceTypeChipTextActive: {
     fontWeight: '700',
-    color: '#DA70D6',
+    color: '#AF9197',
   },
   // Offer tabs styles
   offerTabsScroll: {
@@ -2170,7 +2113,7 @@ const styles = StyleSheet.create({
   },
   offerTabTextActive: {
     fontWeight: '700',
-    color: '#DA70D6',
+    color: '#AF9197',
   },
   // Vertical offer grid styles - matching horizontal layout
   offerVerticalGrid: {
@@ -2208,8 +2151,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(126,102,103,0.10)',
   },
   modalTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -2217,14 +2160,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   modalCloseText: {
     fontSize: 20,
@@ -2233,43 +2174,26 @@ const styles = StyleSheet.create({
   modalTabsScroll: {
     maxHeight: 59,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(126,102,103,0.10)',
   },
   modalTabsContent: {
     paddingHorizontal: 16,
   },
   modalTab: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 100,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 14,
     marginRight: 8,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.5)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.4)',
-    borderRightColor: 'rgba(255, 255, 255, 0.1)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(126,102,103,0.14)',
+    backgroundColor: 'rgba(126,102,103,0.06)',
   },
   modalTabActive: {
-    backgroundColor: 'rgba(218, 112, 214, 0.25)',
-    borderTopColor: 'rgba(229, 128, 232, 0.8)',
-    borderLeftColor: 'rgba(229, 128, 232, 0.7)',
-    borderRightColor: 'rgba(163, 66, 195, 0.3)',
-    borderBottomColor: 'rgba(163, 66, 195, 0.3)',
-    shadowColor: '#DA70D6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
+    backgroundColor: 'rgba(175,145,151,0.18)',
+    borderColor: '#AF9197',
   },
   modalTabText: {
-    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: '500',
   },
@@ -2292,37 +2216,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalOfferCardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 20,
-    borderWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    padding: 14,
   },
   modalOfferLogo: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    borderWidth: 3,
-    borderTopColor: 'rgba(255, 255, 255, 0.6)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.5)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
     marginBottom: 10,
     alignSelf: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
   },
   modalOfferContent: {
     flex: 1,
@@ -2334,14 +2238,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   modalOfferDescription: {
-    fontFamily: 'Jura-Regular',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '400',
     opacity: 0.8,
     marginBottom: 6,
   },
   modalOfferValidText: {
-    fontFamily: 'Jura-Regular',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '500',
     opacity: 0.6,
@@ -2350,21 +2254,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 100,
-    borderWidth: 2.5,
-    borderTopColor: '#000',
-    borderLeftColor: '#000',
-    borderRightColor: '#333',
-    borderBottomColor: '#333',
     zIndex: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
   },
   // Provider Modal Styles
   modalProvidersGrid: {
@@ -2379,21 +2272,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalProviderCardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    padding: 16,
+    padding: 14,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
   },
   modalProviderLogo: {
     width: 80,

@@ -1,5 +1,6 @@
 // src/screens/auth/SignUpStep3Screen.tsx
 import React, { useState, useCallback } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,11 +15,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
 import { validateEmail, validateDob } from '../../utils/validation';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep3'>;
 
@@ -28,42 +29,30 @@ interface FormErrors {
   businessEmail?: string;
 }
 
+const L = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
+const D = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
+
 export default function SignUpStep3Screen({ navigation }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const t = isDarkMode ? D : L;
   const { data, updateData, totalSteps } = useRegistration();
   const insets = useSafeAreaInsets();
 
-  // User fields
   const [dobDay, setDobDay] = useState(data.dobDay);
   const [dobMonth, setDobMonth] = useState(data.dobMonth);
   const [dobYear, setDobYear] = useState(data.dobYear);
 
-  // Provider fields
   const [businessName, setBusinessName] = useState(data.businessName);
   const [businessEmail, setBusinessEmail] = useState(data.businessEmail);
+  const [businessPhone, setBusinessPhone] = useState(data.businessPhone);
+  const [instagram, setInstagram] = useState(data.instagram);
+  const [tiktok, setTiktok] = useState(data.tiktok);
+  const [website, setWebsite] = useState(data.website);
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const isUser = data.accountType === 'user';
-
-  const glassStyle = (active?: boolean) => ({
-    backgroundColor: active
-      ? (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.35)')
-      : (isDarkMode ? 'rgba(58, 58, 60, 0.6)' : 'rgba(255, 255, 255, 0.15)'),
-    borderTopColor: isDarkMode ? theme.border : (active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.7)'),
-    borderLeftColor: isDarkMode ? theme.border : (active ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)'),
-    borderRightColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-    borderBottomColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-  });
-
-  const inputGlass = (hasError: boolean) => ({
-    backgroundColor: isDarkMode ? 'rgba(58, 58, 60, 0.6)' : 'rgba(255, 255, 255, 0.12)',
-    borderTopColor: hasError ? 'rgba(255,59,48,0.6)' : (isDarkMode ? theme.border : 'rgba(255,255,255,0.8)'),
-    borderLeftColor: hasError ? 'rgba(255,59,48,0.4)' : (isDarkMode ? theme.border : 'rgba(255,255,255,0.6)'),
-    borderRightColor: hasError ? 'rgba(255,59,48,0.3)' : (isDarkMode ? theme.border : 'rgba(255,255,255,0.2)'),
-    borderBottomColor: hasError ? 'rgba(255,59,48,0.3)' : (isDarkMode ? theme.border : 'rgba(255,255,255,0.2)'),
-  });
 
   const validate = useCallback((): FormErrors => {
     const errs: FormErrors = {};
@@ -85,32 +74,42 @@ export default function SignUpStep3Screen({ navigation }: Props) {
 
   const renderError = (field: keyof FormErrors) => {
     if (!touched[field] || !errors[field]) return null;
-    return <Text style={[styles.errorText, { color: isDarkMode ? '#FF453A' : '#FF3B30' }]}>{errors[field]}</Text>;
+    return <Text style={styles.errorText}>{errors[field]}</Text>;
   };
+
+  const inputBorder = (field: keyof FormErrors) =>
+    touched[field] && errors[field] ? '#DC2626' : t.border;
 
   const handleContinue = () => {
     const errs = validate();
     setErrors(errs);
 
-    if (isUser) {
-      setTouched({ dob: true });
-    } else {
-      setTouched({ businessName: true, businessEmail: true });
+    if (isUser) setTouched({ dob: true });
+    else setTouched({ businessName: true, businessEmail: true });
+
+    if (Object.keys(errs).length > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      return;
     }
-
-    if (Object.keys(errs).length > 0) return;
-
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     if (isUser) {
       updateData({ dobDay, dobMonth, dobYear });
     } else {
-      updateData({ businessName, businessEmail });
+      updateData({
+        businessName,
+        businessEmail,
+        businessPhone: businessPhone.trim(),
+        instagram: instagram.replace(/^@/, '').trim(),
+        tiktok: tiktok.replace(/^@/, '').trim(),
+        website: website.trim(),
+      });
     }
     navigation.navigate('SignUpStep4');
   };
 
   return (
-    <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+    <ThemedBackground style={{ flex: 1 }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -124,29 +123,25 @@ export default function SignUpStep3Screen({ navigation }: Props) {
         >
           {/* Back */}
           <TouchableOpacity
-            style={[styles.backBtn, glassStyle()]}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
+            style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+            activeOpacity={0.6}
           >
-            <Text style={[styles.backIcon, { color: theme.text }]}>{'<'}</Text>
+            <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
           </TouchableOpacity>
 
-          {/* Progress */}
           <StepProgressIndicator currentStep={3} totalSteps={totalSteps} />
 
-          {/* Header */}
           <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>
+            <Text style={[styles.headerTitle, { color: t.text }]}>
               {isUser ? 'Personal Details' : 'Business Details'}
             </Text>
           </View>
 
-          {/* Form Card */}
-          <View style={[styles.formCard, glassStyle()]}>
+          <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
             {isUser ? (
-              /* User: DOB */
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.text }]}>DATE OF BIRTH</Text>
+                <Text style={[styles.fieldLabel, { color: t.sub }]}>DATE OF BIRTH</Text>
                 <View style={styles.dobRow}>
                   {[
                     { value: dobDay, set: setDobDay, ph: 'DD', max: 2, flex: 1 },
@@ -155,16 +150,16 @@ export default function SignUpStep3Screen({ navigation }: Props) {
                   ].map((f, i) => (
                     <View key={f.ph} style={{ flex: f.flex, flexDirection: 'row', alignItems: 'center' }}>
                       {i > 0 && (
-                        <Text style={[styles.dobSlash, { color: theme.secondaryText }]}>/</Text>
+                        <Text style={[styles.dobSlash, { color: t.sub }]}>/</Text>
                       )}
-                      <View style={[styles.inputWrap, styles.dobField, inputGlass(!!touched['dob'] && !!errors.dob)]}>
+                      <View style={[styles.inputWrap, styles.dobField, { backgroundColor: t.surface, borderColor: inputBorder('dob') }]}>
                         <TextInput
-                          style={[styles.input, { color: theme.text, textAlign: 'center' }]}
+                          style={[styles.input, { color: t.text, textAlign: 'center' }]}
                           value={f.value}
-                          onChangeText={t => { if (t.length <= f.max) f.set(t.replace(/[^0-9]/g, '')); }}
+                          onChangeText={v => { if (v.length <= f.max) f.set(v.replace(/[^0-9]/g, '')); }}
                           onBlur={() => markTouched('dob')}
                           placeholder={f.ph}
-                          placeholderTextColor={theme.secondaryText}
+                          placeholderTextColor={t.sub}
                           keyboardType="number-pad"
                           maxLength={f.max}
                         />
@@ -175,51 +170,119 @@ export default function SignUpStep3Screen({ navigation }: Props) {
                 {renderError('dob')}
               </View>
             ) : (
-              /* Provider: Business fields */
               <>
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.text }]}>BUSINESS NAME</Text>
-                  <View style={[styles.inputWrap, inputGlass(!!touched['businessName'] && !!errors.businessName)]}>
+                  <Text style={[styles.fieldLabel, { color: t.sub }]}>BUSINESS NAME</Text>
+                  <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('businessName') }]}>
                     <TextInput
-                      style={[styles.input, { color: theme.text }]}
+                      style={[styles.input, { color: t.text }]}
                       value={businessName}
                       onChangeText={setBusinessName}
                       onBlur={() => markTouched('businessName')}
                       placeholder="Glow Studio"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={t.sub}
                     />
                   </View>
                   {renderError('businessName')}
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.text }]}>BUSINESS EMAIL</Text>
-                  <View style={[styles.inputWrap, inputGlass(!!touched['businessEmail'] && !!errors.businessEmail)]}>
+                  <Text style={[styles.fieldLabel, { color: t.sub }]}>BUSINESS EMAIL</Text>
+                  <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('businessEmail') }]}>
                     <TextInput
-                      style={[styles.input, { color: theme.text }]}
+                      style={[styles.input, { color: t.text }]}
                       value={businessEmail}
                       onChangeText={setBusinessEmail}
                       onBlur={() => markTouched('businessEmail')}
                       placeholder="hello@glowstudio.com"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={t.sub}
                       keyboardType="email-address"
                       autoCapitalize="none"
                     />
                   </View>
                   {renderError('businessEmail')}
                 </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: t.sub }]}>
+                    BUSINESS PHONE{' '}
+                    <Text style={[styles.optionalTag, { color: t.sub }]}>optional</Text>
+                  </Text>
+                  <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                    <TextInput
+                      style={[styles.input, { color: t.text }]}
+                      value={businessPhone}
+                      onChangeText={setBusinessPhone}
+                      placeholder="+44 7700 900000"
+                      placeholderTextColor={t.sub}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.sectionDivider, { borderColor: t.border }]}>
+                  <Text style={[styles.sectionDividerText, { color: t.sub }]}>SOCIAL & ONLINE PRESENCE</Text>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: t.sub }]}>
+                    INSTAGRAM <Text style={[styles.optionalTag, { color: t.sub }]}>optional</Text>
+                  </Text>
+                  <View style={[styles.prefixWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                    <Text style={[styles.prefix, { color: t.sub }]}>@</Text>
+                    <TextInput
+                      style={[styles.input, { color: t.text, flex: 1 }]}
+                      value={instagram}
+                      onChangeText={v => setInstagram(v.replace(/^@/, ''))}
+                      placeholder="glowstudio"
+                      placeholderTextColor={t.sub}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: t.sub }]}>
+                    TIKTOK <Text style={[styles.optionalTag, { color: t.sub }]}>optional</Text>
+                  </Text>
+                  <View style={[styles.prefixWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                    <Text style={[styles.prefix, { color: t.sub }]}>@</Text>
+                    <TextInput
+                      style={[styles.input, { color: t.text, flex: 1 }]}
+                      value={tiktok}
+                      onChangeText={v => setTiktok(v.replace(/^@/, ''))}
+                      placeholder="glowstudio"
+                      placeholderTextColor={t.sub}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: t.sub }]}>
+                    WEBSITE <Text style={[styles.optionalTag, { color: t.sub }]}>optional</Text>
+                  </Text>
+                  <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                    <TextInput
+                      style={[styles.input, { color: t.text }]}
+                      value={website}
+                      onChangeText={setWebsite}
+                      placeholder="www.glowstudio.com"
+                      placeholderTextColor={t.sub}
+                      keyboardType="url"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
               </>
             )}
 
-            {/* Continue */}
             <TouchableOpacity
-              style={[styles.continueBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
+              style={[styles.continueBtn, { backgroundColor: t.accent }]}
               onPress={handleContinue}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
-              <Text style={[styles.continueBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-                CONTINUE
-              </Text>
+              <Text style={styles.continueBtnText}>CONTINUE</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -236,62 +299,51 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
   },
-  backIcon: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-  },
+  backIcon: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   header: { marginBottom: 28 },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 32,
-    fontWeight: '900',
     letterSpacing: 1,
   },
   formCard: {
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 1,
     padding: 20,
-    overflow: 'hidden',
   },
   fieldGroup: { marginBottom: 16 },
   fieldLabel: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
-    letterSpacing: 1,
+    fontSize: 11,
+    letterSpacing: 1.5,
     marginBottom: 8,
   },
   inputWrap: {
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'android' ? 10 : 13,
-    overflow: 'hidden',
   },
   input: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 15,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
     padding: 0,
   },
   errorText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    marginTop: 6,
-    marginLeft: 4,
+    color: '#DC2626',
+    marginTop: 5,
+    marginLeft: 2,
   },
-  dobRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dobField: {
-    flex: 1,
-    paddingHorizontal: 8,
-  },
+  dobRow: { flexDirection: 'row', alignItems: 'center' },
+  dobField: { flex: 1, paddingHorizontal: 8 },
   dobSlash: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
@@ -302,12 +354,43 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     alignItems: 'center',
     marginTop: 8,
-    borderWidth: 1.5,
-    borderColor: 'rgba(218,112,214,0.4)',
   },
   continueBtnText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 1,
+    color: '#FFFFFF',
+  },
+  optionalTag: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    fontWeight: '400',
+    letterSpacing: 0.3,
+    textTransform: 'lowercase',
+  },
+  sectionDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 4,
+    marginBottom: 16,
+    paddingTop: 14,
+  },
+  sectionDividerText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    letterSpacing: 1.5,
+  },
+  prefixWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'android' ? 10 : 13,
+  },
+  prefix: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 15,
+    marginRight: 4,
+    padding: 0,
   },
 });

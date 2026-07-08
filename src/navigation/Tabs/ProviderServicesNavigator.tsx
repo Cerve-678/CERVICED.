@@ -2,6 +2,9 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderMyProfileScreen from '../../screens/ProviderMyProfileScreen';
 import InfoRegScreen from '../../screens/InfoRegScreen';
+import ProviderPromotionsScreen from '../../screens/ProviderPromotionsScreen';
+import ProviderClienteleScreen from '../../screens/ProviderClienteleScreen';
+import ProviderInfoPackScreen from '../../screens/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
 import { ProviderServicesStackParamList } from '../types';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -30,6 +33,22 @@ export default function ProviderServicesNavigator() {
           headerShown: false,
           presentation: 'card',
         }}
+      />
+
+      <ProviderServicesStack.Screen
+        name="Promotions"
+        component={ProviderPromotionsScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <ProviderServicesStack.Screen
+        name="Clientele"
+        component={ProviderClienteleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <ProviderServicesStack.Screen
+        name="InfoPacks"
+        component={ProviderInfoPackScreen}
+        options={{ headerShown: false, presentation: 'card' }}
       />
 
       <ProviderServicesStack.Screen

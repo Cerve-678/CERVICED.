@@ -8,9 +8,9 @@ function dbToProvider(p: DbProvider): Provider {
   return {
     id: p.slug,
     name: p.display_name,
-    service: p.service_category,
+    service: p.service_category as any,
     logo: p.logo_url ? { uri: p.logo_url } : null,
-    location: p.location_text ?? undefined,
+    ...(p.location_text != null ? { location: p.location_text } : {}),
   };
 }
 
@@ -44,7 +44,7 @@ export interface ConversationMemory {
 
   // Location & logistics
   locationPreference?: string;
-  priceRange?: { min: number; max: number };
+  priceRange?: { min?: number; max?: number };
 
   // Time preferences
   datePreference?: string;
@@ -149,7 +149,7 @@ class EnhancedAIChatService {
   }
 
   // ==================== FEATURE 4: ENHANCED SERVICE MATCHING ====================
-  private extractServiceType(message: string): { category: string | null; specificService?: string } {
+  private extractServiceType(message: string): { category: string | null; specificService?: string | undefined } {
     const lowerMessage = message.toLowerCase();
 
     // Check all service types
@@ -191,25 +191,25 @@ class EnhancedAIChatService {
     // Pattern: "under $50", "below $100"
     const underMatch = lowerMessage.match(/(?:under|below|less than)\s*\$?(\d+)/);
     if (underMatch) {
-      return { max: parseInt(underMatch[1]) };
+      return { max: parseInt(underMatch[1] ?? '0') };
     }
 
     // Pattern: "over $50", "above $100", "more than $75"
     const overMatch = lowerMessage.match(/(?:over|above|more than)\s*\$?(\d+)/);
     if (overMatch) {
-      return { min: parseInt(overMatch[1]) };
+      return { min: parseInt(overMatch[1] ?? '0') };
     }
 
     // Pattern: "between $50 and $100"
     const betweenMatch = lowerMessage.match(/between\s*\$?(\d+)\s*(?:and|-)\s*\$?(\d+)/);
     if (betweenMatch) {
-      return { min: parseInt(betweenMatch[1]), max: parseInt(betweenMatch[2]) };
+      return { min: parseInt(betweenMatch[1] ?? '0'), max: parseInt(betweenMatch[2] ?? '0') };
     }
 
     // Pattern: "$50-$100", "$50 - $100"
     const rangeMatch = lowerMessage.match(/\$?(\d+)\s*-\s*\$?(\d+)/);
     if (rangeMatch) {
-      return { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
+      return { min: parseInt(rangeMatch[1] ?? '0'), max: parseInt(rangeMatch[2] ?? '0') };
     }
 
     return null;
@@ -285,7 +285,9 @@ class EnhancedAIChatService {
     // ==================== FEATURE 1: UPDATE CONVERSATION MEMORY ====================
     if (serviceMatch.category) {
       this.conversationMemory.servicePreference = serviceMatch.category;
-      this.conversationMemory.specificService = serviceMatch.specificService;
+      if (serviceMatch.specificService != null) {
+        this.conversationMemory.specificService = serviceMatch.specificService;
+      }
     }
     if (priceFilter) {
       this.conversationMemory.priceRange = priceFilter;
@@ -390,12 +392,12 @@ class EnhancedAIChatService {
         ? `I found ${providers.length} ${serviceDesc} provider${providers.length !== 1 ? 's' : ''} `
         : `Perfect! I found ${providers.length} amazing ${serviceDesc} provider${providers.length !== 1 ? 's' : ''} `;
 
-      if (priceFilter.max) {
+      if (priceFilter?.max) {
         responseText += `under $${priceFilter.max}`;
-      } else if (priceFilter.min) {
-        responseText += `over $${priceFilter.min}`;
-      } else if (priceFilter.min && priceFilter.max) {
+      } else if (priceFilter?.min && priceFilter?.max) {
         responseText += `between $${priceFilter.min}-$${priceFilter.max}`;
+      } else if (priceFilter?.min) {
+        responseText += `over $${priceFilter.min}`;
       }
 
       responseText += `:\n\n`;

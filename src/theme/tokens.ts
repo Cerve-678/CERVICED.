@@ -10,36 +10,36 @@
 export const colors = {
   // Brand Colors
   brand: {
-    primary: '#a342c3ff',
-    primaryLight: '#DA70D6',
-    primaryDark: '#8B2DA8',
-    accent: '#E580E8',
+    primary: '#AF9197',
+    primaryLight: '#AF9197',
+    primaryDark: '#7E6667',
+    accent: '#AF9197',
   },
 
   // Semantic Colors - Light Mode
   light: {
     background: {
-      primary: '#F5E6FA',
-      secondary: '#FCEEFF',
-      elevated: 'rgba(255, 255, 255, 0.3)',
-      overlay: 'rgba(0, 0, 0, 0.6)',
+      primary: '#F5F1EC',
+      secondary: '#EDE8E2',
+      elevated: '#FFFFFF',
+      overlay: 'rgba(0, 0, 0, 0.5)',
     },
     surface: {
       primary: '#FFFFFF',
-      secondary: '#F8F8F8',
-      glass: 'rgba(255, 255, 255, 0.2)',
-      blur: 'rgba(255, 255, 255, 0.8)',
+      secondary: '#EDE8E2',
+      glass: 'rgba(255, 255, 255, 0.6)',
+      blur: 'rgba(245, 241, 236, 0.85)',
     },
     text: {
       primary: '#000000',
-      secondary: 'rgba(0, 0, 0, 0.6)',
+      secondary: '#7E6667',
       tertiary: 'rgba(0, 0, 0, 0.4)',
       inverse: '#FFFFFF',
     },
     border: {
-      primary: 'rgba(255, 255, 255, 0.4)',
-      secondary: 'rgba(128, 128, 128, 0.2)',
-      focus: '#a342c3ff',
+      primary: 'rgba(126, 102, 103, 0.14)',
+      secondary: 'rgba(126, 102, 103, 0.08)',
+      focus: '#AF9197',
     },
     status: {
       success: '#34C759',
@@ -52,27 +52,27 @@ export const colors = {
   // Semantic Colors - Dark Mode
   dark: {
     background: {
-      primary: '#1C1C1E',
-      secondary: '#2C2C2E',
-      elevated: 'rgba(58, 58, 60, 0.8)',
+      primary: '#1A1815',
+      secondary: '#201D1A',
+      elevated: '#252220',
       overlay: 'rgba(0, 0, 0, 0.6)',
     },
     surface: {
-      primary: '#2C2C2E',
-      secondary: '#3A3A3C',
-      glass: 'rgba(58, 58, 60, 0.6)',
-      blur: 'rgba(58, 58, 60, 0.9)',
+      primary: '#252220',
+      secondary: '#201D1A',
+      glass: 'rgba(37, 34, 32, 0.7)',
+      blur: 'rgba(26, 24, 21, 0.9)',
     },
     text: {
-      primary: '#FFFFFF',
-      secondary: 'rgba(255, 255, 255, 0.75)',
-      tertiary: 'rgba(255, 255, 255, 0.5)',
-      inverse: '#000000',
+      primary: '#F0ECE7',
+      secondary: 'rgba(240, 236, 231, 0.6)',
+      tertiary: 'rgba(240, 236, 231, 0.35)',
+      inverse: '#1A1815',
     },
     border: {
-      primary: 'rgba(255, 255, 255, 0.2)',
-      secondary: 'rgba(128, 128, 128, 0.3)',
-      focus: '#E580E8',
+      primary: 'rgba(175, 145, 151, 0.15)',
+      secondary: 'rgba(175, 145, 151, 0.08)',
+      focus: '#AF9197',
     },
     status: {
       success: '#32D74B',

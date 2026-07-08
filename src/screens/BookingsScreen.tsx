@@ -26,13 +26,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useFont } from '../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking } from '../services/databaseService';
-import AppBackground from '../components/AppBackground';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, ProviderContactInfo, getProviderAddressSettingsByDisplayName, ProviderAddressSettings } from '../services/databaseService';
+import * as WaitlistService from '../services/WaitlistService';
+import type { WaitlistEntry } from '../services/WaitlistService';
+import { ThemedBackground } from '../components/ThemedBackground';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { HomeScreenProps } from '../navigation/types';
 
@@ -48,72 +53,75 @@ interface BookingCardProps {
   rowHasTag?: boolean;
 }
 
+type GroupedListItem = { kind: 'category'; serviceType: string; bookings: ConfirmedBooking[] };
+
+interface GroupBookingCardProps {
+  groupId: string;
+  bookings: ConfirmedBooking[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  onBookingPress: (booking: ConfirmedBooking) => void;
+  highlightedBookingId: string | null;
+  recentlyAddedBookings: Set<string>;
+}
+
 // ==================== CONSTANTS ====================
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// ✅ PROVIDER RESCHEDULE CONFIGURATION
-const PROVIDER_RESCHEDULE_CONFIG: Record<string, { maxReschedules: number; cooldownHours: number }> = {
-  'Hair by Jennifer': { maxReschedules: 1, cooldownHours: 24 },
-  'Styled by Kathrine': { maxReschedules: 1, cooldownHours: 24 },
-  'Diva Nails': { maxReschedules: 1, cooldownHours: 24 },
-  'Jana Aesthetics': { maxReschedules: 1, cooldownHours: 24 },
-  'Her Brows': { maxReschedules: 1, cooldownHours: 24 },
-  'Kiki Nails': { maxReschedules: 1, cooldownHours: 24 },
-  'Makeup by Mya': { maxReschedules: 1, cooldownHours: 24 },
-  'Vikki Laid': { maxReschedules: 1, cooldownHours: 24 },
-  'Your Lashed': { maxReschedules: 1, cooldownHours: 24 },
-  'RoseMay Aesthetics': { maxReschedules: 1, cooldownHours: 24 },
-  'Filler by Jess': { maxReschedules: 1, cooldownHours: 24 },
-  'Eyebrow Deluxe': { maxReschedules: 1, cooldownHours: 24 },
-  'Lashes Galore': { maxReschedules: 1, cooldownHours: 24 },
-  'Zee Nail Artist': { maxReschedules: 1, cooldownHours: 24 },
-  'Painted by Zoe': { maxReschedules: 1, cooldownHours: 24 },
-  'Braided Slick': { maxReschedules: 1, cooldownHours: 24 },
-  'Lash Bae': { maxReschedules: 1, cooldownHours: 24 },
-};
+// Default reschedule policy applies to all providers
+const DEFAULT_RESCHEDULE_CONFIG = { maxReschedules: 1, cooldownHours: 24 };
 
 // ==================== HELPER FUNCTIONS ====================
 
-const getFullProviderName = (shortName: string): string => {
-  const nameMap: Record<string, string> = {
-    JENNIFER: 'Hair by Jennifer',
-    'Hair by Jennifer': 'Hair by Jennifer',
-    KATHRINE: 'Styled by Kathrine',
-    'Styled by Kathrine': 'Styled by Kathrine',
-    DIVANA: 'Diva Nails',
-    'Diva Nails': 'Diva Nails',
-    JANA: 'Jana Aesthetics',
-    'Jana Aesthetics': 'Jana Aesthetics',
-    'HER BROWS': 'Her Brows',
-    'Her Brows': 'Her Brows',
-    KIKI: 'Kiki Nails',
-    'Kiki Nails': 'Kiki Nails',
-    MYA: 'Makeup by Mya',
-    'Makeup by Mya': 'Makeup by Mya',
-    VIKKI: 'Vikki Laid',
-    'Vikki Laid': 'Vikki Laid',
-    LASHED: 'Your Lashed',
-    'Your Lashed': 'Your Lashed',
-    ROSEMAY: 'RoseMay Aesthetics',
-    'RoseMay Aesthetics': 'RoseMay Aesthetics',
-    JESS: 'Filler by Jess',
-    'Filler by Jess': 'Filler by Jess',
-    'EYEBROW DELUXE': 'Eyebrow Deluxe',
-    'Eyebrow Deluxe': 'Eyebrow Deluxe',
-    'LASHES GALORE': 'Lashes Galore',
-    'Lashes Galore': 'Lashes Galore',
-    ZEE: 'Zee Nail Artist',
-    'Zee Nail Artist': 'Zee Nail Artist',
-    ZOE: 'Painted by Zoe',
-    'Painted by Zoe': 'Painted by Zoe',
-    'BRAIDED SLICK': 'Braided Slick',
-    'Braided Slick': 'Braided Slick',
-    'LASH BAE': 'Lash Bae',
-    'Lash Bae': 'Lash Bae',
+const _DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const _MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function formatDisplayDate(dateStr: string): string {
+  const iso = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2]}-${iso[3]}T12:00:00`);
+    if (!isNaN(d.getTime())) return `${_DAYS[d.getDay()]} ${d.getDate()} ${_MONTHS[d.getMonth()]}`;
+  }
+  return dateStr;
+}
+
+function resolveDateLabel(label: string): string {
+  const today = new Date();
+  const fmt = (d: Date) => `${_DAYS[d.getDay()]} ${d.getDate()} ${_MONTHS[d.getMonth()]}`;
+  const nextDay = (dow: number) => {
+    const d = new Date(today);
+    const diff = ((dow - d.getDay() + 7) % 7) || 7;
+    d.setDate(d.getDate() + diff);
+    return d;
   };
-  return nameMap[shortName] || shortName;
+  switch (label) {
+    case 'Tomorrow': { const t = new Date(today); t.setDate(today.getDate() + 1); return fmt(t); }
+    case 'This Weekend': { const sat = nextDay(6); const sun = new Date(sat); sun.setDate(sat.getDate() + 1); return `${fmt(sat)} or ${fmt(sun)}`; }
+    case 'Next Week': { const mon = nextDay(1); const fri = new Date(mon); fri.setDate(mon.getDate() + 4); return `${fmt(mon)} – ${fmt(fri)}`; }
+    case 'Next Month': { const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1); return `${_MONTHS[nm.getMonth()]} ${nm.getFullYear()}`; }
+    default: return label;
+  }
+}
+
+
+// ─── Service category resolver ────────────────────────────────────────────────
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  NAILS:      ['gel', 'acrylic', 'nail', 'manicure', 'pedicure', 'nail art', 'infill', 'sns', 'dip', 'shellac', 'chrome', 'french'],
+  HAIR:       ['hair', 'cut', 'trim', 'blow dry', 'colour', 'color', 'highlights', 'balayage', 'extension', 'braid', 'cornrow', 'keratin', 'relaxer', 'weave', 'wig', 'loc', 'twist'],
+  LASHES:     ['lash', 'eyelash', 'classic set', 'hybrid set', 'volume', 'mega volume', 'lash lift', 'lash tint'],
+  BROWS:      ['brow', 'eyebrow', 'brow wax', 'brow tint', 'henna', 'lamination', 'microblading', 'ombre brow', 'powder brow'],
+  MUA:        ['makeup', 'make-up', 'mua', 'bridal make', 'glam', 'contour', 'airbrush', 'smokey'],
+  AESTHETICS: ['botox', 'filler', 'aesthetic', 'facial', 'peel', 'microneedling', 'dermaplaning', 'thread', 'wax', 'waxing', 'tan', 'tanning', 'massage', 'skin'],
 };
+
+function resolveServiceCategory(serviceName: string, defaultCategory: string): string {
+  const lower = (serviceName || '').toLowerCase();
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(kw => lower.includes(kw))) return cat;
+  }
+  return (defaultCategory || 'OTHER').toUpperCase();
+}
 
 // ✅ Generate dynamic future dates based on ACTUAL calendar months
 // Provider response result type
@@ -143,7 +151,7 @@ const generateDynamicRescheduleDates = (selectedMonth?: Date, userSelections?: s
   };
 
   const addDate = (list: typeof requestedDates, d: Date, times: string[]) => {
-    const key = d.toISOString().split('T')[0];
+    const key = d.toISOString().split('T')[0] ?? '';
     if (!list.find(existing => existing.date === key)) {
       list.push({ date: key, times });
     }
@@ -283,6 +291,96 @@ const generateDynamicRescheduleDates = (selectedMonth?: Date, userSelections?: s
 
 // ==================== PAYMENT CALCULATION ====================
 
+function buildClientReceiptHTML(booking: ConfirmedBooking): string {
+  const servicePrice = booking.price || 0;
+  const addOnsTotal = booking.addOns?.reduce((s, a) => s + (a.price || 0), 0) || 0;
+  const subtotal = servicePrice + addOnsTotal;
+  const serviceCharge = booking.serviceCharge || 2.99;
+  const total = subtotal + serviceCharge;
+  const paymentType = booking.paymentType || 'full';
+  const depositAmount = booking.depositAmount || 0;
+  const amountPaid = booking.amountPaid || 0;
+  const remainingBalance = total - amountPaid;
+
+  const addOnRows = (booking.addOns ?? []).map(a =>
+    `<tr><td style="padding:6px 0;color:#555;padding-left:16px">+ ${a.name}</td><td style="padding:6px 0;color:#555;text-align:right">£${Number(a.price).toFixed(2)}</td></tr>`
+  ).join('');
+
+  const dateStr = new Date(booking.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const ref = (booking.id ?? '').slice(0, 8).toUpperCase();
+  const m = (booking as any).paymentMethod as string | undefined;
+  const METHOD_LABELS: Record<string, string> = {
+    card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay',
+  };
+  const paymentMethodLabel = (m && METHOD_LABELS[m]) ? METHOD_LABELS[m]! : 'Card';
+
+  const paymentRows = paymentType === 'deposit'
+    ? `<tr><td style="padding:6px 0;color:#34C759;font-weight:600">Deposit Paid</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${depositAmount.toFixed(2)}</td></tr>
+       <tr><td style="padding:6px 0;color:#34C759;font-weight:600">Total Paid</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${(depositAmount + serviceCharge).toFixed(2)}</td></tr>
+       ${remainingBalance > 0 ? `<tr><td style="padding:6px 0;color:#FF9500;font-weight:600">Balance Due at Appointment</td><td style="padding:6px 0;color:#FF9500;font-weight:600;text-align:right">£${remainingBalance.toFixed(2)}</td></tr>` : ''}
+       <tr><td style="padding:6px 0;color:#555">Payment Method</td><td style="padding:6px 0;color:#555;text-align:right">${paymentMethodLabel}</td></tr>`
+    : `<tr><td style="padding:6px 0;color:#34C759;font-weight:600">Total Paid</td><td style="padding:6px 0;color:#34C759;font-weight:600;text-align:right">£${amountPaid.toFixed(2)}</td></tr>
+       <tr><td style="padding:6px 0;color:#555">Payment Method</td><td style="padding:6px 0;color:#555;text-align:right">${paymentMethodLabel}</td></tr>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #fff; color: #111; padding: 48px 40px; max-width: 520px; margin: 0 auto; }
+.brand { font-size: 38px; font-weight: 900; letter-spacing: 8px; text-align: center; margin-bottom: 4px; }
+.sub { font-size: 13px; letter-spacing: 3px; color: #888; text-align: center; margin-bottom: 24px; }
+.label { font-size: 11px; letter-spacing: 2px; color: #888; margin-bottom: 10px; font-weight: 700; }
+.perf { border: none; border-top: 2px dashed #ddd; margin: 18px 0; }
+table { width: 100%; border-collapse: collapse; }
+td { font-size: 15px; vertical-align: middle; padding: 6px 0; }
+.bold td { font-weight: 600; }
+.total-block { margin-top: 18px; padding-top: 14px; border-top: 2.5px solid #111; display: flex; justify-content: space-between; align-items: center; }
+.total-label { font-size: 13px; letter-spacing: 2px; font-weight: 700; }
+.total-value { font-size: 28px; font-weight: 900; }
+.ref-block { margin-top: 24px; text-align: center; }
+.ref-label { font-size: 11px; letter-spacing: 2px; color: #aaa; margin-bottom: 4px; }
+.ref-value { font-size: 18px; font-weight: 700; letter-spacing: 3px; color: #555; }
+.date { font-size: 12px; color: #aaa; margin-top: 4px; }
+</style></head><body>
+<div class="brand">CERVICED</div>
+<div class="sub">PAYMENT RECEIPT</div>
+<hr class="perf"/>
+<section>
+  <div class="label">SERVICE</div>
+  <table>
+    <tr class="bold"><td>${booking.serviceName ?? '—'}</td><td style="text-align:right">£${servicePrice.toFixed(2)}</td></tr>
+    ${addOnRows}
+    ${addOnRows ? `<tr><td style="padding:6px 0;color:#888;font-size:13px">Subtotal</td><td style="padding:6px 0;color:#888;font-size:13px;text-align:right">£${subtotal.toFixed(2)}</td></tr>` : ''}
+  </table>
+</section>
+<hr class="perf"/>
+<section>
+  <div class="label">BOOKING</div>
+  <table>
+    <tr><td style="color:#555">Provider</td><td style="color:#555;text-align:right">${booking.providerName ?? '—'}</td></tr>
+    <tr><td style="color:#555">Date</td><td style="color:#555;text-align:right">${booking.bookingDate ?? '—'}</td></tr>
+    <tr><td style="color:#555">Time</td><td style="color:#555;text-align:right">${booking.bookingTime ?? '—'}</td></tr>
+  </table>
+</section>
+<hr class="perf"/>
+<section>
+  <div class="label">PAYMENT</div>
+  <table>
+    ${paymentRows}
+  </table>
+  <div class="total-block">
+    <span class="total-label">TOTAL</span>
+    <span class="total-value">£${total.toFixed(2)}</span>
+  </div>
+</section>
+<hr class="perf"/>
+<div class="ref-block">
+  <div class="ref-label">REFERENCE</div>
+  <div class="ref-value">${ref}</div>
+  <div class="date">${dateStr}</div>
+</div>
+</body></html>`;
+}
+
 const calculatePaymentBreakdown = (booking: ConfirmedBooking) => {
   const servicePrice = booking.price || 0;
   const addOnsTotal = booking.addOns?.reduce((s, a) => s + (a.price || 0), 0) || 0;
@@ -344,6 +442,158 @@ const HiddenDevMenuTrigger = ({ navigation }: any) => {
   );
 };
 
+// ==================== GROUP BOOKING CARD ====================
+
+const STATUS_PRIORITY: BookingStatus[] = [
+  BookingStatus.CANCELLED,
+  BookingStatus.NO_SHOW,
+  BookingStatus.PENDING,
+  BookingStatus.IN_PROGRESS,
+  BookingStatus.UPCOMING,
+  BookingStatus.COMPLETED,
+];
+
+const STATUS_LABELS: Record<string, string> = {
+  [BookingStatus.UPCOMING]: 'Upcoming',
+  [BookingStatus.IN_PROGRESS]: 'In Progress',
+  [BookingStatus.COMPLETED]: 'Completed',
+  [BookingStatus.CANCELLED]: 'Cancelled',
+  [BookingStatus.NO_SHOW]: 'No Show',
+  pending: 'Pending',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  [BookingStatus.UPCOMING]: '#4CAF50',
+  [BookingStatus.IN_PROGRESS]: '#2196F3',
+  [BookingStatus.COMPLETED]: '#2196F3',
+  [BookingStatus.CANCELLED]: '#F44336',
+  [BookingStatus.NO_SHOW]: '#FF9800',
+  pending: '#AF9197',
+};
+
+const GroupBookingCard = React.memo<GroupBookingCardProps>(
+  ({ groupId, bookings, isExpanded, onToggle, onBookingPress, highlightedBookingId }) => {
+    const { theme, isDarkMode } = useTheme();
+    const styles = useMemo(() => createStyles(theme, isDarkMode), [theme, isDarkMode]);
+
+    const serviceCount = bookings.length;
+
+    const totalBasePrice = useMemo(
+      () => bookings.reduce((sum, b) => sum + b.price + (b.addOns?.reduce((s, a) => s + a.price, 0) ?? 0), 0),
+      [bookings]
+    );
+
+    const platformFee = useMemo(
+      () => bookings.reduce((sum, b) => sum + (b.serviceCharge ?? 0), 0),
+      [bookings]
+    );
+
+    const earliestDate = bookings[0]?.bookingDate ?? '';
+
+    const overallStatus = useMemo(() => {
+      const statuses = new Set(bookings.map(b => b.status));
+      return STATUS_PRIORITY.find(s => statuses.has(s)) ?? BookingStatus.UPCOMING;
+    }, [bookings]);
+
+    const statusLabel = STATUS_LABELS[overallStatus] ?? 'Upcoming';
+    const statusColor = STATUS_COLORS[overallStatus] ?? '#4CAF50';
+
+    const formattedDate = useMemo(() => {
+      if (!earliestDate) return '';
+      const parts = earliestDate.split('-');
+      if (parts.length < 3) return earliestDate;
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return `${_MONTHS[d.getMonth()]} ${d.getDate()}`;
+    }, [earliestDate]);
+
+    const cardBg = isDarkMode ? '#2C2C2E' : '#FFFFFF';
+    const borderColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+    const divColor = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+    const titleColor = isDarkMode ? '#F0F0F0' : '#111';
+    const metaColor = isDarkMode ? 'rgba(255,255,255,0.55)' : '#666';
+    const feeColor = isDarkMode ? 'rgba(255,255,255,0.45)' : '#999';
+    const itemProviderColor = isDarkMode ? '#F0F0F0' : '#222';
+    const itemServiceColor = isDarkMode ? 'rgba(255,255,255,0.6)' : '#666';
+    const itemDateColor = isDarkMode ? 'rgba(255,255,255,0.4)' : '#999';
+    const itemPriceColor = isDarkMode ? '#F0F0F0' : '#111';
+    const feeBgColor = isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)';
+
+    return (
+      <View style={[styles.groupBookingCard, { backgroundColor: cardBg, borderColor }]}>
+        <TouchableOpacity
+          style={styles.groupBookingHeader}
+          onPress={onToggle}
+          activeOpacity={0.7}
+        >
+          <View style={styles.groupBookingHeaderLeft}>
+            <Text style={[styles.groupBookingTitle, { color: titleColor }]}>
+              {`Group Booking  ·  ${serviceCount} service${serviceCount !== 1 ? 's' : ''}  ·  £${totalBasePrice.toFixed(2)}  ·  ${formattedDate}`}
+            </Text>
+            <View style={[styles.groupBookingStatusBadge, { backgroundColor: statusColor + '22' }]}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: statusColor }}>{statusLabel}</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 20, color: metaColor, marginLeft: 8 }}>
+            {isExpanded ? '▴' : '▾'}
+          </Text>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={[styles.groupBookingBody, { borderTopColor: divColor }]}>
+            {bookings.map((booking, index) => {
+              const itemBase = booking.price + (booking.addOns?.reduce((s, a) => s + a.price, 0) ?? 0);
+              const isLast = index === bookings.length - 1;
+              const isHighlighted = highlightedBookingId === booking.id;
+              return (
+                <TouchableOpacity
+                  key={booking.id}
+                  style={[
+                    styles.groupBookingItemRow,
+                    { borderBottomColor: divColor },
+                    isLast && { borderBottomWidth: 0 },
+                    isHighlighted && { backgroundColor: isDarkMode ? 'rgba(200,80,200,0.12)' : 'rgba(200,80,200,0.07)' },
+                  ]}
+                  onPress={() => onBookingPress(booking)}
+                  activeOpacity={0.7}
+                >
+                  {booking.providerImage ? (
+                    <Image
+                      source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage}
+                      style={styles.groupBookingItemImage}
+                    />
+                  ) : (
+                    <View style={[styles.groupBookingItemImage, { backgroundColor: isDarkMode ? '#3C3C3E' : '#EEE' }]} />
+                  )}
+                  <View style={styles.groupBookingItemInfo}>
+                    <Text style={[styles.groupBookingItemProvider, { color: itemProviderColor }]} numberOfLines={1}>
+                      {booking.providerName}
+                    </Text>
+                    <Text style={[styles.groupBookingItemService, { color: itemServiceColor }]} numberOfLines={1}>
+                      {booking.serviceName}
+                    </Text>
+                    <Text style={[styles.groupBookingItemDateTime, { color: itemDateColor }]}>
+                      {`${formattedDate}  ·  ${booking.bookingTime}`}
+                    </Text>
+                  </View>
+                  <Text style={[styles.groupBookingItemPrice, { color: itemPriceColor }]}>
+                    £{itemBase.toFixed(2)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            {platformFee > 0 && (
+              <View style={[styles.groupBookingPlatformFeeRow, { backgroundColor: feeBgColor }]}>
+                <Text style={[styles.groupBookingPlatformFeeLabel, { color: feeColor }]}>Platform Fee</Text>
+                <Text style={[styles.groupBookingPlatformFeeValue, { color: feeColor }]}>£{platformFee.toFixed(2)}</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  }
+);
+
 // ✅ OPTIMIZED BookingCard - NO INLINE FUNCTIONS
 const BookingCard = React.memo<BookingCardProps>(
   ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, rowHasTag = false }) => {
@@ -378,12 +628,12 @@ const BookingCard = React.memo<BookingCardProps>(
 
     const highlightBorderColor = highlightAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', '#9C27B0'],
+      outputRange: [isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', '#AF9197'],
     });
 
     const highlightBackgroundColor = highlightAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [isDarkMode ? '#2C2C2E' : '#FFFFFF', 'rgba(156, 39, 176, 0.08)'],
+      outputRange: [isDarkMode ? '#2C2C2E' : '#FFFFFF', 'rgba(175, 145, 151, 0.08)'],
     });
 
     const showStatusBadge =
@@ -406,7 +656,7 @@ const BookingCard = React.memo<BookingCardProps>(
     }, [booking.isPendingReschedule, booking.status]);
 
     const badgeColor = useMemo(() => {
-      if (booking.isPendingReschedule) return '#9C27B0';
+      if (booking.isPendingReschedule) return '#AF9197';
       if (booking.status === BookingStatus.PENDING) return '#FF9500';
       return statusColors[booking.status as keyof typeof statusColors] || '#9E9E9E';
     }, [booking.isPendingReschedule, booking.status]);
@@ -442,14 +692,15 @@ const BookingCard = React.memo<BookingCardProps>(
               <Text style={styles.providerService} numberOfLines={1}>
                 {booking.serviceName}
               </Text>
+              {(booking.addOns?.length ?? 0) > 0 && (
+                <View style={styles.cardAddOnPill}>
+                  <Text style={styles.cardAddOnPillText}>+ {booking.addOns!.length} add-on{booking.addOns!.length === 1 ? '' : 's'}</Text>
+                </View>
+              )}
               <View style={styles.appointmentTime}>
                 <View style={styles.dateTimeRow}>
                   <Text style={styles.appointmentDate}>
-                    {new Date(booking.bookingDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
+                    {formatDisplayDate(booking.bookingDate)}
                   </Text>
                   {wasRescheduled && booking.status === BookingStatus.UPCOMING && (
                     <View style={styles.purpleDot} />
@@ -509,6 +760,15 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const rescheduleTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const [activeFilters, setActiveFilters] = useState<Set<'all' | 'past'>>(new Set());
+  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
+
+  // Load waitlist entries for this user
+  useEffect(() => {
+    if (!user?.id) return;
+    WaitlistService.getUserWaitlistEntries(user.id)
+      .then(setWaitlistEntries)
+      .catch(() => {});
+  }, [user?.id]);
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     setActiveFilters(prev => {
@@ -524,6 +784,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+
+  const handleShareReceipt = useCallback(async () => {
+    if (!selectedBooking) return;
+    try {
+      const html = buildClientReceiptHTML(selectedBooking);
+      const { uri } = await Print.printToFileAsync({ html });
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
+    } catch {
+      Alert.alert('Error', 'Could not generate the receipt.');
+    }
+  }, [selectedBooking]);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [providerResponseMessage, setProviderResponseMessage] = useState<string>('');
@@ -543,11 +814,18 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageText, setMessageText] = useState('');
+  const [contactSheetVisible, setContactSheetVisible] = useState(false);
+  const [contactSheetBooking, setContactSheetBooking] = useState<ConfirmedBooking | null>(null);
+  const [contactSheetInfo, setContactSheetInfo] = useState<ProviderContactInfo | null>(null);
+  const [contactSheetLoading, setContactSheetLoading] = useState(false);
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [showTipModal, setShowTipModal] = useState(false);
   const [hasTipped, setHasTipped] = useState(false);
   const [selectedRescheduleMonth, setSelectedRescheduleMonth] = useState<Date>(new Date());
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
+  const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
+  const [selectedBookingAddrSettings, setSelectedBookingAddrSettings] = useState<ProviderAddressSettings | null>(null);
+  const [addrCountdown, setAddrCountdown] = useState('');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // ✅ Track rated bookings and tips
@@ -557,6 +835,16 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Track highlighted booking (from notification navigation) and recently added bookings
   const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
   const [recentlyAddedBookings, setRecentlyAddedBookings] = useState<Set<string>>(new Set());
+
+  // ✅ Group booking expand/collapse
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((id: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
 
@@ -582,7 +870,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ==================== HELPER FUNCTIONS ====================
 
   const getStatusColor = useCallback((status: string, isPending?: boolean) => {
-    if (isPending) return '#9C27B0';
+    if (isPending) return '#AF9197';
     
     const colorMap: Record<string, string> = {
       [BookingStatus.UPCOMING]: '#4CAF50',
@@ -631,12 +919,21 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, []);
 
-  const isLocationVisible = useCallback((bookingDate: string) => {
-    const appointmentDate = new Date(bookingDate);
-    const now = new Date();
-    const hoursUntilAppointment = (appointmentDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-    return hoursUntilAppointment <= 24;
+  const openContactSheet = useCallback(async (booking: ConfirmedBooking) => {
+    setContactSheetBooking(booking);
+    setContactSheetInfo(null);
+    setContactSheetVisible(true);
+    setContactSheetLoading(true);
+    try {
+      const info = await getProviderContactByDisplayName(booking.providerName);
+      setContactSheetInfo(info);
+    } catch {
+      setContactSheetInfo({ preferred_contact_methods: ['in_app'], whatsapp_number: null, email: null, phone: null });
+    } finally {
+      setContactSheetLoading(false);
+    }
   }, []);
+
 
   // ✅ Check if messaging is available (within 72 hours before or after appointment)
   const isMessagingAvailable = useCallback((bookingDate: string) => {
@@ -648,7 +945,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const handleBookingPress = useCallback((booking: ConfirmedBooking) => {
     setSelectedBooking(booking);
+    setBookingIntakeForm(null);
+    setSelectedBookingAddrSettings(null);
+    setAddrCountdown('');
     setModalVisible(true);
+    getIntakeFormByBooking(booking.id)
+      .then(f => setBookingIntakeForm(f))
+      .catch(() => {});
+    // Fetch provider address settings so we can show correct release info
+    if (!booking.clientAddress) {
+      getProviderAddressSettingsByDisplayName(booking.providerName)
+        .then(s => setSelectedBookingAddrSettings(s))
+        .catch(() => {});
+    }
   }, []);
 
   // ✅ REMOVED: Duplicate reschedule logic - now using canReschedule from BookingContext
@@ -899,7 +1208,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         const capturedSelections = [...selectedDates];
 
         if (__DEV__) console.log(`[${providerName}] Step 1: User requesting reschedule for booking ${bookingId}`);
-        await requestReschedule(bookingId, selectedDates);
+        await requestReschedule(bookingId, selectedDates.map(resolveDateLabel));
         if (__DEV__) console.log(`[${providerName}] Step 1 Complete: Booking ${bookingId} Status=PENDING`);
 
         setSuccessMessage(`Reschedule request sent! ${providerName} will respond with available dates.`);
@@ -914,52 +1223,34 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           rescheduleTimeoutsRef.current.delete(bookingId);
         }
 
-        // ✅ Create new booking-specific timeout with captured month (no shared state)
-        const rescheduleTimeout = setTimeout(async () => {
-          if (__DEV__) console.log(`[${providerName}] Step 2: 30s elapsed for booking ${bookingId}, provider responding...`);
+        // ✅ DEV ONLY: mock provider response after 30s (real response comes via Supabase notification)
+        if (__DEV__) {
+          const rescheduleTimeout = setTimeout(async () => {
+            console.log(`[${providerName}] DEV: 30s mock provider response for booking ${bookingId}`);
 
-          // ✅ Use captured month and selections from when timeout was created
-          const response = generateDynamicRescheduleDates(currentMonth, capturedSelections);
+            const response = generateDynamicRescheduleDates(currentMonth, capturedSelections);
+            setProviderResponseMessage(response.message);
+            setProviderNoAvailability(response.noAvailability);
 
-          // Store the provider's response message
-          setProviderResponseMessage(response.message);
-          setProviderNoAvailability(response.noAvailability);
-
-          if (response.noAvailability) {
-            if (__DEV__) console.log(`[${providerName}] No availability for booking ${bookingId}`);
-            // Still call respond so the booking status updates
-            try {
-              await providerRespondToReschedule(bookingId, []);
-            } catch (error) {
-              console.error(`❌ [${providerName}] Error for booking ${bookingId}:`, error);
-            }
-          } else {
-            const mockAvailableDates = response.dates
-              .filter((d): d is { date: string; times: string[] } => d.date !== undefined);
+            const mockAvailableDates = response.noAvailability
+              ? []
+              : response.dates.filter((d): d is { date: string; times: string[] } => d.date !== undefined);
 
             try {
               await providerRespondToReschedule(bookingId, mockAvailableDates);
-              if (__DEV__) console.log(`[${providerName}] Step 2 Complete: Booking ${bookingId} Status=AVAILABLE (met request: ${response.couldMeetRequest})`);
             } catch (error) {
-              console.error(`[${providerName}] Error for booking ${bookingId}:`, error);
+              console.error(`[${providerName}] DEV mock error for booking ${bookingId}:`, error);
             }
-          }
 
-          // Clean up
-          {
-            // Clean up timeout reference after completion
             rescheduleTimeoutsRef.current.delete(bookingId);
-            if (__DEV__) console.log(`[${providerName}] Timeout cleaned up for booking ${bookingId}`);
-          }
-        }, 30000) as any; // 30 seconds
+          }, 30000) as any;
 
-        // ✅ Store timeout reference for this specific booking
-        rescheduleTimeoutsRef.current.set(bookingId, rescheduleTimeout);
-        if (__DEV__) console.log(`[${providerName}] Timeout registered for booking ${bookingId}`);
+          rescheduleTimeoutsRef.current.set(bookingId, rescheduleTimeout);
+        }
       }
     } catch (error: any) {
       console.error('❌ Reschedule error:', error);
-      Alert.alert('Error', error.message || 'Failed to process reschedule request.');
+      Alert.alert('Error', 'Couldn\'t process the reschedule request. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -991,7 +1282,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             service_id: null,
             user_id: user.id,
             rating,
-            comment: reviewText.trim() || undefined,
+            ...(reviewText.trim() ? { comment: reviewText.trim() } : {}),
           });
         }
       }
@@ -1070,6 +1361,45 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }, 2000);
   }, [selectedBooking, tipAmount]);
 
+  // Countdown ticker for address release
+  useEffect(() => {
+    if (!selectedBooking || selectedBooking.clientAddress) return;
+    const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
+    if (!policy || policy === 'always' || policy === 'manual') return;
+
+    const offsetDays: Record<string, number> = {
+      on_confirmation: 0,
+      day_before: 1,
+      two_days_before: 2,
+      three_days_before: 3,
+      five_days_before: 5,
+      week_before: 7,
+    };
+    const days = offsetDays[policy];
+    if (days === undefined) return;
+
+    const computeCountdown = () => {
+      const appt = new Date(`${selectedBooking.bookingDate}T12:00:00`);
+      const releaseAt = new Date(appt);
+      releaseAt.setDate(releaseAt.getDate() - days);
+      const diff = releaseAt.getTime() - Date.now();
+      if (diff <= 0) { setAddrCountdown(''); return; }
+      const totalHours = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      if (totalHours >= 48) {
+        setAddrCountdown(`${Math.ceil(diff / 86400000)} days`);
+      } else if (totalHours >= 1) {
+        setAddrCountdown(`${totalHours}h ${mins}m`);
+      } else {
+        setAddrCountdown(`${mins}m`);
+      }
+    };
+
+    computeCountdown();
+    const id = setInterval(computeCountdown, 60000);
+    return () => clearInterval(id);
+  }, [selectedBooking, selectedBookingAddrSettings]);
+
   const retryLoadBookings = useCallback(async () => {
     setRetrying(true);
     try {
@@ -1136,7 +1466,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         backgroundColor: isDarkMode ? theme.background : 'transparent',
       },
       headerTitleStyle: {
-        fontFamily: 'BakbakOne',
+        fontFamily: 'BakbakOne-Regular',
         fontSize: 22,
         color: theme.text,
       },
@@ -1271,6 +1601,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
         setSelectedBooking(booking);
 
+        // Auto-expand the group card if this booking belongs to one
+        if (booking.groupBookingId) {
+          setExpandedGroups(prev => new Set(prev).add(booking.groupBookingId!));
+        }
+
         // Set highlight state for smart scroll and highlight animation
         if (shouldHighlight) {
           setHighlightedBookingId(bookingId!);
@@ -1292,12 +1627,21 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         }, 400);
 
         // Small delay to ensure view is switched and modal can open
-        setTimeout(() => {
-          if (shouldOpenReschedule && booking.isPendingReschedule) {
+        setTimeout(async () => {
+          if (shouldOpenReschedule) {
+            // Sync active reschedule request from Supabase — handles both user-initiated and provider-initiated
+            if (!booking.rescheduleRequest?.providerAvailableDates) {
+              try {
+                const dbReq = await getActiveRescheduleRequest(booking.id);
+                if (dbReq?.status === 'provider_responded' && (dbReq.provider_available_slots ?? []).length > 0) {
+                  await providerRespondToReschedule(booking.id, dbReq.provider_available_slots!);
+                }
+              } catch {}
+            }
             if (__DEV__) console.log('Opening reschedule modal');
             setShowRescheduleModal(true);
             setModalVisible(false);
-          } else if (route.params.openBookingId) {
+          } else if (route.params?.openBookingId) {
             if (__DEV__) console.log('Opening booking details modal');
             setModalVisible(true);
           }
@@ -1314,7 +1658,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
-  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation]);
+  }, [route?.params?.openBookingId, route?.params?.openReschedule, route?.params?.highlightBookingId, route?.params?.initialTab, todayBookings, upcomingBookings, pastBookings, filteredUpcomingBookings, navigation, providerRespondToReschedule]);
 
   // ✅ Update selectedBooking ONLY when modal is visible and booking state changes
   // Use ref to track last update to prevent infinite loops
@@ -1399,21 +1743,29 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ==================== COMPUTED VALUES ====================
 
-  const routeCoordinates = useMemo(() => todayBookings.map(b => b.coordinates), [todayBookings]);
+  const routeCoordinates = useMemo(
+    () => todayBookings.map(b => b.coordinates).filter(Boolean) as { latitude: number; longitude: number }[],
+    [todayBookings]
+  );
 
-  const groupedBookings = useMemo(() => {
-    let bookings: ConfirmedBooking[] = [];
-    if (activeFilters.has('all')) bookings = [...bookings, ...filteredUpcomingBookings];
-    if (activeFilters.has('past')) bookings = [...bookings, ...filteredPastBookings];
-    return bookings.reduce(
-      (acc, booking) => {
-        const serviceKey = booking.providerService;
-        if (!acc[serviceKey]) acc[serviceKey] = [];
-        acc[serviceKey].push(booking);
-        return acc;
-      },
-      {} as Record<string, ConfirmedBooking[]>
-    );
+  const listItems = useMemo((): GroupedListItem[] => {
+    let source: ConfirmedBooking[] = [];
+    if (activeFilters.has('all')) source = [...source, ...filteredUpcomingBookings];
+    if (activeFilters.has('past')) source = [...source, ...filteredPastBookings];
+
+    const categoryMap = new Map<string, ConfirmedBooking[]>();
+    for (const b of source) {
+      const cat = resolveServiceCategory(b.serviceName, b.providerService);
+      const arr = categoryMap.get(cat) ?? [];
+      arr.push(b);
+      categoryMap.set(cat, arr);
+    }
+
+    const items: GroupedListItem[] = [];
+    for (const [serviceType, bookings] of categoryMap) {
+      items.push({ kind: 'category', serviceType, bookings });
+    }
+    return items;
   }, [activeFilters, filteredUpcomingBookings, filteredPastBookings]);
 
   // ✅ Check if booking has been rated or tipped
@@ -1423,7 +1775,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ==================== RENDER ====================
 
   return (
-    <AppBackground>
+    <ThemedBackground>
       <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
         {/* ✅ SINGLE SCROLLVIEW - NO NESTING */}
         <ScrollView
@@ -1437,9 +1789,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#C850C8"
-              colors={['#C850C8']}
-              progressBackgroundColor={isDarkMode ? '#1C1C1E' : '#F5E6FA'}
+              tintColor="#AF9197"
+              colors={['#AF9197']}
+              progressBackgroundColor={isDarkMode ? '#201D1A' : '#EDE8E2'}
               progressViewOffset={120}
             />
           }
@@ -1506,8 +1858,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     ref={mapRef}
                     style={styles.map}
                     initialRegion={{
-                      latitude: currentBooking?.coordinates.latitude || userLocation?.latitude || 34.0736,
-                      longitude: currentBooking?.coordinates.longitude || userLocation?.longitude || -118.4004,
+                      latitude: currentBooking?.coordinates?.latitude ?? userLocation?.latitude ?? 51.5074,
+                      longitude: currentBooking?.coordinates?.longitude ?? userLocation?.longitude ?? -0.1278,
                       latitudeDelta: 0.15,
                       longitudeDelta: 0.15,
                     }}
@@ -1522,7 +1874,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     {todayBookings.length > 0 && !allTodayBookingsCompleted ? (
                       <>
-                        {todayBookings.map(booking => (
+                        {todayBookings.filter(b => b.coordinates).map(booking => (
                           <Marker
                             key={booking.id}
                             coordinate={booking.coordinates}
@@ -1556,7 +1908,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                         {routeCoordinates.length > 1 && (
                           <Polyline
                             coordinates={routeCoordinates}
-                            strokeColor="#C850C8"
+                            strokeColor="#AF9197"
                             strokeWidth={3}
                             lineDashPattern={[5, 5]}
                           />
@@ -1564,7 +1916,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       </>
                     ) : (
                       <Marker
-                        coordinate={{ latitude: 34.0736, longitude: -118.4004 }}
+                        coordinate={{ latitude: userLocation?.latitude ?? 51.5074, longitude: userLocation?.longitude ?? -0.1278 }}
                         title="No appointments today"
                       >
                         <View style={styles.serviceMarker}>
@@ -1590,7 +1942,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           renderItem={({ item: booking }) => (
                             <TouchableOpacity
                               style={styles.appointmentCard}
-                              onPress={() => focusMapOnLocation(booking.coordinates)}
+                              onPress={() => booking.coordinates && focusMapOnLocation(booking.coordinates)}
                               activeOpacity={0.8}
                             >
                               <BlurView intensity={15} tint={isDarkMode ? 'dark' : 'light'} style={styles.cardBlur}>
@@ -1600,11 +1952,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {booking.serviceName}
                                     </Text>
                                     <Text style={styles.appointmentProvider}>
-                                      {new Date(booking.bookingDate).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                      })} • {booking.bookingTime}
+                                      {formatDisplayDate(booking.bookingDate)} • {booking.bookingTime}
                                     </Text>
                                     <Text style={styles.appointmentProvider}>
                                       {booking.providerName} - {booking.status.replace('_', ' ')}
@@ -1682,11 +2030,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {currentBooking.serviceName}
                                     </Text>
                                     <Text style={styles.appointmentProvider}>
-                                      {new Date(currentBooking.bookingDate).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                      })} • {currentBooking.bookingTime}
+                                      {formatDisplayDate(currentBooking.bookingDate)} • {currentBooking.bookingTime}
                                     </Text>
                                     <Text style={styles.appointmentProvider}>
                                       {currentBooking.providerName} - {currentBooking.status.replace('_', ' ')}
@@ -1758,12 +2102,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         {isMessagingAvailable(currentBooking.bookingDate) && (
                                           <TouchableOpacity
                                             style={styles.messageButton}
-                                            onPress={() => {
-                                              setSelectedBooking(currentBooking);
-                                              setShowMessageModal(true);
-                                            }}
+                                            onPress={() => openContactSheet(currentBooking)}
                                           >
-                                            <Text style={styles.buttonText}>Message</Text>
+                                            <Text style={styles.buttonText}>Contact</Text>
                                           </TouchableOpacity>
                                         )}
                                       </>
@@ -1795,11 +2136,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           {booking.serviceName}
                                         </Text>
                                         <Text style={styles.nextAppointmentProvider}>
-                                          {new Date(booking.bookingDate).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric',
-                                          })} • {booking.bookingTime}
+                                          {formatDisplayDate(booking.bookingDate)} • {booking.bookingTime}
                                         </Text>
                                         <Text style={styles.nextAppointmentProvider}>
                                           {booking.providerName} - {booking.duration}
@@ -1869,12 +2206,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             {isMessagingAvailable(booking.bookingDate) && (
                                               <TouchableOpacity
                                                 style={styles.messageButton}
-                                                onPress={() => {
-                                                  setSelectedBooking(booking);
-                                                  setShowMessageModal(true);
-                                                }}
+                                                onPress={() => openContactSheet(booking)}
                                               >
-                                                <Text style={styles.buttonText}>Message</Text>
+                                                <Text style={styles.buttonText}>Contact</Text>
                                               </TouchableOpacity>
                                             )}
                                           </>
@@ -1949,7 +2283,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     )}
                   </View>
                 )}
-                {Object.keys(groupedBookings).length === 0 ? (
+                {listItems.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>
                       {activeFilters.has('all') && activeFilters.has('past')
@@ -1962,58 +2296,59 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 ) : (
                   <FlatList
                     ref={bookingsListRef}
-                    data={Object.entries(groupedBookings)}
-                    keyExtractor={([serviceType]) => serviceType}
+                    data={listItems}
+                    keyExtractor={(item) => item.serviceType}
                     onScrollToIndexFailed={(info) => {
                       console.warn('Scroll to index failed:', info);
-                      // Fallback: scroll to offset
                       bookingsListRef.current?.scrollToOffset({
                         offset: info.averageItemLength * info.index,
                         animated: true,
                       });
                     }}
-                    renderItem={({ item: [serviceType, bookings] }) => {
-                      const rowHasTag = bookings.some(b =>
+                    renderItem={({ item }) => {
+                      const { serviceType, bookings } = item;
+                      const rowHasTag = bookings.some((b: ConfirmedBooking) =>
                         b.status === BookingStatus.CANCELLED ||
                         b.status === BookingStatus.NO_SHOW ||
                         b.isPendingReschedule
                       );
                       return (
-                      <View style={styles.serviceCategory}>
-                        <View style={styles.serviceCategoryHeader}>
-                          <View style={styles.serviceCategoryTag}>
-                            <Text style={styles.serviceCategoryName}>
-                              {serviceType.toUpperCase()}
-                            </Text>
+                        <View style={styles.serviceCategory}>
+                          <View style={styles.serviceCategoryHeader}>
+                            <View style={styles.serviceCategoryTag}>
+                              <Text style={styles.serviceCategoryName}>
+                                {serviceType.toUpperCase()}
+                              </Text>
+                            </View>
                           </View>
+                          <FlatList
+                            horizontal
+                            data={bookings}
+                            keyExtractor={booking => booking.id}
+                            renderItem={({ item: booking }) => (
+                              <BookingCard
+                                booking={booking}
+                                onPress={handleBookingPress}
+                                isHighlighted={highlightedBookingId === booking.id}
+                                isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
+                                rowHasTag={rowHasTag}
+                              />
+                            )}
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.serviceImagesContainer}
+                            removeClippedSubviews={true}
+                            maxToRenderPerBatch={5}
+                            windowSize={5}
+                            initialNumToRender={3}
+                            getItemLayout={(_data, index) => ({
+                              length: 162,
+                              offset: 162 * index,
+                              index,
+                            })}
+                          />
                         </View>
-                        <FlatList
-                          horizontal
-                          data={bookings}
-                          keyExtractor={booking => booking.id}
-                          renderItem={({ item: booking }) => (
-                            <BookingCard
-                              booking={booking}
-                              onPress={handleBookingPress}
-                              isHighlighted={highlightedBookingId === booking.id}
-                              isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
-                              rowHasTag={rowHasTag}
-                            />
-                          )}
-                          showsHorizontalScrollIndicator={false}
-                          contentContainerStyle={styles.serviceImagesContainer}
-                          removeClippedSubviews={true}
-                          maxToRenderPerBatch={5}
-                          windowSize={5}
-                          initialNumToRender={3}
-                          getItemLayout={(data, index) => ({
-                            length: 162,
-                            offset: 162 * index,
-                            index,
-                          })}
-                        />
-                      </View>
-                    ); }}
+                      );
+                    }}
                     showsVerticalScrollIndicator={false}
                     scrollEnabled={false}
                     removeClippedSubviews={true}
@@ -2026,6 +2361,81 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 )}
               </View>
             )}
+          {/* Waitlist Section */}
+          {waitlistEntries.length > 0 && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+              <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>ON WAITLIST</Text>
+              {waitlistEntries.map(entry => (
+                <View
+                  key={entry.id}
+                  style={{
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: theme.border ?? 'rgba(126,102,103,0.14)',
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(175,145,151,0.08)',
+                    padding: 16,
+                    marginBottom: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: 'BakbakOne', fontSize: 15, color: theme.text, marginBottom: 2 }}>
+                        {entry.service_name_snapshot}
+                      </Text>
+                      <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
+                        {entry.provider_name_snapshot}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        <View style={{
+                          backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+                          borderRadius: 10,
+                          paddingHorizontal: 10,
+                          paddingVertical: 3,
+                        }}>
+                          <Text style={{
+                            fontFamily: 'BakbakOne',
+                            fontSize: 10,
+                            letterSpacing: 0.4,
+                            color: entry.status === 'notified' ? '#34C759' : '#FF9500',
+                          }}>
+                            {entry.status === 'notified' ? 'SLOT OPENED' : `#${entry.position} IN QUEUE`}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    {entry.status === 'notified' && (
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#AF9197',
+                          borderRadius: 20,
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          marginLeft: 12,
+                        }}
+                        onPress={() => navigation.navigate('ProviderProfile', { providerId: entry.provider_id })}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontFamily: 'BakbakOne', fontSize: 11, color: '#fff' }}>Book Now</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={{ marginTop: 10, alignSelf: 'flex-start' }}
+                    onPress={() => {
+                      WaitlistService.leaveWaitlist(entry.id).then(() => {
+                        setWaitlistEntries(prev => prev.filter(e => e.id !== entry.id));
+                      }).catch(() => {});
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontFamily: 'Jura-Regular', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
+                      Leave waitlist
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
           </View>
         </ScrollView>
 
@@ -2037,7 +2447,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           onRequestClose={() => {
             setModalVisible(false);
             setShowReceipt(false);
-            // ✅ FIX: Re-enable scrolling when closing modal via back button
+            setSelectedBookingAddrSettings(null);
+            setAddrCountdown('');
             setTimeout(() => {
               mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
               modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -2052,8 +2463,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               onPress={() => {
                 setModalVisible(false);
                 setShowReceipt(false);
+                setSelectedBookingAddrSettings(null);
+                setAddrCountdown('');
                 Keyboard.dismiss();
-                // ✅ FIX: Re-enable scrolling when closing modal via backdrop
                 setTimeout(() => {
                   mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
                   modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
@@ -2086,7 +2498,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                               resizeMode="cover"
                             />
                             <Text style={styles.modalProviderName}>
-                              {getFullProviderName(selectedBooking.providerName)}
+                              {selectedBooking.providerName}
                             </Text>
                             <View style={styles.modalServiceTypeBadge}>
                               <Text style={styles.modalServiceTypeText}>
@@ -2116,12 +2528,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     </View>
                                   )}
                                   <Text style={styles.modalValue}>
-                                    {new Date(selectedBooking.bookingDate).toLocaleDateString('en-US', {
-                                      weekday: 'short',
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric',
-                                    })}
+                                    {formatDisplayDate(selectedBooking.bookingDate)}
                                   </Text>
                                 </View>
                               </View>
@@ -2141,7 +2548,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                   styles.modalStatusBadge,
                                   { 
                                     backgroundColor: selectedBooking.isPendingReschedule 
-                                      ? '#9C27B0' 
+                                      ? '#AF9197' 
                                       : getStatusColor(selectedBooking.status) 
                                   }
                                 ]}>
@@ -2178,6 +2585,37 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                               )}
                             </View>
                           </View>
+
+                          {/* ── TO DO: Intake Form ── */}
+                          {bookingIntakeForm && bookingIntakeForm.status === 'pending' && (
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalSectionTitle}>TO DO</Text>
+                              <TouchableOpacity
+                                style={styles.intakeFormTodo}
+                                activeOpacity={0.8}
+                                onPress={() => {
+                                  setModalVisible(false);
+                                  navigation.navigate('ClientIntakeForm', {
+                                    formId: bookingIntakeForm.id,
+                                    bookingId: bookingIntakeForm.bookingId,
+                                  });
+                                }}
+                              >
+                                <View style={styles.intakeFormTodoIcon}>
+                                  <Text style={{ fontSize: 20 }}>📋</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.intakeFormTodoTitle}>{bookingIntakeForm.title}</Text>
+                                  <Text style={styles.intakeFormTodoSub}>
+                                    Your provider needs this before your appointment — tap to fill out
+                                  </Text>
+                                </View>
+                                <View style={styles.intakeFormTodoBadge}>
+                                  <Text style={styles.intakeFormTodoBadgeText}>Required</Text>
+                                </View>
+                              </TouchableOpacity>
+                            </View>
+                          )}
 
                           {/* Add-Ons */}
                           {(selectedBooking.addOns?.length ?? 0) > 0 && (
@@ -2290,7 +2728,16 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                             {showReceipt && (
                               <View style={styles.receiptContainer}>
                                 <View style={styles.receiptPaper}>
-                                  <Text style={styles.receiptHeaderText}>PAYMENT RECEIPT</Text>
+                                  <View style={styles.receiptHeaderRow}>
+                                    <Text style={styles.receiptHeaderText}>PAYMENT RECEIPT</Text>
+                                    <TouchableOpacity
+                                      onPress={handleShareReceipt}
+                                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                      style={styles.receiptShareBtn}
+                                    >
+                                      <Ionicons name="share-outline" size={18} color={isDarkMode ? '#F0F0F0' : '#111'} />
+                                    </TouchableOpacity>
+                                  </View>
                                   <View style={styles.receiptDivider} />
                                   <View style={styles.receiptSection}>
                                     <View style={styles.receiptRow}>
@@ -2337,7 +2784,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             </Text>
                                           </View>
                                           <View style={styles.receiptRow}>
-                                            <Text style={styles.receiptLabel}>Service Charge</Text>
+                                            <Text style={styles.receiptLabel}>Platform Fee</Text>
                                             <Text style={styles.receiptValue}>
                                               £{payment.serviceCharge.toFixed(2)}
                                             </Text>
@@ -2381,7 +2828,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           <View style={styles.receiptRow}>
                                             <Text style={styles.receiptLabel}>Payment Method</Text>
                                             <Text style={styles.receiptValue}>
-                                              {(selectedBooking as any).paymentMethod || 'Card'}
+                                              {{ card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' }[(selectedBooking as any).paymentMethod] ?? 'Card'}
                                             </Text>
                                           </View>
                                         </View>
@@ -2397,7 +2844,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             </Text>
                                           </View>
                                           <View style={styles.receiptRow}>
-                                            <Text style={styles.receiptLabel}>Service Charge</Text>
+                                            <Text style={styles.receiptLabel}>Platform Fee</Text>
                                             <Text style={styles.receiptValue}>
                                               £{payment.serviceCharge.toFixed(2)}
                                             </Text>
@@ -2423,7 +2870,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           <View style={styles.receiptRow}>
                                             <Text style={styles.receiptLabel}>Payment Method</Text>
                                             <Text style={styles.receiptValue}>
-                                              {(selectedBooking as any).paymentMethod || 'Card'}
+                                              {{ card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' }[(selectedBooking as any).paymentMethod] ?? 'Card'}
                                             </Text>
                                           </View>
                                           <View style={styles.receiptFullyPaidBadge}>
@@ -2480,30 +2927,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                               )}
 
                               {/* HIDE CONTACT IF COMPLETED OR CANCELLED */}
-                              {selectedBooking.status !== BookingStatus.COMPLETED && 
+                              {selectedBooking.status !== BookingStatus.COMPLETED &&
                                selectedBooking.status !== BookingStatus.CANCELLED && (
                                 <View style={styles.modalSection}>
                                   <Text style={styles.modalSectionTitle}>CONTACT & LOCATION</Text>
                                   <View style={styles.modalCard}>
                                     <View style={styles.modalContactBlock}>
-                                      <Text style={styles.modalLabel}>Message Provider</Text>
+                                      <Text style={styles.modalLabel}>Contact Provider</Text>
                                       {isMessagingAvailable(selectedBooking.bookingDate) ? (
                                         <TouchableOpacity
                                           style={styles.modalMessageButtonLarge}
                                           onPress={() => {
                                             setModalVisible(false);
-                                            setShowMessageModal(true);
-                                            // ✅ FIX: Re-enable scrolling when opening message modal
-                                            setTimeout(() => {
-                                              mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
-                                              modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
-                                            }, 100);
+                                            setTimeout(() => openContactSheet(selectedBooking), 300);
                                           }}
                                           activeOpacity={0.7}
                                         >
-                                          <Text style={styles.modalMessageButtonText}>
-                                            Send Message
-                                          </Text>
+                                          <Text style={styles.modalMessageButtonText}>Contact</Text>
                                         </TouchableOpacity>
                                       ) : (
                                         <View style={styles.modalLockedBadge}>
@@ -2513,33 +2953,109 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         </View>
                                       )}
                                     </View>
+
+                                    {/* ADDRESS — mobile vs non-mobile */}
                                     <View style={styles.modalContactBlock}>
-                                      <Text style={styles.modalLabel}>Address</Text>
-                                      {isLocationVisible(selectedBooking.bookingDate) ? (
-                                        <>
-                                          <Text style={styles.modalAddressText}>
-                                            {selectedBooking.address}
-                                          </Text>
-                                          <TouchableOpacity
-                                            style={styles.modalDirectionsButtonSmall}
-                                            onPress={() => {
-                                              setModalVisible(false);
-                                              openInMaps(selectedBooking);
-                                            }}
-                                            activeOpacity={0.7}
-                                          >
-                                            <Text style={styles.modalDirectionsButtonTextSmall}>
-                                              GET DIRECTIONS
+                                      <Text style={styles.modalLabel}>
+                                        {selectedBooking.clientAddress ? 'Your Address' : 'Location'}
+                                      </Text>
+
+                                      {/* ── MOBILE: provider coming to client ── */}
+                                      {selectedBooking.clientAddress ? (
+                                        <View>
+                                          <View style={[styles.modalLockedBadge, { backgroundColor: 'rgba(175,145,151,0.10)', borderColor: 'rgba(175,145,151,0.30)' }]}>
+                                            <Text style={[styles.modalLockedText, { color: '#AF9197' }]}>
+                                              Your provider is coming to you
                                             </Text>
-                                          </TouchableOpacity>
-                                        </>
-                                      ) : (
-                                        <View style={styles.modalLockedBadge}>
-                                          <Text style={styles.modalLockedText}>
-                                            Location revealed 24 hours before appointment
+                                          </View>
+                                          <Text style={[styles.modalAddressText, { marginTop: 6 }]}>
+                                            {selectedBooking.clientAddress}
                                           </Text>
                                         </View>
-                                      )}
+                                      ) : (() => {
+                                        // Non-mobile: check real release state
+                                        const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
+                                        const isReleased = !!selectedBooking.addressReleasedAt
+                                          || policy === 'always'
+                                          || (policy === 'on_confirmation' && (
+                                            selectedBooking.status === BookingStatus.UPCOMING ||
+                                            selectedBooking.status === BookingStatus.IN_PROGRESS
+                                          ));
+
+                                        if (isReleased && selectedBooking.address) {
+                                          return (
+                                            <>
+                                              <Text style={styles.modalAddressText}>
+                                                {selectedBooking.address}
+                                              </Text>
+                                              <TouchableOpacity
+                                                style={styles.modalDirectionsButtonSmall}
+                                                onPress={() => { setModalVisible(false); openInMaps(selectedBooking); }}
+                                                activeOpacity={0.7}
+                                              >
+                                                <Text style={styles.modalDirectionsButtonTextSmall}>GET DIRECTIONS</Text>
+                                              </TouchableOpacity>
+                                            </>
+                                          );
+                                        }
+
+                                        // Not yet released — show countdown or policy message
+                                        const policyLabel: Record<string, string> = {
+                                          on_confirmation: 'Address shared once your booking is confirmed',
+                                          day_before: 'Address released 24 hours before your appointment',
+                                          two_days_before: 'Address released 48 hours before your appointment',
+                                          three_days_before: 'Address released 72 hours before your appointment',
+                                          five_days_before: 'Address released 5 days before your appointment',
+                                          week_before: 'Address released 1 week before your appointment',
+                                          manual: 'Address will be shared by your provider',
+                                        };
+                                        const msg = policy ? (policyLabel[policy] ?? 'Address to be confirmed') : 'Address to be confirmed by your provider';
+                                        return (
+                                          <View>
+                                            <View style={styles.modalLockedBadge}>
+                                              <Text style={styles.modalLockedText}>{msg}</Text>
+                                            </View>
+                                            {addrCountdown ? (
+                                              <Text style={[styles.modalLockedText, { marginTop: 4, color: '#AF9197', fontSize: 12 }]}>
+                                                Releases in {addrCountdown}
+                                              </Text>
+                                            ) : null}
+                                          </View>
+                                        );
+                                      })()}
+                                    </View>
+                                  </View>
+                                </View>
+                              )}
+
+                              {/* PENDING CONFIRMATION CALLOUT */}
+                              {selectedBooking.status === BookingStatus.PENDING && (
+                                <View style={[styles.modalSection, { marginTop: -4 }]}>
+                                  <View style={{ backgroundColor: 'rgba(255,149,0,0.10)', borderColor: 'rgba(255,149,0,0.30)', borderWidth: 1, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <Ionicons name="time-outline" size={18} color="#FF9500" />
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ fontFamily: 'Jura-SemiBold', fontSize: 13, color: '#FF9500' }}>Awaiting Confirmation</Text>
+                                      <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: '#FF950099', marginTop: 2 }}>
+                                        Your provider hasn't confirmed this booking yet. You'll be notified once it's confirmed.
+                                      </Text>
+                                    </View>
+                                  </View>
+                                </View>
+                              )}
+
+                              {/* BALANCE DUE CALLOUT */}
+                              {(selectedBooking.remainingBalance ?? 0) > 0 &&
+                               selectedBooking.status === BookingStatus.UPCOMING && (
+                                <View style={[styles.modalSection, { marginTop: -4 }]}>
+                                  <View style={{ backgroundColor: 'rgba(52,199,89,0.08)', borderColor: 'rgba(52,199,89,0.30)', borderWidth: 1, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <Ionicons name="card-outline" size={18} color="#34C759" />
+                                    <View style={{ flex: 1 }}>
+                                      <Text style={{ fontFamily: 'Jura-SemiBold', fontSize: 13, color: '#34C759' }}>
+                                        £{selectedBooking.remainingBalance.toFixed(2)} due at appointment
+                                      </Text>
+                                      <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: '#34C75999', marginTop: 2 }}>
+                                        Deposit paid — bring the remaining balance on the day.
+                                      </Text>
                                     </View>
                                   </View>
                                 </View>
@@ -2686,7 +3202,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
                                           {/* Request Refund */}
                                           <TouchableOpacity
-                                            style={[styles.confirmRescheduleButton, { flex: 1, marginLeft: 6, backgroundColor: '#9C27B0' }]}
+                                            style={[styles.confirmRescheduleButton, { flex: 1, marginLeft: 6, backgroundColor: '#AF9197' }]}
                                             onPress={() => {
                                               setModalVisible(false);
                                               setProviderNoAvailability(false);
@@ -2859,12 +3375,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                         (dateOption: any, idx: number) => (
                           <View key={idx} style={styles.dateOptionCard}>
                             <Text style={styles.dateOptionDate}>
-                              {new Date(dateOption.date).toLocaleDateString('en-US', {
-                                weekday: 'long',
-                                month: 'long',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })}
+                              {formatDisplayDate(dateOption.date)}
                             </Text>
                             <View style={styles.timeSlots}>
                               {dateOption.times.map((time: string, timeIdx: number) => {
@@ -3311,7 +3822,119 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </Pressable>
         </Modal>
 
-                {/* ✅ IN-APP MESSAGE MODAL - REDESIGNED */}
+        {/* ── Contact Options Sheet ─────────────────────────────────────── */}
+        <Modal
+          visible={contactSheetVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setContactSheetVisible(false)}
+        >
+          <Pressable style={csSt.overlay} onPress={() => setContactSheetVisible(false)}>
+            <Pressable style={csSt.sheet} onPress={e => e.stopPropagation()}>
+              {/* Handle */}
+              <View style={csSt.handle} />
+
+              <Text style={csSt.title}>
+                Contact {contactSheetBooking?.providerName ?? 'Provider'}
+              </Text>
+              <Text style={csSt.subtitle}>Choose how you'd like to get in touch</Text>
+
+              {contactSheetLoading ? (
+                <ActivityIndicator color="#B7E1DA" style={{ marginVertical: 24 }} />
+              ) : (
+                <View style={csSt.options}>
+                  {/* In-app is always shown */}
+                  <TouchableOpacity
+                    style={csSt.option}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setContactSheetVisible(false);
+                      if (contactSheetBooking) {
+                        setSelectedBooking(contactSheetBooking);
+                        setShowMessageModal(true);
+                      }
+                    }}
+                  >
+                    <View style={[csSt.optionIcon, { backgroundColor: '#5B1E32' }]}>
+                      <Text style={csSt.optionEmoji}>💬</Text>
+                    </View>
+                    <View style={csSt.optionText}>
+                      <Text style={csSt.optionLabel}>In-app message</Text>
+                      <Text style={csSt.optionDesc}>Chat directly inside Cerviced</Text>
+                    </View>
+                    <Text style={csSt.optionChevron}>›</Text>
+                  </TouchableOpacity>
+
+                  {/* Email */}
+                  {contactSheetInfo?.preferred_contact_methods?.includes('email') && contactSheetInfo.email && (
+                    <TouchableOpacity
+                      style={csSt.option}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setContactSheetVisible(false);
+                        Linking.openURL(`mailto:${contactSheetInfo!.email}`);
+                      }}
+                    >
+                      <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}>
+                        <Text style={csSt.optionEmoji}>✉️</Text>
+                      </View>
+                      <View style={csSt.optionText}>
+                        <Text style={csSt.optionLabel}>Email</Text>
+                        <Text style={csSt.optionDesc} numberOfLines={1}>{contactSheetInfo.email}</Text>
+                      </View>
+                      <Text style={csSt.optionChevron}>›</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* WhatsApp */}
+                  {contactSheetInfo?.preferred_contact_methods?.includes('whatsapp') && contactSheetInfo.whatsapp_number && (
+                    <TouchableOpacity
+                      style={csSt.option}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setContactSheetVisible(false);
+                        const num = contactSheetInfo!.whatsapp_number!.replace(/\D/g, '');
+                        Linking.openURL(`https://wa.me/${num}`);
+                      }}
+                    >
+                      <View style={[csSt.optionIcon, { backgroundColor: '#1A3D2B' }]}>
+                        <Text style={csSt.optionEmoji}>💚</Text>
+                      </View>
+                      <View style={csSt.optionText}>
+                        <Text style={csSt.optionLabel}>WhatsApp</Text>
+                        <Text style={csSt.optionDesc}>{contactSheetInfo.whatsapp_number}</Text>
+                      </View>
+                      <Text style={csSt.optionChevron}>›</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Phone */}
+                  {contactSheetInfo?.preferred_contact_methods?.includes('phone') && contactSheetInfo.phone && (
+                    <TouchableOpacity
+                      style={csSt.option}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setContactSheetVisible(false);
+                        Linking.openURL(`tel:${contactSheetInfo!.phone}`);
+                      }}
+                    >
+                      <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}>
+                        <Text style={csSt.optionEmoji}>📞</Text>
+                      </View>
+                      <View style={csSt.optionText}>
+                        <Text style={csSt.optionLabel}>Phone call</Text>
+                        <Text style={csSt.optionDesc}>{contactSheetInfo.phone}</Text>
+                      </View>
+                      <Text style={csSt.optionChevron}>›</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* ✅ IN-APP MESSAGE MODAL - REDESIGNED */}
         <Modal
           visible={showMessageModal}
           animationType="slide"
@@ -3352,8 +3975,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
                 <View style={styles.msgHeaderCenter}>
                   <View style={styles.msgAvatarWrapper}>
-                    {selectedBooking?.providerLogo ? (
-                      <Image source={selectedBooking.providerLogo} style={styles.msgAvatar} />
+                    {selectedBooking?.providerImage ? (
+                      <Image source={selectedBooking.providerImage} style={styles.msgAvatar} />
                     ) : (
                       <View style={styles.msgAvatarFallback}>
                         <Text style={styles.msgAvatarInitial}>
@@ -3397,8 +4020,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   messages.map((message, index) => {
                     const isUser = message.sender === 'user';
                     const showTimestamp = index === 0 ||
-                      (messages[index - 1] &&
-                       message.timestamp.getTime() - messages[index - 1].timestamp.getTime() > 300000);
+                      (messages[index - 1] != null &&
+                       message.timestamp.getTime() - (messages[index - 1]?.timestamp.getTime() ?? 0) > 300000);
                     return (
                       <View key={message.id}>
                         {showTimestamp && (
@@ -3560,7 +4183,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </TouchableWithoutFeedback>
         </Modal>
       </SafeAreaView>
-    </AppBackground>
+    </ThemedBackground>
   );
 }
 // ==================== STYLES ====================
@@ -3593,7 +4216,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: '800',
   },
   headerSubtitle: {
-    fontFamily: 'Jura',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
     color: isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
     textAlign: 'center',
@@ -3612,23 +4235,24 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.14)',
     overflow: 'hidden',
+    backgroundColor: isDarkMode ? '#201D1A' : '#EDE8E2',
   },
   categoryButtonActive: {
-    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.85)',
-    borderColor: isDarkMode ? '#FFF' : '#000',
+    backgroundColor: '#AF9197',
+    borderColor: '#AF9197',
   },
   categoryText: {
     fontFamily: 'BakbakOne',
     fontSize: 12,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     letterSpacing: 1,
     fontWeight: '800',
   },
   categoryTextActive: {
-    color: isDarkMode ? '#000' : '#fff',
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   mapContainer: {
@@ -3652,7 +4276,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: 'rgba(200, 80, 200, 0.3)',
+    borderColor: 'rgba(175, 145, 151, 0.3)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -3660,7 +4284,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     elevation: 6,
   },
   activeServiceMarker: {
-    borderColor: '#C850C8',
+    borderColor: '#AF9197',
     borderWidth: 3,
   },
   markerContent: {
@@ -3674,13 +4298,13 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     letterSpacing: 1,
   },
   serviceDuration: {
-    fontFamily: 'Jura',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 9,
     color: isDarkMode ? 'rgba(255,255,255,0.7)' : '#666',
     fontWeight: '600',
   },
   activeServiceLabel: {
-    color: '#C850C8',
+    color: '#AF9197',
   },
   activeMarkerDot: {
     position: 'absolute',
@@ -3688,10 +4312,10 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     right: -5,
     width: 12,
     height: 12,
-    backgroundColor: '#C850C8',
+    backgroundColor: '#AF9197',
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: isDarkMode ? '#2C2C2E' : '#fff',
+    borderColor: isDarkMode ? '#201D1A' : '#fff',
   },
   upcomingSection: {
     marginHorizontal: 20,
@@ -3714,7 +4338,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   upcomingLabelText: {
     fontFamily: 'BakbakOne',
     fontSize: 12,
-    color: '#C850C8',
+    color: '#AF9197',
     letterSpacing: 1,
     fontWeight: '800',
   },
@@ -3787,17 +4411,17 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: 'bold',
   },
   appointmentProvider: {
-    fontFamily: 'Jura',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     color: isDarkMode ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
     marginBottom: 4,
     fontWeight: '600',
   },
   appointmentAddress: {
-    fontFamily: 'barbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontWeight: '400',
     fontSize: 12,
-    color: '#C850C8',
+    color: '#AF9197',
     fontStyle: 'italic',
   },
   nextAppointmentService: {
@@ -3808,14 +4432,14 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: 'bold',
   },
   nextAppointmentProvider: {
-    fontFamily: 'Jura',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     color: isDarkMode ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.8)',
     marginBottom: 4,
     fontWeight: '600',
   },
   nextAppointmentAddress: {
-    fontFamily: 'Jura',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     color: isDarkMode ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)',
     fontStyle: 'italic',
@@ -3853,8 +4477,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   rateButton: {
     flex: 1,
-    backgroundColor: '#d900ff2d',
-    borderColor: '#bf00ffff',
+    backgroundColor: 'rgba(175,145,151,0.18)',
+    borderColor: '#AF9197',
     borderWidth: 1,
     borderStyle: 'solid',
     paddingHorizontal: 8,
@@ -3986,7 +4610,20 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   providerService: {
     fontSize: 11,
     color: isDarkMode ? 'rgba(255,255,255,0.7)' : '#666',
-    marginBottom: 4,
+    marginBottom: 3,
+  },
+  cardAddOnPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    marginBottom: 3,
+  },
+  cardAddOnPillText: {
+    fontSize: 9,
+    color: isDarkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)',
+    letterSpacing: 0.2,
   },
   appointmentTime: {
     marginTop: 4,
@@ -4014,7 +4651,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginBottom: 8,
   },
   emptyStateSubtext: {
-    fontFamily: 'Jura',
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
     color: isDarkMode ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
     textAlign: 'center',
@@ -4077,7 +4714,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderRadius: 40,
     marginBottom: 12,
     borderWidth: 3,
-    borderColor: 'rgba(200, 80, 200, 0.3)',
+    borderColor: 'rgba(175, 145, 151, 0.3)',
   },
   modalProviderName: { 
     fontSize: 20, 
@@ -4086,17 +4723,17 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginBottom: 8 
   },
   modalServiceTypeBadge: {
-    backgroundColor: 'rgba(200, 80, 200, 0.1)',
+    backgroundColor: 'rgba(175, 145, 151, 0.1)',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(200, 80, 200, 0.3)',
+    borderColor: 'rgba(175, 145, 151, 0.3)',
   },
   modalServiceTypeText: {
     fontSize: 11,
     fontWeight: 'bold',
-    color: '#C850C8',
+    color: '#AF9197',
     letterSpacing: 0.5
   },
   completedStatusBadge: {
@@ -4339,11 +4976,11 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     lineHeight: 18 
   },
   modalInstructionsCard: {
-    backgroundColor: 'rgba(156, 39, 176, 0.05)',
+    backgroundColor: 'rgba(175, 145, 151, 0.05)',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: 'rgba(156, 39, 176, 0.2)',
+    borderColor: 'rgba(175, 145, 151, 0.2)',
   },
   modalInstructionsText: { 
     fontSize: 12, 
@@ -4423,7 +5060,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   modalActionButton: {
     flex: 1,
-    backgroundColor: '#9C27B0',
+    backgroundColor: '#AF9197',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -4465,8 +5102,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   modalRateButton: {
     flex: 1,
-    backgroundColor: '#f200ff1e',
-    borderColor: '#bf00ff89',
+    backgroundColor: 'rgba(175,145,151,0.12)',
+    borderColor: 'rgba(175,145,151,0.4)',
     borderWidth: 1,
     paddingVertical: 10,
     borderRadius: 12,
@@ -4502,13 +5139,13 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     color: isDarkMode ? '#FFFFFF' : '#000',
     fontWeight: 'bold',
   },
-  modalBottomSpace: { 
-    height: 20 
+  modalBottomSpace: {
+    height: 20
   },
-  modalFooter: { 
-    borderTopWidth: 1, 
-    borderTopColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', 
-    padding: 15 
+  modalFooter: {
+    borderTopWidth: 1,
+    borderTopColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    padding: 15
   },
   modalCloseButtonFullWidth: {
     backgroundColor: '#4f4f4fe2',
@@ -4555,13 +5192,33 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0',
     borderStyle: 'dashed',
   },
+  receiptHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    position: 'relative',
+  },
   receiptHeaderText: {
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 10,
     color: isDarkMode ? '#F0F0F0' : '#333',
     letterSpacing: 1,
+  },
+  receiptShareBtn: {
+    position: 'absolute',
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptShareIcon: {
+    fontSize: 14,
+    color: isDarkMode ? '#F0F0F0' : '#333',
   },
   receiptDivider: { 
     height: 1, 
@@ -4712,15 +5369,15 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     justifyContent: 'center',
   },
   dateSuggestionActive: { 
-    backgroundColor: isDarkMode ? 'rgba(156, 39, 176, 0.25)' : '#E8D4F5', 
-    borderColor: '#9C27B0' 
+    backgroundColor: isDarkMode ? 'rgba(175, 145, 151, 0.25)' : 'rgba(175,145,151,0.2)', 
+    borderColor: '#AF9197' 
   },
   dateSuggestionText: { 
     fontSize: 14, 
     color: isDarkMode ? 'rgba(255,255,255,0.7)' : '#666' 
   },
   dateSuggestionTextActive: { 
-    color: '#9C27B0', 
+    color: '#AF9197', 
     fontWeight: '600' 
   },
   rescheduleActions: { 
@@ -4744,7 +5401,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#9C27B0',
+    backgroundColor: '#AF9197',
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 44,
@@ -4801,16 +5458,16 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginTop: 4,
   },
   rescheduleStatusCard: {
-    backgroundColor: 'rgba(156, 39, 176, 0.08)',
+    backgroundColor: 'rgba(175, 145, 151, 0.08)',
     borderRadius: 16,
     padding: 20,
     borderWidth: 2,
-    borderColor: 'rgba(156, 39, 176, 0.3)',
+    borderColor: 'rgba(175, 145, 151, 0.3)',
   },
   rescheduleStatusTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#9C27B0',
+    color: '#AF9197',
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -4840,12 +5497,12 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginBottom: 20,
   },
   dateOptionCard: {
-    backgroundColor: 'rgba(156, 39, 176, 0.05)',
+    backgroundColor: 'rgba(175, 145, 151, 0.05)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(156, 39, 176, 0.15)',
+    borderColor: 'rgba(175, 145, 151, 0.15)',
   },
   dateOptionDate: {
     fontSize: 15,
@@ -4871,8 +5528,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     alignItems: 'center',
   },
   timeSlotChipActive: {
-    backgroundColor: '#9C27B0',
-    borderColor: '#9C27B0',
+    backgroundColor: '#AF9197',
+    borderColor: '#AF9197',
   },
   timeSlotText: {
     fontSize: 13,
@@ -4892,7 +5549,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#9C27B0',
+    backgroundColor: '#AF9197',
   },
   // Green dot for recently added bookings - moved 1cm (~28pt) to the left
   recentlyAddedDot: {
@@ -4925,17 +5582,17 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     justifyContent: 'flex-start',
   },
   rescheduledBadge: {
-    backgroundColor: 'rgba(156, 39, 176, 0.15)',
+    backgroundColor: 'rgba(175, 145, 151, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#9C27B0',
+    borderColor: '#AF9197',
     marginRight: 5,
   },
   rescheduledBadgeText: {
     fontSize: 9,
-    color: '#9C27B0',
+    color: '#AF9197',
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
@@ -5243,7 +5900,7 @@ msgBackButton: {
 msgBackArrow: {
   fontSize: 32,
   fontWeight: '300',
-  color: '#C850C8',
+  color: '#AF9197',
   marginTop: -2,
 },
 msgHeaderCenter: {
@@ -5264,7 +5921,7 @@ msgAvatarFallback: {
   width: 36,
   height: 36,
   borderRadius: 18,
-  backgroundColor: '#C850C8',
+  backgroundColor: '#AF9197',
   alignItems: 'center',
   justifyContent: 'center',
 },
@@ -5352,7 +6009,7 @@ msgBubble: {
 },
 msgBubbleUser: {
   alignSelf: 'flex-end',
-  backgroundColor: '#C850C8',
+  backgroundColor: '#AF9197',
   borderBottomRightRadius: 6,
 },
 msgBubbleProvider: {
@@ -5400,7 +6057,7 @@ msgSendCircle: {
   width: 36,
   height: 36,
   borderRadius: 18,
-  backgroundColor: '#C850C8',
+  backgroundColor: '#AF9197',
   alignItems: 'center',
   justifyContent: 'center',
 },
@@ -5413,6 +6070,139 @@ msgSendArrow: {
   fontWeight: '700',
   marginTop: -1,
 },
+
+// ── Intake form to-do card ──
+intakeFormTodo: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+  backgroundColor: 'rgba(163,66,195,0.10)',
+  borderWidth: 1.5,
+  borderColor: 'rgba(163,66,195,0.35)',
+  borderRadius: 14,
+  padding: 14,
+},
+intakeFormTodoIcon: {
+  width: 40, height: 40, borderRadius: 20,
+  backgroundColor: 'rgba(163,66,195,0.15)',
+  alignItems: 'center', justifyContent: 'center',
+},
+intakeFormTodoTitle: {
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#AF9197',
+  marginBottom: 3,
+},
+intakeFormTodoSub: {
+  fontSize: 12,
+  color: '#AF9197',
+  opacity: 0.75,
+  lineHeight: 17,
+},
+intakeFormTodoBadge: {
+  backgroundColor: '#AF9197',
+  borderRadius: 6,
+  paddingHorizontal: 7,
+  paddingVertical: 3,
+},
+intakeFormTodoBadgeText: {
+  color: '#fff',
+  fontSize: 10,
+  fontWeight: '800',
+  letterSpacing: 0.3,
+},
+
+// ── Group Booking Card ───────────────────────────────────────────────────────
+groupBookingCard: {
+  marginBottom: 24,
+  borderRadius: 16,
+  overflow: 'hidden',
+  borderWidth: 1,
+},
+groupBookingHeader: {
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  justifyContent: 'space-between' as const,
+  padding: 14,
+},
+groupBookingHeaderLeft: {
+  flex: 1,
+},
+groupBookingTitle: {
+  fontSize: 13,
+  letterSpacing: 0.3,
+  fontWeight: '600' as const,
+},
+groupBookingStatusBadge: {
+  alignSelf: 'flex-start' as const,
+  borderRadius: 8,
+  paddingHorizontal: 8,
+  paddingVertical: 3,
+  marginTop: 6,
+},
+groupBookingBody: {
+  borderTopWidth: 1,
+},
+groupBookingItemRow: {
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  padding: 12,
+  borderBottomWidth: 1,
+},
+groupBookingItemImage: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  marginRight: 10,
+},
+groupBookingItemInfo: {
+  flex: 1,
+},
+groupBookingItemProvider: {
+  fontSize: 12,
+  fontWeight: '600' as const,
+},
+groupBookingItemService: {
+  fontSize: 11,
+  marginTop: 1,
+},
+groupBookingItemDateTime: {
+  fontSize: 10,
+  marginTop: 2,
+},
+groupBookingItemPrice: {
+  fontSize: 13,
+  fontWeight: '600' as const,
+},
+groupBookingPlatformFeeRow: {
+  flexDirection: 'row' as const,
+  justifyContent: 'space-between' as const,
+  paddingHorizontal: 14,
+  paddingVertical: 10,
+},
+groupBookingPlatformFeeLabel: {
+  fontSize: 12,
+},
+groupBookingPlatformFeeValue: {
+  fontSize: 12,
+},
+});
+
+// ── Contact Sheet Styles ──────────────────────────────────────────────────────
+const csSt = StyleSheet.create({
+  overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  sheet:       { backgroundColor: '#1C1C1E', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
+  handle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginTop: 12, marginBottom: 20 },
+  title:       { fontSize: 18, fontWeight: '700', color: '#F2EBF0', textAlign: 'center', marginBottom: 4 },
+  subtitle:    { fontSize: 13, color: 'rgba(183,225,218,0.55)', textAlign: 'center', marginBottom: 20 },
+  options:     { gap: 10 },
+  option:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2C2C2E', borderRadius: 14, padding: 14, gap: 14 },
+  optionIcon:  { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  optionEmoji: { fontSize: 20 },
+  optionText:  { flex: 1 },
+  optionLabel: { fontSize: 15, fontWeight: '600', color: '#F2EBF0' },
+  optionDesc:  { fontSize: 12, color: 'rgba(183,225,218,0.55)', marginTop: 2 },
+  optionChevron: { fontSize: 22, color: 'rgba(255,255,255,0.3)', fontWeight: '300' },
 });
 
 export default BookingsScreen;

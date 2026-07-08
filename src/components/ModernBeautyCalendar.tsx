@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 import { AvailabilityService } from '../services/AvailabilityService';
+
+const ACCENT = '#AF9197';
+const ACCENT_LIGHT = 'rgba(175,145,151,0.18)';
                                                     
 type TimeSlot = string;
 
@@ -133,118 +136,17 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return new Date(d.setDate(diff));
   };
 
+  // Fallback used only when Supabase is unreachable. Returns standard hours —
+  // real schedule must come from AvailabilityService (Supabase provider_availability).
   const generateBeautyTimeSlots = (
-    dateString: string, 
-    dayOfWeek: number, 
-    providerName?: string
+    _dateString: string,
+    _dayOfWeek: number,
+    _providerName?: string
   ): TimeSlot[] => {
-    const beautyHours: TimeSlot[] = [
+    return [
       '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
       '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM'
     ];
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    return beautyHours.filter(time => {
-      let isAvailable = true;
-      switch (providerName) {
-        case 'KATHRINE':
-        case 'Styled by Kathrine':
-          if (time === '12:00 PM' || (isWeekend && ['9:00 AM', '6:00 PM'].includes(time))) {
-            isAvailable = false;
-          }
-          break;
-        case 'DIVA':
-        case 'Diva Nails':
-          if (['12:00 PM', '1:00 PM'].includes(time)) {
-            isAvailable = false;
-          }
-          break;
-        case 'LASHED':
-        case 'Your Lashed':
-          if (isWeekend && time === '9:00 AM') {
-            isAvailable = false;
-          }
-          break;
-        case 'VIKKI LAID':
-        case 'Vikki Laid':
-          isAvailable = ['10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM', '4:00 PM'].includes(time);
-          break;
-        case 'MYA':
-        case 'Makeup by Mya':
-          if (time === '1:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'JENNIFER':
-        case 'Hair by Jennifer':
-          if (time === '12:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'JANA':
-        case 'Jana Aesthetics':
-          if (['12:00 PM', '1:00 PM'].includes(time)) {
-            isAvailable = false;
-          }
-          break;
-        case 'HER BROWS':
-        case 'Her Brows':
-          if (isWeekend && time === '6:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'KIKI':
-        case "Kiki's Nails":
-          if (time === '1:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'ROSEMAY AESTHETICS':
-        case 'RoseMay Aesthetics':
-          if (['12:00 PM', '1:00 PM'].includes(time)) {
-            isAvailable = false;
-          }
-          break;
-        case 'FILLER BY JESS':
-        case 'Filler by Jess':
-          if (['12:00 PM', '1:00 PM'].includes(time)) {
-            isAvailable = false;
-          }
-          break;
-        case 'EYEBROW DELUXE':
-        case 'Eyebrow Deluxe':
-          if (isWeekend && time === '6:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'LASHES GALORE':
-        case 'Lashes Galore':
-          if (isWeekend && time === '9:00 AM') {
-            isAvailable = false;
-          }
-          break;
-        case 'ZEE NAIL ARTIST':
-        case 'Zee Nail Artist':
-          if (time === '1:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'PAINTED BY ZOE':
-        case 'Painted by Zoe':
-          if (time === '12:00 PM') {
-            isAvailable = false;
-          }
-          break;
-        case 'BRAIDED SLICK':
-        case 'Braided Slick':
-          if (time === '12:00 PM' || (isWeekend && time === '9:00 AM')) {
-            isAvailable = false;
-          }
-          break;
-      }
-      // Removed random 15% blocking - availability is now based on actual bookings
-      return isAvailable;
-    });
   };
 
   const navigateWeek = (direction: number) => {
@@ -345,9 +247,36 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const calendarDays = getCalendarDays();
   const weekDayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Sync availability map for the popup month view — used for dot indicators only.
+  // No API calls; uses the same provider schedule logic as the week view fallback.
+  const monthAvailability = useMemo<Record<string, boolean>>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const result: Record<string, boolean> = {};
+    calendarDays.forEach(date => {
+      if (!date) return;
+      if (date < today) return;
+      const dateString = date.toISOString().split('T')[0]!;
+      // If the real week-slot data already loaded for this date, use it
+      if (availableSlots[dateString] !== undefined) {
+        result[dateString] = availableSlots[dateString].available > 0;
+      } else {
+        // Fall back to the sync schedule
+        const times = generateBeautyTimeSlots(dateString, date.getDay(), providerName);
+        result[dateString] = times.length > 0;
+      }
+    });
+    return result;
+  }, [calendarDays, availableSlots, providerName]);
+
+  const popupBg   = isDarkMode ? '#252220' : '#FFFFFF';
+  const popupSep  = isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.12)';
+  const popupText = isDarkMode ? '#F0ECE7' : '#1C1A18';
+  const popupSub  = '#7E6667';
+
   return (
     <View style={[styles.container, style]}>
-      {/* Full Calendar Modal */}
+      {/* ── Full Calendar Popup ──────────────────────────────────────── */}
       <Modal
         visible={showFullCalendar}
         transparent
@@ -360,162 +289,162 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           onPress={() => setShowFullCalendar(false)}
         >
           <View
-            style={[
-              styles.calendarPopup,
-              { backgroundColor: isDarkMode ? '#1a1a1a' : '#fff' }
-            ]}
+            style={[styles.calendarPopup, { backgroundColor: popupBg, borderColor: popupSep, borderWidth: StyleSheet.hairlineWidth }]}
             onStartShouldSetResponder={() => true}
           >
-            {/* Month Navigation */}
+            {/* Month nav */}
             <View style={styles.monthHeader}>
               <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.monthNavButton}>
-                <Text style={{ color: theme.text, fontSize: 18 }}>‹</Text>
+                <Text style={[styles.monthNavArrow, { color: popupText }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={[styles.monthTitle, { color: theme.text }]}>
-                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              <Text style={[styles.monthTitle, { color: popupText }]}>
+                {calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
               </Text>
               <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.monthNavButton}>
-                <Text style={{ color: theme.text, fontSize: 18 }}>›</Text>
+                <Text style={[styles.monthNavArrow, { color: popupText }]}>›</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Weekday Headers */}
+            {/* Weekday headers */}
             <View style={styles.weekdayRow}>
               {weekDayHeaders.map(day => (
-                <Text key={day} style={[styles.weekdayText, { color: theme.secondaryText }]}>
-                  {day}
-                </Text>
+                <Text key={day} style={[styles.weekdayText, { color: popupSub }]}>{day}</Text>
               ))}
             </View>
 
-            {/* Calendar Grid */}
+            {/* Calendar grid with dots */}
             <View style={styles.calendarGrid}>
               {calendarDays.map((date, index) => {
-                if (!date) {
-                  return <View key={`empty-${index}`} style={styles.calendarDay} />;
-                }
+                if (!date) return <View key={`empty-${index}`} style={styles.calendarDay} />;
+
                 const dateString = date.toISOString().split('T')[0]!;
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                const isPast = date < today;
-                const isToday = date.toDateString() === new Date().toDateString();
+                const isPast     = date < today;
+                const isToday    = date.toDateString() === new Date().toDateString();
                 const isSelected = selectedDate === dateString;
+                const hasSlots   = !isPast && monthAvailability[dateString] === true;
 
                 return (
                   <TouchableOpacity
                     key={`day-${index}`}
                     style={[
                       styles.calendarDay,
-                      isToday && [styles.calendarDayToday, { borderColor: theme.accent }],
-                      isSelected && { backgroundColor: theme.accent },
-                      isPast && styles.calendarDayPast
+                      isSelected && { backgroundColor: ACCENT },
+                      isToday && !isSelected && { borderWidth: 1.5, borderColor: ACCENT },
+                      isPast && styles.calendarDayPast,
                     ]}
                     onPress={() => handleCalendarDaySelect(date)}
                     disabled={isPast}
+                    activeOpacity={0.7}
                   >
-                    <Text
-                      style={[
-                        styles.calendarDayText,
-                        { color: isSelected ? '#fff' : theme.text },
-                        isPast && { color: theme.secondaryText }
-                      ]}
-                    >
+                    <Text style={[
+                      styles.calendarDayText,
+                      { color: isSelected ? '#fff' : isPast ? popupSub : popupText },
+                    ]}>
                       {date.getDate()}
                     </Text>
+                    {/* Availability dot */}
+                    <View style={styles.calDotWrap}>
+                      {hasSlots && (
+                        <View style={[
+                          styles.calDot,
+                          { backgroundColor: isSelected ? 'rgba(255,255,255,0.75)' : ACCENT },
+                        ]} />
+                      )}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
+            </View>
+
+            {/* Legend */}
+            <View style={styles.legendRow}>
+              <View style={[styles.legendDot, { backgroundColor: ACCENT }]} />
+              <Text style={[styles.legendText, { color: popupSub }]}>Available slots</Text>
             </View>
           </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* Week Navigation */}
+      {/* ── Week navigation ──────────────────────────────────────────── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
-          <Text style={{ color: theme.text, fontSize: 22 }}>‹</Text>
+        <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+          <Text style={[styles.navArrow, { color: theme.text }]}>‹</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowFullCalendar(true)}>
-          <Text style={[styles.weekTitle, { color: theme.text }]}>
-            {formatWeekRange()} <Text style={{ fontSize: 10 }}>▼</Text>
-          </Text>
+        <TouchableOpacity onPress={() => setShowFullCalendar(true)} style={styles.weekRangeBtn}>
+          <Text style={[styles.weekTitle, { color: theme.text }]}>{formatWeekRange()}</Text>
+          <Text style={[styles.weekChevron, { color: theme.secondaryText }]}>▼</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
-          <Text style={{ color: theme.text, fontSize: 22 }}>›</Text>
+        <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
+          <Text style={[styles.navArrow, { color: theme.text }]}>›</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Days */}
+      {/* ── Day pills ────────────────────────────────────────────────── */}
       <View style={styles.daysRow}>
-        {weekDays.map(day => (
-          <TouchableOpacity
-            key={day.dateString}
-            style={[
-              styles.dayPill,
-              { backgroundColor: isDarkMode ? '#000' : '#f5f5f5', borderColor: isDarkMode ? theme.border : 'transparent' },
-              isDarkMode && { borderWidth: 1 },
-              day.isToday && [styles.todayPill, { borderColor: theme.accent }],
-              selectedDate === day.dateString && { backgroundColor: theme.accent },
-              day.status === 'past' && styles.pastDayPill
-            ]}
-            onPress={() => handleDateClick(day.dateString, day)}
-            disabled={day.status === 'past' || day.status === 'closed'}
-          >
-            <Text style={[
-              styles.dayText,
-              { color: selectedDate === day.dateString ? '#FFFFFF' : theme.text }
-            ]}>
-              {day.dayName}
-            </Text>
-            <Text style={[
-              styles.dayNumberText,
-              { color: selectedDate === day.dateString ? '#FFFFFF' : theme.text }
-            ]}>
-              {day.dayNumber}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {weekDays.map(day => {
+          const isSel = selectedDate === day.dateString;
+          const isDisabled = day.status === 'past' || day.status === 'closed';
+          const pillBg = isSel ? ACCENT : (isDarkMode ? '#2E2B27' : '#F0EBE6');
+          return (
+            <TouchableOpacity
+              key={day.dateString}
+              style={[
+                styles.dayPill,
+                { backgroundColor: pillBg },
+                day.isToday && !isSel && { borderWidth: 1.5, borderColor: ACCENT },
+                isDisabled && styles.pastDayPill,
+              ]}
+              onPress={() => handleDateClick(day.dateString, day)}
+              disabled={isDisabled}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.dayText, { color: isSel ? 'rgba(255,255,255,0.82)' : theme.secondaryText }]}>
+                {day.dayName}
+              </Text>
+              <Text style={[styles.dayNumberText, { color: isSel ? '#fff' : theme.text }]}>
+                {day.dayNumber}
+              </Text>
+              {/* Availability dot */}
+              <View style={styles.dotWrap}>
+                {day.available > 0
+                  ? <View style={[styles.dot, { backgroundColor: isSel ? 'rgba(255,255,255,0.7)' : ACCENT }]} />
+                  : <View style={styles.dotPlaceholder} />
+                }
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* Time Selection - ✅ COMPLETELY FIXED */}
+      {/* ── Time slots ───────────────────────────────────────────────── */}
       {showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
-        if (!currentSlots?.times || currentSlots.times.length === 0) {
-          return null;
-        }
-
-        const chunkedTimes = chunkArray(
-          currentSlots.times, 
-          Math.ceil(currentSlots.times.length / 3)
-        );
-
+        if (!currentSlots?.times || currentSlots.times.length === 0) return null;
+        const chunkedTimes = chunkArray(currentSlots.times, Math.ceil(currentSlots.times.length / 3));
         return (
           <View style={styles.timeContainer}>
             {chunkedTimes.map((timeRow, idx) => (
               <View key={idx} style={styles.timeRow}>
-                {timeRow.map(time => (
-                  <TouchableOpacity
-                    key={time}
-                    style={[
-                      styles.timeTab,
-                      {
-                        backgroundColor: selectedTime === time
-                          ? theme.accent
-                          : (isDarkMode ? '#000' : '#f0f0f0'),
-                        borderColor: isDarkMode ? theme.border : 'transparent'
-                      },
-                      isDarkMode && { borderWidth: 1 }
-                    ]}
-                    onPress={() => handleTimeClick(time)}
-                  >
-                    <Text style={[
-                      styles.timeText,
-                      { color: selectedTime === time ? '#FFFFFF' : theme.text }
-                    ]}>
-                      {time}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {timeRow.map(time => {
+                  const timeSel = selectedTime === time;
+                  return (
+                    <TouchableOpacity
+                      key={time}
+                      style={[
+                        styles.timeTab,
+                        { backgroundColor: timeSel ? ACCENT : (isDarkMode ? '#2E2B27' : ACCENT_LIGHT) },
+                      ]}
+                      onPress={() => handleTimeClick(time)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.timeText, { color: timeSel ? '#fff' : theme.text }]}>
+                        {time}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             ))}
           </View>
@@ -535,121 +464,64 @@ const chunkArray = <T,>(arr: T[], size: number): T[][] => {
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 12 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  navButton: { padding: 8 },
-  weekTitle: { fontSize: 16, fontWeight: '600' },
+  // ── Main container ──────────────────────────────────────────────────
+  container: { paddingVertical: 10, paddingHorizontal: 4 },
 
-  daysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14
-  },
-  dayPill: {
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  todayPill: { borderWidth: 1, borderColor: '#007AFF' },
-  cloudSelectedDay: { backgroundColor: 'rgba(0,122,255,0.15)' },
-  pastDayPill: { opacity: 0.4 },
+  // ── Week navigation header ──────────────────────────────────────────
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingBottom: 8 },
+  navButton:    { width: 28, alignItems: 'center' },
+  navArrow:     { fontSize: 24, fontWeight: '300', lineHeight: 28 },
+  weekRangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  weekTitle:    { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+  weekChevron:  { fontSize: 10, marginTop: 2 },
 
-  dayText: { fontSize: 12, color: '#333' },
-  dayNumberText: { fontSize: 15, fontWeight: '600', color: '#333' },
-  cloudSelectedDayText: { color: '#007AFF' },
+  // ── Day pills ───────────────────────────────────────────────────────
+  daysRow:         { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2, marginBottom: 4 },
+  dayPill:         { flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 8, marginHorizontal: 2 },
+  pastDayPill:     { opacity: 0.38 },
+  dayText:         { fontSize: 10, fontWeight: '500', marginBottom: 3 },
+  dayNumberText:   { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  dotWrap:         { height: 6, justifyContent: 'center', alignItems: 'center', marginTop: 3 },
+  dot:             { width: 4, height: 4, borderRadius: 2 },
+  dotPlaceholder:  { width: 4, height: 4 },
 
-  timeContainer: { marginTop: 10, alignItems: 'center' },
-  timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 6,
-    flexWrap: 'wrap'
-  },
-  timeTab: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 4,
-    marginBottom: 5,
-    minWidth: 62,
-    alignItems: 'center',
-  },
-  cloudSelectedTime: { backgroundColor: 'rgba(0,122,255,0.15)' },
-  timeText: { fontSize: 13, color: '#333' },
-  cloudSelectedTimeText: { color: '#007AFF', fontWeight: '600' },
+  // ── Time slots ──────────────────────────────────────────────────────
+  timeContainer: { paddingTop: 10, paddingHorizontal: 2 },
+  timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
+  timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
+  timeText:      { fontSize: 13, fontWeight: '500' },
 
-  // Full Calendar Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // ── Full calendar modal ─────────────────────────────────────────────
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   calendarPopup: {
-    width: 280,
-    borderRadius: 16,
-    padding: 16,
+    width: 300,
+    borderRadius: 20,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  monthHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  monthNavButton: {
-    padding: 8,
-  },
-  monthTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 8,
-  },
-  weekdayText: {
-    fontSize: 11,
-    fontWeight: '500',
-    width: 32,
-    textAlign: 'center',
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
+  monthHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  monthNavButton: { padding: 8 },
+  monthNavArrow:  { fontSize: 22, fontWeight: '300' },
+  monthTitle:     { fontSize: 16, fontWeight: '600' },
+  weekdayRow:     { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 },
+  weekdayText:    { fontSize: 11, fontWeight: '500', width: 32, textAlign: 'center' },
+  calendarGrid:   { flexDirection: 'row', flexWrap: 'wrap' },
   calendarDay: {
     width: '14.28%',
-    aspectRatio: 1,
+    paddingVertical: 5,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 12,
   },
-  calendarDayToday: {
-    borderWidth: 1,
-  },
-  calendarDayPast: {
-    opacity: 0.4,
-  },
-  calendarDayText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
+  calendarDayPast: { opacity: 0.35 },
+  calendarDayText: { fontSize: 13, fontWeight: '500' },
+  calDotWrap:  { height: 5, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  calDot:      { width: 4, height: 4, borderRadius: 2 },
+  legendRow:   { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 },
+  legendDot:   { width: 6, height: 6, borderRadius: 3 },
+  legendText:  { fontSize: 11 },
 });

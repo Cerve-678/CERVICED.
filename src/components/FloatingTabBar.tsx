@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+// @ts-ignore - react-native-reanimated not installed (legacy component)
 import Animated, {
   useAnimatedStyle,
   withSpring,

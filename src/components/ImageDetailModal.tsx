@@ -16,7 +16,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { usePlannerStore } from '../stores/usePlannerStore';
 import { PortfolioItem } from '../data/providerProfiles';
-import { getProviderForItem } from '../data/portfolioFeed';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 
@@ -45,7 +44,7 @@ export const ImageDetailModal = ({
 
   if (!item) return null;
 
-  const provider = getProviderForItem(item);
+  const hasProvider = !!item.providerName;
   const isSaved = isPortfolioSaved(item.id);
   const activeEvent = getActiveEvent();
   const imageHeight = Math.min(SCREEN_HEIGHT * 0.45, SCREEN_WIDTH * item.aspectRatio);
@@ -59,16 +58,18 @@ export const ImageDetailModal = ({
   };
 
   const handleViewProfile = () => {
-    if (provider) {
+    if (hasProvider) {
       onClose();
-      onViewProfile(provider.id, provider.name, provider.service, provider.logo);
+      const logoSource = item.providerLogoUri ? { uri: item.providerLogoUri } : null;
+      onViewProfile(item.providerSlug ?? item.providerId, item.providerName ?? '', item.category, logoSource);
     }
   };
 
   const handleBookNow = () => {
-    if (provider) {
+    if (hasProvider) {
       onClose();
-      onBookNow(provider.id, provider.name, provider.service, provider.logo);
+      const logoSource = item.providerLogoUri ? { uri: item.providerLogoUri } : null;
+      onBookNow(item.providerSlug ?? item.providerId, item.providerName ?? '', item.category, logoSource);
     }
   };
 
@@ -109,26 +110,34 @@ export const ImageDetailModal = ({
             {/* Info card */}
             <View style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}>
               {/* Provider row */}
-              {provider && (
+              {hasProvider && (
                 <View style={styles.providerRow}>
-                  <Image
-                    source={provider.logo}
-                    style={styles.providerLogo}
-                    resizeMode="cover"
-                  />
+                  {item.providerLogoUri ? (
+                    <Image
+                      source={{ uri: item.providerLogoUri }}
+                      style={styles.providerLogo}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.providerLogo, { backgroundColor: isDarkMode ? '#333' : '#F0F0F0' }]} />
+                  )}
                   <View style={styles.providerInfo}>
                     <Text style={[styles.providerName, { color: theme.text }]}>
-                      {provider.name}
+                      {item.providerName}
                     </Text>
-                    <View style={styles.ratingRow}>
-                      <TabIcon name="star" size={12} color="#FFD700" />
-                      <Text style={[styles.ratingText, { color: theme.text }]}>
-                        {provider.rating}
-                      </Text>
-                      <Text style={[styles.reviewCount, { color: theme.secondaryText }]}>
-                        ({provider.reviewCount})
-                      </Text>
-                    </View>
+                    {(item.providerRating != null) && (
+                      <View style={styles.ratingRow}>
+                        <TabIcon name="star" size={12} color="#FFD700" />
+                        <Text style={[styles.ratingText, { color: theme.text }]}>
+                          {item.providerRating}
+                        </Text>
+                        {item.providerReviewCount != null && (
+                          <Text style={[styles.reviewCount, { color: theme.secondaryText }]}>
+                            ({item.providerReviewCount})
+                          </Text>
+                        )}
+                      </View>
+                    )}
                   </View>
                   <View style={styles.categoryChip}>
                     <Text style={styles.categoryText}>{item.category}</Text>
@@ -180,34 +189,36 @@ export const ImageDetailModal = ({
               </TouchableOpacity>
 
               {/* Action buttons row */}
-              <View style={styles.actionsRow}>
-                {/* View Profile */}
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.outlineButton, { borderColor: '#a342c3ff' }]}
-                  onPress={handleViewProfile}
-                  activeOpacity={0.8}
-                >
-                  <TabIcon name="user" size={14} color="#a342c3ff" />
-                  <Text style={styles.outlineButtonText}>View Profile</Text>
-                </TouchableOpacity>
-
-                {/* Book Now */}
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={handleBookNow}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={['#a342c3ff', '#8a2fb8']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.bookNowGradient}
+              {hasProvider && (
+                <View style={styles.actionsRow}>
+                  {/* View Profile */}
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.outlineButton, { borderColor: '#a342c3ff' }]}
+                    onPress={handleViewProfile}
+                    activeOpacity={0.8}
                   >
-                    <TabIcon name="basket-shopping" size={14} color="#FFFFFF" />
-                    <Text style={styles.bookNowText}>Book Now</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
+                    <TabIcon name="user" size={14} color="#a342c3ff" />
+                    <Text style={styles.outlineButtonText}>View Profile</Text>
+                  </TouchableOpacity>
+
+                  {/* Book Now */}
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={handleBookNow}
+                    activeOpacity={0.8}
+                  >
+                    <LinearGradient
+                      colors={['#a342c3ff', '#8a2fb8']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.bookNowGradient}
+                    >
+                      <TabIcon name="basket-shopping" size={14} color="#FFFFFF" />
+                      <Text style={styles.bookNowText}>Book Now</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Save button */}
               <TouchableOpacity

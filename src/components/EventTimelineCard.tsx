@@ -9,8 +9,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { PlanTask } from '../stores/usePlannerStore';
-import { getPortfolioItemById } from '../data/portfolioFeed';
-import { getProviderForItem } from '../data/portfolioFeed';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 
@@ -42,8 +40,6 @@ export const EventTimelineCard = ({
   onRemove,
 }: EventTimelineCardProps) => {
   const { theme, isDarkMode } = useTheme();
-  const portfolioItem = getPortfolioItemById(task.portfolioItemId);
-  const provider = portfolioItem ? getProviderForItem(portfolioItem) : undefined;
   const statusConfig = STATUS_CONFIG[task.status];
 
   return (
@@ -73,9 +69,9 @@ export const EventTimelineCard = ({
       >
         <View style={styles.cardRow}>
           {/* Inspo thumbnail */}
-          {portfolioItem && (
+          {task.portfolioImageUri && (
             <Image
-              source={portfolioItem.image}
+              source={{ uri: task.portfolioImageUri }}
               style={styles.thumbnail}
               resizeMode="cover"
             />

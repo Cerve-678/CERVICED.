@@ -1,4 +1,4 @@
-// SearchScreen.tsx - Uber-style Provider Discovery Interface with Search Header
+// SearchScreen.tsx
 import React, { useState, useCallback, useMemo, memo, useRef, useLayoutEffect } from 'react';
 import {
   View,
@@ -13,23 +13,38 @@ import {
   Animated,
   ImageSourcePropType,
   ListRenderItem,
-  LayoutAnimation,
+  TextInput,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { ExploreStackParamList } from '../navigation/types';
 import { useCart } from '../contexts/CartContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import TabIcon from '../components/TabIcon';
-import { getProviders } from '../services/databaseService';
+import { getProviders, searchProviders, logSearchEvent } from '../services/databaseService';
 import type { DbProvider } from '../types/database';
-import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
+import userLearningService from '../services/userLearningService';
+import { useAuth } from '../contexts/AuthContext';
 
-// Types
+// ── Design tokens — mirrors HomeScreen palette ────────────────────────────────
+const L = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
+  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
+};
+const D = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
+  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
+};
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
   id: string;
   name: string;
@@ -51,1055 +66,688 @@ interface ProviderCardData {
 interface ProviderCardProps {
   provider: ProviderCardData;
   onPress: () => void;
-  onBookNow: () => void;
   index: number;
+  P: typeof L;
 }
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 
-// Provider Card Component
-const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, onBookNow, index }) => {
-  const { theme } = useTheme();
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+// ── Availability colour ───────────────────────────────────────────────────────
+function availColor(a: string) {
+  if (a === 'Slots Available') return '#4CAF50';
+  if (a === 'Slots Limited') return '#FF9500';
+  return '#FF3B30';
+}
+
+// ── Provider Card ─────────────────────────────────────────────────────────────
+const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) => {
+  const slideAnim = useRef(new Animated.Value(24)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const color = availColor(provider.availability);
 
   React.useEffect(() => {
     Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 400,
-        delay: index * 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        delay: index * 100,
-        useNativeDriver: true,
-      }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 340, delay: index * 55, useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 340, delay: index * 55, useNativeDriver: true }),
     ]).start();
   }, []);
 
-  const getAvailabilityColor = () => {
-    if (provider.availability === 'Slots Available') {
-      return '#4CAF50';
-    } else if (provider.availability === 'Slots Limited') {
-      return '#FF9500';
-    } else if (provider.availability === 'No Slots') {
-      return '#FF3B30';
-    }
-    return '#999999';
-  };
-
   return (
-    <Animated.View
-      style={[
-        styles.providerCard,
-        { backgroundColor: theme.cardBackground },
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
-        }
-      ]}
-    >
-      <TouchableOpacity
-        style={styles.cardTouchable}
-        onPress={onPress}
-        activeOpacity={0.95}
-      >
-        <View style={styles.cardContent}>
-          {/* Provider Image */}
-          <View style={styles.providerImageContainer}>
-            <Image
-              source={provider.logo}
-              style={styles.providerImage}
-              resizeMode="cover"
-            />
-            {/* Availability Indicator */}
-            <View style={[styles.availabilityDot, { backgroundColor: getAvailabilityColor() }]} />
-          </View>
+    <Animated.View style={[styles.card, { backgroundColor: P.card, borderColor: P.border, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <TouchableOpacity style={styles.cardBody} onPress={onPress} activeOpacity={0.88}>
 
-          {/* Provider Info */}
-          <View style={styles.providerInfo}>
-            <View style={styles.providerHeader}>
-              <Text style={[styles.providerName, { color: theme.text }]} numberOfLines={1}>
-                {provider.name}
-              </Text>
-              <View style={styles.ratingContainer}>
-                <TabIcon name="star" size={14} color="#FFD700" />
-                <Text style={[styles.ratingText, { color: theme.text }]}>{provider.rating}</Text>
-                <Text style={[styles.reviewCount, { color: theme.secondaryText }]}>({provider.reviewCount})</Text>
-              </View>
-            </View>
-
-            {/* Service Category Pill */}
-            <View style={styles.servicePillContainer}>
-              <View style={styles.servicePill}>
-                <Text style={styles.servicePillText}>{provider.service}</Text>
-              </View>
-            </View>
-
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <TabIcon name="earth" size={12} color={theme.secondaryText} />
-                <Text style={[styles.metaText, { color: theme.secondaryText }]}>{provider.distance}</Text>
-              </View>
-              <View style={styles.metaDivider} />
-              <View style={styles.metaItem}>
-                <TabIcon name="bell" size={12} color={theme.secondaryText} />
-                <Text style={[styles.metaText, { color: theme.secondaryText }]}>{provider.estimatedWait}</Text>
-              </View>
-              <View style={styles.metaDivider} />
-              <Text style={[styles.priceRange, { color: theme.secondaryText }]}>{provider.priceRange}</Text>
-            </View>
-
-            {/* Availability Status */}
-            <View style={[styles.availabilityBadge, { backgroundColor: `${getAvailabilityColor()}15` }]}>
-              <View style={[styles.availabilityBadgeDot, { backgroundColor: getAvailabilityColor() }]} />
-              <Text style={[styles.availabilityText, { color: getAvailabilityColor() }]}>
-                {provider.availability}
-              </Text>
-            </View>
-
-            {/* Specialties */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.specialtiesContainer}
-            >
-              {provider.specialties.map((specialty, idx) => (
-                <View key={idx} style={styles.specialtyTag}>
-                  <Text style={styles.specialtyText}>{specialty}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
+        {/* Provider image with availability dot */}
+        <View style={styles.imageWrap}>
+          <Image source={provider.logo} style={styles.cardImage} resizeMode="cover" />
+          <View style={[styles.availDot, { backgroundColor: color, borderColor: P.card }]} />
         </View>
 
-        {/* Book Now Button */}
-        <TouchableOpacity
-          style={styles.bookNowButton}
-          onPress={onBookNow}
-          activeOpacity={0.8}
-        >
-          <View style={styles.bookNowGradient}>
-            <Text style={styles.bookNowText}>Book Now</Text>
-            <TabIcon name="basket-shopping" size={14} color="#FFFFFF" />
+        {/* Info column */}
+        <View style={styles.cardInfo}>
+          <Text style={[styles.cardName, { color: P.text }]} numberOfLines={1}>
+            {provider.name}
+          </Text>
+
+          <View style={[styles.servicePill, { backgroundColor: `${P.accent}18`, borderColor: `${P.accent}50` }]}>
+            <Text style={[styles.servicePillText, { color: P.accent }]}>
+              {provider.service}
+            </Text>
           </View>
-        </TouchableOpacity>
+
+          <View style={styles.metaRow}>
+            <Text style={styles.star}>★</Text>
+            <Text style={[styles.ratingNum, { color: P.text }]}>{provider.rating.toFixed(1)}</Text>
+            <Text style={[styles.reviewCount, { color: P.sub }]}> ({provider.reviewCount})</Text>
+            <Text style={[styles.priceText, { color: P.sub }]}>  {provider.priceRange}</Text>
+          </View>
+
+          <View style={[styles.availBadge, { backgroundColor: `${color}22` }]}>
+            <View style={[styles.availBadgeDot, { backgroundColor: color }]} />
+            <Text style={[styles.availBadgeText, { color }]}>{provider.availability}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* Book Now */}
+      <TouchableOpacity style={[styles.bookBtn, { backgroundColor: P.accent }]} onPress={onPress} activeOpacity={0.8}>
+        <Text style={[styles.bookBtnText, { color: P.ice }]}>Book Now</Text>
       </TouchableOpacity>
     </Animated.View>
   );
 });
 ProviderCard.displayName = 'ProviderCard';
 
-// Main SearchScreen Component
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
   });
 
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<string>('All');
-  const [selectedSort, setSelectedSort] = useState<string>('Available Slots');
-  const [selectedLocation, setSelectedLocation] = useState<string>('All Locations');
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
-  const [providerData, setProviderData] = useState<ProviderCardData[]>([]);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [refreshing, setRefreshing]       = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState('All');
+  const [selectedSort, setSelectedSort]   = useState('Available Slots');
+  const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
+  const [filtersOpen, setFiltersOpen]     = useState(false);
 
-  function mapDbToCardData(p: DbProvider, index: number): ProviderCardData {
-    const priceRanges = ['£25-£50', '£40-£75', '£50-£100', '£60-£120', '£75-£150'];
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Map DB provider to card data ────────────────────────────────────────────
+  function mapDbToCardData(p: DbProvider, i: number): ProviderCardData {
+    const ranges = ['£25–£50', '£40–£75', '£50–£100', '£60–£120', '£75–£150'];
     return {
       id: p.slug,
       name: p.display_name,
       service: p.service_category,
-      logo: p.logo_url ? { uri: p.logo_url } : null,
+      logo: p.logo_url ? { uri: p.logo_url } : require('../../assets/icon.png'),
       location: p.location_text ?? 'London',
-      totalSlots: 0,
-      bookedSlots: 0,
-      isAvailable: true,
-      distance: '',
-      rating: p.rating,
-      reviewCount: p.review_count,
-      estimatedWait: '10-15 min',
-      priceRange: priceRanges[index % priceRanges.length] || '£50-£100',
-      specialties: getSpecialtiesForService(p.service_category),
+      totalSlots: 0, bookedSlots: 0,
+      isAvailable: true, distance: '',
+      rating: p.rating, reviewCount: p.review_count,
+      estimatedWait: '10–15 min',
+      priceRange: ranges[i % ranges.length] ?? '£50–£100',
+      specialties: specialtiesFor(p.service_category),
       availability: 'Slots Available',
     };
   }
 
-  function getSpecialtiesForService(service: string): string[] {
-    const specialtyMap: Record<string, string[]> = {
-      'HAIR': ['Braids', 'Weaves', 'Wigs'],
-      'NAILS': ['Acrylics', 'Gel', 'Nail Art'],
-      'MUA': ['Bridal', 'Editorial', 'Glam'],
-      'LASHES': ['Classic', 'Volume', 'Hybrid'],
-      'BROWS': ['Microblading', 'Lamination', 'Tinting'],
-      'AESTHETICS': ['Facials', 'Peels', 'Injectables'],
+  function specialtiesFor(service: string): string[] {
+    const map: Record<string, string[]> = {
+      HAIR: ['Braids', 'Weaves', 'Wigs'],
+      NAILS: ['Acrylics', 'Gel', 'Nail Art'],
+      MUA: ['Bridal', 'Editorial', 'Glam'],
+      LASHES: ['Classic', 'Volume', 'Hybrid'],
+      BROWS: ['Microblading', 'Lamination', 'Tinting'],
+      AESTHETICS: ['Facials', 'Peels', 'Injectables'],
     };
-    return specialtyMap[service] ?? ['Beauty', 'Style'];
+    return map[service] ?? ['Beauty', 'Style'];
   }
 
-  // Memoize theme values to prevent re-renders
-  const themeColors = useMemo(() => ({
-    text: theme.text,
-    secondaryText: theme.secondaryText,
-    background: theme.background,
-    cardBackground: theme.cardBackground,
-    statusBar: theme.statusBar,
-    blurTint: theme.blurTint,
-  }), [theme.text, theme.secondaryText, theme.background, theme.cardBackground, theme.statusBar, theme.blurTint]);
-
-  // Listen for search query from route params
+  // Route param search query
   React.useEffect(() => {
-    if (route?.params?.initialQuery) {
-      setSearchQuery(route.params.initialQuery);
-    }
+    if (route?.params?.initialQuery) setSearchQuery(route.params.initialQuery);
   }, [route?.params?.initialQuery]);
 
-  // Set up header options dynamically for dark mode - useLayoutEffect for instant updates
+  // Hide the default navigation header — we use our own
   useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTintColor: themeColors.text,
-      headerStyle: {
-        backgroundColor: 'transparent',
-      },
-      headerTitleStyle: {
-        color: themeColors.text,
-        fontSize: 17,
-        fontWeight: '600',
-        fontFamily: 'BakbakOne-Regular',
-      },
-      headerBlurEffect: themeColors.blurTint,
-      headerLeft: () => null,
-    });
-  }, [navigation, themeColors.text, themeColors.blurTint]);
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
-  const { addToCart } = useCart();
+  const categoryCodeMap: Record<string, string> = {
+    Hair: 'HAIR', Nails: 'NAILS', Makeup: 'MUA',
+    Aesthetics: 'AESTHETICS', Brows: 'BROWS', Lashes: 'LASHES',
+  };
 
-  // Fetch providers from Supabase on mount
+  // Load all providers on mount (no query)
   React.useEffect(() => {
-    getProviders().then(data => {
-      setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i)));
-    }).catch(() => setProviderData([]));
+    getProviders()
+      .then(data => setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i))))
+      .catch(() => setProviderData([]));
   }, []);
 
-  // Get unique locations for filter
-  const uniqueLocations = useMemo(() => {
-    const locations = new Set(providerData.map(p => p.location));
-    return ['All Locations', ...Array.from(locations).sort()];
-  }, [providerData]);
+  // Debounced server search — fires when query or category changes
+  React.useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
 
-  // Filter and sort logic
+    const catCode = selectedFilter !== 'All' ? categoryCodeMap[selectedFilter] : undefined;
+
+    if (!searchQuery.trim()) {
+      // No query — reload all providers for the selected category
+      getProviders(catCode)
+        .then(data => setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i))))
+        .catch(() => {});
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(() => {
+      const q = searchQuery.trim();
+      searchProviders(q, catCode)
+        .then(data => {
+          setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i)));
+          // Log every search — zero-result searches are the most valuable signal
+          logSearchEvent({
+            query: q,
+            resultsCount: data.length,
+            ...(catCode     && { categoryFilter: catCode }),
+            ...(user?.id    && { userId: user.id }),
+          });
+        })
+        .catch(() => {});
+    }, 400);
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchQuery, selectedFilter]);
+
+  // ── Sort only — filtering is now done server-side ───────────────────────────
   const filteredProviders = useMemo(() => {
-    let filtered = [...providerData];
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.service.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    const list = [...providerData];
+    if (selectedSort === 'Highest Rated') {
+      list.sort((a, b) => b.rating - a.rating);
     }
+    return list;
+  }, [providerData, selectedSort]);
 
-    // Apply category filter
-    if (selectedFilter !== 'All') {
-      const filterMap: Record<string, string> = {
-        'Hair': 'HAIR',
-        'Nails': 'NAILS',
-        'Makeup': 'MUA',
-        'Aesthetics': 'AESTHETICS',
-        'Brows': 'BROWS',
-        'Lashes': 'LASHES',
+  // ── Search input handler ─────────────────────────────────────────────────────
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+    // Track for user learning once query is meaningful
+    if (text.trim().length >= 3) {
+      const catCode = selectedFilter !== 'All' ? categoryCodeMap[selectedFilter] : undefined;
+      userLearningService.trackSearch(text, catCode).catch(() => {});
+    }
+  }, [selectedFilter]);
+
+  // ── Tracked filter chip selection ───────────────────────────────────────────
+  const handleFilterPress = useCallback((f: string) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = selectedFilter === f && f !== 'All' ? 'All' : f;
+    setSelectedFilter(next);
+    if (next !== 'All') {
+      const categoryMap: Record<string, string> = {
+        Hair: 'HAIR', Nails: 'NAILS', Makeup: 'MUA',
+        Lashes: 'LASHES', Brows: 'BROWS', Aesthetics: 'AESTHETICS',
       };
-      const serviceFilter = filterMap[selectedFilter];
-      filtered = filtered.filter(p => p.service === serviceFilter);
+      const cat = categoryMap[next];
+      if (cat) userLearningService.trackFilter(cat).catch(() => {});
     }
+  }, [selectedFilter]);
 
-    // Apply location filter
-    if (selectedLocation !== 'All Locations') {
-      filtered = filtered.filter(p => p.location === selectedLocation);
-    }
-
-    // Apply sorting
-    if (selectedSort === 'Available Slots') {
-      filtered.sort((a, b) => {
-        const priorityOrder: Record<string, number> = { 'Slots Available': 0, 'Slots Limited': 1, 'No Slots': 2 };
-        return (priorityOrder[a.availability] ?? 2) - (priorityOrder[b.availability] ?? 2);
-      });
-    } else if (selectedSort === 'Nearest') {
-      filtered.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
-    } else if (selectedSort === 'Highest Rated') {
-      filtered.sort((a, b) => b.rating - a.rating);
-    }
-
-    return filtered;
-  }, [providerData, searchQuery, selectedFilter, selectedSort, selectedLocation]);
-
+  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    getProviders().then(data => {
-      setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i)));
-    }).catch(() => setProviderData([])).finally(() => setRefreshing(false));
-  }, []);
+    const catCode = selectedFilter !== 'All' ? categoryCodeMap[selectedFilter] : undefined;
+    const fn = searchQuery.trim()
+      ? searchProviders(searchQuery.trim(), catCode)
+      : getProviders(catCode);
+    fn
+      .then(data => setProviderData(data.map((p, i) => mapDbToCardData(p as DbProvider, i))))
+      .catch(() => setProviderData([]))
+      .finally(() => setRefreshing(false));
+  }, [searchQuery, selectedFilter]);
 
   const handleProviderPress = useCallback((provider: ProviderCardData) => {
-    navigation.navigate('ProviderProfile', {
+    userLearningService.trackInteraction({
+      type: 'view',
       providerId: provider.id,
-      source: 'search',
-    });
+      providerName: provider.name,
+      serviceCategory: provider.service,
+      timestamp: new Date().toISOString(),
+    }).catch(() => {});
+    navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
   }, [navigation]);
 
-  const handleBookNow = useCallback((provider: ProviderCardData) => {
-    // Navigate directly to provider profile for full booking experience
-    navigation.navigate('ProviderProfile', {
-      providerId: provider.id,
-      source: 'search',
-    });
-  }, [navigation]);
+  const renderCard: ListRenderItem<ProviderCardData> = useCallback(({ item, index }) => (
+    <ProviderCard provider={item} onPress={() => handleProviderPress(item)} index={index} P={P} />
+  ), [handleProviderPress, P]);
 
-  const renderProviderCard: ListRenderItem<ProviderCardData> = useCallback(({ item, index }) => (
-    <ProviderCard
-      provider={item}
-      onPress={() => handleProviderPress(item)}
-      onBookNow={() => handleBookNow(item)}
-      index={index}
-    />
-  ), [handleProviderPress, handleBookNow]);
+  const activeFilterCount = (selectedFilter !== 'All' ? 1 : 0) + (selectedSort !== 'Available Slots' ? 1 : 0);
 
-  const toggleFilters = useCallback(() => {
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setFiltersExpanded(prev => !prev);
-  }, []);
-
-  const filters = useMemo(() =>
-    ['All', 'Hair', 'Nails', 'Makeup', 'Aesthetics', 'Brows', 'Lashes'], []
-  );
-
-  const sortOptions = useMemo(() =>
-    ['Available Slots', 'Nearest', 'Highest Rated'], []
-  );
-
-  const renderListHeader = useCallback(() => (
-    <View>
-      {/* Available Providers Count */}
-      <View style={styles.availableCountSection}>
-        <Text style={[styles.availableCountText, { color: theme.text }]}>
-          {filteredProviders.filter(p => p.isAvailable).length} providers available
-        </Text>
-        <Text style={[styles.availableSubtextText, { color: theme.secondaryText }]}>near you right now</Text>
-      </View>
-
-      {/* Filter Chips */}
-      <View style={styles.filterChipsSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterChipsScrollContent}
-        >
-          {filters.map((filter) => {
-            const isActive = selectedFilter === filter;
-            return (
-              <TouchableOpacity
-                key={filter}
-                style={[
-                  styles.horizontalFilterChip,
-                  { backgroundColor: theme.cardBackground, borderColor: theme.border },
-                  isActive && styles.horizontalFilterChipSelected
-                ]}
-                onPress={() => {
-                  if (Platform.OS === 'ios') {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }
-                  setSelectedFilter(isActive && filter !== 'All' ? 'All' : filter);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.horizontalFilterChipText,
-                  { color: isActive ? '#FFFFFF' : theme.secondaryText },
-                  isActive && styles.horizontalFilterChipTextSelected
-                ]}>
-                  {filter}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Sort Options */}
-      <View style={styles.sortChipsSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.sortChipsScrollContent}
-        >
-          {sortOptions.map((sort) => {
-            const isActive = selectedSort === sort;
-            return (
-              <TouchableOpacity
-                key={sort}
-                style={[
-                  styles.sortChipItem,
-                  { backgroundColor: theme.cardBackground, borderColor: theme.border },
-                  isActive && styles.sortChipItemSelected
-                ]}
-                onPress={() => {
-                  if (Platform.OS === 'ios') {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }
-                  setSelectedSort(isActive ? 'Available Slots' : sort);
-                }}
-                activeOpacity={0.7}
-              >
-                <TabIcon
-                  name="sliders"
-                  size={14}
-                  color={isActive ? '#FFFFFF' : theme.secondaryText}
-                />
-                <Text style={[
-                  styles.sortChipItemText,
-                  { color: isActive ? '#FFFFFF' : theme.secondaryText },
-                  isActive && styles.sortChipItemTextSelected
-                ]}>
-                  {sort}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Filter Dropdown Button */}
-      <View style={styles.filterButtonContainer}>
-        <TouchableOpacity
-          style={styles.filterButtonActive}
-          onPress={toggleFilters}
-          activeOpacity={0.7}
-        >
-          <BlurView intensity={40} tint={theme.blurTint} style={styles.filterButtonBlur}>
-            <Text style={[styles.filterButtonText, { color: theme.text }]}>
-              FILTERS {filtersExpanded ? '▲' : '▼'}
-            </Text>
-          </BlurView>
-        </TouchableOpacity>
-      </View>
-
-      {/* Collapsible Filter Dropdown */}
-      {filtersExpanded && (
-        <View style={styles.filterDropdown}>
-          <BlurView intensity={40} tint={theme.blurTint} style={[styles.filterDropdownBlur, { backgroundColor: theme.cardBackground }]}>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled={true}
-            >
-              {/* Category Section */}
-              <Text style={[styles.filterSectionTitle, { color: theme.text }]}>CATEGORY</Text>
-              <View style={styles.filterChipContainer}>
-                {['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics'].map((filter) => {
-                  const isActive = selectedFilter === filter;
-                  return (
-                    <TouchableOpacity
-                      key={filter}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor: theme.cardBackground,
-                          borderColor: isActive ? '#000000' : theme.border,
-                          borderWidth: isActive ? 2 : 1.5,
-                        }
-                      ]}
-                      onPress={() => {
-                        if (Platform.OS === 'ios') {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }
-                        // Toggle selection - if already selected, deselect to 'All'
-                        setSelectedFilter(isActive && filter !== 'All' ? 'All' : filter);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          {
-                            color: isActive ? '#000000' : theme.text,
-                            fontWeight: isActive ? '800' : '600',
-                          }
-                        ]}
-                      >
-                        {filter}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Location Section */}
-              <Text style={[styles.filterSectionTitle, { color: theme.text, marginTop: 20 }]}>LOCATION</Text>
-              <View style={styles.filterChipContainer}>
-                {uniqueLocations.map((location) => {
-                  const isActive = selectedLocation === location;
-                  return (
-                    <TouchableOpacity
-                      key={location}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor: theme.cardBackground,
-                          borderColor: isActive ? '#000000' : theme.border,
-                          borderWidth: isActive ? 2 : 1.5,
-                        }
-                      ]}
-                      onPress={() => {
-                        if (Platform.OS === 'ios') {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }
-                        // Toggle selection
-                        setSelectedLocation(isActive && location !== 'All Locations' ? 'All Locations' : location);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          {
-                            color: isActive ? '#000000' : theme.text,
-                            fontWeight: isActive ? '800' : '600',
-                          }
-                        ]}
-                      >
-                        {location}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Sort Section */}
-              <Text style={[styles.filterSectionTitle, { color: theme.text, marginTop: 20 }]}>SORT BY</Text>
-              <View style={styles.filterChipContainer}>
-                {['Available Slots', 'Nearest', 'Highest Rated'].map((sort) => {
-                  const isActive = selectedSort === sort;
-                  return (
-                    <TouchableOpacity
-                      key={sort}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor: theme.cardBackground,
-                          borderColor: isActive ? '#000000' : theme.border,
-                          borderWidth: isActive ? 2 : 1.5,
-                        }
-                      ]}
-                      onPress={() => {
-                        if (Platform.OS === 'ios') {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }
-                        // Toggle selection
-                        setSelectedSort(isActive ? 'Available Slots' : sort);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          {
-                            color: isActive ? '#000000' : theme.text,
-                            fontWeight: isActive ? '800' : '600',
-                          }
-                        ]}
-                      >
-                        {sort}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          </BlurView>
-        </View>
-      )}
+  // ── List header: just result count ─────────────────────────────────────────
+  const renderHeader = useCallback(() => (
+    <View style={[styles.listHeaderBar, { borderBottomColor: P.sep }]}>
+      <Text style={[styles.countText, { color: P.sub }]}>
+        {filteredProviders.length} {filteredProviders.length === 1 ? 'provider' : 'providers'}
+      </Text>
     </View>
-  ), [filtersExpanded, theme, selectedFilter, selectedSort, selectedLocation, uniqueLocations, toggleFilters, filteredProviders, filters, sortOptions]);
+  ), [filteredProviders.length, P]);
 
   if (!fontsLoaded) {
     return (
-      <View style={[styles.loading, { backgroundColor: theme.background }]}>
-        <Text style={[styles.loadingText, { color: theme.secondaryText }]}>Loading...</Text>
+      <View style={[styles.loading, { backgroundColor: P.bg }]}>
+        <Text style={[styles.loadingText, { color: P.sub }]}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <ThemedBackground style={styles.container}>
-      <StatusBar barStyle={theme.statusBar} />
+    <View style={[styles.root, { backgroundColor: P.bg }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* Provider List with proper spacing under transparent header */}
+      {/* ── Custom header ── */}
+      <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: P.sep }]}>
+        <TouchableOpacity
+          style={[styles.backBtn, { backgroundColor: P.surface, borderColor: P.border }]}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.backArrow, { color: P.text }]}>←</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.headerTitle, { color: P.text }]}>FIND PROVIDERS</Text>
+
+        <TouchableOpacity
+          style={[styles.filterBtn, {
+            backgroundColor: filtersOpen ? P.accent : P.surface,
+            borderColor: filtersOpen ? P.accent : P.border,
+          }]}
+          onPress={() => {
+            if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFiltersOpen(prev => !prev);
+          }}
+          activeOpacity={0.75}
+        >
+          <TabIcon name="sliders" size={14} color={filtersOpen ? P.ice : P.sub} />
+          {activeFilterCount > 0 && (
+            <View style={[styles.filterBadge, { backgroundColor: filtersOpen ? P.ice : P.accent }]}>
+              <Text style={[styles.filterBadgeText, { color: filtersOpen ? P.accent : P.ice }]}>
+                {activeFilterCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Search bar ── */}
+      <View style={[styles.searchWrap, { backgroundColor: P.bg }]}>
+        <View style={[styles.searchBar, { backgroundColor: P.surface, borderColor: P.border }]}>
+          <TabIcon name="magnifying-glass" size={16} color={P.sub} />
+          <TextInput
+            style={[styles.searchInput, { color: P.text, fontFamily: 'Jura-VariableFont_wght' }]}
+            placeholder="Search providers, services..."
+            placeholderTextColor={P.sub}
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={[styles.clearBtn, { color: P.sub }]}>×</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* ── Collapsible filter panel ── */}
+      {filtersOpen && (
+        <View style={[styles.filterPanel, { backgroundColor: P.surface, borderBottomColor: P.sep }]}>
+          <Text style={[styles.filterPanelLabel, { color: P.sub }]}>CATEGORY</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsContent}
+            style={styles.chipsScroll}
+          >
+            {['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics'].map(f => {
+              const active = selectedFilter === f;
+              return (
+                <TouchableOpacity
+                  key={f}
+                  onPress={() => handleFilterPress(f)}
+                  style={[styles.chip, { backgroundColor: active ? P.accent : P.bg, borderColor: active ? P.accent : P.border }]}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.chipText, { color: active ? P.ice : P.sub, fontWeight: active ? '700' : '500' }]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <View style={[styles.filterPanelSep, { backgroundColor: P.sep }]} />
+
+          <Text style={[styles.filterPanelLabel, { color: P.sub }]}>SORT BY</Text>
+          <View style={styles.sortChips}>
+            {['Available Slots', 'Highest Rated'].map(s => {
+              const active = selectedSort === s;
+              return (
+                <TouchableOpacity
+                  key={s}
+                  onPress={() => {
+                    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedSort(active ? 'Available Slots' : s);
+                  }}
+                  style={[styles.sortChip, { backgroundColor: active ? P.accent : P.bg, borderColor: active ? P.accent : P.border }]}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.sortChipText, { color: active ? P.ice : P.sub }]}>
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* ── Provider list ── */}
       <FlatList
         data={filteredProviders}
-        renderItem={renderProviderCard}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderListHeader}
+        renderItem={renderCard}
+        keyExtractor={item => item.id}
+        ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={true}
         bounces={true}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#a342c3ff"
-            colors={['#a342c3ff']}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={P.accent} colors={[P.accent]} />
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <TabIcon name="magnifying-glass" size={48} color={theme.secondaryText} />
-            <Text style={[styles.emptyText, { color: theme.text }]}>No providers found</Text>
-            <Text style={[styles.emptySubtext, { color: theme.secondaryText}]}>Try adjusting your filters</Text>
+          <View style={styles.emptyWrap}>
+            <TabIcon name="magnifying-glass" size={44} color={P.border} />
+            <Text style={[styles.emptyTitle, { color: P.text }]}>No providers found</Text>
+            <Text style={[styles.emptySub, { color: P.sub }]}>Try adjusting your filters or search</Text>
           </View>
         }
       />
-
-    </ThemedBackground>
+    </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  root: { flex: 1 },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { fontSize: 14, fontFamily: 'Jura-VariableFont_wght' },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  loading: {
-    flex: 1,
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
   },
-  loadingText: {
-    fontSize: fonts.body.medium,
-    color: '#666666',
+  backArrow: { fontSize: 18, fontWeight: '500', marginTop: -1 },
+  headerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
+  filterBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
     fontFamily: 'Jura-VariableFont_wght',
+  },
+
+  // Filter panel
+  filterPanel: {
+    paddingTop: 14,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  filterPanelLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  filterPanelSep: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+
+  // List header
+  listHeaderBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+
+  // Search
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 11 : 8,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+  },
+  clearBtn: {
+    fontSize: 20,
+    fontWeight: '300',
+    lineHeight: 22,
+  },
+
+  // Filter chips row
+  chipsScroll: { paddingBottom: 2 },
+  chipsContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingVertical: 4,
+  },
+  chip: {
+    borderRadius: 100,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  chipText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    letterSpacing: 0.2,
+  },
+
+  // Sort row
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  countText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sortChips: { flexDirection: 'row', gap: 6 },
+  sortChip: {
+    borderRadius: 100,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sortChipText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '600',
   },
 
   // List
   listContent: {
-    paddingTop: 190,
-    paddingBottom: 100,
-  },
-  listHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  filterButtonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  filterButtonActive: {
-    marginLeft: 10,
-  },
-  filterButtonBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 15,
-    borderWidth: 1.5,
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.3)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  filterButtonText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  filterDropdown: {
-    marginTop: 15,
-    marginHorizontal: spacing.lg,
-    borderRadius: 20,
-    overflow: 'hidden',
-    maxHeight: 400,
-  },
-  filterDropdownBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1.5,
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.3)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 20,
-    padding: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  filterSectionTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  filterChipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 15,
-  },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  filterChipText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  availableCountContainer: {
-    marginBottom: spacing.sm,
-  },
-  availableCount: {
-    fontSize: fonts.title.large,
-    fontWeight: '700',
-    color: '#000000',
-    fontFamily: 'BakbakOne-Regular',
-  },
-  availableSubtext: {
-    fontSize: fonts.body.medium,
-    color: '#666666',
-    fontFamily: 'Jura-VariableFont_wght',
-    marginTop: spacing.xs,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: dimensions.card.smallBorderRadius,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 66, 195, 0.2)',
-  },
-  locationText: {
-    fontSize: fonts.locationText,
-    fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
-  },
-  radiusText: {
-    fontSize: fonts.body.medium,
-    fontWeight: '500',
-    fontFamily: 'Jura-VariableFont_wght',
+    paddingBottom: 110,
+    paddingTop: 4,
   },
 
-  // Provider Card
-  providerCard: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    backgroundColor: '#FFFFFF',
-    borderRadius: dimensions.card.smallBorderRadius,
+  // Provider card
+  card: {
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
-  cardTouchable: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    overflow: 'hidden',
-  },
-  cardContent: {
+  cardBody: {
     flexDirection: 'row',
-    padding: spacing.lg,
+    padding: 14,
+    gap: 14,
   },
-  providerImageContainer: {
+  imageWrap: {
     position: 'relative',
-    marginRight: spacing.lg,
   },
-  providerImage: {
-    width: dimensions.providerLogo.size,
-    height: dimensions.providerLogo.size,
-    borderRadius: dimensions.providerLogo.borderRadius,
-    backgroundColor: '#F0F0F0',
+  cardImage: {
+    width: 84,
+    height: 84,
+    borderRadius: 14,
+    backgroundColor: '#E0D8D4',
   },
-  availabilityDot: {
+  availDot: {
     position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    width: 12,
-    height: 12,
+    bottom: 4,
+    right: 4,
+    width: 11,
+    height: 11,
     borderRadius: 6,
-    borderWidth: dimensions.providerLogo.borderWidth,
-    borderColor: '#FFFFFF',
+    borderWidth: 2,
   },
-  providerInfo: {
+  cardInfo: {
     flex: 1,
-    justifyContent: 'space-between',
+    gap: 5,
+    justifyContent: 'center',
   },
-  providerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.xs,
-  },
-  providerName: {
-    fontSize: fonts.title.small,
-    fontWeight: '700',
-    color: '#000000',
+  cardName: {
     fontFamily: 'BakbakOne-Regular',
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.gap.xs,
-  },
-  ratingText: {
-    fontSize: fonts.ratingText,
-    fontWeight: '800',
-    color: '#000000',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-  reviewCount: {
-    fontSize: fonts.body.xsmall,
-    color: '#999999',
-    fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-  serviceType: {
-    fontSize: fonts.serviceText,
-    color: '#a342c3ff',
-    fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
-    marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  servicePillContainer: {
-    marginBottom: spacing.sm,
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
   servicePill: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#F5E6FA',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(163, 66, 195, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   servicePillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#a342c3ff',
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.gap.sm,
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.gap.xs,
+  star: {
+    fontSize: 12,
+    color: '#F5A623',
   },
-  metaText: {
-    fontSize: fonts.body.xsmall,
-    color: '#666666',
+  ratingNum: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
     fontWeight: '700',
+    marginLeft: 3,
+  },
+  reviewCount: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  metaDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: '#E0E0E0',
-  },
-  priceRange: {
-    fontSize: fonts.body.xsmall,
-    color: '#666666',
-    fontWeight: '800',
+  priceText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
   },
-  availabilityBadge: {
+  availBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.gap.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 20,
     alignSelf: 'flex-start',
-    marginBottom: spacing.sm,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 5,
   },
-  availabilityBadgeDot: {
+  availBadgeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
   },
-  availabilityText: {
-    fontSize: 11,
-    fontWeight: '700',
+  availBadgeText: {
     fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
     letterSpacing: 0.3,
   },
-  specialtiesContainer: {
-    flexDirection: 'row',
-  },
-  specialtyTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#F5E6FA',
-    marginRight: spacing.gap.sm,
-  },
-  specialtyText: {
-    fontSize: fonts.serviceTag,
-    color: '#a342c3ff',
-    fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
 
-  // Book Now Button
-  bookNowButton: {
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  bookNowGradient: {
-    flexDirection: 'row',
+  // Book Now button
+  bookBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
     paddingVertical: 10,
-    backgroundColor: '#000000',
   },
-  bookNowText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-
-  // Available Count Section
-  availableCountSection: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  availableCountText: {
-    fontSize: fonts.title.large,
-    fontWeight: '700',
+  bookBtnText: {
     fontFamily: 'BakbakOne-Regular',
-  },
-  availableSubtextText: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'Jura-VariableFont_wght',
-    marginTop: spacing.xs,
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
 
-  // Horizontal Filter Chips
-  filterChipsSection: {
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(240, 240, 240, 0.3)',
-  },
-  filterChipsScrollContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.gap.sm,
-  },
-  horizontalFilterChip: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1,
-  },
-  horizontalFilterChipSelected: {
-    backgroundColor: '#a342c3ff',
-    borderColor: '#a342c3ff',
-  },
-  horizontalFilterChipText: {
-    fontSize: fonts.body.medium,
-    fontWeight: '600',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-  horizontalFilterChipTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  // Sort Chips
-  sortChipsSection: {
-    paddingVertical: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  sortChipsScrollContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.gap.sm,
-  },
-  sortChipItem: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: spacing.gap.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1,
-  },
-  sortChipItemSelected: {
-    backgroundColor: '#000000',
-    borderColor: '#000000',
-  },
-  sortChipItemText: {
-    fontSize: fonts.body.small,
-    fontWeight: '600',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-  sortChipItemTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  // Empty State
-  emptyContainer: {
+  // Empty state
+  emptyWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 64,
+    gap: 10,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666666',
-    marginTop: 16,
+  emptyTitle: {
     fontFamily: 'BakbakOne-Regular',
+    fontSize: 17,
+    marginTop: 8,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999999',
-    marginTop: 4,
+  emptySub: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
   },
 });

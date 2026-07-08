@@ -141,12 +141,12 @@ function createEnterpriseTheme(mode: 'light' | 'dark'): EnterpriseTheme {
 
 // Legacy theme constructors for backward compatibility
 export const lightTheme: Theme = {
-  background: colors.light.background.primary,
-  secondaryBackground: colors.light.background.secondary,
-  cardBackground: colors.light.background.elevated,
-  text: colors.light.text.primary,
-  secondaryText: colors.light.text.secondary,
-  accent: colors.brand.primaryLight,
+  background: colors.light.background.primary,        // #F5F1EC
+  secondaryBackground: colors.light.background.secondary, // #EDE8E2
+  cardBackground: colors.light.background.elevated,   // #FFFFFF
+  text: colors.light.text.primary,                    // #000000
+  secondaryText: colors.light.text.secondary,         // #7E6667
+  accent: colors.brand.primary,                       // #AF9197
   border: colors.light.border.primary,
   glassBackground: colors.light.surface.glass,
   blurTint: 'light',
@@ -155,12 +155,12 @@ export const lightTheme: Theme = {
 };
 
 export const darkTheme: Theme = {
-  background: colors.dark.background.primary,
-  secondaryBackground: colors.dark.background.secondary,
-  cardBackground: colors.dark.background.elevated,
-  text: colors.dark.text.primary,
+  background: colors.dark.background.primary,         // #1A1815
+  secondaryBackground: colors.dark.background.secondary, // #201D1A
+  cardBackground: colors.dark.background.elevated,    // #252220
+  text: colors.dark.text.primary,                     // #F0ECE7
   secondaryText: colors.dark.text.secondary,
-  accent: colors.brand.accent,
+  accent: colors.brand.primary,                       // #AF9197
   border: colors.dark.border.primary,
   glassBackground: colors.dark.surface.glass,
   blurTint: 'dark',

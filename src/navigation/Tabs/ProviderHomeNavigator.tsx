@@ -2,8 +2,14 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderHomeScreen from '../../screens/ProviderHomeScreen';
 import ProviderBookingDetailScreen from '../../screens/ProviderBookingDetailScreen';
+import ProviderIntakeFormScreen from '../../screens/ProviderIntakeFormScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
+import ProviderInboxScreen from '../../screens/ProviderInboxScreen';
+import ProviderPromotionsScreen from '../../screens/ProviderPromotionsScreen';
+import ProviderClienteleScreen from '../../screens/ProviderClienteleScreen';
+import ProviderInfoPackScreen from '../../screens/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
+import ProviderScheduleScreen from '../../screens/ProviderScheduleScreen';
 import { ProviderHomeStackParamList } from '../types';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -23,18 +29,41 @@ export default function ProviderHomeNavigator() {
       <ProviderHomeStack.Screen
         name="BookingDetail"
         component={ProviderBookingDetailScreen}
-        options={{
-          title: 'Booking Details',
-          presentation: 'card',
-          headerBackTitle: 'Schedule',
-          headerStyle: {
-            backgroundColor: theme.background,
-          },
-          headerTintColor: theme.text,
-          headerTitleStyle: {
-            color: theme.text,
-          },
-        }}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="ProviderIntakeForm"
+        component={ProviderIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="Promotions"
+        component={ProviderPromotionsScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <ProviderHomeStack.Screen
+        name="Clientele"
+        component={ProviderClienteleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <ProviderHomeStack.Screen
+        name="InfoPacks"
+        component={ProviderInfoPackScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="ProviderInbox"
+        component={ProviderInboxScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="ProviderSchedule"
+        component={ProviderScheduleScreen}
+        options={{ headerShown: false, presentation: 'formSheet', contentStyle: { backgroundColor: '#351E28' } }}
       />
 
       <ProviderHomeStack.Group screenOptions={{

@@ -4,7 +4,7 @@
 
 import { ProviderRegistrationData } from './providerRegistrationService';
 
-const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
+const ANTHROPIC_API_KEY = process.env['EXPO_PUBLIC_ANTHROPIC_API_KEY'];
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
 async function fetchAcuityPageText(url: string): Promise<string> {
@@ -133,6 +133,17 @@ Rules:
       description: svc.description || '',
       images: [],
       addOns: [],
+      tags: [],
+      techniqueTags: [],
+      outcomeTags: [],
+      occasionTags: [],
+      trendNames: [],
+      isPregnancySafe: false,
+      patchTestRequired: false,
+      minAge: null,
+      contraindications: [],
+      aftercareNotes: '',
+      serviceType: '' as const,
     }));
   }
 
@@ -148,5 +159,13 @@ Rules:
     accentColor: '#7B1FA2',
     logo: null,
     categories,
+    phone: '',
+    email: '',
+    instagram: '',
+    website: '',
+    yearsExperience: '',
+    businessType: '',
+    fullAddress: '',
+    addressReleasePolicy: 'on_confirmation',
   };
 }

@@ -5,6 +5,8 @@ import React, { createContext, useContext, useReducer, useCallback, useMemo, Rea
 export interface CartItem {
   id: string;
   providerName: string;
+  providerDisplayName?: string;
+  providerSlug?: string;
   providerImage: any;
   providerService: string;
   serviceName: string;
@@ -18,7 +20,7 @@ export interface CartItem {
   addedAt: string;
   serviceInstanceIndex?: number;
   addOns?: Array<{
-    id: number;
+    id: string | number;
     name: string;
     price: number;
   }>;
@@ -64,7 +66,7 @@ export interface AddToCartParams {
     description: string;
     instanceId?: string | number;
     addOns?: Array<{
-      id: number;
+      id: string | number;
       name: string;
       price: number;
     }>;

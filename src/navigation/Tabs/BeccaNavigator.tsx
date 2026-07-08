@@ -2,8 +2,10 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BeccaScreen from '../../screens/BeccaScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
+import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import BookingsScreen from '../../screens/BookingsScreen';
+import ClientIntakeFormScreen from '../../screens/ClientIntakeFormScreen';
 import CartScreen from '../../screens/CartScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
 import { BeccaStackParamList } from '../types';
@@ -22,6 +24,12 @@ export default function BeccaNavigator() {
         options={{ headerShown: false }}
       />
       
+      <BeccaStack.Screen
+        name="ProviderChat"
+        component={ProviderChatScreen}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+      />
+
       <BeccaStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
@@ -89,6 +97,11 @@ export default function BeccaNavigator() {
           },
           headerTintColor: theme.text,
         }}
+      />
+      <BeccaStack.Screen
+        name="ClientIntakeForm"
+        component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
       />
       <BeccaStack.Screen
         name="DevSettings"

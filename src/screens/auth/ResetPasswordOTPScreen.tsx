@@ -1,10 +1,12 @@
 // src/screens/auth/ResetPasswordOTPScreen.tsx
 import React, { useState, useRef } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,16 +16,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
-import { KeyIcon } from '../../components/IconLibrary';
 import { supabase } from '../../lib/supabase';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'ResetPasswordOTP'>;
 
+const L = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
+const D = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
+
 export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const t = isDarkMode ? D : L;
   const insets = useSafeAreaInsets();
   const email = route.params?.email ?? '';
 
@@ -31,14 +36,6 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
-
-  const glassStyle = () => ({
-    backgroundColor: isDarkMode ? 'rgba(58,58,60,0.6)' : 'rgba(255,255,255,0.15)',
-    borderTopColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.7)',
-    borderLeftColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.5)',
-    borderRightColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-    borderBottomColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-  });
 
   const handleOtpChange = (value: string, index: number) => {
     if (value.length === 6) {
@@ -64,31 +61,32 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   const handleVerify = async () => {
     const token = otp.join('');
     if (token.length < 6) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Enter code', 'Please enter the 6-digit code from your email.');
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'recovery',
-    });
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
     if (error) {
       setIsVerifying(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Invalid code', 'The code is incorrect or has expired. Try resending.');
       return;
     }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setIsVerifying(false);
-    // Session is now set — navigate to new password screen
     navigation.navigate('NewPassword');
   };
 
   const handleResend = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setResending(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email);
     setResending(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Error', "Couldn't resend the code. Please try again.");
     } else {
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
@@ -97,84 +95,76 @@ export default function ResetPasswordOTPScreen({ navigation, route }: Props) {
   };
 
   return (
-    <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
-          <KeyIcon size={64} color="#a342c3" style={{ marginBottom: 24 }} />
+    <ThemedBackground style={{ flex: 1 }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
-          <Text style={[styles.title, { color: theme.text }]}>Enter reset code</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-            We sent a 6-digit code to
-          </Text>
-          <Text style={[styles.email, { color: theme.text }]}>{email}</Text>
+            <View style={[styles.iconCircle, { backgroundColor: t.surface }]}>
+              <Text style={[styles.iconGlyph, { color: t.accent }]}>🔑</Text>
+            </View>
 
-          <View style={styles.otpRow}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={ref => { inputRefs.current[index] = ref; }}
-                style={[
-                  styles.otpBox,
-                  {
-                    color: theme.text,
-                    backgroundColor: isDarkMode ? 'rgba(58,58,60,0.8)' : 'rgba(255,255,255,0.6)',
-                    borderColor: digit ? theme.accent : (isDarkMode ? theme.border : 'rgba(255,255,255,0.6)'),
-                  },
-                ]}
-                value={digit}
-                onChangeText={val => handleOtpChange(val, index)}
-                onKeyPress={e => handleKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={6}
-                textAlign="center"
-                selectionColor={theme.accent}
-                autoFocus={index === 0}
-              />
-            ))}
+            <Text style={[styles.title, { color: t.text }]}>Enter reset code</Text>
+            <Text style={[styles.subtitle, { color: t.sub }]}>We sent a 6-digit code to</Text>
+            <Text style={[styles.emailText, { color: t.text }]}>{email}</Text>
+
+            <View style={styles.otpRow}>
+              {otp.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={ref => { inputRefs.current[index] = ref; }}
+                  style={[
+                    styles.otpBox,
+                    {
+                      color: t.text,
+                      backgroundColor: t.surface,
+                      borderColor: digit ? t.accent : t.border,
+                    },
+                  ]}
+                  value={digit}
+                  onChangeText={val => handleOtpChange(val, index)}
+                  onKeyPress={e => handleKeyPress(e, index)}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  textAlign="center"
+                  selectionColor={t.accent}
+                  autoFocus={index === 0}
+                />
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: t.accent }]}
+              onPress={handleVerify}
+              activeOpacity={0.75}
+              disabled={isVerifying}
+            >
+              {isVerifying ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryBtnText}>VERIFY CODE</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.secondaryBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+              onPress={handleResend}
+              activeOpacity={0.6}
+              disabled={resending}
+            >
+              {resending ? (
+                <ActivityIndicator color={t.text} />
+              ) : (
+                <Text style={[styles.secondaryBtnText, { color: t.text }]}>Resend code</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.backLink} onPress={() => navigation.navigate('Login')} activeOpacity={0.6}>
+              <Text style={[styles.backLinkText, { color: t.sub }]}>Back to log in</Text>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
-            onPress={handleVerify}
-            activeOpacity={0.8}
-            disabled={isVerifying}
-          >
-            {isVerifying ? (
-              <ActivityIndicator color={isDarkMode ? '#fff' : theme.text} />
-            ) : (
-              <Text style={[styles.primaryBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-                VERIFY CODE
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.resendBtn, glassStyle()]}
-            onPress={handleResend}
-            activeOpacity={0.7}
-            disabled={resending}
-          >
-            {resending ? (
-              <ActivityIndicator color={theme.text} />
-            ) : (
-              <Text style={[styles.resendText, { color: theme.text }]}>Resend code</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.backLink}
-            onPress={() => navigation.navigate('Login')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.backLinkText, { color: theme.secondaryText }]}>
-              Back to log in
-            </Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </ThemedBackground>
   );
@@ -188,18 +178,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  iconGlyph: { fontSize: 36 },
   title: {
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',
-    fontWeight: '900',
+    letterSpacing: 0.5,
     marginBottom: 12,
     textAlign: 'center',
   },
-  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 4 },
-  email: {
+  subtitle: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 16,
-    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  emailText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
     textAlign: 'center',
     marginBottom: 32,
   },
@@ -214,12 +217,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: 'BakbakOne-Regular',
   },
   primaryBtn: {
     width: '100%',
     height: 52,
-    borderRadius: 16,
+    borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -227,23 +230,26 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
-    fontWeight: '700',
     letterSpacing: 1,
+    color: '#FFFFFF',
   },
-  resendBtn: {
+  secondaryBtn: {
     width: '100%',
     height: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    borderRadius: 100,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
   },
-  resendText: {
+  secondaryBtnText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 0.5,
   },
   backLink: { paddingVertical: 8 },
-  backLinkText: { fontSize: 14 },
+  backLinkText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+  },
 });

@@ -20,64 +20,18 @@ ALTER TABLE public.notifications
     'no_show',                -- provider marked client as no-show
     'payment_success',        -- payment processed
     'new_provider',           -- new provider joined
-    'reschedule_request',     -- user requested a reschedule
-    'reschedule_response',    -- provider responded with available dates
-    'reschedule_confirmed',   -- user confirmed a new date/time
+    'reschedule_request',            -- user requested a reschedule
+    'reschedule_provider_response',  -- provider responded with available dates
+    'reschedule_confirmed',          -- user confirmed a new date/time
     'review_request',         -- prompt user to leave a review
     'review_received',        -- provider received a new review
     'promotion'               -- promotional offer
   ));
 
 -- ───────────────────────────────────────────────────────────
--- 2. handle_new_booking — fires on INSERT
---    New bookings are PENDING, so we tell both sides accordingly
+-- 2. handle_new_booking is defined in automation_jobs.sql
+--    (includes auto-accept logic). Do not redefine it here.
 -- ───────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.handle_new_booking()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Notify user: request sent, awaiting confirmation
-  INSERT INTO public.notifications
-    (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
-  VALUES (
-    NEW.user_id,
-    'booking_pending',
-    'Booking Request Sent',
-    'Your request with ' || NEW.provider_name_snapshot ||
-      ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
-      ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') ||
-      ' is awaiting confirmation.',
-    'high',
-    TRUE,
-    NEW.id,
-    NEW.provider_id
-  );
-
-  -- Notify provider: new booking request
-  INSERT INTO public.notifications
-    (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
-  SELECT
-    p.user_id,
-    'booking_pending',
-    'New Booking Request',
-    COALESCE(NEW.customer_name, 'A client') || ' requested ' ||
-      NEW.service_name_snapshot ||
-      ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
-      '. Please confirm or decline.',
-    'high',
-    TRUE,
-    NEW.id,
-    NEW.provider_id
-  FROM public.providers p
-  WHERE p.id = NEW.provider_id;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS on_booking_created ON public.bookings;
-CREATE TRIGGER on_booking_created
-  AFTER INSERT ON public.bookings
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_booking();
 
 -- ───────────────────────────────────────────────────────────
 -- 3. handle_booking_status_change — fires on UPDATE OF status

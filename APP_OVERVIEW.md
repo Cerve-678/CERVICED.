@@ -161,7 +161,8 @@ The app supports **two user roles**:
 ```
 App Level:
 ├── AuthProvider (user authentication & login state)
-├── ThemeProvider (dark/light mode)
+├── ThemeProvi
+|er (dark/light mode)
 ├── FontProvider (font loading)
 └── SafeAreaProvider (safe area context)
 

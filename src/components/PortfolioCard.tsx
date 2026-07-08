@@ -11,7 +11,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { PortfolioItem } from '../data/providerProfiles';
-import { getProviderForItem } from '../data/portfolioFeed';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 
@@ -29,7 +28,6 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } = useBookmarkStore();
 
   const isSaved = isPortfolioSaved(item.id);
-  const provider = getProviderForItem(item);
   const imageHeight = columnWidth * item.aspectRatio;
 
   useEffect(() => {
@@ -114,7 +112,7 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
           <TabIcon
             name="bookmark"
             size={16}
-            color={isSaved ? '#a342c3ff' : '#FFFFFF'}
+            color={isSaved ? '#AF9197' : '#FFFFFF'}
           />
         </TouchableOpacity>
 
@@ -126,21 +124,23 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
           </View>
 
           {/* Provider name */}
-          {provider && (
+          {item.providerName && (
             <Text style={styles.providerName} numberOfLines={1}>
-              {provider.name}
+              {item.providerName}
             </Text>
           )}
         </View>
       </TouchableOpacity>
 
       {/* Caption below card */}
-      <Text
-        style={[styles.caption, { color: theme.secondaryText }]}
-        numberOfLines={2}
-      >
-        {item.caption}
-      </Text>
+      {item.caption ? (
+        <Text
+          style={[styles.caption, { color: theme.secondaryText }]}
+          numberOfLines={2}
+        >
+          {item.caption}
+        </Text>
+      ) : null}
 
       {item.price && (
         <Text style={styles.price}>{item.price}</Text>
@@ -219,16 +219,25 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
+  captionContainer: {
+    marginTop: 6,
+  },
   caption: {
     fontSize: 11,
     fontFamily: 'Jura-VariableFont_wght',
-    marginTop: 6,
     lineHeight: 15,
+  },
+  expandText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#AF9197',
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 3,
   },
   price: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#a342c3ff',
+    color: '#AF9197',
     fontFamily: 'Jura-VariableFont_wght',
     marginTop: 2,
   },

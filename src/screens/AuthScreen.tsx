@@ -165,9 +165,10 @@ export default function AuthScreen({ navigation }: any) {
 
     if (accountType === 'user') {
       const dobString = `${dobYear}-${dobMonth.padStart(2, '0')}-${dobDay.padStart(2, '0')}`;
-      login({ name, email, phone, dob: dobString, accountType: 'user', loginMethod: 'email' });
+      login({ id: '', name, email, phone, dob: dobString, accountType: 'user', loginMethod: 'email' });
     } else {
       login({
+        id: '',
         name,
         email: businessEmail,
         phone,
@@ -183,6 +184,7 @@ export default function AuthScreen({ navigation }: any) {
 
   const handleSocialLogin = (provider: string) => {
     login({
+      id: '',
       name: `${provider} User`,
       email: `${provider.toLowerCase()}@user.com`,
       phone: '',
@@ -434,7 +436,7 @@ export default function AuthScreen({ navigation }: any) {
 
             {/* Submit */}
             <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
+              style={[styles.submitBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(175,145,151,0.35)' }]}
               onPress={handleSubmit}
               activeOpacity={0.8}
             >
@@ -618,7 +620,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
     borderWidth: 1.5,
-    borderColor: 'rgba(218,112,214,0.4)',
+    borderColor: 'rgba(175,145,151,0.4)',
   },
   submitText: {
     fontFamily: 'BakbakOne-Regular',

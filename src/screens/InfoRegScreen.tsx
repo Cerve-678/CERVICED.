@@ -18,15 +18,15 @@ import {
   ActivityIndicator,
   NativeSyntheticEvent,
   TextInputFocusEventData,
+  Switch,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { StackScreenProps } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 // Icon imports
 import { BellIcon } from '../components/IconLibrary';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,7 +39,7 @@ import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
 
 // Supabase registration service
-import { saveProviderToSupabase } from '../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies } from '../services/providerRegistrationService';
 import { transferFromAcuity } from '../services/acuityTransferService';
 
 // Navigation types
@@ -72,6 +72,7 @@ const ACCENT_COLORS = [
 
 // Predefined gradient options - expanded with more themes
 const GRADIENT_PRESETS: Array<{ name: string; colors: [string, string, ...string[]] }> = [
+  { name: 'App Default', colors: ['#EDE8E2', '#C4A8AE', '#AF9197'] },
   { name: 'Sunset', colors: ['#FF6B6B', '#4ECDC4', '#45B7D1'] },
   { name: 'Rose Gold', colors: ['#FF69B4', '#FFB6C1', '#FFC1CC'] },
   { name: 'Ocean', colors: ['#5fd5dcff', '#bd66ff9c', '#33CCCC'] },
@@ -111,7 +112,54 @@ interface ProviderRegistrationData {
   accentColor: string; // User-selected accent color
   logo: string | null;
   categories: Record<string, ServiceData[]>;
+  phone: string;
+  email: string;
+  instagram: string;
+  website: string;
+  yearsExperience: string;
+  // Address privacy
+  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
+  fullAddress: string;
+  addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
 }
+
+// ─── Policy types ────────────────────────────────────────────────────────────
+type CancelNotice     = 'none' | '24h' | '48h' | '72h';
+type CancelPenalty    = 'none' | 'deposit' | 'full';
+type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
+type MaxReschedules   = '1' | '2' | 'unlimited';
+type DepositType      = 'percent' | 'fixed';
+type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
+
+interface ProviderPolicies {
+  cancelNotice:     CancelNotice;
+  cancelPenalty:    CancelPenalty;
+  cancelNote:       string;
+  rescheduleNotice: RescheduleNotice;
+  maxReschedules:   MaxReschedules;
+  rescheduleNote:   string;
+  depositRequired:  boolean;
+  depositType:      DepositType;
+  depositAmount:    string;
+  depositNote:      string;
+  noShowAction:     NoShowAction;
+  noShowNote:       string;
+}
+
+const DEFAULT_POLICIES: ProviderPolicies = {
+  cancelNotice:     '24h',
+  cancelPenalty:    'none',
+  cancelNote:       '',
+  rescheduleNotice: '24h',
+  maxReschedules:   '1',
+  rescheduleNote:   '',
+  depositRequired:  false,
+  depositType:      'percent',
+  depositAmount:    '',
+  depositNote:      '',
+  noShowAction:     'none',
+  noShowNote:       '',
+};
 
 // Add-on interface
 interface AddOnData {
@@ -126,9 +174,53 @@ interface ServiceData {
   price: number;
   duration: string;
   description: string;
-  images: string[]; // Array of images for carousel
-  addOns: AddOnData[]; // Optional add-ons for this service
+  images: string[];
+  addOns: AddOnData[];
+  // Discoverability tags
+  tags: string[];
+  techniqueTags: string[];
+  outcomeTags: string[];
+  occasionTags: string[];
+  trendNames: string[];
+  // Safety
+  isPregnancySafe: boolean;
+  patchTestRequired: boolean;
+  minAge: number | null;
+  contraindications: string[];
+  aftercareNotes: string;
+  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | '';
 }
+
+// ─── Tag presets per context ─────────────────────────────────────────────────
+
+const STYLE_TAGS = ['natural', 'glam', 'editorial', 'classic', 'boho', 'edgy', 'soft-girl', 'baddie', 'minimalist', 'bold'];
+
+const OCCASION_TAGS = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party'];
+
+const TECHNIQUE_TAGS_BY_CATEGORY: { [key: string]: string[] } = {
+  HAIR:       ['balayage', 'highlights', 'ombre', 'keratin', 'relaxer', 'braids', 'locs', 'twists', 'extensions', 'colour'],
+  NAILS:      ['gel', 'acrylic', 'biab', 'nail-art', 'french', 'ombre', 'chrome', 'dip-powder', 'gel-x'],
+  LASHES:     ['classic', 'hybrid', 'volume', 'mega-volume', 'lash-lift', 'lash-tint', 'russian', 'wispy'],
+  BROWS:      ['microblading', 'powder-brow', 'combo-brow', 'lamination', 'tinting', 'hd-brows', 'threading', 'waxing'],
+  MUA:        ['airbrush', 'full-glam', 'editorial', 'natural', 'bridal', 'sfx', 'cut-crease', 'dewy'],
+  AESTHETICS: ['microneedling', 'chemical-peel', 'dermaplaning', 'hifu', 'filler', 'botox', 'laser', 'hydrafacial', 'mesotherapy', 'prp'],
+  OTHER:      [],
+};
+
+const OUTCOME_TAGS_BY_CATEGORY: { [key: string]: string[] } = {
+  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition'],
+  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability'],
+  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic'],
+  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched'],
+  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity'],
+  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting'],
+  OTHER:      ['results', 'enhancement', 'maintenance'],
+};
+
+const TREND_SUGGESTIONS = ['glazed-donut', 'clean-girl', 'mob-wife', 'coquette', 'soap-brows', 'butterfly-lashes', 'old-money', 'cherry-cola', 'strawberry-girl'];
+
+const AESTHETICS_CATEGORIES = ['AESTHETICS'];
+const isAestheticsService = (cat: string) => AESTHETICS_CATEGORIES.includes(cat.toUpperCase());
 
 // Service Image Carousel Component
 interface ServiceImageCarouselProps {
@@ -270,6 +362,30 @@ const GradientPickerModal: React.FC<GradientPickerModalProps> = ({
   );
 };
 
+// ─── Reusable chip-select row ─────────────────────────────────────────────────
+interface ChipSelectProps {
+  options: string[];
+  selected: string[];
+  onToggle: (tag: string) => void;
+  accentColor?: string;
+}
+const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onToggle, accentColor = '#9C27B0' }) => (
+  <View style={styles.chipGrid}>
+    {options.map(opt => {
+      const active = selected.includes(opt);
+      return (
+        <TouchableOpacity
+          key={opt}
+          style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]}
+          onPress={() => onToggle(opt)}
+        >
+          <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt}</Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
+
 // Add/Edit Service Modal
 interface ServiceModalProps {
   visible: boolean;
@@ -286,6 +402,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   service,
   categoryName,
 }) => {
+  const catKey = categoryName.toUpperCase();
+  const isAesthetics = isAestheticsService(catKey);
+  const techniquOptions: string[] = TECHNIQUE_TAGS_BY_CATEGORY[catKey] ?? TECHNIQUE_TAGS_BY_CATEGORY['OTHER'] ?? [];
+  const outcomeOptions: string[] = OUTCOME_TAGS_BY_CATEGORY[catKey] ?? OUTCOME_TAGS_BY_CATEGORY['OTHER'] ?? [];
+
   const [name, setName] = useState(service?.name || '');
   const [price, setPrice] = useState(service?.price?.toString() || '');
   const [duration, setDuration] = useState(service?.duration || '');
@@ -294,9 +415,24 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
+  // Tag state
+  const [selectedTags, setSelectedTags] = useState<string[]>(service?.tags || []);
+  const [selectedTechniques, setSelectedTechniques] = useState<string[]>(service?.techniqueTags || []);
+  const [selectedOutcomes, setSelectedOutcomes] = useState<string[]>(service?.outcomeTags || []);
+  const [selectedOccasions, setSelectedOccasions] = useState<string[]>(service?.occasionTags || []);
+  const [trendNames, setTrendNames] = useState<string[]>(service?.trendNames || []);
+  const [trendInput, setTrendInput] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceData['serviceType']>(service?.serviceType || '');
+  // Safety state
+  const [isPregnancySafe, setIsPregnancySafe] = useState(service?.isPregnancySafe ?? false);
+  const [patchTestRequired, setPatchTestRequired] = useState(service?.patchTestRequired ?? false);
+  const [minAge, setMinAge] = useState(service?.minAge?.toString() || '');
+  const [contraindications, setContraindications] = useState<string[]>(service?.contraindications || []);
+  const [contraindicationInput, setContraindicationInput] = useState('');
+  const [aftercareNotes, setAftercareNotes] = useState(service?.aftercareNotes || '');
+
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Reset state when service changes
   React.useEffect(() => {
     setName(service?.name || '');
     setPrice(service?.price?.toString() || '');
@@ -304,7 +440,23 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setDescription(service?.description || '');
     setImages(service?.images || []);
     setAddOns(service?.addOns || []);
+    setSelectedTags(service?.tags || []);
+    setSelectedTechniques(service?.techniqueTags || []);
+    setSelectedOutcomes(service?.outcomeTags || []);
+    setSelectedOccasions(service?.occasionTags || []);
+    setTrendNames(service?.trendNames || []);
+    setTrendInput('');
+    setServiceType(service?.serviceType || '');
+    setIsPregnancySafe(service?.isPregnancySafe ?? false);
+    setPatchTestRequired(service?.patchTestRequired ?? false);
+    setMinAge(service?.minAge?.toString() || '');
+    setContraindications(service?.contraindications || []);
+    setContraindicationInput('');
+    setAftercareNotes(service?.aftercareNotes || '');
   }, [service]);
+
+  const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
+    setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
 
   const handleAddImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -312,41 +464,40 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       Alert.alert('Permission Required', 'Please allow access to your photo library.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
-
-    if (!result.canceled && result.assets[0]) {
-      setImages([...images, result.assets[0].uri]);
-    }
+    if (!result.canceled && result.assets[0]) setImages([...images, result.assets[0].uri]);
   };
 
-  const handleRemoveImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index));
-  };
+  const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
 
   const handleAddAddOn = () => {
     if (!newAddOnName.trim() || !newAddOnPrice.trim()) {
       Alert.alert('Missing Information', 'Please enter add-on name and price.');
       return;
     }
-    const newAddOn: AddOnData = {
-      id: Date.now(),
-      name: newAddOnName.trim(),
-      price: parseFloat(newAddOnPrice) || 0,
-    };
-    setAddOns([...addOns, newAddOn]);
+    setAddOns([...addOns, { id: Date.now(), name: newAddOnName.trim(), price: parseFloat(newAddOnPrice) || 0 }]);
     setNewAddOnName('');
     setNewAddOnPrice('');
     Keyboard.dismiss();
   };
 
-  const handleRemoveAddOn = (id: number) => {
-    setAddOns(addOns.filter(a => a.id !== id));
+  const handleRemoveAddOn = (id: number) => setAddOns(addOns.filter(a => a.id !== id));
+
+  const handleAddTrend = () => {
+    const t = trendInput.trim().toLowerCase().replace(/\s+/g, '-');
+    if (t && !trendNames.includes(t)) setTrendNames([...trendNames, t]);
+    setTrendInput('');
+  };
+
+  const handleAddContraindication = () => {
+    const c = contraindicationInput.trim();
+    if (c && !contraindications.includes(c)) setContraindications([...contraindications, c]);
+    setContraindicationInput('');
   };
 
   const handleSave = () => {
@@ -354,25 +505,39 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       Alert.alert('Missing Information', 'Please enter a service name and price.');
       return;
     }
-
     onSave({
       id: service?.id || Date.now(),
       name: name.trim(),
       price: parseFloat(price) || 0,
       duration: duration.trim() || '1 hour',
       description: description.trim(),
-      images: images,
-      addOns: addOns,
+      images,
+      addOns,
+      tags: selectedTags,
+      techniqueTags: selectedTechniques,
+      outcomeTags: selectedOutcomes,
+      occasionTags: selectedOccasions,
+      trendNames,
+      isPregnancySafe,
+      patchTestRequired,
+      minAge: minAge ? parseInt(minAge, 10) : null,
+      contraindications,
+      aftercareNotes: aftercareNotes.trim(),
+      serviceType,
     });
     onClose();
   };
 
   const handleInputFocus = () => {
-    // Scroll to bottom when focusing on inputs at the bottom
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 300);
+    setTimeout(() => { scrollViewRef.current?.scrollToEnd({ animated: true }); }, 300);
   };
+
+  const SERVICE_TYPES: { value: ServiceData['serviceType']; label: string }[] = [
+    { value: 'treatment',    label: 'Treatment' },
+    { value: 'enhancement',  label: 'Enhancement' },
+    { value: 'maintenance',  label: 'Maintenance' },
+    { value: 'restorative',  label: 'Restorative' },
+  ];
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -399,15 +564,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 20 }}
             >
-              {/* Service Images Carousel */}
+              {/* Service Images */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Service Images</Text>
-                <ServiceImageCarousel
-                  images={images}
-                  onAddImage={handleAddImage}
-                  onRemoveImage={handleRemoveImage}
-                  size={100}
-                />
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} size={100} />
                 <Text style={styles.inputHint}>Add multiple images to showcase your service</Text>
               </View>
 
@@ -415,13 +575,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Service Name *</Text>
                 <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="e.g., Classic Lash Extensions"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
-                  />
+                  <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor="rgba(0,0,0,0.4)" />
                 </BlurView>
               </View>
 
@@ -429,14 +583,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Price (£) *</Text>
                 <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={price}
-                    onChangeText={setPrice}
-                    placeholder="e.g., 55"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
-                    keyboardType="numeric"
-                  />
+                  <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" />
                 </BlurView>
               </View>
 
@@ -444,13 +591,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Duration</Text>
                 <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={duration}
-                    onChangeText={setDuration}
-                    placeholder="e.g., 2 hours"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
-                  />
+                  <TextInput style={styles.textInput} value={duration} onChangeText={setDuration} placeholder="e.g., 2 hours" placeholderTextColor="rgba(0,0,0,0.4)" />
                 </BlurView>
               </View>
 
@@ -458,26 +599,166 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Description</Text>
                 <BlurView intensity={15} tint="light" style={styles.inputBlurMultiline}>
-                  <TextInput
-                    style={[styles.textInput, styles.textInputMultiline]}
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder="Describe your service..."
-                    placeholderTextColor="rgba(0,0,0,0.4)"
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                    onFocus={handleInputFocus}
-                  />
+                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={description} onChangeText={setDescription} placeholder="Describe your service..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={4} textAlignVertical="top" onFocus={handleInputFocus} />
                 </BlurView>
               </View>
 
-              {/* Add-Ons Section */}
+              {/* ── Service Type ─────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Service Type</Text>
+                <Text style={styles.inputHint}>Helps clients understand what kind of service this is</Text>
+                <View style={styles.chipGrid}>
+                  {SERVICE_TYPES.map(({ value, label }) => {
+                    const active = serviceType === value;
+                    return (
+                      <TouchableOpacity key={value} style={[styles.chip, active && styles.chipActive]} onPress={() => setServiceType(active ? '' : value)}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* ── Style Tags ───────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Style / Vibe</Text>
+                <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
+                <ChipSelect options={STYLE_TAGS} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} />
+              </View>
+
+              {/* ── Occasion Tags ────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Best For (Occasion)</Text>
+                <Text style={styles.inputHint}>When would a client typically book this?</Text>
+                <ChipSelect options={OCCASION_TAGS} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} />
+              </View>
+
+              {/* ── Technique Tags ───────────────────────────────────── */}
+              {techniquOptions.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Techniques Used</Text>
+                  <Text style={styles.inputHint}>Select every technique this service involves</Text>
+                  <ChipSelect options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} />
+                </View>
+              )}
+
+              {/* ── Outcome Tags ─────────────────────────────────────── */}
+              {outcomeOptions.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Results / Outcomes</Text>
+                  <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
+                  <ChipSelect options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} />
+                </View>
+              )}
+
+              {/* ── Trend Names ──────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Trend Names (Optional)</Text>
+                <Text style={styles.inputHint}>Add viral or trend names clients search for (e.g. glazed-donut, soap-brows)</Text>
+                {trendNames.length > 0 && (
+                  <View style={styles.chipGrid}>
+                    {trendNames.map(t => (
+                      <TouchableOpacity key={t} style={[styles.chip, styles.chipActive]} onPress={() => setTrendNames(trendNames.filter(x => x !== t))}>
+                        <Text style={styles.chipTextActive}>{t} ×</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.addAddOnRow}>
+                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1 }]}>
+                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddTrend} returnKeyType="done" />
+                  </BlurView>
+                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
+                    <Text style={styles.addAddOnButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.chipGrid}>
+                  {TREND_SUGGESTIONS.filter(t => !trendNames.includes(t)).map(t => (
+                    <TouchableOpacity key={t} style={styles.chip} onPress={() => setTrendNames([...trendNames, t])}>
+                      <Text style={styles.chipText}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* ── Aesthetics Safety Section (AESTHETICS only) ──────── */}
+              {isAesthetics && (
+                <View style={[styles.inputGroup, styles.safetyCard]}>
+                  <Text style={styles.safetySectionTitle}>Treatment Safety</Text>
+                  <Text style={styles.inputHint}>Required for aesthetic treatments — helps clients book safely</Text>
+
+                  <View style={styles.toggleRow}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={styles.toggleLabel}>Patch Test Required</Text>
+                      <Text style={styles.toggleHint}>Client must be patch tested before this treatment</Text>
+                    </View>
+                    <Switch value={patchTestRequired} onValueChange={setPatchTestRequired} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
+                  </View>
+
+                  <View style={styles.toggleRow}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
+                      <Text style={styles.toggleHint}>This treatment is safe during pregnancy</Text>
+                    </View>
+                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Minimum Age</Text>
+                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                      <TextInput style={styles.textInput} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={handleInputFocus} />
+                    </BlurView>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Contraindications</Text>
+                    <Text style={styles.inputHint}>Conditions that prevent this treatment (e.g. active acne, blood thinners)</Text>
+                    {contraindications.length > 0 && (
+                      <View style={styles.chipGrid}>
+                        {contraindications.map(c => (
+                          <TouchableOpacity key={c} style={[styles.chip, styles.chipWarning]} onPress={() => setContraindications(contraindications.filter(x => x !== c))}>
+                            <Text style={styles.chipTextActive}>{c} ×</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                    <View style={styles.addAddOnRow}>
+                      <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1 }]}>
+                        <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={handleInputFocus} />
+                      </BlurView>
+                      <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddContraindication}>
+                        <Text style={styles.addAddOnButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* ── Pregnancy safe toggle (non-aesthetics) ───────────── */}
+              {!isAesthetics && (
+                <View style={styles.inputGroup}>
+                  <View style={styles.toggleRow}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
+                      <Text style={styles.toggleHint}>This service is safe during pregnancy</Text>
+                    </View>
+                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
+                  </View>
+                </View>
+              )}
+
+              {/* ── Aftercare Notes ──────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Aftercare Notes (Optional)</Text>
+                <BlurView intensity={15} tint="light" style={styles.inputBlurMultiline}>
+                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={3} textAlignVertical="top" onFocus={handleInputFocus} />
+                </BlurView>
+              </View>
+
+              {/* ── Add-Ons ──────────────────────────────────────────── */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Add-Ons (Optional)</Text>
-                <Text style={styles.inputHint}>Add optional extras clients can add to this service</Text>
-
-                {/* Existing Add-Ons */}
+                <Text style={styles.inputHint}>Optional extras clients can add to this service</Text>
                 {addOns.length > 0 && (
                   <View style={styles.addOnsContainer}>
                     {addOns.map((addOn) => (
@@ -486,39 +767,19 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                           <Text style={styles.addOnName}>{addOn.name}</Text>
                           <Text style={styles.addOnPrice}>+£{addOn.price}</Text>
                         </View>
-                        <TouchableOpacity
-                          style={styles.removeAddOnButton}
-                          onPress={() => handleRemoveAddOn(addOn.id)}
-                        >
+                        <TouchableOpacity style={styles.removeAddOnButton} onPress={() => handleRemoveAddOn(addOn.id)}>
                           <Text style={styles.removeAddOnText}>×</Text>
                         </TouchableOpacity>
                       </View>
                     ))}
                   </View>
                 )}
-
-                {/* Add New Add-On */}
                 <View style={styles.addAddOnRow}>
                   <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnNameInput]}>
-                    <TextInput
-                      style={styles.textInput}
-                      value={newAddOnName}
-                      onChangeText={setNewAddOnName}
-                      placeholder="Add-on name"
-                      placeholderTextColor="rgba(0,0,0,0.4)"
-                      onFocus={handleInputFocus}
-                    />
+                    <TextInput style={styles.textInput} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor="rgba(0,0,0,0.4)" onFocus={handleInputFocus} />
                   </BlurView>
                   <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnPriceInput]}>
-                    <TextInput
-                      style={styles.textInput}
-                      value={newAddOnPrice}
-                      onChangeText={setNewAddOnPrice}
-                      placeholder="£"
-                      placeholderTextColor="rgba(0,0,0,0.4)"
-                      keyboardType="numeric"
-                      onFocus={handleInputFocus}
-                    />
+                    <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={handleInputFocus} />
                   </BlurView>
                   <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddAddOn}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
@@ -527,7 +788,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               </View>
             </ScrollView>
 
-            {/* Save Button */}
             <View style={styles.modalFooter}>
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -667,7 +927,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
 
           {isLoading ? (
             <View style={styles.transferLoadingRow}>
-              <ActivityIndicator size="small" color="#7B1FA2" />
+              <ActivityIndicator size="small" color="#AF9197" />
               <Text style={styles.transferLoadingText}>{statusMsg}</Text>
             </View>
           ) : null}
@@ -978,7 +1238,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.previewCategoryTabs}
-                  keyExtractor={(item) => item}
+                  keyExtractor={(item, index) => `preview-cat-${item}-${index}`}
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={[
@@ -1088,13 +1348,23 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               />
               <Text style={styles.previewSectionTitle}>Contact Information</Text>
               <Text style={styles.previewContactText}>
-                Location: {providerData.location || 'Your Location'}
+                📍 {providerData.location || 'Your Location'}
               </Text>
-              <Text style={styles.previewContactText}>
-                Service: {providerData.providerService === 'OTHER'
-                  ? providerData.customServiceType || 'Service'
-                  : providerData.providerService}
-              </Text>
+              {providerData.phone ? (
+                <Text style={styles.previewContactText}>📞 {providerData.phone}</Text>
+              ) : null}
+              {providerData.email ? (
+                <Text style={styles.previewContactText}>✉️ {providerData.email}</Text>
+              ) : null}
+              {providerData.instagram ? (
+                <Text style={styles.previewContactText}>📸 @{providerData.instagram}</Text>
+              ) : null}
+              {providerData.website ? (
+                <Text style={styles.previewContactText}>🌐 {providerData.website}</Text>
+              ) : null}
+              {providerData.yearsExperience ? (
+                <Text style={styles.previewContactText}>⭐ {providerData.yearsExperience} years experience</Text>
+              ) : null}
               <TouchableOpacity
                 style={[styles.previewContactButton, { backgroundColor: accentColor }]}
                 activeOpacity={0.8}
@@ -1112,6 +1382,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 // Main Component
 const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
@@ -1131,7 +1402,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     const scrollTo = inputPositions.current[inputName] || 0;
     setTimeout(() => {
       mainScrollViewRef.current?.scrollTo({
-        y: Math.max(0, scrollTo - 250), // Scroll to position with more padding for keyboard
+        y: Math.max(0, scrollTo - 250),
         animated: true,
       });
     }, 300);
@@ -1149,26 +1420,38 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     accentColor: '#7B1FA2',
     logo: null,
     categories: {},
+    phone: '',
+    email: '',
+    instagram: '',
+    website: '',
+    yearsExperience: '',
+    businessType: '',
+    fullAddress: '',
+    addressReleasePolicy: 'on_confirmation',
   });
 
-  // Load saved provider data on mount
-  useEffect(() => {
-    const loadSavedData = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('@provider_reg_data');
-        if (stored) {
-          const parsed = JSON.parse(stored) as ProviderRegistrationData;
-          setProviderData(parsed);
-          setShowTransferModal(false); // Skip transfer modal if data already exists
-        }
-      } catch (e) {
-        console.error('Error loading provider data:', e);
-      }
-    };
-    loadSavedData();
-  }, []);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'policies'>('profile');
+  const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
+  const [policiesSaved, setPoliciesSaved] = useState(false);
 
-  const { user } = useAuth();
+  // Load existing provider data and policies from Supabase/AsyncStorage on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    loadProviderFromSupabase(user.id)
+      .then(data => {
+        if (data) {
+          setProviderData(data);
+          setIsEditMode(true);
+          const firstCat = Object.keys(data.categories)[0];
+          if (firstCat) setSelectedCategory(firstCat);
+        }
+      })
+      .catch(() => {});
+    AsyncStorage.getItem(`provider_policies_${user.id}`)
+      .then(raw => { if (raw) setPolicies(JSON.parse(raw)); })
+      .catch(() => {});
+  }, [user?.id]);
 
   // Modal states
   const [showGradientPicker, setShowGradientPicker] = useState(false);
@@ -1199,15 +1482,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets[0]) {
-      setProviderData(prev => ({ ...prev, logo: result.assets[0].uri }));
+    const asset = result.assets?.[0];
+    if (!result.canceled && asset) {
+      setProviderData(prev => ({ ...prev, logo: asset.uri }));
     }
   };
 
   // Handle data transfer from Acuity Scheduling URL
   const handleTransferData = useCallback(async (url: string) => {
     const extracted = await transferFromAcuity(url);
-    setProviderData(extracted);
+    // Preserve any existing contact fields not covered by Acuity import
+    setProviderData(prev => ({ ...prev, ...extracted }));
     const firstCat = Object.keys(extracted.categories)[0];
     if (firstCat) setSelectedCategory(firstCat);
     setShowTransferModal(false);
@@ -1327,6 +1612,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, []);
 
   // Submit registration
+  const setPolicy = useCallback(<K extends keyof ProviderPolicies>(key: K, value: ProviderPolicies[K]) => {
+    setPolicies(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const handleSavePolicies = useCallback(async () => {
+    if (!user?.id) return;
+    await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
+    setPoliciesSaved(true);
+    setTimeout(() => setPoliciesSaved(false), 2000);
+  }, [policies, user?.id]);
+
   const handleSubmit = useCallback(async () => {
     if (!providerData.providerName.trim()) {
       Alert.alert('Missing Information', 'Please enter your business name.');
@@ -1355,7 +1651,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       );
     } catch (e: any) {
       console.error('Error saving provider profile:', e);
-      Alert.alert('Error', e?.message || 'Failed to save profile. Please try again.');
+      Alert.alert('Error', 'Couldn\'t save your profile. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1459,7 +1755,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Provider Registration</Text>
+            <Text style={styles.headerTitle}>{isEditMode ? 'Edit Profile' : 'Provider Registration'}</Text>
             <View style={{ width: 40 }} />
           </View>
 
@@ -1496,6 +1792,26 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </View>
               </TouchableOpacity>
             </View>
+
+            {/* Tab switcher */}
+            <View style={styles.tabSwitcher}>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'profile' && { backgroundColor: adaptiveAccentColor }]}
+                onPress={() => setActiveTab('profile')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabBtnText, activeTab === 'profile' && styles.tabBtnTextActive]}>Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'policies' && { backgroundColor: adaptiveAccentColor }]}
+                onPress={() => setActiveTab('policies')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabBtnText, activeTab === 'policies' && styles.tabBtnTextActive]}>Policies</Text>
+              </TouchableOpacity>
+            </View>
+
+            {activeTab === 'profile' && (<>
 
             {/* Business Name */}
             <BlurView intensity={50} tint="light" style={styles.card}>
@@ -1692,6 +2008,117 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
             </BlurView>
 
+            {/* Contact Information */}
+            <BlurView intensity={50} tint="light" style={styles.card}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
+              <Text style={styles.sectionTitle}>Contact Information</Text>
+              <Text style={styles.sectionSubtitle}>
+                What clients see on your public profile
+              </Text>
+
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) => { inputPositions.current['phone'] = e.nativeEvent.layout.y + 700; }}
+              >
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.phone}
+                    onChangeText={(text) => setProviderData({ ...providerData, phone: text })}
+                    placeholder="+44 7XXX XXXXXX"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    keyboardType="phone-pad"
+                    onFocus={() => handleInputFocus('phone')}
+                  />
+                </BlurView>
+              </View>
+
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) => { inputPositions.current['contactEmail'] = e.nativeEvent.layout.y + 750; }}
+              >
+                <Text style={styles.inputLabel}>Contact Email</Text>
+                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.email}
+                    onChangeText={(text) => setProviderData({ ...providerData, email: text })}
+                    placeholder="bookings@yourbusiness.com"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => handleInputFocus('contactEmail')}
+                  />
+                </BlurView>
+              </View>
+
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) => { inputPositions.current['instagram'] = e.nativeEvent.layout.y + 800; }}
+              >
+                <Text style={styles.inputLabel}>Instagram Handle</Text>
+                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.instagram}
+                    onChangeText={(text) =>
+                      setProviderData({ ...providerData, instagram: text.replace(/^@/, '') })
+                    }
+                    placeholder="yourbusiness"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => handleInputFocus('instagram')}
+                  />
+                </BlurView>
+              </View>
+
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) => { inputPositions.current['website'] = e.nativeEvent.layout.y + 850; }}
+              >
+                <Text style={styles.inputLabel}>Website</Text>
+                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.website}
+                    onChangeText={(text) => setProviderData({ ...providerData, website: text })}
+                    placeholder="https://yourbusiness.com"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    onFocus={() => handleInputFocus('website')}
+                  />
+                </BlurView>
+              </View>
+
+              <View
+                style={styles.inputGroup}
+                onLayout={(e) => { inputPositions.current['experience'] = e.nativeEvent.layout.y + 900; }}
+              >
+                <Text style={styles.inputLabel}>Years of Experience</Text>
+                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.yearsExperience}
+                    onChangeText={(text) => setProviderData({ ...providerData, yearsExperience: text.replace(/[^0-9]/g, '') })}
+                    placeholder="e.g., 5"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    keyboardType="numeric"
+                    onFocus={() => handleInputFocus('experience')}
+                  />
+                </BlurView>
+              </View>
+            </BlurView>
+
             {/* Services Section */}
             <View style={styles.servicesSection}>
               <View style={styles.servicesSectionHeader}>
@@ -1719,7 +2146,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.categoryTabs}
-                    keyExtractor={(item) => item}
+                    keyExtractor={(item, index) => `cat-${item}-${index}`}
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         style={[
@@ -1886,7 +2313,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               disabled={isSubmitting}
             >
               <Text style={styles.submitButtonText}>
-                {isSubmitting ? 'Saving...' : 'Submit for Review'}
+                {isSubmitting ? 'Saving...' : isEditMode ? 'Save Changes' : 'Submit for Review'}
               </Text>
             </TouchableOpacity>
 
@@ -1899,6 +2326,280 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 Preview Profile
               </Text>
             </TouchableOpacity>
+
+            </>)}
+
+            {activeTab === 'policies' && (
+              <BlurView intensity={50} tint="light" style={styles.policiesCard}>
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.3)', 'transparent']}
+                  start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+                  style={styles.cardHighlight}
+                />
+
+                {/* Cancellation */}
+                <Text style={styles.policySectionTitle}>Cancellation</Text>
+                <Text style={styles.policyLabel}>NOTICE REQUIRED</Text>
+                <View style={styles.pillRow}>
+                  {(['none', '24h', '48h', '72h'] as CancelNotice[]).map(opt => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.policyPill, policies.cancelNotice === opt && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setPolicy('cancelNotice', opt)}
+                    >
+                      <Text style={[styles.policyPillText, policies.cancelNotice === opt && { color: '#fff' }]}>
+                        {opt === 'none' ? 'None' : opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={[styles.policyLabel, { marginTop: 12 }]}>IF CANCELLED LATE</Text>
+                <View style={styles.pillRow}>
+                  {([
+                    { v: 'none' as CancelPenalty,    l: 'No penalty' },
+                    { v: 'deposit' as CancelPenalty, l: 'Deposit kept' },
+                    { v: 'full' as CancelPenalty,    l: 'Full charge' },
+                  ]).map(({ v, l }) => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[styles.policyPill, policies.cancelPenalty === v && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setPolicy('cancelPenalty', v)}
+                    >
+                      <Text style={[styles.policyPillText, policies.cancelPenalty === v && { color: '#fff' }]}>{l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.policyNote}
+                  placeholder="Note (e.g. cancellations via message only)"
+                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  value={policies.cancelNote}
+                  onChangeText={v => setPolicy('cancelNote', v)}
+                />
+
+                <View style={styles.policySep} />
+
+                {/* Rescheduling */}
+                <Text style={styles.policySectionTitle}>Rescheduling</Text>
+                <Text style={styles.policyLabel}>NOTICE REQUIRED</Text>
+                <View style={styles.pillRow}>
+                  {([
+                    { v: 'same_day' as RescheduleNotice, l: 'Same day' },
+                    { v: '24h' as RescheduleNotice,      l: '24h' },
+                    { v: '48h' as RescheduleNotice,      l: '48h' },
+                    { v: '72h' as RescheduleNotice,      l: '72h' },
+                  ]).map(({ v, l }) => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[styles.policyPill, policies.rescheduleNotice === v && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setPolicy('rescheduleNotice', v)}
+                    >
+                      <Text style={[styles.policyPillText, policies.rescheduleNotice === v && { color: '#fff' }]}>{l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={[styles.policyLabel, { marginTop: 12 }]}>MAX RESCHEDULES PER BOOKING</Text>
+                <View style={styles.pillRow}>
+                  {(['1', '2', 'unlimited'] as MaxReschedules[]).map(opt => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.policyPill, policies.maxReschedules === opt && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setPolicy('maxReschedules', opt)}
+                    >
+                      <Text style={[styles.policyPillText, policies.maxReschedules === opt && { color: '#fff' }]}>
+                        {opt === 'unlimited' ? 'Unlimited' : opt}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.policyNote}
+                  placeholder="Note (optional)"
+                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  value={policies.rescheduleNote}
+                  onChangeText={v => setPolicy('rescheduleNote', v)}
+                />
+
+                <View style={styles.policySep} />
+
+                {/* Deposit */}
+                <Text style={styles.policySectionTitle}>Deposit</Text>
+                <View style={styles.depositHeader}>
+                  <Text style={styles.policyLabel}>REQUIRE DEPOSIT</Text>
+                  <Switch
+                    value={policies.depositRequired}
+                    onValueChange={v => setPolicy('depositRequired', v)}
+                    trackColor={{ false: 'rgba(0,0,0,0.12)', true: adaptiveAccentColor }}
+                    thumbColor="#fff"
+                  />
+                </View>
+                {policies.depositRequired && (
+                  <>
+                    <View style={styles.depositRow}>
+                      <View style={styles.pillRow}>
+                        {(['percent', 'fixed'] as DepositType[]).map(opt => (
+                          <TouchableOpacity
+                            key={opt}
+                            style={[styles.policyPill, policies.depositType === opt && { backgroundColor: adaptiveAccentColor }]}
+                            onPress={() => setPolicy('depositType', opt)}
+                          >
+                            <Text style={[styles.policyPillText, policies.depositType === opt && { color: '#fff' }]}>
+                              {opt === 'percent' ? '%' : '£'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      <TextInput
+                        style={styles.depositInput}
+                        placeholder={policies.depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
+                        placeholderTextColor="rgba(0,0,0,0.3)"
+                        value={policies.depositAmount}
+                        onChangeText={v => setPolicy('depositAmount', v)}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <TextInput
+                      style={styles.policyNote}
+                      placeholder="Note (optional)"
+                      placeholderTextColor="rgba(0,0,0,0.3)"
+                      value={policies.depositNote}
+                      onChangeText={v => setPolicy('depositNote', v)}
+                    />
+                  </>
+                )}
+
+                <View style={styles.policySep} />
+
+                {/* No-show */}
+                <Text style={styles.policySectionTitle}>No-show</Text>
+                <Text style={styles.policyLabel}>ACTION</Text>
+                <View style={styles.pillRow}>
+                  {([
+                    { v: 'none' as NoShowAction,           l: 'No action' },
+                    { v: 'warn' as NoShowAction,           l: 'Warn client' },
+                    { v: 'charge_deposit' as NoShowAction, l: 'Charge deposit' },
+                    { v: 'charge_full' as NoShowAction,    l: 'Charge in full' },
+                  ]).map(({ v, l }) => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[styles.policyPill, policies.noShowAction === v && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setPolicy('noShowAction', v)}
+                    >
+                      <Text style={[styles.policyPillText, policies.noShowAction === v && { color: '#fff' }]}>{l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.policyNote}
+                  placeholder="Note (optional)"
+                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  value={policies.noShowNote}
+                  onChangeText={v => setPolicy('noShowNote', v)}
+                />
+
+                {/* ── Business Setup ── */}
+                <View style={styles.policySep} />
+                <Text style={styles.policySectionTitle}>Business Setup</Text>
+                <Text style={styles.policyLabel}>TYPE</Text>
+                <View style={styles.pillRow}>
+                  {([
+                    { v: 'salon'     as const, l: 'Salon' },
+                    { v: 'studio'    as const, l: 'Studio' },
+                    { v: 'home_based'as const, l: 'Home Based' },
+                    { v: 'mobile'    as const, l: 'Mobile' },
+                  ]).map(({ v, l }) => (
+                    <TouchableOpacity
+                      key={v}
+                      style={[styles.policyPill, providerData.businessType === v && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setProviderData(prev => ({ ...prev, businessType: v }))}
+                    >
+                      <Text style={[styles.policyPillText, providerData.businessType === v && { color: '#fff' }]}>{l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {providerData.businessType !== 'mobile' && (
+                  <>
+                    <Text style={[styles.policyLabel, { marginTop: 14 }]}>FULL ADDRESS</Text>
+                    <Text style={styles.addressHint}>
+                      {providerData.businessType === 'home_based'
+                        ? 'Shared with clients only when you release it — never shown publicly.'
+                        : 'Your business address. Shown to clients once booking is confirmed.'}
+                    </Text>
+                    <TextInput
+                      style={styles.policyNote}
+                      placeholder="e.g. 42 Oak Street, London, N1 2AB"
+                      placeholderTextColor="rgba(0,0,0,0.3)"
+                      value={providerData.fullAddress}
+                      onChangeText={v => setProviderData(prev => ({ ...prev, fullAddress: v }))}
+                      multiline
+                    />
+
+                    <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
+                    <View style={styles.pillRow}>
+                      {([
+                        { v: 'always'           as const, l: 'Always visible',  show: providerData.businessType === 'salon' || providerData.businessType === 'studio' },
+                        { v: 'on_confirmation'  as const, l: 'On confirmation', show: true },
+                        { v: 'day_before'       as const, l: '24h before',      show: providerData.businessType === 'home_based' },
+                        { v: 'two_days_before'  as const, l: '48h before',      show: providerData.businessType === 'home_based' },
+                        { v: 'three_days_before'as const, l: '72h before',      show: providerData.businessType === 'home_based' },
+                        { v: 'five_days_before' as const, l: '5 days before',   show: providerData.businessType === 'home_based' },
+                        { v: 'week_before'      as const, l: '1 week before',   show: providerData.businessType === 'home_based' },
+                        { v: 'manual'           as const, l: 'Manual release',  show: providerData.businessType === 'home_based' },
+                      ]).filter(o => o.show).map(({ v, l }) => (
+                        <TouchableOpacity
+                          key={v}
+                          style={[styles.policyPill, providerData.addressReleasePolicy === v && { backgroundColor: adaptiveAccentColor }]}
+                          onPress={() => setProviderData(prev => ({ ...prev, addressReleasePolicy: v }))}
+                        >
+                          <Text style={[styles.policyPillText, providerData.addressReleasePolicy === v && { color: '#fff' }]}>{l}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {({
+                      always:           'Your address is always visible to booked clients.',
+                      on_confirmation:  'Address is shared automatically when the booking is confirmed.',
+                      day_before:       'Address is automatically shared 24 hours before the appointment.',
+                      two_days_before:  'Address is automatically shared 48 hours before the appointment.',
+                      three_days_before: 'Address is automatically shared 72 hours before the appointment.',
+                      five_days_before:  'Address is automatically shared 5 days before the appointment.',
+                      week_before:       'Address is automatically shared 1 week before the appointment.',
+                      manual:           'You control when each client receives your address from the booking detail page.',
+                    } as Record<string, string>)[providerData.addressReleasePolicy] ? (
+                      <Text style={styles.addressHint}>
+                        {(({
+                          always:           'Your address is always visible to booked clients.',
+                          on_confirmation:  'Address is shared automatically when the booking is confirmed.',
+                          day_before:       'Address is automatically shared 24 hours before the appointment.',
+                          two_days_before:  'Address is automatically shared 48 hours before the appointment.',
+                          three_days_before:'Address is automatically shared 72 hours before the appointment.',
+                          week_before:      'Address is automatically shared 1 week before the appointment.',
+                          manual:           'You control when each client receives your address from the booking detail page.',
+                        } as Record<string, string>)[providerData.addressReleasePolicy])}
+                      </Text>
+                    ) : null}
+                  </>
+                )}
+
+                {providerData.businessType === 'mobile' && (
+                  <Text style={styles.addressHint}>
+                    You travel to your clients — no fixed address is shared. Make sure your location text describes your service area.
+                  </Text>
+                )}
+
+                {/* Save */}
+                <TouchableOpacity
+                  style={[styles.savePoliciesBtn, { backgroundColor: policiesSaved ? '#34C759' : adaptiveAccentColor }]}
+                  onPress={handleSavePolicies}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.savePoliciesBtnText}>
+                    {policiesSaved ? '✓ Saved' : 'Save Policies'}
+                  </Text>
+                </TouchableOpacity>
+              </BlurView>
+            )}
+
           </ScrollView>
         </SafeAreaView>
       </ThemedBackground>
@@ -2526,7 +3227,7 @@ const styles = StyleSheet.create({
   transferButton: {
     paddingVertical: 14,
     borderRadius: 20,
-    backgroundColor: '#7B1FA2',
+    backgroundColor: '#AF9197',
     alignItems: 'center',
   },
   transferButtonText: {
@@ -2563,7 +3264,7 @@ const styles = StyleSheet.create({
   },
   transferLoadingText: {
     fontSize: 13,
-    color: '#7B1FA2',
+    color: '#AF9197',
     fontStyle: 'italic',
   },
 
@@ -2586,7 +3287,7 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: 14,
     borderRadius: 20,
-    backgroundColor: '#7B1FA2',
+    backgroundColor: '#AF9197',
     alignItems: 'center',
   },
   saveButtonText: {
@@ -3229,7 +3930,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#7B1FA2',
+    backgroundColor: '#AF9197',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3237,6 +3938,197 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#fff',
     fontWeight: 'bold',
+  },
+
+  // ── Chip select ──
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  chipActive: {
+    backgroundColor: 'rgba(218,112,214,0.2)',
+    borderColor: 'rgba(218,112,214,0.4)',
+  },
+  chipWarning: {
+    backgroundColor: '#FF6868',
+    borderColor: '#FF6868',
+  },
+  chipText: {
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.65)',
+    fontWeight: '500',
+  },
+  chipTextActive: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  // ── Safety card (Aesthetics) ──
+  safetyCard: {
+    backgroundColor: 'rgba(156,39,176,0.07)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(156,39,176,0.18)',
+    padding: 16,
+    gap: 12,
+  },
+  safetySectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6A1B9A',
+    marginBottom: 2,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  toggleInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  toggleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.75)',
+  },
+  toggleHint: {
+    fontSize: 11,
+    color: 'rgba(0,0,0,0.45)',
+    marginTop: 1,
+  },
+
+  // ── Tab switcher ──
+  tabSwitcher: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 14,
+    padding: 4,
+    gap: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 11,
+    alignItems: 'center',
+  },
+  tabBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.75)',
+  },
+  tabBtnTextActive: {
+    color: '#fff',
+  },
+
+  // ── Policies tab ──
+  policiesCard: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  policySectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'rgba(0,0,0,0.75)',
+    marginBottom: 10,
+  },
+  policyLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    color: 'rgba(0,0,0,0.4)',
+    marginBottom: 8,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginBottom: 4,
+  },
+  policyPill: {
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  policyPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.55)',
+  },
+  policyNote: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  policySep: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginVertical: 18,
+  },
+  depositHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  depositRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  depositInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  savePoliciesBtn: {
+    marginTop: 20,
+    paddingVertical: 15,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  savePoliciesBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  addressHint: {
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.45)',
+    marginTop: 6,
+    marginBottom: 4,
+    lineHeight: 17,
   },
 
 });

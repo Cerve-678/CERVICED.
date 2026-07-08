@@ -1,8 +1,21 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import UserProfileScreen from '../../screens/UserProfileScreen';  // CORRECTED: was importing ProviderProfileScreen
-import ProviderProfileScreen from '../../screens/ProviderProfileScreen';  // ADDED: for navigation
+import UserProfileScreen from '../../screens/UserProfileScreen';
+import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
+import ProviderChatScreen from '../../screens/ProviderChatScreen';
+import ProfileInfoScreen from '../../screens/ProfileInfoScreen';
+import BeautyProfileScreen from '../../screens/BeautyProfileScreen';
+import ChangePasswordScreen from '../../screens/ChangePasswordScreen';
+import NotificationsSettingsScreen from '../../screens/NotificationsSettingsScreen';
+import PaymentMethodsScreen from '../../screens/PaymentMethodsScreen';
+import SubscriptionScreen from '../../screens/SubscriptionScreen';
+import HelpCentreScreen from '../../screens/HelpCentreScreen';
+import AboutScreen from '../../screens/AboutScreen';
+import TermsScreen from '../../screens/TermsScreen';
+import ReportProblemScreen from '../../screens/ReportProblemScreen';
+import PointsScreen from '../../screens/PointsScreen';
 import BookingsScreen from '../../screens/BookingsScreen';
+import ClientIntakeFormScreen from '../../screens/ClientIntakeFormScreen';
 import BookmarkedProvidersScreen from '../../screens/BookmarkedProvidersScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import CartScreen from '../../screens/CartScreen';
@@ -20,11 +33,71 @@ export default function ProfileNavigator() {
     <ProfileStack.Navigator>
       <ProfileStack.Screen
         name="ProfileMain"
-        component={UserProfileScreen}  // CORRECTED: now uses UserProfileScreen
+        component={UserProfileScreen}
         options={{ headerShown: false }}
       />
-      
-      {/* ADD ProviderProfile screen for navigation */}
+      <ProfileStack.Screen
+        name="ProfileInfo"
+        component={ProfileInfoScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="BeautyProfile"
+        component={BeautyProfileScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="NotificationsSettings"
+        component={NotificationsSettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="PaymentMethods"
+        component={PaymentMethodsScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="Subscription"
+        component={SubscriptionScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="HelpCentre"
+        component={HelpCentreScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="Terms"
+        component={TermsScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="ReportProblem"
+        component={ReportProblemScreen}
+        options={{ headerShown: false }}
+      />
+      <ProfileStack.Screen
+        name="Points"
+        component={PointsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProfileStack.Screen
+        name="ProviderChat"
+        component={ProviderChatScreen}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+      />
+
       <ProfileStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
@@ -32,13 +105,9 @@ export default function ProfileNavigator() {
           title: 'Provider Profile',
           presentation: 'card',
           headerBackTitle: 'Profile',
-          headerStyle: {
-            backgroundColor: theme.background,
-          },
+          headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.text,
-          headerTitleStyle: {
-            color: theme.text,
-          },
+          headerTitleStyle: { color: theme.text },
         }}
       />
 
@@ -49,13 +118,9 @@ export default function ProfileNavigator() {
           title: 'Cart',
           presentation: 'card',
           headerBackTitle: 'Back',
-          headerStyle: {
-            backgroundColor: theme.background,
-          },
+          headerStyle: { backgroundColor: theme.background },
           headerTintColor: theme.text,
-          headerTitleStyle: {
-            color: theme.text,
-          },
+          headerTitleStyle: { color: theme.text },
         }}
       />
 
@@ -77,21 +142,28 @@ export default function ProfileNavigator() {
         }}
       />
 
+      <ProfileStack.Screen
+        name="ClientIntakeForm"
+        component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProfileStack.Screen
+        name="BookmarkedProviders"
+        component={BookmarkedProvidersScreen}
+        options={{
+          title: 'Saved Providers',
+          presentation: 'card',
+          headerShown: false,
+        }}
+      />
+
       <ProfileStack.Group screenOptions={{
         presentation: 'fullScreenModal',
         headerBackTitle: 'Close',
-        headerStyle: {
-          backgroundColor: theme.background,
-        },
+        headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.text,
       }}>
-        <ProfileStack.Screen
-          name="BookmarkedProviders"
-          component={BookmarkedProvidersScreen}
-          options={{
-            title: 'Saved Providers',
-          }}
-        />
         <ProfileStack.Screen
           name="Notifications"
           component={NotificationsScreen}
@@ -111,6 +183,7 @@ export default function ProfileNavigator() {
           }}
         />
         <ProfileStack.Screen
+          // @ts-ignore
           name="InfoReg"
           component={InfoRegScreen}
           options={{

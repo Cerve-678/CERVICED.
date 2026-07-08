@@ -1,10 +1,12 @@
 // src/screens/auth/NewPasswordScreen.tsx
 import React, { useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -14,16 +16,19 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
-import { ShieldCheckIcon } from '../../components/IconLibrary';
 import { supabase } from '../../lib/supabase';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'NewPassword'>;
 
+const L = { bg: '#F5F1EC', surface: '#EDE8E2', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
+const D = { bg: '#1A1815', surface: '#201D1A', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
+
 export default function NewPasswordScreen({ navigation }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const t = isDarkMode ? D : L;
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -31,32 +36,25 @@ export default function NewPasswordScreen({ navigation }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const inputStyle = [
-    styles.input,
-    {
-      color: theme.text,
-      backgroundColor: isDarkMode ? 'rgba(58,58,60,0.8)' : 'rgba(255,255,255,0.6)',
-      borderColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.6)',
-    },
-  ];
-
   const handleSave = async () => {
     if (password.length < 8) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Too short', 'Password must be at least 8 characters.');
       return;
     }
     if (password !== confirm) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('No match', 'Passwords do not match.');
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', "Couldn't update your password. Please try again.");
       return;
     }
-    // Sign out so the user logs in fresh with new password
     await supabase.auth.signOut();
     Alert.alert('Password updated!', 'Please log in with your new password.', [
       { text: 'OK', onPress: () => navigation.navigate('Login') },
@@ -64,79 +62,75 @@ export default function NewPasswordScreen({ navigation }: Props) {
   };
 
   return (
-    <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
-          <ShieldCheckIcon size={64} color="#a342c3" style={{ marginBottom: 24 }} />
+    <ThemedBackground style={{ flex: 1 }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
-          <Text style={[styles.title, { color: theme.text }]}>New password</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-            Choose a strong password for your account.
-          </Text>
+            <View style={[styles.iconCircle, { backgroundColor: t.surface }]}>
+              <Text style={[styles.iconGlyph, { color: t.accent }]}>🛡️</Text>
+            </View>
 
-          {/* Password */}
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={inputStyle}
-              placeholder="New password"
-              placeholderTextColor={theme.secondaryText}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              selectionColor={theme.accent}
-            />
+            <Text style={[styles.title, { color: t.text }]}>New password</Text>
+            <Text style={[styles.subtitle, { color: t.sub }]}>
+              Choose a strong password for your account.
+            </Text>
+
+            {/* Password */}
+            <View style={[styles.inputWrapper, { backgroundColor: t.surface, borderColor: t.border }]}>
+              <TextInput
+                style={[styles.input, { color: t.text }]}
+                placeholder="New password"
+                placeholderTextColor={t.sub}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                selectionColor={t.accent}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
+              >
+                <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Confirm */}
+            <View style={[styles.inputWrapper, { backgroundColor: t.surface, borderColor: t.border }]}>
+              <TextInput
+                style={[styles.input, { color: t.text }]}
+                placeholder="Confirm password"
+                placeholderTextColor={t.sub}
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry={!showConfirm}
+                autoCapitalize="none"
+                selectionColor={t.accent}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowConfirm(v => !v); }}
+              >
+                <Text style={[styles.eyeText, { color: t.sub }]}>{showConfirm ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
-              style={styles.eyeBtn}
-              onPress={() => setShowPassword(v => !v)}
+              style={[styles.primaryBtn, { backgroundColor: t.accent }]}
+              onPress={handleSave}
+              activeOpacity={0.75}
+              disabled={loading}
             >
-              <Text style={{ color: theme.secondaryText, fontSize: 13 }}>
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryBtnText}>SAVE PASSWORD</Text>
+              )}
             </TouchableOpacity>
           </View>
-
-          {/* Confirm */}
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={inputStyle}
-              placeholder="Confirm password"
-              placeholderTextColor={theme.secondaryText}
-              value={confirm}
-              onChangeText={setConfirm}
-              secureTextEntry={!showConfirm}
-              autoCapitalize="none"
-              selectionColor={theme.accent}
-            />
-            <TouchableOpacity
-              style={styles.eyeBtn}
-              onPress={() => setShowConfirm(v => !v)}
-            >
-              <Text style={{ color: theme.secondaryText, fontSize: 13 }}>
-                {showConfirm ? 'Hide' : 'Show'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
-            onPress={handleSave}
-            activeOpacity={0.8}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={isDarkMode ? '#fff' : theme.text} />
-            ) : (
-              <Text style={[styles.primaryBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-                SAVE PASSWORD
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </ThemedBackground>
   );
@@ -150,14 +144,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  iconGlyph: { fontSize: 36 },
   title: {
     fontSize: 28,
     fontFamily: 'BakbakOne-Regular',
-    fontWeight: '900',
+    letterSpacing: 0.5,
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
@@ -165,29 +169,31 @@ const styles = StyleSheet.create({
   },
   inputWrapper: {
     width: '100%',
-    marginBottom: 16,
-    position: 'relative',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'android' ? 10 : 13,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   input: {
-    width: '100%',
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
-    paddingRight: 60,
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 15,
+    padding: 0,
+    paddingRight: 8,
   },
-  eyeBtn: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
+  eyeBtn: { paddingLeft: 8 },
+  eyeText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
   },
   primaryBtn: {
     width: '100%',
     height: 52,
-    borderRadius: 16,
+    borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
@@ -195,7 +201,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
-    fontWeight: '700',
     letterSpacing: 1,
+    color: '#FFFFFF',
   },
 });

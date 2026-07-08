@@ -14,8 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 // ── Input component ──────────────────────────────────────────────────────────
@@ -111,8 +111,8 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
       }
 
       const accessToken = session.access_token;
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-      const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+      const supabaseUrl = process.env['EXPO_PUBLIC_SUPABASE_URL']!;
+      const supabaseAnonKey = process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY']!;
       const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
         method: 'PUT',
         headers: {
@@ -129,7 +129,7 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
       setConfirmPassword('');
       Alert.alert('Success', 'Your password has been updated.');
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Failed to update password.');
+      Alert.alert('Error', 'Couldn\'t update your password. Please try again.');
     } finally {
       setPasswordLoading(false);
     }
@@ -138,18 +138,19 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <ThemedBackground>
+    <ThemedBackground style={{ flex: 1 }}>
       <SafeAreaView style={styles.container} edges={['top']}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <TouchableOpacity
+            style={[styles.backBtn, { backgroundColor: isDarkMode ? '#201D1A' : '#EDE8E2', borderColor: 'rgba(126,102,103,0.14)' }]}
             onPress={() => navigation.goBack()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.75}
           >
-            <Ionicons name="chevron-back" size={26} color={theme.text} />
+            <Text style={[styles.backArrow, { color: theme.text }]}>←</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Change Password</Text>
-          <View style={{ width: 26 }} />
+          <Text style={[styles.headerTitle, { color: theme.text }]}>CHANGE PASSWORD</Text>
+          <View style={styles.backBtn} />
         </View>
 
         <KeyboardAvoidingView
@@ -252,7 +253,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  headerTitle: { fontSize: 18, fontWeight: '600' },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backArrow: { fontSize: 18, fontWeight: '400' },
+  headerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    letterSpacing: 1,
+  },
   content: { padding: 20, gap: 0 },
   section: { gap: 16 },
   fieldWrap: { gap: 6 },

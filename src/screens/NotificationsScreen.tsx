@@ -15,10 +15,8 @@ import {
   Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { useFonts } from 'expo-font';
 import { useFont } from '../contexts/FontContext';
-import { ThemedBackground } from '../components/ThemedBackground';
 import { BellIcon } from '../components/IconLibrary';
 import { NotificationService } from '../services/notificationService';
 import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../services/databaseService';
@@ -28,10 +26,24 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 
 import { HomeScreenProps } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
+import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
-import { CommonActions } from '@react-navigation/native';
+import { CommonActions, StackActions } from '@react-navigation/native';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const NL = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', text: '#000000',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
+  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
+};
+const ND = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', text: '#F0ECE7',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
+  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
+};
 
 interface Notification {
   id: string;
@@ -50,9 +62,9 @@ interface Notification {
   provider: string;
   service: string;
   providerImage?: any;
-  bookingId?: string;
-  status?: string;
-  providerId?: string; // For new_provider notifications
+  bookingId?: string | undefined;
+  status?: string | undefined;
+  providerId?: string | undefined; // For new_provider notifications
 }
 
 // ── Skeleton Notification Row ───────────────────────────────────
@@ -102,13 +114,29 @@ const notifSkeletonStyles = StyleSheet.create({
   line: { height: 12, borderRadius: 6 },
 });
 
+// Notification types that only make sense for a provider
+const PROVIDER_ONLY_TYPES: Notification['type'][] = [
+  'booking_pending', 'no_show', 'review_received',
+];
+// Notification types that only make sense for a client
+const CLIENT_ONLY_TYPES: Notification['type'][] = [
+  'new_provider', 'promotion', 'review_request',
+  'reschedule_provider_response', 'booking_declined',
+];
+
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode } = useTheme();
+  const P = isDarkMode ? ND : NL;
   const { textStyles } = useFont();
   const [fontsLoaded] = useFonts({
     BakbakOne: require('../../assets/fonts/BakbakOne-Regular.ttf'),
     Jura: require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
   });
+  const { user, activeMode } = useAuth();
+  const isProvider = activeMode === 'provider';
+  const isProviderRef = useRef(false);
+  isProviderRef.current = isProvider;
+
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -142,7 +170,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       .channel('notifications-screen')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` },
         (payload) => {
           const n = mapDbNotification(payload.new as DbNotification);
           setNotifications(prev => [n, ...prev]);
@@ -150,7 +178,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'notifications' },
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` },
         (payload) => {
           const updated = mapDbNotification(payload.new as DbNotification);
           setNotifications(prev =>
@@ -176,24 +204,42 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     }
   };
 
+  // Reset active filter tab whenever the user switches between provider/client mode
+  useEffect(() => {
+    setSelectedFilter('all');
+  }, [activeMode]);
+
   // ✅ Filter notifications based on selected filter
   const filteredNotifications = useMemo(() => {
+    // First strip notifications that belong to the other mode
+    const modeFiltered = notifications.filter(n =>
+      isProvider
+        ? !CLIENT_ONLY_TYPES.includes(n.type)
+        : !PROVIDER_ONLY_TYPES.includes(n.type)
+    );
+
     switch (selectedFilter) {
       case 'unread':
-        return notifications.filter(n => !n.read);
+        return modeFiltered.filter(n => !n.read);
       case 'bookings':
-        return notifications.filter(n => 
-          ['booking_confirmed', 'booking_reminder', 'booking_cancelled', 
-           'reschedule_request', 'reschedule_provider_response', 'reschedule_confirmed'].includes(n.type)
+        return modeFiltered.filter(n =>
+          ['booking_pending', 'booking_confirmed', 'booking_reminder',
+           'booking_cancelled', 'booking_in_progress', 'no_show',
+           'reschedule_request', 'reschedule_provider_response',
+           'reschedule_confirmed'].includes(n.type)
+        );
+      case 'reviews':
+        return modeFiltered.filter(n =>
+          ['review_received', 'review_request'].includes(n.type)
         );
       case 'promotions':
-        return notifications.filter(n => 
+        return modeFiltered.filter(n =>
           ['promotion', 'new_provider'].includes(n.type)
         );
       default:
-        return notifications;
+        return modeFiltered;
     }
-  }, [notifications, selectedFilter]);
+  }, [notifications, selectedFilter, isProvider]);
 
   // ✅ Mark single notification as read
   const markAsRead = useCallback(async (notificationId: string) => {
@@ -243,12 +289,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setSelectedNotification(null);
   }, []);
 
-  const { user } = useAuth();
-  const isProvider = user?.accountType === 'provider';
-  // Use a ref so the callback always reads the latest value, never stale
-  const isProviderRef = useRef(false);
-  isProviderRef.current = isProvider;
-
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
     if (__DEV__) console.log('[NotificationsScreen] handleNotificationAction called');
@@ -283,25 +323,22 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           if (notification.bookingId) {
             const bookingId = notification.bookingId;
             // Dismiss Notifications modal
-            navigation.dispatch(CommonActions.goBack());
+            navigation.dispatch(CommonActions.goBack() as any);
             // After modal dismiss animation, push BookingDetail in same stack
             setTimeout(() => {
               navigation.dispatch(
-                CommonActions.navigate({ name: 'BookingDetail', params: { bookingId } })
+                CommonActions.navigate({ name: 'BookingDetail', params: { bookingId } }) as any
               );
               if (__DEV__) console.log('Provider — navigating to BookingDetail:', bookingId);
             }, 500);
           }
         } else {
-          // Client: go back to tab then open Bookings screen
+          // Client: replace Notifications with Bookings so the modal dismisses cleanly
           const bookingsParams = notification.bookingId
             ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
-            : undefined;
-          navigation.goBack();
-          setTimeout(() => {
-            navigation.navigate('Bookings', bookingsParams);
-            if (__DEV__) console.log('Client — navigating to Bookings:', bookingsParams);
-          }, 400);
+            : {};
+          if (__DEV__) console.log('Client — navigating to Bookings:', bookingsParams);
+          navigation.dispatch(StackActions.replace('Bookings', bookingsParams));
         }
       }, 300);
     } else if (notification.type === 'new_provider') {
@@ -314,11 +351,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       }
 
       setTimeout(() => {
-        navigation.goBack();
-        setTimeout(() => {
-          navigation.navigate('ProviderProfile', { providerId: notification.providerId!, source: 'notification' });
-          if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
-        }, 100);
+        if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
+        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' }));
       }, 300);
     } else if (notification.type === 'promotion') {
       if (__DEV__) console.log('Navigating to Home');
@@ -359,7 +393,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   if (!fontsLoaded || notificationsLoading) {
     return (
-      <ThemedBackground style={styles.background}>
+      <ThemedBackground style={{ flex: 1 }}>
         <SafeAreaView style={styles.safeArea}>
           <View style={{ paddingTop: 16 }}>
             {[1, 2, 3, 4, 5, 6].map(k => (
@@ -375,9 +409,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const getBellColor = (type: string) => {
     if (['booking_cancelled', 'booking_declined', 'no_show'].includes(type)) return '#FF1744';
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress'].includes(type)) return '#4CAF50';
-    if (['booking_pending', 'reschedule_request', 'reschedule_response', 'reschedule_provider_response'].includes(type)) return '#FF9500';
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider'].includes(type)) return '#9C27B0';
+    if (['promotion', 'new_provider'].includes(type)) return '#AF9197';
     return '#FF9800';
   };
 
@@ -446,11 +480,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         onPress={() => showFullMessage(item)}
         style={styles.notificationItem}
       >
-        <BlurView
-          intensity={25}
-          tint={theme.blurTint}
+        <View
           style={[
             styles.notificationBlur,
+            { backgroundColor: P.card },
             !item.read && styles.unreadNotification
           ]}
         >
@@ -480,7 +513,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                   textStyles.button,
                   styles.notificationTitle,
                   styles.notificationTitleBold,
-                  { color: theme.text },
+                  { color: P.text },
                   !item.read && styles.unreadTitle
                 ]} numberOfLines={1}>
                   {item.title}
@@ -488,12 +521,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 {!item.read && <View style={styles.unreadDot} />}
               </View>
 
-              <Text style={[textStyles.body, styles.notificationMessage, { color: theme.secondaryText }]} numberOfLines={2}>
+              <Text style={[textStyles.body, styles.notificationMessage, { color: P.sub }]} numberOfLines={2}>
                 {item.message}
               </Text>
 
               <View style={styles.notificationFooter}>
-                <Text style={[textStyles.caption, styles.notificationTime, { color: theme.secondaryText }]}>
+                <Text style={[textStyles.caption, styles.notificationTime, { color: P.sub }]}>
                   {formatTimestamp(item.timestamp)}
                 </Text>
 
@@ -507,13 +540,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               </View>
             </View>
           </View>
-        </BlurView>
+        </View>
       </TouchableOpacity>
     </Swipeable>
   );
 
   return (
-    <ThemedBackground style={styles.background}>
+    <View style={[styles.background, { backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }]}>
       <SafeAreaView style={styles.safeArea}>
         <StatusBar barStyle={theme.statusBar} translucent={true} />
 
@@ -525,7 +558,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Notifications</Text>
+            <Text style={[styles.headerTitle, { color: P.text }]}>Notifications</Text>
             {unreadCount > 0 && (
               <View style={styles.unreadBadge}>
                 <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
@@ -547,38 +580,41 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         {/* ✅ Filter Tabs */}
         <View style={styles.filterContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-            {[
-              { key: 'all', label: 'All' },
-              { key: 'unread', label: 'Unread' },
-              { key: 'bookings', label: 'Bookings' },
-              { key: 'promotions', label: 'Offers' }
-            ].map((filter) => (
+            {(isProvider
+              ? [
+                  { key: 'all', label: 'All' },
+                  { key: 'unread', label: 'Unread' },
+                  { key: 'bookings', label: 'Bookings' },
+                  { key: 'reviews', label: 'Reviews' },
+                ]
+              : [
+                  { key: 'all', label: 'All' },
+                  { key: 'unread', label: 'Unread' },
+                  { key: 'bookings', label: 'Bookings' },
+                  { key: 'promotions', label: 'Offers' },
+                ]
+            ).map((filter) => (
               <TouchableOpacity
                 key={filter.key}
-                style={styles.filterButton}
+                style={[
+                  styles.filterButton,
+                  styles.filterButtonBlur,
+                  selectedFilter === filter.key && styles.filterButtonActive
+                ]}
                 onPress={() => setSelectedFilter(filter.key)}
                 activeOpacity={0.7}
               >
-                <BlurView
-                  intensity={25}
-                  tint={theme.blurTint}
-                  style={[
-                    styles.filterButtonBlur,
-                    selectedFilter === filter.key && styles.filterButtonActive
-                  ]}
-                >
-                  <Text style={[
-                    styles.filterButtonText,
-                    selectedFilter === filter.key && styles.filterButtonTextActive
-                  ]}>
-                    {filter.label}
-                  </Text>
-                  {filter.key === 'unread' && unreadCount > 0 && (
-                    <View style={styles.filterBadge}>
-                      <Text style={styles.filterBadgeText}>{unreadCount}</Text>
-                    </View>
-                  )}
-                </BlurView>
+                <Text style={[
+                  styles.filterButtonText,
+                  selectedFilter === filter.key && styles.filterButtonTextActive
+                ]}>
+                  {filter.label}
+                </Text>
+                {filter.key === 'unread' && unreadCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{unreadCount}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -603,21 +639,21 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             <RefreshControl 
               refreshing={refreshing} 
               onRefresh={onRefresh}
-              tintColor="#9C27B0"
-              colors={['#9C27B0']}
+              tintColor="#AF9197"
+              colors={['#AF9197']}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <BlurView intensity={25} tint={theme.blurTint} style={styles.emptyStateBlur}>
-                <BellIcon size={64} color={isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)'} />
-                <Text style={[textStyles.h3, styles.emptyStateTitle, { color: theme.text }]}>No notifications</Text>
-                <Text style={[textStyles.body, styles.emptyStateText, { color: theme.secondaryText }]}>
+              <View style={styles.emptyStateBlur}>
+                <BellIcon size={64} color={P.sub} />
+                <Text style={[textStyles.h3, styles.emptyStateTitle, { color: P.text }]}>No notifications</Text>
+                <Text style={[textStyles.body, styles.emptyStateText, { color: P.sub }]}>
                   {selectedFilter === 'all'
                     ? "You're all caught up! New notifications will appear here."
                     : `No ${selectedFilter} notifications to show.`}
                 </Text>
-              </BlurView>
+              </View>
             </View>
           }
           contentContainerStyle={styles.notificationsContent}
@@ -637,18 +673,18 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           >
             <View style={styles.modalContainer}>
               <TouchableOpacity activeOpacity={1} onPress={() => {}}>
-                <BlurView intensity={80} tint={theme.blurTint} style={styles.messagePopup}>
+                <View style={[styles.messagePopup, { backgroundColor: P.card, borderColor: P.border }]}>
                   {selectedNotification && (
                     <>
                       <View style={styles.popupHeader}>
                         <View style={styles.popupHeaderLeft}>
                           <View style={[
                             styles.popupIconContainer,
-                            { backgroundColor: `${getBellColor(selectedNotification.type)}20` }
+                            { backgroundColor: `${getBellColor(selectedNotification.type)}20`, borderColor: P.border }
                           ]}>
-                            <BellIcon 
+                            <BellIcon
                               size={40}
-                              color={getBellColor(selectedNotification.type)} 
+                              color={getBellColor(selectedNotification.type)}
                             />
                           </View>
                           {selectedNotification.providerImage && (
@@ -661,26 +697,26 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                         </View>
 
                         <TouchableOpacity
-                          style={styles.closeButton}
+                          style={[styles.closeButton, { backgroundColor: P.surface }]}
                           onPress={closeMessagePopup}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.closeButtonText, { color: theme.text }]}>×</Text>
+                          <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
                         </TouchableOpacity>
                       </View>
 
-                      <Text style={[textStyles.h3, styles.popupTitle, { color: theme.text }]}>
+                      <Text style={[textStyles.h3, styles.popupTitle, { color: P.text }]}>
                         {selectedNotification.title}
                       </Text>
 
                       <ScrollView style={styles.popupMessageScroll}>
-                        <Text style={[textStyles.body, styles.popupMessage, { color: theme.secondaryText }]}>
+                        <Text style={[textStyles.body, styles.popupMessage, { color: P.sub }]}>
                           {selectedNotification.message}
                         </Text>
                       </ScrollView>
 
-                      <View style={styles.popupFooter}>
-                        <Text style={[textStyles.caption, styles.popupTime, { color: theme.secondaryText }]}>
+                      <View style={[styles.popupFooter, { borderTopColor: P.sep }]}>
+                        <Text style={[textStyles.caption, styles.popupTime, { color: P.sub }]}>
                           {formatTimestamp(selectedNotification.timestamp)}
                         </Text>
 
@@ -701,13 +737,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                       </View>
                     </>
                   )}
-                </BlurView>
+                </View>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
       </SafeAreaView>
-    </ThemedBackground>
+    </View>
   );
 }
 
@@ -726,7 +762,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(126,102,103,0.2)',
   },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
@@ -750,13 +786,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(175,145,151,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(175,145,151,0.2)',
   },
   backArrow: {
     fontSize: 28,
-    color: '#000',
     fontWeight: '300',
   },
   headerCenter: {
@@ -769,7 +804,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   headerTitle: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: fonts.title.large,
     color: '#000',
     fontWeight: 'bold',
@@ -789,21 +824,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: fonts.body.small,
     fontWeight: 'bold',
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
   },
   markAllButton: {
-    backgroundColor: 'rgba(156,39,176,0.15)',
+    backgroundColor: 'rgba(175,145,151,0.12)',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    // Pill shape
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(156,39,176,0.3)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   markAllText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
-    color: '#9C27B0',
+    color: '#AF9197',
     fontWeight: 'bold',
     letterSpacing: 0.3,
   },
@@ -816,26 +850,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
     borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(126,102,103,0.18)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.gap.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(175,145,151,0.06)',
   },
   filterButtonActive: {
-    backgroundColor: 'rgba(156,39,176,0.2)',
-    borderColor: '#9C27B0'
+    backgroundColor: 'rgba(175,145,151,0.18)',
+    borderColor: '#AF9197',
   },
   filterButtonText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: fonts.body.medium,
-    color: '#666',
+    color: '#7E6667',
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
-  filterButtonTextActive: { color: '#9C27B0' },
+  filterButtonTextActive: { color: '#AF9197' },
   filterBadge: {
     backgroundColor: '#FF1744',
     borderRadius: spacing.md,
@@ -848,7 +881,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: fonts.body.xsmall,
     fontWeight: 'bold',
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
   },
 
   // Notifications List
@@ -856,15 +889,13 @@ const styles = StyleSheet.create({
   notificationItem: { marginBottom: spacing.lg },
   notificationBlur: {
     borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(126,102,103,0.14)',
     padding: spacing.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   unreadNotification: {
-    backgroundColor: 'rgba(156, 39, 176, 0.08)',
-    borderColor: 'rgba(156, 39, 176, 0.3)',
+    backgroundColor: 'rgba(175,145,151,0.06)',
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   notificationHeader: { flexDirection: 'row', gap: spacing.gap.md },
   notificationLeft: { alignItems: 'center', gap: spacing.gap.sm },
@@ -891,11 +922,11 @@ const styles = StyleSheet.create({
   },
   notificationTitle: { color: '#000', flex: 1 },
   unreadTitle: { fontWeight: 'bold' },
-  unreadDot: { 
-    width: 8, 
-    height: 8, 
-    borderRadius: 4, 
-    backgroundColor: '#9C27B0' 
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#AF9197',
   },
   notificationMessage: { 
     color: 'rgba(0,0,0,0.8)', 
@@ -909,17 +940,17 @@ const styles = StyleSheet.create({
   },
   notificationTime: { color: 'rgba(0,0,0,0.5)' },
   readMoreButton: {
-    backgroundColor: 'rgba(156,39,176,0.15)',
+    backgroundColor: 'rgba(175,145,151,0.12)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(156,39,176,0.3)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   readMoreText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 10,
-    color: '#9C27B0',
+    color: '#AF9197',
     fontWeight: 'bold',
     letterSpacing: 0.3,
   },
@@ -935,10 +966,8 @@ const styles = StyleSheet.create({
   messagePopup: {
     borderRadius: 25,
     padding: 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   popupHeader: {
     flexDirection: 'row',
@@ -953,20 +982,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 30,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   popupProviderImage: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   closeButton: {
     width: 36,
     height: 36,
-    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
@@ -976,7 +1003,7 @@ const styles = StyleSheet.create({
     color: '#000', 
     marginBottom: 16, 
     textAlign: 'center',
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
   },
   popupMessageScroll: {
     maxHeight: 200,
@@ -992,8 +1019,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   popupTime: { color: 'rgba(0,0,0,0.5)' },
   popupActionButton: {
@@ -1004,7 +1030,7 @@ const styles = StyleSheet.create({
   popupActionText: { 
     color: '#fff', 
     letterSpacing: 0.5,
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
   },
 
@@ -1014,16 +1040,15 @@ const styles = StyleSheet.create({
     padding: 40,
     borderRadius: 25,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(126,102,103,0.14)',
+    backgroundColor: 'rgba(175,145,151,0.05)',
   },
   emptyStateTitle: { 
     color: '#000', 
     marginTop: 20, 
     marginBottom: 10,
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
   },
   emptyStateText: { 
     color: 'rgba(0,0,0,0.7)', 
@@ -1050,13 +1075,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
     fontSize: 16,
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
   },
 
   // Bold notification title
   notificationTitleBold: {
     fontWeight: 'bold',
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
   },
 
   // Error banner

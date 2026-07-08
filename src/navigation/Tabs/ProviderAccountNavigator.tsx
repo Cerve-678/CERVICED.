@@ -5,7 +5,22 @@ import InfoRegScreen from '../../screens/InfoRegScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import ProviderBookingHistoryScreen from '../../screens/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../screens/ProviderBookingDetailScreen';
-import ChangeCredentialsScreen from '../../screens/ChangeCredentialsScreen';
+import ProviderIntakeFormScreen from '../../screens/ProviderIntakeFormScreen';
+import ChangePasswordScreen from '../../screens/ChangePasswordScreen';
+import HelpCentreScreen from '../../screens/HelpCentreScreen';
+import AboutScreen from '../../screens/AboutScreen';
+import TermsScreen from '../../screens/TermsScreen';
+import ReportProblemScreen from '../../screens/ReportProblemScreen';
+import ProviderAnalyticsScreen from '../../screens/ProviderAnalyticsScreen';
+import ProviderPromotionsScreen from '../../screens/ProviderPromotionsScreen';
+import ProviderClienteleScreen from '../../screens/ProviderClienteleScreen';
+import ProviderBusinessEmailScreen from '../../screens/ProviderBusinessEmailScreen';
+import ProviderCommunicationsScreen from '../../screens/ProviderCommunicationsScreen';
+import ProviderAutomationsScreen from '../../screens/ProviderAutomationsScreen';
+import BusinessProfileScreen from '../../screens/BusinessProfileScreen';
+import BrandingScreen from '../../screens/BrandingScreen';
+import ProviderAccountInfoScreen from '../../screens/ProviderAccountInfoScreen';
+import ProviderInfoPackScreen from '../../screens/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
 import { ProviderAccountStackParamList } from '../types';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -52,19 +67,102 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="BookingDetail"
         component={ProviderBookingDetailScreen}
-        options={{
-          title: 'Booking Details',
-          presentation: 'card',
-          headerBackTitle: 'History',
-          headerStyle: { backgroundColor: theme.background },
-          headerTintColor: theme.text,
-          headerTitleStyle: { color: theme.text },
-        }}
+        options={{ headerShown: false, presentation: 'card' }}
       />
 
       <ProviderAccountStack.Screen
-        name="ChangeCredentials"
-        component={ChangeCredentialsScreen}
+        name="ProviderIntakeForm"
+        component={ProviderIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Analytics"
+        component={ProviderAnalyticsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Promotions"
+        component={ProviderPromotionsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Clientele"
+        component={ProviderClienteleScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="InfoPacks"
+        component={ProviderInfoPackScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ChangePassword"
+        component={ChangePasswordScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AccountInfo"
+        component={ProviderAccountInfoScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="BusinessDetails"
+        component={ProviderBusinessEmailScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Communications"
+        component={ProviderCommunicationsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Automations"
+        component={ProviderAutomationsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="BusinessProfile"
+        component={BusinessProfileScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Branding"
+        component={BrandingScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="HelpCentre"
+        component={HelpCentreScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Terms"
+        component={TermsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ReportProblem"
+        component={ReportProblemScreen}
         options={{ headerShown: false }}
       />
 

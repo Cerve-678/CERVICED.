@@ -7,9 +7,9 @@ function dbToProvider(p: DbProvider): Provider {
   return {
     id: p.slug,
     name: p.display_name,
-    service: p.service_category,
+    service: p.service_category as any,
     logo: p.logo_url ? { uri: p.logo_url } : null,
-    location: p.location_text ?? undefined,
+    ...(p.location_text != null ? { location: p.location_text } : {}),
   };
 }
 

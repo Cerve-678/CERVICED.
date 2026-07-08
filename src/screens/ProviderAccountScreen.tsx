@@ -1,213 +1,462 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
+  StatusBar,
+  Linking,
+  Modal,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import Icon from '../components/IconLibrary';
 import { useAuth } from '../contexts/AuthContext';
+import { useRegistration } from '../contexts/RegistrationContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { ThemedBackground } from '../components/ThemedBackground';
 import { supabase } from '../lib/supabase';
+import {
+  isBiometricAvailable,
+  isBiometricEnabled,
+  getBiometricLabel,
+  enableBiometric,
+  disableBiometric,
+  authenticateWithBiometrics,
+} from '../services/biometricService';
+import { ThemedBackground } from '../components/ThemedBackground';
 
-// ── Reusable row ────────────────────────────────────────────────────────────
-interface RowProps {
-  icon: keyof typeof Ionicons.glyphMap;
+// ─── Brand palette ────────────────────────────────────────────────────────────
+const LIGHT = {
+  bg:        '#F5F1EC',
+  surface:   '#EDE8E2',
+  card:      '#FFFFFF',
+  accent:    '#AF9197',
+  ice:       '#FFFFFF',
+  text:      '#000000',
+  sub:       '#7E6667',
+  border:    'rgba(126,102,103,0.14)',
+  sep:       'rgba(126,102,103,0.08)',
+  iconBg:    'rgba(175,145,151,0.12)',
+};
+const DARK = {
+  bg:        '#1A1815',
+  surface:   '#201D1A',
+  card:      '#252220',
+  accent:    '#AF9197',
+  ice:       '#FFFFFF',
+  text:      '#F0ECE7',
+  sub:       '#7E6667',
+  border:    'rgba(126,102,103,0.18)',
+  sep:       'rgba(126,102,103,0.10)',
+  iconBg:    'rgba(175,145,151,0.10)',
+};
+
+// ── Settings row (identical to client) ──────────────────────────────────────
+
+interface SettingsOptionProps {
+  icon: string;
   title: string;
   subtitle: string;
   onPress: () => void;
-  theme: any;
-  destructive?: boolean;
+  P: typeof LIGHT;
+  danger?: boolean;
 }
 
-const Row = React.memo(({ icon, title, subtitle, onPress, theme, destructive }: RowProps) => (
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }: SettingsOptionProps) => (
   <TouchableOpacity
-    style={[styles.row, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
-    onPress={onPress}
+    style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
+    onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
   >
-    <View style={styles.rowLeft}>
-      <View style={[styles.iconBox, { backgroundColor: destructive ? '#FF3B3020' : theme.accent + '20' }]}>
-        <Ionicons
-          name={icon}
-          size={22}
-          color={destructive ? '#FF3B30' : theme.accent}
-        />
-      </View>
-      <View>
-        <Text style={[styles.rowTitle, { color: destructive ? '#FF3B30' : theme.text }]}>{title}</Text>
-        <Text style={[styles.rowSub, { color: theme.secondaryText }]}>{subtitle}</Text>
+    <View style={styles.optionLeft}>
+      <Icon name={icon} size={20} color={danger ? P.accent : P.sub} style={{ marginRight: 12 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.optionText, { color: danger ? P.accent : P.text }]}>{title}</Text>
+        <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
-    {!destructive && (
-      <Ionicons name="chevron-forward" size={18} color={theme.secondaryText} />
-    )}
+    <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
   </TouchableOpacity>
 ));
 
 // ── Main screen ──────────────────────────────────────────────────────────────
-export default function ProviderAccountScreen({ navigation }: any) {
-  const { user, logout } = useAuth();
-  const { isDarkMode, toggleTheme, theme } = useTheme();
-  const [changingPassword, setChangingPassword] = useState(false);
 
-  const handleChangePassword = async () => {
-    if (!user?.email) return;
-    setChangingPassword(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email);
-    setChangingPassword(false);
-    if (error) {
-      Alert.alert('Error', error.message);
+export default function ProviderAccountScreen({ navigation }: any) {
+  const { user, logout, switchMode } = useAuth();
+  const { resetData, updateData } = useRegistration();
+  const { isDarkMode, toggleTheme } = useTheme();
+  const P = isDarkMode ? DARK : LIGHT;
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('Face ID');
+
+  useEffect(() => {
+    (async () => {
+      const available = await isBiometricAvailable();
+      if (!available) return;
+      const [enabled, label] = await Promise.all([isBiometricEnabled(), getBiometricLabel()]);
+      setBiometricAvailable(true);
+      setBiometricEnabled(enabled);
+      setBiometricLabel(label);
+    })();
+  }, []);
+
+  const handleBiometricToggle = async (value: boolean) => {
+    Haptics.selectionAsync().catch(() => {});
+    if (value) {
+      const authenticated = await authenticateWithBiometrics(biometricLabel);
+      if (!authenticated) return;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.refresh_token;
+      if (!token) {
+        Alert.alert('Error', 'Could not enable Face ID. Please try again.');
+        return;
+      }
+      await enableBiometric(token);
+      setBiometricEnabled(true);
     } else {
-      Alert.alert(
-        'Email Sent',
-        `A password reset link has been sent to ${user.email}.`
-      );
+      await disableBiometric();
+      setBiometricEnabled(false);
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => logout() },
-    ]);
+  const handleSwitchToClient = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    switchMode();
   };
 
+  const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    logout();
+  };
+
+  const displayName = user?.businessName || user?.name || 'My Business';
+  const firstName = displayName.split(' ')[0];
+  const initials = displayName
+    .split(' ')
+    .map((w: string) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
-    <ThemedBackground>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <View style={[styles.avatarCircle, { backgroundColor: theme.accent + '20' }]}>
-            <Ionicons name="storefront" size={30} color={theme.accent} />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
-              {user?.businessName || user?.name || 'My Business'}
-            </Text>
-            <View style={[styles.badge, { backgroundColor: theme.accent + '20' }]}>
-              <Text style={[styles.badgeText, { color: theme.accent }]}>Provider Account</Text>
-            </View>
-          </View>
-        </View>
+    <View style={[styles.background, { backgroundColor: P.bg }]}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          style={styles.content}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          {/* ── My Business ── */}
-          <Text style={[styles.sectionTitle, { color: theme.accent }]}>My Business</Text>
-
-          <Row
-            icon="person-circle-outline"
-            title="Edit Profile"
-            subtitle="Name, logo, about, services"
-            onPress={() => navigation.navigate('EditProfile')}
-            theme={theme}
-          />
-          <Row
-            icon="time-outline"
-            title="Booking History"
-            subtitle="View all past bookings"
-            onPress={() => navigation.navigate('BookingHistory')}
-            theme={theme}
-          />
-          {/* ── Account ── */}
-          <Text style={[styles.sectionTitle, { color: theme.accent }]}>Account</Text>
-
-          <Row
-            icon="mail-outline"
-            title="Change Password"
-            subtitle="Change your login credentials"
-            onPress={() => navigation.navigate('ChangeCredentials')}
-            theme={theme}
-          />
-          <Row
-            icon="notifications-outline"
-            title="Notifications"
-            subtitle="Bookings, messages, reminders"
-            onPress={() => navigation.navigate('Notifications')}
-            theme={theme}
-          />
-
-          {/* Dark mode toggle */}
-          <View style={[styles.row, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-            <View style={styles.rowLeft}>
-              <View style={[styles.iconBox, { backgroundColor: theme.accent + '20' }]}>
-                <Ionicons name="moon-outline" size={22} color={theme.accent} />
+          {/* Hero */}
+          <View style={styles.heroSection}>
+            <View style={styles.heroLeft}>
+              <View style={styles.heroTextBlock}>
+                <Text style={[styles.heroSub, { color: P.sub }]}>Hello,</Text>
+                <Text style={[styles.heroName, { color: P.text }]}>{firstName}.</Text>
+                <View style={[styles.badge, { backgroundColor: P.iconBg }]}>
+                  <Text style={[styles.badgeText, { color: P.accent }]}>Provider</Text>
+                </View>
               </View>
-              <View>
-                <Text style={[styles.rowTitle, { color: theme.text }]}>Dark Mode</Text>
-                <Text style={[styles.rowSub, { color: theme.secondaryText }]}>Switch appearance</Text>
+              <View style={[styles.avatar, {
+                backgroundColor: P.iconBg,
+                borderColor: P.border,
+              }]}>
+                <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
               </View>
             </View>
-            <Switch
-              value={isDarkMode}
-              onValueChange={toggleTheme}
-              trackColor={{ false: '#D1D1D6', true: theme.accent }}
-              thumbColor="#fff"
+          </View>
+
+          {/* Quick cards */}
+          <View style={[styles.quickRow, { backgroundColor: P.surface, borderColor: P.border }]}>
+            {[
+              { icon: 'bar-chart',   label: 'Analytics',  sub: 'Revenue & Stats', onPress: () => navigation.navigate('Analytics') },
+              { icon: 'local-offer', label: 'Promotions', sub: 'Offers & Deals',  onPress: () => navigation.navigate('Promotions') },
+              { icon: 'people',      label: 'Clientele',  sub: 'Loyal Clients',   onPress: () => navigation.navigate('Clientele') },
+            ].map(({ icon, label, sub, onPress }) => (
+              <TouchableOpacity
+                key={label}
+                style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+                activeOpacity={0.7}
+              >
+                <Icon name={icon} size={24} color={P.accent} />
+                <Text style={[styles.cardTitle, { color: P.text }]}>{label}</Text>
+                <Text style={[styles.cardSub, { color: P.sub }]}>{sub}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* My Business */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>My Business</Text>
+            <SettingsOption
+              icon="storefront"
+              title="Business Profile"
+              subtitle="Profile, details & communications"
+              onPress={() => navigation.navigate('BusinessProfile')}
+              P={P}
+            />
+            <SettingsOption
+              icon="bar-chart"
+              title="Analytics"
+              subtitle="Revenue, trends & insights"
+              onPress={() => navigation.navigate('Analytics')}
+              P={P}
+            />
+            <SettingsOption
+              icon="local-offer"
+              title="Promotions"
+              subtitle="Offers & deals for clients"
+              onPress={() => navigation.navigate('Promotions')}
+              P={P}
+            />
+            <SettingsOption
+              icon="people"
+              title="My Clientele"
+              subtitle="Repeat bookers & loyal clients"
+              onPress={() => navigation.navigate('Clientele')}
+              P={P}
+            />
+            <SettingsOption
+              icon="calendar-today"
+              title="Booking History"
+              subtitle="View all past bookings"
+              onPress={() => navigation.navigate('BookingHistory')}
+              P={P}
             />
           </View>
 
-          {/* ── Support ── */}
-          <Text style={[styles.sectionTitle, { color: theme.accent }]}>Support</Text>
+          {/* Account */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Account</Text>
+            <SettingsOption
+              icon="lock"
+              title="Change Password"
+              subtitle="Update credentials"
+              onPress={() => navigation.navigate('ChangePassword')}
+              P={P}
+            />
+            <SettingsOption
+              icon="badge"
+              title="Account Info"
+              subtitle="Name, phone, DOB & login email"
+              onPress={() => navigation.navigate('AccountInfo')}
+              P={P}
+            />
+            <SettingsOption
+              icon="notifications"
+              title="Notifications"
+              subtitle="Bookings, messages, reminders"
+              onPress={() => navigation.navigate('Notifications')}
+              P={P}
+            />
+            {/* Dark mode toggle */}
+            <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
+              <View style={styles.optionLeft}>
+                <Icon name="brightness-6" size={20} color={P.sub} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, { color: P.text }]}>Dark Mode</Text>
+                  <Text style={[styles.optionSubText, { color: P.sub }]}>Appearance</Text>
+                </View>
+              </View>
+              <Switch
+                value={isDarkMode}
+                onValueChange={() => { Haptics.selectionAsync().catch(() => {}); toggleTheme(); }}
+                trackColor={{ false: '#D1D1D6', true: P.accent }}
+                thumbColor={isDarkMode ? '#fff' : '#f4f3f4'}
+              />
+            </View>
+            {/* Face ID / Touch ID toggle */}
+            <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
+              <View style={styles.optionLeft}>
+                <Icon name="shield-check" size={20} color={P.sub} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, { color: P.text }]}>{biometricLabel}</Text>
+                  <Text style={[styles.optionSubText, { color: P.sub }]}>
+                    {biometricAvailable ? 'Quick sign-in' : 'Not available on this device'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={biometricEnabled}
+                onValueChange={handleBiometricToggle}
+                disabled={!biometricAvailable}
+                trackColor={{ false: '#D1D1D6', true: P.accent }}
+                thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
+              />
+            </View>
+          </View>
 
-          <Row
-            icon="help-circle-outline"
-            title="Help Center"
-            subtitle="FAQs, contact support"
-            onPress={() => Alert.alert('Help Center', 'Email us at support@cerviced.com')}
-            theme={theme}
-          />
-          <Row
-            icon="information-circle-outline"
-            title="About Cerviced"
-            subtitle="Version, legal"
-            onPress={() => Alert.alert('About', 'Cerviced v1.0 — The beauty services platform.')}
-            theme={theme}
-          />
-
-          {/* ── Log out ── */}
-          <View style={styles.logoutSection}>
-            <Row
-              icon="log-out-outline"
-              title="Log Out"
-              subtitle=""
-              onPress={handleLogout}
-              theme={theme}
-              destructive
+          {/* Accessibility & Support */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Accessibility & Support</Text>
+            <SettingsOption
+              icon="format-size"
+              title="Text Size & Font"
+              subtitle="Open phone display settings"
+              onPress={() => Linking.openURL('App-prefs:root=ACCESSIBILITY')}
+              P={P}
+            />
+            <SettingsOption
+              icon="language"
+              title="Language & Region"
+              subtitle="Open phone language settings"
+              onPress={() => Linking.openURL('App-prefs:root=General&path=LANGUAGE_AND_REGION')}
+              P={P}
+            />
+            <SettingsOption
+              icon="help"
+              title="Help Centre"
+              subtitle="FAQs, contact support"
+              onPress={() => navigation.navigate('HelpCentre')}
+              P={P}
             />
           </View>
+
+          {/* For Clients */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>For Clients</Text>
+            <TouchableOpacity
+              style={[styles.modeBtn, {
+                backgroundColor: P.iconBg,
+                borderColor: P.accent,
+              }]}
+              onPress={handleSwitchToClient}
+              activeOpacity={0.8}
+            >
+              <Icon name="swap-horiz" size={22} color={P.text} />
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={[styles.modeBtnTitle, { color: P.text }]}>
+                  {user?.hasClientProfile ? 'Switch to Client Mode' : 'Create Client Account'}
+                </Text>
+                <Text style={[styles.modeBtnSub, { color: P.sub }]}>
+                  {user?.hasClientProfile ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* App Info & Legal */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>App Info & Legal</Text>
+            <SettingsOption
+              icon="info"
+              title="About Cerviced"
+              subtitle="Mission, version"
+              onPress={() => navigation.navigate('About')}
+              P={P}
+            />
+            <SettingsOption
+              icon="gavel"
+              title="Terms & Conditions"
+              subtitle="Legal info"
+              onPress={() => navigation.navigate('Terms')}
+              P={P}
+            />
+            <SettingsOption
+              icon="bug-report"
+              title="Report a Problem"
+              subtitle="Bugs, feedback"
+              onPress={() => navigation.navigate('ReportProblem')}
+              P={P}
+            />
+          </View>
+
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+            <Icon name="logout" size={16} color="#fff" />
+            <Text style={styles.logoutText}>Log Out</Text>
+          </TouchableOpacity>
+
+          <Text style={[styles.footerText, { color: P.sub }]}>Cerviced v1.0.0</Text>
         </ScrollView>
       </SafeAreaView>
-    </ThemedBackground>
+
+      {/* ── Create Client Account modal ─────────────────────────────────── */}
+      <Modal visible={showClientModal} transparent animationType="fade" onRequestClose={() => setShowClientModal(false)}>
+        <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.modalTitle, { color: P.text }]}>Create Client Account</Text>
+            <Text style={[styles.modalBody, { color: P.sub }]}>
+              Would you like to use your existing details (name, email, phone)?{'\n\n'}
+              Your client profile will be completely separate from your provider business.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: P.accent }]}
+              onPress={() => {
+                setShowClientModal(false);
+                resetData();
+                updateData({
+                  accountType: 'user',
+                  fromClientSwitch: true,
+                  name: user?.name || '',
+                  email: user?.email || '',
+                  phone: user?.phone || '',
+                });
+                navigation.navigate('SignUpStep2');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalBtnText}>Yes, use my details</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalBtnOutline, { borderColor: P.border }]}
+              onPress={() => {
+                setShowClientModal(false);
+                resetData();
+                navigation.navigate('SignUpStep1');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.modalBtnOutlineText, { color: P.text }]}>Create new account</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowClientModal(false)} activeOpacity={0.6}>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
+
+    </View>
   );
 }
 
+// ── Styles (mirrors UserProfileScreen exactly) ───────────────────────────────
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 14,
+  background: { flex: 1 },
+  container: { flex: 1, paddingHorizontal: 20 },
+  content: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
+
+  // Hero
+  heroSection: {
+    marginBottom: 20,
+    marginTop: 12,
+    paddingHorizontal: 4,
   },
-  avatarCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  heroLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerText: { flex: 1, gap: 4 },
-  name: { fontSize: 18, fontWeight: '700' },
+  avatarText: { fontSize: 16, fontWeight: '700' },
+  heroTextBlock: { flex: 1, gap: 4 },
+  heroSub: { fontSize: 14, fontWeight: '500', letterSpacing: 0.2 },
+  heroName: { fontSize: 40, fontWeight: '800', letterSpacing: -0.5 },
   badge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -215,45 +464,104 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   badgeText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 120,
-    paddingTop: 12,
+
+  // Quick cards
+  quickRow: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 10,
+    marginBottom: 20,
+    borderWidth: 0.5,
+    gap: 8,
+  },
+  card: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 0.5,
+    gap: 4,
+  },
+  cardTitle: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  cardSub: { fontSize: 10, fontWeight: '400', textAlign: 'center' },
+
+  // Section
+  section: {
+    marginBottom: 18,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    marginBottom: 10,
+    marginLeft: 2,
     textTransform: 'uppercase',
-    marginTop: 20,
-    marginBottom: 8,
-    marginLeft: 4,
+    opacity: 0.55,
   },
-  row: {
+
+  // Option row
+  option: {
+    padding: 13,
+    borderRadius: 12,
+    marginBottom: 6,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
+    alignItems: 'center',
+    borderWidth: 0.5,
   },
-  rowLeft: {
+  optionLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  optionText: { fontSize: 15, fontWeight: '600' },
+  optionSubText: { fontSize: 12, fontWeight: '400', marginTop: 1 },
+
+  // Mode switcher button
+  modeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flex: 1,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
   },
-  iconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+  modeBtnTitle: { fontSize: 15, fontWeight: '700' },
+  modeBtnSub: { fontSize: 12, fontWeight: '400' },
+
+  // Logout
+  logoutBtn: {
+    alignSelf: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 100,
+    backgroundColor: '#3A3A3C',
+    gap: 8,
   },
-  rowTitle: { fontSize: 15, fontWeight: '600' },
-  rowSub: { fontSize: 12, marginTop: 1 },
-  logoutSection: { marginTop: 12 },
+  logoutText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  footerText: { fontSize: 11, fontWeight: '400', textAlign: 'center', marginTop: 24 },
+
+  // Modal
+  modalOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  modalCard: {
+    borderRadius: 24,
+    borderWidth: 0.5,
+    padding: 24,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginBottom: 2 },
+  modalBody: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
+  modalBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center' },
+  modalBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  modalBtnOutline: { borderRadius: 100, paddingVertical: 14, alignItems: 'center', borderWidth: 1 },
+  modalBtnOutlineText: { fontSize: 15, fontWeight: '600' },
+  modalCancel: { paddingVertical: 10, alignItems: 'center' },
+  modalCancelText: { fontSize: 14, fontWeight: '500' },
 });

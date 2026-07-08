@@ -8,74 +8,66 @@ import {
   View,
   StatusBar,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
+const L = { bg: '#F5F1EC', surface: '#EDE8E2', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
+const D = { bg: '#1A1815', surface: '#201D1A', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
+
 export default function WelcomeScreen({ navigation }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const t = isDarkMode ? D : L;
   const insets = useSafeAreaInsets();
 
-  const glassStyle = () => ({
-    backgroundColor: isDarkMode
-      ? 'rgba(58, 58, 60, 0.6)'
-      : 'rgba(255, 255, 255, 0.15)',
-    borderTopColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.7)',
-    borderLeftColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.5)',
-    borderRightColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-    borderBottomColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-  });
-
   const handleSocialLogin = (provider: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     Alert.alert('Coming soon', `${provider} login will be available soon.`);
   };
 
   return (
-    <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+    <ThemedBackground style={{ flex: 1 }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
-      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 20 }]}>
+      <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 }]}>
         {/* Branding */}
         <View style={styles.brandSection}>
-          <Text style={[styles.brandName, { color: theme.text }]}>Cerviced</Text>
-          <Text style={[styles.tagline, { color: theme.secondaryText }]}>
-            Beauty at your fingertips
+          <Text style={[styles.brandName, { color: t.text }]}>CERVICED.</Text>
+          <Text style={[styles.tagline, { color: t.sub }]}>
+            Beauty maintenance at your fingertips
           </Text>
         </View>
 
         {/* Actions */}
         <View style={styles.actionsSection}>
-          {/* Sign Up Button */}
+          {/* Sign Up */}
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
-            onPress={() => navigation.navigate('SignUpStep1')}
-            activeOpacity={0.8}
+            style={[styles.primaryBtn, { backgroundColor: t.accent }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('SignUpStep1'); }}
+            activeOpacity={0.75}
           >
-            <Text style={[styles.primaryBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-              SIGN UP
-            </Text>
+            <Text style={styles.primaryBtnText}>SIGN UP</Text>
           </TouchableOpacity>
 
-          {/* Log In Button */}
+          {/* Log In */}
           <TouchableOpacity
-            style={[styles.secondaryBtn, glassStyle()]}
-            onPress={() => navigation.navigate('Login')}
-            activeOpacity={0.7}
+            style={[styles.secondaryBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('Login'); }}
+            activeOpacity={0.75}
           >
-            <Text style={[styles.secondaryBtnText, { color: theme.text }]}>
-              LOG IN
-            </Text>
+            <Text style={[styles.secondaryBtnText, { color: t.text }]}>LOG IN</Text>
           </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.4)' }]} />
-            <Text style={[styles.dividerLabel, { color: theme.secondaryText }]}>OR</Text>
-            <View style={[styles.dividerLine, { backgroundColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.4)' }]} />
+            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
+            <Text style={[styles.dividerLabel, { color: t.sub }]}>OR</Text>
+            <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
           </View>
 
           {/* Social Login */}
@@ -83,21 +75,21 @@ export default function WelcomeScreen({ navigation }: Props) {
             {['Instagram', 'Google', 'Apple'].map(p => (
               <TouchableOpacity
                 key={p}
-                style={[styles.socialBtn, glassStyle()]}
+                style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
                 onPress={() => handleSocialLogin(p)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.socialLabel, { color: theme.text }]}>{p}</Text>
+                <Text style={[styles.socialLabel, { color: t.text }]}>{p}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Terms */}
-          <Text style={[styles.termsText, { color: theme.secondaryText }]}>
+          <Text style={[styles.termsText, { color: t.sub }]}>
             By continuing, you agree to our{' '}
-            <Text style={[styles.termsLink, { color: theme.accent }]}>Terms of Service</Text>
+            <Text style={[styles.termsLink, { color: t.accent }]}>Terms of Service</Text>
             {' '}and{' '}
-            <Text style={[styles.termsLink, { color: theme.accent }]}>Privacy Policy</Text>
+            <Text style={[styles.termsLink, { color: t.accent }]}>Privacy Policy</Text>
           </Text>
         </View>
       </View>
@@ -114,45 +106,48 @@ const styles = StyleSheet.create({
   },
   brandSection: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    paddingBottom: 175,
   },
   brandName: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 48,
+    fontSize: 44,
     letterSpacing: 2,
   },
   tagline: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 16,
+    fontSize: 15,
     marginTop: 8,
     letterSpacing: 0.5,
+    fontWeight: '600',
   },
   actionsSection: {
     paddingBottom: 8,
   },
   primaryBtn: {
+    height: 50,
     borderRadius: 100,
-    paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(218,112,214,0.4)',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   primaryBtnText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
+    fontSize: 13,
     letterSpacing: 1,
+    color: '#FFFFFF',
   },
   secondaryBtn: {
+    height: 50,
     borderRadius: 100,
-    paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 1.5,
-    marginTop: 12,
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   secondaryBtnText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
+    fontSize: 13,
     letterSpacing: 1,
   },
   divider: {
@@ -160,27 +155,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 24,
   },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-  },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth },
   dividerLabel: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     letterSpacing: 2,
     marginHorizontal: 16,
   },
-  socialRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  socialRow: { flexDirection: 'row', gap: 10 },
   socialBtn: {
     flex: 1,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1,
     paddingVertical: 13,
     alignItems: 'center',
-    overflow: 'hidden',
   },
   socialLabel: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -194,7 +182,5 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 20,
   },
-  termsLink: {
-    fontWeight: '700',
-  },
+  termsLink: { fontWeight: '700' },
 });

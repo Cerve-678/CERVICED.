@@ -82,7 +82,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           if (parsed) {
             const cats = Object.keys(parsed.categories);
             if (cats.length > 0 && !cats.includes(selectedCategory)) {
-              setSelectedCategory(cats[0]);
+              setSelectedCategory(cats[0] ?? '');
             }
           }
         } catch (e) {

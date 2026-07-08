@@ -1,891 +1,500 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Switch,
-  ImageBackground,
-  StatusBar,
+import React, { useState, useEffect } from 'react';
+import {
+  Alert,
   Modal,
-  TextInput
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  StatusBar,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import Icon from '../components/IconLibrary';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useRegistration } from '../contexts/RegistrationContext';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { supabase } from '../lib/supabase';
+import {
+  isBiometricAvailable,
+  isBiometricEnabled,
+  getBiometricLabel,
+  enableBiometric,
+  disableBiometric,
+  authenticateWithBiometrics,
+} from '../services/biometricService';
+
+// ── Settings row ────────────────────────────────────────────────────────────
 
 interface SettingsOptionProps {
   icon: string;
   title: string;
   subtitle: string;
   onPress: () => void;
-  disabled: boolean;
-  theme: any;
+  palette: { card: string; border: string; accent: string; sub: string; text: string };
+  danger?: boolean;
 }
 
-const SettingsOption = React.memo(({ icon, title, subtitle, onPress, disabled, theme }: SettingsOptionProps) => {
-  return (
-    <TouchableOpacity
-      style={[styles.option, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.7}
-    >
-      <View style={styles.optionLeft}>
-        <View style={styles.iconContainer}>
-          <Icon
-            name={icon}
-            size={24}
-            color={disabled ? theme.secondaryText : theme.text}
-          />
-        </View>
-        <Text style={[styles.optionText, { color: disabled ? theme.secondaryText : theme.text }]}>
-          {title}
-        </Text>
+const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P, danger }: SettingsOptionProps) => (
+  <TouchableOpacity
+    style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
+    onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+    activeOpacity={0.7}
+  >
+    <View style={styles.optionLeft}>
+      <Icon name={icon} size={20} color={danger ? P.accent : P.sub} style={{ marginRight: 12 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.optionText, { color: danger ? P.accent : P.text }]}>{title}</Text>
+        <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
       </View>
-      <Text style={[styles.optionSubText, { color: disabled ? theme.secondaryText : theme.secondaryText }]}>
-        {subtitle}
-      </Text>
-    </TouchableOpacity>
-  );
-});
+    </View>
+    <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
+  </TouchableOpacity>
+));
+
+// ── Brand palette ────────────────────────────────────────────────────────────
+const L = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', text: '#000000',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
+  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
+};
+const D = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', text: '#F0ECE7',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
+  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
+};
+
+// ── Main screen ─────────────────────────────────────────────────────────────
 
 export default function UserProfileScreen({ navigation }: any) {
-  const { isLoggedIn, logout } = useAuth();
-  const { isDarkMode, toggleTheme, theme: currentTheme } = useTheme();
-  
-  // Modal states
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showBeautyModal, setShowBeautyModal] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false);
-  const [showAboutModal, setShowAboutModal] = useState(false);
+  const { isLoggedIn, logout, user, switchMode } = useAuth();
+  const { isDarkMode, toggleTheme, theme: t } = useTheme();
+  const P = isDarkMode ? D : L;
+  const { resetData, updateData } = useRegistration();
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('Face ID');
 
-  // Form states for modals
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  useEffect(() => {
+    (async () => {
+      const available = await isBiometricAvailable();
+      if (!available) return;
+      const [enabled, label] = await Promise.all([isBiometricEnabled(), getBiometricLabel()]);
+      setBiometricAvailable(true);
+      setBiometricEnabled(enabled);
+      setBiometricLabel(label);
+    })();
+  }, []);
+
+  const handleBiometricToggle = async (value: boolean) => {
+    Haptics.selectionAsync().catch(() => {});
+    if (value) {
+      const authenticated = await authenticateWithBiometrics(biometricLabel);
+      if (!authenticated) return;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.refresh_token;
+      if (!token) {
+        Alert.alert('Error', 'Could not enable Face ID. Please try again.');
+        return;
+      }
+      await enableBiometric(token);
+      setBiometricEnabled(true);
+    } else {
+      await disableBiometric();
+      setBiometricEnabled(false);
+    }
+  };
 
   const handleLogout = () => {
-    if (__DEV__) console.log('User logged out');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     logout();
   };
-  
-  // Profile Info Modal
-  const ProfileInfoModal = () => (
-    <Modal
-      visible={showProfileModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowProfileModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>PROFILE INFO</Text>
-              <TouchableOpacity onPress={() => setShowProfileModal(false)}>
-                <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>NAME</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="SARAH JOHNSON"
-                    placeholderTextColor={currentTheme.secondaryText}
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>PHONE NUMBER</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="+44 7700 900000"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    keyboardType="phone-pad"
-                  />
-                </BlurView>
-              </View>
-
-              <TouchableOpacity style={styles.saveButton}>
-                <BlurView intensity={60} tint={currentTheme.blurTint} style={styles.saveButtonBlur}>
-                  <Text style={[styles.saveButtonText, { color: currentTheme.text }]}>SAVE CHANGES</Text>
-                </BlurView>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-
-  // Email & Password Modal
-  const EmailPasswordModal = () => (
-    <Modal
-      visible={showEmailModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowEmailModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>CHANGE PASSWORD</Text>
-              <TouchableOpacity onPress={() => setShowEmailModal(false)}>
-                <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>EMAIL</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="JOHN@EXAMPLE.COM"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>CURRENT PASSWORD</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                    placeholder="••••••••••"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    secureTextEntry
-                  />
-                </BlurView>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: currentTheme.text }]}>NEW PASSWORD</Text>
-                <BlurView intensity={30} tint={currentTheme.blurTint} style={styles.inputBlur}>
-                  <TextInput
-                    style={[styles.textInput, { color: currentTheme.text }]}
-                    value={newPassword}
-                    onChangeText={setNewPassword}
-                    placeholder="••••••••••"
-                    placeholderTextColor={currentTheme.secondaryText}
-                    secureTextEntry
-                  />
-                </BlurView>
-              </View>
-
-              <TouchableOpacity style={styles.saveButton}>
-                <BlurView intensity={60} tint={currentTheme.blurTint} style={styles.saveButtonBlur}>
-                  <Text style={[styles.saveButtonText, { color: currentTheme.text }]}>UPDATE CREDENTIALS</Text>
-                </BlurView>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-
-  // About Modal
-  const AboutModal = () => (
-    <Modal
-      visible={showAboutModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowAboutModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={styles.modalBlur}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>ABOUT CERVICED</Text>
-              <TouchableOpacity onPress={() => setShowAboutModal(false)}>
-                <Text style={[styles.closeButton, { color: currentTheme.text }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[styles.aboutText, { color: currentTheme.text }]}>
-                Cerviced is your premier beauty services platform connecting users with top-tier beauty professionals.
-              </Text>
-              <Text style={[styles.aboutText, { color: currentTheme.text }]}>
-                Version 1.0.0
-              </Text>
-              <Text style={[styles.aboutText, { color: currentTheme.text }]}>
-                © 2025 Cerviced. All rights reserved.
-              </Text>
-            </ScrollView>
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
+  const firstName = user?.name?.split(' ')[0] ?? '';
+  const initials = user?.name
+    ? user.name.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+    : '?';
 
   return (
     <ThemedBackground style={styles.background}>
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={currentTheme.statusBar} translucent={true} />
+        <StatusBar barStyle={t.statusBar} translucent />
 
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: currentTheme.text }]}>Your Account</Text>
-        </View>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-        <ScrollView 
-          style={styles.content} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {/* Quick Access Cards */}
-          <View style={[styles.liquidGlassCell, { backgroundColor: currentTheme.glassBackground, borderColor: currentTheme.border }]}>
-            <View style={styles.cardContainer}>
-              <TouchableOpacity
-                style={[styles.card, { backgroundColor: currentTheme.cardBackground, borderColor: currentTheme.border }]}
-                onPress={() => {}}
-                disabled={!isLoggedIn}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardIconContainer}>
-                  <Icon name="bookmark" size={28} color={isLoggedIn ? currentTheme.accent : currentTheme.secondaryText} />
-                </View>
-                <Text style={[styles.cardTitle, { color: isLoggedIn ? currentTheme.text : currentTheme.secondaryText }]}>
-                  Saved Looks
-                </Text>
-                <Text style={[styles.cardSubText, { color: isLoggedIn ? currentTheme.secondaryText : currentTheme.secondaryText }]}>
-                  View favorites
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.card, { backgroundColor: currentTheme.cardBackground, borderColor: currentTheme.border }]}
-                onPress={() => {}}
-                disabled={!isLoggedIn}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardIconContainer}>
-                  <Icon name="calendar-today" size={28} color={isLoggedIn ? currentTheme.accent : currentTheme.secondaryText} />
-                </View>
-                <Text style={[styles.cardTitle, { color: isLoggedIn ? currentTheme.text : currentTheme.secondaryText }]}>
-                  Bookings
-                </Text>
-                <Text style={[styles.cardSubText, { color: isLoggedIn ? currentTheme.secondaryText : currentTheme.secondaryText }]}>
-                  Appointments
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.card, { backgroundColor: currentTheme.cardBackground, borderColor: currentTheme.border }]}
-                onPress={() => {}}
-                disabled={!isLoggedIn}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardIconContainer}>
-                  <Icon name="star" size={28} color={isLoggedIn ? currentTheme.accent : currentTheme.secondaryText} />
-                </View>
-                <Text style={[styles.cardTitle, { color: isLoggedIn ? currentTheme.text : currentTheme.secondaryText }]}>
-                  Points
-                </Text>
-                <Text style={[styles.cardSubText, { color: isLoggedIn ? currentTheme.secondaryText : currentTheme.secondaryText }]}>
-                  Your rewards
-                </Text>
-              </TouchableOpacity>
+          {/* Hero */}
+          <View style={styles.heroSection}>
+            <View style={styles.heroLeft}>
+              <View style={styles.heroTextBlock}>
+                <Text style={[styles.heroSub, { color: P.sub }]}>Hello,</Text>
+                <Text style={[styles.heroName, { color: P.text }]}>{firstName || 'You'}.</Text>
+              </View>
+              <View style={[styles.avatar, { backgroundColor: P.iconBg, borderColor: P.border }]}>
+                <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
+              </View>
             </View>
+          </View>
+
+          {/* Quick cards */}
+          <View style={[styles.quickRow, { backgroundColor: P.surface, borderColor: P.border }]}>
+            {[
+              { icon: 'bookmark', label: 'Saved', sub: 'Your Favourites', onPress: () => navigation.navigate('BookmarkedProviders') },
+              { icon: 'calendar-today', label: 'Bookings', sub: 'Appointments', onPress: () => navigation.navigate('Bookings') },
+              { icon: 'star', label: 'Points', sub: 'Your Rewards', onPress: () => navigation.navigate('Points') },
+            ].map(({ icon, label, sub, onPress }) => (
+              <TouchableOpacity
+                key={label}
+                style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+                activeOpacity={0.7}
+              >
+                <Icon name={icon} size={24} color={P.accent} />
+                <Text style={[styles.cardTitle, { color: P.text }]}>{label}</Text>
+                <Text style={[styles.cardSub, { color: P.sub }]}>{sub}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Account Management */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: currentTheme.accent }]}>Account Management</Text>
-            
-            <SettingsOption
-              icon="user"
-              title="Profile Info"
-              subtitle="Name, phone, picture"
-              onPress={() => setShowProfileModal(true)}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="heart"
-              title="Beauty Preferences"
-              subtitle="Favorites, providers"
-              onPress={() => setShowBeautyModal(true)}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="bookmark"
-              title="Saved Looks"
-              subtitle="Looks, products"
-              onPress={() => {}}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="email"
-              title="Change Password"
-              subtitle="Update credentials"
-              onPress={() => setShowEmailModal(true)}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="payment"
-              title="Payment Methods"
-              subtitle="Cards, Apple Pay"
-              onPress={() => setShowPaymentModal(true)}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="receipt"
-              title="Subscription & Billing"
-              subtitle="Plans, invoices"
-              onPress={() => {}}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>Account Management</Text>
+            <SettingsOption icon="user" title="Profile Info" subtitle="Name, phone" onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
+            <SettingsOption icon="heart" title="Beauty Profile" subtitle="Hair, skin, interests" onPress={() => navigation.navigate('BeautyProfile')} palette={P} />
+            <SettingsOption icon="lock" title="Change Password" subtitle="Update credentials" onPress={() => navigation.navigate('ChangePassword')} palette={P} />
+            <SettingsOption icon="payment" title="Payment Methods" subtitle="Cards, Apple Pay" onPress={() => navigation.navigate('PaymentMethods')} palette={P} />
+            <SettingsOption icon="receipt" title="Subscription & Billing" subtitle="Plans, invoices" onPress={() => navigation.navigate('Subscription')} palette={P} />
           </View>
 
           {/* Notifications & Preferences */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: currentTheme.accent }]}>Notifications & Preferences</Text>
-            
-            <SettingsOption
-              icon="notifications"
-              title="Push Notifications"
-              subtitle="Bookings, reminders"
-              onPress={() => setShowNotificationsModal(true)}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="message"
-              title="Email/SMS Alerts"
-              subtitle="Marketing"
-              onPress={() => {}}
-              disabled={!isLoggedIn}
-              theme={currentTheme}
-            />
-            
-            {/* Dark Mode Toggle */}
-            <View style={[styles.option, { backgroundColor: currentTheme.cardBackground, borderColor: currentTheme.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>Preferences</Text>
+            <SettingsOption icon="notifications" title="Notifications" subtitle="Bookings, reminders, marketing" onPress={() => navigation.navigate('NotificationsSettings')} palette={P} />
+            <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
               <View style={styles.optionLeft}>
-                <View style={styles.iconContainer}>
-                  <Icon name="brightness-6" size={24} color={currentTheme.text} />
+                <Icon name="brightness-6" size={20} color={P.sub} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, { color: P.text }]}>Dark Mode</Text>
+                  <Text style={[styles.optionSubText, { color: P.sub }]}>Appearance</Text>
                 </View>
-                <Text style={[styles.optionText, { color: currentTheme.text }]}>
-                  Dark Mode
-                </Text>
               </View>
               <Switch
                 value={isDarkMode}
-                onValueChange={toggleTheme}
-                trackColor={{ false: '#D1D1D6', true: currentTheme.accent }}
+                onValueChange={() => { Haptics.selectionAsync().catch(() => {}); toggleTheme(); }}
+                trackColor={{ false: '#D1D1D6', true: P.accent }}
                 thumbColor={isDarkMode ? '#fff' : '#f4f3f4'}
+              />
+            </View>
+            <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
+              <View style={styles.optionLeft}>
+                <Icon name="shield-check" size={20} color={P.sub} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, { color: P.text }]}>{biometricLabel}</Text>
+                  <Text style={[styles.optionSubText, { color: P.sub }]}>
+                    {biometricAvailable ? 'Quick sign-in' : 'Not available on this device'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={biometricEnabled}
+                onValueChange={handleBiometricToggle}
+                disabled={!biometricAvailable}
+                trackColor={{ false: '#D1D1D6', true: P.accent }}
+                thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
               />
             </View>
           </View>
 
           {/* Accessibility & Support */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: currentTheme.accent }]}>Accessibility & Support</Text>
-            
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>Accessibility & Support</Text>
             <SettingsOption
               icon="format-size"
               title="Text Size & Font"
-              subtitle="Accessibility"
-              onPress={() => {}}
-              disabled={false}
-              theme={currentTheme}
+              subtitle="Open phone display settings"
+              onPress={() => Linking.openURL('App-prefs:root=ACCESSIBILITY')}
+              palette={P}
             />
-
             <SettingsOption
               icon="language"
               title="Language & Region"
-              subtitle="Multilingual"
-              onPress={() => {}}
-              disabled={false}
-              theme={currentTheme}
+              subtitle="Open phone language settings"
+              onPress={() => Linking.openURL('App-prefs:root=General&path=LANGUAGE_AND_REGION')}
+              palette={P}
             />
-
-            <SettingsOption
-              icon="help"
-              title="Help Center"
-              subtitle="FAQs, chat"
-              onPress={() => setShowHelpModal(true)}
-              disabled={false}
-              theme={currentTheme}
-            />
+            <SettingsOption icon="help" title="Help Centre" subtitle="FAQs, contact support" onPress={() => navigation.navigate('HelpCentre')} palette={P} />
           </View>
 
-          {/* Become a Provider */}
+          {/* For Professionals */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: currentTheme.accent }]}>For Professionals</Text>
-
-            <TouchableOpacity
-              style={[styles.becomeProviderButton, { backgroundColor: currentTheme.accent }]}
-              onPress={() => navigation.navigate('InfoReg')}
-              activeOpacity={0.8}
-            >
-              <Icon name="storefront" size={24} color="#fff" />
-              <View style={styles.becomeProviderText}>
-                <Text style={styles.becomeProviderTitle}>Become a Provider</Text>
-                <Text style={styles.becomeProviderSubtitle}>List your services on Cerviced</Text>
-              </View>
-              <Icon name="chevron-right" size={24} color="#fff" />
-            </TouchableOpacity>
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>For Professionals</Text>
+            {user?.accountType === 'provider' ? (
+              <TouchableOpacity
+                style={[styles.providerBtn, {
+                  backgroundColor: P.iconBg,
+                  borderColor: P.border,
+                }]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); switchMode(); }}
+                activeOpacity={0.8}
+              >
+                <Icon name="swap-horiz" size={22} color={P.text} />
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={[styles.providerBtnTitle, { color: P.text }]}>Switch to Provider Mode</Text>
+                  <Text style={[styles.providerBtnSub, { color: P.sub }]}>Go to your provider dashboard</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.providerBtn, {
+                  backgroundColor: P.iconBg,
+                  borderColor: P.border,
+                }]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  switchMode();
+                }}
+                activeOpacity={0.8}
+              >
+                <Icon name="storefront" size={22} color={P.text} />
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                  <Text style={[styles.providerBtnTitle, { color: P.text }]}>Become a Provider</Text>
+                  <Text style={[styles.providerBtnSub, { color: P.sub }]}>List your services on Cerviced</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* App Info & Legal */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: currentTheme.accent }]}>App Info & Legal</Text>
-
-            <SettingsOption
-              icon="info"
-              title="About Cerviced"
-              subtitle="Mission, version"
-              onPress={() => setShowAboutModal(true)}
-              disabled={false}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="gavel"
-              title="Terms & Conditions"
-              subtitle="Legal info"
-              onPress={() => {}}
-              disabled={false}
-              theme={currentTheme}
-            />
-
-            <SettingsOption
-              icon="bug-report"
-              title="Report a Problem"
-              subtitle="Bugs, feedback"
-              onPress={() => {}}
-              disabled={false}
-              theme={currentTheme}
-            />
+            <Text style={[styles.sectionTitle, { color: P.sub }]}>App Info & Legal</Text>
+            <SettingsOption icon="info" title="About Cerviced" subtitle="Mission, version" onPress={() => navigation.navigate('About')} palette={P} />
+            <SettingsOption icon="gavel" title="Terms & Conditions" subtitle="Legal info" onPress={() => navigation.navigate('Terms')} palette={P} />
+            <SettingsOption icon="bug-report" title="Report a Problem" subtitle="Bugs, feedback" onPress={() => navigation.navigate('ReportProblem')} palette={P} />
           </View>
 
           {isLoggedIn && (
             <TouchableOpacity
-              style={[styles.logoutButton, { borderColor: currentTheme.accent }]}
-              onPress={handleLogout}
+              style={styles.logoutBtn}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); setShowLogoutModal(true); }}
               activeOpacity={0.7}
             >
-              <View style={styles.iconContainer}>
-                <Icon name="logout" size={24} color={currentTheme.accent} />
-              </View>
-              <Text style={[styles.logoutText, { color: currentTheme.accent }]}>Log Out</Text>
+              <Icon name="logout" size={16} color="#fff" />
+              <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
           )}
 
-          <Text style={[styles.footerText, { color: currentTheme.secondaryText }]}>
-            {isLoggedIn ? 'Customize your Cerviced experience!' : 'Sign in to access more features!'}
-          </Text>
+          <Text style={[styles.footerText, { color: P.sub }]}>Cerviced v1.0.0</Text>
         </ScrollView>
-
-        {/* Modals */}
-        <ProfileInfoModal />
-        <EmailPasswordModal />
-        <AboutModal />
       </SafeAreaView>
+
+      {/* ── Become a Provider modal ─────────────────────────────────────── */}
+      <Modal visible={showProviderModal} transparent animationType="fade" onRequestClose={() => setShowProviderModal(false)}>
+        <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlayCenter}>
+          <View style={[styles.modalCard, { backgroundColor: isDarkMode ? '#252220' : '#FFFFFF', borderColor: P.border }]}>
+            <Text style={[styles.modalTitle, { color: P.text }]}>Become a Provider</Text>
+            <Text style={[styles.modalBody, { color: P.sub }]}>
+              Would you like to use your existing account details (name, email, phone)?
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: P.accent }]}
+              onPress={() => {
+                setShowProviderModal(false);
+                resetData();
+                updateData({ accountType: 'provider', fromProviderSwitch: true, name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
+                navigation.navigate('SignUpStep3' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalBtnText}>Yes, use my details</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalBtnOutline, { borderColor: P.border }]}
+              onPress={() => {
+                setShowProviderModal(false);
+                resetData();
+                (navigation as any).getParent()?.getParent()?.navigate('SignUpStep1');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.modalBtnOutlineText, { color: P.text }]}>Create new account</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowProviderModal(false)} activeOpacity={0.6}>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
+
+      {/* ── Log out confirmation modal ──────────────────────────────────── */}
+      <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
+        <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: isDarkMode ? '#252220' : '#FFFFFF', borderColor: P.border }]}>
+            <Text style={[styles.modalTitle, { color: P.text }]}>Log Out</Text>
+            <Text style={[styles.modalBody, { color: P.sub }]}>
+              Are you sure you want to log out?
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: '#c0392b' }]}
+              onPress={() => { setShowLogoutModal(false); handleLogout(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalBtnText}>Yes, log out</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowLogoutModal(false)} activeOpacity={0.6}>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
     </ThemedBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  header: {
-    paddingTop: 20,
-    paddingBottom: 20,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  signInButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    alignItems: 'center',
+  background: { flex: 1 },
+  container: { flex: 1, paddingHorizontal: 20 },
+  content: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
+
+  // Hero
+  heroSection: {
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: 12,
+    paddingHorizontal: 4,
   },
-  signInButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
+  heroLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  liquidGlassCell: {
-    borderRadius: 20,
-    padding: 15,
-    marginBottom: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
-    borderWidth: 0.5,
-  },
-  cardContainer: {
+  avatarText: { fontSize: 16, fontWeight: '700' },
+  heroTextBlock: { flex: 1 },
+  heroSub: { fontSize: 14, fontWeight: '500', letterSpacing: 0.2, marginBottom: 2 },
+  heroName: { fontSize: 40, fontFamily: 'BakbakOne-Regular', letterSpacing: -0.5 },
+
+  // Quick cards
+  quickRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderRadius: 20,
+    padding: 10,
+    marginBottom: 20,
+    borderWidth: 0.5,
+    gap: 8,
   },
   card: {
-    borderRadius: 12,
-    padding: 12,
     flex: 1,
-    marginHorizontal: 5,
+    borderRadius: 14,
+    padding: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
     borderWidth: 0.5,
+    gap: 4,
   },
-  cardIconContainer: {
-    marginBottom: 6,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 6,
-  },
-  cardSubText: {
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: 2,
-  },
+  cardTitle: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  cardSub: { fontSize: 10, fontWeight: '400', textAlign: 'center' },
+
+  // Section
   section: {
-    marginBottom: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 15,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 18,
+    borderRadius: 16,
+    padding: 12,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 15,
-    marginLeft: 10,
-  },
-  option: {
-    padding: 15,
-    borderRadius: 12,
+    fontSize: 11,
+    fontFamily: 'BakbakOne-Regular',
+    letterSpacing: 1.5,
     marginBottom: 10,
+    marginLeft: 2,
+    textTransform: 'uppercase',
+    opacity: 0.55,
+  },
+
+  // Option row
+  option: {
+    padding: 13,
+    borderRadius: 12,
+    marginBottom: 6,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
     borderWidth: 0.5,
   },
-  optionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingLeft: 5,
-  },
-  iconContainer: {
-    marginRight: 15,
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  optionSubText: {
-    fontSize: 12,
-    maxWidth: '40%',
-    textAlign: 'right',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(218, 112, 214, 0.1)',
-    padding: 15,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    borderWidth: 1,
-  },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 10,
-  },
-  footerText: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 30,
-    lineHeight: 20,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalBlur: {
-    width: '90%',
-    maxHeight: '80%',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  modalContent: {
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  closeButton: {
-    fontSize: 28,
-    fontWeight: '300',
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: 0.5,
-  },
-  inputBlur: {
-    borderRadius: 15,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-  },
-  textInput: {
-    fontSize: 14,
-    letterSpacing: 0.5,
-  },
-  saveButton: {
-    marginTop: 20,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  saveButtonBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    borderRadius: 20,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  aboutText: {
-    fontSize: 14,
-    lineHeight: 24,
-    marginBottom: 15,
-  },
-  // Beauty Preferences Modal Styles
-  sectionSubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 12,
-    marginTop: 10,
-    letterSpacing: 0.5,
-  },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 20,
-  },
-  chip: {
-    backgroundColor: 'rgba(218, 112, 214, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-  },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  providerList: {
-    marginBottom: 20,
-  },
-  providerItem: {
-    fontSize: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  // Payment Modal Styles
-  paymentCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 15,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  paymentCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  paymentCardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 12,
-  },
-  paymentCardExpiry: {
-    fontSize: 12,
-    marginLeft: 36,
-  },
-  addButton: {
-    marginTop: 10,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  // Notifications Modal Styles
-  notificationOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  notificationTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  notificationSubtitle: {
-    fontSize: 12,
-  },
-  // Help Center Modal Styles
-  helpItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  helpQuestion: {
-    fontSize: 14,
-    fontWeight: '500',
-    flex: 1,
-  },
-  contactButton: {
-    marginTop: 20,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  // Become Provider Button
-  becomeProviderButton: {
+  optionLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  optionText: { fontSize: 15, fontWeight: '600' },
+  optionSubText: { fontSize: 12, fontWeight: '400', marginTop: 1 },
+
+  // Provider button
+  providerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderRadius: 16,
-    marginTop: 5,
+    borderWidth: 1,
+  },
+  providerBtnTitle: { fontSize: 15, fontWeight: '700' },
+  providerBtnSub: { fontSize: 12, fontWeight: '400' },
+
+  // Logout
+  logoutBtn: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 100,
+    backgroundColor: '#3A3A3C',
+    gap: 8,
+  },
+  logoutText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  footerText: { fontSize: 11, fontWeight: '400', textAlign: 'center', marginTop: 24 },
+
+  // Modals
+  modalOverlayCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end', padding: 16, paddingBottom: 32 },
+  modalCard: {
+    borderRadius: 24,
+    borderWidth: 0.5,
+    padding: 24,
+    gap: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
   },
-  becomeProviderText: {
-    flex: 1,
-    marginLeft: 15,
+  modalTitle: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3, marginBottom: 2 },
+  modalBody: { fontSize: 14, lineHeight: 20, marginBottom: 6 },
+  modalBtn: {
+    borderRadius: 100,
+    paddingVertical: 15,
+    alignItems: 'center',
   },
-  becomeProviderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 2,
+  modalBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  modalBtnOutline: {
+    borderRadius: 100,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
   },
-  becomeProviderSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-  },
+  modalBtnOutlineText: { fontSize: 15, fontWeight: '600' },
+  modalCancel: { paddingVertical: 10, alignItems: 'center' },
+  modalCancelText: { fontSize: 14, fontWeight: '500' },
 });

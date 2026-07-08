@@ -1,5 +1,6 @@
 // src/screens/auth/SignUpStep1Screen.tsx
 import React from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   StatusBar,
   StyleSheet,
@@ -10,97 +11,92 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep1'>;
 
+const L = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
+const D = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
+
 export default function SignUpStep1Screen({ navigation }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const t = isDarkMode ? D : L;
   const { data, updateData, totalSteps } = useRegistration();
   const insets = useSafeAreaInsets();
-
-  const glassStyle = (active?: boolean) => ({
-    backgroundColor: active
-      ? (isDarkMode ? 'rgba(58, 58, 60, 0.8)' : 'rgba(255, 255, 255, 0.35)')
-      : (isDarkMode ? 'rgba(58, 58, 60, 0.6)' : 'rgba(255, 255, 255, 0.15)'),
-    borderTopColor: isDarkMode ? theme.border : (active ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.7)'),
-    borderLeftColor: isDarkMode ? theme.border : (active ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)'),
-    borderRightColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-    borderBottomColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-  });
-
   const isSelected = data.accountType;
 
   return (
-    <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+    <ThemedBackground style={{ flex: 1 }}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
       <View style={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 }]}>
         {/* Back */}
         <TouchableOpacity
-          style={[styles.backBtn, glassStyle()]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
+          style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+          activeOpacity={0.6}
         >
-          <Text style={[styles.backIcon, { color: theme.text }]}>{'<'}</Text>
+          <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
         </TouchableOpacity>
 
         {/* Progress */}
         <StepProgressIndicator currentStep={1} totalSteps={totalSteps} />
 
         {/* Header */}
-        <Text style={[styles.headerTitle, { color: theme.text }]}>I am a...</Text>
+        <Text style={[styles.headerTitle, { color: t.text }]}>I am a...</Text>
 
         {/* Selection Cards */}
         <View style={styles.cardsContainer}>
-          {/* User Card */}
           <TouchableOpacity
             style={[
               styles.selectionCard,
-              glassStyle(isSelected === 'user'),
-              isSelected === 'user' && styles.selectedCard,
+              {
+                backgroundColor: t.card,
+                borderColor: isSelected === 'user' ? t.accent : t.border,
+                borderWidth: isSelected === 'user' ? 1.5 : 1,
+              },
             ]}
-            onPress={() => updateData({ accountType: 'user' })}
-            activeOpacity={0.7}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); updateData({ accountType: 'user' }); }}
+            activeOpacity={0.6}
           >
-            <Text style={[styles.cardEmoji]}>{"✨"}</Text>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>Looking for Services</Text>
-            <Text style={[styles.cardDesc, { color: theme.secondaryText }]}>
+            <Text style={styles.cardEmoji}>✨</Text>
+            <Text style={[styles.cardTitle, { color: t.text }]}>Looking for Services</Text>
+            <Text style={[styles.cardDesc, { color: t.sub }]}>
               Find and book beauty professionals near you
             </Text>
           </TouchableOpacity>
 
-          {/* Provider Card */}
           <TouchableOpacity
             style={[
               styles.selectionCard,
-              glassStyle(isSelected === 'provider'),
-              isSelected === 'provider' && styles.selectedCard,
+              {
+                backgroundColor: t.card,
+                borderColor: isSelected === 'provider' ? t.accent : t.border,
+                borderWidth: isSelected === 'provider' ? 1.5 : 1,
+              },
             ]}
-            onPress={() => updateData({ accountType: 'provider' })}
-            activeOpacity={0.7}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); updateData({ accountType: 'provider' }); }}
+            activeOpacity={0.6}
           >
-            <Text style={[styles.cardEmoji]}>{"💼"}</Text>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>Beauty Professional</Text>
-            <Text style={[styles.cardDesc, { color: theme.secondaryText }]}>
+            <Text style={styles.cardEmoji}>💼</Text>
+            <Text style={[styles.cardTitle, { color: t.text }]}>Beauty Professional</Text>
+            <Text style={[styles.cardDesc, { color: t.sub }]}>
               List your services and manage bookings
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Continue Button */}
+        {/* Continue */}
         <View style={styles.bottomSection}>
           <TouchableOpacity
-            style={[styles.continueBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(218,112,214,0.35)' }]}
-            onPress={() => navigation.navigate('SignUpStep2')}
-            activeOpacity={0.8}
+            style={[styles.continueBtn, { backgroundColor: t.accent }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('SignUpStep2'); }}
+            activeOpacity={0.75}
           >
-            <Text style={[styles.continueBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>
-              CONTINUE
-            </Text>
+            <Text style={styles.continueBtnText}>CONTINUE</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -118,7 +114,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
@@ -130,7 +126,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 32,
-    fontWeight: '900',
     letterSpacing: 1,
     marginBottom: 28,
   },
@@ -140,12 +135,7 @@ const styles = StyleSheet.create({
   },
   selectionCard: {
     borderRadius: 20,
-    borderWidth: 1.5,
     padding: 24,
-    overflow: 'hidden',
-  },
-  selectedCard: {
-    borderColor: 'rgba(218,112,214,0.6)',
   },
   cardEmoji: {
     fontSize: 32,
@@ -170,12 +160,11 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     paddingVertical: 15,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(218,112,214,0.4)',
   },
   continueBtnText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
     letterSpacing: 1,
+    color: '#FFFFFF',
   },
 });

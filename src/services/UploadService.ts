@@ -110,7 +110,7 @@ class UploadService {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? 'Images',
         allowsEditing: true,
         aspect: [1, 1], // Square for logos
         quality: 0.8,

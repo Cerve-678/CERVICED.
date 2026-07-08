@@ -1,156 +1,8 @@
-// src/services/bookingService.ts - COMPLETE FIXED VERSION
+// src/services/bookingService.ts
 import { CartItem } from '../contexts/CartContext';
 import { AppointmentData } from '../contexts/BookingContext';
+import type { ProviderLocationData } from './databaseService';
 
-function getFullProviderName(shortName: string): string {
-  const nameMap: Record<string, string> = {
-    JENNIFER: 'Hair by Jennifer',
-    'Hair by Jennifer': 'Hair by Jennifer',
-    KATHRINE: 'Styled by Kathrine',
-    'Styled by Kathrine': 'Styled by Kathrine',
-    DIVANA: 'Diva Nails',
-    'Diva Nails': 'Diva Nails',
-    JANA: 'Jana Aesthetics',
-    'Jana Aesthetics': 'Jana Aesthetics',
-    'HER BROWS': 'Her Brows',
-    'Her Brows': 'Her Brows',
-    KIKI: "Kiki's Nails",
-    "Kiki's Nails": "Kiki's Nails",
-    'Kiki Nails': "Kiki's Nails",
-    MYA: 'Makeup by Mya',
-    'Makeup by Mya': 'Makeup by Mya',
-    VIKKI: 'Vikki Laid',
-    'Vikki Laid': 'Vikki Laid',
-    LASHED: 'Your Lashed',
-    'Your Lashed': 'Your Lashed',
-    'ROSEMAY AESTHETICS': 'RoseMay Aesthetics',
-    'RoseMay Aesthetics': 'RoseMay Aesthetics',
-    ROSEMAY: 'RoseMay Aesthetics',
-    'FILLER BY JESS': 'Filler by Jess',
-    'Filler by Jess': 'Filler by Jess',
-    JESS: 'Filler by Jess',
-    'EYEBROW DELUXE': 'Eyebrow Deluxe',
-    'Eyebrow Deluxe': 'Eyebrow Deluxe',
-    EYEBROW: 'Eyebrow Deluxe',
-    'LASHES GALORE': 'Lashes Galore',
-    'Lashes Galore': 'Lashes Galore',
-    GALORE: 'Lashes Galore',
-    'ZEE NAIL ARTIST': 'Zee Nail Artist',
-    'Zee Nail Artist': 'Zee Nail Artist',
-    ZEE: 'Zee Nail Artist',
-    'PAINTED BY ZOE': 'Painted by Zoe',
-    'Painted by Zoe': 'Painted by Zoe',
-    ZOE: 'Painted by Zoe',
-    'BRAIDED SLICK': 'Braided Slick',
-    'Braided Slick': 'Braided Slick',
-    BRAIDED: 'Braided Slick',
-    'LASH BAE': 'Lash Bae',
-    'Lash Bae': 'Lash Bae',
-    LASHBAE: 'Lash Bae',
-    BAE: 'Lash Bae',
-    SLICKED: 'Slicked by Jennifer',
-    'Slicked by Jennifer': 'Slicked by Jennifer',
-  };
-  return nameMap[shortName] || shortName;
-}
-
-// Provider location data
-export const PROVIDER_LOCATIONS: Record<string, {
-  address: string;
-  coordinates: { latitude: number; longitude: number };
-  phone: string;
-}> = {
-  'Hair by Jennifer': {
-    address: '9642 Little Santa Monica Blvd, Beverly Hills, CA 90210',
-    coordinates: { latitude: 34.0736, longitude: -118.4004 },
-    phone: '(310) 555-0123',
-  },
-  'Styled by Kathrine': {
-    address: '8743 Melrose Ave, West Hollywood, CA 90069',
-    coordinates: { latitude: 34.0901, longitude: -118.3617 },
-    phone: '(323) 555-0456',
-  },
-  'Diva Nails': {
-    address: '1234 Main St, Santa Monica, CA 90401',
-    coordinates: { latitude: 34.0195, longitude: -118.4912 },
-    phone: '(310) 555-0789',
-  },
-  'Jana Aesthetics': {
-    address: '6801 Hollywood Blvd, Hollywood, CA 90028',
-    coordinates: { latitude: 34.1016, longitude: -118.3416 },
-    phone: '(323) 555-0321',
-  },
-  'Her Brows': {
-    address: '5555 Sunset Blvd, Los Angeles, CA 90028',
-    coordinates: { latitude: 34.098, longitude: -118.3287 },
-    phone: '(323) 555-0654',
-  },
-  "Kiki's Nails": {
-    address: '7890 Rodeo Dr, Beverly Hills, CA 90210',
-    coordinates: { latitude: 34.0673, longitude: -118.4004 },
-    phone: '(310) 555-0987',
-  },
-  'Makeup by Mya': {
-    address: '3333 Wilshire Blvd, Los Angeles, CA 90010',
-    coordinates: { latitude: 34.0621, longitude: -118.3087 },
-    phone: '(213) 555-0432',
-  },
-  'Vikki Laid': {
-    address: '4444 Ventura Blvd, Sherman Oaks, CA 91423',
-    coordinates: { latitude: 34.1508, longitude: -118.4517 },
-    phone: '(818) 555-0765',
-  },
-  'Your Lashed': {
-    address: '2222 Venice Blvd, Los Angeles, CA 90006',
-    coordinates: { latitude: 34.0423, longitude: -118.3087 },
-    phone: '(323) 555-0198',
-  },
-  'RoseMay Aesthetics': {
-    address: '5678 Beverly Blvd, Los Angeles, CA 90036',
-    coordinates: { latitude: 34.0759, longitude: -118.3414 },
-    phone: '(323) 555-0876',
-  },
-  'Filler by Jess': {
-    address: '9876 Santa Monica Blvd, West Hollywood, CA 90069',
-    coordinates: { latitude: 34.0902, longitude: -118.3817 },
-    phone: '(310) 555-0543',
-  },
-  'Eyebrow Deluxe': {
-    address: '1111 Fairfax Ave, Los Angeles, CA 90046',
-    coordinates: { latitude: 34.0898, longitude: -118.3609 },
-    phone: '(323) 555-0234',
-  },
-  'Lashes Galore': {
-    address: '3456 Highland Ave, Los Angeles, CA 90028',
-    coordinates: { latitude: 34.1018, longitude: -118.3387 },
-    phone: '(323) 555-0678',
-  },
-  'Zee Nail Artist': {
-    address: '7890 Sunset Blvd, Los Angeles, CA 90046',
-    coordinates: { latitude: 34.0978, longitude: -118.3617 },
-    phone: '(323) 555-0912',
-  },
-  'Painted by Zoe': {
-    address: '2468 La Brea Ave, Los Angeles, CA 90046',
-    coordinates: { latitude: 34.0887, longitude: -118.3437 },
-    phone: '(323) 555-0345',
-  },
-  'Braided Slick': {
-    address: '1357 Crenshaw Blvd, Los Angeles, CA 90019',
-    coordinates: { latitude: 34.0489, longitude: -118.3356 },
-    phone: '(323) 555-0789',
-  },
-  'Lash Bae': {
-    address: '5432 Melrose Ave, Los Angeles, CA 90038',
-    coordinates: { latitude: 34.0834, longitude: -118.3256 },
-    phone: '(323) 555-0456',
-  },
-  'Slicked by Jennifer': {
-    address: '8765 West 3rd St, Los Angeles, CA 90048',
-    coordinates: { latitude: 34.0712, longitude: -118.3745 },
-    phone: '(310) 555-0321',
-  },
-};
 
 export interface ServiceBookingData {
   selectedDate: string;
@@ -255,7 +107,8 @@ export class BookingService {
   static createAppointmentData(
     items: CartItem[],
     bookings: Record<string, ServiceBookingData>,
-    customerInfo: { name: string; email: string; phone: string }
+    customerInfo: { name: string; email: string; phone: string },
+    providerLocations: Record<string, ProviderLocationData> = {}
   ): AppointmentData[] {
     if (__DEV__) console.log('Creating appointment data for', items.length, 'items');
 
@@ -336,13 +189,13 @@ export class BookingService {
         remainingBalance
       });
 
-      // Get provider location
-      const fullProviderName = getFullProviderName(item.providerName);
-      const providerLocation = PROVIDER_LOCATIONS[fullProviderName];
+      // Get provider location from DB data (passed in) or fall back gracefully
+      const fullProviderName = item.providerDisplayName ?? item.providerName;
+      const providerLocation = providerLocations[fullProviderName] ?? providerLocations[item.providerName];
 
-      const address = providerLocation?.address || 'Address will be confirmed by provider';
-      const coordinates = providerLocation?.coordinates || { latitude: 34.0522, longitude: -118.2437 };
-      const phone = providerLocation?.phone || 'Phone will be confirmed by provider';
+      const address = providerLocation?.address ?? 'Address will be confirmed by provider';
+      const coordinates = providerLocation?.coordinates ?? null;
+      const phone = providerLocation?.phone ?? 'Phone will be confirmed by provider';
 
       const appointmentData: AppointmentData = {
         cartItemId: item.id,

@@ -40,4 +40,3 @@ export const isProviderFullyBooked = (_provider: Provider): boolean => false;
 export const getAvailableSlotCount = (_provider: Provider): number => 0;
 export const getProvidersByService = (_service: string): Provider[] => [];
 export const getAvailableProviders = (): Provider[] => [];
-};

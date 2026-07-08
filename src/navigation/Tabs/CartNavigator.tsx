@@ -2,7 +2,9 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CartScreen from '../../screens/CartScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
+import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import BookingsScreen from '../../screens/BookingsScreen';
+import ClientIntakeFormScreen from '../../screens/ClientIntakeFormScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
 import { CartStackParamList } from '../types';
@@ -34,10 +36,16 @@ export default function CartNavigator() {
         }}
       />
       
-      <CartStack.Screen 
+      <CartStack.Screen
+        name="ProviderChat"
+        component={ProviderChatScreen}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+      />
+
+      <CartStack.Screen
         name="ProviderProfile"
         component={ProviderProfileScreen}
-        options={{ 
+        options={{
           title: 'Provider Details',
           presentation: 'card',
           headerBackTitle: 'Cart',
@@ -61,6 +69,12 @@ export default function CartNavigator() {
           },
           headerTintColor: theme.text,
         }}
+      />
+
+      <CartStack.Screen
+        name="ClientIntakeForm"
+        component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
       />
 
       <CartStack.Screen

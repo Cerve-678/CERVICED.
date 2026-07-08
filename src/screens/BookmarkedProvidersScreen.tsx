@@ -6,32 +6,36 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
-  Dimensions,
   StatusBar,
   Platform,
   Animated,
-  Pressable,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useFonts } from 'expo-font';
 import { HomeStackParamList } from '../navigation/types';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark } from '../services/databaseService';
+import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark, getActivePromotions } from '../services/databaseService';
 import type { DbProvider } from '../types/database';
 import Icon from '../components/IconLibrary';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 
-const { width } = Dimensions.get('window');
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const L = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', text: '#000000', sub: '#7E6667',
+  border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)',
+};
+const D = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667',
+  border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
+};
 
 type ServiceType = 'ALL' | 'HAIR' | 'NAILS' | 'MUA' | 'LASHES' | 'AESTHETICS' | 'BROWS';
-
 type BookmarkedProvidersScreenNavigationProp = StackNavigationProp<HomeStackParamList, 'BookmarkedProviders'>;
 
 interface Props {
@@ -39,7 +43,8 @@ interface Props {
 }
 
 interface Provider {
-  id: string;
+  id: string;   // UUID — for bookmark remove operations
+  slug: string; // slug — for navigation to ProviderProfile
   name: string;
   service: string;
   logo: any;
@@ -47,10 +52,10 @@ interface Provider {
   rating: number;
 }
 
-/** Map a Supabase DbProvider row to the local Provider shape used in this screen */
 function mapDbProvider(p: DbProvider): Provider {
   return {
     id: p.id,
+    slug: p.slug,
     name: p.display_name,
     service: p.service_category,
     logo: p.logo_url ? { uri: p.logo_url } : null,
@@ -59,7 +64,7 @@ function mapDbProvider(p: DbProvider): Provider {
   };
 }
 
-// ── Skeleton Loader ───────────────────────────────────────────────
+// ── Skeleton ─────────────────────────────────────────────────────────────────
 function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -73,10 +78,10 @@ function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
     return () => loop.stop();
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
+  const P = isDarkMode ? D : L;
   const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
-  const bg = isDarkMode ? 'rgba(28,28,30,0.95)' : '#fff';
   return (
-    <View style={[skeletonStyles.card, { backgroundColor: bg }]}>
+    <View style={[skeletonStyles.card, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
       <Animated.View style={[skeletonStyles.avatar, { backgroundColor: base, opacity }]} />
       <View style={skeletonStyles.info}>
         <Animated.View style={[skeletonStyles.line, { width: '55%', backgroundColor: base, opacity }]} />
@@ -92,129 +97,39 @@ const skeletonStyles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
     marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
   },
-  avatar: { width: 56, height: 56, borderRadius: 28 },
+  avatar: { width: 52, height: 52, borderRadius: 26 },
   info: { flex: 1, marginLeft: 14, gap: 8 },
-  line: { height: 12, borderRadius: 6 },
-  badge: { width: 52, height: 28, borderRadius: 14, marginLeft: 8 },
+  line: { height: 11, borderRadius: 6 },
+  badge: { width: 44, height: 22, borderRadius: 6, marginLeft: 8 },
 });
 
-// Service Tab Button Component with Haptic Feedback and Subtle Animation
-interface ServiceTabProps {
-  service: ServiceType;
-  isSelected: boolean;
-  onPress: () => void;
-  onBack?: () => void;
-  theme: any;
-  isDarkMode: boolean;
-  showBackArrow?: boolean;
-}
-
-function ServiceTab({ service, isSelected, onPress, onBack, theme, isDarkMode, showBackArrow }: ServiceTabProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1.08,
-      useNativeDriver: true,
-      speed: 80,
-      bounciness: 12,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 60,
-      bounciness: 8,
-    }).start();
-  };
-
-  const handlePress = async () => {
-    // Trigger haptic feedback
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onPress();
-  };
-
-  const handleBackPress = async (e: any) => {
-    e.stopPropagation();
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (onBack) onBack();
-  };
-
-  return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      onPress={handlePress}
-      style={styles.serviceButton}
-    >
-      <Animated.View
-        style={[
-          styles.glassCard,
-          {
-            transform: [{ scale: scaleAnim }],
-            backgroundColor:
-              isSelected
-                ? isDarkMode
-                  ? 'rgba(163, 66, 195, 0.4)'
-                  : 'rgba(218, 112, 214, 0.3)'
-                : isDarkMode
-                ? 'rgba(58, 58, 60, 0.8)'
-                : 'rgba(255, 255, 255, 0.15)',
-            borderTopColor:
-              isSelected
-                ? isDarkMode
-                  ? 'rgba(163, 66, 195, 0.7)'
-                  : 'rgba(218, 112, 214, 0.6)'
-                : isDarkMode
-                ? theme.border
-                : 'rgba(255, 255, 255, 0.7)',
-            borderLeftColor:
-              isSelected
-                ? isDarkMode
-                  ? 'rgba(163, 66, 195, 0.6)'
-                  : 'rgba(218, 112, 214, 0.5)'
-                : isDarkMode
-                ? theme.border
-                : 'rgba(255, 255, 255, 0.5)',
-          },
-        ]}
-        shouldRasterizeIOS={true}
-        renderToHardwareTextureAndroid={true}
-      >
-        <Text style={[styles.serviceText, { color: isSelected ? '#A342C3' : theme.text }]}>{service}</Text>
-      </Animated.View>
-    </Pressable>
-  );
-}
-
+// ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
+  const P = isDarkMode ? D : L;
+
+  const [fontsLoaded] = useFonts({
+    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
+    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
+  });
+
   const { removeBookmark, loadBookmarks } = useBookmarkStore();
   const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState<ServiceType>('ALL');
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
-
-  const bookmarkedProviders = liveProviders;
+  const [providerIdsWithOffers, setProviderIdsWithOffers] = useState<Set<string>>(new Set());
 
   const filteredProviders = selectedService === 'ALL'
-    ? bookmarkedProviders
-    : bookmarkedProviders.filter(provider => provider.service === selectedService);
+    ? liveProviders
+    : liveProviders.filter(p => p.service === selectedService);
 
   const serviceCategories: ServiceType[] = ['ALL', 'HAIR', 'NAILS', 'MUA', 'LASHES', 'AESTHETICS', 'BROWS'];
 
-  // Configure transparent system header
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
@@ -222,21 +137,17 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       headerTitle: '',
       headerLeft: () => (
         <TouchableOpacity
-          style={styles.navBackButton}
+          style={[styles.navBackButton, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <BlurView intensity={35} tint={theme.blurTint} style={styles.navBackButtonBlur}>
-            <Text style={[styles.navBackText, { color: theme.text }]}>←</Text>
-          </BlurView>
+          <Text style={[styles.navBackText, { color: P.text }]}>←</Text>
         </TouchableOpacity>
       ),
-      headerStyle: {
-        backgroundColor: 'transparent',
-      },
+      headerStyle: { backgroundColor: 'transparent' },
       headerBackground: () => null,
     });
-  }, [navigation, theme]);
+  }, [navigation, P]);
 
   useFocusEffect(
     useCallback(() => {
@@ -244,10 +155,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         try {
           setLoading(true);
           await loadBookmarks();
-          // Fetch real bookmarked providers from Supabase
           const supabaseData = await getBookmarkedProviders();
           setLiveProviders(supabaseData.map(mapDbProvider));
-          if (__DEV__) console.log('Loaded bookmarks:', supabaseData.length, 'from Supabase');
+          try {
+            const promos = await getActivePromotions();
+            setProviderIdsWithOffers(new Set(promos.map(p => p.provider_id)));
+          } catch { /* silent */ }
         } catch (error) {
           console.error('Failed to load bookmarks:', error);
         } finally {
@@ -260,11 +173,8 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   const handleRemoveBookmark = async (providerId: string) => {
     try {
-      // Remove from Supabase (no-op if unauthenticated)
       await dbRemoveBookmark(providerId).catch(() => {});
-      // Optimistic update for live Supabase state
       setLiveProviders(prev => prev.filter(p => p.id !== providerId));
-      // Also update MMKV store for slug-based lookups
       await removeBookmark(providerId);
     } catch (error) {
       console.error('Failed to remove bookmark:', error);
@@ -275,12 +185,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     navigation.navigate('ProviderProfile', { providerId });
   };
 
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return (
       <ThemedBackground>
         <StatusBar barStyle={theme.statusBar} />
         <SafeAreaView style={styles.container}>
-          <View style={{ paddingTop: 60 }}>
+          <View style={{ paddingTop: 72 }}>
             {[1, 2, 3, 4, 5].map(k => (
               <SkeletonProviderCard key={k} isDarkMode={isDarkMode} />
             ))}
@@ -291,136 +201,150 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
   }
 
   return (
-    <ThemedBackground style={styles.background}>
+    <ThemedBackground>
       <StatusBar barStyle={theme.statusBar} />
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        {/* Header Section */}
-        <View style={styles.screenHeader}>
-          <Text style={[styles.screenTitle, { color: theme.text }]}>YOUR PROVIDERS</Text>
 
-          {/* Service Tabs */}
-          {bookmarkedProviders.length > 0 && (
-            <>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.tabsScroll}
-                contentContainerStyle={styles.tabsContent}
-                decelerationRate="fast"
-                scrollEventThrottle={16}
-                removeClippedSubviews={true}
-                nestedScrollEnabled={false}
-                overScrollMode="never"
-              >
-                {serviceCategories.map((service) => (
-                  <ServiceTab
-                    key={service}
-                    service={service}
-                    isSelected={selectedService === service}
-                    onPress={() => {
-                      setSelectedService(service);
-                    }}
-                    onBack={() => {
-                      setSelectedService('ALL');
-                    }}
-                    theme={theme}
-                    isDarkMode={isDarkMode}
-                    showBackArrow={selectedService !== 'ALL'}
-                  />
-                ))}
-              </ScrollView>
-            </>
+        {/* ── Header ── */}
+        <View style={[styles.screenHeader, { borderBottomColor: P.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+          <View style={styles.screenTitleRow}>
+            <Text style={[styles.screenTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
+            {liveProviders.length > 0 && (
+              <View style={[styles.countBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                <Text style={[styles.countBadgeText, { color: P.sub }]}>{liveProviders.length}</Text>
+              </View>
+            )}
+          </View>
+
+          {liveProviders.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabsContent}
+            >
+              {serviceCategories.map(service => (
+                <TouchableOpacity
+                  key={service}
+                  style={styles.serviceButton}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedService(service);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.servicePill,
+                    {
+                      backgroundColor: selectedService === service ? P.accent : P.surface,
+                      borderColor: P.border,
+                      borderWidth: StyleSheet.hairlineWidth,
+                    },
+                  ]}>
+                    <Text style={[styles.serviceText, { color: selectedService === service ? '#fff' : P.text }]}>
+                      {service}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
         </View>
 
-        {/* Content */}
+        {/* ── List ── */}
         <ScrollView
           style={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           removeClippedSubviews={Platform.OS === 'android'}
-          scrollEventThrottle={16}
-          decelerationRate="fast"
-          overScrollMode="never"
-          bounces={true}
         >
-          {/* Provider Cards - Full Width Rows */}
           {filteredProviders.length > 0 ? (
             <View style={styles.providersContainer}>
-              {filteredProviders.map((provider) => (
+              {filteredProviders.map(provider => (
                 <TouchableOpacity
                   key={provider.id}
-                  style={styles.providerCard}
-                  onPress={() => handleViewProfile(provider.id)}
-                  activeOpacity={0.9}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    handleViewProfile(provider.slug);
+                  }}
+                  activeOpacity={0.75}
                 >
-                  <BlurView intensity={40} tint={theme.blurTint} style={styles.cardBlur}>
-                    {/* Circular Logo */}
-                    <Image source={provider.logo} style={styles.providerLogo} />
+                  <View style={[styles.providerCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    {provider.logo ? (
+                      <Image source={provider.logo} style={styles.providerLogo} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.providerLogoPlaceholder, { backgroundColor: P.surface }]}>
+                        <Text style={[styles.providerLogoInitial, { color: P.sub }]}>
+                          {provider.name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
 
-                    {/* Provider Info */}
                     <View style={styles.providerInfo}>
-                      <Text style={[styles.providerName, { color: theme.text }]} numberOfLines={1}>
+                      <Text style={[styles.providerName, { color: P.text }]} numberOfLines={1}>
                         {provider.name}
                       </Text>
-                      <View style={styles.serviceTag}>
-                        <Text style={styles.serviceTagText}>{provider.service}</Text>
+                      <View style={styles.metaRow}>
+                        <View style={[styles.serviceTag, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                          <Text style={[styles.serviceTagText, { color: P.sub }]}>{provider.service}</Text>
+                        </View>
+                        {providerIdsWithOffers.has(provider.id) && (
+                          <View style={[styles.offerBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                            <Text style={[styles.offerBadgeText, { color: P.accent }]}>OFFER</Text>
+                          </View>
+                        )}
                       </View>
-                      <Text style={[styles.locationText, { color: theme.secondaryText }]} numberOfLines={1}>
-                        {provider.location}
-                      </Text>
+                      {provider.location ? (
+                        <Text style={[styles.locationText, { color: P.sub }]} numberOfLines={1}>
+                          {provider.location}
+                        </Text>
+                      ) : null}
                       <View style={styles.ratingRow}>
-                        <Icon name="star" size={14} color="#FFD700" />
-                        <Text style={[styles.ratingText, { color: theme.text }]}>{provider.rating}</Text>
+                        <Icon name="star" size={11} color={P.accent} />
+                        <Text style={[styles.ratingText, { color: P.sub }]}>{provider.rating}</Text>
                       </View>
                     </View>
 
-                    {/* Bookmark Button */}
                     <TouchableOpacity
-                      style={styles.bookmarkButton}
+                      style={[styles.bookmarkButton, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}
                       onPress={(e) => {
                         e.stopPropagation();
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         handleRemoveBookmark(provider.id);
                       }}
                       activeOpacity={0.7}
                     >
-                      <Icon name="bookmark" size={18} color="#8A2BE2" />
+                      <Icon name="bookmark" size={15} color={P.accent} />
                     </TouchableOpacity>
-                  </BlurView>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
-          ) : bookmarkedProviders.length === 0 ? (
+
+          ) : liveProviders.length === 0 ? (
             <View style={styles.emptyState}>
-              <BlurView intensity={30} tint={theme.blurTint} style={styles.emptyCard}>
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>No Saved Providers</Text>
-                <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
-                  Bookmark your favorite providers to find them quickly
+              <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>No Saved Providers</Text>
+                <Text style={[styles.emptySubtitle, { color: P.sub }]}>
+                  Save providers you love to find them quickly here
                 </Text>
                 <TouchableOpacity
-                  style={styles.exploreButton}
+                  style={[styles.exploreButton, { backgroundColor: P.accent }]}
                   onPress={() => navigation.goBack()}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={['#DA70D6', '#B968C7']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.exploreGradient}
-                  >
-                    <Text style={styles.exploreText}>Explore Providers</Text>
-                  </LinearGradient>
+                  <Text style={styles.exploreButtonText}>Explore Providers</Text>
                 </TouchableOpacity>
-              </BlurView>
+              </View>
             </View>
+
           ) : (
             <View style={styles.emptyState}>
-              <BlurView intensity={30} tint={theme.blurTint} style={styles.emptyCard}>
-                <Text style={[styles.emptyTitle, { color: theme.text }]}>No {selectedService} Providers</Text>
-                <Text style={[styles.emptyText, { color: theme.secondaryText }]}>
+              <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                <Text style={[styles.emptyTitle, { color: P.text }]}>No {selectedService} providers saved</Text>
+                <Text style={[styles.emptySubtitle, { color: P.sub }]}>
                   You haven't bookmarked any {selectedService.toLowerCase()} providers yet
                 </Text>
-              </BlurView>
+              </View>
             </View>
           )}
         </ScrollView>
@@ -430,270 +354,185 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1 },
+
   navBackButton: {
-    marginLeft: dimensions.navBackButton.marginLeft,
-    borderRadius: dimensions.navBackButton.borderRadius,
-    overflow: 'hidden',
-  },
-  navBackButtonBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.8)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.6)',
-    borderRightColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-    width: dimensions.navBackButton.width,
-    height: dimensions.navBackButton.height,
+    marginLeft: 16,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   navBackText: {
-    fontSize: dimensions.navBackButton.fontSize,
+    fontSize: 18,
     fontWeight: '600',
   },
+
   screenHeader: {
-    paddingTop: dimensions.screenHeader.paddingTop,
-    paddingBottom: dimensions.screenHeader.paddingBottom,
-    paddingHorizontal: dimensions.screenHeader.paddingHorizontal,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 72,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+  },
+  screenTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
   },
   screenTitle: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: dimensions.screenTitle.fontSize,
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: spacing.lg,
-    textAlign: 'center',
   },
-  tabsScroll: {
-    paddingVertical: dimensions.scroll.verticalPadding,
-    marginTop: spacing.xs,
+  countBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
+  countBadgeText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
   tabsContent: {
-    paddingHorizontal: 0,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: dimensions.scroll.paddingTop,
-    paddingHorizontal: dimensions.scroll.paddingHorizontal,
-    paddingBottom: Platform.OS === 'android' ? 120 : 140, // Extra space for bottom tab bar
-  },
-  serviceButton: {
-    marginRight: dimensions.servicePill.marginRight,
-  },
-  glassCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 120,
-    borderWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.9)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.7)',
-    borderRightColor: 'rgba(255, 255, 255, 0.4)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.4)',
-    paddingHorizontal: Platform.OS === 'android' ? 14 : 18,
-    height: Platform.OS === 'android' ? 28 : 32,
+    paddingRight: 16,
+    gap: 8,
     flexDirection: 'row',
+  },
+  serviceButton: { marginRight: 0 },
+  servicePill: {
+    borderRadius: 100,
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 18,
+    height: Platform.OS === 'android' ? 30 : 34,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'visible',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  backArrowInTab: {
-    marginRight: 6,
-    paddingHorizontal: 2,
-  },
-  backArrowText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
   serviceText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: fonts.serviceText,
+    fontSize: 11,
   },
-  providersContainer: {
-    gap: dimensions.card.gap,
+
+  scrollContainer: { flex: 1 },
+  scrollContent: {
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'android' ? 120 : 140,
   },
+
+  providersContainer: { gap: 10 },
   providerCard: {
-    width: '100%',
-    borderRadius: dimensions.card.borderRadius,
-    overflow: 'hidden',
-  },
-  cardBlur: {
-    backgroundColor: 'rgba(255, 255, 255, 0.35)',
-    borderRadius: dimensions.card.borderRadius,
-    borderWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 1)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.9)',
-    borderRightColor: 'rgba(255, 255, 255, 0.5)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
-    padding: dimensions.card.padding,
+    borderRadius: 14,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 4,
-      height: 8,
-    },
-    shadowOpacity: 0.35,
-    shadowRadius: 15,
-    elevation: 12,
   },
   providerLogo: {
-    width: dimensions.providerLogo.size,
-    height: dimensions.providerLogo.size,
-    borderRadius: dimensions.providerLogo.borderRadius,
-    borderWidth: dimensions.providerLogo.borderWidth,
-    borderColor: 'rgba(255,255,255,0.6)',
-    marginRight: dimensions.providerLogo.marginRight,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginRight: 12,
   },
-  providerInfo: {
-    flex: 1,
-  },
-  providerName: {
-    fontSize: fonts.providerName,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-    fontFamily: 'BakbakOne-Regular',
-  },
-  serviceTag: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(138, 43, 226, 0.2)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  serviceTagText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#8A2BE2',
-    fontFamily: 'Jura-VariableFont_wght bold ',
-  },
-  locationText: {
-    fontSize: fonts.locationText,
-    marginBottom: spacing.xs,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '300',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.gap.xs,
-  },
-  ratingText: {
-    fontSize: fonts.ratingText,
-    fontWeight: '900',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-  bookmarkButton: {
-    width: dimensions.button.small.width,
-    height: dimensions.button.small.height,
-    borderRadius: dimensions.button.small.borderRadius,
-    backgroundColor: 'rgba(138, 43, 226, 0.2)',
+  providerLogoPlaceholder: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.sm,
   },
+  providerLogoInitial: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+  },
+  providerInfo: { flex: 1 },
+  providerName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  serviceTag: {
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  serviceTagText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 9,
+    letterSpacing: 0.3,
+  },
+  offerBadge: {
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  offerBadgeText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 9,
+    letterSpacing: 0.5,
+  },
+  locationText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    marginBottom: 4,
+    opacity: 0.7,
+  },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ratingText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  bookmarkButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: dimensions.emptyState.paddingTop,
+    paddingTop: 60,
   },
   emptyCard: {
-    width: width - dimensions.emptyState.width,
-    borderRadius: dimensions.card.borderRadius,
-    padding: dimensions.emptyState.cardPadding,
+    width: '100%',
+    borderRadius: 16,
+    padding: 28,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderWidth: 2,
-    borderTopColor: 'rgba(255, 255, 255, 1)',
-    borderLeftColor: 'rgba(255, 255, 255, 0.8)',
-    borderRightColor: 'rgba(255, 255, 255, 0.4)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.4)',
   },
   emptyTitle: {
-    fontSize: fonts.title.medium,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
     fontFamily: 'BakbakOne-Regular',
+    fontSize: 18,
+    marginBottom: 8,
   },
-  emptyText: {
-    fontSize: fonts.body.medium,
-    textAlign: 'center',
-    marginBottom: spacing.xxl,
-    lineHeight: fonts.lineHeight.normal,
+  emptySubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '900',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 19,
+    opacity: 0.7,
   },
   exploreButton: {
-    borderRadius: dimensions.button.medium.borderRadius,
-    overflow: 'hidden',
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
-  exploreGradient: {
-    paddingHorizontal: dimensions.button.medium.paddingHorizontal,
-    paddingVertical: dimensions.button.medium.paddingVertical,
-  },
-  exploreText: {
-    fontSize: fonts.buttonText.medium,
-    fontWeight: '700',
+  exploreButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
     color: '#fff',
-    fontFamily: 'BakbakOne-Regular',
-  },
-  hairTypeFilterContainer: {
-    marginTop: spacing.md,
-  },
-  filterLabel: {
-    fontSize: fonts.body.small,
     fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
-    marginBottom: spacing.sm,
   },
-  hairTypeScroll: {
-    marginBottom: spacing.xs,
-  },
-  hairTypeContent: {
-    gap: spacing.sm,
-  },
-  hairTypeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 100,
-    borderWidth: 1.5,
-    borderRightColor: 'rgba(255, 255, 255, 0.4)',
-    borderBottomColor: 'rgba(255, 255, 255, 0.4)',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  hairTypeText: {
-    fontSize: fonts.body.small,
-    fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-}); 
+});

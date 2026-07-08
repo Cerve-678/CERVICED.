@@ -14,7 +14,6 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts } from 'expo-font';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { ExploreStackParamList } from '../navigation/types';
@@ -41,7 +40,18 @@ import { usePlannerStore } from '../stores/usePlannerStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Navigation type — use the global stack type from types.ts
+const L = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
+  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
+};
+const D = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
+  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
+};
 
 // ============================================================================
 // SUB-TAB SELECTOR
@@ -52,21 +62,21 @@ interface SubTabProps {
 }
 
 const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
-  const { theme } = useTheme();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
   return (
-    <View style={[styles.subTabBar, { backgroundColor: theme.background }]}>
+    <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
       <TouchableOpacity
         style={[
           styles.subTab,
-          activeTab === 'discover' && styles.subTabActive,
+          activeTab === 'discover' && { borderBottomColor: P.accent },
         ]}
         onPress={() => onTabChange('discover')}
       >
         <Text
           style={[
             styles.subTabText,
-            { color: activeTab === 'discover' ? '#a342c3ff' : theme.secondaryText },
-            activeTab === 'discover' && styles.subTabTextActive,
+            { color: activeTab === 'discover' ? P.accent : P.sub },
           ]}
         >
           Discover
@@ -76,15 +86,14 @@ const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
       <TouchableOpacity
         style={[
           styles.subTab,
-          activeTab === 'plans' && styles.subTabActive,
+          activeTab === 'plans' && { borderBottomColor: P.accent },
         ]}
         onPress={() => onTabChange('plans')}
       >
         <Text
           style={[
             styles.subTabText,
-            { color: activeTab === 'plans' ? '#a342c3ff' : theme.secondaryText },
-            activeTab === 'plans' && styles.subTabTextActive,
+            { color: activeTab === 'plans' ? P.accent : P.sub },
           ]}
         >
           My Plans
@@ -109,7 +118,7 @@ function SkeletonMasonryGrid({ isDarkMode }: { isDarkMode: boolean }) {
     return () => loop.stop();
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  const base = isDarkMode ? '#2A2724' : '#EDE8E2';
   const colWidth = (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
   const leftHeights = [200, 140, 180, 120, 160];
   const rightHeights = [160, 210, 130, 175, 150];
@@ -139,13 +148,14 @@ interface FilterChipProps {
 }
 
 const FilterChip = memo<FilterChipProps>(({ label, isSelected, onPress }) => {
-  const { theme } = useTheme();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
   return (
     <TouchableOpacity
       style={[
         styles.filterChip,
-        { backgroundColor: theme.cardBackground, borderColor: theme.border },
-        isSelected && styles.filterChipSelected,
+        { backgroundColor: P.card, borderColor: P.border },
+        isSelected && { backgroundColor: P.accent, borderColor: P.accent },
       ]}
       onPress={onPress}
       activeOpacity={0.7}
@@ -153,8 +163,7 @@ const FilterChip = memo<FilterChipProps>(({ label, isSelected, onPress }) => {
       <Text
         style={[
           styles.filterChipText,
-          { color: isSelected ? '#FFFFFF' : theme.secondaryText },
-          isSelected && styles.filterChipTextSelected,
+          { color: isSelected ? '#FFFFFF' : P.sub },
         ]}
       >
         {label}
@@ -187,14 +196,13 @@ function getDaysUntil(dateStr: string): number {
 }
 
 const EventCard = memo<EventCardProps>(({ event, onPress }) => {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const daysUntil = getDaysUntil(event.date);
   const completedTasks = event.tasks.filter((t: any) => t.status === 'completed').length;
   const totalTasks = event.tasks.length;
   const progress = totalTasks > 0 ? completedTasks / totalTasks : 0;
-
-  const goalImage = null; // goal images are resolved from Supabase IDs stored in plans
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -207,25 +215,21 @@ const EventCard = memo<EventCardProps>(({ event, onPress }) => {
   return (
     <Animated.View style={{ opacity: fadeAnim }}>
       <TouchableOpacity
-        style={[styles.eventCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
+        style={[styles.eventCard, { backgroundColor: P.card, borderColor: P.border }]}
         onPress={onPress}
         activeOpacity={0.9}
       >
         <View style={styles.eventCardRow}>
-          {goalImage ? (
-            <Image source={goalImage.image} style={styles.eventThumbnail} resizeMode="cover" />
-          ) : (
-            <View style={[styles.eventThumbnailPlaceholder, { backgroundColor: isDarkMode ? 'rgba(163,66,195,0.15)' : '#F5E6FA' }]}>
-              <TabIcon name="star" size={20} color="#a342c3ff" />
-            </View>
-          )}
+          <View style={[styles.eventThumbnailPlaceholder, { backgroundColor: P.iconBg }]}>
+            <TabIcon name="star" size={20} color={P.accent} />
+          </View>
 
           <View style={styles.eventCardInfo}>
-            <Text style={[styles.eventCardName, { color: theme.text }]} numberOfLines={1}>
+            <Text style={[styles.eventCardName, { color: P.text }]} numberOfLines={1}>
               {event.name}
             </Text>
 
-            <Text style={[styles.eventCountdown, { color: daysUntil <= 7 ? '#FF6B6B' : '#a342c3ff' }]}>
+            <Text style={[styles.eventCountdown, { color: daysUntil <= 7 ? '#FF6B6B' : P.accent }]}>
               {daysUntil > 0
                 ? `${daysUntil} day${daysUntil !== 1 ? 's' : ''} away`
                 : daysUntil === 0
@@ -235,17 +239,17 @@ const EventCard = memo<EventCardProps>(({ event, onPress }) => {
 
             {totalTasks > 0 && (
               <View style={styles.eventProgressRow}>
-                <View style={[styles.eventProgressBar, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : '#F0F0F0' }]}>
-                  <View style={[styles.eventProgressFill, { width: `${progress * 100}%` }]} />
+                <View style={[styles.eventProgressBar, { backgroundColor: P.surface }]}>
+                  <View style={[styles.eventProgressFill, { width: `${progress * 100}%`, backgroundColor: P.accent }]} />
                 </View>
-                <Text style={[styles.eventProgressText, { color: theme.secondaryText }]}>
+                <Text style={[styles.eventProgressText, { color: P.sub }]}>
                   {completedTasks}/{totalTasks}
                 </Text>
               </View>
             )}
           </View>
 
-          <TabIcon name="magnifying-glass" size={16} color={theme.secondaryText} />
+          <TabIcon name="magnifying-glass" size={16} color={P.sub} />
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -258,7 +262,8 @@ EventCard.displayName = 'EventCard';
 // ============================================================================
 const ExploreScreen = memo(() => {
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
@@ -283,16 +288,25 @@ const ExploreScreen = memo(() => {
   const [portfolioLoading, setPortfolioLoading] = useState(true);
 
   // Map a Supabase portfolio row to the local PortfolioItem shape
-  const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => ({
-    id: item.id,
-    image: { uri: item.image_url },
-    caption: item.caption ?? '',
-    category: (item.category?.toUpperCase() as ServiceCategory) ?? 'NAILS',
-    aspectRatio: item.aspect_ratio,
-    providerId: item.provider?.slug ?? item.provider_id,
-    tags: item.tags ?? [],
-    price: item.price != null ? `£${item.price}` : undefined,
-  }), []);
+  const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => {
+    const p = item.provider as any;
+    return {
+      id: item.id,
+      image: { uri: item.image_url },
+      caption: item.caption ?? '',
+      category: (item.category?.toUpperCase() as ServiceCategory) ?? 'NAILS',
+      aspectRatio: item.aspect_ratio,
+      providerId: p?.slug ?? item.provider_id,
+      tags: item.tags ?? [],
+      price: item.price != null ? `£${item.price}` : undefined,
+      imageUri: item.image_url ?? undefined,
+      providerName: p?.display_name ?? undefined,
+      providerLogoUri: p?.logo_url ?? undefined,
+      providerSlug: p?.slug ?? undefined,
+      providerRating: p?.rating ?? undefined,
+      providerReviewCount: p?.review_count ?? undefined,
+    };
+  }, []);
 
   // Load stores on mount
   useEffect(() => {
@@ -458,8 +472,8 @@ const ExploreScreen = memo(() => {
 
   if (!fontsLoaded) {
     return (
-      <View style={[styles.loading, { backgroundColor: theme.background }]}>
-        <Text style={[styles.loadingText, { color: theme.secondaryText }]}>Loading...</Text>
+      <View style={[styles.loading, { backgroundColor: P.bg }]}>
+        <Text style={[styles.loadingText, { color: P.sub }]}>Loading...</Text>
       </View>
     );
   }
@@ -467,16 +481,16 @@ const ExploreScreen = memo(() => {
   return (
     <ThemedBackground style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <StatusBar barStyle={theme.statusBar} />
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.background }]}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Explore</Text>
+        <View style={[styles.header, { backgroundColor: P.bg }]}>
+          <Text style={[styles.headerTitle, { color: P.text }]}>Explore</Text>
           <TouchableOpacity
             style={styles.savedButton}
             onPress={() => navigation.navigate('BookmarkedProviders' as any)}
           >
-            <TabIcon name="bookmark" size={22} color={theme.text} />
+            <TabIcon name="bookmark" size={22} color={P.text} />
           </TouchableOpacity>
         </View>
 
@@ -487,26 +501,26 @@ const ExploreScreen = memo(() => {
         {activeTab === 'discover' && (
           <>
             {/* Search Bar */}
-            <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
-              <View style={[styles.searchBar, { backgroundColor: theme.cardBackground }]}>
-                <TabIcon name="magnifying-glass" size={18} color={theme.secondaryText} />
+            <View style={[styles.searchContainer, { backgroundColor: P.bg }]}>
+              <View style={[styles.searchBar, { backgroundColor: P.card }]}>
+                <TabIcon name="magnifying-glass" size={18} color={P.sub} />
                 <TextInput
-                  style={[styles.searchInput, { color: theme.text }]}
+                  style={[styles.searchInput, { color: P.text }]}
                   placeholder="Search looks, styles, providers..."
-                  placeholderTextColor={theme.secondaryText}
+                  placeholderTextColor={P.sub}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Text style={[styles.clearButton, { color: theme.secondaryText }]}>×</Text>
+                    <Text style={[styles.clearButton, { color: P.sub }]}>×</Text>
                   </TouchableOpacity>
                 )}
               </View>
             </View>
 
             {/* Filter Chips */}
-            <View style={[styles.filterSection, { backgroundColor: theme.background }]}>
+            <View style={[styles.filterSection, { backgroundColor: P.bg, borderBottomColor: P.sep }]}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -534,16 +548,16 @@ const ExploreScreen = memo(() => {
               keyExtractor={item => item.id}
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
-                  <Text style={[styles.gridCount, { color: theme.secondaryText }]}>
+                  <Text style={[styles.gridCount, { color: P.sub }]}>
                     {portfolioItems.length} looks
                   </Text>
                 </View>
               }
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <TabIcon name="magnifying-glass" size={48} color={theme.secondaryText} />
-                  <Text style={[styles.emptyText, { color: theme.text }]}>No looks found</Text>
-                  <Text style={[styles.emptySubtext, { color: theme.secondaryText }]}>
+                  <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                  <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                  <Text style={[styles.emptySubtext, { color: P.sub }]}>
                     Try a different search or filter
                   </Text>
                 </View>
@@ -562,42 +576,36 @@ const ExploreScreen = memo(() => {
           >
             {events.length === 0 ? (
               <View style={styles.emptyPlans}>
-                <View style={[styles.emptyPlansIcon, { backgroundColor: isDarkMode ? 'rgba(163,66,195,0.1)' : '#F5E6FA' }]}>
-                  <TabIcon name="bookmark" size={36} color="#a342c3ff" />
+                <View style={[styles.emptyPlansIcon, { backgroundColor: P.iconBg }]}>
+                  <TabIcon name="bookmark" size={36} color={P.accent} />
                 </View>
-                <Text style={[styles.emptyPlansTitle, { color: theme.text }]}>
+                <Text style={[styles.emptyPlansTitle, { color: P.text }]}>
                   No plans yet
                 </Text>
-                <Text style={[styles.emptyPlansText, { color: theme.secondaryText }]}>
+                <Text style={[styles.emptyPlansText, { color: P.sub }]}>
                   Browse Discover, find inspo you love, and tap{'\n'}"Plan This" to start building your look
                 </Text>
                 <TouchableOpacity
-                  style={styles.emptyPlansButton}
+                  style={[styles.emptyPlansButton, { backgroundColor: P.accent }]}
                   onPress={() => setActiveTab('discover')}
+                  activeOpacity={0.75}
                 >
-                  <LinearGradient
-                    colors={['#a342c3ff', '#8a2fb8']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.emptyPlansGradient}
-                  >
-                    <Text style={styles.emptyPlansButtonText}>Browse Discover</Text>
-                  </LinearGradient>
+                  <Text style={styles.emptyPlansButtonText}>Browse Discover</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.createDirectButton}
                   onPress={() => setIsCreateEventVisible(true)}
                 >
-                  <Text style={styles.createDirectText}>or create a plan</Text>
+                  <Text style={[styles.createDirectText, { color: P.sub }]}>or create a plan</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <>
                 {activeEventId && (
-                  <View style={[styles.activeEventBanner, { backgroundColor: isDarkMode ? 'rgba(163,66,195,0.1)' : '#F5E6FA' }]}>
-                    <TabIcon name="star" size={14} color="#a342c3ff" />
-                    <Text style={styles.activeEventText}>
+                  <View style={[styles.activeEventBanner, { backgroundColor: P.iconBg }]}>
+                    <TabIcon name="star" size={14} color={P.accent} />
+                    <Text style={[styles.activeEventText, { color: P.accent }]}>
                       Active: {events.find(e => e.id === activeEventId)?.name}
                     </Text>
                   </View>
@@ -612,10 +620,10 @@ const ExploreScreen = memo(() => {
                 ))}
 
                 <TouchableOpacity
-                  style={[styles.newPlanButton, { borderColor: theme.border }]}
+                  style={[styles.newPlanButton, { borderColor: P.border }]}
                   onPress={() => setIsCreateEventVisible(true)}
                 >
-                  <Text style={styles.newPlanText}>+ New Plan</Text>
+                  <Text style={[styles.newPlanText, { color: P.accent }]}>+ New Plan</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -681,6 +689,7 @@ const styles = StyleSheet.create({
     fontSize: fonts.title.large,
     fontWeight: '700',
     fontFamily: 'BakbakOne-Regular',
+    letterSpacing: 1,
   },
   savedButton: {
     padding: spacing.sm,
@@ -699,16 +708,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
-  subTabActive: {
-    borderBottomColor: '#a342c3ff',
-  },
   subTabText: {
     fontSize: fonts.body.medium,
     fontWeight: '600',
     fontFamily: 'BakbakOne-Regular',
-  },
-  subTabTextActive: {
-    fontWeight: '700',
   },
 
   // Search Bar
@@ -738,7 +741,6 @@ const styles = StyleSheet.create({
   filterSection: {
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   filterScrollContent: {
     paddingHorizontal: spacing.lg,
@@ -747,20 +749,13 @@ const styles = StyleSheet.create({
   filterChip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: dimensions.card.smallBorderRadius,
+    borderRadius: 100,
     borderWidth: 1,
-  },
-  filterChipSelected: {
-    backgroundColor: '#a342c3ff',
-    borderColor: '#a342c3ff',
   },
   filterChipText: {
     fontSize: fonts.body.medium,
     fontWeight: '600',
     fontFamily: 'Jura-VariableFont_wght',
-  },
-  filterChipTextSelected: {
-    color: '#FFFFFF',
   },
 
   // Grid
@@ -827,25 +822,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   emptyPlansButton: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    overflow: 'hidden',
+    borderRadius: 100,
     width: '80%',
-  },
-  emptyPlansGradient: {
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 15,
   },
   emptyPlansButtonText: {
     fontSize: fonts.buttonText.medium,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
+    letterSpacing: 1,
   },
   createDirectButton: {
     paddingVertical: spacing.md,
   },
   createDirectText: {
-    color: '#a342c3ff',
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
@@ -864,7 +856,6 @@ const styles = StyleSheet.create({
   activeEventText: {
     fontSize: fonts.body.small,
     fontWeight: '700',
-    color: '#a342c3ff',
     fontFamily: 'Jura-VariableFont_wght',
   },
 
@@ -884,12 +875,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-  },
-  eventThumbnail: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: '#F0F0F0',
   },
   eventThumbnailPlaceholder: {
     width: 52,
@@ -926,7 +911,6 @@ const styles = StyleSheet.create({
   },
   eventProgressFill: {
     height: '100%',
-    backgroundColor: '#a342c3ff',
     borderRadius: 2,
   },
   eventProgressText: {
@@ -945,7 +929,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   newPlanText: {
-    color: '#a342c3ff',
     fontSize: fonts.body.medium,
     fontWeight: '700',
     fontFamily: 'BakbakOne-Regular',

@@ -2,8 +2,12 @@
 // Manages provider availability and prevents double-booking
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../lib/supabase';
 
 const BOOKINGS_STORAGE_KEY = '@bookings';
+
+// Cache provider UUID lookups for the session so we don't query on every slot
+const _providerIdCache = new Map<string, string | null>();
 
 export interface TimeSlot {
   time: string;
@@ -78,6 +82,45 @@ const doTimesOverlap = (
   return start1 < end2 && start2 < end1;
 };
 
+// Parse "HH:MM" or "HH:MM:SS" 24-hour time to minutes
+const parse24HTimeToMinutes = (timeStr: string): number => {
+  const parts = timeStr.split(':');
+  const h = parseInt(parts[0] ?? '0', 10);
+  const m = parseInt(parts[1] ?? '0', 10);
+  return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+};
+
+// Generate time slots between open_time and close_time at a configurable interval
+const generateSlotsFromRange = (openTime: string, closeTime: string, intervalMins = 60): string[] => {
+  const openMins = parse24HTimeToMinutes(openTime);
+  const closeMins = parse24HTimeToMinutes(closeTime);
+  const step = [15, 30, 60].includes(intervalMins) ? intervalMins : 60;
+  const slots: string[] = [];
+  for (let mins = openMins; mins < closeMins; mins += step) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    const period = h < 12 ? 'AM' : 'PM';
+    const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+    const displayM = m === 0 ? '00' : String(m).padStart(2, '0');
+    slots.push(`${displayH}:${displayM} ${period}`);
+  }
+  return slots;
+};
+
+// Look up provider UUID by display name with session-level caching
+const resolveProviderId = async (providerName: string): Promise<string | null> => {
+  if (_providerIdCache.has(providerName)) return _providerIdCache.get(providerName) ?? null;
+  const { data } = await supabase
+    .from('providers')
+    .select('id')
+    .ilike('display_name', providerName)
+    .eq('is_active', true)
+    .maybeSingle();
+  const id = (data as any)?.id ?? null;
+  _providerIdCache.set(providerName, id);
+  return id;
+};
+
 // Standard schedule for all providers — real schedules come from Supabase provider settings
 const getDefaultProviderSchedule = (_providerName: string): ProviderAvailability['baseSchedule'] => {
   const standardHours = [
@@ -135,8 +178,10 @@ export const AvailabilityService = {
   },
 
   /**
-   * Get available time slots for a provider on a specific date
-   * Filters out already-booked slots and considers service duration
+   * Get available time slots for a provider on a specific date.
+   * Reads the provider's real schedule from Supabase (provider_availability) when
+   * the provider UUID can be resolved; falls back to the default 9-6 schedule.
+   * Conflict-checks against confirmed/pending Supabase bookings.
    */
   async getAvailableSlots(
     providerName: string,
@@ -144,51 +189,139 @@ export const AvailabilityService = {
     serviceDuration?: string
   ): Promise<TimeSlot[]> {
     try {
-      // Get the day of week for base schedule
       const dateObj = new Date(date);
       const dayOfWeek = dateObj.getDay();
 
-      // Check if date is in the past
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      if (dateObj < today) {
-        return [];
-      }
+      if (dateObj < today) return [];
 
-      // Get provider's base schedule
-      const baseSchedule = getDefaultProviderSchedule(providerName);
-      const baseSlots = baseSchedule[dayOfWeek] || [];
-
-      if (baseSlots.length === 0) {
-        return [];
-      }
-
-      // Get already booked slots
-      const bookedSlots = await this.getBookedSlots(providerName, date);
-
-      // Service duration in minutes (default 60 if not specified)
       const durationMinutes = serviceDuration ? parseDurationToMinutes(serviceDuration) : 60;
 
-      // Filter available slots
-      const availableSlots: TimeSlot[] = baseSlots.map(time => {
+      // ── Supabase path ──────────────────────────────────────────
+      const providerId = providerName ? await resolveProviderId(providerName) : null;
+
+      if (providerId) {
+        // Fetch scheduling settings + blocked date + day schedule in parallel
+        const [blockedResult, availResult, settingsResult] = await Promise.all([
+          supabase
+            .from('provider_blocked_dates')
+            .select('id')
+            .eq('provider_id', providerId)
+            .eq('blocked_date', date)
+            .maybeSingle(),
+          supabase
+            .from('provider_availability')
+            .select('open_time, close_time, is_closed')
+            .eq('provider_id', providerId)
+            .eq('day_of_week', dayOfWeek)
+            .maybeSingle(),
+          supabase
+            .from('providers')
+            .select('booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs')
+            .eq('id', providerId)
+            .maybeSingle(),
+        ]);
+
+        if (blockedResult.data) return [];
+
+        const settings = settingsResult.data as {
+          booking_window_days: number;
+          slot_interval_mins: number;
+          buffer_mins: number;
+          min_booking_notice_hrs: number;
+        } | null;
+
+        // Enforce booking window — reject dates too far ahead
+        const windowDays = settings?.booking_window_days ?? 60;
+        if (windowDays > 0) {
+          const maxDate = new Date();
+          maxDate.setDate(maxDate.getDate() + windowDays);
+          maxDate.setHours(23, 59, 59, 999);
+          if (dateObj > maxDate) return [];
+        }
+
+        const intervalMins = settings?.slot_interval_mins ?? 60;
+        const bufferMins = settings?.buffer_mins ?? 0;
+        const minNoticeHrs = settings?.min_booking_notice_hrs ?? 0;
+
+        const avail = availResult.data;
+        let baseSlots: string[];
+        let closeTimeMins: number | null = null;
+        if (!avail) {
+          baseSlots = getDefaultProviderSchedule(providerName)[dayOfWeek] ?? [];
+        } else if (avail.is_closed) {
+          return [];
+        } else {
+          baseSlots = generateSlotsFromRange(avail.open_time, avail.close_time, intervalMins);
+          closeTimeMins = parse24HTimeToMinutes(avail.close_time);
+        }
+
+        if (baseSlots.length === 0) return [];
+
+        // Drop slots where the service can't finish before close time
+        if (closeTimeMins !== null) {
+          baseSlots = baseSlots.filter(time => {
+            return parseTimeToMinutes(time) + durationMinutes <= closeTimeMins!;
+          });
+        }
+
+        // Drop slots within minimum booking notice window
+        if (minNoticeHrs > 0) {
+          const earliestAllowedMs = Date.now() + minNoticeHrs * 60 * 60 * 1000;
+          const isToday = date === new Date().toISOString().split('T')[0];
+          if (isToday) {
+            baseSlots = baseSlots.filter(time => {
+              const slotDate = new Date(`${date}T00:00:00`);
+              slotDate.setMinutes(parseTimeToMinutes(time));
+              return slotDate.getTime() >= earliestAllowedMs;
+            });
+          }
+        }
+
+        if (baseSlots.length === 0) return [];
+
+        // Fetch existing bookings
+        const { data: existingBookings } = await supabase
+          .from('bookings')
+          .select('booking_time, end_time')
+          .eq('provider_id', providerId)
+          .eq('booking_date', date)
+          .in('status', ['pending', 'confirmed']);
+
+        return baseSlots.map(time => {
+          const slotStart = parseTimeToMinutes(time);
+          const slotEnd = slotStart + durationMinutes;
+
+          const conflict = (existingBookings ?? []).find(booked => {
+            const bookedStart = parse24HTimeToMinutes(booked.booking_time);
+            const bookedEnd = booked.end_time
+              ? parse24HTimeToMinutes(booked.end_time)
+              : bookedStart + 60;
+            // Extend booked end by buffer so the gap is enforced
+            return doTimesOverlap(slotStart, slotEnd, bookedStart, bookedEnd + bufferMins);
+          });
+
+          return { time, isBooked: !!conflict };
+        });
+      }
+
+      // ── AsyncStorage fallback (no Supabase provider match) ────────
+      const baseSchedule = getDefaultProviderSchedule(providerName);
+      const baseSlots = baseSchedule[dayOfWeek] ?? [];
+      if (baseSlots.length === 0) return [];
+
+      const bookedSlots = await this.getBookedSlots(providerName, date);
+
+      return baseSlots.map(time => {
         const slotStartMinutes = parseTimeToMinutes(time);
         const slotEndMinutes = slotStartMinutes + durationMinutes;
 
-        // Check if this slot conflicts with any booked appointment
         const conflict = bookedSlots.find(booked => {
           const bookedStartMinutes = parseTimeToMinutes(booked.time);
           const bookedDurationMinutes = parseDurationToMinutes(booked.duration);
           const bookedEndMinutes = bookedStartMinutes + bookedDurationMinutes;
-
-          // Check overlap in both directions:
-          // 1. New booking overlaps existing booking
-          // 2. Existing booking overlaps new booking time
-          return doTimesOverlap(
-            slotStartMinutes,
-            slotEndMinutes,
-            bookedStartMinutes,
-            bookedEndMinutes
-          );
+          return doTimesOverlap(slotStartMinutes, slotEndMinutes, bookedStartMinutes, bookedEndMinutes);
         });
 
         return {
@@ -197,8 +330,6 @@ export const AvailabilityService = {
           bookingId: conflict?.bookingId,
         };
       });
-
-      return availableSlots;
     } catch (error) {
       console.error('Error getting available slots:', error);
       return [];
@@ -206,7 +337,9 @@ export const AvailabilityService = {
   },
 
   /**
-   * Check if a specific time slot is available for booking
+   * Check if a specific time slot is available for booking.
+   * Queries Supabase directly so conflicts from other users are visible.
+   * Falls back to AsyncStorage only when the provider has no Supabase record.
    */
   async isSlotAvailable(
     providerName: string,
@@ -215,18 +348,72 @@ export const AvailabilityService = {
     serviceDuration: string
   ): Promise<BookingConflict> {
     try {
-      const bookedSlots = await this.getBookedSlots(providerName, date);
-
       const newStartMinutes = parseTimeToMinutes(time);
       const newDurationMinutes = parseDurationToMinutes(serviceDuration);
       const newEndMinutes = newStartMinutes + newDurationMinutes;
 
-      // Check for conflicts with existing bookings
+      const providerId = await resolveProviderId(providerName);
+
+      if (providerId) {
+        // Check blocked dates
+        const { data: blocked } = await supabase
+          .from('provider_blocked_dates')
+          .select('id')
+          .eq('provider_id', providerId)
+          .eq('blocked_date', date)
+          .maybeSingle();
+        if (blocked) {
+          return { hasConflict: true, message: 'Provider is not available on this date.' };
+        }
+
+        // Check the slot falls within the provider's working hours
+        const dayOfWeek = new Date(date).getDay();
+        const { data: avail } = await supabase
+          .from('provider_availability')
+          .select('open_time, close_time, is_closed')
+          .eq('provider_id', providerId)
+          .eq('day_of_week', dayOfWeek)
+          .maybeSingle();
+
+        if (avail?.is_closed) {
+          return { hasConflict: true, message: 'Provider is closed on this day.' };
+        }
+
+        if (avail) {
+          const openMins = parse24HTimeToMinutes(avail.open_time);
+          const closeMins = parse24HTimeToMinutes(avail.close_time);
+          if (newStartMinutes < openMins || newEndMinutes > closeMins) {
+            return { hasConflict: true, message: 'This time is outside the provider\'s working hours.' };
+          }
+        }
+
+        // Check existing Supabase bookings for overlap
+        const { data: existingBookings } = await supabase
+          .from('bookings')
+          .select('booking_time, end_time')
+          .eq('provider_id', providerId)
+          .eq('booking_date', date)
+          .in('status', ['pending', 'confirmed']);
+
+        const conflict = (existingBookings ?? []).find(booked => {
+          const bookedStart = parse24HTimeToMinutes(booked.booking_time);
+          const bookedEnd = booked.end_time
+            ? parse24HTimeToMinutes(booked.end_time)
+            : bookedStart + 60;
+          return doTimesOverlap(newStartMinutes, newEndMinutes, bookedStart, bookedEnd);
+        });
+
+        if (conflict) {
+          return { hasConflict: true, message: 'This time slot is no longer available.' };
+        }
+        return { hasConflict: false };
+      }
+
+      // Fallback: provider not in Supabase — use AsyncStorage
+      const bookedSlots = await this.getBookedSlots(providerName, date);
       for (const booked of bookedSlots) {
         const bookedStartMinutes = parseTimeToMinutes(booked.time);
-        const bookedDurationMinutes = parseDurationToMinutes(booked.duration);
-        const bookedEndMinutes = bookedStartMinutes + bookedDurationMinutes;
-
+        const bookedEndMinutes = bookedStartMinutes + parseDurationToMinutes(booked.duration);
         if (doTimesOverlap(newStartMinutes, newEndMinutes, bookedStartMinutes, bookedEndMinutes)) {
           return {
             hasConflict: true,
@@ -235,7 +422,6 @@ export const AvailabilityService = {
           };
         }
       }
-
       return { hasConflict: false };
     } catch (error) {
       console.error('Error checking slot availability:', error);

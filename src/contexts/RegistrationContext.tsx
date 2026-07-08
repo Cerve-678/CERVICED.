@@ -1,5 +1,5 @@
 // src/contexts/RegistrationContext.tsx
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { AccountType } from './AuthContext';
 
 export interface RegistrationData {
@@ -13,7 +13,28 @@ export interface RegistrationData {
   dobYear: string;
   businessName: string;
   businessEmail: string;
+  businessPhone: string;
+  instagram: string;
+  tiktok: string;
+  website: string;
+  // Beauty profile — shown to providers
+  hairType: string;
+  skinType: string;
+  allergies: string[];
+  skinConcerns: string[];
+  styleVibe: string;
+  treatmentHistory: string[];
+  medicalNotes: string;
+  photographyConsent: boolean;
+  // Preferences — for matching / discovery only
   serviceInterests: string[];
+  serviceLocations: string[];
+  maintenanceFrequency: string;
+  referralSource: string;
+  // Set when a logged-in client starts the provider upgrade flow
+  fromProviderSwitch: boolean;
+  // Set when a logged-in provider starts the client registration flow
+  fromClientSwitch: boolean;
 }
 
 interface RegistrationContextType {
@@ -36,7 +57,26 @@ const initialData: RegistrationData = {
   dobYear: '',
   businessName: '',
   businessEmail: '',
+  businessPhone: '',
+  instagram: '',
+  tiktok: '',
+  website: '',
+  // Beauty profile
+  hairType: '',
+  skinType: '',
+  allergies: [],
+  skinConcerns: [],
+  styleVibe: '',
+  treatmentHistory: [],
+  medicalNotes: '',
+  photographyConsent: true,
+  // Preferences
   serviceInterests: [],
+  serviceLocations: [],
+  maintenanceFrequency: '',
+  referralSource: '',
+  fromProviderSwitch: false,
+  fromClientSwitch: false,
 };
 
 const RegistrationContext = createContext<RegistrationContextType | undefined>(undefined);
@@ -44,16 +84,16 @@ const RegistrationContext = createContext<RegistrationContextType | undefined>(u
 export function RegistrationProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<RegistrationData>(initialData);
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
+  const totalSteps = 5;
 
-  const updateData = (partial: Partial<RegistrationData>) => {
+  const updateData = useCallback((partial: Partial<RegistrationData>) => {
     setData(prev => ({ ...prev, ...partial }));
-  };
+  }, []);
 
-  const resetData = () => {
+  const resetData = useCallback(() => {
     setData(initialData);
     setCurrentStep(1);
-  };
+  }, []);
 
   return (
     <RegistrationContext.Provider

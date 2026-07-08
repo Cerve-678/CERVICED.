@@ -13,9 +13,8 @@ import ProfileNavigator from './Tabs/ProfileNavigator';
 
 // Components
 import TabIcon from '../components/TabIcon';
-import AdaptiveTabBar from '../components/AdaptiveTabBar';
+import IslandPillTabBar from '../components/IslandPillTabBar';
 import { useCart } from '../contexts/CartContext';
-import { useTheme } from '../contexts/ThemeContext';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -28,17 +27,11 @@ const CartBadge: React.FC<{ count: number }> = ({ count }) => {
   );
 };
 
-const CartTabIcon: React.FC<{ focused: boolean }> = ({ focused }) => {
+const CartTabIcon: React.FC<{ focused: boolean; color: string }> = ({ focused, color }) => {
   const { totalItems } = useCart();
-  const { theme } = useTheme();
   return (
     <View style={styles.cartIconContainer}>
-      <TabIcon
-        name="basket-shopping"
-        focused={focused}
-        color={theme.text}
-        size={26}
-      />
+      <TabIcon name="basket-shopping" focused={focused} color={color} size={26} />
       <CartBadge count={totalItems} />
     </View>
   );
@@ -48,7 +41,7 @@ export default function TabNavigation() {
   return (
     <Tab.Navigator
       initialRouteName="Home"
-      tabBar={(props) => <AdaptiveTabBar {...props} />}
+      tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',
@@ -60,8 +53,8 @@ export default function TabNavigation() {
         name="Becca"
         component={BeccaNavigator}
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="chat-dots" focused={focused} color="#000000ff" size={26} />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="chat-dots" focused={focused} color={color} size={26} />
           ),
         }}
       />
@@ -69,8 +62,8 @@ export default function TabNavigation() {
         name="Explore"
         component={ExploreNavigator}
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="earth" focused={focused} color="#000000ff" size={26} />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="earth" focused={focused} color={color} size={26} />
           ),
         }}
       />
@@ -78,8 +71,8 @@ export default function TabNavigation() {
         name="Home"
         component={HomeNavigator}
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="house" focused={focused} color="#000000ff" size={26} />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="house" focused={focused} color={color} size={26} />
           ),
         }}
       />
@@ -87,15 +80,15 @@ export default function TabNavigation() {
         name="Cart"
         component={CartNavigator}
         options={{
-          tabBarIcon: ({ focused }) => <CartTabIcon focused={focused} />,
+          tabBarIcon: ({ focused, color }) => <CartTabIcon focused={focused} color={color} />,
         }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileNavigator}
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="user" focused={focused} color="#000000ff" size={26} />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="user" focused={focused} color={color} size={26} />
           ),
         }}
       />

@@ -89,10 +89,15 @@ export const CreateEventModal = ({
     if (!canCreate || isCreating) return;
     setIsCreating(true);
     try {
+      const goalImageUri = initialPortfolioItem?.imageUri
+        ?? (initialPortfolioItem?.image != null && typeof initialPortfolioItem.image === 'object' && 'uri' in initialPortfolioItem.image
+            ? (initialPortfolioItem.image as { uri: string }).uri
+            : undefined);
       const event = await createEvent(
         name.trim(),
         selectedDate,
-        initialPortfolioItem?.id
+        initialPortfolioItem?.id,
+        goalImageUri
       );
       setName('');
       setSelectedDate('');

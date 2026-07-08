@@ -5,8 +5,9 @@ import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
+import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
 
 export enum BookingStatus {
   PENDING = 'pending',
@@ -118,10 +119,19 @@ export interface ConfirmedBooking {
     lastRescheduledAt?: string | undefined;
   } | undefined;
 
+  // Provider ID (for provider-facing screens)
+  providerId?: string | undefined;
+
+  // Client address (for mobile providers who travel to the client)
+  clientAddress?: string | undefined;
+
+  // Address release tracking (for non-mobile providers)
+  addressReleasedAt?: string | undefined;
+
   // Metadata
   notes?: string | undefined;
   addOns?: Array<{
-    id: number;
+    id: string | number;
     name: string;
     price: number;
   }> | undefined;
@@ -154,7 +164,7 @@ export interface BookingContextType {
   allTodayBookingsCompleted: boolean;
 
   // Actions
-  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<void>;
+  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], clientAddress?: string) => Promise<void>;
   validateBookingsBeforeCheckout: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<BookingConflictResult>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<void>;
   cancelBooking: (bookingId: string) => Promise<void>;
@@ -177,7 +187,7 @@ export interface AppointmentData {
   date: string;
   time: string;
   address: string;
-  coordinates: BookingCoordinates;
+  coordinates: BookingCoordinates | null;
   phone: string;
   notes?: string;
   customerName: string;
@@ -188,6 +198,7 @@ export interface AppointmentData {
   depositAmount: number; // Isolated deposit (NO service charge)
   remainingBalance: number;
   serviceCharge: number;
+  paymentMethod?: string; // 'card' | 'paypal' | 'apple' | 'google'
 }
 
 const STORAGE_KEY = '@bookings';
@@ -341,29 +352,6 @@ const sortBookingsByDateTime = (bookings: ConfirmedBooking[]): ConfirmedBooking[
   });
 };
 
-const getFullProviderName = (shortName: string): string => {
-  const nameMap: Record<string, string> = {
-    JENNIFER: 'Hair by Jennifer',
-    'Hair by Jennifer': 'Hair by Jennifer',
-    KATHRINE: 'Styled by Kathrine',
-    'Styled by Kathrine': 'Styled by Kathrine',
-    DIVANA: 'Diva Nails',
-    'Diva Nails': 'Diva Nails',
-    JANA: 'Jana Aesthetics',
-    'Jana Aesthetics': 'Jana Aesthetics',
-    'HER BROWS': 'Her Brows',
-    'Her Brows': 'Her Brows',
-    KIKI: "Kiki's Nails",
-    "Kiki's Nails": "Kiki's Nails",
-    MYA: 'Makeup by Mya',
-    'Makeup by Mya': 'Makeup by Mya',
-    VIKKI: 'Vikki Laid',
-    'Vikki Laid': 'Vikki Laid',
-    LASHED: 'Your Lashed',
-    'Your Lashed': 'Your Lashed',
-  };
-  return nameMap[shortName] || shortName;
-};
 
 // Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display
 export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
@@ -396,6 +384,27 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     }
   };
   const startTime = toDisplayTime(db.booking_time);
+  const endTime   = toDisplayTime((db as any).end_time ?? db.booking_time);
+
+  // Compute duration string from start/end minutes
+  const toMin = (t: string | null | undefined): number => {
+    if (!t) return 0;
+    const clean = t.trim().toUpperCase();
+    const isPM = clean.includes('PM');
+    const isAM = clean.includes('AM');
+    const part  = clean.replace(/[AP]M/i, '').trim();
+    const [hs, ms] = part.split(':');
+    let h = parseInt(hs || '0', 10);
+    const m = parseInt(ms || '0', 10);
+    if (isAM && h === 12) h = 0;
+    if (isPM && h !== 12) h += 12;
+    return h * 60 + m;
+  };
+  const diffMin = toMin(endTime) - toMin(startTime);
+  const durationStr = diffMin > 0
+    ? (Math.floor(diffMin / 60) > 0 ? `${Math.floor(diffMin / 60)}h ` : '') + (diffMin % 60 > 0 ? `${diffMin % 60}m` : '')
+    : '';
+
   return {
     id: db.id,
     cartItemId: db.id,
@@ -405,19 +414,25 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     serviceName: db.service_name_snapshot,
     serviceDescription: '',
     price: db.base_price,
-    duration: '',
+    duration: durationStr,
     quantity: 1,
     bookingDate: db.booking_date,
     bookingTime: startTime,
-    endTime: startTime,
+    endTime,
     status: mapSt(db.status),
     address: db.provider_address_snapshot ?? '',
-    coordinates: { latitude: 0, longitude: 0 },
+    coordinates: db.provider_coordinates
+      ? (db.provider_coordinates as unknown as BookingCoordinates)
+      : (null as unknown as BookingCoordinates),
     phone: db.provider_phone_snapshot ?? '',
     customerName: db.customer_name ?? '',
     customerEmail: db.customer_email ?? '',
     customerPhone: db.customer_phone ?? '',
     notes: db.notes ?? undefined,
+    bookingInstructions: db.booking_instructions ?? undefined,
+    clientAddress: (db as any).client_address ?? undefined,
+    addressReleasedAt: db.address_released_at ?? undefined,
+    providerId: (db as any).provider_id ?? undefined,
     addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({
       id: idx,
       name: a.name_snapshot,
@@ -429,6 +444,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     remainingBalance: db.remaining_balance ?? 0,
     serviceCharge: db.service_charge ?? 2.99,
     paymentStatus: mapPay(db.payment_status),
+    paymentMethod: (db as any).payment_method ?? undefined,
     createdAt: db.created_at ?? new Date().toISOString(),
     updatedAt: db.updated_at ?? new Date().toISOString(),
   };
@@ -699,6 +715,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
+      // Persist to Supabase so provider can see the request
+      upsertRescheduleRequest({
+        booking_id: bookingId,
+        original_date: originalDate,
+        original_time: originalTime,
+        requested_dates: preferredDates,
+      }).catch(() => {});
+
       await NotificationService.addRescheduleRequest(
         booking.providerName,
         booking.serviceName,
@@ -854,6 +878,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
+      // Persist new date/time and close the reschedule request in Supabase
+      updateBookingDateTime(bookingId, newDate, newTime, newEndTime).catch(() => {});
+      closeRescheduleRequest(bookingId, 'confirmed').catch(() => {});
+
       await NotificationService.addRescheduleConfirmed(
         booking.providerName,
         booking.serviceName,
@@ -966,7 +994,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const bookingsToValidate = cartItems.map(item => {
         const appointment = appointmentData.find(a => a.cartItemId === item.id);
         return {
-          providerName: getFullProviderName(item.providerName),
+          providerName: item.providerDisplayName ?? item.providerName,
           date: appointment?.date || '',
           time: appointment?.time || '',
           duration: item.duration,
@@ -998,7 +1026,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const createBookingsFromCart = useCallback(async (
     cartItems: CartItem[],
-    appointmentData: AppointmentData[]
+    appointmentData: AppointmentData[],
+    clientAddress?: string
   ) => {
     try {
       if (__DEV__) console.log('Creating bookings from cart...');
@@ -1010,6 +1039,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(`Booking conflict detected: ${conflictMessages}`);
       }
 
+      // Fetch real provider locations from DB before building appointment records
+      const uniqueProviderNames = [...new Set(cartItems.map(i => i.providerDisplayName ?? i.providerName))];
+      const providerLocations: Record<string, import('../services/databaseService').ProviderLocationData> = await getProviderLocationsByDisplayNames(uniqueProviderNames).catch(() => ({}));
+
       const groupBookingId = `group_${Date.now()}`;
       const isGroupBooking = cartItems.length > 1;
 
@@ -1020,7 +1053,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           throw new Error(`Missing appointment data for ${item.serviceName}`);
         }
 
-        const fullProviderName = getFullProviderName(item.providerName);
+        const fullProviderName = item.providerDisplayName ?? item.providerName;
         const endTime = calculateEndTime(appointment.time, item.duration);
         const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
         const now = new Date();
@@ -1072,9 +1105,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           bookingTime: appointment.time,
           endTime,
           status: initialStatus,
-          address: appointment.address,
-          coordinates: appointment.coordinates,
-          phone: appointment.phone,
+          address: providerLocations[fullProviderName]?.address ?? appointment.address,
+          coordinates: (providerLocations[fullProviderName]?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
+          phone: providerLocations[fullProviderName]?.phone ?? appointment.phone,
           // Customer information
           customerName: appointment.customerName,
           customerEmail: appointment.customerEmail,
@@ -1090,6 +1123,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           // NEW: Enhanced payment tracking
           paymentStatus,
           paymentBreakdown,
+          paymentMethod: appointment.paymentMethod,
           paymentConfirmedAt: new Date().toISOString(),
           transactionId: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           // Group booking
@@ -1120,15 +1154,22 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               continue;
             }
 
+
             // Convert "10:00 AM" → "10:00:00" for Postgres TIME type
-            const tMatch = apt.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-            if (!tMatch) continue;
-            let h = parseInt(tMatch[1] ?? '0');
-            const m = parseInt(tMatch[2] ?? '0');
-            const per = (tMatch[3] ?? 'AM').toUpperCase();
-            if (per === 'PM' && h !== 12) h += 12;
-            else if (per === 'AM' && h === 12) h = 0;
-            const pgTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`;
+            const timeTo24 = (t: string): string | null => {
+              const match = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+              if (!match) return null;
+              let hh = parseInt(match[1] ?? '0');
+              const mm = parseInt(match[2] ?? '0');
+              const pp = (match[3] ?? 'AM').toUpperCase();
+              if (pp === 'PM' && hh !== 12) hh += 12;
+              else if (pp === 'AM' && hh === 12) hh = 0;
+              return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:00`;
+            };
+            const pgTime = timeTo24(apt.time);
+            if (!pgTime) continue;
+            const endTimeStr = calculateEndTime(apt.time, item.duration);
+            const pgEndTime = timeTo24(endTimeStr);
 
             const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
             const logoUrl = typeof item.providerImage === 'string' ? item.providerImage : null;
@@ -1142,7 +1183,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 status: 'pending',
                 booking_date: apt.date,
                 booking_time: pgTime,
-                end_time: null,
+                end_time: pgEndTime,
                 notes: apt.notes ?? null,
                 booking_instructions: null,
                 payment_type: apt.paymentType,
@@ -1153,7 +1194,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 amount_paid: apt.amountPaid,
                 remaining_balance: apt.remainingBalance,
                 payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
-                payment_method: null,
+                payment_method: apt.paymentMethod ?? null,
                 payment_intent_id: null,
                 is_group_booking: cartItems.length > 1,
                 group_booking_id: null,
@@ -1161,12 +1202,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 provider_name_snapshot: item.providerName,
                 service_name_snapshot: item.serviceName,
                 provider_logo_snapshot: logoUrl,
-                provider_address_snapshot: apt.address || null,
-                provider_phone_snapshot: apt.phone || null,
-                provider_coordinates: null,
+                provider_address_snapshot: providerLocations[item.providerDisplayName ?? item.providerName]?.address ?? apt.address ?? null,
+                provider_phone_snapshot: providerLocations[item.providerDisplayName ?? item.providerName]?.phone ?? apt.phone ?? null,
+                provider_coordinates: (() => {
+                  const c = (providerLocations as Record<string, { coordinates?: { latitude: number; longitude: number } }>)[item.providerDisplayName ?? item.providerName]?.coordinates;
+                  return c ? { lat: c.latitude, lng: c.longitude } : null;
+                })(),
                 customer_name: apt.customerName,
                 customer_email: apt.customerEmail,
                 customer_phone: apt.customerPhone,
+                address_released_at: null,
+                client_address: clientAddress ?? null,
+                occasion_type: null,
+                style_request: null,
+                reference_image_url: null,
               },
               (item.addOns ?? []).map(a => ({
                 add_on_id: String(a.id),
@@ -1174,6 +1223,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 price_snapshot: a.price,
               }))
             );
+
+            // Confirmation email — fire and forget, never blocks booking
+            if (apt.customerEmail) {
+              const { subject, html } = bookingConfirmationEmail({
+                clientName: apt.customerName || 'there',
+                providerName: item.providerName,
+                service: item.serviceName,
+                date: new Date(apt.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+                time: apt.time,
+                location: apt.address || 'Address shared on confirmation',
+              });
+              sendEmail(apt.customerEmail, subject, html).catch(() => {});
+            }
           }
         }
       } catch (_) {

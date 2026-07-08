@@ -23,9 +23,9 @@ import beccaStorageService, { StoredSession } from '../services/beccaStorageServ
 import { ChatBubble, Suggestions, ProviderRecommendations, ChatInput } from '../components/ChatComponents';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
-import { ThemedBackground } from '../components/ThemedBackground';
 import { useBooking } from '../contexts/BookingContext';
 import { useAuth } from '../contexts/AuthContext';
+import { ThemedBackground } from '../components/ThemedBackground';
 
 // ==================== TYPES ====================
 
@@ -172,7 +172,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
         setSelectedImage(result.assets[0].uri);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.message ?? 'Failed to open photo library.');
+      Alert.alert('Error', 'Couldn\'t open photo library. Please try again.');
     }
   };
 
@@ -296,7 +296,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
   const showRecommendations = lastMessage?.role === 'assistant' && lastMessage?.providerRecommendations;
 
   return (
-    <ThemedBackground style={styles.background}>
+    <View style={[styles.background, { backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }]}>
       <StatusBar barStyle={theme.statusBar} />
       <SafeAreaView style={styles.container} edges={['top']}>
         <KeyboardAvoidingView
@@ -321,11 +321,11 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
               </TouchableOpacity>
               {/* New Chat Button */}
               <TouchableOpacity
-                style={[styles.headerBtn, { backgroundColor: isDarkMode ? 'rgba(229,128,232,0.15)' : 'rgba(163,66,195,0.1)' }]}
+                style={[styles.headerBtn, { backgroundColor: isDarkMode ? 'rgba(220,50,50,0.15)' : 'rgba(200,30,30,0.1)' }]}
                 onPress={handleNewChat}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.headerBtnIcon, { color: isDarkMode ? '#E580E8' : '#a342c3' }]}>+</Text>
+                <Text style={[styles.headerBtnIcon, { color: isDarkMode ? '#FF4444' : '#CC1111' }]}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -458,7 +458,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
           </View>
         </View>
       </Modal>
-    </ThemedBackground>
+    </View>
   );
 }
 

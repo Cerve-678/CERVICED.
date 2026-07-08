@@ -11,7 +11,7 @@ import ProviderAccountNavigator from './Tabs/ProviderAccountNavigator';
 
 // Components
 import TabIcon from '../components/TabIcon';
-import AdaptiveTabBar from '../components/AdaptiveTabBar';
+import IslandPillTabBar from '../components/IslandPillTabBar';
 import { useTheme } from '../contexts/ThemeContext';
 
 const Tab = createBottomTabNavigator<ProviderTabParamList>();
@@ -22,7 +22,7 @@ export default function ProviderTabNavigation() {
   return (
     <Tab.Navigator
       initialRouteName="ProviderHome"
-      tabBar={(props) => <AdaptiveTabBar {...props} />}
+      tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: '#007AFF',

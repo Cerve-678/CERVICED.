@@ -2,11 +2,13 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../../screens/HomeScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
+import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import SearchScreen from '../../screens/SearchScreen';
 import BookingsScreen from '../../screens/BookingsScreen';
 import BookmarkedProvidersScreen from '../../screens/BookmarkedProvidersScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import CartScreen from '../../screens/CartScreen';
+import ClientIntakeFormScreen from '../../screens/ClientIntakeFormScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
 import { HomeStackParamList } from '../types';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -23,6 +25,12 @@ export default function HomeNavigator() {
         name="HomeMain"
         component={HomeScreen}
         options={{ headerShown: false }}
+      />
+
+      <HomeStack.Screen
+        name="ProviderChat"
+        component={ProviderChatScreen}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
       />
 
       {/* PUSH NAVIGATION - Full screen as you requested */}
@@ -114,6 +122,12 @@ export default function HomeNavigator() {
             color: theme.text,
           },
         }}
+      />
+
+      <HomeStack.Screen
+        name="ClientIntakeForm"
+        component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
       />
 
       {/* SWIPE-DOWN MODAL - Notifications (formSheet style on iOS) */}

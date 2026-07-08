@@ -48,14 +48,21 @@
     "plugins": [
       "expo-video",
       "expo-font",
-      "expo-router",
       [
         "expo-notifications",
         {
           "color": "#FF9500",
           "sounds": []
         }
-      ]
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow CERVICED to use Face ID for faster sign-in."
+        }
+      ],
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

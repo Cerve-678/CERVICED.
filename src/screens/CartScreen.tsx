@@ -15,7 +15,6 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { useFonts } from 'expo-font';
 import { useNavigation } from '@react-navigation/native';
 import { useCart, CartItem } from '../contexts/CartContext';
@@ -27,8 +26,24 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import { FONT_SIZES } from '../constants/Typeography';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { ThemedBackground } from '../components/ThemedBackground';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
+import { ThemedBackground } from '../components/ThemedBackground';
+import { getMobileProviderDisplayNames } from '../services/databaseService';
+import { supabase } from '../lib/supabase';
+
+// ─── Design tokens — matches app-wide palette ─────────────────────────────────
+const L = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', text: '#000000',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
+  sep: 'rgba(126,102,103,0.12)',
+};
+const D = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', text: '#F0ECE7',
+  sub: '#7E6667', border: 'rgba(126,102,103,0.22)',
+  sep: 'rgba(126,102,103,0.14)',
+};
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
 
@@ -118,7 +133,7 @@ interface PaymentModalProps {
   onClose: () => void;
   effectiveCartItems: EffectiveCartItem[];
   totalAmount: number;
-  onPaymentSuccess: () => Promise<void>; // ✅ ASYNC
+  onPaymentSuccess: (paymentMethod: string) => Promise<void>;
   onPaymentComplete: () => void;
 }
 
@@ -131,7 +146,8 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentSuccess,
     onPaymentComplete,
   }) => {
-    const { theme } = useTheme();
+    const { theme, isDarkMode } = useTheme();
+    const P = isDarkMode ? D : L;
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
       'card' | 'paypal' | 'apple' | 'google'
     >('card');
@@ -177,7 +193,7 @@ const handlePayment = useCallback(async () => {
     }
     const startTime = Date.now();
     try {
-      await onPaymentSuccess();
+      await onPaymentSuccess(selectedPaymentMethod);
       const duration = Date.now() - startTime;
       if (__DEV__) {
         console.log(`[${timestamp()}] onPaymentSuccess completed in ${duration}ms`);
@@ -259,10 +275,10 @@ const handlePayment = useCallback(async () => {
     return (
       <Modal visible={isVisible} animationType="slide" transparent={true}>
         <View style={styles.paymentOverlay}>
-          <BlurView intensity={40} tint={theme.blurTint} style={styles.paymentModal}>
+          <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
             <SafeAreaView style={styles.paymentModalContent}>
               {/* Payment Header */}
-              <View style={styles.paymentHeader}>
+              <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
                 <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
                 <TouchableOpacity style={styles.paymentCloseButton} onPress={onClose}>
                   <Text style={[styles.paymentCloseText, { color: theme.text }]}>×</Text>
@@ -271,7 +287,7 @@ const handlePayment = useCallback(async () => {
 
               <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false}>
                 {/* Order Summary - UPDATED WITH BREAKDOWN */}
-                <View style={styles.orderSummary}>
+                <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                   <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
                   {effectiveCartItems.map(({ item, effectivePrice, isDeposit }, index) => (
                     <View key={item.id} style={styles.orderItem}>
@@ -296,7 +312,8 @@ const handlePayment = useCallback(async () => {
                       key={method.id}
                       style={[
                         styles.paymentMethodItem,
-                        selectedPaymentMethod === method.id && styles.selectedPaymentMethod,
+                        { backgroundColor: P.surface, borderColor: 'transparent' },
+                        selectedPaymentMethod === method.id && { borderColor: P.accent, backgroundColor: 'rgba(175,145,151,0.1)' },
                       ]}
                       onPress={() => setSelectedPaymentMethod(method.id as any)}
                     >
@@ -305,11 +322,11 @@ const handlePayment = useCallback(async () => {
                       <View
                         style={[
                           styles.paymentMethodRadio,
-                          selectedPaymentMethod === method.id && styles.selectedPaymentMethodRadio,
+                          selectedPaymentMethod === method.id && { borderColor: P.accent },
                         ]}
                       >
                         {selectedPaymentMethod === method.id && (
-                          <View style={styles.paymentMethodRadioInner} />
+                          <View style={[styles.paymentMethodRadioInner, { backgroundColor: P.accent }]} />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -322,9 +339,9 @@ const handlePayment = useCallback(async () => {
                     <Text style={[styles.cardDetailsTitle, { color: theme.text }]}>Card Details</Text>
 
                     <TextInput
-                      style={[styles.cardInput, { backgroundColor: theme.cardBackground, color: theme.text }]}
+                      style={[styles.cardInput, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
                       placeholder="Card Number"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={P.sub}
                       value={cardDetails.number}
                       onChangeText={text =>
                         setCardDetails(prev => ({
@@ -338,9 +355,9 @@ const handlePayment = useCallback(async () => {
 
                     <View style={styles.cardRow}>
                       <TextInput
-                        style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: theme.cardBackground, color: theme.text }]}
+                        style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
                         placeholder="MM/YY"
-                        placeholderTextColor={theme.secondaryText}
+                        placeholderTextColor={P.sub}
                         value={cardDetails.expiry}
                         onChangeText={text =>
                           setCardDetails(prev => ({
@@ -352,9 +369,9 @@ const handlePayment = useCallback(async () => {
                         maxLength={5}
                       />
                       <TextInput
-                        style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: theme.cardBackground, color: theme.text }]}
+                        style={[styles.cardInput, styles.cardInputHalf, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
                         placeholder="CVC"
-                        placeholderTextColor={theme.secondaryText}
+                        placeholderTextColor={P.sub}
                         value={cardDetails.cvc}
                         onChangeText={text =>
                           setCardDetails(prev => ({
@@ -368,9 +385,9 @@ const handlePayment = useCallback(async () => {
                     </View>
 
                     <TextInput
-                      style={[styles.cardInput, { backgroundColor: theme.cardBackground, color: theme.text }]}
+                      style={[styles.cardInput, { backgroundColor: P.surface, color: P.text, borderColor: P.border }]}
                       placeholder="Cardholder Name"
-                      placeholderTextColor={theme.secondaryText}
+                      placeholderTextColor={P.sub}
                       value={cardDetails.name}
                       onChangeText={text =>
                         setCardDetails(prev => ({
@@ -385,7 +402,7 @@ const handlePayment = useCallback(async () => {
 
               {/* Payment Button */}
               <TouchableOpacity
-                style={[styles.payButton, isProcessing && styles.payButtonDisabled]}
+                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: 'rgba(175,145,151,0.5)' }]}
                 onPress={handlePayment}
                 disabled={isProcessing}
               >
@@ -396,7 +413,7 @@ const handlePayment = useCallback(async () => {
                 )}
               </TouchableOpacity>
             </SafeAreaView>
-          </BlurView>
+          </View>
         </View>
       </Modal>
     );
@@ -417,6 +434,7 @@ interface NotesModalProps {
 const NotesModal: React.FC<NotesModalProps> = memo(
   ({ isVisible, onClose, onSave, serviceName, providerName, instanceNumber, currentNotes }) => {
     const { isDarkMode } = useTheme();
+    const P = isDarkMode ? D : L;
     const [notes, setNotes] = useState(currentNotes);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -441,39 +459,39 @@ const NotesModal: React.FC<NotesModalProps> = memo(
     return (
       <Modal visible={isVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.notesModal, isDarkMode && { backgroundColor: 'rgba(44, 44, 46, 0.95)', borderColor: 'rgba(255,255,255,0.15)' }]}>
+          <View style={[styles.notesModal, { backgroundColor: isDarkMode ? 'rgba(37,34,32,0.97)' : 'rgba(255,255,255,0.95)', borderColor: P.border }]}>
             <View style={styles.notesHeader}>
-              <Text style={[styles.notesTitle, isDarkMode && { color: '#FFF' }]}>Add Notes</Text>
-              <Text style={[styles.notesSubtitle, isDarkMode && { color: 'rgba(255,255,255,0.6)' }]}>
+              <Text style={[styles.notesTitle, { color: P.text }]}>Add Notes</Text>
+              <Text style={[styles.notesSubtitle, { color: P.sub }]}>
                 {serviceName} #{instanceNumber} • {providerName}
               </Text>
             </View>
 
             <TextInput
-              style={[styles.notesInput, isDarkMode && { backgroundColor: 'rgba(58,58,60,0.6)', borderColor: 'rgba(255,255,255,0.15)', color: '#FFF' }]}
+              style={[styles.notesInput, { backgroundColor: isDarkMode ? 'rgba(42,38,36,0.6)' : 'rgba(255,255,255,0.5)', borderColor: P.border, color: P.text }]}
               value={notes}
               onChangeText={setNotes}
               placeholder="Add special requests, allergies, or preferences..."
-              placeholderTextColor={isDarkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.45)'}
+              placeholderTextColor={P.sub}
               multiline
               numberOfLines={6}
               maxLength={500}
               editable={!isLoading}
             />
 
-            <Text style={[styles.characterCount, isDarkMode && { color: 'rgba(255,255,255,0.4)' }]}>{notes.length}/500 characters</Text>
+            <Text style={[styles.characterCount, { color: P.sub }]}>{notes.length}/500 characters</Text>
 
             <View style={styles.notesFooter}>
               <TouchableOpacity
-                style={[styles.cancelButton, isDarkMode && { backgroundColor: 'rgba(255,255,255,0.1)' }, isLoading && styles.disabledButton]}
+                style={[styles.cancelButton, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }, isLoading && styles.disabledButton]}
                 onPress={onClose}
                 disabled={isLoading}
               >
-                <Text style={[styles.cancelText, isDarkMode && { color: '#FFF' }]}>Cancel</Text>
+                <Text style={[styles.cancelText, { color: P.text }]}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.saveButton, isLoading && styles.disabledButton]}
+                style={[styles.saveButton, { backgroundColor: P.accent }, isLoading && styles.disabledButton]}
                 onPress={handleSave}
                 disabled={isLoading}
               >
@@ -519,6 +537,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     allCartItems,
   }) => {
     const { theme, isDarkMode } = useTheme();
+    const P = isDarkMode ? D : L;
     const [showCalendar, setShowCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -628,11 +647,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           </View>
         )}
       >
-        <BlurView
-          intensity={20}
-          tint={theme.blurTint}
-          style={[styles.serviceCard, styles.serviceCardShadow]}
-        >
+        <View style={[styles.serviceCard, styles.serviceCardShadow, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
           {/* Service Info */}
           <View style={styles.serviceHeader}>
             <View style={styles.serviceInfo}>
@@ -641,7 +656,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
                 {serviceBooking.isDepositOnly && ' (Deposit)'}
               </Text>
-              <Text style={styles.servicePrice}>£{effectivePrice.toFixed(2)}</Text>
+              <Text style={[styles.servicePrice, { color: P.accent }]}>£{effectivePrice.toFixed(2)}</Text>
               <Text style={[styles.serviceDuration, { color: theme.secondaryText }]}>{duration}</Text>
 
               {/* Enhanced add-ons display with proper pricing */}
@@ -657,7 +672,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                     </Text>
                   ))}
                   <View style={styles.addOnsTotalContainer}>
-                    <Text style={styles.addOnsTotal}>
+                    <Text style={[styles.addOnsTotal, { color: P.accent }]}>
                       Total with Add-ons: £{totalPrice.toFixed(2)}
                     </Text>
                   </View>
@@ -698,21 +713,21 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 
           {/* Deposit Toggle - ADD THIS */}
           <View style={styles.depositToggle}>
-            <Text style={[styles.depositToggleLabel, isDarkMode && { color: '#FFF' }]}>Payment Option</Text>
+            <Text style={[styles.depositToggleLabel, { color: P.sub }]}>Payment Option</Text>
             <View style={styles.depositButtons}>
               <TouchableOpacity
                 style={[
                   styles.depositOptionButton,
-                  isDarkMode && { backgroundColor: 'rgba(255,255,255,0.08)' },
-                  !serviceBooking.isDepositOnly && styles.depositOptionButtonActive,
+                  { backgroundColor: isDarkMode ? P.surface : 'rgba(175,145,151,0.06)' },
+                  !serviceBooking.isDepositOnly && { backgroundColor: 'rgba(175,145,151,0.14)', borderColor: P.accent },
                 ]}
                 onPress={() => handleDepositToggle(false)}
               >
                 <Text
                   style={[
                     styles.depositOptionText,
-                    isDarkMode && { color: 'rgba(255,255,255,0.6)' },
-                    !serviceBooking.isDepositOnly && styles.depositOptionTextActive,
+                    { color: P.sub },
+                    !serviceBooking.isDepositOnly && { color: P.accent, fontWeight: '700' },
                   ]}
                 >
                   Pay Full Amount
@@ -722,16 +737,16 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               <TouchableOpacity
                 style={[
                   styles.depositOptionButton,
-                  isDarkMode && { backgroundColor: 'rgba(255,255,255,0.08)' },
-                  serviceBooking.isDepositOnly && styles.depositOptionButtonActive,
+                  { backgroundColor: isDarkMode ? P.surface : 'rgba(175,145,151,0.06)' },
+                  serviceBooking.isDepositOnly && { backgroundColor: 'rgba(175,145,151,0.14)', borderColor: P.accent },
                 ]}
                 onPress={() => handleDepositToggle(true)}
               >
                 <Text
                   style={[
                     styles.depositOptionText,
-                    isDarkMode && { color: 'rgba(255,255,255,0.6)' },
-                    serviceBooking.isDepositOnly && styles.depositOptionTextActive,
+                    { color: P.sub },
+                    serviceBooking.isDepositOnly && { color: P.accent, fontWeight: '700' },
                   ]}
                 >
                   Pay Deposit Only (20%)
@@ -770,7 +785,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           <TouchableOpacity
             style={[
               styles.notesButton,
-              serviceBooking?.notes ? styles.notesButtonWithContent : styles.notesButtonEmpty,
+              { backgroundColor: 'rgba(175,145,151,0.1)', borderColor: 'rgba(175,145,151,0.3)' },
             ]}
             onPress={() =>
               onShowNotes(
@@ -782,20 +797,13 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               )
             }
           >
-            <Text
-              style={[
-                styles.notesButtonText,
-                serviceBooking?.notes
-                  ? styles.notesButtonTextWithContent
-                  : styles.notesButtonTextEmpty,
-              ]}
-            >
+            <Text style={[styles.notesButtonText, { color: P.accent }]}>
               {serviceBooking?.notes
                 ? `Notes: ${serviceBooking.notes.substring(0, 30)}${serviceBooking.notes.length > 30 ? '...' : ''}`
                 : 'Add Notes'}
             </Text>
           </TouchableOpacity>
-        </BlurView>
+        </View>
       </ErrorBoundary>
     );
   }
@@ -804,6 +812,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 // Main Cart Screen Component
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const { theme, isDarkMode } = useTheme();
+  const P = isDarkMode ? D : L;
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
@@ -849,6 +858,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   // Customer details review modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [reviewName, setReviewName] = useState('');
   const [reviewEmail, setReviewEmail] = useState('');
   const [reviewPhone, setReviewPhone] = useState('');
@@ -856,6 +866,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [confirmedCustomerInfo, setConfirmedCustomerInfo] = useState<{
     name: string; email: string; phone: string;
   } | null>(null);
+  const [showBookingSummaryModal, setShowBookingSummaryModal] = useState(false);
+  const [hasMobileProvider, setHasMobileProvider] = useState(false);
+  const [clientAddress, setClientAddress] = useState('');
 
   // Memoize expensive calculations properly
   const itemsByProvider = useMemo(() => {
@@ -995,6 +1008,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     [currentNotesItem, getServiceBooking, updateServiceBooking]
   );
 
+  // Detect if any provider in the cart is mobile (travels to client)
+  useEffect(() => {
+    if (items.length === 0) { setHasMobileProvider(false); return; }
+    const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
+    getMobileProviderDisplayNames(names)
+      .then(mobileSet => setHasMobileProvider(mobileSet.size > 0))
+      .catch(() => setHasMobileProvider(false));
+  }, [items]);
+
   // Navigation handlers - BACK TO HOME
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1089,6 +1111,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setReviewEmail(user?.email || '');
     setReviewPhone(user?.phone || '');
     setSaveAsDefault(false);
+    setIsEditingDetails(false);
     setShowReviewModal(true);
   } catch (error) {
     console.error('Checkout error:', error);
@@ -1110,6 +1133,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       Alert.alert('Invalid Phone', 'Please enter a valid phone number (at least 10 digits).');
       return;
     }
+    if (hasMobileProvider && !clientAddress.trim()) {
+      Alert.alert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
+      return;
+    }
 
     // Save customer info
     const customerInfo = { name: reviewName, email: reviewEmail, phone: reviewPhone };
@@ -1121,11 +1148,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
 
     setShowReviewModal(false);
-    setShowPaymentModal(true);
+    setShowBookingSummaryModal(true);
   }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser]);
 
-// REPLACE THE ENTIRE handlePaymentSuccess FUNCTION WITH THIS:
-const handlePaymentSuccess = useCallback(async () => {
+const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
   if (__DEV__) {
     console.log('═══════════════════════════════════════');
     console.log('PAYMENT SUCCESS - FUNCTION CALLED');
@@ -1204,6 +1230,31 @@ const handlePaymentSuccess = useCallback(async () => {
       console.log('---');
     }
 
+    // Stamp payment method on every appointment entry
+    appointmentData = appointmentData.map(a => ({ ...a, paymentMethod }));
+
+    // Fetch client health data so the provider sees it immediately on the booking.
+    // Allergies and medical notes are critical for the provider before accepting.
+    try {
+      const { data: healthProfile } = await supabase
+        .from('users')
+        .select('allergies, medical_notes')
+        .eq('id', user?.id ?? '')
+        .single();
+      const parts: string[] = [];
+      if (healthProfile?.allergies?.length) parts.push(`Allergies: ${(healthProfile.allergies as string[]).join(', ')}`);
+      if (healthProfile?.medical_notes) parts.push(`Medical notes: ${healthProfile.medical_notes}`);
+      if (parts.length) {
+        const healthPrefix = `Health info: ${parts.join(' | ')}\n`;
+        appointmentData = appointmentData.map(a => ({
+          ...a,
+          notes: healthPrefix + (a.notes || ''),
+        }));
+      }
+    } catch {
+      // Non-critical — booking proceeds without health data prefix
+    }
+
     // Step 3: Create bookings IN CONTEXT
     if (__DEV__) {
       console.log('STEP 3: Creating bookings in BookingContext...');
@@ -1212,7 +1263,7 @@ const handlePaymentSuccess = useCallback(async () => {
       console.log('- Appointments:', appointmentData.length);
     }
     try {
-      await createBookingsFromCart(itemsToBook, appointmentData);
+      await createBookingsFromCart(itemsToBook, appointmentData, clientAddress.trim() || undefined);
       if (__DEV__) {
         console.log('STEP 3 COMPLETE - createBookingsFromCart returned');
       }
@@ -1274,175 +1325,23 @@ const handlePaymentSuccess = useCallback(async () => {
   }
 }, [checkoutSnapshot, createBookingsFromCart, effectiveFinalTotal, items, confirmedCustomerInfo, user]);
 
-  // Provider navigation with better error handling - NORMALIZE FOR "MAKEUP BY MYA"
   const navigateToProvider = useCallback(
-    (providerName: string) => {
-      try {
-        // Normalize provider name: trim, lowercase, replace spaces with hyphens for matching
-        const normalizedName = providerName.trim().toUpperCase().replace(/\s+/g, ' ');
-        const normalizedForMapping = normalizedName.toUpperCase().replace(/\s+/g, '');
-
-        const providerMapping: Record<string, string> = {
-          JENNIFER: 'hair-by-jennifer',
-          HAIRBYJENNIFER: 'hair-by-jennifer',
-          'HAIR BY JENNIFER': 'hair-by-jennifer',
-          KATHRINE: 'styled-by-kathrine',
-          'STYLED BY KATHRINE': 'styled-by-kathrine',
-          'STYLED BYKATHRINE': 'styled-by-kathrine',
-          DIVANA: 'diva-nails',
-          'DIVA NAILS': 'diva-nails',
-          DIVANAILS: 'diva-nails',
-          JANA: 'jana-aesthetics',
-          'JANA AESTHETICS': 'jana-aesthetics',
-          JANAAESTHETICS: 'jana-aesthetics',
-          'HER BROWS': 'her-brows',
-          HERBROWS: 'her-brows',
-          KIKI: 'kiki-nails',
-          'KIKI NAILS': 'kiki-nails',
-          KIKISNAILS: 'kiki-nails',
-          MYA: 'makeup-by-mya',
-          'MAKEUP BY MYA': 'makeup-by-mya',
-          MAKEUPBYMYA: 'makeup-by-mya',
-          VIKKI: 'vikki-laid',
-          'VIKKI LAID': 'vikki-laid',
-          VIKKILAID: 'vikki-laid',
-          LASHED: 'your-lashed',
-          'YOUR LASHED': 'your-lashed',
-          YOURLASHED: 'your-lashed',
-          'ROSEMAY AESTHETICS': 'rosemay-aesthetics',
-          ROSEMAYAESTHETICS: 'rosemay-aesthetics',
-          'FILLER BY JESS': 'fillerbyjess',
-          FILLERBYJESS: 'fillerbyjess',
-          'EYEBROW DELUXE': 'eyebrowdeluxe',
-          EYEBROWDELUXE: 'eyebrowdeluxe',
-          'LASHES GALORE': 'lashesgalore',
-          LASHESGALORE: 'lashesgalore',
-          ZEE: 'zeenail-artist',
-          'ZEE NAIL ARTIST': 'zeenail-artist',
-          ZEENAILARTIST: 'zeenail-artist',
-          ZOE: 'painted-by-zoe',
-          'PAINTED BY ZOE': 'painted-by-zoe',
-          PAINTEDBYZOE: 'painted-by-zoe',
-          'BRAIDED SLICK': 'braided-slick',
-          BRAIDEDSLICK: 'braided-slick',
-          LASHBAE: 'lash-bae',
-          'LASH BAE': 'lash-bae',
-        };
-
-        const providerId = providerMapping[normalizedForMapping] || providerMapping[normalizedName];
-        if (!providerId) {
-          console.warn(`Provider not found: ${providerName}`);
-          Alert.alert('Error', 'Provider not found');
-          return;
-        }
-
-        // Navigate within Home stack - ProviderProfile is in the same stack
-        navigation.navigate('ProviderProfile', {
-          providerId,
-          source: 'cart',
-        });
-      } catch (error) {
-        console.error('Navigation error:', error);
-        Alert.alert('Navigation Error', 'Unable to open provider profile');
+    (providerItems: CartItem[]) => {
+      const slug = providerItems[0]?.providerSlug;
+      if (!slug) {
+        Alert.alert('Error', 'Unable to open provider profile');
+        return;
       }
+      navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
     },
     [navigation]
   );
-  // Get provider logo from assets - ADD NORMALIZED KEYS
-  const getProviderLogo = useCallback((providerName: string) => {
-    const normalizedForMapping = providerName.toUpperCase().replace(/\s+/g, '');
-    const logoMapping: Record<string, any> = {
-      JENNIFER: require('../../assets/logos/hairbyjennifer.png'),
-      HAIRBYJENNIFER: require('../../assets/logos/hairbyjennifer.png'),
-      'HAIR BY JENNIFER': require('../../assets/logos/hairbyjennifer.png'),
-      KATHRINE: require('../../assets/logos/styledbykathrine.png'),
-      'STYLED BY KATHRINE': require('../../assets/logos/styledbykathrine.png'),
-      'STYLED BYKATHRINE': require('../../assets/logos/styledbykathrine.png'),
-      DIVANA: require('../../assets/logos/divanails.png'),
-      'DIVA NAILS': require('../../assets/logos/divanails.png'),
-      DIVANAILS: require('../../assets/logos/divanails.png'),
-      JANA: require('../../assets/logos/janaaesthetics.png'),
-      'JANA AESTHETICS': require('../../assets/logos/janaaesthetics.png'),
-      JANAAESTHETICS: require('../../assets/logos/janaaesthetics.png'),
-      'HER BROWS': require('../../assets/logos/herbrows.png'),
-      HERBROWS: require('../../assets/logos/herbrows.png'),
-      KIKI: require('../../assets/logos/kikisnails.png'),
-      'KIKI NAILS': require('../../assets/logos/kikisnails.png'),
-      KIKISNAILS: require('../../assets/logos/kikisnails.png'),
-      MYA: require('../../assets/logos/makeupbymya.png'),
-      'MAKEUP BY MYA': require('../../assets/logos/makeupbymya.png'),
-      MAKEUPBYMYA: require('../../assets/logos/makeupbymya.png'),
-      VIKKI: require('../../assets/logos/vikkilaid.png'),
-      'VIKKI LAID': require('../../assets/logos/vikkilaid.png'),
-      VIKKILAID: require('../../assets/logos/vikkilaid.png'),
-      LASHED: require('../../assets/logos/yourlashed.png'),
-      'YOUR LASHED': require('../../assets/logos/yourlashed.png'),
-      YOURLASHED: require('../../assets/logos/yourlashed.png'),
-      'ROSEMAY AESTHETICS': require('../../assets/logos/RoseMayAesthetics.png'),
-      ROSEMAYAESTHETICS: require('../../assets/logos/RoseMayAesthetics.png'),
-      'FILLER BY JESS': require('../../assets/logos/fillerbyjess.png'),
-      FILLERBYJESS: require('../../assets/logos/fillerbyjess.png'),
-      'EYEBROW DELUXE': require('../../assets/logos/eyebrowdeluxe.png'),
-      EYEBROWDELUXE: require('../../assets/logos/eyebrowdeluxe.png'),
-      'LASHES GALORE': require('../../assets/logos/lashesgalore.png'),
-      LASHESGALORE: require('../../assets/logos/lashesgalore.png'),
-      ZEE: require('../../assets/logos/ZeeNail Artist.png'),
-      'ZEE NAIL ARTIST': require('../../assets/logos/ZeeNail Artist.png'),
-      ZEENAILARTIST: require('../../assets/logos/ZeeNail Artist.png'),
-      ZOE: require('../../assets/logos/paintedbyZoe.png'),
-      'PAINTED BY ZOE': require('../../assets/logos/paintedbyZoe.png'),
-      PAINTEDBYZOE: require('../../assets/logos/paintedbyZoe.png'),
-      'BRAIDED SLICK': require('../../assets/logos/braided slick.png'),
-      BRAIDEDSLICK: require('../../assets/logos/braided slick.png'),
-      LASHBAE: require('../../assets/logos/LashBae.png'),
-      'LASH BAE': require('../../assets/logos/LashBae.png'),
-    };
-    return (
-      logoMapping[normalizedForMapping] ||
-      logoMapping[providerName] ||
-      require('../../assets/images/background.png')
-    );
-  }, []);
-
-  // UPDATED: Display name with normalization
-  const getDisplayProviderName = useCallback((providerName: string) => {
-    const normalizedName = providerName.trim().toUpperCase().replace(/\s+/g, ' ');
-    const displayNames: Record<string, string> = {
-      JENNIFER: 'Hair by Jennifer',
-      'HAIR BY JENNIFER': 'Hair by Jennifer',
-      KATHRINE: 'Styled by Kathrine',
-      'STYLED BY KATHRINE': 'Styled by Kathrine',
-      DIVANA: 'Diva Nails',
-      'DIVA NAILS': 'Diva Nails',
-      JANA: 'Jana Aesthetics',
-      'JANA AESTHETICS': 'Jana Aesthetics',
-      'HER BROWS': 'Her Brows',
-      KIKI: 'Kiki Nails',
-      'KIKI NAILS': 'Kiki Nails',
-      MYA: 'Makeup by Mya',
-      'MAKEUP BY MYA': 'Makeup by Mya',
-      VIKKI: 'Vikki Laid',
-      'VIKKI LAID': 'Vikki Laid',
-      LASHED: 'Your Lashed',
-      'YOUR LASHED': 'Your Lashed',
-      'ROSEMAY AESTHETICS': 'RoseMay Aesthetics',
-      'FILLER BY JESS': 'Filler by Jess',
-      'EYEBROW DELUXE': 'Eyebrow Deluxe',
-      'LASHES GALORE': 'Lashes Galore',
-      ZEE: 'Zee Nail Artist',
-      'ZEE NAIL ARTIST': 'Zee Nail Artist',
-      ZOE: 'Painted by Zoe',
-      'PAINTED BY ZOE': 'Painted by Zoe',
-      'BRAIDED SLICK': 'Braided Slick',
-    };
-    return displayNames[normalizedName] || providerName;
-  }, []);
 
   // Show loading while fonts are loading
   if (!fontsLoaded) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#DA70D6" />
+        <ActivityIndicator size="large" color="#AF9197" />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
@@ -1484,7 +1383,7 @@ const handlePaymentSuccess = useCallback(async () => {
     paymentMethodsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
     paymentMethodName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, flex: 1 },
     cardDetailsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
-    cardInput: { backgroundColor: theme.cardBackground, borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', color: theme.text, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', borderWidth: 1 },
     liquidGlassSuccessCheckmark: { fontSize: 28, color: theme.text, fontWeight: 'bold' },
     liquidGlassSuccessTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18, color: theme.text, marginBottom: 6, textAlign: 'center' },
     liquidGlassSuccessButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: theme.text, fontWeight: '600' },
@@ -1492,13 +1391,13 @@ const handlePaymentSuccess = useCallback(async () => {
 
   return (
     <ErrorBoundary>
-      <ThemedBackground>
-        <StatusBar barStyle={theme.statusBar} translucent={true} backgroundColor="transparent" />
+      <ThemedBackground style={{ flex: 1 }}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
         <SafeAreaView style={styles.safeArea}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { backgroundColor: P.bg, borderBottomColor: P.border }]}>
             <TouchableOpacity
-              style={styles.backButton}
+              style={[styles.backButton, { backgroundColor: P.surface, borderColor: P.border }]}
               onPress={handleContinueShopping}
               activeOpacity={0.7}
             >
@@ -1510,7 +1409,7 @@ const handlePaymentSuccess = useCallback(async () => {
             <View style={styles.headerRightButtons}>
               {/* View Bookings Button */}
               <TouchableOpacity
-                style={styles.bookingsButton}
+                style={[styles.bookingsButton, { backgroundColor: 'rgba(175,145,151,0.18)' }]}
                 onPress={() => {
                   try {
                     navigation.navigate('Bookings'); // NAVIGATES TO BOOKINGS SCREEN
@@ -1544,95 +1443,260 @@ const handlePaymentSuccess = useCallback(async () => {
           {/* Confirm Your Details Modal */}
           <Modal visible={showReviewModal} animationType="slide" transparent={true}>
             <View style={styles.modalOverlayNoBlur}>
-              <BlurView intensity={60} tint={theme.blurTint} style={styles.reviewModalContainer}>
+              <View style={[styles.reviewModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
                 <View style={styles.reviewModalContent}>
-                  <Text style={[styles.reviewModalTitle, { color: theme.text }]}>Confirm Your Details</Text>
-                  <Text style={[styles.reviewModalSubtitle, { color: theme.secondaryText }]}>
-                    This info will be shared with your provider
-                  </Text>
+                  {/* Title row with Edit button */}
+                  <View style={styles.reviewTitleRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.reviewModalTitle, { color: P.text }]}>Confirm Your Details</Text>
+                      <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>
+                        This info will be shared with your provider
+                      </Text>
+                    </View>
+                    {!isEditingDetails && (
+                      <TouchableOpacity
+                        style={[styles.reviewEditBtn, { backgroundColor: 'rgba(175,145,151,0.12)', borderColor: P.border }]}
+                        onPress={() => setIsEditingDetails(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.reviewEditText, { color: P.accent }]}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
 
                   {/* Name */}
                   <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: theme.secondaryText }]}>NAME</Text>
-                    <TextInput
-                      style={[styles.reviewInput, { color: theme.text, borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(58,58,60,0.6)' : 'rgba(255,255,255,0.15)' }]}
-                      value={reviewName}
-                      onChangeText={setReviewName}
-                      placeholder="Your name"
-                      placeholderTextColor={theme.secondaryText}
-                    />
+                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>NAME</Text>
+                    {isEditingDetails ? (
+                      <TextInput
+                        style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                        value={reviewName}
+                        onChangeText={setReviewName}
+                        placeholder="Your name"
+                        placeholderTextColor={P.sub}
+                      />
+                    ) : (
+                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewName || '—'}</Text>
+                    )}
                   </View>
 
                   {/* Email */}
                   <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: theme.secondaryText }]}>EMAIL</Text>
-                    <TextInput
-                      style={[styles.reviewInput, { color: theme.text, borderColor: theme.border, backgroundColor: isDarkMode ? 'rgba(58,58,60,0.6)' : 'rgba(255,255,255,0.15)' }]}
-                      value={reviewEmail}
-                      onChangeText={setReviewEmail}
-                      placeholder="your@email.com"
-                      placeholderTextColor={theme.secondaryText}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
+                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>EMAIL</Text>
+                    {isEditingDetails ? (
+                      <TextInput
+                        style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                        value={reviewEmail}
+                        onChangeText={setReviewEmail}
+                        placeholder="your@email.com"
+                        placeholderTextColor={P.sub}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    ) : (
+                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewEmail || '—'}</Text>
+                    )}
                   </View>
 
                   {/* Phone */}
                   <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: theme.secondaryText }]}>PHONE NUMBER</Text>
-                    <TextInput
-                      style={[styles.reviewInput, {
-                        color: theme.text,
-                        borderColor: !reviewPhone.trim() ? '#FF3B30' : theme.border,
-                        backgroundColor: isDarkMode ? 'rgba(58,58,60,0.6)' : 'rgba(255,255,255,0.15)',
-                      }]}
-                      value={reviewPhone}
-                      onChangeText={setReviewPhone}
-                      placeholder="+44 7700 900000"
-                      placeholderTextColor={theme.secondaryText}
-                      keyboardType="phone-pad"
-                    />
-                    {!reviewPhone.trim() && (
+                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>PHONE NUMBER</Text>
+                    {isEditingDetails ? (
+                      <TextInput
+                        style={[styles.reviewInput, {
+                          color: P.text,
+                          borderColor: !reviewPhone.trim() ? '#FF3B30' : P.border,
+                          backgroundColor: P.surface,
+                        }]}
+                        value={reviewPhone}
+                        onChangeText={setReviewPhone}
+                        placeholder="+44 7700 900000"
+                        placeholderTextColor={P.sub}
+                        keyboardType="phone-pad"
+                      />
+                    ) : (
+                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewPhone || '—'}</Text>
+                    )}
+                    {isEditingDetails && !reviewPhone.trim() && (
                       <Text style={styles.reviewPhoneWarning}>Phone number is required to book</Text>
                     )}
                   </View>
 
-                  {/* Save as Default */}
-                  <TouchableOpacity
-                    style={styles.reviewCheckboxRow}
-                    onPress={() => setSaveAsDefault(!saveAsDefault)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.reviewCheckbox, {
-                      borderColor: theme.border,
-                      backgroundColor: saveAsDefault ? theme.accent : 'transparent',
-                    }]}>
-                      {saveAsDefault && <Text style={styles.reviewCheckmark}>✓</Text>}
+                  {/* Address — only shown when a mobile provider is in the cart */}
+                  {hasMobileProvider && (
+                    <View style={styles.reviewFieldGroup}>
+                      <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
+                      <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
+                        Your provider is mobile and will come to you
+                      </Text>
+                      {isEditingDetails ? (
+                        <TextInput
+                          style={[styles.reviewInput, {
+                            color: P.text, borderColor: !clientAddress.trim() ? '#FF3B30' : P.border, backgroundColor: P.surface,
+                          }]}
+                          value={clientAddress}
+                          onChangeText={setClientAddress}
+                          placeholder="e.g. 12 High Street, London, SW1A 1AA"
+                          placeholderTextColor={P.sub}
+                          autoCapitalize="words"
+                        />
+                      ) : (
+                        <Text style={[styles.reviewFieldValue, { color: clientAddress ? P.text : '#FF3B30' }]}>
+                          {clientAddress || 'Address required'}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={[styles.reviewCheckboxLabel, { color: theme.text }]}>
-                      Set as default for future bookings
-                    </Text>
-                  </TouchableOpacity>
+                  )}
 
-                  {/* Buttons */}
-                  <View style={styles.reviewButtonRow}>
+                  {/* Save as Default — only in edit mode */}
+                  {isEditingDetails && (
                     <TouchableOpacity
-                      style={[styles.reviewCancelBtn, { borderColor: theme.border }]}
-                      onPress={() => setShowReviewModal(false)}
+                      style={styles.reviewCheckboxRow}
+                      onPress={() => setSaveAsDefault(!saveAsDefault)}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.reviewCancelText, { color: theme.text }]}>Cancel</Text>
+                      <View style={[styles.reviewCheckbox, {
+                        borderColor: P.border,
+                        backgroundColor: saveAsDefault ? P.accent : 'transparent',
+                      }]}>
+                        {saveAsDefault && <Text style={styles.reviewCheckmark}>✓</Text>}
+                      </View>
+                      <Text style={[styles.reviewCheckboxLabel, { color: P.text }]}>
+                        Set as default for future bookings
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Buttons */}
+                  <View style={[styles.reviewButtonRow, isEditingDetails && { marginTop: 8 }]}>
+                    <TouchableOpacity
+                      style={[styles.reviewCancelBtn, { borderColor: P.border }]}
+                      onPress={() => {
+                        if (isEditingDetails) {
+                          setIsEditingDetails(false);
+                        } else {
+                          setShowReviewModal(false);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.reviewCancelText, { color: P.text }]}>
+                        {isEditingDetails ? 'Done' : 'Cancel'}
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.reviewConfirmBtn, { backgroundColor: theme.accent }]}
+                      style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
                       onPress={handleReviewConfirm}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.reviewConfirmText}>Continue to Payment</Text>
+                      <Text style={styles.reviewConfirmText}>Continue</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-              </BlurView>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Booking Summary Modal */}
+          <Modal visible={showBookingSummaryModal} animationType="slide" transparent={true}>
+            <View style={styles.modalOverlayNoBlur}>
+              <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
+                <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                  <View style={styles.reviewModalContent}>
+                    <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
+                    <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>Review your appointments before payment</Text>
+
+                    {/* Customer info */}
+                    {confirmedCustomerInfo && (
+                      <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
+                        <Text style={[styles.summarySectionTitle, { color: P.sub }]}>CUSTOMER</Text>
+                        <Text style={[styles.summaryCustomerName, { color: P.text }]}>{confirmedCustomerInfo.name}</Text>
+                        {!!confirmedCustomerInfo.email && (
+                          <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.email}</Text>
+                        )}
+                        <Text style={[styles.summaryCustomerDetail, { color: P.sub }]}>{confirmedCustomerInfo.phone}</Text>
+                      </View>
+                    )}
+
+                    {/* Appointments */}
+                    <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
+                      <Text style={[styles.summarySectionTitle, { color: P.sub }]}>APPOINTMENTS</Text>
+                      {checkoutSnapshot.items.map((item, index) => {
+                        const booking = checkoutSnapshot.bookings[item.id] || {};
+                        const basePrice = Number(item?.price) || 0;
+                        const addOnsTotal = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+                        const itemTotal = basePrice + addOnsTotal;
+                        const isDeposit = !!(booking as ServiceBooking).isDepositOnly;
+                        const displayPrice = isDeposit ? BookingService.calculateDeposit(itemTotal) : itemTotal;
+                        const b = booking as ServiceBooking;
+                        return (
+                          <View key={item.id}>
+                            {index > 0 && <View style={[styles.summaryDivider, { backgroundColor: P.sep }]} />}
+                            <View style={styles.summaryBookingItem}>
+                              <View style={styles.summaryItemRow}>
+                                <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
+                                  {item.serviceName}{isDeposit ? ' (Dep.)' : ''}
+                                </Text>
+                                <Text style={[styles.summaryItemPrice, { color: P.accent }]}>
+                                  £{displayPrice.toFixed(2)}
+                                </Text>
+                              </View>
+                              <Text style={[styles.summaryItemProvider, { color: P.sub }]}>
+                                {item.providerDisplayName ?? item.providerName ?? ''}
+                              </Text>
+                              {b.selectedDate && b.selectedTime && (
+                                <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
+                                  {new Date(b.selectedDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} · {b.selectedTime}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Totals */}
+                    <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
+                      <View style={styles.summaryTotalRow}>
+                        <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Subtotal</Text>
+                        <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{effectiveTotal.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.summaryTotalRow}>
+                        <Text style={[styles.summaryTotalLabel, { color: P.sub }]}>Platform Fee</Text>
+                        <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{getServiceFee().toFixed(2)}</Text>
+                      </View>
+                      <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
+                        <Text style={[styles.summaryGrandLabel, { color: P.text }]}>Total</Text>
+                        <Text style={[styles.summaryGrandValue, { color: P.accent }]}>£{effectiveFinalTotal.toFixed(2)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Buttons */}
+                    <View style={styles.reviewButtonRow}>
+                      <TouchableOpacity
+                        style={[styles.reviewCancelBtn, { borderColor: P.border }]}
+                        onPress={() => {
+                          setShowBookingSummaryModal(false);
+                          setShowReviewModal(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.reviewCancelText, { color: P.text }]}>Back</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
+                        onPress={() => {
+                          setShowBookingSummaryModal(false);
+                          setShowPaymentModal(true);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.reviewConfirmText}>Confirm & Pay</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </ScrollView>
+              </View>
             </View>
           </Modal>
 
@@ -1642,7 +1706,7 @@ const handlePaymentSuccess = useCallback(async () => {
             onClose={() => setShowPaymentModal(false)}
             effectiveCartItems={effectiveCartItems}
             totalAmount={effectiveFinalTotal}
-            onPaymentSuccess={handlePaymentSuccess}
+            onPaymentSuccess={(method) => handlePaymentSuccess(method)}
             onPaymentComplete={() => {
               clearCart(); // Clear cart immediately after payment simulation
               setServiceBookings({}); // Clear bookings state
@@ -1655,16 +1719,16 @@ const handlePaymentSuccess = useCallback(async () => {
           {showPaymentSuccessModal && (
             <Modal visible={true} animationType="fade" transparent={true}>
               <View style={styles.modalOverlayNoBlur}>
-                <BlurView intensity={60} tint={theme.blurTint} style={styles.liquidGlassSuccessModalNoBlur}>
+                <View style={[styles.liquidGlassSuccessModalNoBlur, { backgroundColor: P.card }]}>
                   <View style={styles.liquidGlassSuccessContent}>
                     {/* Success Icon */}
                     <View style={styles.liquidGlassSuccessIcon}>
-                      <Text style={[styles.liquidGlassSuccessCheckmark, { color: theme.text }]}>✓</Text>
+                      <Text style={[styles.liquidGlassSuccessCheckmark, { color: '#34C759' }]}>✓</Text>
                     </View>
 
-                    <Text style={[styles.liquidGlassSuccessTitle, { color: theme.text }]}>Success!</Text>
+                    <Text style={[styles.liquidGlassSuccessTitle, { color: P.text }]}>Success!</Text>
 
-                    <Text style={[styles.liquidGlassSuccessMessage, { color: theme.secondaryText }]}>
+                    <Text style={[styles.liquidGlassSuccessMessage, { color: P.sub }]}>
                       Payment of £{paymentTotal.toFixed(2)} has been processed successfully.
                       Appointments have been booked and will show up in Bookings when confirmed by
                       providers.
@@ -1679,7 +1743,7 @@ const handlePaymentSuccess = useCallback(async () => {
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: theme.text }]}>View Bookings</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accent }]}>View Bookings</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -1690,11 +1754,11 @@ const handlePaymentSuccess = useCallback(async () => {
                         }}
                         activeOpacity={0.7}
                       >
-                        <Text style={[styles.liquidGlassSuccessButtonText, { color: theme.text }]}>Continue Shopping</Text>
+                        <Text style={[styles.liquidGlassSuccessButtonText, { color: P.accent }]}>Continue Shopping</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
-                </BlurView>
+                </View>
               </View>
             </Modal>
           )}
@@ -1722,9 +1786,9 @@ const handlePaymentSuccess = useCallback(async () => {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor="#C850C8"
-                colors={['#C850C8']}
-                progressBackgroundColor="#FFF"
+                tintColor="#AF9197"
+                colors={['#AF9197']}
+                progressBackgroundColor={isDarkMode ? '#252220' : '#FFF'}
               />
             }
           >
@@ -1737,18 +1801,8 @@ const handlePaymentSuccess = useCallback(async () => {
 
                   if (!providerData || !providerItems?.length) return null;
 
-                  // ADD THESE CONSOLE LOGS RIGHT HERE - WRAPPED IN __DEV__
-                  if (__DEV__) {
-                    console.log('=== PROVIDER LOGO DEBUG ===');
-                    console.log('Provider name from cart:', providerName);
-                    console.log('Provider items[0]:', providerItems[0]);
-                    console.log('Provider service:', providerItems[0]?.providerService);
-                    console.log('Logo from function:', getProviderLogo(providerName));
-                    console.log('===========================');
-                  }
-
                   return (
-                    <View key={providerName} style={styles.providerSection}>
+                    <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                       {/* Provider Header */}
                       <TouchableOpacity
                         style={styles.providerHeader}
@@ -1779,21 +1833,22 @@ const handlePaymentSuccess = useCallback(async () => {
                           );
                         })()}
 
-                        <TouchableOpacity onPress={() => navigateToProvider(providerName)}>
+                        <TouchableOpacity onPress={() => navigateToProvider(providerItems)}>
                           <View style={styles.providerLogoContainer}>
-                            <Image
-                              source={getProviderLogo(providerName)}
-                              style={styles.providerLogo}
-                              onError={error => {
-                                console.warn('Provider logo failed to load:', error);
-                              }}
-                            />
+                            {providerItems[0]?.providerImage ? (
+                              <Image
+                                source={providerItems[0].providerImage}
+                                style={styles.providerLogo}
+                              />
+                            ) : (
+                              <View style={[styles.providerLogo, { backgroundColor: isDarkMode ? '#333' : '#EEE' }]} />
+                            )}
                           </View>
                         </TouchableOpacity>
 
                         <View style={styles.providerInfo}>
                           <Text style={dynamicStyles.providerName}>
-                            {getDisplayProviderName(providerName)}
+                            {providerItems[0]?.providerDisplayName ?? providerName}
                           </Text>
 
                           {/* Service Type with Translucent Pill Background */}
@@ -1841,13 +1896,13 @@ const handlePaymentSuccess = useCallback(async () => {
                 })}
 
                 {/* Summary - USE EFFECTIVE TOTALS + SERVICE FEE NOTE */}
-                <View style={styles.summary}>
+                <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                   <View style={styles.summaryRow}>
                     <Text style={dynamicStyles.summaryLabel}>Subtotal</Text>
                     <Text style={dynamicStyles.summaryValue}>£{effectiveTotal.toFixed(2)}</Text>
                   </View>
                   <View style={styles.summaryRow}>
-                    <Text style={dynamicStyles.summaryLabel}>Service Fee</Text>
+                    <Text style={dynamicStyles.summaryLabel}>Platform Fee</Text>
                     <Text style={dynamicStyles.summaryValue}>£{getServiceFee().toFixed(2)}</Text>
                   </View>
                   <View style={[styles.summaryRow, styles.totalRow]}>
@@ -1858,7 +1913,7 @@ const handlePaymentSuccess = useCallback(async () => {
 
                 {/* Checkout Button - USE EFFECTIVE TOTAL */}
                 <TouchableOpacity
-                  style={[styles.checkoutButton, isLoading && styles.disabledButton]}
+                  style={[styles.checkoutButton, { backgroundColor: P.accent }, isLoading && styles.disabledButton]}
                   onPress={handleCheckout}
                   disabled={isLoading}
                 >
@@ -1876,8 +1931,8 @@ const handlePaymentSuccess = useCallback(async () => {
                 <Text style={dynamicStyles.emptyTitle}>Cart is Empty</Text>
                 <Text style={dynamicStyles.emptyText}>Add services to get started</Text>
                 <TouchableOpacity
-                  style={styles.browseButton}
-                  onPress={handleContinueShopping} // SAME NAV LOGIC TO HOME MAIN
+                  style={[styles.browseButton, { backgroundColor: P.accent }]}
+                  onPress={handleContinueShopping}
                 >
                   <Text style={styles.browseText}>Browse Services</Text>
                 </TouchableOpacity>
@@ -1900,7 +1955,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: spacing.md,
     fontSize: fonts.body.medium,
-    color: '#DA70D6',
+    color: '#AF9197',
   },
 
   // Header
@@ -1910,21 +1965,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backButton: {
     width: dimensions.navBackButton.width,
     height: dimensions.navBackButton.height,
     borderRadius: dimensions.navBackButton.borderRadius,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   backText: {
     fontSize: fonts.body.large,
@@ -1954,13 +2003,13 @@ const styles = StyleSheet.create({
   bookingsButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(218,112,214,0.2)',
+    backgroundColor: 'rgba(175,145,151,0.18)',
     borderRadius: dimensions.card.smallBorderRadius,
   },
   bookingsText: {
     fontSize: 11,
     fontFamily: 'BakbakOne-Regular',
-    color: '#DA70D6',
+    color: '#AF9197',
   },
   clearButton: {
     paddingHorizontal: spacing.md,
@@ -1971,7 +2020,7 @@ const styles = StyleSheet.create({
 
   // Error Banner
   errorBanner: {
-    backgroundColor: '#ffebee',
+    backgroundColor: 'rgba(244,67,54,0.1)',
     marginHorizontal: spacing.xl,
     marginVertical: spacing.md,
     padding: spacing.md,
@@ -2004,11 +2053,15 @@ const styles = StyleSheet.create({
 
   // Provider Section
   providerSection: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: dimensions.card.borderRadius,
     marginBottom: spacing.lg,
     paddingTop: spacing.xl,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   providerHeader: {
     flexDirection: 'row',
@@ -2020,26 +2073,26 @@ const styles = StyleSheet.create({
     height: dimensions.providerLogo.size + 10,
     borderRadius: (dimensions.providerLogo.size + 10) / 2,
     borderWidth: dimensions.providerLogo.borderWidth,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(175,145,151,0.25)',
   },
   providerLogoContainer: {
     position: 'relative',
     marginRight: dimensions.providerLogo.marginRight + 4,
   },
   serviceTypePill: {
-    backgroundColor: 'rgba(218,112,214,0.15)',
+    backgroundColor: 'rgba(175,145,151,0.15)',
     borderRadius: dimensions.card.smallBorderRadius,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     alignSelf: 'flex-start',
     marginVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: 'rgba(218,112,214,0.3)',
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   serviceTypeText: {
     fontSize: fonts.serviceTag,
     fontFamily: 'BakbakOne-Regular',
-    color: '#DA70D6',
+    color: '#AF9197',
     fontWeight: 'bold',
   },
   // ADD ALL THESE STYLES RIGHT HERE:
@@ -2106,8 +2159,8 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   serviceSeparator: {
-    height: 2,
-    backgroundColor: 'rgba(218, 112, 214, 0.65)',
+    height: 1,
+    backgroundColor: 'rgba(175,145,151,0.25)',
     marginVertical: spacing.lg,
     marginHorizontal: spacing.md,
     borderRadius: 1,
@@ -2121,11 +2174,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   serviceCardShadow: {
-    shadowColor: '#DA70D6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   serviceHeader: {
     flexDirection: 'row',
@@ -2144,7 +2197,7 @@ const styles = StyleSheet.create({
   servicePrice: {
     fontSize: fonts.title.small,
     fontFamily: 'BakbakOne-Regular',
-    color: '#DA70D6',
+    color: '#AF9197',
     marginBottom: spacing.xs,
   },
   serviceDuration: {
@@ -2154,11 +2207,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   addOnsContainer: {
-    backgroundColor: 'rgba(218,112,214,0.1)',
+    backgroundColor: 'rgba(175,145,151,0.1)',
     padding: spacing.md,
     borderRadius: dimensions.card.smallBorderRadius,
     borderWidth: 1,
-    borderColor: 'rgba(218,112,214,0.3)',
+    borderColor: 'rgba(175,145,151,0.25)',
     marginTop: spacing.md,
   },
   addOnsTitle: {
@@ -2183,24 +2236,24 @@ const styles = StyleSheet.create({
   },
   addOnsTotalContainer: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(218,112,214,0.3)',
+    borderTopColor: 'rgba(175,145,151,0.25)',
     paddingTop: spacing.sm,
     marginTop: spacing.sm,
   },
   addOnsTotal: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
-    color: '#c32dbeff',
-    fontWeight: '900',
+    color: '#AF9197',
+    fontWeight: '700',
   },
   removeButton: {
     width: dimensions.button.small.width,
     height: dimensions.button.small.height,
     borderRadius: dimensions.button.small.borderRadius,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(175,145,151,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(0,0,0,0.1)',
   },
   removeText: {
@@ -2266,17 +2319,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   depositOptionButtonActive: {
-    backgroundColor: 'rgba(218,112,214,0.1)',
-    borderColor: '#DA70D6',
+    backgroundColor: 'rgba(175,145,151,0.14)',
+    borderColor: '#AF9197',
   },
   depositOptionText: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'bakbakone-regular',
+    fontFamily: 'BakbakOne-Regular',
     color: 'rgba(0,0,0,0.6)',
   },
   depositOptionTextActive: {
-    color: '#c32dbeff',
-    fontWeight: '900',
+    color: '#AF9197',
+    fontWeight: '700',
   },
   depositInfo: {
     marginTop: spacing.lg,
@@ -2304,7 +2357,6 @@ const styles = StyleSheet.create({
 
   // Fallback Calendar
   fallbackCalendar: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.lg,
     marginBottom: spacing.sm,
@@ -2332,7 +2384,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   fallbackButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#AF9197',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.md,
     marginTop: spacing.lg,
@@ -2352,12 +2404,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   notesButtonEmpty: {
-    backgroundColor: 'rgba(33,150,243,0.1)',
-    borderColor: 'rgba(33,150,243,0.3)',
+    backgroundColor: 'rgba(175,145,151,0.1)',
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   notesButtonWithContent: {
-    backgroundColor: 'rgba(33,150,243,0.1)',
-    borderColor:'rgba(33,150,243,0.3)',
+    backgroundColor: 'rgba(175,145,151,0.1)',
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   notesButtonText: {
     fontSize: fonts.body.small,
@@ -2366,10 +2418,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   notesButtonTextEmpty: {
-    color: '#1976D2',
+    color: '#AF9197',
   },
   notesButtonTextWithContent: {
-    color: '#1976D2',
+    color: '#AF9197',
   },
 
   // Notes Modal
@@ -2416,8 +2468,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: spacing.sm,
     fontSize: fonts.body.medium,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    color: '#000',
   },
   characterCount: {
     fontSize: fonts.body.xsmall,
@@ -2443,7 +2493,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
-    backgroundColor: '#2196F3',
+    backgroundColor: '#AF9197',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.md,
     alignItems: 'center',
@@ -2461,7 +2511,6 @@ const styles = StyleSheet.create({
 
   // Summary - ADDED SERVICE FEE NOTE
   summary: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.lg,
     marginBottom: spacing.lg,
@@ -2491,8 +2540,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(126,102,103,0.2)',
     paddingTop: spacing.sm,
     marginTop: spacing.xs,
     marginBottom: 0,
@@ -2510,7 +2559,7 @@ const styles = StyleSheet.create({
 
   // Checkout Button
   checkoutButton: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: '#AF9197',
     borderRadius: dimensions.button.large.borderRadius,
     padding: spacing.lg,
     marginBottom: spacing.xxl,
@@ -2544,7 +2593,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   browseButton: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: '#AF9197',
     borderRadius: dimensions.card.borderRadius,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
@@ -2627,7 +2676,6 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   orderSummary: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.lg,
     marginBottom: spacing.xxl,
@@ -2685,7 +2733,6 @@ const styles = StyleSheet.create({
   paymentMethodItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -2693,8 +2740,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   selectedPaymentMethod: {
-    borderColor: '#DA70D6',
-    backgroundColor: 'rgba(218,112,214,0.1)',
+    borderColor: '#AF9197',
+    backgroundColor: 'rgba(175,145,151,0.1)',
   },
   paymentMethodIcon: {
     fontSize: fonts.title.small,
@@ -2716,13 +2763,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectedPaymentMethodRadio: {
-    borderColor: '#DA70D6',
+    borderColor: '#AF9197',
   },
   paymentMethodRadioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#DA70D6',
+    backgroundColor: '#AF9197',
   },
   cardDetails: {
     marginBottom: spacing.xxl,
@@ -2734,15 +2781,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   cardInput: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: dimensions.card.smallBorderRadius,
     padding: spacing.md,
     marginBottom: spacing.md,
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
-    color: '#000',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   cardRow: {
     flexDirection: 'row',
@@ -2752,7 +2796,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   payButton: {
-    backgroundColor: '#DA70D6',
+    backgroundColor: '#AF9197',
     borderRadius: dimensions.button.large.borderRadius,
     padding: spacing.lg,
     alignItems: 'center',
@@ -2760,7 +2804,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   payButtonDisabled: {
-    backgroundColor: 'rgba(218,112,214,0.5)',
+    backgroundColor: 'rgba(175,145,151,0.5)',
   },
   payButtonText: {
     fontSize: fonts.body.large,
@@ -2782,32 +2826,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: dimensions.emptyState.cardPadding,
-  },
-  liquidGlassSuccessContent: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: dimensions.card.largeBorderRadius,
-    padding: spacing.xxl,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    width: '88%',
+    maxWidth: 360,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
     shadowRadius: 20,
     elevation: 10,
+  },
+  liquidGlassSuccessContent: {
+    padding: spacing.xxl,
+    alignItems: 'center',
+    width: '100%',
   },
   liquidGlassSuccessIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(87, 177, 78, 0.42)',
+    backgroundColor: 'rgba(52,199,89,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xxl,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(52,199,89,0.25)',
   },
   liquidGlassSuccessCheckmark: {
     fontSize: fonts.title.large,
@@ -2836,14 +2878,14 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   liquidGlassSuccessButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(175,145,151,0.12)',
     borderRadius: dimensions.card.smallBorderRadius,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     width: '100%',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(175,145,151,0.3)',
   },
   liquidGlassSuccessButtonText: {
     fontFamily: 'BakbakOne-Regular',
@@ -2858,8 +2900,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     borderRadius: 24,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   reviewModalContent: {
     padding: 24,
@@ -2951,6 +2992,119 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.5,
     color: '#fff',
+  },
+
+  // Edit toggle
+  reviewTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  reviewEditBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginLeft: 8,
+    marginTop: 2,
+    alignSelf: 'flex-start',
+  },
+  reviewEditText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  reviewFieldValue: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+
+  // Booking Summary Modal
+  summaryModalContainer: {
+    maxHeight: '85%',
+  },
+  summarySection: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  summarySectionTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  summaryCustomerName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    marginBottom: 3,
+  },
+  summaryCustomerDetail: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  summaryBookingItem: {
+    paddingVertical: 8,
+  },
+  summaryItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  summaryItemService: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    flex: 1,
+    marginRight: 8,
+  },
+  summaryItemPrice: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+  },
+  summaryItemProvider: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  summaryItemDateTime: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+  },
+  summaryDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
+  },
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryTotalLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+  },
+  summaryTotalValue: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  summaryGrandTotalRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    marginBottom: 0,
+  },
+  summaryGrandLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+  },
+  summaryGrandValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 17,
   },
 });
 export default CartScreen;

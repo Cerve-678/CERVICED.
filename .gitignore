@@ -41,3 +41,4 @@ supabase/push_webhook_trigger.sql
 # generated native folders
 /ios
 /android
+.claude/

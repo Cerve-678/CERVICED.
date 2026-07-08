@@ -1,6 +1,6 @@
 // src/components/StepProgressIndicator.tsx
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface StepProgressIndicatorProps {
@@ -16,8 +16,12 @@ const STEP_LABELS: Record<number, string> = {
   4: 'Preferences',
 };
 
+const L = { sub: '#7E6667', text: '#000000', border: 'rgba(126,102,103,0.14)', accent: '#AF9197' };
+const D = { sub: '#7E6667', text: '#F0ECE7', border: 'rgba(126,102,103,0.25)', accent: '#AF9197' };
+
 export default function StepProgressIndicator({ currentStep, totalSteps, stepLabel }: StepProgressIndicatorProps) {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode } = useTheme();
+  const t = isDarkMode ? D : L;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -38,75 +42,28 @@ export default function StepProgressIndicator({ currentStep, totalSteps, stepLab
 
   return (
     <View style={styles.container}>
-      {/* Step counter */}
       <View style={styles.labelRow}>
-        <Text style={[styles.stepCount, { color: theme.secondaryText }]}>
+        <Text style={[styles.stepCount, { color: t.sub }]}>
           {currentStep}
-          <Text style={styles.stepTotal}> / {totalSteps}</Text>
+          <Text style={[styles.stepTotal, { color: t.sub }]}> / {totalSteps}</Text>
         </Text>
-        <Text style={[styles.stepLabel, { color: theme.text }]}>{label}</Text>
+        <Text style={[styles.stepLabel, { color: t.sub }]}>{label}</Text>
       </View>
 
-      {/* Progress track */}
-      <View
-        style={[
-          styles.track,
-          {
-            backgroundColor: isDarkMode
-              ? 'rgba(255,255,255,0.08)'
-              : 'rgba(255,255,255,0.25)',
-          },
-        ]}
-      >
-        <Animated.View
-          style={[
-            styles.fill,
-            {
-              width: progressWidth,
-              backgroundColor: 'rgba(218,112,214,0.6)',
-              ...Platform.select({
-                ios: {
-                  shadowColor: 'rgba(218,112,214,1)',
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 6,
-                },
-              }),
-            },
-          ]}
-        >
-          {/* Glow tip */}
-          <View
-            style={[
-              styles.glowTip,
-              {
-                backgroundColor: 'rgba(218,112,214,0.9)',
-                ...Platform.select({
-                  ios: {
-                    shadowColor: '#DA70D6',
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.8,
-                    shadowRadius: 8,
-                  },
-                }),
-              },
-            ]}
-          />
-        </Animated.View>
+      <View style={[styles.track, { backgroundColor: t.border }]}>
+        <Animated.View style={[styles.fill, { width: progressWidth, backgroundColor: t.accent }]} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 32,
-  },
+  container: { marginBottom: 32 },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   stepCount: {
     fontFamily: 'BakbakOne-Regular',
@@ -116,7 +73,6 @@ const styles = StyleSheet.create({
   stepTotal: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    fontWeight: '500',
   },
   stepLabel: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -126,21 +82,12 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   track: {
-    height: 4,
+    height: 3,
     borderRadius: 2,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
     borderRadius: 2,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  glowTip: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: -4,
   },
 });

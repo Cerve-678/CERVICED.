@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ImageBackground,
   StyleSheet,
   StatusBar,
   FlatList,
@@ -16,7 +15,10 @@ import {
   Share,
   Linking,
   Modal,
+  TextInput,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Vibration } from 'react-native';
@@ -26,6 +28,7 @@ import { useFonts } from 'expo-font';
 import { StackScreenProps } from '@react-navigation/stack';
 
 // Correct icon imports - using your IconLibrary.tsx
+import { Ionicons } from '@expo/vector-icons';
 import Icon, { BookmarkIcon, ShareIcon, BellIcon } from '../components/IconLibrary';
 import TabIcon from '../components/TabIcon';
 import { useCart } from '../contexts/CartContext';
@@ -39,12 +42,17 @@ import { HomeStackParamList } from '../navigation/types';
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { getProviderBySlug, getProviderReviews } from '../services/databaseService';
-import type { ProviderWithServices } from '../types/database';
+import { getProviderBySlug, getProviderReviews, addBookmark as dbAddBookmark, removeBookmark as dbRemoveBookmark, trackUserInteraction, getProviderActivePromotions } from '../services/databaseService';
+import userLearningService from '../services/userLearningService';
+import { supabase } from '../lib/supabase';
+import * as WaitlistService from '../services/WaitlistService';
+import type { WaitlistEntry } from '../services/WaitlistService';
+import type { ProviderWithServices, DbPromotion } from '../types/database';
 
 type ProviderProfileScreenProps = StackScreenProps<HomeStackParamList, 'ProviderProfile'>;
 
 const { width: screenWidth } = Dimensions.get('window');
+const SIDE_PANEL_W = screenWidth * 0.85;
 
 // Fallback icons using text symbols
 const HeartIcon = ({ size, color }: { size: number; color: string }) => (
@@ -58,6 +66,7 @@ const StarIcon = ({ size, color }: { size: number; color: string }) => (
 // Provider interface
 interface ProviderData {
   id: string;
+  displayName: string;
   providerName: string;
   providerService: string;
   providerLogo: any;
@@ -67,10 +76,34 @@ interface ProviderData {
   aboutText: string;
   categories: Record<string, ServiceData[]>;
   gradient: [string, string, ...string[]];
+  hasCustomGradient: boolean;
+  accentColor: string | null;
+  backgroundImage: string | null;
+  phone: string;
+  email: string;
+  instagram: string;
+  website: string;
+  yearsExperience: string;
+  specialties: string[];
+  customServiceType: string;
+  whatsapp: string;
+  isVerified: boolean;
+  preferredContactMethods: string[];
+  bookingPolicies: {
+    cancelNotice?: string;
+    cancelPenalty?: string;
+    cancelNote?: string;
+    rescheduleNotice?: string;
+    maxReschedules?: string;
+    depositRequired?: boolean;
+    depositType?: string;
+    depositAmount?: string;
+    noShowAction?: string;
+  } | null;
 }
 
 interface AddOnData {
-  id: number;
+  id: string | number;
   name: string;
   price: number;
   description: string;
@@ -78,6 +111,7 @@ interface AddOnData {
 
 interface ServiceData {
   id: number;
+  dbId: string;
   name: string;
   price: number;
   duration: string;
@@ -118,6 +152,7 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     if (!categories[key]) categories[key] = [];
     categories[key].push({
       id: idx,
+      dbId: s.id,
       name: s.name,
       price: Number(s.price),
       duration: formatDuration(s.duration_minutes),
@@ -128,8 +163,8 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
         .map(img => ({ uri: img.url })),
       addOns: s.add_ons
         .filter(a => a.is_active)
-        .map((a, ai) => ({
-          id: ai,
+        .map(a => ({
+          id: a.id,
           name: a.name,
           price: Number(a.price),
           description: a.description ?? '',
@@ -139,6 +174,7 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
 
   return {
     id: p.slug,
+    displayName: p.display_name,
     providerName: p.display_name.toUpperCase(),
     providerService: p.service_category,
     providerLogo: p.logo_url ? { uri: p.logo_url } : require('../../assets/logos/styledbykathrine.png'),
@@ -148,8 +184,22 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     aboutText: p.about_text ?? '',
     gradient: (p.gradient && p.gradient.length >= 2
       ? p.gradient
-      : ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
+      : ['#AF9197', '#C4A8AD']) as [string, string, ...string[]],
+    hasCustomGradient: !!(p.gradient && p.gradient.length >= 2),
+    accentColor: p.accent_color ?? null,
+    backgroundImage: p.background_image_url ?? null,
     categories,
+    phone: p.phone ?? '',
+    email: p.email ?? '',
+    instagram: p.instagram ?? '',
+    website: p.website ?? '',
+    yearsExperience: p.years_experience ? String(p.years_experience) : '',
+    specialties: p.specialties?.map(s => s.specialty) ?? [],
+    customServiceType: p.custom_service_type ?? '',
+    whatsapp: p.whatsapp_number ?? '',
+    isVerified: p.is_verified ?? false,
+    preferredContactMethods: p.preferred_contact_methods ?? [],
+    bookingPolicies: p.booking_policies ?? null,
   };
 }
 
@@ -243,15 +293,113 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
   }
 );
 
+// 60px circle pill for multi-image services — tap opens modal, swipe pages through images
+const MultiImagePill: React.FC<{
+  images: any[];
+  onPress: (images: any[], index: number) => void;
+  imageStyle: any;
+  containerStyle: any;
+}> = React.memo(({ images, onPress, imageStyle, containerStyle }) => {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const w = imageStyle.width ?? 60;
+
+  return (
+    <View style={{ alignItems: 'center', marginRight: 15 }}>
+      <View style={containerStyle}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          bounces={false}
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          nestedScrollEnabled
+          onMomentumScrollEnd={(e) => {
+            setActiveIdx(Math.round(e.nativeEvent.contentOffset.x / w));
+          }}
+          style={{ width: w, height: imageStyle.height ?? 60 }}
+        >
+          {images.map((img, i) => (
+            <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => onPress(images, i)}>
+              <Image source={img} style={imageStyle} resizeMode="cover" />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+      {images.length > 1 && (
+        <View style={{ flexDirection: 'row', gap: 3, marginTop: 5 }}>
+          {images.map((_, i) => (
+            <View key={i} style={{
+              width: activeIdx === i ? 10 : 4,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: activeIdx === i ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.2)',
+            }} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+});
+
+// Full-width image carousel for services with multiple images
+const MultiImageCarousel: React.FC<{ images: any[] }> = React.memo(({ images }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [cardWidth, setCardWidth] = useState(screenWidth - 80);
+
+  return (
+    <View
+      onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}
+      style={{ borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }}
+    >
+      <FlatList
+        data={images}
+        horizontal
+        pagingEnabled
+        bounces={false}
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={(e) => {
+          if (cardWidth > 0) {
+            setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / cardWidth));
+          }
+        }}
+        keyExtractor={(_, i) => `mc-${i}`}
+        renderItem={({ item }) => (
+          <Image source={item} style={{ width: cardWidth, height: 180 }} resizeMode="cover" />
+        )}
+        style={{ height: 180 }}
+        nestedScrollEnabled
+      />
+      {images.length > 1 && (
+        <View style={{
+          position: 'absolute', bottom: 10, left: 0, right: 0,
+          flexDirection: 'row', justifyContent: 'center', gap: 6,
+        }}>
+          {images.map((_, i) => (
+            <View key={i} style={{
+              width: activeIndex === i ? 18 : 6,
+              height: 6, borderRadius: 3,
+              backgroundColor: activeIndex === i ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.5)',
+            }} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+});
+
 // Enhanced Tab Component with Animations and Visual Feedback - Properly Typed
 interface CategoryTabItemProps {
   category: string;
   isSelected: boolean;
   onPress: () => void;
+  useGlass?: boolean;
 }
 
 const CategoryTabItem: React.FC<CategoryTabItemProps> = React.memo(
-  ({ category, isSelected, onPress }) => {
+  ({ category, isSelected, onPress, useGlass = true }) => {
+    const { isDarkMode } = useTheme();
+    const TP = isDarkMode ? OD : OL;
     const animatedValue = useRef<Animated.Value>(new Animated.Value(0)).current;
     const pressAnimatedValue = useRef<Animated.Value>(new Animated.Value(1)).current;
 
@@ -285,45 +433,53 @@ const CategoryTabItem: React.FC<CategoryTabItemProps> = React.memo(
     }, [pressAnimatedValue, onPress]);
 
     const animatedStyle = useMemo(
-      () => ({
-        transform: [
-          {
-            translateY: animatedValue.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, 3],
-            }),
-          },
-          {
-            scale: pressAnimatedValue,
-          },
-        ],
-      }),
+      () => ({ transform: [{ scale: pressAnimatedValue }] }),
       [animatedValue, pressAnimatedValue]
     );
 
     return (
       <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={1}>
         <Animated.View style={animatedStyle}>
-          <View style={[styles.categoryTab, isSelected && styles.selectedCategoryTab]}>
-            <BlurView
-              intensity={isSelected ? 20 : 12}
-              tint="light"
-              style={[styles.categoryTabBlur, isSelected && styles.selectedCategoryTabBlur]}
-            >
-              <LinearGradient
-                colors={
-                  isSelected
-                    ? ['rgba(255,255,255,0.4)', 'rgba(255,255,255,0.2)']
-                    : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.tabGradientOverlay}
-              />
-              <Text style={[styles.categoryTabText, isSelected && styles.selectedCategoryTabText]}>
-                {category}
-              </Text>
-            </BlurView>
+          <View style={[
+            styles.categoryTab,
+            isSelected && styles.selectedCategoryTab,
+            !useGlass && { borderColor: isSelected ? TP.border : TP.sep },
+          ]}>
+            {useGlass ? (
+              <BlurView
+                intensity={isSelected ? 25 : 14}
+                tint={isDarkMode ? 'dark' : 'light'}
+                style={styles.categoryTabBlur}
+              >
+                {isSelected && (
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0.08)']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.tabGradientOverlay}
+                  />
+                )}
+                <Text style={[
+                  styles.categoryTabText,
+                  isSelected && styles.selectedCategoryTabText,
+                  { color: isSelected ? TP.accent : TP.sub },
+                ]}>
+                  {category}
+                </Text>
+              </BlurView>
+            ) : (
+              <View style={[styles.categoryTabBlur, {
+                backgroundColor: isSelected ? TP.accent + '18' : TP.surface,
+              }]}>
+                <Text style={[
+                  styles.categoryTabText,
+                  isSelected && styles.selectedCategoryTabText,
+                  { color: isSelected ? TP.accent : TP.sub },
+                ]}>
+                  {category}
+                </Text>
+              </View>
+            )}
           </View>
         </Animated.View>
       </TouchableOpacity>
@@ -510,7 +666,7 @@ interface AddOnsModalProps {
   service: ServiceData | null;
   onAddToCart: (
     service: ServiceData,
-    selectedAddOns: Array<{ id: number; name: string; price: number }>
+    selectedAddOns: Array<{ id: string | number; name: string; price: number }>
   ) => void;
   adaptiveAccentColor: string;
 }
@@ -518,7 +674,7 @@ interface AddOnsModalProps {
 const AddOnsModal: React.FC<AddOnsModalProps> = React.memo(
   ({ isVisible, onClose, service, onAddToCart, adaptiveAccentColor }) => {
     const [selectedAddOns, setSelectedAddOns] = useState<
-      Array<{ id: number; name: string; price: number }>
+      Array<{ id: string | number; name: string; price: number }>
     >([]);
 
     // Use service-specific add-ons only (no default fallback to generic ones)
@@ -527,7 +683,7 @@ const AddOnsModal: React.FC<AddOnsModalProps> = React.memo(
       [service]
     );
 
-    const toggleAddOn = useCallback((addOn: { id: number; name: string; price: number }) => {
+    const toggleAddOn = useCallback((addOn: { id: string | number; name: string; price: number }) => {
       setSelectedAddOns(prev => {
         const exists = prev.find(item => item.id === addOn.id);
         if (exists) {
@@ -670,7 +826,7 @@ interface ReviewsModalProps {
   isVisible: boolean;
   onClose: () => void;
   reviews: Array<{
-    id: number;
+    id: number | string;
     name: string;
     rating: number;
     comment: string;
@@ -698,11 +854,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
         presentationStyle="pageSheet"
         onRequestClose={onClose}
       >
-        <ImageBackground
-          source={require('../../assets/images/background.png')}
-          style={styles.modalBackground}
-          resizeMode="cover"
-        >
+        <View style={styles.modalBackground}>
           <LinearGradient
             colors={providerGradient}
             start={{ x: 0, y: 0 }}
@@ -771,7 +923,7 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
               ))}
             </ScrollView>
           </SafeAreaView>
-        </ImageBackground>
+        </View>
       </Modal>
     );
   }
@@ -842,6 +994,271 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
   }
 );
 
+// ── Design tokens (matches HomeScreen palette) ────────────────────────────────
+const OL = {
+  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
+  accent: '#AF9197', text: '#000000', sub: '#7E6667',
+  border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)',
+};
+const OD = {
+  bg: '#1A1815', surface: '#201D1A', card: '#252220',
+  accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667',
+  border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
+};
+
+// ── Offers Modal ─────────────────────────────────────────────────────────────
+interface OffersSidePanelProps {
+  isVisible: boolean;
+  onClose: () => void;
+  slideAnim: Animated.Value;
+  promotions: DbPromotion[];
+  providerName: string;
+  adaptiveAccentColor: string;
+}
+
+const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
+  ({ isVisible, onClose, slideAnim, promotions, providerName, adaptiveAccentColor }) => {
+    const { isDarkMode } = useTheme();
+    const OP = isDarkMode ? OD : OL;
+
+    const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+    const handleCopyCode = useCallback(async (code: string) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    }, []);
+
+    const formatDate = (iso: string) =>
+      new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    if (!isVisible) return null;
+
+    return (
+      <>
+        {/* Scrim behind the panel */}
+        <TouchableOpacity
+          style={styles.sidePanelBackdrop}
+          onPress={onClose}
+          activeOpacity={1}
+        />
+
+        {/* Sliding panel from the right */}
+        <Animated.View
+          style={[
+            styles.sidePanelContainer,
+            { backgroundColor: OP.bg, transform: [{ translateX: slideAnim }] },
+          ]}
+        >
+          <SafeAreaView style={{ flex: 1 }}>
+            {/* Header */}
+            <View style={[offersStyles.header, { borderBottomColor: OP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+              <View>
+                <Text style={[offersStyles.headerTitle, { color: OP.text }]}>OFFERS</Text>
+                <Text style={[offersStyles.headerSub, { color: OP.sub }]}>
+                  {providerName} — {promotions.length} active {promotions.length === 1 ? 'offer' : 'offers'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[offersStyles.closeButton, { backgroundColor: OP.surface, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth }]}
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Text style={[offersStyles.closeText, { color: OP.sub }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* List */}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={offersStyles.listContent}
+            >
+              {promotions.length === 0 ? (
+                <View style={[offersStyles.emptyCard, { backgroundColor: OP.card, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                  <Text style={[offersStyles.emptyText, { color: OP.sub }]}>No active offers right now</Text>
+                </View>
+              ) : (
+                promotions.map(promo => (
+                  <View key={promo.id} style={[offersStyles.offerCard, { backgroundColor: OP.card, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    {(promo.discount_text || promo.discount_percent || promo.discount_amount) && (
+                      <View style={[offersStyles.discountBadge, { backgroundColor: adaptiveAccentColor }]}>
+                        <Text style={offersStyles.discountText}>
+                          {promo.discount_text ||
+                            (promo.discount_percent ? `${promo.discount_percent}% OFF` : `£${promo.discount_amount} OFF`)}
+                        </Text>
+                      </View>
+                    )}
+
+                    <Text style={[offersStyles.offerTitle, { color: OP.text }]}>{promo.title}</Text>
+
+                    {promo.description ? (
+                      <Text style={[offersStyles.offerDescription, { color: OP.sub }]}>{promo.description}</Text>
+                    ) : null}
+
+                    {promo.service_category ? (
+                      <View style={[offersStyles.categoryChip, { backgroundColor: OP.surface, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                        <Text style={[offersStyles.categoryText, { color: OP.sub }]}>
+                          {promo.service_category}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    <Text style={[offersStyles.validity, { color: OP.sub }]}>
+                      Valid {formatDate(promo.valid_from)} – {formatDate(promo.valid_until)}
+                    </Text>
+
+                    {promo.promo_code ? (
+                      <TouchableOpacity
+                        style={[offersStyles.promoRow, { backgroundColor: OP.surface, borderColor: OP.border, borderWidth: StyleSheet.hairlineWidth }]}
+                        onPress={() => handleCopyCode(promo.promo_code!)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[offersStyles.promoLabel, { color: OP.sub }]}>CODE</Text>
+                        <Text style={[offersStyles.promoCode, { color: OP.text }]}>{promo.promo_code}</Text>
+                        <Text style={[offersStyles.promoCopy, { color: copiedCode === promo.promo_code ? adaptiveAccentColor : OP.sub }]}>
+                          {copiedCode === promo.promo_code ? 'COPIED' : 'COPY'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </Animated.View>
+      </>
+    );
+  }
+);
+
+const offersStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  headerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  headerSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  closeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 40,
+    gap: 10,
+  },
+  emptyCard: {
+    borderRadius: 14,
+    padding: 28,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    opacity: 0.6,
+  },
+  offerCard: {
+    borderRadius: 14,
+    padding: 16,
+  },
+  discountBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
+  },
+  discountText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  offerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  offerDescription: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+    opacity: 0.7,
+  },
+  categoryChip: {
+    alignSelf: 'flex-start',
+    borderRadius: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 8,
+  },
+  categoryText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 9,
+    letterSpacing: 0.3,
+    opacity: 0.7,
+  },
+  validity: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    marginBottom: 12,
+    opacity: 0.5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  promoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  promoLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1,
+    opacity: 0.5,
+  },
+  promoCode: {
+    flex: 1,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  promoCopy: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+});
+
 // ── Provider Profile Skeleton ────────────────────────────────────────────────
 function ProviderProfileSkeleton() {
   const { isDarkMode } = useTheme();
@@ -904,7 +1321,8 @@ function ProviderProfileSkeleton() {
 
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigation, route }) => {
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+  const OP = isDarkMode ? OD : OL;
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
@@ -914,6 +1332,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   // Provider state — seeded with local hardcoded data, overridden by Supabase if available
   const [provider, setProvider] = useState<ProviderData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [providerDbId, setProviderDbId] = useState<string | null>(null);
 
   const [reviews, setReviews] = useState<{ id: number | string; name: string; rating: number; comment: string; date: string }[]>([]);
 
@@ -925,6 +1344,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       .then(async data => {
         if (cancelled || !data) return;
         setProvider(mapDbProviderToProviderData(data));
+        setProviderDbId(data.id);
+
+        // Track profile view for personalization + analytics
+        userLearningService.trackInteraction({
+          type: 'view',
+          providerId: data.id,
+          providerName: data.display_name,
+          serviceCategory: data.service_category,
+          timestamp: new Date().toISOString(),
+        });
+        trackUserInteraction({
+          type: 'view',
+          providerId: data.id,
+          serviceCategory: data.service_category,
+        });
+
         // Fetch real reviews using the Supabase UUID
         try {
           const dbReviews = await getProviderReviews(data.id);
@@ -940,6 +1375,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
             })));
           }
         } catch { /* silent */ }
+
+        // Fetch active promotions
+        try {
+          const promos = await getProviderActivePromotions(data.id);
+          if (!cancelled) setPromotions(promos);
+        } catch { /* silent */ }
+
       })
       .catch(() => { /* provider not found — loading=false, provider remains null */ })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -962,13 +1404,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     );
   }, [provider]);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
   const [showFullAbout, setShowFullAbout] = useState(false);
+  const [infoTab, setInfoTab] = useState<'about' | 'policy'>('about');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string>('');
+  const [userWaitlistMap, setUserWaitlistMap] = useState<Record<string, WaitlistEntry>>({});
+  const [waitlistModal, setWaitlistModal] = useState<{ visible: boolean; service: ServiceData | null }>({ visible: false, service: null });
+  const [waitlistNotes, setWaitlistNotes] = useState('');
+  const [waitlistJoining, setWaitlistJoining] = useState(false);
+  const [waitlistError, setWaitlistError] = useState<string | null>(null);
+  const [leaveConfirmEntry, setLeaveConfirmEntry] = useState<WaitlistEntry | null>(null);
+  const [waitlistDateMode, setWaitlistDateMode] = useState<'anytime' | 'range'>('anytime');
+  const [waitlistDateFrom, setWaitlistDateFrom] = useState<Date | null>(null);
+  const [waitlistDateTo, setWaitlistDateTo] = useState<Date | null>(null);
+  const [showDatePickerFrom, setShowDatePickerFrom] = useState(false);
+  const [showDatePickerTo, setShowDatePickerTo] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
   const [showAddOnsModal, setShowAddOnsModal] = useState(false);
+  const [showOffersModal, setShowOffersModal] = useState(false);
+  const [promotions, setPromotions] = useState<DbPromotion[]>([]);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessageData, setSuccessMessageData] = useState<{
     title: string;
@@ -981,12 +1438,76 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(new Animated.Value(100)).current;
   const successAnimation = useRef<Animated.Value>(new Animated.Value(0)).current;
+  const offersTabSlide = useRef<Animated.Value>(new Animated.Value(80)).current;
+  const offersPanelSlide = useRef<Animated.Value>(new Animated.Value(SIDE_PANEL_W)).current;
 
-  // Get adaptive accent color for this provider - memoized
+  // Prefer DB-stored accent_color, fall back to gradient-derived, then app default
   const adaptiveAccentColor = useMemo(
-    () => getAdaptiveAccentColor(provider?.gradient ?? []),
-    [provider?.gradient]
+    () => provider?.accentColor
+      ?? (provider?.hasCustomGradient ? getAdaptiveAccentColor(provider.gradient) : OL.accent),
+    [provider?.accentColor, provider?.gradient, provider?.hasCustomGradient]
   );
+
+  // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat opaque fill
+  const cardBg = isDarkMode ? 'rgba(37,34,32,0.45)' : `${adaptiveAccentColor}14`;
+  const cardBlurTint = isDarkMode ? 'dark' : 'light';
+  const cardBlurIntensity = isDarkMode ? 35 : 25;
+
+  // Slide in the offers tab from the right when promotions are available
+  useEffect(() => {
+    if (promotions.length > 0) {
+      Animated.spring(offersTabSlide, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 60,
+        friction: 10,
+        delay: 600,
+      }).start();
+    } else {
+      offersTabSlide.setValue(80);
+    }
+  }, [promotions.length, offersTabSlide]);
+
+  // Load auth user + their waitlist entries for this provider
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      setCurrentUserId(user.id);
+      // Try to get display name from users table
+      supabase.from('users').select('display_name').eq('id', user.id).maybeSingle()
+        .then(({ data }) => { if (data?.display_name) setCurrentUserName(data.display_name); });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId || !providerDbId) return;
+    WaitlistService.getUserWaitlistEntries(currentUserId).then(entries => {
+      const map: Record<string, WaitlistEntry> = {};
+      entries.filter(e => e.provider_id === providerDbId).forEach(e => {
+        map[e.service_id ?? '__any__'] = e;
+      });
+      setUserWaitlistMap(map);
+    }).catch(() => {});
+  }, [currentUserId, providerDbId]);
+
+  const openOffersPanel = useCallback(() => {
+    setShowOffersModal(true);
+    Animated.spring(offersPanelSlide, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 55,
+      friction: 11,
+    }).start();
+  }, [offersPanelSlide]);
+
+  const closeOffersPanel = useCallback(() => {
+    Animated.spring(offersPanelSlide, {
+      toValue: SIDE_PANEL_W,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 12,
+    }).start(() => setShowOffersModal(false));
+  }, [offersPanelSlide]);
 
   // Show notification popup from right
   const showRightNotification = useCallback(() => {
@@ -1027,9 +1548,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   // Bookmark toggle handler - FIXED VERSION
   const { isBookmarked: isBookmarkedFn, addBookmark, removeBookmark } = useBookmarkStore();
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
+  const [expandedServices, setExpandedServices] = useState<Set<string | number>>(new Set());
+  const [serviceImageModal, setServiceImageModal] = useState<{ visible: boolean; images: any[]; currentIndex: number }>({ visible: false, images: [], currentIndex: 0 });
 
   // Get real-time bookmark status from store
-  const providerIsBookmarked = isBookmarkedFn(providerId);
+  const providerIsBookmarked = isBookmarkedFn(providerDbId ?? providerId);
 
  const handleBookmarkToggle = useCallback(async () => {
   if (isBookmarkLoading) return;
@@ -1039,7 +1562,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   
   try {
     if (providerIsBookmarked) {
-      await removeBookmark(providerId);
+      await removeBookmark(providerDbId ?? providerId);
       if (__DEV__) console.log('Bookmark removed:', providerId);
       setNotificationMessageType('bookmark'); // BOOKMARK MESSAGE TYPE
       
@@ -1064,7 +1587,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         setShowNotification(false);
       });
     } else {
-      await addBookmark(providerId);
+      await addBookmark(providerDbId ?? providerId);
       if (__DEV__) console.log('Provider bookmarked:', providerId);
       setNotificationMessageType('bookmark'); // BOOKMARK MESSAGE TYPE
       
@@ -1099,6 +1622,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
   // Share handler with native share options
   const handleShare = useCallback(async () => {
+    if (!provider) return;
     try {
       const shareOptions = {
         message: `Check out @${provider.providerName} - ${provider.providerService} services in ${provider.location}. Rated ${provider.rating}/5 stars!`,
@@ -1123,37 +1647,109 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     }
   }, [provider]);
 
-  // Email handler for Get In Touch button
-  const handleGetInTouch = useCallback(async () => {
-    const email = `contact@${provider.providerName.toLowerCase().replace(/\s+/g, '')}.com`;
-    const subject = `Inquiry about ${provider.providerService} services`;
-    const body = `Hi ${provider.providerName},\n\nI'm interested in your ${provider.providerService} services in ${provider.location}. Could you please provide more information about availability and booking?\n\nThank you!`;
+  const closeWaitlistModal = useCallback(() => {
+    setWaitlistModal({ visible: false, service: null });
+    setWaitlistNotes('');
+    setWaitlistDateMode('anytime');
+    setWaitlistDateFrom(null);
+    setWaitlistDateTo(null);
+    setShowDatePickerFrom(false);
+    setShowDatePickerTo(false);
+    setWaitlistError(null);
+  }, []);
 
-    const emailUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    try {
-      const supported = await Linking.canOpenURL(emailUrl);
-      if (supported) {
-        await Linking.openURL(emailUrl);
+  const handleOpenDatePicker = useCallback((which: 'from' | 'to') => {
+    if (Platform.OS === 'android') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
+      DateTimePickerAndroid.open({
+        value: (which === 'from' ? waitlistDateFrom : waitlistDateTo) ?? new Date(),
+        mode: 'date',
+        minimumDate: which === 'to' ? (waitlistDateFrom ?? new Date()) : new Date(),
+        onChange: (_: unknown, date?: Date) => {
+          if (date) { if (which === 'from') setWaitlistDateFrom(date); else setWaitlistDateTo(date); }
+        },
+      });
+    } else {
+      const alreadyOpen = showDatePickerFrom || showDatePickerTo;
+      setShowDatePickerFrom(false);
+      setShowDatePickerTo(false);
+      if (alreadyOpen) {
+        setTimeout(() => {
+          if (which === 'from') setShowDatePickerFrom(true);
+          else setShowDatePickerTo(true);
+        }, 200);
       } else {
-        Alert.alert(
-          'Contact Information',
-          `Please contact ${provider.providerName} directly:\n\nEmail: ${email}\nLocation: ${provider.location}`,
-          [
-            { text: 'Copy Email', onPress: () => { if (__DEV__) console.log('Email copied:', email); } },
-            { text: 'OK' },
-          ]
-        );
+        if (which === 'from') setShowDatePickerFrom(true);
+        else setShowDatePickerTo(true);
       }
-    } catch (error) {
-      console.error('Error opening email:', error);
-      Alert.alert(
-        'Contact Information',
-        `Please contact ${provider.providerName} directly:\n\nEmail: ${email}\nLocation: ${provider.location}`,
-        [{ text: 'OK' }]
-      );
     }
-  }, [provider]);
+  }, [waitlistDateFrom, waitlistDateTo, showDatePickerFrom, showDatePickerTo]);
+
+  const handleJoinWaitlist = useCallback(async () => {
+    if (!provider || !providerDbId || !currentUserId || !waitlistModal.service) return;
+    setWaitlistJoining(true);
+    try {
+      let preferredDates: string[] | undefined;
+      if (waitlistDateMode === 'range' && waitlistDateFrom) {
+        const fromStr = waitlistDateFrom.toISOString().split('T')[0]!;
+        preferredDates = waitlistDateTo
+          ? [fromStr, waitlistDateTo.toISOString().split('T')[0]!]
+          : [fromStr];
+      }
+      const entry = await WaitlistService.joinWaitlist({
+        providerId: providerDbId,
+        userId: currentUserId,
+        serviceId: waitlistModal.service.dbId,
+        serviceNameSnapshot: waitlistModal.service.name,
+        providerNameSnapshot: provider.displayName,
+        ...(currentUserName ? { userNameSnapshot: currentUserName } : {}),
+        ...(preferredDates ? { preferredDates } : {}),
+        ...(waitlistNotes.trim() ? { notes: waitlistNotes.trim() } : {}),
+      });
+      setUserWaitlistMap(prev => ({ ...prev, [entry.service_id ?? '__any__']: entry }));
+      closeWaitlistModal();
+    } catch (e: unknown) {
+      const msg = (e as { code?: string })?.code === '23505'
+        ? "You're already on this waitlist."
+        : "Couldn't save — check your connection and try again.";
+      setWaitlistError(msg);
+    }
+    setWaitlistJoining(false);
+  }, [provider, providerDbId, currentUserId, currentUserName, waitlistModal.service, waitlistNotes, waitlistDateMode, waitlistDateFrom, waitlistDateTo, closeWaitlistModal]);
+
+  const handleLeaveWaitlist = useCallback(async (entry: WaitlistEntry) => {
+    try {
+      await WaitlistService.leaveWaitlist(entry.id);
+      setUserWaitlistMap(prev => {
+        const next = { ...prev };
+        delete next[entry.service_id ?? '__any__'];
+        return next;
+      });
+    } catch {
+      Alert.alert('Error', 'Could not leave waitlist.');
+    }
+  }, []);
+
+  const handleConfirmLeave = useCallback(async () => {
+    if (!leaveConfirmEntry) return;
+    const entry = leaveConfirmEntry;
+    setLeaveConfirmEntry(null);
+    await handleLeaveWaitlist(entry);
+  }, [leaveConfirmEntry, handleLeaveWaitlist]);
+
+  // Get In Touch → opens in-app chat with this provider
+  const handleGetInTouch = useCallback(() => {
+    if (!provider || !providerDbId) {
+      Alert.alert('Not available', 'Provider details are still loading.');
+      return;
+    }
+    navigation.navigate('ProviderChat', {
+      providerId: provider.id,
+      providerDbId,
+      providerName: provider.displayName,
+    });
+  }, [provider, providerDbId, navigation]);
 
   // Configure the navigation header with your gradient and icons
   React.useLayoutEffect(() => {
@@ -1235,11 +1831,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     setIsScrolled(offsetY > 100);
   }, []);
 
-  const toggleFollow = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsFollowing(!isFollowing);
-  }, [isFollowing]);
-
   // Show success message with animation
   const showSuccessMessageWithAnimation = useCallback(
     (title: string, message: string, type: 'cart' | 'checkout') => {
@@ -1275,11 +1866,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   const handleQuickBook = useCallback(
     (service: ServiceData) => {
       if (__DEV__) console.log('Quick Book - Redirecting to checkout:', service.name);
+      if (!provider) return;
 
       try {
         // Create cart item for immediate checkout
         const cartItem = {
           providerName: provider.providerName,
+          providerDisplayName: provider.displayName,
+          providerSlug: provider.id,
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
@@ -1332,8 +1926,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   }, []);
 
   const handleAddToCartWithAddOns = useCallback(
-    (service: ServiceData, selectedAddOns: Array<{ id: number; name: string; price: number }>) => {
+    (service: ServiceData, selectedAddOns: Array<{ id: string | number; name: string; price: number }>) => {
       if (__DEV__) console.log('Book with Add-ons - Adding to cart:', service.name, selectedAddOns);
+      if (!provider) return;
 
       try {
         const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0);
@@ -1342,6 +1937,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         // FIXED: Create cart item with proper structure
         const cartItem = {
           providerName: provider.providerName,
+          providerDisplayName: provider.displayName,
+          providerSlug: provider.id,
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
@@ -1414,8 +2011,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     // Show skeleton while loading, error text only when not found
     if (!loading && !provider) {
       return (
-        <View style={styles.loading}>
-          <Text>Provider not found</Text>
+        <View style={[styles.loading, { backgroundColor: OP.bg }]}>
+          <Text style={{ color: OP.sub, fontFamily: 'Jura-VariableFont_wght' }}>Provider not found</Text>
         </View>
       );
     }
@@ -1425,13 +2022,30 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   return (
     <SafeAreaProvider>
       <ThemedBackground>
-        {/* Main gradient that matches header gradient start */}
-        <LinearGradient
-          colors={provider.gradient} // Full gradient progression for main content
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.gradientOverlay}
-        />
+        {/* Custom background — image takes priority over gradient; both fade into app bg */}
+        {(provider.backgroundImage || provider.hasCustomGradient) && (
+          provider.backgroundImage ? (
+            <>
+              <Image
+                source={{ uri: provider.backgroundImage }}
+                style={[styles.heroGradient, { opacity: 0.88 }]}
+                resizeMode="cover"
+              />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.18)', 'transparent', OP.bg]}
+                locations={[0, 0.45, 1]}
+                style={styles.heroGradient}
+              />
+            </>
+          ) : (
+            <LinearGradient
+              colors={[...provider.gradient, OP.bg]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.heroGradient}
+            />
+          )
+        )}
 
         <StatusBar barStyle={theme.statusBar} translucent={true} backgroundColor="transparent" />
 
@@ -1477,6 +2091,285 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           providerGradient={provider?.gradient ?? ['#FF6B6B', '#4ECDC4']}
         />
 
+        {/* Offers side panel */}
+        <OffersSidePanel
+          isVisible={showOffersModal}
+          onClose={closeOffersPanel}
+          slideAnim={offersPanelSlide}
+          promotions={promotions}
+          providerName={provider?.providerName ?? ''}
+          adaptiveAccentColor={adaptiveAccentColor}
+        />
+
+        {/* Fullscreen service image carousel modal */}
+        <Modal
+          visible={serviceImageModal.visible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setServiceImageModal({ visible: false, images: [], currentIndex: 0 })}
+        >
+          <View style={styles.imageModalOverlay}>
+            <TouchableOpacity
+              style={[StyleSheet.absoluteFill, { zIndex: 0 }]}
+              activeOpacity={1}
+              onPress={() => setServiceImageModal({ visible: false, images: [], currentIndex: 0 })}
+            />
+            {serviceImageModal.images.length > 0 && (
+              <FlatList
+                data={serviceImageModal.images}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={serviceImageModal.currentIndex}
+                getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+                keyExtractor={(_, i) => `modal-img-${i}`}
+                renderItem={({ item }) => (
+                  <Image
+                    source={item}
+                    style={{ width: screenWidth, height: screenWidth * 1.15 }}
+                    resizeMode="contain"
+                  />
+                )}
+                style={{ width: screenWidth, flexGrow: 0, zIndex: 1 }}
+              />
+            )}
+            <TouchableOpacity
+              style={styles.imageModalClose}
+              onPress={() => setServiceImageModal({ visible: false, images: [], currentIndex: 0 })}
+            >
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+
+        {/* Waitlist Join Modal — centered popup */}
+        <Modal
+          visible={waitlistModal.visible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeWaitlistModal}
+        >
+          <View style={styles.waitlistPopupBackdrop}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeWaitlistModal} />
+            <View style={[styles.waitlistPopupCard, { backgroundColor: OP.bg, borderColor: OP.border }]}>
+
+              {/* Header row */}
+              <View style={styles.waitlistPopupHeader}>
+                <View style={[styles.waitlistPopupIconWrap, { backgroundColor: adaptiveAccentColor + '18' }]}>
+                  <Ionicons name="time-outline" size={20} color={adaptiveAccentColor} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.waitlistPopupTitle, { color: OP.text }]}>Join Waitlist</Text>
+                  {waitlistModal.service && (
+                    <Text style={[styles.waitlistPopupService, { color: adaptiveAccentColor }]} numberOfLines={1}>
+                      {waitlistModal.service.name}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={closeWaitlistModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.6}>
+                  <Ionicons name="close" size={20} color={OP.sub} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.waitlistPopupSub, { color: OP.sub }]}>
+                We'll notify you when a slot opens up.
+              </Text>
+
+              {/* Availability toggle */}
+              <Text style={[styles.waitlistPopupLabel, { color: OP.sub }]}>AVAILABILITY</Text>
+              <View style={[styles.waitlistSegment, { backgroundColor: OP.surface, borderColor: OP.border }]}>
+                <TouchableOpacity
+                  style={[styles.waitlistSegmentBtn, waitlistDateMode === 'anytime' && { backgroundColor: adaptiveAccentColor }]}
+                  onPress={() => setWaitlistDateMode('anytime')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.waitlistSegmentText, { color: waitlistDateMode === 'anytime' ? '#fff' : OP.sub }]}>Anytime</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.waitlistSegmentBtn, waitlistDateMode === 'range' && { backgroundColor: adaptiveAccentColor }]}
+                  onPress={() => setWaitlistDateMode('range')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.waitlistSegmentText, { color: waitlistDateMode === 'range' ? '#fff' : OP.sub }]}>Date Range</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Date range rows */}
+              {waitlistDateMode === 'range' && (
+                <View style={[styles.waitlistDateBlock, { borderColor: OP.border }]}>
+                  <TouchableOpacity
+                    style={[styles.waitlistDateRow, { borderBottomColor: OP.sep }]}
+                    onPress={() => handleOpenDatePicker('from')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={15} color={OP.sub} />
+                    <Text style={[styles.waitlistDateLabel, { color: OP.sub }]}>From</Text>
+                    <Text style={[styles.waitlistDateValue, { color: waitlistDateFrom ? OP.text : OP.sub, opacity: waitlistDateFrom ? 1 : 0.5 }]}>
+                      {waitlistDateFrom ? waitlistDateFrom.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Select date'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={13} color={OP.sub} style={{ opacity: 0.4 }} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.waitlistDateRow}
+                    onPress={() => handleOpenDatePicker('to')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="calendar-outline" size={15} color={OP.sub} />
+                    <Text style={[styles.waitlistDateLabel, { color: OP.sub }]}>To</Text>
+                    <Text style={[styles.waitlistDateValue, { color: waitlistDateTo ? OP.text : OP.sub, opacity: waitlistDateTo ? 1 : 0.5 }]}>
+                      {waitlistDateTo ? waitlistDateTo.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Select date'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={13} color={OP.sub} style={{ opacity: 0.4 }} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* iOS inline date pickers — onChange only updates value, Done button closes */}
+              {Platform.OS === 'ios' && showDatePickerFrom && waitlistDateMode === 'range' && (
+                <View>
+                  <TouchableOpacity
+                    style={[styles.waitlistPickerDone, { borderBottomColor: OP.border }]}
+                    onPress={() => setShowDatePickerFrom(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.waitlistPickerDoneText, { color: adaptiveAccentColor }]}>Done</Text>
+                  </TouchableOpacity>
+                  <DateTimePicker
+                    value={waitlistDateFrom ?? new Date()}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={new Date()}
+                    onChange={(_, date) => { if (date) setWaitlistDateFrom(date); }}
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                  />
+                </View>
+              )}
+              {Platform.OS === 'ios' && showDatePickerTo && waitlistDateMode === 'range' && (
+                <View>
+                  <TouchableOpacity
+                    style={[styles.waitlistPickerDone, { borderBottomColor: OP.border }]}
+                    onPress={() => setShowDatePickerTo(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.waitlistPickerDoneText, { color: adaptiveAccentColor }]}>Done</Text>
+                  </TouchableOpacity>
+                  <DateTimePicker
+                    value={waitlistDateTo ?? (waitlistDateFrom ? new Date(waitlistDateFrom.getTime() + 7 * 86400000) : new Date())}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={waitlistDateFrom ?? new Date()}
+                    onChange={(_, date) => { if (date) setWaitlistDateTo(date); }}
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                  />
+                </View>
+              )}
+
+              {/* Notes */}
+              <Text style={[styles.waitlistPopupLabel, { color: OP.sub, marginTop: 16 }]}>NOTES (OPTIONAL)</Text>
+              <TextInput
+                style={[styles.waitlistNotesField, { color: OP.text, backgroundColor: OP.surface, borderColor: OP.border }]}
+                value={waitlistNotes}
+                onChangeText={setWaitlistNotes}
+                placeholder="Any preferences for the provider..."
+                placeholderTextColor={OP.sub}
+                multiline
+                maxLength={280}
+              />
+
+              {waitlistError && (
+                <Text style={[styles.waitlistErrorText, { color: '#FF3B30' }]}>{waitlistError}</Text>
+              )}
+
+              {/* Action buttons */}
+              <View style={styles.waitlistPopupActions}>
+                <TouchableOpacity
+                  style={[styles.waitlistPopupCancelBtn, { borderColor: OP.border }]}
+                  onPress={closeWaitlistModal}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.waitlistPopupCancelText, { color: OP.sub }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.waitlistPopupConfirmBtn, { backgroundColor: adaptiveAccentColor, opacity: waitlistJoining ? 0.6 : 1 }]}
+                  onPress={handleJoinWaitlist}
+                  disabled={waitlistJoining}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.waitlistJoinConfirmText}>{waitlistJoining ? 'Joining...' : 'Join Waitlist'}</Text>
+                </TouchableOpacity>
+              </View>
+
+            </View>
+          </View>
+        </Modal>
+
+        {/* Waitlist Leave Confirmation Modal */}
+        <Modal
+          visible={leaveConfirmEntry !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLeaveConfirmEntry(null)}
+        >
+          <View style={styles.waitlistPopupBackdrop}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setLeaveConfirmEntry(null)} />
+            <View style={[styles.leavePopupCard, { backgroundColor: OP.bg, borderColor: OP.border }]}>
+              <View style={[styles.leavePopupIconWrap, { backgroundColor: '#FF950018' }]}>
+                <Ionicons name="exit-outline" size={22} color="#FF9500" />
+              </View>
+              <Text style={[styles.leavePopupTitle, { color: OP.text }]}>Leave Waitlist?</Text>
+              {leaveConfirmEntry && (
+                <Text style={[styles.leavePopupService, { color: adaptiveAccentColor }]} numberOfLines={1}>
+                  {leaveConfirmEntry.service_name_snapshot}
+                </Text>
+              )}
+              <Text style={[styles.leavePopupBody, { color: OP.sub }]}>
+                You'll lose your place in the queue and won't be notified when a slot opens up.
+              </Text>
+              <View style={styles.waitlistPopupActions}>
+                <TouchableOpacity
+                  style={[styles.waitlistPopupCancelBtn, { borderColor: OP.border }]}
+                  onPress={() => setLeaveConfirmEntry(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.waitlistPopupCancelText, { color: OP.sub }]}>Keep my spot</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.leavePopupLeaveBtn}
+                  onPress={handleConfirmLeave}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.leavePopupLeaveText}>Leave</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Floating offers pull-out tab — fixed to right edge, slides in when deals are available */}
+        {promotions.length > 0 && (
+          <Animated.View style={[styles.offersFloatTab, { transform: [{ translateX: offersTabSlide }] }]}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                openOffersPanel();
+              }}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={provider.hasCustomGradient
+                  ? [provider.gradient[0], provider.gradient[1] ?? provider.gradient[0]]
+                  : [adaptiveAccentColor, adaptiveAccentColor + 'CC']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.offersFloatTabGradient}
+              >
+                <Text style={styles.offersFloatCount}>{promotions.length}</Text>
+                <Text style={styles.offersFloatLabel}>OFFERS</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
         <SafeAreaView style={styles.safeArea} edges={['bottom']}>
           <ScrollView
             style={styles.content}
@@ -1501,101 +2394,169 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
               </View>
             </View>
 
-            {/* Provider Info */}
+            {/* Provider Info — editorial strip */}
             <View style={styles.providerInfoCenter}>
-              <Text style={styles.providerNameLarge}>@{provider.providerName}</Text>
-
-              <View style={styles.ratingContainer}>
-                <View style={styles.stars}>
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <StarIcon key={star} size={16} color="#FFD700" />
-                  ))}
-                </View>
-                <Text style={styles.ratingText}>{provider.rating}</Text>
+              {/* Name + verified */}
+              <View style={styles.providerNameRow}>
+                <Text style={[styles.providerDisplayName, { color: OP.text }]}>
+                  {provider.displayName}
+                </Text>
+                {provider.isVerified && (
+                  <Ionicons name="checkmark-circle" size={18} color="#007AFF" />
+                )}
               </View>
 
-              <View style={styles.serviceTag}>
-                <BlurView intensity={15} tint="light" style={styles.serviceTagBlur}>
-                  <Text style={styles.serviceText}>{provider.providerService}</Text>
-                </BlurView>
+              {/* SERVICE TYPE · LOCATION in small caps */}
+              <Text style={[styles.providerMeta, { color: OP.sub }]}>
+                {(provider.providerService === 'OTHER'
+                  ? provider.customServiceType || 'SERVICE'
+                  : provider.providerService
+                ).toUpperCase()}
+                {provider.location ? ` · ${provider.location.toUpperCase()}` : ''}
+              </Text>
+
+              {/* Rating inline */}
+              <View style={styles.ratingRow}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <StarIcon key={star} size={12} color="#FFD700" />
+                ))}
+                <Text style={[styles.ratingInline, { color: OP.text }]}>{provider.rating}</Text>
               </View>
 
-              <Text style={styles.locationText}>📍 {provider.location}</Text>
+              {/* Years experience (optional) */}
+              {provider.yearsExperience ? (
+                <Text style={[styles.yearsExp, { color: OP.sub }]}>
+                  {provider.yearsExperience} years experience
+                </Text>
+              ) : null}
 
-              {/* Slots Section with Bell Inside */}
-              <View style={styles.serviceTag}>
-                <BlurView intensity={15} tint="light" style={styles.serviceTagBlur}>
-                  <View style={styles.slotsContent}>
-                    <Text style={styles.slotsText}>{provider.slotsText}</Text>
-                    <TouchableOpacity
-                      style={styles.bellButtonInline}
-                      onPress={handleNotificationToggle}
-                      activeOpacity={0.8}
-                    >
-                      <BellIcon size={18} color={isNotificationsEnabled ? '#4CAF50' : '#666'} />
-                    </TouchableOpacity>
-                  </View>
-                </BlurView>
-              </View>
-
-              {/* Enhanced Follow Button */}
-              <TouchableOpacity
-                style={styles.followButton}
-                onPress={toggleFollow}
-                activeOpacity={0.8}
-              >
-                <BlurView intensity={12} tint="light" style={styles.followButtonBlur}>
-                  <LinearGradient
-                    colors={
-                      isFollowing
-                        ? ['rgba(76, 175, 80, 0.2)', 'rgba(76, 175, 80, 0.05)']
-                        : ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.followButtonGradient}
-                  />
-                  <Text
-                    style={[styles.followButtonText, isFollowing && styles.followingButtonText]}
+              {/* Slots + bell */}
+              {provider.slotsText ? (
+                <View style={[styles.slotsRow, { backgroundColor: OP.surface, borderColor: OP.border }]}>
+                  <Text style={[styles.slotsText, { color: OP.text }]}>{provider.slotsText}</Text>
+                  <TouchableOpacity
+                    style={styles.bellButtonInline}
+                    onPress={handleNotificationToggle}
+                    activeOpacity={0.8}
                   >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </Text>
-                </BlurView>
-              </TouchableOpacity>
+                    <BellIcon size={16} color={isNotificationsEnabled ? '#4CAF50' : OP.sub} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
 
-            {/* About Section with glass styling */}
-            <BlurView intensity={50} tint="light" style={styles.aboutCard}>
+            {/* About / Policy tabbed card */}
+            <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.aboutCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
               <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
+                colors={(isDarkMode ? ['rgba(255,255,255,0.08)', 'transparent'] : ['rgba(255,255,255,0.3)', 'transparent']) as [string, string]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.03)'] as [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardShadow}
-              />
-              <Text style={styles.sectionTitle}>Relevant Information</Text>
-              <Text style={styles.aboutText}>
-                {showFullAbout ? provider.aboutText : `${provider.aboutText.substring(0, 150)}...`}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowFullAbout(!showFullAbout)}
-                style={styles.moreButton}
-                activeOpacity={0.6}
-              >
-                <Text style={[styles.moreButtonText, { color: adaptiveAccentColor }]}>
-                  {showFullAbout ? 'Show Less' : 'More'}
-                </Text>
-              </TouchableOpacity>
+              {/* Tab switcher — only show if there are policy rows */}
+              {provider.bookingPolicies && (() => {
+                const bp = provider.bookingPolicies!;
+                const hasPolicyRows =
+                  (bp.depositRequired && !!bp.depositAmount) ||
+                  (!!bp.cancelNotice && bp.cancelNotice !== 'none') ||
+                  !!(bp.rescheduleNotice || bp.maxReschedules) ||
+                  (!!bp.noShowAction && bp.noShowAction !== 'none');
+                if (!hasPolicyRows) return null;
+                return (
+                  <View style={[styles.infoTabRow, { borderBottomColor: OP.border }]}>
+                    <TouchableOpacity
+                      style={[styles.infoTab, infoTab === 'about' && { borderBottomColor: adaptiveAccentColor, borderBottomWidth: 2 }]}
+                      onPress={() => setInfoTab('about')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.infoTabText, { color: infoTab === 'about' ? adaptiveAccentColor : OP.sub }]}>About</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.infoTab, infoTab === 'policy' && { borderBottomColor: adaptiveAccentColor, borderBottomWidth: 2 }]}
+                      onPress={() => setInfoTab('policy')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.infoTabText, { color: infoTab === 'policy' ? adaptiveAccentColor : OP.sub }]}>Policy</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })()}
+
+              {infoTab === 'about' ? (
+                <>
+                  {!provider.bookingPolicies && (
+                    <Text style={[styles.sectionTitle, { color: OP.text }]}>Relevant Information</Text>
+                  )}
+                  <Text style={[styles.aboutText, { color: OP.sub }]}>
+                    {showFullAbout ? provider.aboutText : `${provider.aboutText.substring(0, 150)}...`}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowFullAbout(!showFullAbout)}
+                    style={styles.moreButton}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={[styles.moreButtonText, { color: OP.accent }]}>
+                      {showFullAbout ? 'Show Less' : 'More'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                /* Policy tab content */
+                (() => {
+                  const bp = provider.bookingPolicies!;
+                  const rows: { icon: string; label: string; value: string }[] = [];
+                  if (bp.depositRequired && bp.depositAmount) {
+                    rows.push({ icon: '💳', label: 'Deposit', value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required` });
+                  }
+                  if (bp.cancelNotice && bp.cancelNotice !== 'none') {
+                    rows.push({ icon: '⏱', label: 'Cancellation', value: `${bp.cancelNotice} notice${bp.cancelPenalty && bp.cancelPenalty !== 'none' ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}` : ''}` });
+                  }
+                  if (bp.rescheduleNotice || bp.maxReschedules) {
+                    const parts = [];
+                    if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
+                    if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
+                    if (parts.length > 0) rows.push({ icon: '🔄', label: 'Reschedule', value: parts.join(' · ') });
+                  }
+                  if (bp.noShowAction && bp.noShowAction !== 'none') {
+                    rows.push({ icon: '🚫', label: 'No-show', value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge' });
+                  }
+                  if (bp.cancelNote) {
+                    rows.push({ icon: 'ℹ️', label: 'Note', value: bp.cancelNote });
+                  }
+                  return (
+                    <View style={{ paddingTop: 8 }}>
+                      {rows.map((row, i) => (
+                        <View key={i} style={[styles.policyRow, i < rows.length - 1 && { borderBottomColor: OP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                          <Text style={styles.policyIcon}>{row.icon}</Text>
+                          <View style={styles.policyRowText}>
+                            <Text style={[styles.policyLabel, { color: OP.sub }]}>{row.label}</Text>
+                            <Text style={[styles.policyValue, { color: OP.text }]}>{row.value}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()
+              )}
             </BlurView>
+
+            {/* Specialties / Tags */}
+            {provider.specialties.length > 0 && (
+              <View style={styles.specialtiesSection}>
+                <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>Specialties</Text>
+                <View style={styles.specialtiesRow}>
+                  {provider.specialties.map((s, i) => (
+                    <View key={i} style={[styles.specialtyChip, { borderColor: OP.accent + '55', backgroundColor: OP.accent + '18' }]}>
+                      <Text style={[styles.specialtyChipText, { color: OP.accent }]}>{s}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Services Section */}
             <View style={styles.servicesSection}>
-              <Text style={styles.sectionTitleNoCard}>Services</Text>
+              <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>Services</Text>
 
               {/* Enhanced Category Tabs */}
               <FlatList
@@ -1605,9 +2566,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     category={category}
                     isSelected={selectedCategory === category}
                     onPress={() => setSelectedCategory(category)}
+                    useGlass={provider.hasCustomGradient}
                   />
                 )}
-                keyExtractor={item => item}
+                keyExtractor={(item, index) => `cat-${item}-${index}`}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.categoryTabs}
@@ -1615,108 +2577,146 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                 nestedScrollEnabled={true}
               />
 
-              {/* Services List with Updated Buttons */}
+              {/* Services List */}
               <View style={styles.categoryServicesContainer}>
                 {provider.categories[selectedCategory]?.map(service => (
-                  <View key={service.id} style={styles.serviceItemCard}>
-                    <BlurView intensity={50} tint="light" style={styles.serviceCardBlur}>
-                      <LinearGradient
-                        colors={
-                          ['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]
-                        }
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 0, y: 1 }}
-                        style={styles.cardHighlight}
-                      />
+                  <BlurView key={service.id} intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.serviceItemCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                    <View style={styles.serviceCardBlur}>
                       <View style={styles.serviceItem}>
-                        <View style={styles.serviceImageContainer}>
-                          {service.images && service.images.length > 1 ? (
-                            <ServiceImageCarousel images={service.images} size={60} />
-                          ) : (
-                            <>
-                              <Image
-                                source={service.image}
-                                style={styles.serviceImage}
-                                resizeMode="cover"
+                        {(() => {
+                          const isMulti = (service.images?.length ?? 0) > 1;
+                          const hasSingle = (service.images?.length ?? 0) === 1;
+                          const hasLocal = !!service.image;
+
+                          if (isMulti) {
+                            return (
+                              <MultiImagePill
+                                images={service.images!}
+                                onPress={(imgs, idx) => setServiceImageModal({ visible: true, images: imgs, currentIndex: idx })}
+                                imageStyle={styles.serviceImage}
+                                containerStyle={[styles.serviceImageContainer, { marginRight: 0 }]}
                               />
-                              <LinearGradient
-                                colors={getServiceGradient(service.image)}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 0, y: 1 }}
-                                style={styles.serviceImageOverlay}
-                              />
-                            </>
-                          )}
-                        </View>
+                            );
+                          }
+
+                          if (!hasSingle && !hasLocal) return null;
+                          const imgSrc = hasSingle ? service.images![0] : service.image;
+                          return (
+                            <TouchableOpacity
+                              activeOpacity={0.85}
+                              onPress={() => {
+                                if (imgSrc) {
+                                  const imgs = service.images?.length ? service.images : [imgSrc];
+                                  setServiceImageModal({ visible: true, images: imgs, currentIndex: 0 });
+                                }
+                              }}
+                            >
+                              <View style={styles.serviceImageContainer}>
+                                <Image source={imgSrc} style={styles.serviceImage} resizeMode="cover" />
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })()}
+
                         <View style={styles.serviceInfo}>
-                          <Text style={styles.serviceName}>{service.name}</Text>
-                          <Text style={styles.serviceDescription}>{service.description}</Text>
+                          <Text style={[styles.serviceName, { color: OP.text }]}>{service.name}</Text>
+                          <Text
+                            style={[styles.serviceDescription, { color: OP.sub }]}
+                            numberOfLines={expandedServices.has(service.id) ? undefined : 2}
+                          >
+                            {service.description}
+                          </Text>
+                          {(service.description?.length ?? 0) > 80 && (
+                            <TouchableOpacity
+                              onPress={() => setExpandedServices(prev => {
+                                const next = new Set(prev);
+                                next.has(service.id) ? next.delete(service.id) : next.add(service.id);
+                                return next;
+                              })}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.seeMoreText, { color: OP.accent }]}>
+                                {expandedServices.has(service.id) ? 'See less' : 'See more'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                           <View style={styles.serviceDetails}>
-                            <Text style={styles.serviceDuration}>{service.duration}</Text>
-                            <Text style={[styles.servicePrice, { color: adaptiveAccentColor }]}>
+                            <Text style={[styles.serviceDuration, { color: OP.sub }]}>{service.duration}</Text>
+                            <Text style={[styles.servicePrice, { color: OP.accent }]}>
                               £{service.price}
                             </Text>
                           </View>
                         </View>
 
-                        <TouchableOpacity
-                          style={styles.bookButton}
-                          onPress={() => handleBook(service)}
-                          activeOpacity={0.8}
-                        >
-                          <BlurView intensity={14} tint="light" style={styles.actionButtonBlur}>
-                            <LinearGradient
-                              colors={[
-                                'rgba(255,255,255,0.4)',
-                                'rgba(255,255,255,0.1)',
-                                'transparent',
-                              ]}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={styles.buttonReflection}
-                            />
-                            <Text style={styles.bookButtonText}>Book</Text>
-                          </BlurView>
-                        </TouchableOpacity>
+                        {/* Book + Waitlist stacked column */}
+                        <View style={styles.serviceActionColumn}>
+                          <TouchableOpacity
+                            style={[styles.bookButton, { backgroundColor: OP.accent }]}
+                            onPress={() => handleBook(service)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.bookButtonText, { color: '#fff' }]}>Book</Text>
+                          </TouchableOpacity>
+
+                          {(() => {
+                            const wEntry = userWaitlistMap[service.dbId];
+                            if (wEntry) {
+                              return (
+                                <View style={[styles.waitlistChip, {
+                                  borderColor: wEntry.status === 'notified' ? adaptiveAccentColor + '70' : '#FF9500' + '70',
+                                  backgroundColor: wEntry.status === 'notified' ? adaptiveAccentColor + '0D' : '#FF950010',
+                                }]}>
+                                  <Text style={[styles.waitlistChipText, { color: wEntry.status === 'notified' ? adaptiveAccentColor : '#FF9500' }]}>
+                                    {wEntry.status === 'notified' ? 'Waitlisted' : 'Waiting'}
+                                  </Text>
+                                  <TouchableOpacity
+                                    onPress={() => setLeaveConfirmEntry(wEntry)}
+                                    activeOpacity={0.6}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Text style={[styles.waitlistChipX, { color: wEntry.status === 'notified' ? adaptiveAccentColor : '#FF9500' }]}>✕</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              );
+                            }
+                            return (
+                              <TouchableOpacity
+                                style={[styles.waitlistJoinBtn, { borderColor: adaptiveAccentColor + '70', backgroundColor: adaptiveAccentColor + '0D' }]}
+                                onPress={() => { setWaitlistNotes(''); setWaitlistModal({ visible: true, service }); }}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={[styles.waitlistJoinText, { color: adaptiveAccentColor }]}>Waitlist</Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
+                        </View>
                       </View>
-                    </BlurView>
-                  </View>
+                    </View>
+                  </BlurView>
                 ))}
               </View>
             </View>
 
-            {/* Reviews Section with glass styling */}
-            <BlurView intensity={50} tint="light" style={styles.reviewsCard}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.03)'] as [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardShadow}
-              />
-              <Text style={styles.sectionTitle}>Reviews</Text>
-              {reviews.map(review => (
-                <View key={review.id} style={styles.reviewItem}>
+            {/* Reviews Section */}
+            <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.reviewsCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+              <Text style={[styles.sectionTitle, { color: OP.text }]}>Reviews</Text>
+              {reviews.slice(0, 5).map(review => (
+                <View key={review.id} style={[styles.reviewItem, { borderBottomColor: OP.sep }]}>
                   <View style={styles.reviewHeader}>
-                    <Text style={styles.reviewerName}>{review.name}</Text>
+                    <Text style={[styles.reviewerName, { color: OP.text }]}>{review.name}</Text>
                     <View style={styles.reviewRating}>
                       {[1, 2, 3, 4, 5].map(star => (
                         <TabIcon
                           key={star}
                           name="star"
                           size={12}
-                          color={star <= review.rating ? '#FFD700' : 'rgba(0,0,0,0.2)'}
+                          color={star <= review.rating ? '#FFD700' : OP.border}
                         />
                       ))}
                     </View>
-                    <Text style={styles.reviewDate}>{review.date}</Text>
+                    <Text style={[styles.reviewDate, { color: OP.sub }]}>{review.date}</Text>
                   </View>
-                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                  <Text style={[styles.reviewComment, { color: OP.sub }]}>{review.comment}</Text>
                 </View>
               ))}
 
@@ -1725,37 +2725,116 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                 onPress={() => setShowReviewsModal(true)}
                 activeOpacity={0.6}
               >
-                <Text style={[styles.seeAllText, { color: adaptiveAccentColor }]}>
+                <Text style={[styles.seeAllText, { color: OP.accent }]}>
                   See All Reviews
                 </Text>
               </TouchableOpacity>
             </BlurView>
 
-            {/* Contact Information with glass styling */}
-            <BlurView intensity={50} tint="light" style={styles.contactCard}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.03)'] as [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardShadow}
-              />
-              <Text style={styles.sectionTitle}>Contact Information</Text>
-              <Text style={styles.contactText}>Location: {provider.location}</Text>
-              <Text style={styles.contactText}>Service: {provider.providerService}</Text>
+            {/* Booking Policy card — only shown when policies are set */}
+            {provider.bookingPolicies && (() => {
+              const bp = provider.bookingPolicies!;
+              const rows: { icon: string; label: string; value: string }[] = [];
+              if (bp.depositRequired && bp.depositAmount) {
+                rows.push({ icon: '💳', label: 'Deposit', value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required` });
+              }
+              if (bp.cancelNotice && bp.cancelNotice !== 'none') {
+                rows.push({ icon: '⏱', label: 'Cancellation', value: `${bp.cancelNotice} notice${bp.cancelPenalty && bp.cancelPenalty !== 'none' ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}` : ''}` });
+              }
+              if (bp.rescheduleNotice || bp.maxReschedules) {
+                const parts = [];
+                if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
+                if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
+                if (parts.length > 0) rows.push({ icon: '🔄', label: 'Reschedule', value: parts.join(' · ') });
+              }
+              if (bp.noShowAction && bp.noShowAction !== 'none') {
+                rows.push({ icon: '🚫', label: 'No-show', value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge' });
+              }
+              if (rows.length === 0) return null;
+              return (
+                <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.policyCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                  <Text style={[styles.sectionTitle, { color: OP.text }]}>Booking Policy</Text>
+                  {rows.map((row, i) => (
+                    <View key={i} style={[styles.policyRow, i < rows.length - 1 && { borderBottomColor: OP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+                      <Text style={styles.policyIcon}>{row.icon}</Text>
+                      <View style={styles.policyRowText}>
+                        <Text style={[styles.policyLabel, { color: OP.sub }]}>{row.label}</Text>
+                        <Text style={[styles.policyValue, { color: OP.text }]}>{row.value}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </BlurView>
+              );
+            })()}
+
+            {/* Contact */}
+            <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.contactCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+              <Text style={[styles.sectionTitle, { color: OP.text }]}>Contact</Text>
+
+              {provider.location ? (
+                <View style={[styles.contactRow, { borderBottomColor: OP.sep }]}>
+                  <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Location</Text>
+                  <Text style={[styles.contactRowText, { color: OP.text }]} numberOfLines={1}>{provider.location}</Text>
+                </View>
+              ) : null}
+
+              {provider.phone ? (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderBottomColor: OP.sep }]}
+                  onPress={() => Linking.openURL(`sms:${provider.phone.replace(/\s/g, '')}`)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Phone</Text>
+                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Message ›</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {provider.whatsapp ? (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderBottomColor: OP.sep }]}
+                  onPress={() => Linking.openURL(`https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, '')}`)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.contactRowLabel, { color: OP.sub }]}>WhatsApp</Text>
+                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Open ›</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {provider.email ? (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderBottomColor: OP.sep }]}
+                  onPress={() => Linking.openURL(`mailto:${provider.email}`)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Email</Text>
+                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Send ›</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {provider.instagram ? (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderBottomColor: OP.sep }]}
+                  onPress={() => Linking.openURL(`https://instagram.com/${provider.instagram}`)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Instagram</Text>
+                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]} numberOfLines={1}>@{provider.instagram} ›</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {provider.website ? (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderBottomColor: OP.sep }]}
+                  onPress={() => Linking.openURL(provider.website)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Website</Text>
+                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Visit ›</Text>
+                </TouchableOpacity>
+              ) : null}
+
               <TouchableOpacity
-                style={[
-                  styles.contactButton,
-                  {
-                    backgroundColor: adaptiveAccentColor,
-                    shadowColor: adaptiveAccentColor,
-                  },
-                ]}
+                style={[styles.contactButton, { backgroundColor: adaptiveAccentColor }]}
                 onPress={handleGetInTouch}
                 activeOpacity={0.8}
               >
@@ -1772,15 +2851,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    backgroundColor: '#F5E6FA',
   },
-  gradientOverlay: {
+  heroGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    opacity: 0.85, // Slightly more opaque for better seamless transition
   },
   safeArea: {
     flex: 1,
@@ -1855,7 +2932,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5E6FA',
   },
   logoContainer: {
     alignItems: 'center',
@@ -1891,6 +2967,99 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
     paddingHorizontal: 20,
+  },
+  providerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  providerDisplayName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 26,
+    textAlign: 'center',
+  },
+  providerHandle: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    marginBottom: 14,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  providerMeta: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    marginBottom: 10,
+    opacity: 0.75,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    marginBottom: 8,
+  },
+  ratingInline: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  yearsExp: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 10,
+    opacity: 0.6,
+    letterSpacing: 0.4,
+  },
+  infoTabRow: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 12,
+    marginHorizontal: -4,
+  },
+  infoTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  infoTabText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  infoTagRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  infoTagPill: {
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  infoTagText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  slotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 4,
   },
   providerNameLarge: {
     fontFamily: 'BakbakOne-Regular',
@@ -2041,43 +3210,6 @@ const styles = StyleSheet.create({
   },
 
 
-  // Enhanced Follow Button
-  followButton: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    marginTop: 5, // Reduced from 10 to close the gap
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: 'rgba(0,0,0,0.1)',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  followButtonBlur: {
-    paddingVertical: 10,
-    paddingHorizontal: 28,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  followButtonGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  followButtonText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    color: '#000',
-    fontWeight: 'bold',
-    letterSpacing: 0.3,
-    zIndex: 1,
-  },
-  followingButtonText: {
-    color: '#4CAF50',
-  },
 
   // Enhanced 3D Glass Effects
   cardHighlight: {
@@ -2101,28 +3233,33 @@ const styles = StyleSheet.create({
 
   aboutCard: {
     padding: 20,
-    borderRadius: 30,
+    borderRadius: 18,
     marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 9,
+    elevation: 3,
+  },
+  cardHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
   },
   sectionTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    color: '#000',
     marginBottom: 15,
   },
   aboutText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    color: '#000',
     lineHeight: 20,
     marginBottom: 10,
   },
@@ -2137,13 +3274,31 @@ const styles = StyleSheet.create({
   },
 
   // Services Section
+  specialtiesSection: {
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  specialtiesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  specialtyChip: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  specialtyChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   servicesSection: {
     marginBottom: 20,
   },
   sectionTitleNoCard: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    color: '#000',
     marginBottom: 15,
     paddingHorizontal: 20,
   },
@@ -2163,31 +3318,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     overflow: 'hidden',
     minWidth: 80,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.25)',
-    shadowColor: 'rgba(0,0,0,0.08)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
   },
   selectedCategoryTab: {
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: 'rgba(0,0,0,0.12)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: 'rgba(255,255,255,0.45)',
   },
   categoryTabBlur: {
     paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingVertical: 11,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    position: 'relative',
   },
-  selectedCategoryTabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
+  selectedCategoryTabBlur: {},
   tabGradientOverlay: {
     position: 'absolute',
     top: 0,
@@ -2198,14 +3341,11 @@ const styles = StyleSheet.create({
   categoryTabText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
-    color: '#000',
     textAlign: 'center',
     fontWeight: '600',
   },
   selectedCategoryTabText: {
-    color: '#000',
     fontWeight: 'bold',
-    opacity: 0.9,
   },
 
   categoryServicesContainer: {
@@ -2213,17 +3353,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   serviceItemCard: {
-    borderRadius: 25,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    marginBottom: 15,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 9,
+    elevation: 3,
+    marginBottom: 12,
   },
   serviceCardBlur: {
     flex: 1,
@@ -2261,14 +3399,40 @@ const styles = StyleSheet.create({
   serviceName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#000',
     marginBottom: 5,
   },
   serviceDescription: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.85)',
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  seeMoreText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  imageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageModalClose: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageModalFull: {
+    width: '100%',
+    height: '80%',
   },
   serviceDetails: {
     flexDirection: 'row',
@@ -2278,7 +3442,6 @@ const styles = StyleSheet.create({
   serviceDuration: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: 'rgba(0, 0, 0, 0.8)',
   },
   servicePrice: {
     fontFamily: 'BakbakOne-Regular',
@@ -2310,22 +3473,16 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
   },
   bookButton: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    shadowColor: 'rgba(0,0,0,0.12)',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bookButtonText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 10,
-    color: '#000',
+    fontSize: 12,
     fontWeight: 'bold',
-    zIndex: 1,
   },
   quickBookButton: {
     borderRadius: 18,
@@ -2350,23 +3507,20 @@ const styles = StyleSheet.create({
   // Reviews Section
   reviewsCard: {
     padding: 20,
-    borderRadius: 25,
+    borderRadius: 18,
     marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 9,
+    elevation: 3,
   },
   reviewItem: {
     marginBottom: 15,
     paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   reviewHeader: {
     flexDirection: 'row',
@@ -2377,7 +3531,6 @@ const styles = StyleSheet.create({
   reviewerName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: '#000',
   },
   reviewRating: {
     flexDirection: 'row',
@@ -2386,13 +3539,11 @@ const styles = StyleSheet.create({
   reviewDate: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
-    color: 'rgba(0, 0, 0, 0.7)',
     marginLeft: 'auto',
   },
   reviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: '#000',
     lineHeight: 18,
   },
   seeAllButton: {
@@ -2407,43 +3558,99 @@ const styles = StyleSheet.create({
   },
 
   // Contact Section
+  policyCard: {
+    padding: 20,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 9,
+    elevation: 3,
+    marginBottom: 16,
+  },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 14,
+  },
+  policyRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  policyIcon: {
+    fontSize: 20,
+    width: 28,
+    textAlign: 'center',
+  },
+  policyRowText: {
+    flex: 1,
+  },
+  policyLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  policyValue: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   contactCard: {
     padding: 20,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 9,
+    elevation: 3,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 4,
+  },
+  contactRowLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  contactRowText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+    paddingLeft: 16,
+  },
+  contactRowAction: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
   },
   contactText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: '#000',
     marginBottom: 8,
   },
   contactButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 60, // Much wider
-    borderRadius: 25,
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
-    alignSelf: 'center',
-    marginTop: 15,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-    minWidth: 220, // Wider minimum width
-    maxWidth: 280, // Wider maximum width
-    // backgroundColor and shadowColor will be set dynamically using adaptiveAccentColor
+    marginTop: 16,
   },
   contactButtonText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
+    fontSize: 13,
+    letterSpacing: 0.5,
     color: '#fff',
   },
 
@@ -2807,6 +4014,205 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#fff',
     fontWeight: 'bold',
+  },
+
+  // ── Floating Offers Pull-Out Tab ────────────────────────────────────────────
+  offersFloatTab: {
+    position: 'absolute',
+    right: 0,
+    top: 220,
+    zIndex: 200,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: -3, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  offersFloatTabGradient: {
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 14,
+    paddingRight: 10,
+    alignItems: 'center',
+    minWidth: 54,
+  },
+  offersFloatCount: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    lineHeight: 22,
+  },
+  offersFloatLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: 1.2,
+    marginTop: 2,
+  },
+
+  // ── Offers Side Panel ───────────────────────────────────────────────────────
+  sidePanelBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    zIndex: 300,
+  },
+  sidePanelContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: SIDE_PANEL_W,
+    zIndex: 301,
+    shadowColor: '#000',
+    shadowOffset: { width: -4, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 24,
+  },
+
+  // Waitlist — service card
+  serviceActionColumn: { alignItems: 'center', gap: 6 },
+  waitlistJoinBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waitlistJoinText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, fontWeight: 'bold' },
+  waitlistChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  waitlistChipText: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.3 },
+  waitlistChipX: { fontFamily: 'BakbakOne-Regular', fontSize: 11, opacity: 0.7 },
+  waitlistRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  waitlistBadge: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  waitlistBadgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 0.3 },
+  waitlistLeaveText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, opacity: 0.6 },
+
+  // Waitlist — centered popup modal
+  waitlistPopupBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+  waitlistPopupCard: {
+    width: '100%',
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  waitlistPopupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  waitlistPopupIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  waitlistPopupTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17 },
+  waitlistPopupService: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 1 },
+  waitlistPopupSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 16, opacity: 0.7 },
+  waitlistPopupLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
+  waitlistSegment: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 3, marginBottom: 14 },
+  waitlistSegmentBtn: { flex: 1, borderRadius: 9, paddingVertical: 9, alignItems: 'center' },
+  waitlistSegmentText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.3 },
+  waitlistDateBlock: { borderRadius: 14, borderWidth: 1, marginBottom: 2, overflow: 'hidden' },
+  waitlistDateRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
+  waitlistDateLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, width: 32, letterSpacing: 0.3 },
+  waitlistDateValue: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13 },
+  waitlistPickerDone: { alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  waitlistPickerDoneText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3 },
+  waitlistNotesField: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    minHeight: 72,
+    textAlignVertical: 'top',
+    marginBottom: 18,
+  },
+  waitlistErrorText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginBottom: 10, textAlign: 'center' },
+  waitlistPopupActions: { flexDirection: 'row', gap: 10 },
+  waitlistPopupCancelBtn: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 13, alignItems: 'center' },
+  waitlistPopupCancelText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.3 },
+  waitlistPopupConfirmBtn: { flex: 1.6, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
+  waitlistJoinConfirmText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: '#fff', letterSpacing: 0.4 },
+
+  // Leave waitlist confirmation popup
+  leavePopupCard: {
+    width: '100%',
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  leavePopupIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  leavePopupTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    letterSpacing: 0.2,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  leavePopupService: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.3,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  leavePopupBody: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    opacity: 0.75,
+    marginBottom: 22,
+    paddingHorizontal: 6,
+  },
+  leavePopupLeaveBtn: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+  },
+  leavePopupLeaveText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: '#fff',
+    letterSpacing: 0.4,
   },
 });
 

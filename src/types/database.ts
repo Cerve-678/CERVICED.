@@ -25,7 +25,9 @@ export type NotificationType =
   | 'booking_cancelled'  | 'booking_reminder'   | 'booking_in_progress'
   | 'no_show'            | 'payment_success'    | 'new_provider'
   | 'reschedule_request' | 'reschedule_response'| 'reschedule_confirmed'
-  | 'review_request'     | 'review_received'    | 'promotion';
+  | 'review_request'     | 'review_received'    | 'promotion'
+  | 'provider_message'   | 'balance_collected'
+  | 'waitlist_slot_available';
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -73,14 +75,48 @@ export interface DbProvider {
   logo_url: string | null;
   gradient: string[] | null;
   accent_color: string | null;
+  background_image_url: string | null;
   phone: string | null;
   email: string | null;
+  instagram: string | null;
+  website: string | null;
+  preferred_contact_methods: string[] | null;
+  whatsapp_number: string | null;
   rating: number;
   review_count: number;
   years_experience: number | null;
   is_active: boolean;
   is_featured: boolean;
   is_verified: boolean;
+  booking_policies: {
+    cancelNotice?: string;
+    cancelPenalty?: string;
+    cancelNote?: string;
+    rescheduleNotice?: string;
+    maxReschedules?: string;
+    rescheduleNote?: string;
+    depositRequired?: boolean;
+    depositType?: string;
+    depositAmount?: string;
+    depositNote?: string;
+    noShowAction?: string;
+    noShowNote?: string;
+  } | null;
+  business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  full_address: string | null;
+  address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
+  // Discoverability — power search, Becca, and personalised feeds
+  style_tags: string[] | null;
+  occasion_tags: string[] | null;
+  expertise_tags: string[] | null;
+  technique_tags: string[] | null;
+  inclusive_flags: string[] | null;
+  price_tier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  auto_accept_bookings: boolean;
+  booking_window_days: number;
+  slot_interval_mins: number;
+  buffer_mins: number;
+  min_booking_notice_hrs: number;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +139,20 @@ export interface DbService {
   is_active: boolean;
   sort_order: number;
   created_at: string;
+  // Discoverability tags — feed search, Becca, and user learning
+  tags: string[] | null;
+  technique_tags: string[] | null;
+  outcome_tags: string[] | null;
+  occasion_tags: string[] | null;
+  trend_names: string[] | null;
+  // Safety & suitability
+  is_pregnancy_safe: boolean;
+  patch_test_required: boolean;
+  min_age: number | null;
+  contraindications: string[] | null;
+  // Context
+  aftercare_notes: string | null;
+  service_type: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | null;
 }
 
 export interface DbServiceImage {
@@ -149,6 +199,12 @@ export interface DbPortfolioItem {
   aspect_ratio: number;
   is_featured: boolean;
   created_at: string;
+  // Enriched discovery tags — personalised Explore feed
+  vibe_tags: string[] | null;
+  occasion_tags: string[] | null;
+  trend_names: string[] | null;
+  hair_type_shown: string | null;
+  skin_tone_shown: 'fair' | 'light' | 'medium' | 'tan' | 'deep' | 'rich' | null;
 }
 
 export interface DbBooking {
@@ -185,6 +241,12 @@ export interface DbBooking {
   customer_email: string | null;
   customer_phone: string | null;
   confirmed_at: string | null;
+  address_released_at: string | null;
+  client_address: string | null;
+  // Client intent — feeds search personalisation and Becca context
+  occasion_type: 'wedding' | 'prom' | 'photoshoot' | 'date-night' | 'birthday' | 'festival' | 'everyday' | 'other' | null;
+  style_request: string | null;
+  reference_image_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -254,10 +316,31 @@ export interface DbPromotion {
   discount_percent: number | null;
   discount_amount: number | null;
   service_category: string | null;
+  service_ids: string[] | null;
+  promo_code: string | null;
   valid_from: string;
   valid_until: string;
   is_active: boolean;
+  image_url: string | null;
+  scheduled_notify_at: string | null;
+  notify_sent_at: string | null;
   created_at: string;
+}
+
+export interface ClienteleMember {
+  user_id: string;
+  customer_name: string;
+  customer_email: string;
+  booking_count: number;
+  last_booking_date: string;
+  total_spent: number;
+}
+
+export interface DbPromotionWithProvider extends DbPromotion {
+  providers?: {
+    display_name: string | null;
+    logo_url: string | null;
+  } | null;
 }
 
 export interface DbEventPlan {

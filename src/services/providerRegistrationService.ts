@@ -20,6 +20,17 @@ export interface ServiceData {
   description: string;
   images: string[];
   addOns: AddOnData[];
+  tags: string[];
+  techniqueTags: string[];
+  outcomeTags: string[];
+  occasionTags: string[];
+  trendNames: string[];
+  isPregnancySafe: boolean;
+  patchTestRequired: boolean;
+  minAge: number | null;
+  contraindications: string[];
+  aftercareNotes: string;
+  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | '';
 }
 
 export interface ProviderRegistrationData {
@@ -33,6 +44,16 @@ export interface ProviderRegistrationData {
   accentColor: string;
   logo: string | null;
   categories: Record<string, ServiceData[]>;
+  // Contact info displayed to clients
+  phone: string;
+  email: string;
+  instagram: string;
+  website: string;
+  yearsExperience: string;
+  // Address privacy
+  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
+  fullAddress: string;
+  addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -151,6 +172,11 @@ export async function saveProviderToSupabase(
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
+        phone: data.phone || null,
+        email: data.email || null,
+        instagram: data.instagram || null,
+        website: data.website || null,
+        years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         is_active: true,
       })
       .eq('id', existingProvider.id);
@@ -180,6 +206,11 @@ export async function saveProviderToSupabase(
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
+        phone: data.phone || null,
+        email: data.email || null,
+        instagram: data.instagram || null,
+        website: data.website || null,
+        years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         is_active: true,
       })
       .select('id')
@@ -211,6 +242,17 @@ export async function saveProviderToSupabase(
           duration_minutes: parseDurationToMinutes(svc.duration),
           is_active: true,
           sort_order: sortOrder,
+          tags: svc.tags?.length ? svc.tags : null,
+          technique_tags: svc.techniqueTags?.length ? svc.techniqueTags : null,
+          outcome_tags: svc.outcomeTags?.length ? svc.outcomeTags : null,
+          occasion_tags: svc.occasionTags?.length ? svc.occasionTags : null,
+          trend_names: svc.trendNames?.length ? svc.trendNames : null,
+          is_pregnancy_safe: svc.isPregnancySafe ?? false,
+          patch_test_required: svc.patchTestRequired ?? false,
+          min_age: svc.minAge ?? null,
+          contraindications: svc.contraindications?.length ? svc.contraindications : null,
+          aftercare_notes: svc.aftercareNotes || null,
+          service_type: svc.serviceType || null,
         })
         .select('id')
         .single();
@@ -283,6 +325,17 @@ export async function loadProviderFromSupabase(
       price,
       duration_minutes,
       sort_order,
+      tags,
+      technique_tags,
+      outcome_tags,
+      occasion_tags,
+      trend_names,
+      is_pregnancy_safe,
+      patch_test_required,
+      min_age,
+      contraindications,
+      aftercare_notes,
+      service_type,
       service_images ( url, sort_order ),
       service_add_ons ( name, price )
     `)
@@ -322,8 +375,21 @@ export async function loadProviderFromSupabase(
       description: svc.description || '',
       images,
       addOns,
+      tags: svc.tags || [],
+      techniqueTags: svc.technique_tags || [],
+      outcomeTags: svc.outcome_tags || [],
+      occasionTags: svc.occasion_tags || [],
+      trendNames: svc.trend_names || [],
+      isPregnancySafe: svc.is_pregnancy_safe ?? false,
+      patchTestRequired: svc.patch_test_required ?? false,
+      minAge: svc.min_age ?? null,
+      contraindications: svc.contraindications || [],
+      aftercareNotes: svc.aftercare_notes || '',
+      serviceType: svc.service_type || '',
     });
   }
+
+  const cached = await getCachedProviderData().catch(() => null);
 
   return {
     providerName: provider.display_name,
@@ -336,7 +402,49 @@ export async function loadProviderFromSupabase(
     accentColor: provider.accent_color || '#7B1FA2',
     logo: provider.logo_url || null,
     categories,
+    phone: provider.phone || '',
+    email: provider.email || '',
+    instagram: provider.instagram || cached?.instagram || '',
+    website: provider.website || cached?.website || '',
+    yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
+    businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
+    fullAddress: provider.full_address || '',
+    addressReleasePolicy: (provider.address_release_policy as ProviderRegistrationData['addressReleasePolicy']) || 'on_confirmation',
   };
+}
+
+// ── Booking policies — saved to Supabase booking_policies column ─────────────
+
+export async function saveProviderPolicies(userId: string, policies: Record<string, unknown>): Promise<void> {
+  const { data: existing } = await supabase
+    .from('providers')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (!existing) return;
+  await supabase
+    .from('providers')
+    .update({ booking_policies: policies })
+    .eq('id', existing.id);
+  // Keep local copy in sync
+  await AsyncStorage.setItem(`provider_policies_${userId}`, JSON.stringify(policies));
+}
+
+export async function loadProviderPolicies(userId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const { data } = await supabase
+      .from('providers')
+      .select('booking_policies')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if ((data as any)?.booking_policies) return (data as any).booking_policies;
+  } catch {}
+  // Fallback to local cache
+  try {
+    const raw = await AsyncStorage.getItem(`provider_policies_${userId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
 }
 
 // ── AsyncStorage cache helpers ───────────────────────────────────────────────

@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ExploreScreen from '../../screens/ExploreScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
+import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import SearchScreen from '../../screens/SearchScreen';
 import BookmarkedProvidersScreen from '../../screens/BookmarkedProvidersScreen';
 import CartScreen from '../../screens/CartScreen';
@@ -23,6 +24,12 @@ export default function ExploreNavigator() {
         options={{ headerShown: false }}
       />
       
+      <ExploreStack.Screen
+        name="ProviderChat"
+        component={ProviderChatScreen}
+        options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+      />
+
       {/* PUSH NAVIGATION for Provider Profile */}
       <ExploreStack.Screen
         name="ProviderProfile"
@@ -90,7 +97,7 @@ export default function ExploreNavigator() {
           name="Search"
           component={SearchScreen}
           options={{
-            title: 'Search & Filter',
+            title: 'Search Cervices',
           }}
         />
         <ExploreStack.Screen

@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePlannerStore, suggestChecklistItems, PlanTask, ChecklistItem } from '../stores/usePlannerStore';
-import { getPortfolioItemById } from '../data/portfolioFeed';
 import { EventTimelineCard } from '../components/EventTimelineCard';
 import { ThemedBackground } from '../components/ThemedBackground';
 import TabIcon from '../components/TabIcon';
@@ -61,7 +60,7 @@ const EventDetailScreen = () => {
   const [showSuggestions, setShowSuggestions] = useState(true);
 
   const daysUntil = event ? getDaysUntil(event.date) : 0;
-  const goalImage = event?.goalImageId ? getPortfolioItemById(event.goalImageId) : null;
+  const goalImageUri = event?.goalImageUri ?? null;
 
   const sortedTasks = useMemo(() => {
     if (!event) return [];
@@ -86,15 +85,10 @@ const EventDetailScreen = () => {
 
   const handleBookNow = useCallback((task: PlanTask) => {
     if (task.providerId) {
-      const portfolioItem = getPortfolioItemById(task.portfolioItemId);
-      const provider = portfolioItem ? require('../data/portfolioFeed').getProviderForItem(portfolioItem) : null;
-      if (provider) {
-        navigation.navigate('ProviderProfile', {
-          providerLogo: provider.logo,
-          providerName: provider.name,
-          providerService: provider.service,
-        });
-      }
+      navigation.navigate('ProviderProfile', {
+        providerId: task.providerId,
+        source: 'plans',
+      });
     }
   }, [navigation]);
 
@@ -178,19 +172,19 @@ const EventDetailScreen = () => {
       >
         {/* Hero section */}
         <View style={styles.heroSection}>
-          {goalImage && (
+          {goalImageUri && (
             <Image
-              source={goalImage.image}
+              source={{ uri: goalImageUri }}
               style={styles.goalImage}
               resizeMode="cover"
             />
           )}
 
-          <View style={[styles.heroOverlay, !goalImage && { paddingTop: spacing.lg }]}>
-            <Text style={[styles.eventName, { color: goalImage ? '#FFFFFF' : theme.text }]}>
+          <View style={[styles.heroOverlay, !goalImageUri && { paddingTop: spacing.lg }]}>
+            <Text style={[styles.eventName, { color: goalImageUri ? '#FFFFFF' : theme.text }]}>
               {event.name}
             </Text>
-            <Text style={[styles.eventDate, { color: goalImage ? 'rgba(255,255,255,0.85)' : theme.secondaryText }]}>
+            <Text style={[styles.eventDate, { color: goalImageUri ? 'rgba(255,255,255,0.85)' : theme.secondaryText }]}>
               {formatEventDate(event.date)}
             </Text>
           </View>
@@ -199,7 +193,7 @@ const EventDetailScreen = () => {
         {/* Countdown */}
         <View style={[styles.countdownCard, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
           <View style={styles.countdownContent}>
-            <Text style={[styles.countdownNumber, { color: daysUntil <= 7 ? '#FF6B6B' : '#a342c3ff' }]}>
+            <Text style={[styles.countdownNumber, { color: daysUntil <= 7 ? '#FF6B6B' : '#AF9197' }]}>
               {daysUntil > 0 ? daysUntil : 0}
             </Text>
             <Text style={[styles.countdownLabel, { color: theme.secondaryText }]}>
@@ -219,7 +213,7 @@ const EventDetailScreen = () => {
                     styles.progressFill,
                     {
                       width: totalTasks > 0 ? `${(completedTasks / totalTasks) * 100}%` : '0%',
-                      backgroundColor: '#a342c3ff',
+                      backgroundColor: '#AF9197',
                     },
                   ]}
                 />
@@ -358,8 +352,8 @@ const EventDetailScreen = () => {
                     style={[
                       styles.suggestionChip,
                       {
-                        backgroundColor: isDarkMode ? 'rgba(163,66,195,0.1)' : '#F5E6FA',
-                        borderColor: isDarkMode ? 'rgba(163,66,195,0.2)' : '#E8D0F0',
+                        backgroundColor: isDarkMode ? 'rgba(175,145,151,0.1)' : 'rgba(175,145,151,0.08)',
+                        borderColor: isDarkMode ? 'rgba(175,145,151,0.2)' : 'rgba(175,145,151,0.2)',
                       },
                     ]}
                     onPress={() => handleAddSuggestion(suggestion)}
@@ -577,7 +571,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   addButtonText: {
-    color: '#a342c3ff',
+    color: '#AF9197',
     fontWeight: '700',
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: fonts.body.medium,
@@ -615,7 +609,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     fontSize: 11,
-    color: '#a342c3ff',
+    color: '#AF9197',
     fontWeight: '600',
     fontFamily: 'Jura-VariableFont_wght',
   },
