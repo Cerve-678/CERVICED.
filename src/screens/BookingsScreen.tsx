@@ -116,11 +116,17 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 };
 
 function resolveServiceCategory(serviceName: string, defaultCategory: string): string {
+  // Prefer the provider's actual registered category when we have one — only
+  // fall back to guessing from the service name for legacy bookings saved
+  // before service_category_snapshot existed.
+  if (defaultCategory && defaultCategory.trim()) {
+    return defaultCategory.toUpperCase();
+  }
   const lower = (serviceName || '').toLowerCase();
   for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     if (keywords.some(kw => lower.includes(kw))) return cat;
   }
-  return (defaultCategory || 'OTHER').toUpperCase();
+  return 'OTHER';
 }
 
 // ✅ Generate dynamic future dates based on ACTUAL calendar months
@@ -2992,8 +2998,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       ) : (() => {
                                         // Non-mobile: check real release state
                                         const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
+                                        const apptMs = selectedBooking.bookingDate && selectedBooking.bookingTime
+                                          ? new Date(`${selectedBooking.bookingDate}T${selectedBooking.bookingTime}`).getTime()
+                                          : null;
+                                        const hoursUntilAppt = apptMs ? (apptMs - Date.now()) / 3_600_000 : null;
+                                        const policyHoursMap: Record<string, number> = {
+                                          day_before: 24, two_days_before: 48, three_days_before: 72,
+                                          five_days_before: 120, week_before: 168,
+                                        };
+                                        const policyHrs = policy ? policyHoursMap[policy] : null;
+                                        const timeBasedReleased = policyHrs !== null && hoursUntilAppt !== null && hoursUntilAppt <= policyHrs;
                                         const isReleased = !!selectedBooking.addressReleasedAt
                                           || policy === 'always'
+                                          || timeBasedReleased
                                           || (policy === 'on_confirmation' && (
                                             selectedBooking.status === BookingStatus.UPCOMING ||
                                             selectedBooking.status === BookingStatus.IN_PROGRESS
