@@ -8,7 +8,11 @@ ALTER TABLE public.providers
   ADD COLUMN IF NOT EXISTS full_address TEXT,
   ADD COLUMN IF NOT EXISTS address_release_policy TEXT
     DEFAULT 'on_confirmation'
-    CHECK (address_release_policy IN ('always','on_confirmation','day_before','manual'));
+    CHECK (address_release_policy IN (
+      'always','on_confirmation','day_before',
+      'two_days_before','three_days_before','five_days_before','week_before',
+      'manual'
+    ));
 
 ALTER TABLE public.bookings
   ADD COLUMN IF NOT EXISTS address_released_at TIMESTAMPTZ;

@@ -34,7 +34,7 @@ import { useFont } from '../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, ProviderContactInfo, getProviderAddressSettingsByDisplayName, ProviderAddressSettings } from '../services/databaseService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, ProviderContactInfo, getProviderAddressSettingsByDisplayName, ProviderAddressSettings, getProviderCancellationPolicy } from '../services/databaseService';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -826,6 +826,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
   const [selectedBookingAddrSettings, setSelectedBookingAddrSettings] = useState<ProviderAddressSettings | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
+  const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   // ✅ Track rated bookings and tips
@@ -948,16 +949,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setBookingIntakeForm(null);
     setSelectedBookingAddrSettings(null);
     setAddrCountdown('');
+    setCancellationNoticeHrs(0);
     setModalVisible(true);
     getIntakeFormByBooking(booking.id)
       .then(f => setBookingIntakeForm(f))
       .catch(() => {});
-    // Fetch provider address settings so we can show correct release info
     if (!booking.clientAddress) {
       getProviderAddressSettingsByDisplayName(booking.providerName)
         .then(s => setSelectedBookingAddrSettings(s))
         .catch(() => {});
     }
+    getProviderCancellationPolicy(booking.providerName)
+      .then(hrs => setCancellationNoticeHrs(hrs))
+      .catch(() => {});
   }, []);
 
   // ✅ REMOVED: Duplicate reschedule logic - now using canReschedule from BookingContext
@@ -1096,6 +1100,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleCancelBooking = useCallback(async () => {
     if (!selectedBooking) return;
 
+    // Enforce provider's cancellation notice window
+    if (cancellationNoticeHrs > 0 && selectedBooking.bookingDate && selectedBooking.bookingTime) {
+      const appointmentMs = new Date(`${selectedBooking.bookingDate}T${selectedBooking.bookingTime}`).getTime();
+      const hoursUntil = (appointmentMs - Date.now()) / 3_600_000;
+      if (hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs) {
+        Alert.alert(
+          'Cancellation Not Allowed',
+          `This provider requires ${cancellationNoticeHrs} hours' notice to cancel. Please contact them directly.`,
+        );
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const bookingId = selectedBooking.id;
@@ -1119,7 +1136,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBooking, cancelBooking]);
+  }, [selectedBooking, cancelBooking, cancellationNoticeHrs]);
 
   const handleRescheduleRequest = useCallback(() => {
     if (!selectedBooking) return;

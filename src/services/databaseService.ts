@@ -1292,6 +1292,28 @@ export async function updateProviderScheduleSettings(
   if (error) throw error;
 }
 
+/** Persist cancellation notice hours to providers table (0 = anytime). */
+export async function updateProviderCancellationPolicy(
+  providerId: string,
+  noticeHours: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update({ cancellation_notice_hours: noticeHours })
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+/** Fetch a provider's cancellation notice window by display name. Returns 0 (anytime) on error. */
+export async function getProviderCancellationPolicy(displayName: string): Promise<number> {
+  const { data } = await supabase
+    .from('providers')
+    .select('cancellation_notice_hours')
+    .eq('display_name', displayName)
+    .maybeSingle();
+  return (data as any)?.cancellation_notice_hours ?? 0;
+}
+
 export async function upsertProviderAvailability(
   providerId: string,
   dayOfWeek: number,
@@ -1774,7 +1796,7 @@ export async function getMobileProviderDisplayNames(displayNames: string[]): Pro
 export interface ProviderAddressSettings {
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   full_address: string | null;
-  address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'manual' | null;
+  address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
 }
 
 /** Fetch a provider's address/business-type settings by provider UUID. */

@@ -16,6 +16,7 @@ import {
   updateProviderAutoAccept,
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
+  updateProviderCancellationPolicy,
   getMyProviderProfile,
 } from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
@@ -263,6 +264,8 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           ? 0
           : parseInt(d.maxBookingsPerDay, 10) || 0;
         saves.push(updateProviderMaxBookingsPerDay(providerId, capInt));
+        const cancelHrs = parseInt(d.cancellationNoticeHours, 10) || 0;
+        saves.push(updateProviderCancellationPolicy(providerId, cancelHrs));
       }
       await Promise.all(saves);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
