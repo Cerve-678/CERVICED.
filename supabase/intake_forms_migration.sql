@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_intake_forms_status
 -- ── 3. Row-Level Security ───────────────────────────────────
 ALTER TABLE public.booking_intake_forms ENABLE ROW LEVEL SECURITY;
 
--- Provider can create forms for their bookings
+DROP POLICY IF EXISTS "provider_insert_intake_forms" ON public.booking_intake_forms;
 CREATE POLICY "provider_insert_intake_forms" ON public.booking_intake_forms
   FOR INSERT WITH CHECK (
     provider_id IN (
@@ -51,7 +51,7 @@ CREATE POLICY "provider_insert_intake_forms" ON public.booking_intake_forms
     )
   );
 
--- Provider can read any form they created
+DROP POLICY IF EXISTS "provider_select_intake_forms" ON public.booking_intake_forms;
 CREATE POLICY "provider_select_intake_forms" ON public.booking_intake_forms
   FOR SELECT USING (
     provider_id IN (
@@ -59,7 +59,7 @@ CREATE POLICY "provider_select_intake_forms" ON public.booking_intake_forms
     )
   );
 
--- Provider can update (e.g. edit questions before client sees)
+DROP POLICY IF EXISTS "provider_update_intake_forms" ON public.booking_intake_forms;
 CREATE POLICY "provider_update_intake_forms" ON public.booking_intake_forms
   FOR UPDATE USING (
     provider_id IN (
@@ -67,11 +67,11 @@ CREATE POLICY "provider_update_intake_forms" ON public.booking_intake_forms
     )
   );
 
--- Client can read forms addressed to them
+DROP POLICY IF EXISTS "client_select_intake_forms" ON public.booking_intake_forms;
 CREATE POLICY "client_select_intake_forms" ON public.booking_intake_forms
   FOR SELECT USING (client_user_id = auth.uid());
 
--- Client can fill in answers
+DROP POLICY IF EXISTS "client_submit_intake_forms" ON public.booking_intake_forms;
 CREATE POLICY "client_submit_intake_forms" ON public.booking_intake_forms
   FOR UPDATE USING  (client_user_id = auth.uid())
   WITH CHECK (client_user_id = auth.uid());

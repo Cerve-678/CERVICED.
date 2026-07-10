@@ -16,7 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_provider_follows_user_id     ON public.provider_f
 
 ALTER TABLE public.provider_follows ENABLE ROW LEVEL SECURITY;
 
--- Users can see and manage only their own follows
+DROP POLICY IF EXISTS "Users manage their own follows" ON public.provider_follows;
 CREATE POLICY "Users manage their own follows"
   ON public.provider_follows
   FOR ALL
@@ -24,7 +24,7 @@ CREATE POLICY "Users manage their own follows"
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
--- Providers can see their own follower count (SELECT only)
+DROP POLICY IF EXISTS "Providers can read their follower rows" ON public.provider_follows;
 CREATE POLICY "Providers can read their follower rows"
   ON public.provider_follows
   FOR SELECT

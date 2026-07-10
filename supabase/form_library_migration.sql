@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS provider_form_library (
 
 ALTER TABLE provider_form_library ENABLE ROW LEVEL SECURITY;
 
--- Providers manage their own library
+DROP POLICY IF EXISTS "provider_form_library_all" ON provider_form_library;
 CREATE POLICY "provider_form_library_all"
 ON provider_form_library FOR ALL
 USING (

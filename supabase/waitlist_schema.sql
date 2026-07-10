@@ -47,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_user     ON public.provider_waitlist(use
 -- RLS
 ALTER TABLE public.provider_waitlist ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Waitlist participants can see and manage their entries" ON public.provider_waitlist;
 CREATE POLICY "Waitlist participants can see and manage their entries"
   ON public.provider_waitlist
   FOR ALL USING (
