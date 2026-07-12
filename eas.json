@@ -31,9 +31,9 @@
     "production": {
       "ios": {
         "ascAppId": "6761615066",
-        "ascApiKeyId": "57BA74VGL6",
+        "ascApiKeyId": "YL7U4X8SY6",
         "ascApiKeyIssuerId": "7ea93d11-20d3-42ad-8ba1-90d102fa703d",
-        "ascApiKeyPath": "/Users/mac/cerviced/CERVICED./AuthKey_57BA74VGL6.p8"
+        "ascApiKeyPath": "./AuthKey_YL7U4X8SY6.p8"
       }
     }
   }
