@@ -118,16 +118,14 @@ export default function ProfileNavigator() {
         }}
       />
 
+      {/* CartScreen renders its own header, so the native stack header must
+          stay hidden (matches CartNavigator's CartMain). */}
       <ProfileStack.Screen
         name="CartMain"
         component={CartScreen}
         options={{
-          title: 'Cart',
           presentation: 'card',
-          headerBackTitle: 'Back',
-          headerStyle: { backgroundColor: theme.background },
-          headerTintColor: theme.text,
-          headerTitleStyle: { color: theme.text },
+          headerShown: false,
         }}
       />
 

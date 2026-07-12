@@ -52,6 +52,10 @@ interface BookingCardProps {
   isRecentlyAdded?: boolean;
   /** Pending intake forms + unread info packs — shows the "!" attention badge */
   actionCount?: number;
+  /** True when ANY card in this horizontal row is mid-reschedule — reserves
+   *  the reschedule badge's space on every card so the row stays aligned,
+   *  even on cards that don't have a badge of their own. */
+  rowHasTag?: boolean;
 }
 
 type GroupedListItem = { kind: 'category'; serviceType: string; bookings: ConfirmedBooking[] };
@@ -421,6 +425,9 @@ const calculatePaymentBreakdown = (booking: ConfirmedBooking) => {
 
 // ==================== COMPONENTS ====================
 
+// TEMPORARY — testing-only access to Dev Settings via a triple-tap on the
+// top-right corner. Remove this component and its mount point below before
+// shipping to TestFlight / production (it is not gated by __DEV__).
 const HiddenDevMenuTrigger = ({ navigation }: any) => {
   const tapCountRef = React.useRef(0);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -432,7 +439,7 @@ const HiddenDevMenuTrigger = ({ navigation }: any) => {
       tapCountRef.current = 0;
     }, 2000);
 
-    if (tapCountRef.current === 5) {
+    if (tapCountRef.current === 3) {
       if (__DEV__) console.log('Opening Dev Settings...');
       navigation.navigate('DevSettings');
       tapCountRef.current = 0;
@@ -443,7 +450,12 @@ const HiddenDevMenuTrigger = ({ navigation }: any) => {
   return (
     <TouchableOpacity
       onPress={handleTap}
-      style={{ position: 'absolute', top: 0, right: 0, width: 60, height: 60, zIndex: 100 }}
+      style={{ width: 28, alignSelf: 'stretch' }}
+      // left/right stay INSIDE the row's 12px gap to each neighboring pill —
+      // going wider overlaps their real touch bounds and steals taps meant
+      // for this trigger. top/bottom are safe to expand generously since
+      // there's nothing else competing there.
+      hitSlop={{ top: 24, bottom: 24, left: 10, right: 10 }}
       activeOpacity={1}
     />
   );
@@ -603,7 +615,7 @@ const GroupBookingCard = React.memo<GroupBookingCardProps>(
 
 // ✅ OPTIMIZED BookingCard - NO INLINE FUNCTIONS
 const BookingCard = React.memo<BookingCardProps>(
-  ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, rowHasTag = false, actionCount = 0 }) => {
+  ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, actionCount = 0, rowHasTag = false }) => {
     const { theme, isDarkMode } = useTheme();
     const styles = useMemo(() => createStyles(theme, isDarkMode), [theme, isDarkMode]);
     const statusColors = {
@@ -649,8 +661,6 @@ const BookingCard = React.memo<BookingCardProps>(
       booking.status === BookingStatus.PENDING ||
       booking.isPendingReschedule;
 
-    const wasRescheduled = !!booking.rescheduleRequest?.originalDate && !booking.isPendingReschedule;
-
     const badgeText = useMemo(() => {
       if (booking.isPendingReschedule) {
         const hasProviderResponse = !!(booking as any).rescheduleRequest?.providerAvailableDates;
@@ -687,6 +697,15 @@ const BookingCard = React.memo<BookingCardProps>(
           >
             <View style={styles.providerImageWrapper}>
               <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.providerLogo} resizeMode="cover" />
+              {/* Status dot (e.g. orange = awaiting confirmation) — top-left so it
+                  never collides with the "recently added" / "!" dots on the right */}
+              {showStatusBadge && (
+                <View
+                  style={[styles.statusDot, { backgroundColor: badgeColor }]}
+                  accessible
+                  accessibilityLabel={badgeText}
+                />
+              )}
               {/* Green dot for recently added bookings */}
               {isRecentlyAdded && booking.status === BookingStatus.UPCOMING && (
                 <View style={styles.recentlyAddedDot} />
@@ -703,7 +722,7 @@ const BookingCard = React.memo<BookingCardProps>(
                 </View>
               )}
             </View>
-            <View style={rowHasTag ? styles.providerInfoFixed : styles.providerInfo}>
+            <View style={styles.providerInfo}>
               <Text style={styles.providerName} numberOfLines={1}>
                 {booking.providerName}
               </Text>
@@ -720,17 +739,21 @@ const BookingCard = React.memo<BookingCardProps>(
                   <Text style={styles.appointmentDate}>
                     {formatDisplayDate(booking.bookingDate)}
                   </Text>
-                  {wasRescheduled && booking.status === BookingStatus.UPCOMING && (
-                    <View style={styles.purpleDot} />
-                  )}
                 </View>
                 <Text style={styles.appointmentTimeText}>{booking.bookingTime}</Text>
               </View>
-              {showStatusBadge && (
-                <View style={[styles.statusBadgeSmall, { backgroundColor: badgeColor }]}>
-                  <Text style={styles.statusBadgeText}>{badgeText}</Text>
+              {/* Reschedule badge — visible text, not just a dot, since it's
+                  actionable. Cards without one still reserve the space when
+                  a sibling in the row has it, so the row stays aligned. */}
+              {booking.isPendingReschedule ? (
+                <View style={[styles.rescheduleBadge, { backgroundColor: badgeColor }]}>
+                  <Text style={styles.rescheduleBadgeText} numberOfLines={1}>
+                    {badgeText === 'AVAILABLE' ? 'Reschedule Available' : 'Reschedule Pending'}
+                  </Text>
                 </View>
-              )}
+              ) : rowHasTag ? (
+                <View style={styles.rescheduleBadgeSpacer} />
+              ) : null}
             </View>
           </Animated.View>
         </Pressable>
@@ -1146,10 +1169,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleCancelBooking = useCallback(async () => {
     if (!selectedBooking) return;
 
-    // Enforce provider's cancellation notice window.
+    // Enforce provider's cancellation notice window — but only for bookings
+    // the provider has actually confirmed. A still-pending request was never
+    // accepted, so there's nothing to give notice for; the client can always
+    // withdraw it outright.
     // bookingTime is a 12h display string ("2:30 PM") — template-literal Date
     // parsing produced Invalid Date/NaN, which silently skipped this check.
-    if (cancellationNoticeHrs > 0 && selectedBooking.bookingDate && selectedBooking.bookingTime) {
+    if (selectedBooking.status !== BookingStatus.PENDING && cancellationNoticeHrs > 0 && selectedBooking.bookingDate && selectedBooking.bookingTime) {
       const appointmentMs = createBookingDateTime(selectedBooking.bookingDate, selectedBooking.bookingTime).getTime();
       const hoursUntil = (appointmentMs - Date.now()) / 3_600_000;
       if (hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs) {
@@ -1884,7 +1910,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               tintColor="#AF9197"
               colors={['#AF9197']}
               progressBackgroundColor={isDarkMode ? '#201D1A' : '#EDE8E2'}
-              progressViewOffset={120}
+              progressViewOffset={60}
             />
           }
           keyboardShouldPersistTaps="handled"
@@ -1893,7 +1919,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           onScrollBeginDrag={() => Keyboard.dismiss()}
         >
           <View style={styles.content}>
-            <HiddenDevMenuTrigger navigation={navigation} />
+            {/* Refresh indicator — the native RefreshControl spinner sits behind
+                the transparent header and is easy to miss, so mirror its state
+                here in the always-visible content area just below the header. */}
+            {refreshing && (
+              <View style={styles.refreshIndicatorRow}>
+                <ActivityIndicator size="small" color="#AF9197" />
+              </View>
+            )}
 
             {/* Category Toggle */}
             <View style={styles.categoryContainer}>
@@ -1915,10 +1948,15 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       activeFilters.has('all') && styles.categoryTextActive,
                     ]}
                   >
-                    All Bookings
+                    Upcoming
                   </Text>
                 </BlurView>
               </TouchableOpacity>
+
+              {/* TEMPORARY — testing-only dev menu access, triple-tap. See
+                  removal note on HiddenDevMenuTrigger's definition above. */}
+              <HiddenDevMenuTrigger navigation={navigation} />
+
               <TouchableOpacity
                 onPress={() => toggleFilter('past')}
                 style={styles.categoryButtonWrapper}
@@ -2325,7 +2363,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <View style={styles.emptyState}>
                     <Text style={styles.emptyStateText}>No appointments scheduled for today</Text>
                     <Text style={styles.emptyStateSubtext}>
-                      View All Bookings to see upcoming appointments
+                      View Upcoming to see your next appointments
                     </Text>
                   </View>
                 )}
@@ -2399,11 +2437,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     }}
                     renderItem={({ item }) => {
                       const { serviceType, bookings } = item;
-                      const rowHasTag = bookings.some((b: ConfirmedBooking) =>
-                        b.status === BookingStatus.CANCELLED ||
-                        b.status === BookingStatus.NO_SHOW ||
-                        b.isPendingReschedule
-                      );
+                      const rowHasTag = bookings.some((b: ConfirmedBooking) => b.isPendingReschedule);
                       return (
                         <View style={styles.serviceCategory}>
                           <View style={styles.serviceCategoryHeader}>
@@ -2423,8 +2457,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                 onPress={handleBookingPress}
                                 isHighlighted={highlightedBookingId === booking.id}
                                 isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
-                                rowHasTag={rowHasTag}
                                 actionCount={bookingActionItems[booking.id] ?? 0}
+                                rowHasTag={rowHasTag}
                               />
                             )}
                             showsHorizontalScrollIndicator={false}
@@ -2434,8 +2468,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                             windowSize={5}
                             initialNumToRender={3}
                             getItemLayout={(_data, index) => ({
-                              length: 162,
-                              offset: 162 * index,
+                              length: 144,
+                              offset: 144 * index,
                               index,
                             })}
                           />
@@ -3109,6 +3143,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         </View>
                                       ) : (() => {
                                         // Non-mobile: check real release state
+                                        // If the address hasn't been manually released yet, wait for the
+                                        // policy to load before rendering anything — avoids a flash where
+                                        // the generic locked badge briefly appears then disappears.
+                                        if (!selectedBooking.addressReleasedAt && selectedBookingAddrSettings === null) {
+                                          return null;
+                                        }
                                         const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
                                         // 12h display time needs the shared parser — template-literal
                                         // Date parsing gave NaN, keeping the address locked forever
@@ -3184,31 +3224,43 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     <View style={{ flex: 1 }}>
                                       <Text style={{ fontFamily: 'Jura-SemiBold', fontSize: 13, color: '#FF9500' }}>Awaiting Confirmation</Text>
                                       <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: '#FF950099', marginTop: 2 }}>
-                                        Your provider hasn't confirmed this booking yet. You'll be notified once it's confirmed.
-                                        If they don't respond within 48 hours the request expires automatically.
+                                        {(() => {
+                                          try {
+                                            const passed = createBookingDateTime(selectedBooking.bookingDate, selectedBooking.bookingTime).getTime() < Date.now();
+                                            if (passed) {
+                                              return "Your provider never confirmed this booking and the appointment time has passed. You can cancel the request below.";
+                                            }
+                                          } catch {}
+                                          return "Your provider hasn't confirmed this booking yet. You'll be notified once it's confirmed. If they don't respond within 48 hours the request expires automatically.";
+                                        })()}
                                       </Text>
                                     </View>
                                   </View>
                                 </View>
                               )}
 
-                              {/* BALANCE DUE CALLOUT */}
-                              {(selectedBooking.remainingBalance ?? 0) > 0 &&
-                               selectedBooking.status === BookingStatus.UPCOMING && (
-                                <View style={[styles.modalSection, { marginTop: -4 }]}>
-                                  <View style={{ backgroundColor: 'rgba(52,199,89,0.08)', borderColor: 'rgba(52,199,89,0.30)', borderWidth: 1, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                    <Ionicons name="card-outline" size={18} color="#34C759" />
-                                    <View style={{ flex: 1 }}>
-                                      <Text style={{ fontFamily: 'Jura-SemiBold', fontSize: 13, color: '#34C759' }}>
-                                        £{selectedBooking.remainingBalance.toFixed(2)} due at appointment
-                                      </Text>
-                                      <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: '#34C75999', marginTop: 2 }}>
-                                        Deposit paid — bring the remaining balance on the day.
-                                      </Text>
-                                    </View>
+                              {/* ACTIONS - PENDING (client can withdraw a request the provider hasn't responded to) */}
+                              {selectedBooking.status === BookingStatus.PENDING && (
+                                <View style={styles.modalActionsSection}>
+                                  <View style={styles.modalActionsRow}>
+                                    <TouchableOpacity
+                                      style={[styles.modalCancelButton, { flex: 1 }]}
+                                      onPress={() => {
+                                        setModalVisible(false);
+                                        setShowCancelModal(true);
+                                        setTimeout(() => {
+                                          mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
+                                          modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
+                                        }, 100);
+                                      }}
+                                      activeOpacity={0.7}
+                                    >
+                                      <Text style={styles.modalCancelButtonText}>Decline Request</Text>
+                                    </TouchableOpacity>
                                   </View>
                                 </View>
                               )}
+
 
                               {/* ACTIONS - UPCOMING */}
                               {selectedBooking.status === BookingStatus.UPCOMING && !selectedBooking.isPendingReschedule && (
@@ -3791,7 +3843,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           onRequestClose={() => setViewingPack(null)}
           statusBarTranslucent
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end', zIndex: 1000, elevation: 1000 }}>
             <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setViewingPack(null)} />
             <View style={{
               maxHeight: '78%',
@@ -3800,7 +3852,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               borderTopRightRadius: 24,
               paddingHorizontal: 22,
               paddingTop: 14,
-              paddingBottom: 36,
+              // Clear the floating pill tab bar (bottom ~30-34 + minHeight 80)
+              paddingBottom: 130,
             }}>
               <View style={{ width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)' }} />
               {viewingPack && (
@@ -4408,6 +4461,13 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     flex: 1,
     paddingTop: 150,
   },
+  refreshIndicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -6,
+    marginBottom: 12,
+  },
   header: {
     marginBottom: 20,
     alignItems: 'center',
@@ -4788,7 +4848,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     gap: 8,
   },
   providerCard: {
-    width: 150,
+    width: 142,
     backgroundColor: isDarkMode ? '#2C2C2E' : '#FFF',
     borderRadius: 15,
     overflow: 'hidden',
@@ -4797,17 +4857,18 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   providerLogo: {
     width: '100%',
-    height: 100,
+    height: 92,
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
     backgroundColor: isDarkMode ? '#3A3A3C' : '#F5F5F5',
   },
+  // Fixed height (not auto) so every card in the row is the same height
+  // regardless of which optional bits (add-on pill) render. Status is now a
+  // dot on the image instead of a text pill, so this no longer reserves
+  // space for a badge row.
   providerInfo: {
-    padding: 10,
-  },
-  providerInfoFixed: {
-    padding: 10,
-    height: 105,
+    padding: 9,
+    height: 96,
   },
   providerName: {
     fontSize: 12,
@@ -4864,19 +4925,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     color: isDarkMode ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)',
     textAlign: 'center',
   },
-  statusBadgeSmall: {
-    marginTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  statusBadgeText: { 
-    fontSize: 9, 
-    color: '#FFF', 
-    fontWeight: 'bold' 
-  },
-  flatListContent: { 
+  flatListContent: {
     paddingBottom: 20 
   },
   modalBackdrop: {
@@ -5759,6 +5808,24 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#AF9197',
   },
+  rescheduleBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginTop: 6,
+  },
+  rescheduleBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    color: '#fff',
+  },
+  // Reserves the reschedule badge's vertical space on cards that don't have
+  // one, so every card in the row lines up with the one that does.
+  rescheduleBadgeSpacer: {
+    height: 6 + 3 + 3 + 12, // marginTop + paddingVertical*2 + approx text line height
+  },
   // Green dot for recently added bookings - moved 1cm (~28pt) to the left
   recentlyAddedDot: {
     position: 'absolute',
@@ -5768,6 +5835,19 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
+    zIndex: 10,
+  },
+  // Status indicator (e.g. orange = awaiting confirmation) — top-left corner
+  // of the card image, replacing the old full-width text pill so cards stay compact
+  statusDot: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     borderWidth: 2,
     borderColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
     zIndex: 10,

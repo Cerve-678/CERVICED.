@@ -122,6 +122,9 @@ export interface ConfirmedBooking {
   // Provider ID (for provider-facing screens)
   providerId?: string | undefined;
 
+  // Client user ID (for provider-facing screens — the user who made the booking)
+  clientUserId?: string | undefined;
+
   // Client address (for mobile providers who travel to the client)
   clientAddress?: string | undefined;
 
@@ -465,6 +468,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     clientAddress: (db as any).client_address ?? undefined,
     addressReleasedAt: db.address_released_at ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
+    clientUserId: (db as any).user_id ?? undefined,
     addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({
       id: idx,
       name: a.name_snapshot,
@@ -1059,7 +1063,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           provider_id: confirmedProviderId,
           type: 'reschedule_confirmed',
           title: 'Reschedule Confirmed',
-          message: `${booking.customerName || 'A client'} confirmed their ${booking.serviceName} for ${newDate} at ${newTime}.`,
+          message: `${booking.customerName || 'A client'} confirmed their ${booking.serviceName} for ${newDate.split('-').reverse().join('/')} at ${newTime}.`,
           priority: 'medium',
           is_actionable: true,
           booking_id: bookingId,

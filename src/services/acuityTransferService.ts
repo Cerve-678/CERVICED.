@@ -157,6 +157,7 @@ Rules:
     slotsText: extracted.slotsText || '',
     gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
     accentColor: '#7B1FA2',
+    profileTheme: 'app',
     logo: null,
     categories,
     phone: '',

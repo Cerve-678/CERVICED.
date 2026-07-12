@@ -208,6 +208,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   // ── Preview modal ─────────────────────────────────────────────────────────
   const [showPreview, setShowPreview] = useState(false);
 
+  // ── Booking picker (opened from Quick Access — no booking context yet) ────
+  const [pickingBookingFor, setPickingBookingFor] = useState<string | null>(null); // library form id
+  const [pickableBookings, setPickableBookings] = useState<BookingWithAddOns[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+
   const autoTemplate = detectTemplate(serviceName);
 
   // ── Disable native swipe-back in builder mode (beforeRemove not supported in native-stack) ──
@@ -223,7 +228,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           getProviderFormLibrary(),
           getMyProviderProfile(),
           getMyProviderServices(),
-          existingFormId ? getIntakeFormByBooking(bookingId) : Promise.resolve(null),
+          existingFormId && bookingId ? getIntakeFormByBooking(bookingId) : Promise.resolve(null),
         ]);
 
         setLibraryForms(forms);
@@ -367,14 +372,36 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   }, [editingId, title, questions, selectedServices, autoSend, requiresSignature]);
 
   // ── Send to client ────────────────────────────────────────────────────────
-  const handleSendToClient = useCallback(async (libraryFormId: string) => {
+  // Opened from a booking: bookingId/clientUserId are already known — send
+  // straight away. Opened from Quick Access (library-only): no target yet,
+  // so open a booking picker first and recurse once one is chosen.
+  const handleSendToClient = useCallback(async (libraryFormId: string, targetBookingId?: string, targetClientUserId?: string) => {
+    const toBookingId = targetBookingId ?? bookingId;
+    const toClientUserId = targetClientUserId ?? clientUserId;
+
+    if (!toBookingId || !toClientUserId) {
+      setLoadingBookings(true);
+      setPickingBookingFor(libraryFormId);
+      try {
+        const all = await getProviderBookings();
+        const upcoming = all.filter(b => b.status === 'pending' || b.status === 'confirmed');
+        setPickableBookings(upcoming);
+      } catch {
+        showToast('Could not load your bookings. Please try again.', 'error');
+        setPickingBookingFor(null);
+      } finally {
+        setLoadingBookings(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
       const provider = await getMyProviderProfile();
       if (!provider) throw new Error();
-      const form = await sendLibraryFormToClient(libraryFormId, bookingId, clientUserId);
+      const form = await sendLibraryFormToClient(libraryFormId, toBookingId, toClientUserId);
       await insertBookingUserNotification({
-        booking_id: bookingId,
+        booking_id: toBookingId,
         type: 'booking_confirmed',
         title: `${provider.display_name} sent you a form`,
         message: `Please fill out: "${form.title}" before your appointment.`,
@@ -384,13 +411,20 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       showToast('Form sent to client.', 'success');
-      navigation.goBack();
+      setPickingBookingFor(null);
+      if (hasBookingContext) navigation.goBack();
     } catch {
       showToast('Could not send the form. Please try again.', 'error');
     } finally {
       setSaving(false);
     }
-  }, [bookingId, clientUserId, navigation]);
+  }, [bookingId, clientUserId, hasBookingContext, navigation, showToast]);
+
+  const handlePickBookingForSend = useCallback((booking: BookingWithAddOns) => {
+    if (!pickingBookingFor) return;
+    Haptics.selectionAsync().catch(() => {});
+    handleSendToClient(pickingBookingFor, booking.id, booking.user_id);
+  }, [pickingBookingFor, handleSendToClient]);
 
   const handleSaveAndSend = useCallback(async () => {
     const saved = await handleSaveToLibrary();
@@ -836,6 +870,53 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             )}
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* ── Booking picker — shown when "Send to Client" is tapped from the
+            library with no booking already in context (i.e. opened from
+            Quick Access rather than from a specific booking). ── */}
+      <Modal
+        visible={!!pickingBookingFor}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPickingBookingFor(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPickingBookingFor(null)} />
+          <View style={{ maxHeight: '75%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 14, paddingBottom: insets.bottom + 20 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, alignSelf: 'center', backgroundColor: P.border, marginBottom: 14 }} />
+            <Text style={{ fontSize: 17, fontWeight: '700', color: P.text, textAlign: 'center', marginBottom: 4 }}>Send to Which Booking?</Text>
+            <Text style={{ fontSize: 12, color: P.sub, textAlign: 'center', marginBottom: 14, paddingHorizontal: 24 }}>
+              Choose the appointment this form is for
+            </Text>
+            {loadingBookings ? (
+              <ActivityIndicator color={P.accent} style={{ marginVertical: 30 }} />
+            ) : pickableBookings.length === 0 ? (
+              <Text style={{ fontSize: 13, color: P.sub, textAlign: 'center', paddingVertical: 30, paddingHorizontal: 24 }}>
+                No upcoming bookings to send this to yet.
+              </Text>
+            ) : (
+              <ScrollView style={{ paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+                {pickableBookings.map(b => (
+                  <TouchableOpacity
+                    key={b.id}
+                    style={[styles.formRow, { backgroundColor: P.card, borderColor: P.border }]}
+                    activeOpacity={0.75}
+                    onPress={() => handlePickBookingForSend(b)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.formRowTitle, { color: P.text }]}>{b.customer_name ?? 'Client'}</Text>
+                      <Text style={[styles.formRowSub, { color: P.sub }]}>
+                        {b.service_name_snapshot} · {b.booking_date}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={P.sub} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
       </Modal>
 
       <DialogHost />

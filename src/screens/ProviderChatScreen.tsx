@@ -10,11 +10,21 @@ import {
   StyleSheet,
   ActivityIndicator,
   Keyboard,
+  Modal,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
+import {
+  getProviderAddressSettings,
+  getClientBookingsForAddressShare,
+  setBookingClientAddress,
+  insertProviderNotification,
+  ProviderAddressSettings,
+  ClientBookingSummary,
+} from '../services/databaseService';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'ProviderChat'>;
 
@@ -51,6 +61,20 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const [sending, setSending] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+
+  // Address-sharing (mobile providers only — client sends the address they want visited)
+  const [addressSettings, setAddressSettings] = useState<ProviderAddressSettings | null>(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [addressBookings, setAddressBookings] = useState<ClientBookingSummary[]>([]);
+  const [loadingAddressBookings, setLoadingAddressBookings] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<ClientBookingSummary | null>(null);
+  const [addressText, setAddressText] = useState('');
+  const [sendingAddress, setSendingAddress] = useState(false);
+
+  useEffect(() => {
+    if (!providerDbId) return;
+    getProviderAddressSettings(providerDbId).then(setAddressSettings).catch(() => {});
+  }, [providerDbId]);
 
   // Get current user
   useEffect(() => {
@@ -160,6 +184,35 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     });
   }, [navigation, providerName]);
 
+  const postMessage = useCallback(async (text: string) => {
+    if (!text || !conversationId || !userId) return;
+
+    const { data: inserted } = await supabase
+      .from('provider_messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: userId,
+        sender_type: 'user',
+        content: text,
+      })
+      .select('*')
+      .single();
+
+    if (inserted) {
+      setMessages(prev => {
+        if (prev.find(m => m.id === inserted.id)) return prev;
+        return [...prev, inserted as Message];
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    }
+
+    await supabase.rpc('update_conversation_last_message', {
+      conv_id: conversationId,
+      msg_text: text,
+      p_sender_type: 'user',
+    });
+  }, [conversationId, userId]);
+
   const sendMessage = useCallback(async () => {
     const text = inputText.trim();
     if (!text || !conversationId || !userId || sending) return;
@@ -169,35 +222,64 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     Keyboard.dismiss();
 
     try {
-      const { data: inserted } = await supabase
-        .from('provider_messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: userId,
-          sender_type: 'user',
-          content: text,
-        })
-        .select('*')
-        .single();
-
-      if (inserted) {
-        setMessages(prev => {
-          if (prev.find(m => m.id === inserted.id)) return prev;
-          return [...prev, inserted as Message];
-        });
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
-      }
-
-      await supabase.rpc('update_conversation_last_message', {
-        conv_id: conversationId,
-        msg_text: text,
-        p_sender_type: 'user',
-      });
+      await postMessage(text);
     } catch {
       /* silent */
     }
     setSending(false);
-  }, [inputText, conversationId, userId, sending]);
+  }, [inputText, conversationId, userId, sending, postMessage]);
+
+  const openAddressModal = useCallback(async () => {
+    if (!providerDbId) return;
+    setShowAddressModal(true);
+    setLoadingAddressBookings(true);
+    setSelectedBooking(null);
+    setAddressText('');
+    try {
+      const bookings = await getClientBookingsForAddressShare(providerDbId);
+      setAddressBookings(bookings);
+      const [only] = bookings;
+      if (bookings.length === 1 && only) {
+        setSelectedBooking(only);
+        setAddressText(only.client_address ?? '');
+      }
+    } finally {
+      setLoadingAddressBookings(false);
+    }
+  }, [providerDbId]);
+
+  const closeAddressModal = useCallback(() => {
+    setShowAddressModal(false);
+  }, []);
+
+  const selectAddressBooking = useCallback((b: ClientBookingSummary) => {
+    setSelectedBooking(b);
+    setAddressText(b.client_address ?? '');
+  }, []);
+
+  const handleSendAddress = useCallback(async () => {
+    const address = addressText.trim();
+    if (!address || !selectedBooking || sendingAddress) return;
+
+    setSendingAddress(true);
+    try {
+      await setBookingClientAddress(selectedBooking.id, address);
+      await postMessage(`📍 Sent my address for ${selectedBooking.service_name_snapshot}: ${address}`);
+      insertProviderNotification({
+        provider_id: providerDbId,
+        type: 'new_message',
+        title: 'Address received',
+        message: `A client sent their address for their ${selectedBooking.service_name_snapshot} appointment.`,
+        priority: 'medium',
+        is_actionable: false,
+        booking_id: selectedBooking.id,
+      }).catch(() => {});
+      setShowAddressModal(false);
+    } catch {
+      /* silent */
+    }
+    setSendingAddress(false);
+  }, [addressText, selectedBooking, sendingAddress, postMessage, providerDbId]);
 
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isUser = item.sender_type === 'user';
@@ -267,6 +349,17 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
         }
       />
 
+      {addressSettings?.business_type === 'mobile' && (
+        <TouchableOpacity
+          style={[styles.addressBtn, { backgroundColor: OP.surface, borderColor: OP.border }]}
+          onPress={openAddressModal}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="location-outline" size={14} color={OP.accent} />
+          <Text style={[styles.addressBtnText, { color: OP.accent }]}>Send my address</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Input bar */}
       <View style={[styles.inputRow, { backgroundColor: OP.bg, borderTopColor: OP.border }]}>
         <TextInput
@@ -292,6 +385,84 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           )}
         </TouchableOpacity>
       </View>
+
+      <Modal visible={showAddressModal} transparent animationType="slide" onRequestClose={closeAddressModal}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
+            <Text style={[styles.modalTitle, { color: OP.text }]}>Send your address</Text>
+
+            {loadingAddressBookings ? (
+              <ActivityIndicator color={OP.accent} style={{ marginVertical: 20 }} />
+            ) : addressBookings.length === 0 ? (
+              <Text style={[styles.modalEmpty, { color: OP.sub }]}>
+                No upcoming bookings with {providerName} yet.
+              </Text>
+            ) : (
+              <>
+                {addressBookings.length > 1 && (
+                  <FlatList
+                    data={addressBookings}
+                    keyExtractor={b => b.id}
+                    style={styles.bookingList}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.bookingOption,
+                          { borderColor: selectedBooking?.id === item.id ? OP.accent : OP.border },
+                        ]}
+                        onPress={() => selectAddressBooking(item)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.bookingOptionService, { color: OP.text }]}>
+                          {item.service_name_snapshot}
+                        </Text>
+                        <Text style={[styles.bookingOptionDate, { color: OP.sub }]}>
+                          {new Date(item.booking_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} • {item.booking_time.slice(0, 5)}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+
+                <TextInput
+                  style={[styles.addressInput, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}
+                  value={addressText}
+                  onChangeText={setAddressText}
+                  placeholder="Enter the address for this appointment"
+                  placeholderTextColor={OP.sub}
+                  multiline
+                  editable={!!selectedBooking}
+                />
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: OP.surface }]}
+                    onPress={closeAddressModal}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.modalBtnText, { color: OP.text }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalBtn,
+                      { backgroundColor: OP.accent, opacity: (!addressText.trim() || !selectedBooking || sendingAddress) ? 0.5 : 1 },
+                    ]}
+                    onPress={handleSendAddress}
+                    disabled={!addressText.trim() || !selectedBooking || sendingAddress}
+                    activeOpacity={0.75}
+                  >
+                    {sendingAddress ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={[styles.modalBtnText, { color: '#fff' }]}>Send</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -359,4 +530,72 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendIcon: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  addressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  addressBtnText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '600' },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalCard: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 32,
+  },
+  modalTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 17,
+    marginBottom: 14,
+  },
+  modalEmpty: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    marginVertical: 20,
+    textAlign: 'center',
+  },
+  bookingList: { maxHeight: 150, marginBottom: 12 },
+  bookingOption: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  bookingOptionService: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  bookingOptionDate: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2 },
+  addressInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+    minHeight: 70,
+    textAlignVertical: 'top',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  modalBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, fontWeight: '700' },
 });

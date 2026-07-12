@@ -1928,72 +1928,6 @@ export async function getMyProviderIntakeForms(): Promise<IntakeForm[]> {
 }
 
 // ─────────────────────────────────────────────────────────
-// PROVIDER FORMS INBOX (received responses — quick-access view)
-// ─────────────────────────────────────────────────────────
-
-export interface ReceivedIntakeForm extends IntakeForm {
-  customerName: string | null;
-  serviceName: string | null;
-  bookingDate: string | null;
-}
-
-/** All intake forms the provider has sent, newest activity first, with
- *  booking context — powers the received-responses inbox. */
-export async function getMyReceivedIntakeForms(): Promise<ReceivedIntakeForm[]> {
-  const provider = await getMyProviderProfile();
-  if (!provider) return [];
-  const { data, error } = await supabase
-    .from('booking_intake_forms')
-    .select('*, booking:bookings ( customer_name, service_name_snapshot, booking_date )')
-    .eq('provider_id', provider.id)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (error) return [];
-  return (data ?? []).map((d: any) => ({
-    ...mapIntakeForm(d),
-    customerName: d.booking?.customer_name ?? null,
-    serviceName:  d.booking?.service_name_snapshot ?? null,
-    bookingDate:  d.booking?.booking_date ?? null,
-  }));
-}
-
-export interface InfoPackReceipt {
-  id: string;
-  bookingId: string;
-  title: string;
-  service: string;
-  viewedAt: string | null;
-  createdAt: string;
-  customerName: string | null;
-  serviceName: string | null;
-  bookingDate: string | null;
-}
-
-/** Info packs sent with bookings + whether the client has read them. */
-export async function getMyInfoPackReceipts(): Promise<InfoPackReceipt[]> {
-  const provider = await getMyProviderProfile();
-  if (!provider) return [];
-  const { data, error } = await supabase
-    .from('booking_info_packs')
-    .select('id, booking_id, title, service, viewed_at, created_at, booking:bookings ( customer_name, service_name_snapshot, booking_date )')
-    .eq('provider_id', provider.id)
-    .order('created_at', { ascending: false })
-    .limit(100);
-  if (error) return [];
-  return (data ?? []).map((d: any) => ({
-    id:           d.id,
-    bookingId:    d.booking_id,
-    title:        d.title,
-    service:      d.service ?? 'GENERAL',
-    viewedAt:     d.viewed_at ?? null,
-    createdAt:    d.created_at,
-    customerName: d.booking?.customer_name ?? null,
-    serviceName:  d.booking?.service_name_snapshot ?? null,
-    bookingDate:  d.booking?.booking_date ?? null,
-  }));
-}
-
-// ─────────────────────────────────────────────────────────
 // BOOKING INFO PACKS (prep/aftercare info attached to bookings —
 // see supabase/info_packs_bookings.sql)
 // ─────────────────────────────────────────────────────────
@@ -2269,6 +2203,36 @@ export async function getProviderAddressSettingsByDisplayName(displayName: strin
     .single();
   if (error || !data) return null;
   return data as ProviderAddressSettings;
+}
+
+export interface ClientBookingSummary {
+  id: string;
+  service_name_snapshot: string;
+  booking_date: string;
+  booking_time: string;
+  client_address: string | null;
+}
+
+/** Client's upcoming/pending bookings with a given (mobile) provider — used to pick which booking an address applies to when sending it via chat. */
+export async function getClientBookingsForAddressShare(providerId: string): Promise<ClientBookingSummary[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, service_name_snapshot, booking_date, booking_time, client_address')
+    .eq('provider_id', providerId)
+    .in('status', ['pending', 'upcoming'])
+    .order('booking_date', { ascending: true })
+    .order('booking_time', { ascending: true });
+  if (error) return [];
+  return (data ?? []) as ClientBookingSummary[];
+}
+
+/** Save the address a client sends their mobile provider, for a specific booking. */
+export async function setBookingClientAddress(bookingId: string, address: string): Promise<void> {
+  const { error } = await supabase
+    .from('bookings')
+    .update({ client_address: address })
+    .eq('id', bookingId);
+  if (error) throw error;
 }
 
 /** Manually release the full address for a specific booking to the client. */

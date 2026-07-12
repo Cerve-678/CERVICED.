@@ -134,7 +134,6 @@ export interface DbProvider {
     autoReviewRequest?: boolean;
     postApptCheckIn?: boolean;
     birthdayGreeting?: boolean;
-    autoSendIntakeForm?: boolean;
     waitlistEnabled?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;

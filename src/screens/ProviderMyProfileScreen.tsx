@@ -8,60 +8,43 @@ import {
   StyleSheet,
   Dimensions,
   FlatList,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFonts } from 'expo-font';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { loadProviderFromSupabase } from '../services/providerRegistrationService';
+import type { ProviderRegistrationData } from '../services/providerRegistrationService';
+import { getProviderPortfolio } from '../services/databaseService';
+import type { DbPortfolioItem } from '../types/database';
+import { supabase } from '../lib/supabase';
+import { resolveProviderTheme, withAlpha, isDarkColor } from '../constants/providerThemes';
 import AppBackground from '../components/AppBackground';
 
 const { width: screenWidth } = Dimensions.get('window');
-
-// Matches InfoRegScreen's data shape
-interface AddOnData {
-  id: number;
-  name: string;
-  price: number;
-}
-
-interface ServiceData {
-  id: number;
-  name: string;
-  price: number;
-  duration: string;
-  description: string;
-  images: string[];
-  addOns: AddOnData[];
-}
-
-interface ProviderRegistrationData {
-  providerName: string;
-  providerService: string;
-  customServiceType: string;
-  location: string;
-  aboutText: string;
-  slotsText: string;
-  gradient: [string, string, ...string[]];
-  accentColor: string;
-  logo: string | null;
-  categories: Record<string, ServiceData[]>;
-}
 
 interface Props {
   navigation: any;
 }
 
+// Mirrors ProviderProfileScreen's live design (theme, typography, section set,
+// Portfolio) so a provider's own view of their profile is what a client sees.
+// Rebuild this whenever that screen changes.
 export default function ProviderMyProfileScreen({ navigation }: Props) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme } = useTheme();
   const { user } = useAuth();
+  const [fontsLoaded] = useFonts({
+    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
+    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
+    'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
+  });
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
+  const [providerDbId, setProviderDbId] = useState<string | null>(null);
+  const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showFullAbout, setShowFullAbout] = useState(false);
@@ -76,6 +59,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
           if (user?.id) {
             parsed = await loadProviderFromSupabase(user.id);
+            const { data } = await supabase
+              .from('providers')
+              .select('id')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            if (data?.id) {
+              setProviderDbId(data.id);
+              getProviderPortfolio(data.id).then(setPortfolio).catch(() => {});
+            }
           }
 
           setProviderData(parsed);
@@ -105,6 +97,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     return providerData.categories[selectedCategory] || [];
   }, [providerData, selectedCategory]);
 
+  // Provider-only stat — not shown to clients, but useful context on their own profile
   const totalServices = useMemo(() => {
     if (!providerData) return 0;
     return Object.values(providerData.categories).reduce((sum, arr) => sum + arr.length, 0);
@@ -121,8 +114,23 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('EditProfile');
   }, [navigation]);
 
-  // Loading state — waiting for Supabase
-  if (isLoading) {
+  const PP = useMemo(
+    () => resolveProviderTheme(providerData?.profileTheme),
+    [providerData?.profileTheme]
+  );
+  const cardBg = withAlpha(PP.card, PP.isDark ? 0.5 : 0.9);
+  const accentColor = providerData?.accentColor || PP.accent;
+  // Some backdrops (Cream, Sky, Blush…) are pale — white hero text needs to
+  // flip to dark there, matching ProviderProfileScreen's contrast logic.
+  const heroIsDark = isDarkColor(providerData?.gradient[0] ?? PP.hero);
+  const heroText = heroIsDark ? '#fff' : '#26201E';
+  const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
+  const heroShadow = heroIsDark
+    ? { textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 }
+    : undefined;
+
+  // Loading state — waiting for Supabase / fonts
+  if (isLoading || !fontsLoaded) {
     return (
       <AppBackground>
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -159,16 +167,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     );
   }
 
-  const accentColor = providerData.accentColor || '#007AFF';
-
   return (
-    <View style={styles.container}>
-      {/* Gradient Background */}
+    <View style={[styles.container, { backgroundColor: PP.bg }]}>
+      {/* Hero backdrop — matches ProviderProfileScreen's hero-then-sheet split */}
       <LinearGradient
-        colors={providerData.gradient}
+        colors={[providerData.gradient[0] ?? PP.hero, PP.bg]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={StyleSheet.absoluteFill}
+        style={styles.heroImage}
       />
 
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -176,13 +182,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         <View style={styles.topBar}>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={styles.editButton}
+            style={[styles.editButton, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
             onPress={handleEditProfile}
             activeOpacity={0.7}
           >
-            <BlurView intensity={20} tint="light" style={styles.editButtonBlur}>
-              <Text style={styles.editButtonText}>Edit Profile</Text>
-            </BlurView>
+            <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
 
@@ -216,53 +220,44 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
           {/* Provider Info */}
           <View style={styles.providerInfoCenter}>
-            <Text style={styles.providerNameLarge}>
-              @{providerData.providerName.toUpperCase()}
+            <Text style={[styles.providerNameLarge, { color: heroText }, heroShadow]}>
+              {providerData.providerName || 'Your Business Name'}
             </Text>
 
-            <View style={styles.serviceTag}>
-              <BlurView intensity={15} tint="light" style={styles.serviceTagBlur}>
-                <Text style={styles.serviceText}>{serviceType}</Text>
-              </BlurView>
-            </View>
-
-            <Text style={styles.locationText}>
-              {'📍'} {providerData.location}
+            <Text style={[styles.metaText, { color: heroSub }, heroShadow]}>
+              {(serviceType || 'SERVICE').toUpperCase()}
+              {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
             </Text>
+
+            {providerData.yearsExperience ? (
+              <Text style={[styles.yearsText, { color: heroSub }, heroShadow]}>{providerData.yearsExperience} years experience</Text>
+            ) : null}
 
             {providerData.slotsText ? (
-              <View style={styles.serviceTag}>
-                <BlurView intensity={15} tint="light" style={styles.serviceTagBlur}>
-                  <Text style={styles.slotsText}>{providerData.slotsText}</Text>
-                </BlurView>
+              <View style={[styles.slotsPill, { backgroundColor: cardBg, borderColor: PP.border }]}>
+                <Text style={[styles.slotsText, { color: PP.sub }]}>{providerData.slotsText}</Text>
               </View>
             ) : null}
 
-            {/* Stats Row */}
-            <View style={styles.statsRow}>
+            {/* Stats — provider-only context, not shown to clients */}
+            <View style={[styles.statsRow, { backgroundColor: cardBg, borderColor: PP.border }]}>
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{totalServices}</Text>
-                <Text style={styles.statLabel}>Services</Text>
+                <Text style={[styles.statNumber, { color: PP.text }]}>{totalServices}</Text>
+                <Text style={[styles.statLabel, { color: PP.sub }]}>Services</Text>
               </View>
-              <View style={[styles.statDivider, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
+              <View style={[styles.statDivider, { backgroundColor: PP.border }]} />
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{categoryNames.length}</Text>
-                <Text style={styles.statLabel}>Categories</Text>
+                <Text style={[styles.statNumber, { color: PP.text }]}>{categoryNames.length}</Text>
+                <Text style={[styles.statLabel, { color: PP.sub }]}>Categories</Text>
               </View>
             </View>
           </View>
 
           {/* About Section */}
           {providerData.aboutText ? (
-            <BlurView intensity={50} tint="light" style={styles.aboutCard}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <Text style={styles.sectionTitle}>About</Text>
-              <Text style={styles.aboutText}>
+            <View style={[styles.card, { backgroundColor: cardBg, borderColor: PP.border }]}>
+              <Text style={[styles.sectionTitle, { color: PP.text }]}>About</Text>
+              <Text style={[styles.aboutText, { color: PP.sub }]}>
                 {showFullAbout
                   ? providerData.aboutText
                   : providerData.aboutText.length > 150
@@ -274,46 +269,39 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   onPress={() => setShowFullAbout(!showFullAbout)}
                   style={styles.moreButton}
                 >
-                  <Text style={[styles.moreButtonText, { color: accentColor }]}>
+                  <Text style={[styles.moreButtonText, { color: PP.text }]}>
                     {showFullAbout ? 'Show Less' : 'More'}
                   </Text>
                 </TouchableOpacity>
               )}
-            </BlurView>
+            </View>
           ) : null}
 
           {/* Services Section */}
           {categoryNames.length > 0 && (
             <View style={styles.servicesSection}>
-              <Text style={styles.sectionTitleWhite}>Services</Text>
+              <Text style={[styles.sectionTitleNoCard, { color: PP.text }]}>Services</Text>
 
               {/* Category Tabs */}
               <FlatList
                 data={categoryNames}
-                renderItem={({ item: category }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.categoryTab,
-                      selectedCategory === category && [
-                        styles.categoryTabActive,
-                        { borderColor: accentColor },
-                      ],
-                    ]}
-                    onPress={() => setSelectedCategory(category)}
-                    activeOpacity={0.7}
-                  >
-                    <BlurView intensity={12} tint="light" style={styles.categoryTabBlur}>
-                      <Text
-                        style={[
-                          styles.categoryTabText,
-                          selectedCategory === category && { color: '#fff', fontWeight: '700' },
-                        ]}
-                      >
+                renderItem={({ item: category }) => {
+                  const selected = selectedCategory === category;
+                  return (
+                    <TouchableOpacity
+                      style={[
+                        styles.categoryTab,
+                        { borderColor: selected ? 'transparent' : PP.border, backgroundColor: selected ? accentColor : cardBg },
+                      ]}
+                      onPress={() => setSelectedCategory(category)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.categoryTabText, { color: selected ? '#fff' : PP.text }]}>
                         {category}
                       </Text>
-                    </BlurView>
-                  </TouchableOpacity>
-                )}
+                    </TouchableOpacity>
+                  );
+                }}
                 keyExtractor={(item) => item}
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -322,73 +310,98 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
               {/* Service Cards */}
               {currentServices.map((service) => (
-                <View key={service.id} style={styles.serviceItemCard}>
-                  <BlurView intensity={50} tint="light" style={styles.serviceCardBlur}>
-                    <LinearGradient
-                      colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.cardHighlight}
-                    />
-                    <View style={styles.serviceItem}>
-                      {/* Service Image */}
-                      <View style={styles.serviceImageContainer}>
-                        {service.images && service.images.length > 0 ? (
-                          <Image
-                            source={{ uri: service.images[0] }}
-                            style={styles.serviceImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.serviceImage, styles.serviceImagePlaceholder]}>
-                            <Text style={styles.serviceImagePlaceholderText}>
-                              {service.name.charAt(0)}
-                            </Text>
-                          </View>
-                        )}
+                <View key={service.id} style={[styles.serviceItemCard, { backgroundColor: cardBg, borderColor: PP.border }]}>
+                  <View style={styles.serviceItem}>
+                    {/* Service Image — accent-tinted initial when no photo, so
+                        description text starts at the same x on every card */}
+                    {service.images && service.images.length > 0 ? (
+                      <Image
+                        source={{ uri: service.images[0] }}
+                        style={styles.serviceImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.serviceImage, styles.serviceImagePlaceholder, { backgroundColor: accentColor + '1C' }]}>
+                        <Text style={[styles.serviceImagePlaceholderText, { color: accentColor }]}>
+                          {service.name.charAt(0).toUpperCase()}
+                        </Text>
                       </View>
+                    )}
 
-                      {/* Service Info */}
-                      <View style={styles.serviceInfo}>
-                        <Text style={styles.serviceName}>{service.name}</Text>
-                        {service.description ? (
-                          <Text style={styles.serviceDescription} numberOfLines={2}>
-                            {service.description}
-                          </Text>
-                        ) : null}
-                        <View style={styles.serviceDetails}>
-                          <Text style={styles.serviceDuration}>{service.duration}</Text>
-                          <Text style={[styles.servicePrice, { color: accentColor }]}>
-                            {'\u00A3'}{service.price}
+                    {/* Service Info */}
+                    <View style={styles.serviceInfo}>
+                      <Text style={[styles.serviceName, { color: PP.text }]}>{service.name}</Text>
+                      {service.description ? (
+                        <Text style={[styles.serviceDescription, { color: PP.sub }]} numberOfLines={2}>
+                          {service.description}
+                        </Text>
+                      ) : null}
+                      <View style={styles.serviceDetails}>
+                        <Text style={[styles.serviceDuration, { color: PP.sub }]}>{service.duration}</Text>
+                        <Text style={[styles.servicePrice, { color: PP.text }]}>
+                          {'£'}{service.price}
+                        </Text>
+                      </View>
+                      {service.addOns && service.addOns.length > 0 && (
+                        <View style={styles.addOnsRow}>
+                          <Text style={[styles.addOnsLabel, { color: PP.sub }]}>
+                            +{service.addOns.length} add-on{service.addOns.length !== 1 ? 's' : ''}
                           </Text>
                         </View>
-                        {service.addOns && service.addOns.length > 0 && (
-                          <View style={styles.addOnsRow}>
-                            <Text style={styles.addOnsLabel}>
-                              +{service.addOns.length} add-on{service.addOns.length !== 1 ? 's' : ''}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                      )}
                     </View>
-                  </BlurView>
+                  </View>
                 </View>
               ))}
             </View>
           )}
 
           {/* Contact Info */}
-          <BlurView intensity={50} tint="light" style={styles.contactCard}>
-            <LinearGradient
-              colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.cardHighlight}
-            />
-            <Text style={styles.sectionTitle}>Contact Information</Text>
-            <Text style={styles.contactText}>Location: {providerData.location}</Text>
-            <Text style={styles.contactText}>Service: {serviceType}</Text>
-          </BlurView>
+          <View style={[styles.card, { backgroundColor: cardBg, borderColor: PP.border }]}>
+            <Text style={[styles.sectionTitle, { color: PP.text }]}>Contact</Text>
+            {providerData.location ? (
+              <View style={[styles.contactRow, { borderBottomColor: PP.border }]}>
+                <Text style={[styles.contactLabel, { color: PP.sub }]}>Location</Text>
+                <Text style={[styles.contactValue, { color: PP.text }]} numberOfLines={1}>{providerData.location}</Text>
+              </View>
+            ) : null}
+            {providerData.phone ? (
+              <View style={[styles.contactRow, { borderBottomColor: PP.border }]}>
+                <Text style={[styles.contactLabel, { color: PP.sub }]}>Phone</Text>
+                <Text style={[styles.contactValue, { color: PP.text }]}>{providerData.phone}</Text>
+              </View>
+            ) : null}
+            {providerData.email ? (
+              <View style={[styles.contactRow, { borderBottomColor: PP.border }]}>
+                <Text style={[styles.contactLabel, { color: PP.sub }]}>Email</Text>
+                <Text style={[styles.contactValue, { color: PP.text }]} numberOfLines={1}>{providerData.email}</Text>
+              </View>
+            ) : null}
+            {providerData.instagram ? (
+              <View style={[styles.contactRow, { borderBottomColor: PP.border }]}>
+                <Text style={[styles.contactLabel, { color: PP.sub }]}>Instagram</Text>
+                <Text style={[styles.contactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram}</Text>
+              </View>
+            ) : null}
+            {providerData.website ? (
+              <View style={styles.contactRow}>
+                <Text style={[styles.contactLabel, { color: PP.sub }]}>Website</Text>
+                <Text style={[styles.contactValue, { color: PP.text }]} numberOfLines={1}>{providerData.website}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Portfolio — bottom, matching ProviderProfileScreen */}
+          {portfolio.length > 0 && (
+            <View style={styles.portfolioSection}>
+              <Text style={[styles.sectionTitleNoCard, { color: PP.text }]}>Portfolio</Text>
+              <View style={styles.portfolioGrid}>
+                {portfolio.map(item => (
+                  <Image key={item.id} source={{ uri: item.image_url }} style={styles.portfolioTile} />
+                ))}
+              </View>
+            </View>
+          )}
 
           <View style={{ height: 120 }} />
         </ScrollView>
@@ -401,10 +414,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 340,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
 
@@ -442,23 +463,18 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 8,
   },
   editButton: {
     borderRadius: 20,
-    overflow: 'hidden',
-  },
-  editButtonBlur: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   editButtonText: {
+    fontFamily: 'BakbakOne-Regular',
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
   },
 
   // Logo
@@ -468,21 +484,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     overflow: 'hidden',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.4)',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
-      },
-      android: { elevation: 8 },
-    }),
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.8)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 8,
   },
   providerLogo: {
     width: '100%',
@@ -501,62 +513,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoPlaceholderText: {
-    fontSize: 48,
-    fontWeight: '700',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 40,
     color: '#fff',
   },
 
-  // Provider info
+  // Provider info — hero text, matches ProviderProfileScreen typography
   providerInfoCenter: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 30,
   },
   providerNameLarge: {
-    fontSize: 28,
+    fontFamily: 'Prata-Regular',
+    fontSize: 26,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  metaText: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 1,
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    marginBottom: 10,
   },
-  serviceTag: {
+  yearsText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  slotsPill: {
     borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  serviceTagBlur: {
+    borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  serviceText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  locationText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 8,
+    paddingVertical: 10,
+    marginBottom: 16,
   },
   slotsText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
   },
-
-  // Stats
+  // Stats row — provider-only, not shown to clients
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 12,
     paddingHorizontal: 32,
   },
@@ -565,147 +569,115 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
   },
   statLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 10,
     marginTop: 2,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   statDivider: {
-    width: 1,
+    width: StyleSheet.hairlineWidth,
     height: 30,
     marginHorizontal: 16,
   },
 
-  // About card
-  aboutCard: {
-    marginHorizontal: 16,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-  cardHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 40,
+  // Generic frosted card
+  card: {
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: 'rgba(0,0,0,0.7)',
-    marginBottom: 10,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 18,
+    marginBottom: 15,
   },
   aboutText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
-    color: 'rgba(0,0,0,0.6)',
     lineHeight: 20,
   },
   moreButton: {
-    marginTop: 8,
+    marginTop: 10,
+    alignSelf: 'flex-start',
   },
   moreButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 
   // Services section
   servicesSection: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  sectionTitleWhite: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 12,
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+  sectionTitleNoCard: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 18,
+    marginBottom: 15,
   },
 
   // Category tabs
   categoryTabsContent: {
-    paddingBottom: 12,
-    gap: 8,
+    paddingBottom: 4,
+    gap: 10,
   },
   categoryTab: {
     borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  categoryTabActive: {
-    borderWidth: 1.5,
-  },
-  categoryTabBlur: {
+    borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    overflow: 'hidden',
+    paddingVertical: 10,
   },
   categoryTabText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    fontWeight: '600',
   },
 
   // Service cards
   serviceItemCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 10,
-  },
-  serviceCardBlur: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    padding: 12,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 15,
+    marginBottom: 12,
   },
   serviceItem: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  serviceImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 12,
-  },
   serviceImage: {
     width: 60,
     height: 60,
-    borderRadius: 12,
+    borderRadius: 30,
+    marginRight: 15,
   },
   serviceImagePlaceholder: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   serviceImagePlaceholderText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 22,
   },
   serviceInfo: {
     flex: 1,
   },
   serviceName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: 'rgba(0,0,0,0.8)',
-    marginBottom: 2,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    marginBottom: 5,
   },
   serviceDescription: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
     marginBottom: 4,
   },
   serviceDetails: {
@@ -714,33 +686,58 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   serviceDuration: {
-    fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 11,
   },
   servicePrice: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   addOnsRow: {
     marginTop: 4,
   },
   addOnsLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: 'rgba(0,0,0,0.4)',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
-  // Contact card
-  contactCard: {
-    marginHorizontal: 16,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
+  // Contact rows — matches ProviderProfileScreen's contactRow layout
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  contactText: {
-    fontSize: 14,
-    color: 'rgba(0,0,0,0.6)',
-    marginBottom: 4,
+  contactLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  contactValue: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
+    paddingLeft: 16,
+  },
+
+  // Portfolio — two-column grid
+  portfolioSection: {
+    marginBottom: 20,
+  },
+  portfolioGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  portfolioTile: {
+    width: (screenWidth - 40 - 12) / 2,
+    height: (screenWidth - 40 - 12) / 2,
+    borderRadius: 18,
   },
 });

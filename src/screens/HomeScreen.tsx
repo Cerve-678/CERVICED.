@@ -1108,44 +1108,6 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
-            {/* Book Again Section - Only show if user has previous bookings */}
-            {previouslyBookedProviders.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>BOOK AGAIN</Text>
-                </View>
-
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {previouslyBookedProviders.slice(0, 10).map(provider => (
-                    <TouchableOpacity
-                      key={`booked-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
             {/* Recommended Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1472,6 +1434,44 @@ export default function HomeScreen() {
                 ))}
               </ScrollView>
             </View>}
+
+            {/* Book Again Section - Only show if user has previous bookings */}
+            {previouslyBookedProviders.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>BOOK AGAIN</Text>
+                </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
+                >
+                  {previouslyBookedProviders.slice(0, 10).map(provider => (
+                    <TouchableOpacity
+                      key={`booked-${provider.id}`}
+                      style={styles.roundCard}
+                      onPress={() => navigateToProvider(provider)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                        {provider.logo && (
+                          <Image
+                            source={provider.logo}
+                            style={styles.roundCardImage}
+                            resizeMode="cover"
+                          />
+                        )}
+                      </View>
+                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
+                        {provider.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </>
         )}
 

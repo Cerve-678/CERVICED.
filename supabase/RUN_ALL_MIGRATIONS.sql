@@ -2326,7 +2326,7 @@ GRANT USAGE ON SCHEMA cron TO postgres;
 --   Written by ProviderAutomationsScreen on save. Keys used here:
 --   clientReminderTiming (text[] e.g. ["24h","48h"]), rebookingNudgeWeeks
 --   ('never'|'2'|'4'|...), autoReviewRequest, postApptCheckIn,
---   birthdayGreeting, autoSendIntakeForm, waitlistEnabled (client UI),
+--   birthdayGreeting, waitlistEnabled (client UI),
 --   autoAcceptWaitlist, depositRequiredNew.
 --   NULL settings = provider never saved the screen → defaults apply
 --   (24h reminder on, everything else off) to preserve old behaviour.
@@ -2662,10 +2662,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ───────────────────────────────────────────────────────────
 -- STEP 8: Auto-send intake form on new bookings
---   When the provider enabled autoSendIntakeForm and has a library form
---   marked auto_send whose service_names match the booked service (or is
---   blank = all services), a copy is sent with the booking automatically
---   and the client is notified. Mirrors databaseService.sendLibraryFormToBooking.
+--   Mirrors the info-pack auto-attach trigger: a library form marked
+--   auto_send whose service_names match the booked service (or is
+--   blank = all services) is sent automatically, no separate provider-
+--   level toggle required — the per-form Auto-send switch is the only
+--   gate, same as how info packs have no gate beyond service match.
+--   Mirrors databaseService.sendLibraryFormToBooking.
 -- ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.handle_auto_send_intake_form()
 RETURNS TRIGGER AS $$
@@ -2673,12 +2675,11 @@ DECLARE
   v_provider RECORD;
   v_form     RECORD;
 BEGIN
-  SELECT id, display_name, automation_settings
+  SELECT id, display_name
     INTO v_provider
     FROM public.providers
    WHERE id = NEW.provider_id;
-  IF NOT FOUND
-     OR COALESCE((v_provider.automation_settings->>'autoSendIntakeForm')::BOOLEAN, FALSE) = FALSE THEN
+  IF NOT FOUND THEN
     RETURN NEW;
   END IF;
 
@@ -2785,6 +2786,7 @@ SELECT cron.schedule(
 -- ============================================================
 
 
+
 -- ════════════════════════════════════════════════════
 -- info_packs_bookings.sql
 -- ════════════════════════════════════════════════════
@@ -2820,8 +2822,6 @@ CREATE TABLE IF NOT EXISTS public.info_packs (
 
 -- Packs attach to SPECIFIC services (by name), mirroring
 -- provider_form_library.service_names. Empty array = all services.
--- The legacy `service` category column remains as a display label and
--- as a fallback matcher for packs created before this migration.
 ALTER TABLE public.info_packs
   ADD COLUMN IF NOT EXISTS service_names TEXT[] NOT NULL DEFAULT '{}';
 
@@ -2915,9 +2915,9 @@ ALTER TABLE public.notifications
 
 -- ───────────────────────────────────────────────────────────
 -- STEP 4: Attach matching packs when a booking is created
---   Matches packs whose service is GENERAL or equals the booking's
---   service category snapshot. One notification per booking regardless
---   of how many packs attach.
+--   Matches packs whose service_names lists this exact booked service,
+--   or is empty (= attach to all services). One notification per
+--   booking regardless of how many packs attach.
 -- ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.handle_attach_info_packs()
 RETURNS TRIGGER AS $$
@@ -2931,22 +2931,14 @@ BEGIN
    WHERE id = NEW.provider_id;
   IF NOT FOUND THEN RETURN NEW; END IF;
 
-  -- Per-service match: pack lists this exact service (or is blank = all).
-  -- Legacy packs (no service_names) fall back to category matching.
   INSERT INTO public.booking_info_packs
     (booking_id, info_pack_id, provider_id, client_user_id, title, service, content)
   SELECT NEW.id, ip.id, v_provider.id, NEW.user_id, ip.title, NEW.service_name_snapshot, ip.content
     FROM public.info_packs ip
    WHERE ip.provider_id IN (v_provider.id, v_provider.user_id)
      AND (
-       NEW.service_name_snapshot = ANY(COALESCE(ip.service_names, '{}'))
-       OR (
-         cardinality(COALESCE(ip.service_names, '{}')) = 0
-         AND (
-           COALESCE(ip.service, 'GENERAL') = 'GENERAL'
-           OR UPPER(ip.service) = UPPER(COALESCE(NEW.service_category_snapshot, ''))
-         )
-       )
+       NEW.service_name_snapshot = ANY(ip.service_names)
+       OR cardinality(ip.service_names) = 0
      )
   ON CONFLICT (booking_id, info_pack_id) DO NOTHING;
 
@@ -3003,14 +2995,8 @@ BEGIN
        AND bk.status IN ('pending', 'confirmed')
        AND bk.booking_date >= CURRENT_DATE
        AND (
-         bk.service_name_snapshot = ANY(COALESCE(NEW.service_names, '{}'))
-         OR (
-           cardinality(COALESCE(NEW.service_names, '{}')) = 0
-           AND (
-             COALESCE(NEW.service, 'GENERAL') = 'GENERAL'
-             OR UPPER(NEW.service) = UPPER(COALESCE(bk.service_category_snapshot, ''))
-           )
-         )
+         bk.service_name_snapshot = ANY(NEW.service_names)
+         OR cardinality(NEW.service_names) = 0
        )
   LOOP
     INSERT INTO public.booking_info_packs

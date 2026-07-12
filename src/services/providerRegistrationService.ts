@@ -67,7 +67,7 @@ function isLocalUri(uri: string): boolean {
   );
 }
 
-async function uploadToStorage(
+export async function uploadToStorage(
   bucket: string,
   storagePath: string,
   localUri: string
@@ -179,6 +179,9 @@ export async function saveProviderToSupabase(
         instagram: data.instagram || null,
         website: data.website || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
+        business_type: data.businessType || null,
+        full_address: data.fullAddress || null,
+        address_release_policy: data.addressReleasePolicy || 'on_confirmation',
         is_active: true,
       })
       .eq('id', existingProvider.id);
@@ -214,6 +217,9 @@ export async function saveProviderToSupabase(
         instagram: data.instagram || null,
         website: data.website || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
+        business_type: data.businessType || null,
+        full_address: data.fullAddress || null,
+        address_release_policy: data.addressReleasePolicy || 'on_confirmation',
         is_active: true,
       })
       .select('id')

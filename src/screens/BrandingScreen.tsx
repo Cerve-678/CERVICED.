@@ -9,7 +9,6 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,8 +26,7 @@ import {
   parseThemeKey,
 } from '../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../components/ProviderThemePicker';
-
-const { width: SW } = Dimensions.get('window');
+import { uploadToStorage } from '../services/providerRegistrationService';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -50,25 +48,11 @@ async function uploadBackgroundImage(
   localUri: string
 ): Promise<string> {
   const ext = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
   const storagePath = `${userId}/background.${ext}`;
-
-  const response = await fetch(localUri);
-  const blob = await response.blob();
-  const arrayBuffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-
-  const { error } = await supabase.storage
-    .from('provider-backgrounds')
-    .upload(storagePath, bytes, { contentType, upsert: true });
-
-  if (error) throw new Error(`Upload failed: ${error.message}`);
-
-  const { data } = supabase.storage
-    .from('provider-backgrounds')
-    .getPublicUrl(storagePath);
-
-  return data.publicUrl;
+  // fetch(localUri).blob() is unreliable for file:// URIs in React Native
+  // ("Network request failed") — uploadToStorage reads via expo-file-system
+  // and uploads as bytes instead, same as the provider logo upload.
+  return uploadToStorage('provider-backgrounds', storagePath, localUri);
 }
 
 export default function BrandingScreen({ navigation }: any) {
@@ -267,13 +251,12 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Colour theme — accent + card colour + backdrop sets */}
+          {/* Profile theme — accent + card colour + backdrop sets */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Colour Theme</Text>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Profile Theme</Text>
             <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Each option is three colours — accent, card colour, and backdrop (shown behind
-              your profile as a gradient). Pick a set or build your own with Custom, then
-              choose the content-area colour below.
+              Each preset is a matched set of accent, card, and backdrop colours.
+              Pick one or tap Custom to build your own.
             </Text>
             <ProviderThemePicker
               value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
@@ -440,120 +423,6 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: '#fff',
-  },
-
-  gradientGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-
-  themeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  themeOption: {
-    width: (SW - 40 - 18 * 2 - 10 * 3) / 4,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    overflow: 'hidden',
-    alignItems: 'center',
-    paddingBottom: 4,
-  },
-  themeSwatch: {
-    width: '100%',
-    height: 52,
-    borderRadius: 8,
-    marginBottom: 4,
-    padding: 7,
-    justifyContent: 'space-between',
-  },
-  themeCardBar: {
-    width: '75%',
-    height: 13,
-    borderRadius: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  themeAccentDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    alignSelf: 'flex-end',
-  },
-  customPanel: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  customLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 10,
-    letterSpacing: 1,
-    marginBottom: 8,
-    marginTop: 6,
-  },
-  customRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  customSwatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  gradientOption: {
-    width: (SW - 40 - 18 * 2 - 10 * 3) / 4,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    overflow: 'hidden',
-    alignItems: 'center',
-    paddingBottom: 4,
-  },
-  gradientSwatch: {
-    width: '100%',
-    height: 52,
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  gradientName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 9,
-    textAlign: 'center',
-  },
-
-  accentGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  accentOption: {
-    width: (SW - 40 - 18 * 2 - 10 * 3) / 4,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    paddingBottom: 4,
-    paddingTop: 4,
-  },
-  accentSwatch: {
-    width: 36, height: 36,
-    borderRadius: 18,
-    marginBottom: 4,
-  },
-  accentName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 9,
-    textAlign: 'center',
   },
 
   saveBtn: {

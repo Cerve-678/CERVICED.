@@ -12,6 +12,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,10 +72,10 @@ function fmtDate(d: string) {
 // ─── Pack Card ────────────────────────────────────────────────────────────────
 
 function PackCard({
-  pack, dark, P, index, onSend, onDelete,
+  pack, dark, P, index, onPress, onSend, onDelete,
 }: {
   pack: InfoPack; dark: boolean; P: typeof LIGHT_P; index: number;
-  onSend: () => void; onDelete: () => void;
+  onPress: () => void; onSend: () => void; onDelete: () => void;
 }) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
@@ -96,32 +97,34 @@ function PackCard({
 
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <View style={[pc.card, { backgroundColor: P.card, borderColor: P.border }]}>
-        <View style={pc.cardTop}>
-          <View style={[pc.servicePill, { backgroundColor: pillBg }]}>
-            <Text style={[pc.servicePillText, { color: sc.text }]} numberOfLines={1}>{pillLabel}</Text>
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
+        <View style={[pc.card, { backgroundColor: P.card, borderColor: P.border }]}>
+          <View style={pc.cardTop}>
+            <View style={[pc.servicePill, { backgroundColor: pillBg }]}>
+              <Text style={[pc.servicePillText, { color: sc.text }]} numberOfLines={1}>{pillLabel}</Text>
+            </View>
+            <Text style={[pc.date, { color: P.sub }]}>{fmtDate(pack.createdAt)}</Text>
           </View>
-          <Text style={[pc.date, { color: P.sub }]}>{fmtDate(pack.createdAt)}</Text>
+          <Text style={[pc.title, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
+          <Text style={[pc.preview, { color: P.sub }]} numberOfLines={2}>{pack.content}</Text>
+          <View style={[pc.actions, { borderTopColor: P.border }]}>
+            <TouchableOpacity
+              style={[pc.actionBtn, { backgroundColor: dark ? 'rgba(255,59,48,0.10)' : 'rgba(255,59,48,0.07)' }]}
+              onPress={onDelete} activeOpacity={0.75}
+            >
+              <Ionicons name="trash-outline" size={14} color="#FF453A" />
+              <Text style={[pc.actionText, { color: '#FF453A' }]}>Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[pc.actionBtn, { flex: 1, backgroundColor: P.iconBg }]}
+              onPress={onSend} activeOpacity={0.75}
+            >
+              <Ionicons name="send-outline" size={14} color={P.accent} />
+              <Text style={[pc.actionText, { color: P.accent }]}>Send to client</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={[pc.title, { color: P.text }]} numberOfLines={1}>{pack.title}</Text>
-        <Text style={[pc.preview, { color: P.sub }]} numberOfLines={2}>{pack.content}</Text>
-        <View style={[pc.actions, { borderTopColor: P.border }]}>
-          <TouchableOpacity
-            style={[pc.actionBtn, { backgroundColor: dark ? 'rgba(255,59,48,0.10)' : 'rgba(255,59,48,0.07)' }]}
-            onPress={onDelete} activeOpacity={0.75}
-          >
-            <Ionicons name="trash-outline" size={14} color="#FF453A" />
-            <Text style={[pc.actionText, { color: '#FF453A' }]}>Delete</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[pc.actionBtn, { flex: 1, backgroundColor: P.iconBg }]}
-            onPress={onSend} activeOpacity={0.75}
-          >
-            <Ionicons name="send-outline" size={14} color={P.accent} />
-            <Text style={[pc.actionText, { color: P.accent }]}>Send to client</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -168,6 +171,10 @@ function SendSheet({
 
   if (!visible && !pack) return null;
 
+  // Rendered inside a native Modal — a screen-local absolute overlay can never
+  // outrank the floating pill tab bar, which mounts at the navigator level,
+  // above individual screens. Modal renders in its own top-level layer instead.
+
   const handleEmail = () => {
     if (!pack || !email.trim()) return;
     const sub2   = encodeURIComponent(`Info Pack: ${pack.title}`);
@@ -183,34 +190,36 @@ function SendSheet({
   };
 
   return (
-    <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? 'auto' : 'none'}>
-      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
-          <View style={[ss.handle, { backgroundColor: P.border }]} />
-          <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
-          {pack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{pack.title}</Text>}
-          <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-            <Ionicons name="mail-outline" size={16} color={P.sub} />
-            <TextInput style={[ss.input, { color: P.text }]} placeholder="Client email" placeholderTextColor={P.sub} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          </View>
-          <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-            <Ionicons name="call-outline" size={16} color={P.sub} />
-            <TextInput style={[ss.input, { color: P.text }]} placeholder="Client phone" placeholderTextColor={P.sub} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          </View>
-          <View style={ss.btnRow}>
-            <TouchableOpacity style={[ss.btn, { backgroundColor: P.iconBg }]} activeOpacity={0.78} onPress={handleEmail}>
-              <Ionicons name="mail-outline" size={16} color={P.accent} />
-              <Text style={[ss.btnText, { color: P.accent }]}>Send via Email</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[ss.btn, { backgroundColor: dark ? 'rgba(48,209,88,0.15)' : 'rgba(48,209,88,0.10)' }]} activeOpacity={0.78} onPress={handleSMS}>
-              <Ionicons name="chatbubble-outline" size={16} color="#30D158" />
-              <Text style={[ss.btnText, { color: '#30D158' }]}>Send via SMS</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Animated.View>
+    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? 'auto' : 'none'}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
+            <View style={[ss.handle, { backgroundColor: P.border }]} />
+            <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
+            {pack && <Text style={[ss.packName, { color: P.sub }]} numberOfLines={1}>{pack.title}</Text>}
+            <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
+              <Ionicons name="mail-outline" size={16} color={P.sub} />
+              <TextInput style={[ss.input, { color: P.text }]} placeholder="Client email" placeholderTextColor={P.sub} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+            <View style={[ss.inputWrap, { backgroundColor: P.iconBg, borderColor: P.border }]}>
+              <Ionicons name="call-outline" size={16} color={P.sub} />
+              <TextInput style={[ss.input, { color: P.text }]} placeholder="Client phone" placeholderTextColor={P.sub} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            </View>
+            <View style={ss.btnRow}>
+              <TouchableOpacity style={[ss.btn, { backgroundColor: P.iconBg }]} activeOpacity={0.78} onPress={handleEmail}>
+                <Ionicons name="mail-outline" size={16} color={P.accent} />
+                <Text style={[ss.btnText, { color: P.accent }]}>Send via Email</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[ss.btn, { backgroundColor: dark ? 'rgba(48,209,88,0.15)' : 'rgba(48,209,88,0.10)' }]} activeOpacity={0.78} onPress={handleSMS}>
+                <Ionicons name="chatbubble-outline" size={16} color="#30D158" />
+                <Text style={[ss.btnText, { color: '#30D158' }]}>Send via SMS</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </Animated.View>
+    </Modal>
   );
 }
 
@@ -240,6 +249,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const [content,    setContent]    = useState('');
   const [packs,      setPacks]      = useState<InfoPack[]>([]);
   const [sending,    setSending]    = useState<InfoPack | null>(null);
+  const [previewing, setPreviewing] = useState<InfoPack | null>(null);
   const [isLoading,  setIsLoading]  = useState(true);
   const [myServices, setMyServices] = useState<string[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -367,6 +377,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
             renderItem={({ item, index }) => (
               <PackCard
                 pack={item} dark={dark} P={P} index={index}
+                onPress={() => setPreviewing(item)}
                 onSend={() => setSending(item)}
                 onDelete={() => handleDelete(item.id)}
               />
@@ -436,6 +447,45 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
         pack={sending} visible={!!sending} dark={dark} P={P}
         onClose={() => setSending(null)}
       />
+
+      {/* Full-content preview — tapping a card only ever showed the 2-line
+          truncated snippet before; this is where you actually read it. */}
+      <Modal
+        visible={!!previewing}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPreviewing(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPreviewing(null)} />
+          <View style={{ maxHeight: '78%', backgroundColor: P.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 36 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16, backgroundColor: P.border }} />
+            {previewing && (
+              <>
+                <Text style={{ fontSize: 19, fontWeight: '800', letterSpacing: -0.4, color: P.text, marginBottom: 4 }} numberOfLines={2}>
+                  {previewing.title}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: P.accent, marginBottom: 14 }}>
+                  {previewing.serviceNames.length === 0 ? 'ALL SERVICES' : previewing.serviceNames.join(', ').toUpperCase()}
+                </Text>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                  <Text style={{ fontSize: 15, lineHeight: 23, color: P.text }}>
+                    {previewing.content}
+                  </Text>
+                </ScrollView>
+                <TouchableOpacity
+                  style={{ marginTop: 18, borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: P.accent }}
+                  activeOpacity={0.85}
+                  onPress={() => setPreviewing(null)}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       <DialogHost />
     </View>
   );

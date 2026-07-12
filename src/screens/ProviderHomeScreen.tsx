@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import {
+  Alert,
   Animated,
   FlatList,
   Modal,
@@ -269,11 +270,12 @@ interface BookingCardProps {
   expansionState: ExpansionState;
   onToggleExpand: () => void;
   onPress: () => void;
+  onViewMessages: () => void;
   dark: boolean;
   P: typeof L;
 }
 
-function BookingCard({ booking, expansionState, onToggleExpand, onPress, dark, P }: BookingCardProps) {
+function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
   const cfg   = statusCfg(booking.status);
   const past  = isPastBooking(booking.bookingDate, booking.bookingTime);
   const eta   = countdownLabel(booking.bookingDate, booking.bookingTime);
@@ -376,7 +378,7 @@ function BookingCard({ booking, expansionState, onToggleExpand, onPress, dark, P
             <Text style={[bc.instructions, { color: P.sub }]}>*{booking.bookingInstructions}*</Text>
           )}
           <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
-          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.indicator }]} activeOpacity={0.75}>
+          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.indicator }]} activeOpacity={0.75} onPress={onViewMessages}>
             <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>View Messages</Text>
           </TouchableOpacity>
         </View>
@@ -1026,6 +1028,34 @@ export default function ProviderHomeScreen({ navigation }: Props) {
     });
   }, []);
 
+  const openConversation = useCallback(async (booking: ConfirmedBooking) => {
+    const clientUserId = booking.clientUserId;
+    const providerId = booking.providerId;
+    if (!clientUserId || !providerId) return;
+    try {
+      const clientName = booking.customerName || 'Client';
+      const { data: existing } = await supabase
+        .from('provider_conversations')
+        .select('id')
+        .eq('provider_id', providerId)
+        .eq('user_id', clientUserId)
+        .maybeSingle();
+      if (existing?.id) {
+        navigation.navigate('ProviderConversation', { conversationId: existing.id, clientUserId, clientName });
+        return;
+      }
+      const { data: created, error } = await supabase
+        .from('provider_conversations')
+        .insert({ provider_id: providerId, user_id: clientUserId })
+        .select('id')
+        .single();
+      if (error || !created) throw error;
+      navigation.navigate('ProviderConversation', { conversationId: created.id, clientUserId, clientName });
+    } catch {
+      Alert.alert('Error', 'Could not open chat. Try again.');
+    }
+  }, [navigation]);
+
   const handleDateTap = useCallback((dateStr: string) => {
     setSelectedDate(dateStr);
     const idx = STRIP_DATES.indexOf(dateStr);
@@ -1323,6 +1353,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                     expansionState={expansionStates[item.booking.id] ?? 0}
                     onToggleExpand={() => toggleExpand(item.booking.id)}
                     onPress={() => navigation.navigate('BookingDetail', { bookingId: item.booking.id, booking: item.booking })}
+                    onViewMessages={() => openConversation(item.booking)}
                     dark={dark}
                     P={P}
                   />

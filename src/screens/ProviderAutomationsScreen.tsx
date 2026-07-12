@@ -59,7 +59,6 @@ interface ProviderAutomations {
 
   // Provider business rules
   autoConfirmBookings:    boolean;
-  autoSendIntakeForm:     boolean;
   bufferMins:             string;     // '0' | '10' | '15' | '30' | '45' | '60'
   cancellationNoticeHours:string;     // '0' | '12' | '24' | '48' | '72'
   depositRequiredNew:     boolean;    // require deposit from first-time clients
@@ -79,7 +78,6 @@ const DEFAULTS: ProviderAutomations = {
   birthdayGreeting:        false,
   newBookingRecap:         true,
   autoConfirmBookings:     false,
-  autoSendIntakeForm:      false,
   bufferMins:              '0',
   cancellationNoticeHours: '24',
   depositRequiredNew:      false,
@@ -214,7 +212,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           birthdayGreeting:        a.birthdayGreeting     ?? m['pa_birthday_greeting']      ?? DEFAULTS.birthdayGreeting,
           newBookingRecap:         m['pa_new_booking_recap']           ?? DEFAULTS.newBookingRecap,
           autoConfirmBookings:     m['pa_auto_confirm_bookings']       ?? DEFAULTS.autoConfirmBookings,
-          autoSendIntakeForm:      a.autoSendIntakeForm   ?? m['pa_auto_send_intake_form']  ?? DEFAULTS.autoSendIntakeForm,
           bufferMins:              m['pa_buffer_mins']                 ?? DEFAULTS.bufferMins,
           cancellationNoticeHours: m['pa_cancellation_notice_hours']   ?? DEFAULTS.cancellationNoticeHours,
           depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
@@ -245,7 +242,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             pa_birthday_greeting:         d.birthdayGreeting,
             pa_new_booking_recap:         d.newBookingRecap,
             pa_auto_confirm_bookings:     d.autoConfirmBookings,
-            pa_auto_send_intake_form:     d.autoSendIntakeForm,
             pa_buffer_mins:               d.bufferMins,
             pa_cancellation_notice_hours: d.cancellationNoticeHours,
             pa_deposit_required_new:      d.depositRequiredNew,
@@ -279,7 +275,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           autoReviewRequest:    d.autoReviewRequest,
           postApptCheckIn:      d.postApptCheckIn,
           birthdayGreeting:     d.birthdayGreeting,
-          autoSendIntakeForm:   d.autoSendIntakeForm,
           waitlistEnabled:      d.waitlistEnabled,
           autoAcceptWaitlist:   d.autoAcceptWaitlist,
           depositRequiredNew:   d.depositRequiredNew,
@@ -449,14 +444,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           description="New booking requests are confirmed instantly without manual approval. Best for providers with a fixed open schedule."
           value={d.autoConfirmBookings}
           onToggle={v => set('autoConfirmBookings', v)}
-          C={C}
-        />
-
-        <AutoCard
-          title="Auto-send intake form on confirmation"
-          description="When a booking is confirmed, your default intake form is automatically sent to the client. Requires a form to be set in your Form Library."
-          value={d.autoSendIntakeForm}
-          onToggle={v => set('autoSendIntakeForm', v)}
           C={C}
         />
 

@@ -254,13 +254,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const [fetchedBooking, setFetchedBooking] = useState<ConfirmedBooking | null>(null);
   const [fetching, setFetching] = useState(false);
-  const [clientUserId, setClientUserId] = useState<string | null>(null);
+  // Seed from the booking object directly — clientUserId on ConfirmedBooking is the source of truth.
+  // The DB fallback below only fires when the field is absent (legacy local-only bookings).
+  const [clientUserId, setClientUserId] = useState<string | null>(
+    contextBooking?.clientUserId ?? null
+  );
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
   const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [showSupportDropdown, setShowSupportDropdown] = useState(false);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
+  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: string } | null>(null);
   const [showRespondModal, setShowRespondModal] = useState(false);
   const [outboundSlots, setOutboundSlots] = useState<{ date: string; times: string[] }[]>([]);
   const [slotDate, setSlotDate] = useState('');
@@ -355,6 +360,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           notes: d.notes ?? undefined,
           bookingInstructions: d.booking_instructions ?? undefined,
           clientAddress: d.client_address ?? undefined,
+          clientUserId: d.user_id ?? undefined,
         } as unknown as ConfirmedBooking;
         setFetchedBooking(mapped);
         if (d.user_id) setClientUserId(d.user_id);
@@ -367,6 +373,59 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     getActiveRescheduleRequest(bookingId)
       .then(r => setDbReschedule(r))
       .catch(() => {});
+  }, [bookingId]);
+
+  // Realtime: keep reschedule state + booking date/time in sync while screen is open.
+  // Without this, if the client confirms a reschedule the provider still sees the old
+  // date and the "reschedule pending" UI until they close and reopen the screen.
+  useEffect(() => {
+    if (!bookingId) return;
+
+    const to12 = (t: string) => {
+      const [hs, ms] = t.split(':');
+      let h = parseInt(hs ?? '0');
+      const m = parseInt(ms ?? '0');
+      const p = h >= 12 ? 'PM' : 'AM';
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+      return `${h}:${String(m).padStart(2, '0')} ${p}`;
+    };
+
+    const channel = supabase
+      .channel(`provider-booking-live-${bookingId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'booking_reschedule_requests', filter: `booking_id=eq.${bookingId}` },
+        (payload) => {
+          const row = payload.new as DbBookingRescheduleRequest | null;
+          // If row was deleted or status is confirmed/rejected, clear the reschedule UI
+          if (!row || (payload.eventType === 'DELETE')) {
+            setDbReschedule(null);
+          } else {
+            setDbReschedule(row);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${bookingId}` },
+        (payload) => {
+          const d = payload.new as any;
+          if (!d) return;
+          const rawStart = d.booking_time ? (d.booking_time as string).slice(0, 5) : '';
+          const rawEnd = d.end_time ? (d.end_time as string).slice(0, 5) : '';
+          setLiveBookingOverrides(prev => ({
+            ...prev,
+            ...(d.booking_date && { bookingDate: d.booking_date }),
+            ...(rawStart && { bookingTime: to12(rawStart) }),
+            ...(rawEnd && { endTime: to12(rawEnd) }),
+            ...(d.status && { status: d.status }),
+          }));
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [bookingId]);
 
   useEffect(() => {
@@ -440,7 +499,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     })();
   }, []);
 
-  const booking = contextBooking ?? fetchedBooking;
+  const baseBooking = contextBooking ?? fetchedBooking;
+  const booking = baseBooking ? {
+    ...baseBooking,
+    ...(liveBookingOverrides?.bookingDate !== undefined && { bookingDate: liveBookingOverrides.bookingDate }),
+    ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
+    ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
+    ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status as BookingStatus }),
+  } as ConfirmedBooking : baseBooking;
 
   // Fetch real available slots when provider enters a complete DD/MM/YYYY date
   useEffect(() => {
@@ -634,6 +700,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       setReleasingAddress(false);
     }
   }, [booking, releasingAddress]);
+
+  const addressPolicy = useMemo(
+    () => addressSettings?.address_release_policy ?? 'manual',
+    [addressSettings]
+  );
+
+  const isAddressReleased = useMemo(() => {
+    if (!booking) return false;
+    return !!addressReleasedAt
+      || addressPolicy === 'always'
+      || (addressPolicy === 'on_confirmation' && (
+        booking.status === BookingStatus.UPCOMING ||
+        booking.status === BookingStatus.IN_PROGRESS ||
+        booking.status === BookingStatus.COMPLETED
+      ));
+  }, [booking, addressReleasedAt, addressPolicy]);
 
   const handleStatusChange = useCallback(
     (newStatus: BookingStatus) => {
@@ -973,7 +1055,32 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
-                {booking.address ? (
+                {addressSettings?.business_type !== 'mobile' && addressPolicy === 'manual' ? (
+                  isAddressReleased ? (
+                    <Row
+                      label="Location"
+                      value="Address sent to client"
+                      textColor={P.text}
+                      valueColor="#34C759"
+                      divColor={rowDiv}
+                      last
+                    />
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.row}
+                      onPress={handleReleaseAddress}
+                      activeOpacity={0.7}
+                      disabled={releasingAddress}
+                    >
+                      <Text style={[styles.rowLabel, { color: P.text }]} numberOfLines={1}>Location</Text>
+                      {releasingAddress ? (
+                        <ActivityIndicator size="small" color={P.accent} />
+                      ) : (
+                        <Text style={[styles.rowValue, { color: P.accent }]}>Address will be confirmed…</Text>
+                      )}
+                    </TouchableOpacity>
+                  )
+                ) : booking.address ? (
                   <Row label="Location" value={booking.address} textColor={P.text} divColor={rowDiv} last />
                 ) : null}
               </View>
@@ -981,126 +1088,35 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Perforated divider ── */}
               <Perf color={perf} />
 
-              {/* ── ADDRESS section — always visible ── */}
-              <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: P.sub }]}>ADDRESS</Text>
+              {/* ── ADDRESS section — mobile providers only; client sends this via messaging ── */}
+              {addressSettings?.business_type === 'mobile' && (
+                <>
+                  <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: P.sub }]}>ADDRESS</Text>
 
-                {addressSettings?.business_type === 'mobile' ? (
-                  booking.clientAddress ? (
-                    <>
-                      <View style={[addrStyles.addressBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: rowDiv }]}>
-                        <Text style={[addrStyles.addressLabel, { color: P.sub }]}>CLIENT ADDRESS</Text>
-                        <Text style={[addrStyles.addressText, { color: P.text }]}>{booking.clientAddress}</Text>
-                      </View>
-                      <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv, marginTop: 8 }]}>
-                        <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
-                        <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — you travel to the client</Text>
-                      </View>
-                    </>
-                  ) : (
-                    <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv }]}>
-                      <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
-                      <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — client address not provided</Text>
-                    </View>
-                  )
-                ) : (() => {
-                  const policy = addressSettings?.address_release_policy ?? 'manual';
-
-                  // Calculate whether address is logically released
-                  const isReleased = !!addressReleasedAt
-                    || policy === 'always'
-                    || (policy === 'on_confirmation' && (
-                      booking.status === BookingStatus.UPCOMING ||
-                      booking.status === BookingStatus.IN_PROGRESS ||
-                      booking.status === BookingStatus.COMPLETED
-                    ));
-
-                  // Calculate the scheduled release date for timed policies
-                  const scheduledReleaseDate = (() => {
-                    if (!booking.bookingDate) return null;
-                    const offsetDays: Record<string, number> = {
-                      day_before: 1, two_days_before: 2, three_days_before: 3,
-                      five_days_before: 5, week_before: 7,
-                    };
-                    const days = offsetDays[policy];
-                    if (!days) return null;
-                    const appt = new Date(booking.bookingDate);
-                    appt.setDate(appt.getDate() - days);
-                    return appt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                  })();
-
-                  return (
-                    <>
-                      {/* Your address — always visible to provider */}
-                      {addressSettings?.full_address ? (
+                    {booking.clientAddress ? (
+                      <>
                         <View style={[addrStyles.addressBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: rowDiv }]}>
-                          <Text style={[addrStyles.addressLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
-                          <Text style={[addrStyles.addressText, { color: P.text }]}>{addressSettings.full_address}</Text>
+                          <Text style={[addrStyles.addressLabel, { color: P.sub }]}>CLIENT ADDRESS</Text>
+                          <Text style={[addrStyles.addressText, { color: P.text }]}>{booking.clientAddress}</Text>
                         </View>
-                      ) : (
-                        <Text style={[addrStyles.noAddressHint, { color: P.sub }]}>
-                          No full address set — add it in your profile settings.
-                        </Text>
-                      )}
+                        <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv, marginTop: 8 }]}>
+                          <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
+                          <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — you travel to the client</Text>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv }]}>
+                        <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
+                        <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — waiting for client to send their address in Messages</Text>
+                      </View>
+                    )}
+                  </View>
 
-                      {/* Manual policy: prominent release button or sent confirmation */}
-                      {(policy === 'manual' || !addressSettings) && (
-                        isReleased ? (
-                          <View style={[addrStyles.sentConfirm, { backgroundColor: '#34C75912', borderColor: '#34C75940' }]}>
-                            <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-                            <Text style={[addrStyles.sentConfirmText, { color: '#34C759' }]}>
-                              {'Address sent to client'}
-                              {addressReleasedAt ? ` · ${new Date(addressReleasedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
-                            </Text>
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            style={[addrStyles.releaseBtn, { backgroundColor: P.accent, opacity: releasingAddress ? 0.6 : 1 }]}
-                            onPress={handleReleaseAddress}
-                            activeOpacity={0.8}
-                            disabled={releasingAddress}
-                          >
-                            {releasingAddress
-                              ? <ActivityIndicator size="small" color="#fff" />
-                              : <>
-                                  <Ionicons name="location-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
-                                  <Text style={addrStyles.releaseBtnText}>Share Address with Client</Text>
-                                </>
-                            }
-                          </TouchableOpacity>
-                        )
-                      )}
-
-                      {/* Timed / auto policies: show status or scheduled date */}
-                      {policy !== 'manual' && addressSettings && (
-                        isReleased ? (
-                          <View style={[addrStyles.sentConfirm, { backgroundColor: '#34C75912', borderColor: '#34C75940' }]}>
-                            <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-                            <Text style={[addrStyles.sentConfirmText, { color: '#34C759' }]}>
-                              {'Location shared with client'}
-                              {addressReleasedAt ? ` · ${new Date(addressReleasedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={[addrStyles.sentConfirm, { backgroundColor: isDarkMode ? 'rgba(255,159,10,0.10)' : 'rgba(255,149,0,0.08)', borderColor: 'rgba(255,149,0,0.30)' }]}>
-                            <Ionicons name="time-outline" size={16} color="#FF9500" />
-                            <Text style={[addrStyles.sentConfirmText, { color: '#FF9500' }]}>
-                              {policy === 'on_confirmation'
-                                ? 'Will be shared automatically when this booking is confirmed'
-                                : scheduledReleaseDate
-                                  ? `Will be shared with the client on ${scheduledReleaseDate}`
-                                  : 'Will be shared automatically before the appointment'}
-                            </Text>
-                          </View>
-                        )
-                      )}
-                    </>
-                  );
-                })()}
-              </View>
-
-              {/* ── Perforated divider ── */}
-              <Perf color={perf} />
+                  {/* ── Perforated divider ── */}
+                  <Perf color={perf} />
+                </>
+              )}
 
               {/* ── NOTES section ── */}
               {(booking.notes || booking.bookingInstructions) && (
@@ -3071,54 +3087,16 @@ const addrStyles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 20,
   },
-  noAddressHint: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginBottom: 8,
-    opacity: 0.6,
-  },
   policyDesc: {
     fontSize: 11,
     lineHeight: 16,
     marginBottom: 10,
     opacity: 0.55,
   },
-  releaseBtn: {
-    borderRadius: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  releaseBtnText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '700',
-  },
   releasedAt: {
     fontSize: 10,
     opacity: 0.45,
     textAlign: 'center',
     marginTop: 2,
-  },
-  sentConfirm: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 6,
-  },
-  sentConfirmText: {
-    fontSize: 12,
-    fontWeight: '600',
-    flex: 1,
-    lineHeight: 17,
   },
 });

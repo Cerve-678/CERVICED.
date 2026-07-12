@@ -39,7 +39,7 @@ import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies } from '../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../services/providerRegistrationService';
 import { transferFromAcuity } from '../services/acuityTransferService';
 import { supabase } from '../lib/supabase';
@@ -55,6 +55,9 @@ import {
   encodeCustomTheme,
   parseThemeKey,
   decodeCustomTheme,
+  resolveProviderTheme,
+  withAlpha,
+  isDarkColor,
 } from '../constants/providerThemes';
 
 // Navigation types
@@ -257,6 +260,7 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = ({
         onScroll={handleScroll}
         scrollEventThrottle={16}
         keyExtractor={(item, index) => `${item}-${index}`}
+        getItemLayout={(_data, index) => ({ length: size, offset: size * index, index })}
         renderItem={({ item, index }) => {
           if (item === 'add') {
             return (
@@ -1068,12 +1072,15 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   );
 };
 
-// Preview Modal - Matches ProviderProfileScreen design exactly
+// Preview Modal — mirrors the live ProviderProfileScreen: same theme resolution,
+// typography, and section set (including Portfolio), so what a provider sees
+// here is what a client actually sees. Rebuilt whenever that screen changes.
 interface PreviewModalProps {
   visible: boolean;
   onClose: () => void;
   providerData: ProviderRegistrationData;
   accentColor: string;
+  portfolio: DbPortfolioItem[];
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -1081,6 +1088,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   onClose,
   providerData,
   accentColor,
+  portfolio,
 }) => {
   const categoryNames = Object.keys(providerData.categories);
   const [selectedPreviewCategory, setSelectedPreviewCategory] = useState<string>(
@@ -1097,23 +1105,33 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   // Mock rating for preview
   const mockRating = 5.0;
+  const PP = resolveProviderTheme(providerData.profileTheme);
+  const cardBg = withAlpha(PP.card, PP.isDark ? 0.5 : 0.9);
+  // Some backdrops (Cream, Sky, Blush…) are pale — white hero text needs to
+  // flip to dark there, matching ProviderProfileScreen's contrast logic.
+  const heroIsDark = isDarkColor(providerData.gradient[0] ?? PP.hero);
+  const heroText = heroIsDark ? '#fff' : '#26201E';
+  const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
+  const heroShadow = heroIsDark
+    ? { textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 }
+    : undefined;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
-      <LinearGradient
-        colors={providerData.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.previewContainer}
-      >
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <View style={[styles.previewContainer, { backgroundColor: PP.bg }]}>
+        <LinearGradient
+          colors={[providerData.gradient[0] ?? PP.hero, PP.bg]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.previewHeroImage}
+        />
         <SafeAreaView style={styles.previewSafeArea} edges={['top', 'bottom']}>
           {/* Preview Header with back button */}
           <View style={styles.previewHeader}>
             <TouchableOpacity style={styles.previewBackButton} onPress={onClose}>
               <Text style={styles.previewBackText}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.previewHeaderTitle}>Provider Profile</Text>
             <View style={styles.previewBadge}>
               <Text style={styles.previewBadgeText}>PREVIEW</Text>
             </View>
@@ -1147,8 +1165,16 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
             {/* Provider Info - Centered like ProviderProfileScreen */}
             <View style={styles.previewProviderInfoCenter}>
-              <Text style={styles.previewProviderNameLarge}>
-                @{providerData.providerName || 'YourBusinessName'}
+              <Text style={[styles.previewProviderNameLarge, { color: heroText }, heroShadow]}>
+                {providerData.providerName || 'Your Business Name'}
+              </Text>
+
+              <Text style={[styles.previewMetaText, { color: heroSub }, heroShadow]}>
+                {(providerData.providerService === 'OTHER'
+                  ? providerData.customServiceType || 'SERVICE'
+                  : providerData.providerService
+                ).toUpperCase()}
+                {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
               </Text>
 
               {/* Rating */}
@@ -1158,62 +1184,26 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     <Text key={star} style={styles.previewStar}>★</Text>
                   ))}
                 </View>
-                <Text style={styles.previewRatingText}>{mockRating}</Text>
+                <Text style={[styles.previewRatingText, { color: heroText }, heroShadow]}>{mockRating}</Text>
               </View>
 
-              {/* Service Tag with blur */}
-              <View style={styles.previewServiceTag}>
-                <BlurView intensity={15} tint="light" style={styles.previewServiceTagBlur}>
-                  <Text style={styles.previewServiceTagText}>
-                    {providerData.providerService === 'OTHER'
-                      ? providerData.customServiceType || 'SERVICE'
-                      : providerData.providerService}
-                  </Text>
-                </BlurView>
-              </View>
-
-              <Text style={styles.previewLocationText}>
-                📍 {providerData.location || 'Your Location'}
-              </Text>
+              {providerData.yearsExperience ? (
+                <Text style={[styles.previewYearsText, { color: heroSub }, heroShadow]}>{providerData.yearsExperience} years experience</Text>
+              ) : null}
 
               {/* Slots with Bell */}
-              <View style={styles.previewServiceTag}>
-                <BlurView intensity={15} tint="light" style={styles.previewServiceTagBlur}>
-                  <View style={styles.previewSlotsContent}>
-                    <Text style={styles.previewSlotsText}>
-                      {providerData.slotsText || 'Booking info here'}
-                    </Text>
-                    <View style={styles.previewBellButton}>
-                      <BellIcon size={16} color="#000" />
-                    </View>
-                  </View>
-                </BlurView>
+              <View style={[styles.previewSlotsPill, { backgroundColor: cardBg, borderColor: PP.border }]}>
+                <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
+                  {providerData.slotsText || 'Booking info here'}
+                </Text>
+                <BellIcon size={16} color={PP.sub} />
               </View>
-
-              {/* Follow Button */}
-              <TouchableOpacity style={styles.previewFollowButton} activeOpacity={0.8}>
-                <BlurView intensity={12} tint="light" style={styles.previewFollowButtonBlur}>
-                  <LinearGradient
-                    colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.previewFollowButtonGradient}
-                  />
-                  <Text style={styles.previewFollowButtonText}>Follow</Text>
-                </BlurView>
-              </TouchableOpacity>
             </View>
 
-            {/* About Section with glass styling */}
-            <BlurView intensity={50} tint="light" style={styles.previewAboutCard}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.previewCardHighlight}
-              />
-              <Text style={styles.previewSectionTitle}>Relevant Information</Text>
-              <Text style={styles.previewAboutText}>
+            {/* About Section */}
+            <View style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}>
+              <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Relevant Information</Text>
+              <Text style={[styles.previewAboutText, { color: PP.sub }]}>
                 {showFullAbout
                   ? providerData.aboutText || 'Your business description will appear here...'
                   : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
@@ -1222,16 +1212,16 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 onPress={() => setShowFullAbout(!showFullAbout)}
                 style={styles.previewMoreButton}
               >
-                <Text style={[styles.previewMoreButtonText, { color: accentColor }]}>
+                <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
                   {showFullAbout ? 'Show Less' : 'More'}
                 </Text>
               </TouchableOpacity>
-            </BlurView>
+            </View>
 
             {/* Services Section */}
             {categoryNames.length > 0 && (
               <View style={styles.previewServicesSection}>
-                <Text style={styles.previewSectionTitleNoCard}>Services</Text>
+                <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Services</Text>
 
                 {/* Category Tabs */}
                 <FlatList
@@ -1240,99 +1230,79 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   showsHorizontalScrollIndicator={false}
                   style={styles.previewCategoryTabs}
                   keyExtractor={(item, index) => `preview-cat-${item}-${index}`}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={[
-                        styles.previewCategoryTab,
-                        selectedPreviewCategory === item && styles.previewSelectedCategoryTab,
-                      ]}
-                      onPress={() => setSelectedPreviewCategory(item)}
-                    >
-                      <BlurView
-                        intensity={selectedPreviewCategory === item ? 20 : 12}
-                        tint="light"
+                  renderItem={({ item }) => {
+                    const selected = selectedPreviewCategory === item;
+                    return (
+                      <TouchableOpacity
                         style={[
-                          styles.previewCategoryTabBlur,
-                          selectedPreviewCategory === item && styles.previewSelectedCategoryTabBlur,
+                          styles.previewCategoryTab,
+                          { borderColor: selected ? 'transparent' : PP.border, backgroundColor: selected ? accentColor : cardBg },
                         ]}
+                        onPress={() => setSelectedPreviewCategory(item)}
                       >
-                        <Text
-                          style={[
-                            styles.previewCategoryTabText,
-                            selectedPreviewCategory === item && styles.previewSelectedCategoryTabText,
-                          ]}
-                        >
+                        <Text style={[styles.previewCategoryTabText, { color: selected ? '#fff' : PP.text }]}>
                           {item}
                         </Text>
-                      </BlurView>
-                    </TouchableOpacity>
-                  )}
+                      </TouchableOpacity>
+                    );
+                  }}
                   contentContainerStyle={styles.previewCategoryTabsContent}
                 />
 
                 {/* Services List */}
                 <View style={styles.previewCategoryServicesContainer}>
                   {providerData.categories[selectedPreviewCategory]?.map((service) => (
-                    <View key={service.id} style={styles.previewServiceItemCard}>
-                      <BlurView intensity={50} tint="light" style={styles.previewServiceCardBlur}>
-                        <LinearGradient
-                          colors={['rgba(255,255,255,0.3)', 'transparent']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 0, y: 1 }}
-                          style={styles.previewCardHighlight}
-                        />
-                        <View style={styles.previewServiceItemRow}>
-                          {/* Service Image */}
-                          <View style={styles.previewServiceImageContainer}>
-                            {service.images && service.images.length > 0 ? (
-                              <Image
-                                source={{ uri: service.images[0] }}
-                                style={styles.previewServiceImage}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <View style={styles.previewServiceImagePlaceholder}>
-                                <Text style={styles.previewServiceImagePlaceholderText}>📷</Text>
-                              </View>
-                            )}
-                          </View>
-
-                          <View style={styles.previewServiceItemInfo}>
-                            <Text style={styles.previewServiceItemName}>{service.name}</Text>
-                            <Text style={styles.previewServiceItemDesc} numberOfLines={2}>
-                              {service.description}
+                    <View key={service.id} style={[styles.previewServiceItemCard, { backgroundColor: cardBg, borderColor: PP.border }]}>
+                      <View style={styles.previewServiceItemRow}>
+                        {/* Service Image — accent-tinted initial when no photo, so
+                            description text starts at the same x on every card */}
+                        {service.images && service.images.length > 0 ? (
+                          <Image
+                            source={{ uri: service.images[0] }}
+                            style={styles.previewServiceImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.previewServiceImagePlaceholder, { backgroundColor: accentColor + '1C' }]}>
+                            <Text style={[styles.previewServiceImagePlaceholderText, { color: accentColor }]}>
+                              {(service.name || '?').charAt(0).toUpperCase()}
                             </Text>
-                            <View style={styles.previewServiceItemDetails}>
-                              <Text style={styles.previewServiceItemDuration}>{service.duration}</Text>
-                              <Text style={[styles.previewServiceItemPrice, { color: accentColor }]}>
-                                £{service.price}
-                              </Text>
-                            </View>
-                          </View>
-
-                          {/* Book Button */}
-                          <TouchableOpacity style={styles.previewBookButton} activeOpacity={0.8}>
-                            <BlurView intensity={14} tint="light" style={styles.previewBookButtonBlur}>
-                              <Text style={styles.previewBookButtonText}>Book</Text>
-                            </BlurView>
-                          </TouchableOpacity>
-                        </View>
-
-                        {/* Add-ons preview */}
-                        {service.addOns && service.addOns.length > 0 && (
-                          <View style={styles.previewServiceAddOns}>
-                            <Text style={styles.previewAddOnsLabel}>Add-ons available:</Text>
-                            {service.addOns.map((addOn) => (
-                              <View key={addOn.id} style={styles.previewAddOnRow}>
-                                <Text style={styles.previewAddOnName}>+ {addOn.name}</Text>
-                                <Text style={[styles.previewAddOnPrice, { color: accentColor }]}>
-                                  +£{addOn.price}
-                                </Text>
-                              </View>
-                            ))}
                           </View>
                         )}
-                      </BlurView>
+
+                        <View style={styles.previewServiceItemInfo}>
+                          <Text style={[styles.previewServiceItemName, { color: PP.text }]}>{service.name}</Text>
+                          <Text style={[styles.previewServiceItemDesc, { color: PP.sub }]} numberOfLines={2}>
+                            {service.description}
+                          </Text>
+                          <View style={styles.previewServiceItemDetails}>
+                            <Text style={[styles.previewServiceItemDuration, { color: PP.sub }]}>{service.duration}</Text>
+                            <Text style={[styles.previewServiceItemPrice, { color: PP.text }]}>
+                              £{service.price}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Book Button */}
+                        <View style={[styles.previewBookButton, { backgroundColor: accentColor }]}>
+                          <Text style={styles.previewBookButtonText}>Book</Text>
+                        </View>
+                      </View>
+
+                      {/* Add-ons preview */}
+                      {service.addOns && service.addOns.length > 0 && (
+                        <View style={[styles.previewServiceAddOns, { borderTopColor: PP.border }]}>
+                          <Text style={[styles.previewAddOnsLabel, { color: PP.sub }]}>Add-ons available:</Text>
+                          {service.addOns.map((addOn) => (
+                            <View key={addOn.id} style={styles.previewAddOnRow}>
+                              <Text style={[styles.previewAddOnName, { color: PP.sub }]}>+ {addOn.name}</Text>
+                              <Text style={[styles.previewAddOnPrice, { color: accentColor }]}>
+                                +£{addOn.price}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -1340,31 +1310,37 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             )}
 
             {/* Contact Section */}
-            <BlurView intensity={50} tint="light" style={styles.previewContactCard}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.previewCardHighlight}
-              />
-              <Text style={styles.previewSectionTitle}>Contact Information</Text>
-              <Text style={styles.previewContactText}>
-                📍 {providerData.location || 'Your Location'}
-              </Text>
+            <View style={[styles.previewCard, { backgroundColor: cardBg, borderColor: PP.border }]}>
+              <Text style={[styles.previewSectionTitle, { color: PP.text }]}>Contact</Text>
+              {providerData.location ? (
+                <View style={[styles.previewContactRow, { borderBottomColor: PP.border }]}>
+                  <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Location</Text>
+                  <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.location}</Text>
+                </View>
+              ) : null}
               {providerData.phone ? (
-                <Text style={styles.previewContactText}>📞 {providerData.phone}</Text>
+                <View style={[styles.previewContactRow, { borderBottomColor: PP.border }]}>
+                  <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
+                  <Text style={[styles.previewContactValue, { color: PP.text }]}>{providerData.phone}</Text>
+                </View>
               ) : null}
               {providerData.email ? (
-                <Text style={styles.previewContactText}>✉️ {providerData.email}</Text>
+                <View style={[styles.previewContactRow, { borderBottomColor: PP.border }]}>
+                  <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
+                  <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.email}</Text>
+                </View>
               ) : null}
               {providerData.instagram ? (
-                <Text style={styles.previewContactText}>📸 @{providerData.instagram}</Text>
+                <View style={[styles.previewContactRow, { borderBottomColor: PP.border }]}>
+                  <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Instagram</Text>
+                  <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram}</Text>
+                </View>
               ) : null}
               {providerData.website ? (
-                <Text style={styles.previewContactText}>🌐 {providerData.website}</Text>
-              ) : null}
-              {providerData.yearsExperience ? (
-                <Text style={styles.previewContactText}>⭐ {providerData.yearsExperience} years experience</Text>
+                <View style={styles.previewContactRow}>
+                  <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Website</Text>
+                  <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.website}</Text>
+                </View>
               ) : null}
               <TouchableOpacity
                 style={[styles.previewContactButton, { backgroundColor: accentColor }]}
@@ -1372,10 +1348,22 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               >
                 <Text style={styles.previewContactButtonText}>Get In Touch</Text>
               </TouchableOpacity>
-            </BlurView>
+            </View>
+
+            {/* Portfolio Section — bottom, matching ProviderProfileScreen */}
+            {portfolio.length > 0 && (
+              <View style={styles.previewPortfolioSection}>
+                <Text style={[styles.previewSectionTitleNoCard, { color: PP.text }]}>Portfolio</Text>
+                <View style={styles.previewPortfolioGrid}>
+                  {portfolio.map(item => (
+                    <Image key={item.id} source={{ uri: item.image_url }} style={styles.previewPortfolioTile} />
+                  ))}
+                </View>
+              </View>
+            )}
           </ScrollView>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     </Modal>
   );
 };
@@ -1387,6 +1375,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
+    'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
   });
 
   // Ref for main scrollview to enable auto-scroll to focused inputs
@@ -1437,9 +1426,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
   const [policiesSaved, setPoliciesSaved] = useState(false);
 
+  // True until the existing-provider fetch settles — without this the form
+  // renders with empty defaults ('Provider Registration', blank fields, the
+  // 'app' theme) for a beat before the real saved data pops in, which reads
+  // as a glitch. Gated in the render below, same as the other profile screens.
+  const [isLoadingProvider, setIsLoadingProvider] = useState(true);
+
   // Load existing provider data and policies from Supabase/AsyncStorage on mount
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) { setIsLoadingProvider(false); return; }
     loadProviderFromSupabase(user.id)
       .then(data => {
         if (data) {
@@ -1449,7 +1444,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           if (firstCat) setSelectedCategory(firstCat);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setIsLoadingProvider(false));
     // Load saved policies from Supabase (source of truth), falling back to
     // the local cache inside loadProviderPolicies. Merge over defaults so
     // fields added later (e.g. bookingInstructions) are never undefined.
@@ -1500,17 +1496,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // ── Portfolio (client work gallery shown on the public profile) ───────────
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<DbPortfolioItem[]>([]);
+  const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioUploading, setPortfolioUploading] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) { setPortfolioLoading(false); return; }
     supabase.from('providers').select('id').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => { if (data?.id) setProviderDbId(data.id); });
+      .then(({ data }) => {
+        if (data?.id) setProviderDbId(data.id);
+        else setPortfolioLoading(false); // no provider row yet — nothing to fetch
+      });
   }, [user?.id, isEditMode]);
 
   useEffect(() => {
     if (!providerDbId) return;
-    getProviderPortfolio(providerDbId).then(setPortfolioItems).catch(() => {});
+    // getProviderPortfolio depends on providerDbId resolving first (a second
+    // async hop after the main provider-data load), so it can still lag a
+    // moment behind the loading gate above — track it separately so the
+    // Portfolio card shows a spinner instead of a bare "no photos yet" flash.
+    setPortfolioLoading(true);
+    getProviderPortfolio(providerDbId)
+      .then(setPortfolioItems)
+      .catch(() => {})
+      .finally(() => setPortfolioLoading(false));
   }, [providerDbId]);
 
   const handleAddPortfolioImages = useCallback(async () => {
@@ -1528,32 +1536,64 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     });
     if (result.canceled || !result.assets?.length) return;
 
+    // Show each picked photo immediately using its local URI — upload happens
+    // in the background, so selection never looks like it did nothing even on
+    // a slow connection. Each temp entry is swapped for the real DB row (or
+    // removed with an error) independently, so one failure in a multi-select
+    // batch no longer silently drops the rest.
+    const pending = result.assets.map((asset, i) => ({
+      tempId: `temp-${Date.now()}-${i}`,
+      asset,
+    }));
+    setPortfolioItems(prev => [
+      ...pending.map(({ tempId, asset }): DbPortfolioItem => ({
+        id: tempId,
+        provider_id: providerDbId,
+        service_id: null,
+        image_url: asset.uri,
+        caption: null,
+        category: null,
+        tags: null,
+        price: null,
+        aspect_ratio: asset.width && asset.height ? asset.width / asset.height : 1,
+        is_featured: false,
+        created_at: new Date().toISOString(),
+        vibe_tags: null,
+        occasion_tags: null,
+        trend_names: null,
+        hair_type_shown: null,
+        skin_tone_shown: null,
+      })),
+      ...prev,
+    ]);
+
     setPortfolioUploading(true);
-    try {
-      for (const asset of result.assets) {
+    await Promise.all(pending.map(async ({ tempId, asset }) => {
+      try {
         const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-        const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
         const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        const { error: upErr } = await supabase.storage
-          .from('portfolio')
-          .upload(path, bytes, { contentType, upsert: true });
-        if (upErr) throw new Error(upErr.message);
-        const { data: pub } = supabase.storage.from('portfolio').getPublicUrl(path);
+        // fetch(localUri).blob() is unreliable for file:// URIs in React
+        // Native ("Network request failed") — read via expo-file-system and
+        // upload as bytes instead, same as the provider logo upload.
+        const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
         const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
-        const item = await addPortfolioItem(providerDbId, pub.publicUrl, ratio);
-        setPortfolioItems(prev => [item, ...prev]);
+        const item = await addPortfolioItem(providerDbId, publicUrl, ratio);
+        setPortfolioItems(prev => prev.map(p => (p.id === tempId ? item : p)));
+      } catch (e: any) {
+        setPortfolioItems(prev => prev.filter(p => p.id !== tempId));
+        Alert.alert('Upload failed', e?.message ?? 'Could not upload one of the images.');
       }
-    } catch (e: any) {
-      Alert.alert('Upload failed', e?.message ?? 'Could not upload image.');
-    } finally {
-      setPortfolioUploading(false);
-    }
+    }));
+    setPortfolioUploading(false);
   }, [user?.id, providerDbId]);
 
   const handleRemovePortfolioItem = useCallback(async (item: DbPortfolioItem) => {
+    // Still-uploading optimistic entries have a local id and were never
+    // persisted — just drop them locally, no DB/storage row exists yet.
+    if (item.id.startsWith('temp-')) {
+      setPortfolioItems(prev => prev.filter(p => p.id !== item.id));
+      return;
+    }
     try {
       await deletePortfolioItem(item.id);
       setPortfolioItems(prev => prev.filter(p => p.id !== item.id));
@@ -1732,10 +1772,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   const handleSavePolicies = useCallback(async () => {
     if (!user?.id) return;
-    await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
+    // The Policies tab's own "Business Setup" section (business type, address,
+    // address release timing) lives in providerData, not the policies object —
+    // it must be saved here too, or it's silently lost when this is the only
+    // save button the provider ever presses.
+    await Promise.all([
+      saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>),
+      saveProviderToSupabase(user.id, providerData),
+    ]);
     setPoliciesSaved(true);
     setTimeout(() => setPoliciesSaved(false), 2000);
-  }, [policies, user?.id]);
+  }, [policies, providerData, user?.id]);
 
   const handleSubmit = useCallback(async () => {
     if (!providerData.providerName.trim()) {
@@ -1779,10 +1826,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   const categoryNames = Object.keys(providerData.categories);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || isLoadingProvider) {
     return (
       <View style={styles.loading}>
-        <Text>Loading...</Text>
+        <ActivityIndicator size="large" color="#AF9197" />
       </View>
     );
   }
@@ -1843,6 +1890,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onClose={() => setShowPreviewModal(false)}
           providerData={providerData}
           accentColor={adaptiveAccentColor}
+          portfolio={portfolioItems}
         />
 
         <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -2015,79 +2063,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
             </BlurView>
 
-            {/* Colour Theme — accent + card colour + backdrop, shared with Branding & Style */}
-            <BlurView intensity={50} tint="light" style={styles.card}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <Text style={styles.sectionTitle}>Colour Theme</Text>
-              <Text style={styles.sectionSubtitle}>
-                Each option is three colours — accent, card colour, and backdrop (shown behind
-                your profile as a gradient). Pick a set or build your own with Custom, then
-                choose the content-area colour below.
-              </Text>
-              <ProviderThemePicker
-                value={themeSel}
-                onChange={handleThemeChange}
-                textColor="#000"
-                subColor="rgba(0,0,0,0.6)"
-                borderColor="rgba(0,0,0,0.15)"
-                sepColor="rgba(0,0,0,0.1)"
-              />
-            </BlurView>
-
-            {/* Portfolio — client work gallery shown on your public profile */}
-            <BlurView intensity={50} tint="light" style={styles.card}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <Text style={styles.sectionTitle}>Portfolio</Text>
-              <Text style={styles.sectionSubtitle}>
-                Photos of your work, shown on your public profile in a two-column gallery.
-              </Text>
-
-              <View style={styles.portfolioGrid}>
-                {portfolioItems.map(item => (
-                  <View key={item.id} style={styles.portfolioThumbWrap}>
-                    <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} />
-                    <TouchableOpacity
-                      style={styles.portfolioRemoveBtn}
-                      onPress={() => handleRemovePortfolioItem(item)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.portfolioRemoveText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-
-                <TouchableOpacity
-                  style={styles.portfolioAddTile}
-                  onPress={handleAddPortfolioImages}
-                  activeOpacity={0.8}
-                  disabled={portfolioUploading || !providerDbId}
-                >
-                  {portfolioUploading ? (
-                    <ActivityIndicator color="#000" />
-                  ) : (
-                    <>
-                      <Text style={styles.portfolioAddPlus}>+</Text>
-                      <Text style={styles.portfolioAddText}>Add Photos</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {!providerDbId && (
-                <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
-              )}
-            </BlurView>
-
             {/* About Section */}
             <BlurView intensity={50} tint="light" style={styles.card}>
               <LinearGradient
@@ -2137,6 +2112,85 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   />
                 </BlurView>
               </View>
+            </BlurView>
+
+            {/* Profile Theme — accent + card colour + backdrop, shared with Branding & Style */}
+            <BlurView intensity={50} tint="light" style={styles.card}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
+              <Text style={styles.sectionTitle}>Profile Theme</Text>
+              <Text style={styles.sectionSubtitle}>
+                Each option is three colours — accent, card colour, and backdrop (shown behind
+                your profile as a gradient). Pick a set or build your own with Custom, then
+                choose the content-area colour below.
+              </Text>
+              <ProviderThemePicker
+                value={themeSel}
+                onChange={handleThemeChange}
+                textColor="#000"
+                subColor="rgba(0,0,0,0.6)"
+                borderColor="rgba(0,0,0,0.15)"
+                sepColor="rgba(0,0,0,0.1)"
+              />
+            </BlurView>
+
+            {/* Portfolio — client work gallery shown on your public profile */}
+            <BlurView intensity={50} tint="light" style={styles.card}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
+              <Text style={styles.sectionTitle}>Portfolio</Text>
+              <Text style={styles.sectionSubtitle}>
+                Photos of your work, shown on your public profile in a two-column gallery.
+              </Text>
+
+              {portfolioLoading ? (
+                <View style={styles.portfolioLoadingRow}>
+                  <ActivityIndicator color="#AF9197" />
+                </View>
+              ) : (
+                <View style={styles.portfolioGrid}>
+                  {portfolioItems.map(item => (
+                    <View key={item.id} style={styles.portfolioThumbWrap}>
+                      <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} />
+                      <TouchableOpacity
+                        style={styles.portfolioRemoveBtn}
+                        onPress={() => handleRemovePortfolioItem(item)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.portfolioRemoveText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  <TouchableOpacity
+                    style={styles.portfolioAddTile}
+                    onPress={handleAddPortfolioImages}
+                    activeOpacity={0.8}
+                    disabled={portfolioUploading || !providerDbId}
+                  >
+                    {portfolioUploading ? (
+                      <ActivityIndicator color="#000" />
+                    ) : (
+                      <>
+                        <Text style={styles.portfolioAddPlus}>+</Text>
+                        <Text style={styles.portfolioAddText}>Add Photos</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!providerDbId && !portfolioLoading && (
+                <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
+              )}
             </BlurView>
 
             {/* Contact Information */}
@@ -2879,6 +2933,10 @@ const styles = StyleSheet.create({
   },
 
   // Portfolio manager
+  portfolioLoadingRow: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
   portfolioGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -3620,6 +3678,13 @@ const styles = StyleSheet.create({
   previewSafeArea: {
     flex: 1,
   },
+  previewHeroImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 340,
+  },
   previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -3639,17 +3704,12 @@ const styles = StyleSheet.create({
   previewBackText: {
     fontSize: 24,
     fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-  },
-  previewHeaderTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    color: '#000',
+    color: '#fff',
   },
   previewBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 15,
   },
   previewBadgeText: {
@@ -3717,150 +3777,92 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   previewProviderNameLarge: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 28,
-    color: '#000',
-    marginBottom: 15,
+    fontFamily: 'Prata-Regular',
+    fontSize: 26,
+    marginBottom: 4,
     textAlign: 'center',
-    textShadowColor: 'rgba(255,255,255,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+  },
+  previewMetaText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+    marginBottom: 10,
   },
   // Rating
   previewRatingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 15,
+    gap: 3,
+    marginBottom: 8,
   },
   previewStars: {
     flexDirection: 'row',
     gap: 3,
   },
   previewStar: {
-    fontSize: 16,
+    fontSize: 12,
     color: '#FFD700',
   },
   previewRatingText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
-    color: '#000',
-    fontWeight: 'bold',
-  },
-  // Service Tag
-  previewServiceTag: {
-    borderRadius: 25,
-    marginBottom: 15,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: 'rgba(0,0,0,0.1)',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  previewServiceTagBlur: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  previewServiceTagText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    color: '#000',
-  },
-  previewLocationText: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 14,
-    color: 'rgba(0,0,0,0.7)',
-    marginBottom: 15,
+    fontWeight: '800',
+    fontSize: 13,
+    marginLeft: 4,
+  },
+  previewYearsText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 10,
   },
   // Slots with Bell
-  previewSlotsContent: {
+  previewSlotsPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   previewSlotsText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    color: '#000',
-  },
-  previewBellButton: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  // Follow Button
-  previewFollowButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    marginTop: 5,
-  },
-  previewFollowButtonBlur: {
-    paddingHorizontal: 40,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    position: 'relative',
-  },
-  previewFollowButtonGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  previewFollowButtonText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    color: '#000',
+    fontSize: 11,
   },
-  // About Card
-  previewAboutCard: {
+  // Generic frosted card — About / Contact
+  previewCard: {
     padding: 20,
-    borderRadius: 25,
+    borderRadius: 18,
     marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  previewCardHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   previewSectionTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    color: '#000',
-    marginBottom: 10,
+    marginBottom: 15,
   },
   previewSectionTitleNoCard: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    color: '#000',
     marginBottom: 15,
   },
   previewAboutText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
-    color: 'rgba(0,0,0,0.7)',
     lineHeight: 20,
+    marginBottom: 10,
   },
   previewMoreButton: {
-    marginTop: 10,
+    alignSelf: 'flex-start',
   },
   previewMoreButtonText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   // Services Section
   previewServicesSection: {
@@ -3875,68 +3877,45 @@ const styles = StyleSheet.create({
   },
   previewCategoryTab: {
     borderRadius: 20,
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  previewSelectedCategoryTab: {
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  previewCategoryTabBlur: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  previewSelectedCategoryTabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   previewCategoryTabText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
-    color: 'rgba(0,0,0,0.7)',
-  },
-  previewSelectedCategoryTabText: {
-    color: '#000',
+    fontSize: 11,
+    fontWeight: '600',
   },
   previewCategoryServicesContainer: {
     gap: 12,
   },
   previewServiceItemCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  previewServiceCardBlur: {
-    flex: 1,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    marginBottom: 12,
   },
   previewServiceItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-  },
-  previewServiceImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: 12,
   },
   previewServiceImage: {
     width: 60,
     height: 60,
+    borderRadius: 30,
+    marginRight: 12,
   },
   previewServiceImagePlaceholder: {
     width: 60,
     height: 60,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    marginRight: 12,
   },
   previewServiceImagePlaceholderText: {
-    fontSize: 24,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 22,
   },
   previewServiceItemInfo: {
     flex: 1,
@@ -3945,13 +3924,12 @@ const styles = StyleSheet.create({
   previewServiceItemName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#000',
     marginBottom: 4,
   },
   previewServiceItemDesc: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    color: 'rgba(0,0,0,0.6)',
+    fontWeight: '600',
+    fontSize: 12,
     marginBottom: 6,
   },
   previewServiceItemDetails: {
@@ -3961,8 +3939,8 @@ const styles = StyleSheet.create({
   },
   previewServiceItemDuration: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
-    color: 'rgba(0,0,0,0.5)',
   },
   previewServiceItemPrice: {
     fontFamily: 'BakbakOne-Regular',
@@ -3971,32 +3949,25 @@ const styles = StyleSheet.create({
   },
   // Book Button
   previewBookButton: {
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  previewBookButtonBlur: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   previewBookButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: '#000',
+    fontWeight: 'bold',
+    color: '#fff',
   },
   // Add-ons in preview
   previewServiceAddOns: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: 8,
     paddingTop: 8,
   },
   previewAddOnsLabel: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
-    color: 'rgba(0,0,0,0.5)',
     marginBottom: 4,
   },
   previewAddOnRow: {
@@ -4008,43 +3979,58 @@ const styles = StyleSheet.create({
   previewAddOnName: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: 'rgba(0,0,0,0.6)',
   },
   previewAddOnPrice: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
   },
-  // Contact Card
-  previewContactCard: {
-    padding: 20,
-    borderRadius: 25,
-    marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+  // Contact rows — matches ProviderProfileScreen's contactRow layout
+  previewContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  previewContactText: {
+  previewContactLabel: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 14,
-    color: 'rgba(0,0,0,0.7)',
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  previewContactValue: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'right',
+    paddingLeft: 16,
   },
   previewContactButton: {
-    paddingVertical: 14,
-    borderRadius: 25,
+    paddingVertical: 15,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: 16,
   },
   previewContactButtonText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
+    fontSize: 13,
+    letterSpacing: 0.5,
     color: '#fff',
+  },
+  // Portfolio — simple two-column grid (the real screen's masonry is a nice-to-have;
+  // uniform tiles convey the look accurately without duplicating that algorithm)
+  previewPortfolioSection: {
+    marginBottom: 20,
+  },
+  previewPortfolioGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  previewPortfolioTile: {
+    width: (screenWidth - 40 - 12) / 2,
+    height: (screenWidth - 40 - 12) / 2,
+    borderRadius: 18,
   },
 
   // Custom Service Type Input

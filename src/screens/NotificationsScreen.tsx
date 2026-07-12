@@ -29,6 +29,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
 import { CommonActions, StackActions } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -172,6 +173,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Load notifications on mount and when screen focuses
   useEffect(() => {
     loadNotifications();
+    Notifications.setBadgeCountAsync(0).catch(() => {});
 
     // Realtime subscription — new notifications pop in instantly
     const channel = supabase

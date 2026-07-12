@@ -17,6 +17,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  findNodeHandle,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -51,6 +52,7 @@ import type { ProviderWithServices, DbPromotion, DbPortfolioItem } from '../type
 import {
   resolveProviderTheme,
   withAlpha,
+  isDarkColor,
   type ProviderThemeTokens,
 } from '../constants/providerThemes';
 
@@ -1545,10 +1547,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     [portfolio]
   );
 
-  // Hero info floats over the photo/gradient — use light text with a soft shadow there
-  const isOverPhoto = !!(provider?.backgroundImage || provider?.hasCustomGradient);
-  const heroText = isOverPhoto ? '#FFFFFF' : OP.text;
-  const heroSub = isOverPhoto ? 'rgba(255,255,255,0.96)' : OP.sub;
+  // Hero info floats over the photo/gradient. Every theme always carries a
+  // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
+  // can't decide text colour any more — some backdrops (Cream, Sky, Blush…)
+  // are pale, and white text on them is close to invisible. Decide from the
+  // actual rendered colour's brightness instead; a photo always gets the
+  // dark-overlay treatment so white text is safe there.
+  const heroBgColor = provider?.hasCustomGradient ? provider?.gradient[0] : OP.hero;
+  const heroIsDark = !!provider?.backgroundImage || (heroBgColor ? isDarkColor(heroBgColor) : true);
+  const heroText = heroIsDark ? '#FFFFFF' : '#26201E';
+  const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
 
   // Slide in the offers tab from the right when promotions are available
   useEffect(() => {
@@ -1605,27 +1613,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       friction: 12,
     }).start(() => setShowOffersModal(false));
   }, [offersPanelSlide]);
-
-  // Offers "Book Now" — close the panel, pre-select the offer's category when it
-  // matches one of the provider's service categories, and scroll to Services.
-  const handleBookOffer = useCallback((promo: DbPromotion) => {
-    closeOffersPanel();
-    if (promo.service_category && provider?.categories[promo.service_category]) {
-      setSelectedCategory(promo.service_category);
-    }
-    setTimeout(() => {
-      const scrollNode = scrollRef.current;
-      const section = servicesSectionRef.current;
-      if (!scrollNode || !section) return;
-      const innerNode = (scrollNode as any).getInnerViewNode?.();
-      if (!innerNode) return;
-      section.measureLayout(
-        innerNode,
-        (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
-        () => {}
-      );
-    }, 350); // let the panel slide out first
-  }, [closeOffersPanel, provider]);
 
   // Show notification popup from right
   const showRightNotification = useCallback(() => {
@@ -2019,6 +2006,48 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     },
     [provider, providerDbId, addToCart, showSuccessMessageWithAnimation, hideSuccessMessage, navigation]
   );
+
+  // Offers "Book Now" — when the offer targets exactly one service, skip
+  // straight to checkout via the same flow as Quick Book. Otherwise (offer
+  // spans multiple/all services) there's nothing safe to auto-pick, so fall
+  // back to jumping the client to Services with that category pre-selected.
+  const handleBookOffer = useCallback((promo: DbPromotion) => {
+    closeOffersPanel();
+    if (!provider) return;
+
+    const allServices = Object.values(provider.categories).flat();
+    let target: ServiceData | undefined;
+    if (promo.service_ids && promo.service_ids.length === 1) {
+      target = allServices.find(s => s.dbId === promo.service_ids![0]);
+    } else if (promo.service_category && provider.categories[promo.service_category]?.length === 1) {
+      target = provider.categories[promo.service_category]![0];
+    }
+
+    if (target) {
+      setTimeout(() => handleQuickBook(target!), 350); // let the panel slide out first
+      return;
+    }
+
+    if (promo.service_category && provider.categories[promo.service_category]) {
+      setSelectedCategory(promo.service_category);
+    }
+    setTimeout(() => {
+      const scrollNode = scrollRef.current;
+      const section = servicesSectionRef.current;
+      if (!scrollNode || !section) return;
+      // measureLayout needs the ScrollView's underlying native node handle,
+      // not the component instance itself — passing the instance directly
+      // triggers "ref.measureLayout must be called with a ref to a native
+      // component" at runtime even though scrollTo still happens to work.
+      const scrollHandle = findNodeHandle(scrollNode);
+      if (!scrollHandle) return;
+      section.measureLayout(
+        scrollHandle,
+        (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
+        () => {}
+      );
+    }, 350);
+  }, [closeOffersPanel, provider, handleQuickBook]);
 
   const handleBook = useCallback((service: ServiceData) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -2513,16 +2542,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
               <View style={styles.providerInfoCenter}>
                 {/* Name + verified */}
                 <View style={styles.providerNameRow}>
-                  <Text style={[styles.providerDisplayName, { color: heroText }, isOverPhoto && styles.heroTextShadow]}>
+                  <Text style={[styles.providerDisplayName, { color: heroText }, heroIsDark && styles.heroTextShadow]}>
                     {provider.displayName}
                   </Text>
                   {provider.isVerified && (
-                    <Ionicons name="checkmark-circle" size={18} color={isOverPhoto ? '#FFFFFF' : '#007AFF'} />
+                    <Ionicons name="checkmark-circle" size={18} color={heroIsDark ? '#FFFFFF' : '#007AFF'} />
                   )}
                 </View>
 
                 {/* SERVICE TYPE · LOCATION in small caps */}
-                <Text style={[styles.providerMeta, { color: heroSub }, isOverPhoto && styles.heroTextShadow]}>
+                <Text style={[styles.providerMeta, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
                   {(provider.providerService === 'OTHER'
                     ? provider.customServiceType || 'SERVICE'
                     : provider.providerService
@@ -2535,12 +2564,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                   {[1, 2, 3, 4, 5].map(star => (
                     <StarIcon key={star} size={12} color="#FFD700" />
                   ))}
-                  <Text style={[styles.ratingInline, { color: heroText }, isOverPhoto && styles.heroTextShadow]}>{provider.rating}</Text>
+                  <Text style={[styles.ratingInline, { color: heroText }, heroIsDark && styles.heroTextShadow]}>{provider.rating}</Text>
                 </View>
 
                 {/* Years experience (optional) */}
                 {provider.yearsExperience ? (
-                  <Text style={[styles.yearsExp, { color: heroSub }, isOverPhoto && styles.heroTextShadow]}>
+                  <Text style={[styles.yearsExp, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
                     {provider.yearsExperience} years experience
                   </Text>
                 ) : null}

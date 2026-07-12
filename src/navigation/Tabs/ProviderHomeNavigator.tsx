@@ -70,7 +70,18 @@ export default function ProviderHomeNavigator() {
       <ProviderHomeStack.Screen
         name="ProviderSchedule"
         component={ProviderScheduleScreen}
-        options={{ headerShown: false, presentation: 'formSheet', contentStyle: { backgroundColor: '#351E28' } }}
+        options={{
+          headerShown: false,
+          presentation: 'formSheet',
+          // Cap the sheet below full screen so Save Hours sits near the
+          // bottom instead of being stranded mid-screen on a full sheet.
+          sheetAllowedDetents: [0.75],
+          // formSheet can present slightly taller than the screen's own
+          // content — whatever peeks out below shows this color, so it must
+          // track the screen's actual (theme-aware) background, not a fixed
+          // one, or a mismatched strip shows at the bottom of the sheet.
+          contentStyle: { backgroundColor: theme.background },
+        }}
       />
 
       <ProviderHomeStack.Group screenOptions={{

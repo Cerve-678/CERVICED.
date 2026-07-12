@@ -534,6 +534,10 @@ interface ServiceCardProps {
   providerName: string;
   allCartItems: CartItem[]; // ADD THIS LINE
   depositPolicy?: ProviderDepositPolicy;
+  appliedPromo?: DbPromotion;
+  promoDiscount: number;
+  onApplyPromo: (itemId: string, code: string) => Promise<string | null>;
+  onRemovePromo: (itemId: string) => void;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
@@ -546,11 +550,33 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     providerName,
     allCartItems,
     depositPolicy,
+    appliedPromo,
+    promoDiscount,
+    onApplyPromo,
+    onRemovePromo,
   }) => {
     const { theme, isDarkMode } = useTheme();
     const P = isDarkMode ? D : L;
     const [showCalendar, setShowCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+
+    // Promo code — one per booking, entered right on this card
+    const [promoInput, setPromoInput] = useState('');
+    const [promoApplying, setPromoApplying] = useState(false);
+    const [promoError, setPromoError] = useState<string | null>(null);
+
+    const handleApplyPromoPress = useCallback(async () => {
+      if (!promoInput.trim() || promoApplying) return;
+      setPromoApplying(true);
+      setPromoError(null);
+      const error = await onApplyPromo(item.id, promoInput);
+      setPromoApplying(false);
+      if (error) {
+        setPromoError(error);
+      } else {
+        setPromoInput('');
+      }
+    }, [promoInput, promoApplying, onApplyPromo, item.id]);
 
     // Scheduling constraints fetched once per provider
     const [constraints, setConstraints] = useState<{
@@ -603,11 +629,11 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     }, [totalPrice, serviceBooking.isDepositOnly, depositPolicyArg]);
 
     const depositLabel = useMemo(() => {
-      if (!depositPolicy) return 'Pay Deposit Only (20%)';
+      if (!depositPolicy) return 'Pay Deposit (20%)';
       if (depositPolicy.depositType === 'fixed') {
-        return `Pay Deposit Only (£${depositPolicy.depositAmount} flat)`;
+        return `Pay Deposit (£${depositPolicy.depositAmount} flat)`;
       }
-      return `Pay Deposit Only (${depositPolicy.depositAmount}%)`;
+      return `Pay Deposit (${depositPolicy.depositAmount}%)`;
     }, [depositPolicy]);
 
     const handleDateSelect = useCallback(
@@ -811,13 +837,69 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             {serviceBooking.isDepositOnly && (
               <View style={styles.depositInfo}>
                 <Text style={styles.depositInfoText}>
-                  Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)} — charged now
+                  Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
                 <Text style={styles.depositRemainingText}>
-                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} — pay
-                  at appointment
+                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} (pay
+                  at appointment)
                 </Text>
               </View>
+            )}
+          </View>
+
+          {/* Promo code — specific to this booking */}
+          <View style={{ marginTop: 10 }}>
+            {appliedPromo ? (
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+                borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
+                backgroundColor: P.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+              }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: P.accent }}>
+                  {appliedPromo.promo_code?.toUpperCase()}
+                </Text>
+                <Text style={{ flex: 1, fontSize: 11, color: P.sub }} numberOfLines={1}>
+                  {appliedPromo.title}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
+                  −£{promoDiscount.toFixed(2)}
+                </Text>
+                <TouchableOpacity onPress={() => onRemovePromo(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#FF6868' }}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={{
+                    flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
+                    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+                    fontSize: 13, color: P.text, backgroundColor: P.surface,
+                  }}
+                  placeholder="Promo code for this booking"
+                  placeholderTextColor={P.sub}
+                  value={promoInput}
+                  onChangeText={t => { setPromoInput(t); setPromoError(null); }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={{
+                    borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center',
+                    backgroundColor: promoInput.trim() ? P.accent : P.surface,
+                  }}
+                  onPress={handleApplyPromoPress}
+                  disabled={!promoInput.trim() || promoApplying}
+                  activeOpacity={0.8}
+                >
+                  {promoApplying
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={{ fontSize: 12, fontWeight: '700', color: promoInput.trim() ? '#fff' : P.sub }}>Apply</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+            {promoError && (
+              <Text style={{ fontSize: 11, color: '#FF6868', marginTop: 6 }}>{promoError}</Text>
             )}
           </View>
 
@@ -966,94 +1048,71 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [items]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
-  const [promoInput, setPromoInput] = useState('');
-  const [promoApplying, setPromoApplying] = useState(false);
-  const [promoError, setPromoError] = useState<string | null>(null);
-  // One applied promo per provider, keyed by provider display name
+  // Each booking (cart item) can carry its own code — a client with three
+  // services from the same provider might have three different promos, one
+  // per service. Entry happens on the individual ServiceCard, not globally.
+  // Keyed by cart item id.
   const [appliedPromos, setAppliedPromos] = useState<Record<string, DbPromotion>>({});
 
-  const handleApplyPromo = useCallback(async () => {
-    const code = promoInput.trim();
-    if (!code || promoApplying) return;
-    setPromoApplying(true);
-    setPromoError(null);
+  const handleApplyPromoToItem = useCallback(async (itemId: string, code: string): Promise<string | null> => {
+    const item = items.find(i => i.id === itemId);
+    if (!item) return 'Could not find that service in your cart.';
+    const trimmed = code.trim();
+    if (!trimmed) return 'Enter a code first.';
     try {
-      const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
-      for (const name of names) {
-        const promo = await validatePromoCode(name, code);
-        if (promo) {
-          setAppliedPromos(prev => ({ ...prev, [name]: promo }));
-          setPromoInput('');
-          setPromoApplying(false);
-          return;
-        }
+      const providerName = item.providerDisplayName ?? item.providerName;
+      const promo = await validatePromoCode(providerName, trimmed);
+      if (!promo) return 'This code isn’t valid for this provider.';
+      if (promo.service_ids && promo.service_ids.length > 0 && !promo.service_ids.includes(item.serviceId)) {
+        return 'This code doesn’t apply to this service.';
       }
-      setPromoError('This code isn’t valid for the providers in your cart.');
+      if (promo.service_category &&
+          promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) {
+        return 'This code doesn’t apply to this service.';
+      }
+      setAppliedPromos(prev => ({ ...prev, [itemId]: promo }));
+      return null;
     } catch {
-      setPromoError('Could not check that code — please try again.');
-    } finally {
-      setPromoApplying(false);
+      return 'Could not check that code — please try again.';
     }
-  }, [promoInput, promoApplying, items]);
+  }, [items]);
 
-  const handleRemovePromo = useCallback((providerName: string) => {
+  const handleRemovePromoFromItem = useCallback((itemId: string) => {
     setAppliedPromos(prev => {
       const next = { ...prev };
-      delete next[providerName];
+      delete next[itemId];
       return next;
     });
   }, []);
 
-  // Drop applied promos whose provider no longer has items in the cart
+  // Drop applied promos for items no longer in the cart
   useEffect(() => {
-    const inCart = new Set(items.map(i => i.providerDisplayName ?? i.providerName));
+    const idsInCart = new Set(items.map(i => i.id));
     setAppliedPromos(prev => {
-      const stale = Object.keys(prev).filter(name => !inCart.has(name));
+      const stale = Object.keys(prev).filter(id => !idsInCart.has(id));
       if (stale.length === 0) return prev;
       const next = { ...prev };
-      for (const name of stale) delete next[name];
+      for (const id of stale) delete next[id];
       return next;
     });
   }, [items]);
 
-  // Absolute £ discount per cart item (off base+add-ons, capped at the base
-  // price so an item can never go negative). Percent promos apply per item;
-  // fixed-amount promos are allocated across eligible items proportionally.
+  // Absolute £ discount per cart item (off base+add-ons, capped at the base price).
   const itemPromoDiscounts = useMemo((): Record<string, number> => {
     const discounts: Record<string, number> = {};
-    for (const [providerName, promo] of Object.entries(appliedPromos)) {
-      const eligible = items.filter(item => {
-        if ((item.providerDisplayName ?? item.providerName) !== providerName) return false;
-        if (promo.service_ids && promo.service_ids.length > 0 && !promo.service_ids.includes(item.serviceId)) return false;
-        if (promo.service_category &&
-            promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) return false;
-        return true;
-      });
-      if (eligible.length === 0) continue;
-
-      const itemTotal = (item: CartItem) =>
-        (Number(item.price) || 0) +
+    for (const [itemId, promo] of Object.entries(appliedPromos)) {
+      const item = items.find(i => i.id === itemId);
+      if (!item) continue;
+      const itemTotal = (Number(item.price) || 0) +
         (item.addOns ?? []).reduce((s, a) => s + (Number(a.price) || 0), 0);
-
+      let off = 0;
       if (promo.discount_percent && promo.discount_percent > 0) {
-        for (const item of eligible) {
-          const off = (itemTotal(item) * promo.discount_percent) / 100;
-          discounts[item.id] = Math.min(off, Number(item.price) || 0);
-        }
+        off = (itemTotal * promo.discount_percent) / 100;
       } else if (promo.discount_amount && promo.discount_amount > 0) {
-        const pool = eligible.reduce((s, i) => s + itemTotal(i), 0);
-        if (pool <= 0) continue;
-        let remaining = Math.min(promo.discount_amount, pool);
-        eligible.forEach((item, idx) => {
-          const share = idx === eligible.length - 1
-            ? remaining
-            : Math.min(remaining, (itemTotal(item) / pool) * Math.min(promo.discount_amount!, pool));
-          const off = Math.min(share, Number(item.price) || 0);
-          discounts[item.id] = off;
-          remaining = Math.max(0, remaining - off);
-        });
+        off = promo.discount_amount;
       }
       // discount_text-only promos carry no redeemable value at checkout
+      discounts[itemId] = Math.min(off, Number(item.price) || 0);
     }
     return discounts;
   }, [appliedPromos, items]);
@@ -1119,25 +1178,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     () => Math.max(0, effectiveTotalNoPromo - effectiveTotal),
     [effectiveTotalNoPromo, effectiveTotal]
   );
-
-  // Balance the client will owe the provider directly (deposit-only items):
-  // discounted full price minus the deposit being charged today.
-  const dueAtAppointment = useMemo(() => {
-    return items.reduce((sum, item) => {
-      const booking = serviceBookings[item.id] || { isDepositOnly: false };
-      if (!booking.isDepositOnly) return sum;
-      const basePrice = Number(item?.price) || 0;
-      const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => s + (Number(addOn?.price) || 0), 0);
-      const itemTotalPrice = basePrice + addOnsTotal - (itemPromoDiscounts[item.id] ?? 0);
-      const provName = item.providerDisplayName ?? item.providerName;
-      const pol = providerDepositPolicies[provName];
-      const policyArg: DepositPolicy | number = pol
-        ? { type: pol.depositType, amount: pol.depositAmount }
-        : 20;
-      const deposit = BookingService.calculateDeposit(itemTotalPrice, policyArg);
-      return sum + Math.max(0, itemTotalPrice - deposit);
-    }, 0);
-  }, [items, serviceBookings, providerDepositPolicies, itemPromoDiscounts]);
 
   // Compute effective cart items for payment modal
   const effectiveCartItems = useMemo(() => {
@@ -1329,12 +1369,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // Bake promo discounts into the snapshot so the discounted price flows
     // through validation, payment, and the saved booking. A note on the
     // booking tells the provider which code was redeemed.
-    const promoByProvider = appliedPromos;
     const snapshotBookings: typeof serviceBookings = { ...serviceBookings };
     const snapshotItems = items.map(item => {
       const discount = itemPromoDiscounts[item.id] ?? 0;
       if (discount <= 0) return item;
-      const promo = promoByProvider[item.providerDisplayName ?? item.providerName];
+      const promo = appliedPromos[item.id];
       const existing = snapshotBookings[item.id];
       const promoNote = `Promo ${promo?.promo_code ?? ''} applied (−£${discount.toFixed(2)})`.trim();
       snapshotBookings[item.id] = {
@@ -1875,7 +1914,14 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                         const addOnsTotal = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
                         const itemTotal = basePrice + addOnsTotal;
                         const isDeposit = !!(booking as ServiceBooking).isDepositOnly;
-                        const displayPrice = isDeposit ? BookingService.calculateDeposit(itemTotal) : itemTotal;
+                        // Use the provider's actual deposit policy (percent OR flat £) —
+                        // never the 20% fallback, which silently ignores fixed-fee policies.
+                        const itemPromoName = item.providerDisplayName ?? item.providerName;
+                        const itemDepositPolicy = providerDepositPolicies[itemPromoName];
+                        const itemDepositPolicyArg: DepositPolicy | number = itemDepositPolicy
+                          ? { type: itemDepositPolicy.depositType, amount: itemDepositPolicy.depositAmount }
+                          : 20;
+                        const displayPrice = isDeposit ? BookingService.calculateDeposit(itemTotal, itemDepositPolicyArg) : itemTotal;
                         const b = booking as ServiceBooking;
                         return (
                           <View key={item.id}>
@@ -2131,6 +2177,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                                 providerName={providerName}
                                 allCartItems={items}
                                 depositPolicy={providerDepositPolicies[providerName]}
+                                appliedPromo={appliedPromos[item.id]}
+                                promoDiscount={itemPromoDiscounts[item.id] ?? 0}
+                                onApplyPromo={handleApplyPromoToItem}
+                                onRemovePromo={handleRemovePromoFromItem}
                               />
                               {/* Visual Separator */}
                               {index < providerItems.length - 1 && (
@@ -2144,53 +2194,29 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                   );
                 })}
 
-                {/* Promo code */}
-                <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TextInput
-                      style={{
-                        flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
-                        borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-                        fontSize: 14, color: P.text, backgroundColor: P.surface,
-                      }}
-                      placeholder="Promo code"
-                      placeholderTextColor={P.sub}
-                      value={promoInput}
-                      onChangeText={t => { setPromoInput(t); setPromoError(null); }}
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                    />
-                    <TouchableOpacity
-                      style={{
-                        borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center',
-                        backgroundColor: promoInput.trim() ? P.accent : P.surface,
-                      }}
-                      onPress={handleApplyPromo}
-                      disabled={!promoInput.trim() || promoApplying}
-                      activeOpacity={0.8}
-                    >
-                      {promoApplying
-                        ? <ActivityIndicator size="small" color="#fff" />
-                        : <Text style={{ fontSize: 13, fontWeight: '700', color: promoInput.trim() ? '#fff' : P.sub }}>Apply</Text>}
-                    </TouchableOpacity>
+                {/* Applied promo codes recap — codes are entered per-service on each
+                    card above; this just rolls up what's active. */}
+                {Object.keys(appliedPromos).length > 0 && (
+                  <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
+                    {Object.entries(appliedPromos).map(([itemId, promo]) => {
+                      const item = items.find(i => i.id === itemId);
+                      if (!item) return null;
+                      return (
+                        <View key={itemId} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: P.accent }}>
+                            {promo.promo_code?.toUpperCase()}
+                          </Text>
+                          <Text style={{ flex: 1, fontSize: 12, color: P.sub }} numberOfLines={1}>
+                            {item.serviceName}
+                          </Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
+                            −£{(itemPromoDiscounts[itemId] ?? 0).toFixed(2)}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
-                  {promoError && (
-                    <Text style={{ fontSize: 12, color: '#FF6868', marginTop: 8 }}>{promoError}</Text>
-                  )}
-                  {Object.entries(appliedPromos).map(([providerName, promo]) => (
-                    <View key={providerName} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: P.accent }}>
-                        {promo.promo_code?.toUpperCase()}
-                      </Text>
-                      <Text style={{ flex: 1, fontSize: 12, color: P.sub }} numberOfLines={1}>
-                        {promo.title} • {providerName}
-                      </Text>
-                      <TouchableOpacity onPress={() => handleRemovePromo(providerName)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#FF6868' }}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
+                )}
 
                 {/* Summary - USE EFFECTIVE TOTALS + SERVICE FEE NOTE */}
                 <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
@@ -2212,11 +2238,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                     <Text style={dynamicStyles.totalLabel}>Total</Text>
                     <Text style={dynamicStyles.totalValue}>£{effectiveFinalTotal.toFixed(2)}</Text>
                   </View>
-                  {dueAtAppointment > 0 && (
-                    <Text style={{ fontSize: 12, lineHeight: 17, color: P.sub, marginTop: 10 }}>
-                      Only deposits are charged today — the remaining £{dueAtAppointment.toFixed(2)} is paid at your appointment.
-                    </Text>
-                  )}
                 </View>
 
                 {/* Checkout Button - USE EFFECTIVE TOTAL */}

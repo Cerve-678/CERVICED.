@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
+import * as Notifications from 'expo-notifications';
 import TabNavigation from './TabNavigator';
 import ProviderTabNavigation from './ProviderTabNavigator';
 import { RootStackParamList } from './types';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { navigationRef } from './navigationRef';
+import { handleNotificationTap } from '../services/notificationTapHandler';
 
 // Auth screens
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
@@ -28,6 +31,34 @@ export default function RootNavigation() {
   const { theme: colors } = useTheme();
   const MainTabsComponent = activeMode === 'provider' ? ProviderTabNavigation : TabNavigation;
 
+  // Track whether NavigationContainer has finished mounting
+  const [isNavReady, setIsNavReady] = useState(false);
+  // Dedup guard — prevents the same notification firing both hooks
+  const handledNotifRef = useRef<string | null>(null);
+
+  // Cold-start tap: app was killed, user tapped the notification, app launched
+  const lastNotifResponse = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    if (!isNavReady || !lastNotifResponse) return;
+    const id = lastNotifResponse.notification.request.identifier;
+    if (handledNotifRef.current === id) return;
+    handledNotifRef.current = id;
+    const data = lastNotifResponse.notification.request.content.data;
+    handleNotificationTap(data as any);
+  }, [isNavReady, lastNotifResponse]);
+
+  // Background/foreground tap: app was running or suspended
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const id = response.notification.request.identifier;
+      if (handledNotifRef.current === id) return;
+      handledNotifRef.current = id;
+      const data = response.notification.request.content.data;
+      handleNotificationTap(data as any);
+    });
+    return () => sub.remove();
+  }, []);
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
@@ -48,7 +79,7 @@ export default function RootNavigation() {
         </View>
       </View>
     </Modal>
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={() => setIsNavReady(true)}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
