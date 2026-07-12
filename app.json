@@ -33,7 +33,9 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "config": {
         "googleMaps": {
@@ -70,9 +72,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "624d44eb-1d17-4c9a-b782-3675ee5e7863"
+        "projectId": "124a2960-5455-41f8-bbb5-820013f52951"
       }
     },
-    "owner": "umbrellacollective"
+    "owner": "naoa"
   }
 }
