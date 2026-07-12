@@ -17,6 +17,7 @@ import {
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
   updateProviderCancellationPolicy,
+  updateProviderAutomationSettings,
   getMyProviderProfile,
 } from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
@@ -202,20 +203,23 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         ]);
         if (profile) setProviderId(profile.id);
         const m = user?.user_metadata ?? {};
+        // Prefer the providers-table mirror (what cron jobs and clients act
+        // on); fall back to legacy user_metadata, then defaults.
+        const a = (profile as any)?.automation_settings ?? {};
         setD({
-          clientReminderTiming:    m['pa_client_reminder_timing']     ?? DEFAULTS.clientReminderTiming,
-          rebookingNudgeWeeks:     m['pa_rebooking_nudge_weeks']       ?? DEFAULTS.rebookingNudgeWeeks,
-          autoReviewRequest:       m['pa_auto_review_request']         ?? DEFAULTS.autoReviewRequest,
-          postApptCheckIn:         m['pa_post_appt_check_in']          ?? DEFAULTS.postApptCheckIn,
-          birthdayGreeting:        m['pa_birthday_greeting']           ?? DEFAULTS.birthdayGreeting,
+          clientReminderTiming:    a.clientReminderTiming ?? m['pa_client_reminder_timing'] ?? DEFAULTS.clientReminderTiming,
+          rebookingNudgeWeeks:     a.rebookingNudgeWeeks  ?? m['pa_rebooking_nudge_weeks']  ?? DEFAULTS.rebookingNudgeWeeks,
+          autoReviewRequest:       a.autoReviewRequest    ?? m['pa_auto_review_request']    ?? DEFAULTS.autoReviewRequest,
+          postApptCheckIn:         a.postApptCheckIn      ?? m['pa_post_appt_check_in']     ?? DEFAULTS.postApptCheckIn,
+          birthdayGreeting:        a.birthdayGreeting     ?? m['pa_birthday_greeting']      ?? DEFAULTS.birthdayGreeting,
           newBookingRecap:         m['pa_new_booking_recap']           ?? DEFAULTS.newBookingRecap,
           autoConfirmBookings:     m['pa_auto_confirm_bookings']       ?? DEFAULTS.autoConfirmBookings,
-          autoSendIntakeForm:      m['pa_auto_send_intake_form']       ?? DEFAULTS.autoSendIntakeForm,
+          autoSendIntakeForm:      a.autoSendIntakeForm   ?? m['pa_auto_send_intake_form']  ?? DEFAULTS.autoSendIntakeForm,
           bufferMins:              m['pa_buffer_mins']                 ?? DEFAULTS.bufferMins,
           cancellationNoticeHours: m['pa_cancellation_notice_hours']   ?? DEFAULTS.cancellationNoticeHours,
-          depositRequiredNew:      m['pa_deposit_required_new']        ?? DEFAULTS.depositRequiredNew,
-          waitlistEnabled:         m['pa_waitlist_enabled']            ?? DEFAULTS.waitlistEnabled,
-          autoAcceptWaitlist:      m['pa_auto_accept_waitlist']        ?? DEFAULTS.autoAcceptWaitlist,
+          depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
+          waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
+          autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
           maxBookingsPerDay:       m['pa_max_bookings_per_day']        ?? DEFAULTS.maxBookingsPerDay,
           bookingWindowDays:       String(profile?.booking_window_days    ?? m['pa_booking_window_days']    ?? DEFAULTS.bookingWindowDays),
           slotIntervalMins:        String(profile?.slot_interval_mins     ?? m['pa_slot_interval_mins']     ?? DEFAULTS.slotIntervalMins),
@@ -266,6 +270,20 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         saves.push(updateProviderMaxBookingsPerDay(providerId, capInt));
         const cancelHrs = parseInt(d.cancellationNoticeHours, 10) || 0;
         saves.push(updateProviderCancellationPolicy(providerId, cancelHrs));
+        // Mirror the client-facing automations onto the providers row —
+        // user_metadata is invisible to client screens and pg_cron jobs,
+        // so anything that must act on these settings reads them from here.
+        saves.push(updateProviderAutomationSettings(providerId, {
+          clientReminderTiming: d.clientReminderTiming,
+          rebookingNudgeWeeks:  d.rebookingNudgeWeeks,
+          autoReviewRequest:    d.autoReviewRequest,
+          postApptCheckIn:      d.postApptCheckIn,
+          birthdayGreeting:     d.birthdayGreeting,
+          autoSendIntakeForm:   d.autoSendIntakeForm,
+          waitlistEnabled:      d.waitlistEnabled,
+          autoAcceptWaitlist:   d.autoAcceptWaitlist,
+          depositRequiredNew:   d.depositRequiredNew,
+        }));
       }
       await Promise.all(saves);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

@@ -7,6 +7,8 @@ export interface CartItem {
   providerName: string;
   providerDisplayName?: string;
   providerSlug?: string;
+  /** Supabase providers.id (UUID) — the canonical link used when saving bookings */
+  providerId?: string;
   providerImage: any;
   providerService: string;
   serviceName: string;
@@ -56,6 +58,10 @@ export interface CartContextType {
 
 export interface AddToCartParams {
   providerName: string;
+  providerDisplayName?: string | undefined;
+  providerSlug?: string | undefined;
+  /** Supabase providers.id (UUID) — pass whenever the caller has it loaded */
+  providerId?: string | undefined;
   providerImage: any;
   providerService: string;
   service: {
@@ -167,11 +173,14 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
   try {
     switch (action.type) {
       case CartActionType.ADD_ITEM: {
-        const { 
-          providerName, 
-          providerImage, 
-          providerService, 
-          service, 
+        const {
+          providerName,
+          providerDisplayName,
+          providerSlug,
+          providerId,
+          providerImage,
+          providerService,
+          service,
           quantity = 1,
           selectedOptions = {},
           forceNewInstance = false
@@ -200,6 +209,9 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           const newItem: CartItem = {
             id: itemId,
             providerName: String(providerName || 'Unknown Provider'),
+            ...(providerDisplayName ? { providerDisplayName } : {}),
+            ...(providerSlug ? { providerSlug } : {}),
+            ...(providerId ? { providerId } : {}),
             providerImage: providerImage || null,
             providerService: String(providerService || 'General'),
             serviceName: String(safeGet(service, 'name', 'Unknown Service')),

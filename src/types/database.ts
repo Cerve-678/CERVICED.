@@ -23,11 +23,18 @@ export type PaymentStatus =
 export type NotificationType =
   | 'booking_pending'    | 'booking_confirmed'  | 'booking_declined'
   | 'booking_cancelled'  | 'booking_reminder'   | 'booking_in_progress'
+  | 'booking_not_started'
   | 'no_show'            | 'payment_success'    | 'new_provider'
-  | 'reschedule_request' | 'reschedule_response'| 'reschedule_confirmed'
+  | 'reschedule_request' | 'reschedule_provider_response' | 'reschedule_confirmed'
   | 'review_request'     | 'review_received'    | 'promotion'
-  | 'provider_message'   | 'balance_collected'
-  | 'waitlist_slot_available';
+  | 'provider_message'   | 'balance_collected'  | 'balance_reminder'
+  | 'intake_form_reminder'
+  | 'waitlist_slot_available'
+  | 'new_message'
+  | 'announcement'          // provider broadcast to clients (client-facing)
+  | 'intake_form_received'  // provider sent client a form to fill (client-facing)
+  | 'intake_form_completed' // client sent a filled form back (provider-facing)
+  | 'info_pack_received';   // provider sent client prep/aftercare info (client-facing)
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -76,6 +83,7 @@ export interface DbProvider {
   gradient: string[] | null;
   accent_color: string | null;
   background_image_url: string | null;
+  profile_theme: string | null; // preset key from src/constants/providerThemes.ts ('app', 'blush', …)
   phone: string | null;
   email: string | null;
   instagram: string | null;
@@ -117,6 +125,20 @@ export interface DbProvider {
   slot_interval_mins: number;
   buffer_mins: number;
   min_booking_notice_hrs: number;
+  cancellation_notice_hours: number;
+  /** Mirror of the provider's Automations screen settings — readable by
+   *  client screens and pg_cron jobs (auth user_metadata is not). */
+  automation_settings: {
+    clientReminderTiming?: string[]; // e.g. ['24h','48h','2h']
+    rebookingNudgeWeeks?: string;    // 'never' | '2' | '4' | ...
+    autoReviewRequest?: boolean;
+    postApptCheckIn?: boolean;
+    birthdayGreeting?: boolean;
+    autoSendIntakeForm?: boolean;
+    waitlistEnabled?: boolean;
+    autoAcceptWaitlist?: boolean;
+    depositRequiredNew?: boolean;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -233,6 +255,7 @@ export interface DbBooking {
   group_booking_count: number;
   provider_name_snapshot: string;
   service_name_snapshot: string;
+  service_category_snapshot: string | null;
   provider_logo_snapshot: string | null;
   provider_address_snapshot: string | null;
   provider_phone_snapshot: string | null;

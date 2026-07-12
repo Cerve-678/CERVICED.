@@ -22,6 +22,7 @@ import {
   getMyProviderProfile,
   getMyProviderServices,
   getProviderFormLibrary,
+  getProviderBookings,
   saveFormToLibrary,
   updateLibraryForm,
   deleteLibraryForm,
@@ -31,6 +32,7 @@ import {
   IntakeForm,
   LibraryForm,
 } from '../services/databaseService';
+import type { BookingWithAddOns } from '../types/database';
 import { ProviderHomeScreenProps } from '../navigation/types';
 import { useProviderDialog } from '../components/ProviderDialog';
 
@@ -171,7 +173,11 @@ type Mode = 'picker' | 'builder' | 'readonly';
 type PickerTab = 'myForms' | 'templates';
 
 export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
-  const { bookingId, clientUserId, serviceName, formId: existingFormId } = route.params;
+  // Opened two ways: from a booking (all params set — builder pre-fills the
+  // service, sending goes straight to that client) or from Quick Access with
+  // no params at all (pure library — sending opens a booking picker below).
+  const { bookingId, clientUserId, serviceName = '', formId: existingFormId } = route.params ?? {};
+  const hasBookingContext = !!bookingId && !!clientUserId;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();

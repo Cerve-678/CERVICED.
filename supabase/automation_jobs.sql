@@ -304,12 +304,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ───────────────────────────────────────────────────────────
 -- STEP 10: Schedule the four cron jobs
---   Each block deletes any existing job with the same name first,
---   so this script is safe to re-run without creating duplicates.
+--   cron.schedule() upserts by job_name — re-running this with the same
+--   name updates the existing job in place, so this script is safe to
+--   re-run without creating duplicates. (Deliberately not using
+--   DELETE FROM cron.job first — Supabase blocks direct DML on that
+--   table; cron.schedule/cron.unschedule are the sanctioned interface.)
 -- ───────────────────────────────────────────────────────────
 
 -- Provider 24hr reminders — every day at 08:00 UTC
-DELETE FROM cron.job WHERE jobname = 'provider-24hr-reminders';
 SELECT cron.schedule(
   'provider-24hr-reminders',
   '0 8 * * *',
@@ -317,7 +319,6 @@ SELECT cron.schedule(
 );
 
 -- User 24hr reminders — every day at 08:00 UTC
-DELETE FROM cron.job WHERE jobname = 'user-24hr-reminders';
 SELECT cron.schedule(
   'user-24hr-reminders',
   '0 8 * * *',
@@ -325,7 +326,6 @@ SELECT cron.schedule(
 );
 
 -- Pending booking warnings — every day at 10:00 UTC
-DELETE FROM cron.job WHERE jobname = 'pending-booking-warnings';
 SELECT cron.schedule(
   'pending-booking-warnings',
   '0 10 * * *',
@@ -333,7 +333,6 @@ SELECT cron.schedule(
 );
 
 -- Auto-complete past bookings — every 30 minutes
-DELETE FROM cron.job WHERE jobname = 'auto-complete-bookings';
 SELECT cron.schedule(
   'auto-complete-bookings',
   '*/30 * * * *',

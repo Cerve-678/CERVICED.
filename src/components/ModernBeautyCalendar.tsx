@@ -581,6 +581,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
   },
+  calendarDayToday: { borderWidth: 1.5, borderRadius: 12 },
   calendarDayPast: { opacity: 0.35 },
   calendarDayText: { fontSize: 13, fontWeight: '500' },
   calDotWrap:  { height: 5, justifyContent: 'center', alignItems: 'center', marginTop: 2 },

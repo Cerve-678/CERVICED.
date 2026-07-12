@@ -12,19 +12,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
-import { getProviderBookings } from '../services/databaseService';
+import { getProviderBookings, getProviderConversations, ProviderConversationWithClient } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 import { ThemedBackground } from '../components/ThemedBackground';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterKey = 'all' | 'pending' | 'confirmed' | 'done';
+type FilterKey = 'all' | 'pending' | 'confirmed' | 'done' | 'messages';
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all',       label: 'All'       },
   { key: 'pending',   label: 'Pending'   },
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'done',      label: 'Done'      },
+  { key: 'messages',  label: 'Messages'  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -42,6 +43,19 @@ function timeAgo(dateStr: string, timeStr: string): string {
   const days = Math.floor(hrs / 24);
   if (days < 7)  return `${days}d ago`;
   return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function timeAgoISO(iso: string | null): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days}d ago`;
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
 function initials(name: string): string {
@@ -212,6 +226,74 @@ const row = StyleSheet.create({
   dateChip:    { fontSize: 11 },
 });
 
+// ─── Conversation row ─────────────────────────────────────────────────────────
+
+function ConversationRow({
+  conversation,
+  index,
+  text,
+  sub,
+  accent,
+  border,
+  onPress,
+}: {
+  conversation: ProviderConversationWithClient;
+  index: number;
+  text: string;
+  sub: string;
+  accent: string;
+  border: string;
+  onPress: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = Math.min(index * 45, 300);
+    Animated.parallel([
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 280, delay, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 90, friction: 14, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const isUnread = conversation.unread_count_provider > 0;
+  const clientName = conversation.client?.name ?? 'Client';
+  const init = initials(clientName);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <TouchableOpacity
+        activeOpacity={0.72}
+        onPress={onPress}
+        style={[row.wrap, { borderBottomColor: border }]}
+      >
+        {isUnread && (
+          <View style={[row.unreadBar, { backgroundColor: accent }]} />
+        )}
+
+        <View style={[row.avatar, { backgroundColor: `${accent}22` }]}>
+          <Text style={[row.avatarText, { color: accent }]}>{init}</Text>
+        </View>
+
+        <View style={row.body}>
+          <View style={row.topLine}>
+            <Text style={[row.name, { color: text, fontWeight: isUnread ? '700' : '500' }]} numberOfLines={1}>
+              {clientName}
+            </Text>
+            <Text style={[row.timestamp, { color: sub }]}>{timeAgoISO(conversation.last_message_at)}</Text>
+          </View>
+
+          <Text style={[row.service, { color: isUnread ? text : sub, fontWeight: isUnread ? '600' : '400' }]} numberOfLines={1}>
+            {conversation.last_message ?? 'No messages yet'}
+          </Text>
+        </View>
+
+        <Ionicons name="chevron-forward" size={14} color={sub} style={{ opacity: 0.35, marginTop: 2, marginLeft: 4 }} />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 // ─── Section header ───────────────────────────────────────────────────────────
 
 function SectionHeader({ label, count, dark, text, sub }: { label: string; count: number; dark: boolean; text: string; sub: string }) {
@@ -256,31 +338,48 @@ const DARK_P = {
   iconBg:  'rgba(175,145,151,0.10)',
 };
 
-export default function ProviderInboxScreen({ navigation }: any) {
+export default function ProviderInboxScreen({ navigation, route }: any) {
   const { isDarkMode: dark } = useTheme();
   const P = dark ? DARK_P : LIGHT_P;
 
-  const [bookings,   setBookings]   = useState<BookingWithAddOns[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter,     setFilter]     = useState<FilterKey>('all');
+  const [bookings,      setBookings]      = useState<BookingWithAddOns[]>([]);
+  const [conversations, setConversations] = useState<ProviderConversationWithClient[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [filter,        setFilter]        = useState<FilterKey>(route?.params?.initialFilter ?? 'all');
+
+  // Apply initialFilter on re-navigation too — navigate() to an already-mounted
+  // inbox only updates params, so the useState initializer never re-runs
+  useEffect(() => {
+    const f = route?.params?.initialFilter as FilterKey | undefined;
+    if (f) setFilter(f);
+  }, [route?.params?.initialFilter]);
 
   const fetchBookings = useCallback(async () => {
     try { setBookings(await getProviderBookings()); } catch {}
   }, []);
 
+  const fetchConversations = useCallback(async () => {
+    try { setConversations(await getProviderConversations()); } catch {}
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    fetchBookings().finally(() => setLoading(false));
-  }, [fetchBookings]);
+    Promise.all([fetchBookings(), fetchConversations()]).finally(() => setLoading(false));
+  }, [fetchBookings, fetchConversations]);
 
-  useFocusEffect(useCallback(() => { fetchBookings(); }, [fetchBookings]));
+  useFocusEffect(useCallback(() => { fetchBookings(); fetchConversations(); }, [fetchBookings, fetchConversations]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchBookings();
+    await Promise.all([fetchBookings(), fetchConversations()]);
     setRefreshing(false);
-  }, [fetchBookings]);
+  }, [fetchBookings, fetchConversations]);
+
+  const unreadConversationCount = useMemo(
+    () => conversations.filter(c => c.unread_count_provider > 0).length,
+    [conversations]
+  );
 
   const pendingIds = useMemo(
     () => new Set(bookings.filter(b => b.status === 'pending').map(b => b.id)),
@@ -328,9 +427,13 @@ export default function ProviderInboxScreen({ navigation }: any) {
   // Flat items for FlatList
   type ListItem =
     | { key: string; t: 'section'; label: string; count: number }
-    | { key: string; t: 'booking'; booking: BookingWithAddOns; idx: number };
+    | { key: string; t: 'booking'; booking: BookingWithAddOns; idx: number }
+    | { key: string; t: 'conversation'; conversation: ProviderConversationWithClient; idx: number };
 
   const flatItems = useMemo((): ListItem[] => {
+    if (filter === 'messages') {
+      return conversations.map((c, idx) => ({ key: c.id, t: 'conversation' as const, conversation: c, idx }));
+    }
     const out: ListItem[] = [];
     let bookingIdx = 0;
     for (const s of listData) {
@@ -343,7 +446,7 @@ export default function ProviderInboxScreen({ navigation }: any) {
       }
     }
     return out;
-  }, [listData]);
+  }, [listData, filter, conversations]);
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerY    = useRef(new Animated.Value(-6)).current;
@@ -384,7 +487,8 @@ export default function ProviderInboxScreen({ navigation }: any) {
         <View style={[s.filterRow, { backgroundColor: P.card, borderBottomColor: P.border }]}>
           {FILTERS.map(f => {
             const active = filter === f.key;
-            const isNew  = f.key === 'pending' && pendingCount > 0;
+            const badgeCount = f.key === 'pending' ? pendingCount : f.key === 'messages' ? unreadConversationCount : 0;
+            const isNew  = badgeCount > 0;
             return (
               <TouchableOpacity
                 key={f.key}
@@ -394,7 +498,7 @@ export default function ProviderInboxScreen({ navigation }: any) {
                 <Text style={[s.filterLabel, { color: active ? P.accent : P.sub }]}>{f.label}</Text>
                 {isNew && (
                   <View style={[s.filterBadge, { backgroundColor: '#FF3B30' }]}>
-                    <Text style={s.filterBadgeText}>{pendingCount}</Text>
+                    <Text style={s.filterBadgeText}>{badgeCount}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -429,6 +533,23 @@ export default function ProviderInboxScreen({ navigation }: any) {
                   />
                 );
               }
+              if (item.t === 'conversation') {
+                return (
+                  <ConversationRow
+                    conversation={item.conversation}
+                    index={item.idx}
+                    text={P.text}
+                    sub={P.sub}
+                    accent={P.accent}
+                    border={P.border}
+                    onPress={() => navigation.navigate('ProviderConversation', {
+                      conversationId: item.conversation.id,
+                      clientUserId: item.conversation.user_id,
+                      clientName: item.conversation.client?.name ?? 'Client',
+                    })}
+                  />
+                );
+              }
               return (
                 <InboxRow
                   booking={item.booking}
@@ -445,10 +566,12 @@ export default function ProviderInboxScreen({ navigation }: any) {
             ListEmptyComponent={
               <View style={s.empty}>
                 <View style={[s.emptyIcon, { backgroundColor: P.iconBg }]}>
-                  <Ionicons name="mail-open-outline" size={36} color={P.sub} />
+                  <Ionicons name={filter === 'messages' ? 'chatbubble-outline' : 'mail-open-outline'} size={36} color={P.sub} />
                 </View>
                 <Text style={[s.emptyTitle, { color: P.text }]}>All clear</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>No bookings in this category</Text>
+                <Text style={[s.emptySub, { color: P.sub }]}>
+                  {filter === 'messages' ? 'No conversations yet' : 'No bookings in this category'}
+                </Text>
               </View>
             }
           />

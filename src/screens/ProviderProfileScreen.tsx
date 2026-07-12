@@ -42,17 +42,26 @@ import { HomeStackParamList } from '../navigation/types';
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { getProviderBySlug, getProviderReviews, addBookmark as dbAddBookmark, removeBookmark as dbRemoveBookmark, trackUserInteraction, getProviderActivePromotions } from '../services/databaseService';
+import { getProviderBySlug, getProviderReviews, addBookmark as dbAddBookmark, removeBookmark as dbRemoveBookmark, trackUserInteraction, getProviderActivePromotions, getProviderPortfolio } from '../services/databaseService';
 import userLearningService from '../services/userLearningService';
 import { supabase } from '../lib/supabase';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
-import type { ProviderWithServices, DbPromotion } from '../types/database';
+import type { ProviderWithServices, DbPromotion, DbPortfolioItem } from '../types/database';
+import {
+  resolveProviderTheme,
+  withAlpha,
+  type ProviderThemeTokens,
+} from '../constants/providerThemes';
 
 type ProviderProfileScreenProps = StackScreenProps<HomeStackParamList, 'ProviderProfile'>;
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const SIDE_PANEL_W = screenWidth * 0.85;
+
+// Hero → content transition: the logo/name/rating/slots float directly over the photo;
+// the content sheet starts right after them, rising over the photo with a rounded lip.
+const SHEET_LIP_RADIUS = 36;
 
 // Fallback icons using text symbols
 const HeartIcon = ({ size, color }: { size: number; color: string }) => (
@@ -79,6 +88,7 @@ interface ProviderData {
   hasCustomGradient: boolean;
   accentColor: string | null;
   backgroundImage: string | null;
+  profileTheme: string; // preset key from providerThemes.ts — 'app' follows viewer's theme
   phone: string;
   email: string;
   instagram: string;
@@ -100,6 +110,11 @@ interface ProviderData {
     depositAmount?: string;
     noShowAction?: string;
   } | null;
+  /** Enforced at cancellation (providers.cancellation_notice_hours) — takes
+   *  precedence over the descriptive bookingPolicies.cancelNotice text. */
+  cancellationNoticeHours: number;
+  /** Provider's Automations toggle — hides the join-waitlist button when off. */
+  waitlistEnabled: boolean;
 }
 
 interface AddOnData {
@@ -142,6 +157,22 @@ function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m > 0 ? `${h}h ${m}min` : `${h} hour${h > 1 ? 's' : ''}`;
+}
+
+// ─── Policy helpers ─────────────────────────────────────────────────────────
+/** True when the provider has anything worth showing on the Policy tab —
+ *  either descriptive booking_policies or the enforced cancellation window. */
+function hasPolicyInfo(provider: ProviderData): boolean {
+  const bp = provider.bookingPolicies;
+  return (
+    provider.cancellationNoticeHours > 0 ||
+    (!!bp && (
+      (!!bp.depositRequired && !!bp.depositAmount) ||
+      (!!bp.cancelNotice && bp.cancelNotice !== 'none') ||
+      !!(bp.rescheduleNotice || bp.maxReschedules) ||
+      (!!bp.noShowAction && bp.noShowAction !== 'none')
+    ))
+  );
 }
 
 // ─── Map Supabase ProviderWithServices → local ProviderData ─────────────────
@@ -188,6 +219,7 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     hasCustomGradient: !!(p.gradient && p.gradient.length >= 2),
     accentColor: p.accent_color ?? null,
     backgroundImage: p.background_image_url ?? null,
+    profileTheme: p.profile_theme ?? 'app',
     categories,
     phone: p.phone ?? '',
     email: p.email ?? '',
@@ -200,6 +232,9 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     isVerified: p.is_verified ?? false,
     preferredContactMethods: p.preferred_contact_methods ?? [],
     bookingPolicies: p.booking_policies ?? null,
+    cancellationNoticeHours: p.cancellation_notice_hours ?? 0,
+    // Absent setting = waitlist stays available (pre-toggle behaviour)
+    waitlistEnabled: p.automation_settings?.waitlistEnabled !== false,
   };
 }
 
@@ -393,13 +428,15 @@ interface CategoryTabItemProps {
   category: string;
   isSelected: boolean;
   onPress: () => void;
-  useGlass?: boolean;
+  cardBg: string;
+  blurIntensity: number;
+  blurTint: 'light' | 'dark';
+  borderColor: string;
+  textColor: string;
 }
 
 const CategoryTabItem: React.FC<CategoryTabItemProps> = React.memo(
-  ({ category, isSelected, onPress, useGlass = true }) => {
-    const { isDarkMode } = useTheme();
-    const TP = isDarkMode ? OD : OL;
+  ({ category, isSelected, onPress, cardBg, blurIntensity, blurTint, borderColor, textColor }) => {
     const animatedValue = useRef<Animated.Value>(new Animated.Value(0)).current;
     const pressAnimatedValue = useRef<Animated.Value>(new Animated.Value(1)).current;
 
@@ -440,46 +477,28 @@ const CategoryTabItem: React.FC<CategoryTabItemProps> = React.memo(
     return (
       <TouchableOpacity onPressIn={handlePressIn} onPressOut={handlePressOut} activeOpacity={1}>
         <Animated.View style={animatedStyle}>
-          <View style={[
-            styles.categoryTab,
-            isSelected && styles.selectedCategoryTab,
-            !useGlass && { borderColor: isSelected ? TP.border : TP.sep },
-          ]}>
-            {useGlass ? (
-              <BlurView
-                intensity={isSelected ? 25 : 14}
-                tint={isDarkMode ? 'dark' : 'light'}
-                style={styles.categoryTabBlur}
-              >
-                {isSelected && (
-                  <LinearGradient
-                    colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0.08)']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.tabGradientOverlay}
-                  />
-                )}
-                <Text style={[
-                  styles.categoryTabText,
-                  isSelected && styles.selectedCategoryTabText,
-                  { color: isSelected ? TP.accent : TP.sub },
-                ]}>
-                  {category}
-                </Text>
-              </BlurView>
-            ) : (
-              <View style={[styles.categoryTabBlur, {
-                backgroundColor: isSelected ? TP.accent + '18' : TP.surface,
-              }]}>
-                <Text style={[
-                  styles.categoryTabText,
-                  isSelected && styles.selectedCategoryTabText,
-                  { color: isSelected ? TP.accent : TP.sub },
-                ]}>
-                  {category}
-                </Text>
-              </View>
-            )}
+          <View style={[styles.categoryTab, { borderColor }]}>
+            <BlurView
+              intensity={blurIntensity}
+              tint={blurTint}
+              style={[styles.categoryTabBlur, { backgroundColor: cardBg }]}
+            >
+              {isSelected && (
+                <LinearGradient
+                  colors={(blurTint === 'dark' ? ['rgba(255,255,255,0.08)', 'transparent'] : ['rgba(255,255,255,0.3)', 'transparent']) as [string, string]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.tabGradientOverlay}
+                />
+              )}
+              <Text style={[
+                styles.categoryTabText,
+                isSelected && styles.selectedCategoryTabText,
+                { color: textColor },
+              ]}>
+                {category}
+              </Text>
+            </BlurView>
           </View>
         </Animated.View>
       </TouchableOpacity>
@@ -918,7 +937,9 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
                     </View>
                     <Text style={styles.modalReviewDate}>{review.date}</Text>
                   </View>
-                  <Text style={styles.modalReviewComment}>{review.comment}</Text>
+                  {review.comment ? (
+                    <Text style={styles.modalReviewComment}>{review.comment}</Text>
+                  ) : null}
                 </BlurView>
               ))}
             </ScrollView>
@@ -994,17 +1015,8 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
   }
 );
 
-// ── Design tokens (matches HomeScreen palette) ────────────────────────────────
-const OL = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', text: '#000000', sub: '#7E6667',
-  border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)',
-};
-const OD = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667',
-  border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
-};
+// Elegant serif for display names & section headings (matches the reference look)
+const SERIF = 'Prata-Regular';
 
 // ── Offers Modal ─────────────────────────────────────────────────────────────
 interface OffersSidePanelProps {
@@ -1014,12 +1026,13 @@ interface OffersSidePanelProps {
   promotions: DbPromotion[];
   providerName: string;
   adaptiveAccentColor: string;
+  themeTokens: ProviderThemeTokens;
+  onBookOffer: (promo: DbPromotion) => void;
 }
 
 const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
-  ({ isVisible, onClose, slideAnim, promotions, providerName, adaptiveAccentColor }) => {
-    const { isDarkMode } = useTheme();
-    const OP = isDarkMode ? OD : OL;
+  ({ isVisible, onClose, slideAnim, promotions, providerName, adaptiveAccentColor, themeTokens, onBookOffer }) => {
+    const OP = themeTokens;
 
     const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -1120,6 +1133,17 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
                         </Text>
                       </TouchableOpacity>
                     ) : null}
+
+                    <TouchableOpacity
+                      style={[offersStyles.bookBtn, { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        onBookOffer(promo);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={offersStyles.bookBtnText}>Book Now</Text>
+                    </TouchableOpacity>
                   </View>
                 ))
               )}
@@ -1147,6 +1171,7 @@ const offersStyles = StyleSheet.create({
   },
   headerSub: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     opacity: 0.7,
   },
@@ -1174,12 +1199,18 @@ const offersStyles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     opacity: 0.6,
   },
   offerCard: {
     borderRadius: 14,
     padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 4,
   },
   discountBadge: {
     alignSelf: 'flex-start',
@@ -1203,6 +1234,7 @@ const offersStyles = StyleSheet.create({
   },
   offerDescription: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 10,
@@ -1223,6 +1255,7 @@ const offersStyles = StyleSheet.create({
   },
   validity: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
     marginBottom: 12,
     opacity: 0.5,
@@ -1257,11 +1290,27 @@ const offersStyles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  bookBtn: {
+    marginTop: 12,
+    borderRadius: 22,
+    paddingVertical: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  bookBtnText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
 });
 
 // ── Provider Profile Skeleton ────────────────────────────────────────────────
 function ProviderProfileSkeleton() {
-  const { isDarkMode } = useTheme();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -1273,9 +1322,11 @@ function ProviderProfileSkeleton() {
     loop.start();
     return () => loop.stop();
   }, [shimmer]);
+  // Provider theme isn't known yet while loading — use the 'app' preset.
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#3A3A3C' : '#D1D1D6';
-  const bg = isDarkMode ? '#1C1C1E' : '#F2F2F7';
+  const skeletonTheme = resolveProviderTheme('app');
+  const base = '#DDD5CC';
+  const bg = skeletonTheme.bg;
 
   return (
     <View style={{ flex: 1, backgroundColor: bg }}>
@@ -1321,11 +1372,11 @@ function ProviderProfileSkeleton() {
 
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigation, route }) => {
-  const { theme, isDarkMode } = useTheme();
-  const OP = isDarkMode ? OD : OL;
+  const { theme } = useTheme();
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
+    'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
   });
 
   const providerId = route.params?.providerId || 'styled-by-kathrine';
@@ -1333,6 +1384,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   const [provider, setProvider] = useState<ProviderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
+
+  // Palette follows the provider's chosen profile theme (preset key or custom set).
+  // Until the provider loads this resolves to the 'app' preset.
+  const OP = resolveProviderTheme(provider?.profileTheme);
 
   const [reviews, setReviews] = useState<{ id: number | string; name: string; rating: number; comment: string; date: string }[]>([]);
 
@@ -1382,6 +1437,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           if (!cancelled) setPromotions(promos);
         } catch { /* silent */ }
 
+        // Fetch portfolio (client work gallery)
+        try {
+          const items = await getProviderPortfolio(data.id);
+          if (!cancelled) setPortfolio(items);
+        } catch { /* silent */ }
+
       })
       .catch(() => { /* provider not found — loading=false, provider remains null */ })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -1426,6 +1487,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   const [showAddOnsModal, setShowAddOnsModal] = useState(false);
   const [showOffersModal, setShowOffersModal] = useState(false);
   const [promotions, setPromotions] = useState<DbPromotion[]>([]);
+  const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessageData, setSuccessMessageData] = useState<{
     title: string;
@@ -1434,6 +1496,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   } | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceData | null>(null);
   const [notificationMessageType, setNotificationMessageType] = useState<'bell' | 'bookmark'>('bell');
+
+  // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
+  const scrollRef = useRef<ScrollView>(null);
+  const servicesSectionRef = useRef<View>(null);
 
   // Animation references - properly typed and persistent
   const slideRightAnimation = useRef<Animated.Value>(new Animated.Value(100)).current;
@@ -1444,14 +1510,45 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   // Prefer DB-stored accent_color, fall back to gradient-derived, then app default
   const adaptiveAccentColor = useMemo(
     () => provider?.accentColor
-      ?? (provider?.hasCustomGradient ? getAdaptiveAccentColor(provider.gradient) : OL.accent),
-    [provider?.accentColor, provider?.gradient, provider?.hasCustomGradient]
+      ?? (provider?.hasCustomGradient ? getAdaptiveAccentColor(provider.gradient) : OP.accent),
+    [provider?.accentColor, provider?.gradient, provider?.hasCustomGradient, OP.accent]
   );
 
-  // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat opaque fill
-  const cardBg = isDarkMode ? 'rgba(37,34,32,0.45)' : `${adaptiveAccentColor}14`;
-  const cardBlurTint = isDarkMode ? 'dark' : 'light';
-  const cardBlurIntensity = isDarkMode ? 35 : 25;
+  // Card overlay tint sits on top of a BlurView for a frosted-glass look instead of a flat
+  // opaque fill — derived from the provider theme's card colour so every preset matches.
+  const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);
+  const cardBlurTint = OP.isDark ? ('dark' as const) : ('light' as const);
+  const cardBlurIntensity = OP.isDark ? 35 : 25;
+  const cardHighlightColors = (OP.isDark
+    ? ['rgba(255,255,255,0.08)', 'transparent']
+    : ['rgba(255,255,255,0.3)', 'transparent']) as [string, string];
+
+  // ── Pinterest-style two-column portfolio ────────────────────────────────────
+  // Items are dealt into whichever column is currently shorter, with tile height
+  // from the item's aspect ratio, giving the staggered masonry look.
+  const PORTFOLIO_COL_W = (screenWidth - 40 - 12) / 2;
+  const portfolioColumns = useMemo(() => {
+    const cols: Array<Array<DbPortfolioItem & { tileHeight: number; globalIndex: number }>> = [[], []];
+    const colHeights = [0, 0];
+    portfolio.forEach((item, i) => {
+      const ratio = item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
+      const tileHeight = Math.min(Math.max(PORTFOLIO_COL_W / ratio, 140), 300);
+      const target = colHeights[0]! <= colHeights[1]! ? 0 : 1;
+      cols[target]!.push({ ...item, tileHeight, globalIndex: i });
+      colHeights[target]! += tileHeight + 12;
+    });
+    return cols;
+  }, [portfolio, PORTFOLIO_COL_W]);
+
+  const portfolioImages = useMemo(
+    () => portfolio.map(item => ({ uri: item.image_url })),
+    [portfolio]
+  );
+
+  // Hero info floats over the photo/gradient — use light text with a soft shadow there
+  const isOverPhoto = !!(provider?.backgroundImage || provider?.hasCustomGradient);
+  const heroText = isOverPhoto ? '#FFFFFF' : OP.text;
+  const heroSub = isOverPhoto ? 'rgba(255,255,255,0.96)' : OP.sub;
 
   // Slide in the offers tab from the right when promotions are available
   useEffect(() => {
@@ -1508,6 +1605,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       friction: 12,
     }).start(() => setShowOffersModal(false));
   }, [offersPanelSlide]);
+
+  // Offers "Book Now" — close the panel, pre-select the offer's category when it
+  // matches one of the provider's service categories, and scroll to Services.
+  const handleBookOffer = useCallback((promo: DbPromotion) => {
+    closeOffersPanel();
+    if (promo.service_category && provider?.categories[promo.service_category]) {
+      setSelectedCategory(promo.service_category);
+    }
+    setTimeout(() => {
+      const scrollNode = scrollRef.current;
+      const section = servicesSectionRef.current;
+      if (!scrollNode || !section) return;
+      const innerNode = (scrollNode as any).getInnerViewNode?.();
+      if (!innerNode) return;
+      section.measureLayout(
+        innerNode,
+        (_x: number, y: number) => scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
+        () => {}
+      );
+    }, 350); // let the panel slide out first
+  }, [closeOffersPanel, provider]);
 
   // Show notification popup from right
   const showRightNotification = useCallback(() => {
@@ -1709,11 +1827,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       });
       setUserWaitlistMap(prev => ({ ...prev, [entry.service_id ?? '__any__']: entry }));
       closeWaitlistModal();
-    } catch (e: unknown) {
-      const msg = (e as { code?: string })?.code === '23505'
-        ? "You're already on this waitlist."
-        : "Couldn't save — check your connection and try again.";
-      setWaitlistError(msg);
+    } catch {
+      setWaitlistError("Couldn't save — check your connection and try again.");
     }
     setWaitlistJoining(false);
   }, [provider, providerDbId, currentUserId, currentUserName, waitlistModal.service, waitlistNotes, waitlistDateMode, waitlistDateFrom, waitlistDateTo, closeWaitlistModal]);
@@ -1756,11 +1871,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
-      headerTitle: isScrolled && provider ? `@${provider.providerName}` : 'Provider Profile',
+      headerTitle: isScrolled && provider ? provider.displayName : '',
       headerTitleStyle: {
-        fontFamily: 'BakbakOne-Regular',
-        fontSize: 18,
-        color: '#000',
+        fontFamily: SERIF,
+        fontSize: 17,
+        color: OP.text,
       },
       headerLeft: () => (
         <TouchableOpacity
@@ -1793,19 +1908,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           </TouchableOpacity>
         </View>
       ),
-      headerBackground: () => (
-        <View style={styles.headerBackgroundContainer}>
-          <LinearGradient
-            colors={[
-              provider?.gradient[0] ?? '#a342c3',
-              provider?.gradient[0] ?? '#a342c3',
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.navHeaderBackground}
-          />
-        </View>
-      ),
+      headerBackground: () =>
+        isScrolled ? (
+          <View style={[styles.headerBackgroundContainer, { backgroundColor: OP.bg }]} />
+        ) : null,
       headerStyle: {
         height: 120, // Increased from default to push the header background down
         borderBottomWidth: 0,
@@ -1874,6 +1980,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           providerName: provider.providerName,
           providerDisplayName: provider.displayName,
           providerSlug: provider.id,
+          providerId: providerDbId ?? undefined,
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
@@ -1910,7 +2017,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         Alert.alert('Error', 'Failed to process quick booking. Please try again.');
       }
     },
-    [provider, addToCart, showSuccessMessageWithAnimation, hideSuccessMessage, navigation]
+    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation, hideSuccessMessage, navigation]
   );
 
   const handleBook = useCallback((service: ServiceData) => {
@@ -1939,6 +2046,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           providerName: provider.providerName,
           providerDisplayName: provider.displayName,
           providerSlug: provider.id,
+          providerId: providerDbId ?? undefined,
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
@@ -1974,7 +2082,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         Alert.alert('Error', 'Failed to add service to cart. Please try again.');
       }
     },
-    [provider, addToCart, showSuccessMessageWithAnimation]
+    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation]
   );
 
   const handleViewCart = useCallback(() => {
@@ -2022,29 +2130,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   return (
     <SafeAreaProvider>
       <ThemedBackground>
-        {/* Custom background — image takes priority over gradient; both fade into app bg */}
-        {(provider.backgroundImage || provider.hasCustomGradient) && (
-          provider.backgroundImage ? (
-            <>
-              <Image
-                source={{ uri: provider.backgroundImage }}
-                style={[styles.heroGradient, { opacity: 0.88 }]}
-                resizeMode="cover"
-              />
-              <LinearGradient
-                colors={['rgba(0,0,0,0.18)', 'transparent', OP.bg]}
-                locations={[0, 0.45, 1]}
-                style={styles.heroGradient}
-              />
-            </>
-          ) : (
-            <LinearGradient
-              colors={[...provider.gradient, OP.bg]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.heroGradient}
+        {/* Hero photo/gradient — full-bleed backdrop; the rounded sheet below overlaps
+            up onto its lower edge for a seamless card-over-photo transition.
+            Always rendered so the app's themed background never shows through. */}
+        {provider.backgroundImage ? (
+          <>
+            <Image
+              source={{ uri: provider.backgroundImage }}
+              style={[styles.heroImage, { opacity: 0.88 }]}
+              resizeMode="cover"
             />
-          )
+            <LinearGradient
+              colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.18)', 'transparent']}
+              locations={[0, 0.35, 0.62]}
+              style={styles.heroImage}
+            />
+          </>
+        ) : (
+          <LinearGradient
+            colors={provider.hasCustomGradient ? provider.gradient : [OP.hero, OP.bg]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.heroImage}
+          />
         )}
 
         <StatusBar barStyle={theme.statusBar} translucent={true} backgroundColor="transparent" />
@@ -2099,6 +2207,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           promotions={promotions}
           providerName={provider?.providerName ?? ''}
           adaptiveAccentColor={adaptiveAccentColor}
+          themeTokens={OP}
+          onBookOffer={handleBookOffer}
         />
 
         {/* Fullscreen service image carousel modal */}
@@ -2240,7 +2350,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     display="spinner"
                     minimumDate={new Date()}
                     onChange={(_, date) => { if (date) setWaitlistDateFrom(date); }}
-                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    themeVariant={OP.isDark ? 'dark' : 'light'}
                   />
                 </View>
               )}
@@ -2259,7 +2369,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     display="spinner"
                     minimumDate={waitlistDateFrom ?? new Date()}
                     onChange={(_, date) => { if (date) setWaitlistDateTo(date); }}
-                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    themeVariant={OP.isDark ? 'dark' : 'light'}
                   />
                 </View>
               )}
@@ -2370,98 +2480,109 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           </Animated.View>
         )}
 
-        <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        {/* No bottom edge inset — the pink sheet must run under the home indicator */}
+        <SafeAreaView style={styles.safeArea} edges={[]}>
           <ScrollView
+            ref={scrollRef}
             style={styles.content}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
             scrollEventThrottle={16}
             onScroll={handleScroll}
             nestedScrollEnabled={true}
+            stickyHeaderIndices={[1]}
           >
-            {/* Provider Logo - Bigger */}
-            <View style={styles.logoContainer}>
-              <View style={styles.logoWrapper}>
-                <Image
-                  source={provider.providerLogo}
-                  style={styles.providerLogo}
-                  resizeMode="cover"
-                />
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-                  style={styles.logoGloss}
-                />
-              </View>
-            </View>
-
-            {/* Provider Info — editorial strip */}
-            <View style={styles.providerInfoCenter}>
-              {/* Name + verified */}
-              <View style={styles.providerNameRow}>
-                <Text style={[styles.providerDisplayName, { color: OP.text }]}>
-                  {provider.displayName}
-                </Text>
-                {provider.isVerified && (
-                  <Ionicons name="checkmark-circle" size={18} color="#007AFF" />
-                )}
-              </View>
-
-              {/* SERVICE TYPE · LOCATION in small caps */}
-              <Text style={[styles.providerMeta, { color: OP.sub }]}>
-                {(provider.providerService === 'OTHER'
-                  ? provider.customServiceType || 'SERVICE'
-                  : provider.providerService
-                ).toUpperCase()}
-                {provider.location ? ` · ${provider.location.toUpperCase()}` : ''}
-              </Text>
-
-              {/* Rating inline */}
-              <View style={styles.ratingRow}>
-                {[1, 2, 3, 4, 5].map(star => (
-                  <StarIcon key={star} size={12} color="#FFD700" />
-                ))}
-                <Text style={[styles.ratingInline, { color: OP.text }]}>{provider.rating}</Text>
-              </View>
-
-              {/* Years experience (optional) */}
-              {provider.yearsExperience ? (
-                <Text style={[styles.yearsExp, { color: OP.sub }]}>
-                  {provider.yearsExperience} years experience
-                </Text>
-              ) : null}
-
-              {/* Slots + bell */}
-              {provider.slotsText ? (
-                <View style={[styles.slotsRow, { backgroundColor: OP.surface, borderColor: OP.border }]}>
-                  <Text style={[styles.slotsText, { color: OP.text }]}>{provider.slotsText}</Text>
-                  <TouchableOpacity
-                    style={styles.bellButtonInline}
-                    onPress={handleNotificationToggle}
-                    activeOpacity={0.8}
-                  >
-                    <BellIcon size={16} color={isNotificationsEnabled ? '#4CAF50' : OP.sub} />
-                  </TouchableOpacity>
+            {/* Logo + profile info — floats directly over the hero photo/gradient */}
+            <View style={styles.heroInfoWrap}>
+              {/* Provider Logo - Bigger */}
+              <View style={styles.logoContainer}>
+                <View style={styles.logoWrapper}>
+                  <Image
+                    source={provider.providerLogo}
+                    style={styles.providerLogo}
+                    resizeMode="cover"
+                  />
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
+                    style={styles.logoGloss}
+                  />
                 </View>
-              ) : null}
+              </View>
+
+              {/* Provider Info — editorial strip */}
+              <View style={styles.providerInfoCenter}>
+                {/* Name + verified */}
+                <View style={styles.providerNameRow}>
+                  <Text style={[styles.providerDisplayName, { color: heroText }, isOverPhoto && styles.heroTextShadow]}>
+                    {provider.displayName}
+                  </Text>
+                  {provider.isVerified && (
+                    <Ionicons name="checkmark-circle" size={18} color={isOverPhoto ? '#FFFFFF' : '#007AFF'} />
+                  )}
+                </View>
+
+                {/* SERVICE TYPE · LOCATION in small caps */}
+                <Text style={[styles.providerMeta, { color: heroSub }, isOverPhoto && styles.heroTextShadow]}>
+                  {(provider.providerService === 'OTHER'
+                    ? provider.customServiceType || 'SERVICE'
+                    : provider.providerService
+                  ).toUpperCase()}
+                  {provider.location ? ` · ${provider.location.toUpperCase()}` : ''}
+                </Text>
+
+                {/* Rating inline */}
+                <View style={styles.ratingRow}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <StarIcon key={star} size={12} color="#FFD700" />
+                  ))}
+                  <Text style={[styles.ratingInline, { color: heroText }, isOverPhoto && styles.heroTextShadow]}>{provider.rating}</Text>
+                </View>
+
+                {/* Years experience (optional) */}
+                {provider.yearsExperience ? (
+                  <Text style={[styles.yearsExp, { color: heroSub }, isOverPhoto && styles.heroTextShadow]}>
+                    {provider.yearsExperience} years experience
+                  </Text>
+                ) : null}
+
+                {/* Slots + bell */}
+                {provider.slotsText ? (
+                  <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.slotsRow, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                    <LinearGradient
+                      colors={cardHighlightColors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.slotsCardHighlight}
+                    />
+                    <Text style={[styles.slotsText, { color: OP.sub }]}>{provider.slotsText}</Text>
+                    <TouchableOpacity
+                      style={styles.bellButtonInline}
+                      onPress={handleNotificationToggle}
+                      activeOpacity={0.8}
+                    >
+                      <BellIcon size={16} color={isNotificationsEnabled ? '#4CAF50' : OP.sub} />
+                    </TouchableOpacity>
+                  </BlurView>
+                ) : null}
+              </View>
             </View>
 
+            {/* Sheet transition — soft rounded lip: the content sheet rises over the
+                hero photo with large top corners, like a floating card. */}
+            <View style={[styles.sheetLip, { backgroundColor: OP.bg }]} />
+
+            <View style={[styles.contentSheet, { backgroundColor: OP.bg }]}>
             {/* About / Policy tabbed card */}
             <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.aboutCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
               <LinearGradient
-                colors={(isDarkMode ? ['rgba(255,255,255,0.08)', 'transparent'] : ['rgba(255,255,255,0.3)', 'transparent']) as [string, string]}
+                colors={cardHighlightColors}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
               {/* Tab switcher — only show if there are policy rows */}
-              {provider.bookingPolicies && (() => {
-                const bp = provider.bookingPolicies!;
-                const hasPolicyRows =
-                  (bp.depositRequired && !!bp.depositAmount) ||
-                  (!!bp.cancelNotice && bp.cancelNotice !== 'none') ||
-                  !!(bp.rescheduleNotice || bp.maxReschedules) ||
-                  (!!bp.noShowAction && bp.noShowAction !== 'none');
-                if (!hasPolicyRows) return null;
+              {(() => {
+                if (!hasPolicyInfo(provider)) return null;
                 return (
                   <View style={[styles.infoTabRow, { borderBottomColor: OP.border }]}>
                     <TouchableOpacity
@@ -2469,14 +2590,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                       onPress={() => setInfoTab('about')}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.infoTabText, { color: infoTab === 'about' ? adaptiveAccentColor : OP.sub }]}>About</Text>
+                      <Text style={[styles.infoTabText, { color: infoTab === 'about' ? OP.text : OP.sub }]}>About</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.infoTab, infoTab === 'policy' && { borderBottomColor: adaptiveAccentColor, borderBottomWidth: 2 }]}
                       onPress={() => setInfoTab('policy')}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.infoTabText, { color: infoTab === 'policy' ? adaptiveAccentColor : OP.sub }]}>Policy</Text>
+                      <Text style={[styles.infoTabText, { color: infoTab === 'policy' ? OP.text : OP.sub }]}>Policy</Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -2484,7 +2605,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
               {infoTab === 'about' ? (
                 <>
-                  {!provider.bookingPolicies && (
+                  {!hasPolicyInfo(provider) && (
                     <Text style={[styles.sectionTitle, { color: OP.text }]}>Relevant Information</Text>
                   )}
                   <Text style={[styles.aboutText, { color: OP.sub }]}>
@@ -2495,7 +2616,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     style={styles.moreButton}
                     activeOpacity={0.6}
                   >
-                    <Text style={[styles.moreButtonText, { color: OP.accent }]}>
+                    <Text style={[styles.moreButtonText, { color: OP.text }]}>
                       {showFullAbout ? 'Show Less' : 'More'}
                     </Text>
                   </TouchableOpacity>
@@ -2503,24 +2624,32 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
               ) : (
                 /* Policy tab content */
                 (() => {
-                  const bp = provider.bookingPolicies!;
+                  const bp = provider.bookingPolicies;
                   const rows: { icon: string; label: string; value: string }[] = [];
-                  if (bp.depositRequired && bp.depositAmount) {
+                  if (bp?.depositRequired && bp.depositAmount) {
                     rows.push({ icon: '💳', label: 'Deposit', value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required` });
                   }
-                  if (bp.cancelNotice && bp.cancelNotice !== 'none') {
-                    rows.push({ icon: '⏱', label: 'Cancellation', value: `${bp.cancelNotice} notice${bp.cancelPenalty && bp.cancelPenalty !== 'none' ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}` : ''}` });
+                  // Cancellation — the enforced window (Automations screen) wins over
+                  // the descriptive registration text, so clients see exactly what
+                  // the cancel flow will apply.
+                  const cancelPenaltyText = bp?.cancelPenalty && bp.cancelPenalty !== 'none'
+                    ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}`
+                    : '';
+                  if (provider.cancellationNoticeHours > 0) {
+                    rows.push({ icon: '⏱', label: 'Cancellation', value: `${provider.cancellationNoticeHours} hours' notice${cancelPenaltyText}` });
+                  } else if (bp?.cancelNotice && bp.cancelNotice !== 'none') {
+                    rows.push({ icon: '⏱', label: 'Cancellation', value: `${bp.cancelNotice} notice${cancelPenaltyText}` });
                   }
-                  if (bp.rescheduleNotice || bp.maxReschedules) {
+                  if (bp?.rescheduleNotice || bp?.maxReschedules) {
                     const parts = [];
                     if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
                     if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
                     if (parts.length > 0) rows.push({ icon: '🔄', label: 'Reschedule', value: parts.join(' · ') });
                   }
-                  if (bp.noShowAction && bp.noShowAction !== 'none') {
+                  if (bp?.noShowAction && bp.noShowAction !== 'none') {
                     rows.push({ icon: '🚫', label: 'No-show', value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge' });
                   }
-                  if (bp.cancelNote) {
+                  if (bp?.cancelNote) {
                     rows.push({ icon: 'ℹ️', label: 'Note', value: bp.cancelNote });
                   }
                   return (
@@ -2546,8 +2675,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                 <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>Specialties</Text>
                 <View style={styles.specialtiesRow}>
                   {provider.specialties.map((s, i) => (
-                    <View key={i} style={[styles.specialtyChip, { borderColor: OP.accent + '55', backgroundColor: OP.accent + '18' }]}>
-                      <Text style={[styles.specialtyChipText, { color: OP.accent }]}>{s}</Text>
+                    <View key={i} style={[styles.specialtyChip, { borderColor: adaptiveAccentColor + '55', backgroundColor: adaptiveAccentColor + '18' }]}>
+                      <Text style={[styles.specialtyChipText, { color: OP.text }]}>{s}</Text>
                     </View>
                   ))}
                 </View>
@@ -2555,7 +2684,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
             )}
 
             {/* Services Section */}
-            <View style={styles.servicesSection}>
+            <View style={styles.servicesSection} ref={servicesSectionRef} collapsable={false}>
               <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>Services</Text>
 
               {/* Enhanced Category Tabs */}
@@ -2566,7 +2695,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     category={category}
                     isSelected={selectedCategory === category}
                     onPress={() => setSelectedCategory(category)}
-                    useGlass={provider.hasCustomGradient}
+                    cardBg={selectedCategory === category ? adaptiveAccentColor : cardBg}
+                    blurIntensity={cardBlurIntensity}
+                    blurTint={cardBlurTint}
+                    borderColor={selectedCategory === category ? 'transparent' : OP.border}
+                    textColor={selectedCategory === category ? '#FFFFFF' : OP.text}
                   />
                 )}
                 keyExtractor={(item, index) => `cat-${item}-${index}`}
@@ -2581,6 +2714,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
               <View style={styles.categoryServicesContainer}>
                 {provider.categories[selectedCategory]?.map(service => (
                   <BlurView key={service.id} intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.serviceItemCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+                    <LinearGradient
+                      colors={cardHighlightColors}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={styles.cardHighlight}
+                    />
                     <View style={styles.serviceCardBlur}>
                       <View style={styles.serviceItem}>
                         {(() => {
@@ -2599,7 +2738,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                             );
                           }
 
-                          if (!hasSingle && !hasLocal) return null;
+                          if (!hasSingle && !hasLocal) {
+                            // No photo — placeholder keeps every card's text starting
+                            // at the same x position as cards that do have images.
+                            return (
+                              <View style={[styles.serviceImageContainer, styles.serviceImagePlaceholder, { backgroundColor: adaptiveAccentColor + '1C' }]}>
+                                <Text style={[styles.serviceImagePlaceholderText, { color: adaptiveAccentColor }]}>
+                                  {service.name.charAt(0).toUpperCase()}
+                                </Text>
+                              </View>
+                            );
+                          }
                           const imgSrc = hasSingle ? service.images![0] : service.image;
                           return (
                             <TouchableOpacity
@@ -2635,14 +2784,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                               })}
                               activeOpacity={0.7}
                             >
-                              <Text style={[styles.seeMoreText, { color: OP.accent }]}>
+                              <Text style={[styles.seeMoreText, { color: OP.text }]}>
                                 {expandedServices.has(service.id) ? 'See less' : 'See more'}
                               </Text>
                             </TouchableOpacity>
                           )}
                           <View style={styles.serviceDetails}>
                             <Text style={[styles.serviceDuration, { color: OP.sub }]}>{service.duration}</Text>
-                            <Text style={[styles.servicePrice, { color: OP.accent }]}>
+                            <Text style={[styles.servicePrice, { color: OP.text }]}>
                               £{service.price}
                             </Text>
                           </View>
@@ -2651,7 +2800,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                         {/* Book + Waitlist stacked column */}
                         <View style={styles.serviceActionColumn}>
                           <TouchableOpacity
-                            style={[styles.bookButton, { backgroundColor: OP.accent }]}
+                            style={[styles.bookButton, { backgroundColor: adaptiveAccentColor }]}
                             onPress={() => handleBook(service)}
                             activeOpacity={0.8}
                           >
@@ -2679,6 +2828,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                                 </View>
                               );
                             }
+                            // Provider turned waitlists off in Automations —
+                            // existing entries above still show so they can leave
+                            if (!provider.waitlistEnabled) return null;
                             return (
                               <TouchableOpacity
                                 style={[styles.waitlistJoinBtn, { borderColor: adaptiveAccentColor + '70', backgroundColor: adaptiveAccentColor + '0D' }]}
@@ -2699,6 +2851,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
             {/* Reviews Section */}
             <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.reviewsCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+              <LinearGradient
+                colors={cardHighlightColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
               <Text style={[styles.sectionTitle, { color: OP.text }]}>Reviews</Text>
               {reviews.slice(0, 5).map(review => (
                 <View key={review.id} style={[styles.reviewItem, { borderBottomColor: OP.sep }]}>
@@ -2716,7 +2874,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     </View>
                     <Text style={[styles.reviewDate, { color: OP.sub }]}>{review.date}</Text>
                   </View>
-                  <Text style={[styles.reviewComment, { color: OP.sub }]}>{review.comment}</Text>
+                  {review.comment ? (
+                    <Text style={[styles.reviewComment, { color: OP.sub }]}>{review.comment}</Text>
+                  ) : null}
                 </View>
               ))}
 
@@ -2725,50 +2885,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                 onPress={() => setShowReviewsModal(true)}
                 activeOpacity={0.6}
               >
-                <Text style={[styles.seeAllText, { color: OP.accent }]}>
+                <Text style={[styles.seeAllText, { color: OP.text }]}>
                   See All Reviews
                 </Text>
               </TouchableOpacity>
             </BlurView>
 
-            {/* Booking Policy card — only shown when policies are set */}
-            {provider.bookingPolicies && (() => {
-              const bp = provider.bookingPolicies!;
-              const rows: { icon: string; label: string; value: string }[] = [];
-              if (bp.depositRequired && bp.depositAmount) {
-                rows.push({ icon: '💳', label: 'Deposit', value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required` });
-              }
-              if (bp.cancelNotice && bp.cancelNotice !== 'none') {
-                rows.push({ icon: '⏱', label: 'Cancellation', value: `${bp.cancelNotice} notice${bp.cancelPenalty && bp.cancelPenalty !== 'none' ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}` : ''}` });
-              }
-              if (bp.rescheduleNotice || bp.maxReschedules) {
-                const parts = [];
-                if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
-                if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
-                if (parts.length > 0) rows.push({ icon: '🔄', label: 'Reschedule', value: parts.join(' · ') });
-              }
-              if (bp.noShowAction && bp.noShowAction !== 'none') {
-                rows.push({ icon: '🚫', label: 'No-show', value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge' });
-              }
-              if (rows.length === 0) return null;
-              return (
-                <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.policyCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
-                  <Text style={[styles.sectionTitle, { color: OP.text }]}>Booking Policy</Text>
-                  {rows.map((row, i) => (
-                    <View key={i} style={[styles.policyRow, i < rows.length - 1 && { borderBottomColor: OP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-                      <Text style={styles.policyIcon}>{row.icon}</Text>
-                      <View style={styles.policyRowText}>
-                        <Text style={[styles.policyLabel, { color: OP.sub }]}>{row.label}</Text>
-                        <Text style={[styles.policyValue, { color: OP.text }]}>{row.value}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </BlurView>
-              );
-            })()}
-
             {/* Contact */}
             <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.contactCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
+              <LinearGradient
+                colors={cardHighlightColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
               <Text style={[styles.sectionTitle, { color: OP.text }]}>Contact</Text>
 
               {provider.location ? (
@@ -2785,7 +2915,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Phone</Text>
-                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Message ›</Text>
+                  <Text style={[styles.contactRowAction, { color: OP.text }]}>Message ›</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -2796,7 +2926,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.contactRowLabel, { color: OP.sub }]}>WhatsApp</Text>
-                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Open ›</Text>
+                  <Text style={[styles.contactRowAction, { color: OP.text }]}>Open ›</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -2807,7 +2937,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Email</Text>
-                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Send ›</Text>
+                  <Text style={[styles.contactRowAction, { color: OP.text }]}>Send ›</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -2818,7 +2948,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Instagram</Text>
-                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]} numberOfLines={1}>@{provider.instagram} ›</Text>
+                  <Text style={[styles.contactRowAction, { color: OP.text }]} numberOfLines={1}>@{provider.instagram} ›</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -2829,7 +2959,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.contactRowLabel, { color: OP.sub }]}>Website</Text>
-                  <Text style={[styles.contactRowAction, { color: adaptiveAccentColor }]}>Visit ›</Text>
+                  <Text style={[styles.contactRowAction, { color: OP.text }]}>Visit ›</Text>
                 </TouchableOpacity>
               ) : null}
 
@@ -2841,6 +2971,45 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                 <Text style={styles.contactButtonText}>Get In Touch</Text>
               </TouchableOpacity>
             </BlurView>
+
+            {/* Portfolio — Pinterest-style two-column masonry of client work */}
+            {portfolio.length > 0 && (
+              <View style={styles.portfolioSection}>
+                <Text style={[styles.sectionTitleNoCard, { color: OP.text, paddingHorizontal: 0 }]}>Portfolio</Text>
+                <View style={styles.portfolioColumns}>
+                  {portfolioColumns.map((column, colIdx) => (
+                    <View key={`pcol-${colIdx}`} style={styles.portfolioColumn}>
+                      {column.map(item => (
+                        <TouchableOpacity
+                          key={item.id}
+                          activeOpacity={0.88}
+                          onPress={() => setServiceImageModal({
+                            visible: true,
+                            images: portfolioImages,
+                            currentIndex: item.globalIndex,
+                          })}
+                          style={styles.portfolioTile}
+                        >
+                          <Image
+                            source={{ uri: item.image_url }}
+                            style={{ width: '100%', height: item.tileHeight }}
+                            resizeMode="cover"
+                          />
+                          {item.caption ? (
+                            <View style={styles.portfolioCaptionWrap}>
+                              <Text style={styles.portfolioCaption} numberOfLines={1}>
+                                {item.caption}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            </View>
           </ScrollView>
         </SafeAreaView>
       </ThemedBackground>
@@ -2852,7 +3021,7 @@ const styles = StyleSheet.create({
   background: {
     flex: 1,
   },
-  heroGradient: {
+  heroImage: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -2924,9 +3093,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 115, // Sit above bottom nav pill
-    paddingTop: 160, // Adjusted for header height of 120
+    // No padding here — the sheet itself carries the bottom padding so its pink
+    // backdrop extends all the way down instead of exposing the screen behind it.
+  },
+  heroInfoWrap: {
+    paddingTop: 100, // clears the status bar / back button over the hero photo
+  },
+  sheetLip: {
+    height: SHEET_LIP_RADIUS,
+    borderTopLeftRadius: SHEET_LIP_RADIUS,
+    borderTopRightRadius: SHEET_LIP_RADIUS,
+    marginBottom: -1, // avoids a hairline seam against the content sheet
+  },
+  heroTextShadow: {
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  contentSheet: {
+    minHeight: screenHeight, // always reach the bottom of the screen — never lets the hero photo show through below short content
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 130, // clears the bottom nav pill while keeping the pink backdrop continuous
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
   },
   loading: {
     flex: 1,
@@ -2940,28 +3133,28 @@ const styles = StyleSheet.create({
   },
   logoWrapper: {
     position: 'relative',
-    width: 180, // Increased from 140
-    height: 180, // Increased from 140
+    width: 148,
+    height: 148,
   },
   providerLogo: {
-    width: 180, // Increased from 140
-    height: 180, // Increased from 140
-    borderRadius: 90, // Increased from 70
-    borderWidth: 4, // Increased from 3
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 253, 251, 0.9)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 }, // Increased shadow
-    shadowOpacity: 0.35, // Increased shadow opacity
-    shadowRadius: 16, // Increased shadow radius
-    elevation: 10, // Increased elevation
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 10,
   },
   logoGloss: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 180, // Increased from 140
-    height: 180, // Increased from 140
-    borderRadius: 90, // Increased from 70
+    width: 148,
+    height: 148,
+    borderRadius: 74,
   },
   providerInfoCenter: {
     alignItems: 'center',
@@ -2975,12 +3168,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   providerDisplayName: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 26,
+    fontFamily: SERIF,
+    fontSize: 30,
+    lineHeight: 40,
     textAlign: 'center',
   },
   providerHandle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     marginBottom: 14,
     textAlign: 'center',
@@ -2988,11 +3183,11 @@ const styles = StyleSheet.create({
   },
   providerMeta: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
+    fontWeight: '800',
+    fontSize: 12,
     letterSpacing: 1.2,
     textAlign: 'center',
     marginBottom: 10,
-    opacity: 0.75,
   },
   ratingRow: {
     flexDirection: 'row',
@@ -3003,15 +3198,17 @@ const styles = StyleSheet.create({
   },
   ratingInline: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
+    fontWeight: '800',
+    fontSize: 13,
     marginLeft: 4,
   },
   yearsExp: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
+    fontWeight: '800',
+    fontSize: 12,
     textAlign: 'center',
     marginBottom: 10,
-    opacity: 0.6,
+    opacity: 0.9,
     letterSpacing: 0.4,
   },
   infoTabRow: {
@@ -3057,6 +3254,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 20,
     borderWidth: 1,
+    overflow: 'hidden',
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 4,
@@ -3185,14 +3383,9 @@ const styles = StyleSheet.create({
 
   slotsText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    color: '#000',
-    fontWeight: 'bold',
+    fontSize: 11,
     textAlign: 'center',
     zIndex: 2, // Above overlays
-    textShadowColor: 'rgba(255,255,255,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   slotsoutcard: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
@@ -3212,15 +3405,6 @@ const styles = StyleSheet.create({
 
 
   // Enhanced 3D Glass Effects
-  cardHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-  },
   cardShadow: {
     position: 'absolute',
     bottom: 0,
@@ -3232,15 +3416,15 @@ const styles = StyleSheet.create({
   },
 
   aboutCard: {
-    padding: 20,
-    borderRadius: 18,
+    padding: 22,
+    borderRadius: 26,
     marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 9,
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     elevation: 3,
   },
   cardHighlight: {
@@ -3249,8 +3433,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 40,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+  },
+  slotsCardHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
   },
   sectionTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -3259,6 +3451,7 @@ const styles = StyleSheet.create({
   },
   aboutText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
@@ -3319,10 +3512,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     minWidth: 80,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  selectedCategoryTab: {
-    borderColor: 'rgba(255,255,255,0.45)',
   },
   categoryTabBlur: {
     paddingHorizontal: 18,
@@ -3353,13 +3542,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   serviceItemCard: {
-    borderRadius: 18,
+    borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 9,
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     elevation: 3,
     marginBottom: 12,
   },
@@ -3384,6 +3573,14 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
   },
+  serviceImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceImagePlaceholderText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 22,
+  },
   serviceImageOverlay: {
     position: 'absolute',
     top: 0,
@@ -3403,13 +3600,14 @@ const styles = StyleSheet.create({
   },
   serviceDescription: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     marginBottom: 4,
   },
   seeMoreText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     marginBottom: 6,
   },
   imageModalOverlay: {
@@ -3441,6 +3639,7 @@ const styles = StyleSheet.create({
   },
   serviceDuration: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
   },
   servicePrice: {
@@ -3473,16 +3672,22 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
   },
   bookButton: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bookButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: 'bold',
+    letterSpacing: 0.4,
   },
   quickBookButton: {
     borderRadius: 18,
@@ -3504,17 +3709,56 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 
+  // Portfolio — two-column masonry (sits inside contentSheet, which already pads 20)
+  portfolioSection: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  portfolioColumns: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  portfolioColumn: {
+    flex: 1,
+    gap: 12,
+  },
+  portfolioTile: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  portfolioCaptionWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 10,
+    paddingTop: 14,
+    paddingBottom: 8,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+  },
+  portfolioCaption: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
+    color: '#fff',
+  },
+
   // Reviews Section
   reviewsCard: {
-    padding: 20,
-    borderRadius: 18,
+    padding: 22,
+    borderRadius: 26,
     marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 9,
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     elevation: 3,
   },
   reviewItem: {
@@ -3526,7 +3770,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 8,
+    // no marginBottom — the comment carries its own marginTop, so rows with and
+    // without a comment keep identical spacing
   },
   reviewerName: {
     fontFamily: 'BakbakOne-Regular',
@@ -3538,13 +3783,16 @@ const styles = StyleSheet.create({
   },
   reviewDate: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 10,
     marginLeft: 'auto',
   },
   reviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     lineHeight: 18,
+    marginTop: 8,
   },
   seeAllButton: {
     alignItems: 'center',
@@ -3558,18 +3806,6 @@ const styles = StyleSheet.create({
   },
 
   // Contact Section
-  policyCard: {
-    padding: 20,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 9,
-    elevation: 3,
-    marginBottom: 16,
-  },
   policyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3597,17 +3833,17 @@ const styles = StyleSheet.create({
   policyValue: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   contactCard: {
-    padding: 20,
-    borderRadius: 18,
+    padding: 22,
+    borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 9,
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     elevation: 3,
   },
   contactRow: {
@@ -3621,12 +3857,12 @@ const styles = StyleSheet.create({
   contactRowLabel: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   contactRowText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '700',
     flex: 1,
     textAlign: 'right',
     paddingLeft: 16,
@@ -3634,23 +3870,29 @@ const styles = StyleSheet.create({
   contactRowAction: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '800',
   },
   contactText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     marginBottom: 8,
   },
   contactButton: {
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: 16,
+    borderRadius: 28,
     alignItems: 'center',
     marginTop: 16,
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   contactButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     color: '#fff',
   },
 
@@ -3699,6 +3941,7 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     color: 'rgba(0,0,0,0.85)',
   },
@@ -3754,7 +3997,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 12,
   },
   modalReviewerName: {
     fontFamily: 'BakbakOne-Regular',
@@ -3770,15 +4012,18 @@ const styles = StyleSheet.create({
   },
   modalReviewDate: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.75)',
     marginLeft: 'auto',
   },
   modalReviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     color: '#000',
     lineHeight: 20,
+    marginTop: 12,
   },
 
   // Add-Ons Modal Styles
@@ -3822,6 +4067,7 @@ const styles = StyleSheet.create({
   },
   addOnDescription: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     color: 'rgba(0,0,0,0.85)',
     lineHeight: 16,
@@ -3972,6 +4218,7 @@ const styles = StyleSheet.create({
   },
   successMessage: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 16,
     color: '#000',
     textAlign: 'center',
@@ -4021,7 +4268,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 220,
-    zIndex: 200,
+    zIndex: 999, // always floats above the content sheet
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
     overflow: 'hidden',
@@ -4029,7 +4276,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: -3, height: 4 },
     shadowOpacity: 0.22,
     shadowRadius: 8,
-    elevation: 10,
+    elevation: 20,
   },
   offersFloatTabGradient: {
     paddingTop: 10,
@@ -4081,7 +4328,7 @@ const styles = StyleSheet.create({
   // Waitlist — service card
   serviceActionColumn: { alignItems: 'center', gap: 6 },
   waitlistJoinBtn: {
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -4093,7 +4340,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -4103,7 +4350,7 @@ const styles = StyleSheet.create({
   waitlistRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   waitlistBadge: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
   waitlistBadgeText: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 0.3 },
-  waitlistLeaveText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, opacity: 0.6 },
+  waitlistLeaveText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 10, opacity: 0.6 },
 
   // Waitlist — centered popup modal
   waitlistPopupBackdrop: {
@@ -4127,8 +4374,8 @@ const styles = StyleSheet.create({
   waitlistPopupHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   waitlistPopupIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   waitlistPopupTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 17 },
-  waitlistPopupService: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 1 },
-  waitlistPopupSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 16, opacity: 0.7 },
+  waitlistPopupService: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12, marginTop: 1 },
+  waitlistPopupSub: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13, marginBottom: 16, opacity: 0.7 },
   waitlistPopupLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   waitlistSegment: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 3, marginBottom: 14 },
   waitlistSegmentBtn: { flex: 1, borderRadius: 9, paddingVertical: 9, alignItems: 'center' },
@@ -4136,7 +4383,7 @@ const styles = StyleSheet.create({
   waitlistDateBlock: { borderRadius: 14, borderWidth: 1, marginBottom: 2, overflow: 'hidden' },
   waitlistDateRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
   waitlistDateLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, width: 32, letterSpacing: 0.3 },
-  waitlistDateValue: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontSize: 13 },
+  waitlistDateValue: { flex: 1, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 13 },
   waitlistPickerDone: { alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   waitlistPickerDoneText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3 },
   waitlistNotesField: {
@@ -4145,12 +4392,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     minHeight: 72,
     textAlignVertical: 'top',
     marginBottom: 18,
   },
-  waitlistErrorText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginBottom: 10, textAlign: 'center' },
+  waitlistErrorText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', fontSize: 12, marginBottom: 10, textAlign: 'center' },
   waitlistPopupActions: { flexDirection: 'row', gap: 10 },
   waitlistPopupCancelBtn: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 13, alignItems: 'center' },
   waitlistPopupCancelText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.3 },
@@ -4194,6 +4442,7 @@ const styles = StyleSheet.create({
   },
   leavePopupBody: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',

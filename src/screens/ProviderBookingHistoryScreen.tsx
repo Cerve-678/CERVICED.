@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Easing,
   FlatList,
@@ -390,6 +391,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
       setInviteTime(null);
     } catch (err) {
       console.error('Invite failed:', err);
+      Alert.alert('Invite failed', 'The booking could not be created. Please check your connection and try again.');
     }
     setInviting(false);
   }, [inviteModal.entry, providerDbId, inviteDate, inviteTime]);

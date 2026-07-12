@@ -6,6 +6,8 @@ import NotificationsScreen from '../../screens/NotificationsScreen';
 import ProviderBookingHistoryScreen from '../../screens/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../screens/ProviderBookingDetailScreen';
 import ProviderIntakeFormScreen from '../../screens/ProviderIntakeFormScreen';
+import ProviderInboxScreen from '../../screens/ProviderInboxScreen';
+import ProviderConversationScreen from '../../screens/ProviderConversationScreen';
 import ChangePasswordScreen from '../../screens/ChangePasswordScreen';
 import HelpCentreScreen from '../../screens/HelpCentreScreen';
 import AboutScreen from '../../screens/AboutScreen';
@@ -73,6 +75,18 @@ export default function ProviderAccountNavigator() {
       <ProviderAccountStack.Screen
         name="ProviderIntakeForm"
         component={ProviderIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ProviderInbox"
+        component={ProviderInboxScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ProviderConversation"
+        component={ProviderConversationScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

@@ -807,6 +807,15 @@ export default function ProviderHomeScreen({ navigation }: Props) {
   const [availability,  setAvailability]  = useState<DbProviderAvailability[]>([]);
   const [blockedDates,  setBlockedDates]  = useState<DbProviderBlockedDate[]>([]);
 
+  // Go-live setup checklist. Clients see NO slots and can't book until the
+  // schedule exists, so surface exactly what's missing until it's all done.
+  const [setupStatus, setSetupStatus] = useState<{
+    scheduleSet: boolean;
+    servicesSet: boolean;
+    addressSet: boolean;
+  } | null>(null);
+  const [setupDismissed, setSetupDismissed] = useState(false);
+
   // Add-action sheet
   const [showAddSheet, setShowAddSheet] = useState(false);
   const SHEET_H = 420;
@@ -907,10 +916,17 @@ export default function ProviderHomeScreen({ navigation }: Props) {
       return Promise.all([
         getProviderAvailability(profile.id),
         getProviderBlockedDates(profile.id),
-      ]).then(([avail, blocked]) => {
+        supabase.from('services').select('id', { count: 'exact', head: true }).eq('provider_id', profile.id),
+      ]).then(([avail, blocked, servicesRes]) => {
         if (cancelled) return;
         setAvailability(avail);
         setBlockedDates(blocked);
+        const p = profile as unknown as { business_type?: string | null; full_address?: string | null; location_text?: string | null };
+        setSetupStatus({
+          scheduleSet: avail.some(a => !a.is_closed),
+          servicesSet: (servicesRes.count ?? 0) > 0,
+          addressSet: p.business_type === 'mobile' ? true : !!(p.full_address || p.location_text),
+        });
       });
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -1060,6 +1076,69 @@ export default function ProviderHomeScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* ── Go-live setup checklist ──────────────────────────── */}
+        {setupStatus && !setupDismissed &&
+         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet) && (
+          <View style={{
+            marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
+            backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>Finish setting up to go live</Text>
+              {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
+              {setupStatus.scheduleSet && (
+                <TouchableOpacity onPress={() => setSetupDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={16} color={P.sub} />
+                </TouchableOpacity>
+              )}
+            </View>
+            {!setupStatus.scheduleSet && (
+              <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
+                Clients can't see any time slots or book you until your schedule is set.
+              </Text>
+            )}
+            {([
+              {
+                done: setupStatus.scheduleSet,
+                label: 'Set your weekly schedule',
+                onPress: () => navigation.navigate('ProviderSchedule' as never),
+              },
+              {
+                done: setupStatus.servicesSet,
+                label: 'Add at least one service',
+                onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'EditProfile' }),
+              },
+              {
+                done: setupStatus.addressSet,
+                label: 'Add your business address',
+                onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'EditProfile' }),
+              },
+            ]).map((step, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={step.onPress}
+                disabled={step.done}
+                activeOpacity={0.7}
+                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}
+              >
+                <Ionicons
+                  name={step.done ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={18}
+                  color={step.done ? '#34C759' : P.sub}
+                />
+                <Text style={{
+                  flex: 1, marginLeft: 8, fontSize: 13,
+                  color: step.done ? P.sub : P.text,
+                  textDecorationLine: step.done ? 'line-through' : 'none',
+                }}>
+                  {step.label}
+                </Text>
+                {!step.done && <Ionicons name="chevron-forward" size={14} color={P.sub} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {/* ── Month calendar (collapsible) ─────────────────────── */}
         {showMonth && (
@@ -1291,6 +1370,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
             { icon: 'pricetag-outline',        title: 'Promotions', sub: 'Create & manage offers',            route: 'Promotions'       },
             { icon: 'people-outline',          title: 'Clientele',  sub: 'View & manage your client list',    route: 'Clientele'        },
             { icon: 'document-text-outline',   title: 'Info Pack',  sub: 'Share service details with clients',route: 'InfoPacks'        },
+            { icon: 'clipboard-outline',       title: 'Intake Forms', sub: 'Create & manage your forms',      route: 'ProviderIntakeForm' },
             { icon: 'chatbubble-outline',      title: 'Inbox',      sub: 'Messages with your clients',        route: 'ProviderInbox'    },
           ] as const).map((item, idx, arr) => (
             <React.Fragment key={item.route}>

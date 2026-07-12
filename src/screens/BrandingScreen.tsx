@@ -17,6 +17,16 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  PROVIDER_THEMES,
+  DEFAULT_PROVIDER_THEME,
+  SHEET_BG,
+  encodeCustomTheme,
+  decodeCustomTheme,
+  encodeThemeKey,
+  parseThemeKey,
+} from '../constants/providerThemes';
+import ProviderThemePicker, { type ThemeSelection } from '../components/ProviderThemePicker';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -31,46 +41,9 @@ const DARK = {
   border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
 };
 
-const GRADIENT_PRESETS: Array<{ name: string; colors: [string, string, ...string[]] }> = [
-  { name: 'App Default', colors: ['#EDE8E2', '#C4A8AE', '#AF9197'] },
-  { name: 'Sunset',      colors: ['#FF6B6B', '#4ECDC4', '#45B7D1'] },
-  { name: 'Rose Gold',   colors: ['#FF69B4', '#FFB6C1', '#FFC1CC'] },
-  { name: 'Ocean',       colors: ['#5fd5dcff', '#bd66ff9c', '#33CCCC'] },
-  { name: 'Purple Haze', colors: ['#8d59acff', '#c069c4ff', '#aba0a1ff'] },
-  { name: 'Forest',      colors: ['#1B4332', '#2D5A3D', '#40916C'] },
-  { name: 'Warm Nude',   colors: ['#FFE4B5', '#FFDAB9', '#FFB347'] },
-  { name: 'Deep Pink',   colors: ['#830c53ff', '#f6bbe9ff', '#572862ff'] },
-  { name: 'Royal Blue',  colors: ['#8ba4e9ff', '#073784ff', '#37106aff'] },
-  { name: 'Lavender',    colors: ['#E6E6FA', '#DDA0DD', '#DA70D6'] },
-  { name: 'Mocha',       colors: ['#8c5c0eff', '#311f00ff', '#6f430eff'] },
-  { name: 'Lash Bae',    colors: ['#dc8fedb5', '#e0d3e0ff', '#2d2d2d'] },
-  { name: 'Midnight',    colors: ['#0f0c29', '#302b63', '#24243e'] },
-  { name: 'Cherry',      colors: ['#EB3349', '#F45C43', '#FF6B6B'] },
-  { name: 'Peach',       colors: ['#FFD89B', '#FFCC99', '#FF9966'] },
-  { name: 'Mint',        colors: ['#00B09B', '#96C93D', '#A8E6CF'] },
-  { name: 'Blush',       colors: ['#FFECD2', '#FCB69F', '#FF8A80'] },
-  { name: 'Cosmic',      colors: ['#C33764', '#1D2671', '#0F0C29'] },
-  { name: 'Honey',       colors: ['#F7971E', '#FFD200', '#FFE066'] },
-  { name: 'Grape',       colors: ['#5B247A', '#1BCEDF', '#7B4397'] },
-  { name: 'Slate',       colors: ['#4B6CB7', '#182848', '#2C3E50'] },
-  { name: 'Rosewood',    colors: ['#D4145A', '#FBB03B', '#ED4264'] },
-  { name: 'Ice',         colors: ['#74EBD5', '#ACB6E5', '#E0EAFC'] },
-];
-
-const ACCENT_COLORS = [
-  { name: 'Berry',       color: '#C2185B' },
-  { name: 'Purple',      color: '#7B1FA2' },
-  { name: 'Deep Purple', color: '#4A148C' },
-  { name: 'Indigo',      color: '#303F9F' },
-  { name: 'Blue',        color: '#1565C0' },
-  { name: 'Teal',        color: '#00838F' },
-  { name: 'Green',       color: '#2E7D32' },
-  { name: 'Orange',      color: '#E65100' },
-  { name: 'Brown',       color: '#4E342E' },
-  { name: 'Rose',        color: '#AD1457' },
-  { name: 'Coral',       color: '#FF5722' },
-  { name: 'Gold',        color: '#FF8F00' },
-];
+// Background gradients are derived from the Colour Theme's backdrop colour
+// (saved as [backdrop, sheetColor]) — there is no separate gradient picker.
+// All colour-set options and swatches live in components/ProviderThemePicker.
 
 async function uploadBackgroundImage(
   userId: string,
@@ -109,6 +82,12 @@ export default function BrandingScreen({ navigation }: any) {
 
   const [gradient, setGradient]           = useState<[string, string, ...string[]]>(['#EDE8E2', '#C4A8AE', '#AF9197']);
   const [accentColor, setAccentColor]     = useState('#AF9197');
+  // Colour theme — preset key, or 'custom' with the three colours below
+  const [themeChoice, setThemeChoice]         = useState<string>(DEFAULT_PROVIDER_THEME);
+  const [customBackdrop, setCustomBackdrop]   = useState('#E3C7CF');
+  const [customCard, setCustomCard]           = useState('#F9E9EE');
+  const [customAccent, setCustomAccent]       = useState('#D98BA6');
+  const [sheetColor, setSheetColor]           = useState(SHEET_BG);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
   const [saved, setSaved] = useState(false);
@@ -122,7 +101,7 @@ export default function BrandingScreen({ navigation }: any) {
 
         const { data } = await supabase
           .from('providers')
-          .select('id, gradient, accent_color, background_image_url')
+          .select('id, gradient, accent_color, background_image_url, profile_theme')
           .eq('user_id', user.id)
           .single();
 
@@ -133,6 +112,17 @@ export default function BrandingScreen({ navigation }: any) {
           }
           if (data.accent_color) setAccentColor(data.accent_color);
           if (data.background_image_url) setBackgroundImage(data.background_image_url);
+          const { base, sheet } = parseThemeKey(data.profile_theme);
+          setSheetColor(sheet);
+          const custom = decodeCustomTheme(base);
+          if (custom) {
+            setThemeChoice('custom');
+            setCustomBackdrop(custom.backdrop);
+            setCustomCard(custom.card);
+            setCustomAccent(custom.accent);
+          } else if (base) {
+            setThemeChoice(base);
+          }
         }
       } finally {
         setLoading(false);
@@ -178,12 +168,21 @@ export default function BrandingScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
+      // The colour set drives everything: accent_color and the hero gradient are
+      // both derived from it so the client-facing profile always matches.
+      const isCustom = themeChoice === 'custom';
+      const preset = PROVIDER_THEMES.find(t => t.key === themeChoice);
+      const resolvedAccent = isCustom ? customAccent : preset?.tokens.accent ?? accentColor;
+      const resolvedBackdrop = isCustom ? customBackdrop : preset?.tokens.hero ?? SHEET_BG;
+      const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
+
       const { error } = await supabase
         .from('providers')
         .update({
-          gradient,
-          accent_color: accentColor,
+          gradient: [resolvedBackdrop, sheetColor],
+          accent_color: resolvedAccent,
           background_image_url: backgroundImage,
+          profile_theme: encodeThemeKey(baseKey, sheetColor),
         })
         .eq('id', providerId);
 
@@ -197,7 +196,21 @@ export default function BrandingScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, gradient, accentColor, backgroundImage]);
+  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor]);
+
+  // Single handler for the shared picker — keeps the live preview in sync
+  const handleThemeChange = useCallback((next: ThemeSelection) => {
+    setThemeChoice(next.themeChoice);
+    setCustomBackdrop(next.customBackdrop);
+    setCustomCard(next.customCard);
+    setCustomAccent(next.customAccent);
+    setSheetColor(next.sheetColor);
+    const preset = PROVIDER_THEMES.find(t => t.key === next.themeChoice);
+    const accent = next.themeChoice === 'custom' ? next.customAccent : preset?.tokens.accent ?? next.customAccent;
+    const backdrop = next.themeChoice === 'custom' ? next.customBackdrop : preset?.tokens.hero ?? next.customBackdrop;
+    setAccentColor(accent);
+    setGradient([backdrop, next.sheetColor]);
+  }, []);
 
   if (loading) {
     return (
@@ -254,6 +267,24 @@ export default function BrandingScreen({ navigation }: any) {
             </View>
           </View>
 
+          {/* Colour theme — accent + card colour + backdrop sets */}
+          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sectionTitle, { color: P.text }]}>Colour Theme</Text>
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Each option is three colours — accent, card colour, and backdrop (shown behind
+              your profile as a gradient). Pick a set or build your own with Custom, then
+              choose the content-area colour below.
+            </Text>
+            <ProviderThemePicker
+              value={{ themeChoice, customBackdrop, customCard, customAccent, sheetColor }}
+              onChange={handleThemeChange}
+              textColor={P.text}
+              subColor={P.sub}
+              borderColor={P.border}
+              sepColor={P.sep}
+            />
+          </View>
+
           {/* Background image */}
           <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
             <Text style={[styles.sectionTitle, { color: P.text }]}>Background Image</Text>
@@ -291,65 +322,6 @@ export default function BrandingScreen({ navigation }: any) {
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
-          </View>
-
-          {/* Gradient picker */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Background Gradient</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Used when no background image is set.
-            </Text>
-            <View style={styles.gradientGrid}>
-              {GRADIENT_PRESETS.map((preset) => {
-                const isSelected = JSON.stringify(preset.colors) === JSON.stringify(gradient);
-                return (
-                  <TouchableOpacity
-                    key={preset.name}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setGradient(preset.colors);
-                    }}
-                    activeOpacity={0.8}
-                    style={[styles.gradientOption, isSelected && { borderColor: accentColor, borderWidth: 2.5 }]}
-                  >
-                    <LinearGradient
-                      colors={preset.colors}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.gradientSwatch}
-                    />
-                    <Text style={[styles.gradientName, { color: P.sub }]} numberOfLines={1}>{preset.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Accent color picker */}
-          <View style={[styles.section, { backgroundColor: P.card, borderColor: P.border }]}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Accent Colour</Text>
-            <Text style={[styles.sectionSub, { color: P.sub }]}>
-              Used for buttons, prices, and highlights on your profile.
-            </Text>
-            <View style={styles.accentGrid}>
-              {ACCENT_COLORS.map((item) => {
-                const isSelected = accentColor === item.color;
-                return (
-                  <TouchableOpacity
-                    key={item.color}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setAccentColor(item.color);
-                    }}
-                    activeOpacity={0.8}
-                    style={[styles.accentOption, isSelected && { borderColor: item.color, borderWidth: 2.5 }]}
-                  >
-                    <View style={[styles.accentSwatch, { backgroundColor: item.color }]} />
-                    <Text style={[styles.accentName, { color: P.sub }]} numberOfLines={1}>{item.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
             </View>
           </View>
 
@@ -474,6 +446,69 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+
+  themeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  themeOption: {
+    width: (SW - 40 - 18 * 2 - 10 * 3) / 4,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+    overflow: 'hidden',
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  themeSwatch: {
+    width: '100%',
+    height: 52,
+    borderRadius: 8,
+    marginBottom: 4,
+    padding: 7,
+    justifyContent: 'space-between',
+  },
+  themeCardBar: {
+    width: '75%',
+    height: 13,
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  themeAccentDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    alignSelf: 'flex-end',
+  },
+  customPanel: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  customLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10,
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginTop: 6,
+  },
+  customRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  customSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   gradientOption: {
     width: (SW - 40 - 18 * 2 - 10 * 3) / 4,

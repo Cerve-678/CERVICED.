@@ -92,6 +92,16 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     initConversation();
   }, [userId, providerDbId]);
 
+  // Mark conversation as read by the user on open (mirrors provider side)
+  useEffect(() => {
+    if (!conversationId) return;
+    supabase
+      .from('provider_conversations')
+      .update({ unread_count_user: 0 })
+      .eq('id', conversationId)
+      .then(() => {});
+  }, [conversationId]);
+
   // Load initial messages
   useEffect(() => {
     if (!conversationId) return;
@@ -120,11 +130,19 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
+          const msg = payload.new as Message;
           setMessages(prev => {
-            const msg = payload.new as Message;
             if (prev.find(m => m.id === msg.id)) return prev;
             return [...prev, msg];
           });
+          // Reading it live — clear the unread counter the sender just bumped
+          if (msg.sender_type === 'provider') {
+            supabase
+              .from('provider_conversations')
+              .update({ unread_count_user: 0 })
+              .eq('id', conversationId)
+              .then(() => {});
+          }
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
         }
       )
@@ -173,6 +191,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       await supabase.rpc('update_conversation_last_message', {
         conv_id: conversationId,
         msg_text: text,
+        p_sender_type: 'user',
       });
     } catch {
       /* silent */

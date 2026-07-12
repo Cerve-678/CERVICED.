@@ -34,7 +34,7 @@ export type HomeStackParamList = {
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
-  ClientIntakeForm: { formId: string; bookingId: string };
+  ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   DevSettings: undefined;
 };
 
@@ -57,7 +57,7 @@ export type BeccaStackParamList = {
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
   Notifications: undefined;
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
-  ClientIntakeForm: { formId: string; bookingId: string };
+  ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
   DevSettings: undefined;
 };
@@ -68,7 +68,7 @@ export type CartStackParamList = {
   ProviderProfile: { providerId: string; source?: string };
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
-  ClientIntakeForm: { formId: string; bookingId: string };
+  ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
   DevSettings: undefined;
 };
@@ -89,11 +89,12 @@ export type ProfileStackParamList = {
   Points: undefined;
   ProviderProfile: { providerId: string; source?: string };
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
+  Messages: undefined;
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
-  ClientIntakeForm: { formId: string; bookingId: string };
+  ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   DevSettings: undefined;
   InfoReg: { transferProviderId?: string } | undefined;
 };
@@ -103,9 +104,10 @@ export type ProviderHomeStackParamList = {
   ProviderHomeMain: undefined;
   ProviderSchedule: undefined;
   BookingDetail: { bookingId: string; booking?: any };
-  ProviderIntakeForm: { bookingId: string; clientUserId: string; serviceName: string; formId?: string };
+  ProviderIntakeForm: { bookingId: string; clientUserId: string; serviceName: string; formId?: string } | undefined;
   Notifications: undefined;
-  ProviderInbox: undefined;
+  ProviderInbox: { initialFilter?: 'all' | 'pending' | 'confirmed' | 'done' | 'messages' } | undefined;
+  ProviderConversation: { conversationId: string; clientUserId: string; clientName: string };
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
@@ -134,6 +136,8 @@ export type ProviderAccountStackParamList = {
   Clientele: undefined;
   BookingDetail: { bookingId: string; booking?: any };
   ProviderIntakeForm: { bookingId: string; clientUserId: string; serviceName: string; formId?: string };
+  ProviderInbox: { initialFilter?: 'all' | 'pending' | 'confirmed' | 'done' | 'messages' } | undefined;
+  ProviderConversation: { conversationId: string; clientUserId: string; clientName: string };
   ChangePassword: undefined;
   AccountInfo: undefined;
   BusinessDetails: undefined;

@@ -23,6 +23,7 @@ import { ProviderAccountStackParamList } from '../navigation/types';
 import { useProviderDialog } from '../components/ProviderDialog';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { supabase } from '../lib/supabase';
+import { getMyProviderServices } from '../services/databaseService';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -41,6 +42,8 @@ interface InfoPack {
   id: string;
   title: string;
   service: string;
+  /** Specific services this pack attaches to; empty = all services */
+  serviceNames: string[];
   content: string;
   createdAt: string;
 }
@@ -85,13 +88,18 @@ function PackCard({
 
   const sc = serviceColor(pack.service);
   const pillBg = dark ? sc.dbg : sc.bg;
+  const pillLabel = pack.serviceNames.length === 0
+    ? 'ALL SERVICES'
+    : pack.serviceNames.length === 1
+      ? pack.serviceNames[0]!.toUpperCase()
+      : `${pack.serviceNames[0]!.toUpperCase()} +${pack.serviceNames.length - 1}`;
 
   return (
     <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
       <View style={[pc.card, { backgroundColor: P.card, borderColor: P.border }]}>
         <View style={pc.cardTop}>
           <View style={[pc.servicePill, { backgroundColor: pillBg }]}>
-            <Text style={[pc.servicePillText, { color: sc.text }]}>{pack.service}</Text>
+            <Text style={[pc.servicePillText, { color: sc.text }]} numberOfLines={1}>{pillLabel}</Text>
           </View>
           <Text style={[pc.date, { color: P.sub }]}>{fmtDate(pack.createdAt)}</Text>
         </View>
@@ -229,17 +237,28 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
   const [view,       setView]       = useState<'list' | 'create'>('list');
   const [title,      setTitle]      = useState('');
-  const [service,    setService]    = useState('');
   const [content,    setContent]    = useState('');
   const [packs,      setPacks]      = useState<InfoPack[]>([]);
   const [sending,    setSending]    = useState<InfoPack | null>(null);
   const [isLoading,  setIsLoading]  = useState(true);
+  const [myServices, setMyServices] = useState<string[]>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
-  const resetForm = useCallback(() => { setTitle(''); setService(''); setContent(''); }, []);
+  const resetForm = useCallback(() => { setTitle(''); setSelectedServices([]); setContent(''); }, []);
 
-  // Load packs from Supabase on mount
+  const toggleService = useCallback((name: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedServices(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+  }, []);
+
+  // Load packs + the provider's services on mount
   useEffect(() => {
     if (!user?.id) { setIsLoading(false); return; }
+    getMyProviderServices()
+      .then(services => setMyServices(services.map((s: any) => s.name)))
+      .catch(() => {});
     supabase
       .from('info_packs')
       .select('*')
@@ -251,6 +270,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           id: r.id,
           title: r.title,
           service: r.service ?? 'GENERAL',
+          serviceNames: r.service_names ?? [],
           content: r.content,
           createdAt: (r.created_at as string).split('T')[0]!,
         })));
@@ -261,10 +281,16 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const handleSave = useCallback(async () => {
     if (!title.trim() || !content.trim()) { showToast('Please add a title and content.', 'warning'); return; }
     if (!user?.id) return;
-    const serviceVal = service.trim().toUpperCase() || 'GENERAL';
     const { data, error } = await supabase
       .from('info_packs')
-      .insert({ provider_id: user.id, title: title.trim(), service: serviceVal, content: content.trim() })
+      .insert({
+        provider_id: user.id,
+        title: title.trim(),
+        // Legacy display label — matching now runs on service_names
+        service: selectedServices.length > 0 ? selectedServices[0]!.toUpperCase() : 'GENERAL',
+        service_names: selectedServices,
+        content: content.trim(),
+      })
       .select()
       .single();
     if (error) { showToast('Could not save info pack.', 'error'); return; }
@@ -272,6 +298,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       id: data.id,
       title: data.title,
       service: data.service ?? 'GENERAL',
+      serviceNames: data.service_names ?? [],
       content: data.content,
       createdAt: (data.created_at as string).split('T')[0]!,
     };
@@ -279,7 +306,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     resetForm();
     setView('list');
     if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [title, service, content, user?.id, resetForm, showToast]);
+  }, [title, selectedServices, content, user?.id, resetForm, showToast]);
 
   const handleDelete = useCallback(async (id: string) => {
     setPacks(prev => prev.filter(p => p.id !== id));
@@ -366,9 +393,30 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 <TextInput style={[s.input, { color: P.text }]} placeholder="e.g. Lash Aftercare Guide" placeholderTextColor={P.sub} value={title} onChangeText={setTitle} maxLength={80} />
               </View>
 
-              <Text style={[s.fieldLabel, { color: P.sub }]}>SERVICE</Text>
-              <View style={[s.inputWrap, { backgroundColor: P.card, borderColor: P.border }]}>
-                <TextInput style={[s.input, { color: P.text }]} placeholder="Hair, Nails, Lashes, MUA…" placeholderTextColor={P.sub} value={service} onChangeText={setService} maxLength={30} />
+              <Text style={[s.fieldLabel, { color: P.sub }]}>ATTACHES TO SERVICES</Text>
+              <Text style={[s.fieldHint, { color: P.sub }]}>
+                Pick the services this pack goes with — it's sent automatically when a client books them. Leave empty to attach to every booking.
+              </Text>
+              <View style={s.serviceChipsWrap}>
+                {myServices.length === 0 ? (
+                  <Text style={[s.fieldHint, { color: P.sub }]}>No services on your profile yet — the pack will attach to all bookings.</Text>
+                ) : myServices.map(name => {
+                  const selected = selectedServices.includes(name);
+                  return (
+                    <TouchableOpacity
+                      key={name}
+                      style={[s.serviceChip, {
+                        borderColor: selected ? P.accent : P.border,
+                        backgroundColor: selected ? P.accent + '18' : P.card,
+                      }]}
+                      onPress={() => toggleService(name)}
+                      activeOpacity={0.7}
+                    >
+                      {selected && <Ionicons name="checkmark" size={12} color={P.accent} />}
+                      <Text style={[s.serviceChipText, { color: selected ? P.accent : P.sub }]}>{name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               <Text style={[s.fieldLabel, { color: P.sub }]}>CONTENT</Text>
@@ -408,6 +456,10 @@ const s = StyleSheet.create({
   listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 80 },
 
   fieldLabel:  { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
+  fieldHint:   { fontSize: 12, lineHeight: 18, marginBottom: 10 },
+  serviceChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  serviceChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
+  serviceChipText: { fontSize: 13, fontWeight: '600' },
   inputWrap:   { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13 },
   textAreaWrap:{ alignItems: 'flex-start', paddingVertical: 14 },
   input:       { flex: 1, fontSize: 15 },

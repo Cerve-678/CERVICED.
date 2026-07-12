@@ -23,7 +23,9 @@ import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
   getProviderDepositPoliciesByDisplayNames,
   ProviderDepositPolicy,
+  validatePromoCode,
 } from '../services/databaseService';
+import type { DbPromotion } from '../types/database';
 import { NotificationService } from '../services/notificationService';
 import type { CartScreenProps } from '../navigation/types';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -250,8 +252,8 @@ const handlePayment = useCallback(async () => {
     console.error(`${'='.repeat(60)}\n`);
 
     Alert.alert(
-      'Payment Failed',
-      'There was an error: ' + (error as Error).message
+      'Booking Failed',
+      (error as Error).message || 'Something went wrong. Please try again.'
     );
   } finally {
     if (__DEV__) {
@@ -783,34 +785,37 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.depositOptionButton,
-                  { backgroundColor: isDarkMode ? P.surface : 'rgba(175,145,151,0.06)' },
-                  serviceBooking.isDepositOnly && { backgroundColor: 'rgba(175,145,151,0.14)', borderColor: P.accent },
-                ]}
-                onPress={() => handleDepositToggle(true)}
-              >
-                <Text
+              {/* Hidden when the provider turned deposits off in their policies */}
+              {depositPolicy?.depositAvailable !== false && (
+                <TouchableOpacity
                   style={[
-                    styles.depositOptionText,
-                    { color: P.sub },
-                    serviceBooking.isDepositOnly && { color: P.accent, fontWeight: '700' },
+                    styles.depositOptionButton,
+                    { backgroundColor: isDarkMode ? P.surface : 'rgba(175,145,151,0.06)' },
+                    serviceBooking.isDepositOnly && { backgroundColor: 'rgba(175,145,151,0.14)', borderColor: P.accent },
                   ]}
+                  onPress={() => handleDepositToggle(true)}
                 >
-                  {depositLabel}
-                </Text>
-              </TouchableOpacity>
+                  <Text
+                    style={[
+                      styles.depositOptionText,
+                      { color: P.sub },
+                      serviceBooking.isDepositOnly && { color: P.accent, fontWeight: '700' },
+                    ]}
+                  >
+                    {depositLabel}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {serviceBooking.isDepositOnly && (
               <View style={styles.depositInfo}>
                 <Text style={styles.depositInfoText}>
-                  Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
+                  Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)} — charged now
                 </Text>
                 <Text style={styles.depositRemainingText}>
-                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} (pay
-                  at appointment)
+                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} — pay
+                  at appointment
                 </Text>
               </View>
             )}
@@ -960,6 +965,104 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       .catch(() => {}); // silently fall back to default 20% on error
   }, [items]);
 
+  // ── Promo codes ────────────────────────────────────────────────────────────
+  const [promoInput, setPromoInput] = useState('');
+  const [promoApplying, setPromoApplying] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  // One applied promo per provider, keyed by provider display name
+  const [appliedPromos, setAppliedPromos] = useState<Record<string, DbPromotion>>({});
+
+  const handleApplyPromo = useCallback(async () => {
+    const code = promoInput.trim();
+    if (!code || promoApplying) return;
+    setPromoApplying(true);
+    setPromoError(null);
+    try {
+      const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
+      for (const name of names) {
+        const promo = await validatePromoCode(name, code);
+        if (promo) {
+          setAppliedPromos(prev => ({ ...prev, [name]: promo }));
+          setPromoInput('');
+          setPromoApplying(false);
+          return;
+        }
+      }
+      setPromoError('This code isn’t valid for the providers in your cart.');
+    } catch {
+      setPromoError('Could not check that code — please try again.');
+    } finally {
+      setPromoApplying(false);
+    }
+  }, [promoInput, promoApplying, items]);
+
+  const handleRemovePromo = useCallback((providerName: string) => {
+    setAppliedPromos(prev => {
+      const next = { ...prev };
+      delete next[providerName];
+      return next;
+    });
+  }, []);
+
+  // Drop applied promos whose provider no longer has items in the cart
+  useEffect(() => {
+    const inCart = new Set(items.map(i => i.providerDisplayName ?? i.providerName));
+    setAppliedPromos(prev => {
+      const stale = Object.keys(prev).filter(name => !inCart.has(name));
+      if (stale.length === 0) return prev;
+      const next = { ...prev };
+      for (const name of stale) delete next[name];
+      return next;
+    });
+  }, [items]);
+
+  // Absolute £ discount per cart item (off base+add-ons, capped at the base
+  // price so an item can never go negative). Percent promos apply per item;
+  // fixed-amount promos are allocated across eligible items proportionally.
+  const itemPromoDiscounts = useMemo((): Record<string, number> => {
+    const discounts: Record<string, number> = {};
+    for (const [providerName, promo] of Object.entries(appliedPromos)) {
+      const eligible = items.filter(item => {
+        if ((item.providerDisplayName ?? item.providerName) !== providerName) return false;
+        if (promo.service_ids && promo.service_ids.length > 0 && !promo.service_ids.includes(item.serviceId)) return false;
+        if (promo.service_category &&
+            promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) return false;
+        return true;
+      });
+      if (eligible.length === 0) continue;
+
+      const itemTotal = (item: CartItem) =>
+        (Number(item.price) || 0) +
+        (item.addOns ?? []).reduce((s, a) => s + (Number(a.price) || 0), 0);
+
+      if (promo.discount_percent && promo.discount_percent > 0) {
+        for (const item of eligible) {
+          const off = (itemTotal(item) * promo.discount_percent) / 100;
+          discounts[item.id] = Math.min(off, Number(item.price) || 0);
+        }
+      } else if (promo.discount_amount && promo.discount_amount > 0) {
+        const pool = eligible.reduce((s, i) => s + itemTotal(i), 0);
+        if (pool <= 0) continue;
+        let remaining = Math.min(promo.discount_amount, pool);
+        eligible.forEach((item, idx) => {
+          const share = idx === eligible.length - 1
+            ? remaining
+            : Math.min(remaining, (itemTotal(item) / pool) * Math.min(promo.discount_amount!, pool));
+          const off = Math.min(share, Number(item.price) || 0);
+          discounts[item.id] = off;
+          remaining = Math.max(0, remaining - off);
+        });
+      }
+      // discount_text-only promos carry no redeemable value at checkout
+    }
+    return discounts;
+  }, [appliedPromos, items]);
+
+  const totalPromoDiscount = useMemo(
+    () => Object.values(itemPromoDiscounts).reduce((s, v) => s + v, 0),
+    [itemPromoDiscounts]
+  );
+
   // Compute effective total considering per-service deposits - FIXED NESTED HOOK
   const effectiveTotal = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -969,7 +1072,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => {
         return s + (Number(addOn?.price) || 0);
       }, 0);
-      const itemTotalPrice = basePrice + addOnsTotal;
+      // Promo discount comes off before any deposit is calculated
+      const itemTotalPrice = basePrice + addOnsTotal - (itemPromoDiscounts[item.id] ?? 0);
       let effectiveItemPrice: number;
       if (booking.isDepositOnly) {
         const provName = item.providerDisplayName ?? item.providerName;
@@ -983,12 +1087,57 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
       return sum + effectiveItemPrice;
     }, 0);
-  }, [items, serviceBookings, providerDepositPolicies]);
+  }, [items, serviceBookings, providerDepositPolicies, itemPromoDiscounts]);
 
   const effectiveFinalTotal = useMemo(
     () => effectiveTotal + getServiceFee(),
     [effectiveTotal, getServiceFee]
   );
+
+  // Same as effectiveTotal but WITHOUT promo discounts — used so the summary
+  // reads Subtotal − Promo + Fee = Total exactly, even for deposit-only items
+  // (where a promo only reduces the deposit proportionally).
+  const effectiveTotalNoPromo = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const booking = serviceBookings[item.id] || { isDepositOnly: false };
+      const basePrice = Number(item?.price) || 0;
+      const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => s + (Number(addOn?.price) || 0), 0);
+      const itemTotalPrice = basePrice + addOnsTotal;
+      if (booking.isDepositOnly) {
+        const provName = item.providerDisplayName ?? item.providerName;
+        const pol = providerDepositPolicies[provName];
+        const policyArg: DepositPolicy | number = pol
+          ? { type: pol.depositType, amount: pol.depositAmount }
+          : 20;
+        return sum + BookingService.calculateDeposit(itemTotalPrice, policyArg);
+      }
+      return sum + itemTotalPrice;
+    }, 0);
+  }, [items, serviceBookings, providerDepositPolicies]);
+
+  const promoSavingsShown = useMemo(
+    () => Math.max(0, effectiveTotalNoPromo - effectiveTotal),
+    [effectiveTotalNoPromo, effectiveTotal]
+  );
+
+  // Balance the client will owe the provider directly (deposit-only items):
+  // discounted full price minus the deposit being charged today.
+  const dueAtAppointment = useMemo(() => {
+    return items.reduce((sum, item) => {
+      const booking = serviceBookings[item.id] || { isDepositOnly: false };
+      if (!booking.isDepositOnly) return sum;
+      const basePrice = Number(item?.price) || 0;
+      const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => s + (Number(addOn?.price) || 0), 0);
+      const itemTotalPrice = basePrice + addOnsTotal - (itemPromoDiscounts[item.id] ?? 0);
+      const provName = item.providerDisplayName ?? item.providerName;
+      const pol = providerDepositPolicies[provName];
+      const policyArg: DepositPolicy | number = pol
+        ? { type: pol.depositType, amount: pol.depositAmount }
+        : 20;
+      const deposit = BookingService.calculateDeposit(itemTotalPrice, policyArg);
+      return sum + Math.max(0, itemTotalPrice - deposit);
+    }, 0);
+  }, [items, serviceBookings, providerDepositPolicies, itemPromoDiscounts]);
 
   // Compute effective cart items for payment modal
   const effectiveCartItems = useMemo(() => {
@@ -998,7 +1147,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => {
         return s + (Number(addOn?.price) || 0);
       }, 0);
-      const itemTotalPrice = basePrice + addOnsTotal;
+      const itemTotalPrice = basePrice + addOnsTotal - (itemPromoDiscounts[item.id] ?? 0);
       let effectivePrice: number;
       if (booking.isDepositOnly) {
         const provName = item.providerDisplayName ?? item.providerName;
@@ -1012,7 +1161,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
       return { item, effectivePrice, isDeposit: !!booking.isDepositOnly };
     });
-  }, [items, serviceBookings, providerDepositPolicies]);
+  }, [items, serviceBookings, providerDepositPolicies, itemPromoDiscounts]);
 
   // Booking state management
   const updateServiceBooking = useCallback((itemId: string, updates: ServiceBooking) => {
@@ -1177,9 +1326,26 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     if (__DEV__) {
       console.log('Capturing checkout snapshot...');
     }
+    // Bake promo discounts into the snapshot so the discounted price flows
+    // through validation, payment, and the saved booking. A note on the
+    // booking tells the provider which code was redeemed.
+    const promoByProvider = appliedPromos;
+    const snapshotBookings: typeof serviceBookings = { ...serviceBookings };
+    const snapshotItems = items.map(item => {
+      const discount = itemPromoDiscounts[item.id] ?? 0;
+      if (discount <= 0) return item;
+      const promo = promoByProvider[item.providerDisplayName ?? item.providerName];
+      const existing = snapshotBookings[item.id];
+      const promoNote = `Promo ${promo?.promo_code ?? ''} applied (−£${discount.toFixed(2)})`.trim();
+      snapshotBookings[item.id] = {
+        ...(existing ?? { selectedDate: '', selectedTime: '', isDepositOnly: false }),
+        notes: [existing?.notes, promoNote].filter(Boolean).join('\n'),
+      } as typeof serviceBookings[string];
+      return { ...item, price: Math.max(0, (Number(item.price) || 0) - discount) };
+    });
     const snapshot = {
-      items: [...items], // Clone array
-      bookings: { ...serviceBookings }, // Clone object
+      items: snapshotItems,
+      bookings: snapshotBookings,
     };
     if (__DEV__) {
       console.log('Snapshot captured:', snapshot.items.length, 'items');
@@ -1201,7 +1367,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, serviceBookings, user]);
+}, [items, getServiceBooking, effectiveFinalTotal, serviceBookings, user, appliedPromos, itemPromoDiscounts]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -1978,12 +2144,66 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                   );
                 })}
 
+                {/* Promo code */}
+                <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      style={{
+                        flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
+                        borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+                        fontSize: 14, color: P.text, backgroundColor: P.surface,
+                      }}
+                      placeholder="Promo code"
+                      placeholderTextColor={P.sub}
+                      value={promoInput}
+                      onChangeText={t => { setPromoInput(t); setPromoError(null); }}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity
+                      style={{
+                        borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center',
+                        backgroundColor: promoInput.trim() ? P.accent : P.surface,
+                      }}
+                      onPress={handleApplyPromo}
+                      disabled={!promoInput.trim() || promoApplying}
+                      activeOpacity={0.8}
+                    >
+                      {promoApplying
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={{ fontSize: 13, fontWeight: '700', color: promoInput.trim() ? '#fff' : P.sub }}>Apply</Text>}
+                    </TouchableOpacity>
+                  </View>
+                  {promoError && (
+                    <Text style={{ fontSize: 12, color: '#FF6868', marginTop: 8 }}>{promoError}</Text>
+                  )}
+                  {Object.entries(appliedPromos).map(([providerName, promo]) => (
+                    <View key={providerName} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: P.accent }}>
+                        {promo.promo_code?.toUpperCase()}
+                      </Text>
+                      <Text style={{ flex: 1, fontSize: 12, color: P.sub }} numberOfLines={1}>
+                        {promo.title} • {providerName}
+                      </Text>
+                      <TouchableOpacity onPress={() => handleRemovePromo(providerName)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#FF6868' }}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+
                 {/* Summary - USE EFFECTIVE TOTALS + SERVICE FEE NOTE */}
                 <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                   <View style={styles.summaryRow}>
                     <Text style={dynamicStyles.summaryLabel}>Subtotal</Text>
-                    <Text style={dynamicStyles.summaryValue}>£{effectiveTotal.toFixed(2)}</Text>
+                    <Text style={dynamicStyles.summaryValue}>£{effectiveTotalNoPromo.toFixed(2)}</Text>
                   </View>
+                  {promoSavingsShown > 0 && (
+                    <View style={styles.summaryRow}>
+                      <Text style={[dynamicStyles.summaryLabel, { color: '#30D158' }]}>Promo Discount</Text>
+                      <Text style={[dynamicStyles.summaryValue, { color: '#30D158' }]}>−£{promoSavingsShown.toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={styles.summaryRow}>
                     <Text style={dynamicStyles.summaryLabel}>Platform Fee</Text>
                     <Text style={dynamicStyles.summaryValue}>£{getServiceFee().toFixed(2)}</Text>
@@ -1992,6 +2212,11 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                     <Text style={dynamicStyles.totalLabel}>Total</Text>
                     <Text style={dynamicStyles.totalValue}>£{effectiveFinalTotal.toFixed(2)}</Text>
                   </View>
+                  {dueAtAppointment > 0 && (
+                    <Text style={{ fontSize: 12, lineHeight: 17, color: P.sub, marginTop: 10 }}>
+                      Only deposits are charged today — the remaining £{dueAtAppointment.toFixed(2)} is paid at your appointment.
+                    </Text>
+                  )}
                 </View>
 
                 {/* Checkout Button - USE EFFECTIVE TOTAL */}

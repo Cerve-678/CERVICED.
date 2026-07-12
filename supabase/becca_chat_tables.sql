@@ -31,10 +31,12 @@ ALTER TABLE public.becca_chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.becca_chat_messages ENABLE ROW LEVEL SECURITY;
 
 -- Sessions: users can only see/edit their own
+DROP POLICY IF EXISTS "Users manage own sessions" ON public.becca_chat_sessions;
 CREATE POLICY "Users manage own sessions" ON public.becca_chat_sessions
   FOR ALL USING (auth.uid() = user_id);
 
 -- Messages: users can only see/edit messages in their own sessions
+DROP POLICY IF EXISTS "Users manage own messages" ON public.becca_chat_messages;
 CREATE POLICY "Users manage own messages" ON public.becca_chat_messages
   FOR ALL USING (
     session_id IN (

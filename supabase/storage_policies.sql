@@ -17,11 +17,13 @@ ON CONFLICT (id) DO NOTHING;
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Public read
+DROP POLICY IF EXISTS "provider-logos: public read" ON storage.objects;
 CREATE POLICY "provider-logos: public read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'provider-logos');
 
 -- Authenticated upload to own folder  (<userId>/*)
+DROP POLICY IF EXISTS "provider-logos: authenticated upload" ON storage.objects;
 CREATE POLICY "provider-logos: authenticated upload"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -31,6 +33,7 @@ CREATE POLICY "provider-logos: authenticated upload"
   );
 
 -- Authenticated update own files
+DROP POLICY IF EXISTS "provider-logos: authenticated update" ON storage.objects;
 CREATE POLICY "provider-logos: authenticated update"
   ON storage.objects FOR UPDATE
   TO authenticated
@@ -40,6 +43,7 @@ CREATE POLICY "provider-logos: authenticated update"
   );
 
 -- Authenticated delete own files
+DROP POLICY IF EXISTS "provider-logos: authenticated delete" ON storage.objects;
 CREATE POLICY "provider-logos: authenticated delete"
   ON storage.objects FOR DELETE
   TO authenticated
@@ -52,10 +56,12 @@ CREATE POLICY "provider-logos: authenticated delete"
 -- service-images
 -- ─────────────────────────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "service-images: public read" ON storage.objects;
 CREATE POLICY "service-images: public read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'service-images');
 
+DROP POLICY IF EXISTS "service-images: authenticated upload" ON storage.objects;
 CREATE POLICY "service-images: authenticated upload"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -64,6 +70,7 @@ CREATE POLICY "service-images: authenticated upload"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "service-images: authenticated update" ON storage.objects;
 CREATE POLICY "service-images: authenticated update"
   ON storage.objects FOR UPDATE
   TO authenticated
@@ -72,6 +79,7 @@ CREATE POLICY "service-images: authenticated update"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "service-images: authenticated delete" ON storage.objects;
 CREATE POLICY "service-images: authenticated delete"
   ON storage.objects FOR DELETE
   TO authenticated
@@ -84,10 +92,12 @@ CREATE POLICY "service-images: authenticated delete"
 -- portfolio
 -- ─────────────────────────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "portfolio: public read" ON storage.objects;
 CREATE POLICY "portfolio: public read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'portfolio');
 
+DROP POLICY IF EXISTS "portfolio: authenticated upload" ON storage.objects;
 CREATE POLICY "portfolio: authenticated upload"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -96,6 +106,7 @@ CREATE POLICY "portfolio: authenticated upload"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "portfolio: authenticated update" ON storage.objects;
 CREATE POLICY "portfolio: authenticated update"
   ON storage.objects FOR UPDATE
   TO authenticated
@@ -104,6 +115,7 @@ CREATE POLICY "portfolio: authenticated update"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "portfolio: authenticated delete" ON storage.objects;
 CREATE POLICY "portfolio: authenticated delete"
   ON storage.objects FOR DELETE
   TO authenticated
@@ -116,10 +128,12 @@ CREATE POLICY "portfolio: authenticated delete"
 -- avatars
 -- ─────────────────────────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "avatars: public read" ON storage.objects;
 CREATE POLICY "avatars: public read"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'avatars');
 
+DROP POLICY IF EXISTS "avatars: authenticated upload" ON storage.objects;
 CREATE POLICY "avatars: authenticated upload"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -128,6 +142,7 @@ CREATE POLICY "avatars: authenticated upload"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "avatars: authenticated update" ON storage.objects;
 CREATE POLICY "avatars: authenticated update"
   ON storage.objects FOR UPDATE
   TO authenticated
@@ -136,6 +151,7 @@ CREATE POLICY "avatars: authenticated update"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+DROP POLICY IF EXISTS "avatars: authenticated delete" ON storage.objects;
 CREATE POLICY "avatars: authenticated delete"
   ON storage.objects FOR DELETE
   TO authenticated

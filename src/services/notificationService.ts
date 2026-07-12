@@ -160,19 +160,23 @@ export class NotificationService {
     serviceName: string,
     bookingDate: string,
     bookingTime: string,
-    providerImage?: any
+    providerImage?: any,
+    isPending?: boolean
   ): Promise<void> {
     if (__DEV__) console.log('Creating booking confirmation notification:', {
       bookingId,
       providerName,
       serviceName,
+      isPending,
     });
 
     const notification: AppNotification = {
       id: `notif_${Date.now()}_${Math.random()}`,
       type: 'booking_confirmed',
-      title: 'Booking Confirmed!',
-      message: `Your appointment with ${providerName} for ${serviceName} has been confirmed for ${new Date(bookingDate).toLocaleDateString()} at ${bookingTime}.`,
+      title: isPending ? 'Booking Request Sent' : 'Booking Confirmed!',
+      message: isPending
+        ? `Your request with ${providerName} for ${serviceName} on ${new Date(bookingDate).toLocaleDateString()} at ${bookingTime} is awaiting confirmation.`
+        : `Your appointment with ${providerName} for ${serviceName} has been confirmed for ${new Date(bookingDate).toLocaleDateString()} at ${bookingTime}.`,
       timestamp: new Date().toISOString(),
       read: false,
       priority: 'high',

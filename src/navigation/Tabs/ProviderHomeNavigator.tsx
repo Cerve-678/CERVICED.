@@ -5,6 +5,7 @@ import ProviderBookingDetailScreen from '../../screens/ProviderBookingDetailScre
 import ProviderIntakeFormScreen from '../../screens/ProviderIntakeFormScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
 import ProviderInboxScreen from '../../screens/ProviderInboxScreen';
+import ProviderConversationScreen from '../../screens/ProviderConversationScreen';
 import ProviderPromotionsScreen from '../../screens/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../screens/ProviderClienteleScreen';
 import ProviderInfoPackScreen from '../../screens/ProviderInfoPackScreen';
@@ -58,6 +59,12 @@ export default function ProviderHomeNavigator() {
         name="ProviderInbox"
         component={ProviderInboxScreen}
         options={{ headerShown: false }}
+      />
+
+      <ProviderHomeStack.Screen
+        name="ProviderConversation"
+        component={ProviderConversationScreen}
+        options={{ headerShown: false, presentation: 'card' }}
       />
 
       <ProviderHomeStack.Screen

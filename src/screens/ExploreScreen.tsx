@@ -393,6 +393,7 @@ const ExploreScreen = memo(() => {
     (providerId: string, providerName: string, providerService: string, providerLogo: any) => {
       addToCart({
         providerName,
+        providerSlug: providerId,
         providerImage: providerLogo,
         providerService,
         service: {

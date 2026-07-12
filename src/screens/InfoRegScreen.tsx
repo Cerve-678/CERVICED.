@@ -39,8 +39,23 @@ import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
 
 // Supabase registration service
-import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies } from '../services/providerRegistrationService';
+import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies } from '../services/providerRegistrationService';
+import type { ProviderRegistrationData } from '../services/providerRegistrationService';
 import { transferFromAcuity } from '../services/acuityTransferService';
+import { supabase } from '../lib/supabase';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem } from '../services/databaseService';
+import type { DbPortfolioItem } from '../types/database';
+
+// Colour theme picker (shared with BrandingScreen)
+import ProviderThemePicker, { type ThemeSelection } from '../components/ProviderThemePicker';
+import {
+  PROVIDER_THEMES,
+  SHEET_BG,
+  encodeThemeKey,
+  encodeCustomTheme,
+  parseThemeKey,
+  decodeCustomTheme,
+} from '../constants/providerThemes';
 
 // Navigation types
 import { ProfileStackParamList } from '../navigation/types';
@@ -101,27 +116,9 @@ const GRADIENT_PRESETS: Array<{ name: string; colors: [string, string, ...string
 ];
 
 // Provider data interface for registration
-interface ProviderRegistrationData {
-  providerName: string;
-  providerService: string;
-  customServiceType: string; // For when OTHER is selected
-  location: string;
-  aboutText: string;
-  slotsText: string;
-  gradient: [string, string, ...string[]];
-  accentColor: string; // User-selected accent color
-  logo: string | null;
-  categories: Record<string, ServiceData[]>;
-  phone: string;
-  email: string;
-  instagram: string;
-  website: string;
-  yearsExperience: string;
-  // Address privacy
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
-  fullAddress: string;
-  addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
-}
+// ProviderRegistrationData now comes from providerRegistrationService — kept
+// as a single source of truth so fields (like profileTheme) never drift out
+// of sync between the two.
 
 // ─── Policy types ────────────────────────────────────────────────────────────
 type CancelNotice     = 'none' | '24h' | '48h' | '72h';
@@ -144,6 +141,9 @@ interface ProviderPolicies {
   depositNote:      string;
   noShowAction:     NoShowAction;
   noShowNote:       string;
+  /** Optional instructions stamped onto every new booking (e.g. "please
+   *  arrive 10 minutes early") — shown to clients in their booking details */
+  bookingInstructions: string;
 }
 
 const DEFAULT_POLICIES: ProviderPolicies = {
@@ -159,6 +159,7 @@ const DEFAULT_POLICIES: ProviderPolicies = {
   depositNote:      '',
   noShowAction:     'none',
   noShowNote:       '',
+  bookingInstructions: '',
 };
 
 // Add-on interface
@@ -1418,6 +1419,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     slotsText: 'Slots out every 15th of the month',
     gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
     accentColor: '#7B1FA2',
+    profileTheme: 'app',
     logo: null,
     categories: {},
     phone: '',
@@ -1448,15 +1450,127 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         }
       })
       .catch(() => {});
-    AsyncStorage.getItem(`provider_policies_${user.id}`)
-      .then(raw => { if (raw) setPolicies(JSON.parse(raw)); })
+    // Load saved policies from Supabase (source of truth), falling back to
+    // the local cache inside loadProviderPolicies. Merge over defaults so
+    // fields added later (e.g. bookingInstructions) are never undefined.
+    loadProviderPolicies(user.id)
+      .then(saved => { if (saved) setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) }); })
       .catch(() => {});
   }, [user?.id]);
 
+  // ── Colour theme selection (shared picker, same as Branding & Style) ──────
+  const [themeSel, setThemeSel] = useState<ThemeSelection>({
+    themeChoice: 'app',
+    customBackdrop: '#E3C7CF',
+    customCard: '#F9E9EE',
+    customAccent: '#D98BA6',
+    sheetColor: SHEET_BG,
+  });
+
+  // Derive picker state whenever the stored key changes (initial load / save)
+  useEffect(() => {
+    const { base, sheet } = parseThemeKey(providerData.profileTheme);
+    const custom = decodeCustomTheme(base);
+    setThemeSel(prev => ({
+      themeChoice: custom ? 'custom' : (base ?? 'app'),
+      customBackdrop: custom?.backdrop ?? prev.customBackdrop,
+      customCard: custom?.card ?? prev.customCard,
+      customAccent: custom?.accent ?? prev.customAccent,
+      sheetColor: sheet,
+    }));
+  }, [providerData.profileTheme]);
+
+  const handleThemeChange = useCallback((next: ThemeSelection) => {
+    setThemeSel(next);
+    const isCustom = next.themeChoice === 'custom';
+    const preset = PROVIDER_THEMES.find(t => t.key === next.themeChoice);
+    const accent = isCustom ? next.customAccent : preset?.tokens.accent ?? next.customAccent;
+    const backdrop = isCustom ? next.customBackdrop : preset?.tokens.hero ?? next.customBackdrop;
+    const baseKey = isCustom
+      ? encodeCustomTheme(next.customBackdrop, next.customCard, next.customAccent)
+      : next.themeChoice;
+    setProviderData(prev => ({
+      ...prev,
+      accentColor: accent,
+      gradient: [backdrop, next.sheetColor],
+      profileTheme: encodeThemeKey(baseKey, next.sheetColor),
+    }));
+  }, []);
+
+  // ── Portfolio (client work gallery shown on the public profile) ───────────
+  const [providerDbId, setProviderDbId] = useState<string | null>(null);
+  const [portfolioItems, setPortfolioItems] = useState<DbPortfolioItem[]>([]);
+  const [portfolioUploading, setPortfolioUploading] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('providers').select('id').eq('user_id', user.id).maybeSingle()
+      .then(({ data }) => { if (data?.id) setProviderDbId(data.id); });
+  }, [user?.id, isEditMode]);
+
+  useEffect(() => {
+    if (!providerDbId) return;
+    getProviderPortfolio(providerDbId).then(setPortfolioItems).catch(() => {});
+  }, [providerDbId]);
+
+  const handleAddPortfolioImages = useCallback(async () => {
+    if (!user?.id || !providerDbId) return;
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) return;
+
+    setPortfolioUploading(true);
+    try {
+      for (const asset of result.assets) {
+        const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+        const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+        const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const { error: upErr } = await supabase.storage
+          .from('portfolio')
+          .upload(path, bytes, { contentType, upsert: true });
+        if (upErr) throw new Error(upErr.message);
+        const { data: pub } = supabase.storage.from('portfolio').getPublicUrl(path);
+        const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
+        const item = await addPortfolioItem(providerDbId, pub.publicUrl, ratio);
+        setPortfolioItems(prev => [item, ...prev]);
+      }
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message ?? 'Could not upload image.');
+    } finally {
+      setPortfolioUploading(false);
+    }
+  }, [user?.id, providerDbId]);
+
+  const handleRemovePortfolioItem = useCallback(async (item: DbPortfolioItem) => {
+    try {
+      await deletePortfolioItem(item.id);
+      setPortfolioItems(prev => prev.filter(p => p.id !== item.id));
+      // Best-effort storage cleanup — the row is the source of truth
+      const marker = '/portfolio/';
+      const idx = item.image_url.indexOf(marker);
+      if (idx !== -1) {
+        const path = decodeURIComponent(item.image_url.slice(idx + marker.length));
+        try { await supabase.storage.from('portfolio').remove([path]); } catch { /* ignore */ }
+      }
+    } catch {
+      Alert.alert('Error', 'Could not remove photo.');
+    }
+  }, []);
+
   // Modal states
-  const [showGradientPicker, setShowGradientPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAccentColorPicker, setShowAccentColorPicker] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
@@ -1644,6 +1758,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setIsSubmitting(true);
     try {
       await saveProviderToSupabase(user.id, providerData);
+      await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
       Alert.alert(
         'Profile Saved!',
         'Your provider profile has been saved successfully.',
@@ -1655,7 +1770,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user]);
+  }, [providerData, user, policies]);
 
   // Get adaptive accent color - now uses user-selected accent color
   const adaptiveAccentColor = useMemo(() => {
@@ -1692,14 +1807,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onSkip={() => setShowTransferModal(false)}
         />
 
-        {/* Gradient Picker Modal */}
-        <GradientPickerModal
-          visible={showGradientPicker}
-          onClose={() => setShowGradientPicker(false)}
-          onSelect={(colors) => setProviderData({ ...providerData, gradient: colors })}
-          currentGradient={providerData.gradient}
-        />
-
         {/* Add Category Modal */}
         <AddCategoryModal
           visible={showCategoryModal}
@@ -1717,14 +1824,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onSave={handleSaveService}
           service={editingService}
           categoryName={currentCategory}
-        />
-
-        {/* Accent Color Picker Modal */}
-        <AccentColorPickerModal
-          visible={showAccentColorPicker}
-          onClose={() => setShowAccentColorPicker(false)}
-          onSelect={(color) => setProviderData({ ...providerData, accentColor: color })}
-          currentColor={providerData.accentColor}
         />
 
         {/* Edit Category Modal */}
@@ -1916,7 +2015,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
             </BlurView>
 
-            {/* Gradient Picker */}
+            {/* Colour Theme — accent + card colour + backdrop, shared with Branding & Style */}
             <BlurView intensity={50} tint="light" style={styles.card}>
               <LinearGradient
                 colors={['rgba(255,255,255,0.3)', 'transparent']}
@@ -1924,37 +2023,69 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
-              <Text style={styles.sectionTitle}>Profile Theme</Text>
+              <Text style={styles.sectionTitle}>Colour Theme</Text>
               <Text style={styles.sectionSubtitle}>
-                Choose a gradient and accent color for your brand
+                Each option is three colours — accent, card colour, and backdrop (shown behind
+                your profile as a gradient). Pick a set or build your own with Custom, then
+                choose the content-area colour below.
+              </Text>
+              <ProviderThemePicker
+                value={themeSel}
+                onChange={handleThemeChange}
+                textColor="#000"
+                subColor="rgba(0,0,0,0.6)"
+                borderColor="rgba(0,0,0,0.15)"
+                sepColor="rgba(0,0,0,0.1)"
+              />
+            </BlurView>
+
+            {/* Portfolio — client work gallery shown on your public profile */}
+            <BlurView intensity={50} tint="light" style={styles.card}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
+              <Text style={styles.sectionTitle}>Portfolio</Text>
+              <Text style={styles.sectionSubtitle}>
+                Photos of your work, shown on your public profile in a two-column gallery.
               </Text>
 
-              {/* Gradient Selector */}
-              <Text style={styles.inputLabel}>Background Gradient</Text>
-              <TouchableOpacity
-                style={styles.gradientSelector}
-                onPress={() => setShowGradientPicker(true)}
-              >
-                <LinearGradient
-                  colors={providerData.gradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.gradientPreviewLarge}
-                />
-                <Text style={styles.gradientSelectorText}>Tap to change gradient</Text>
-              </TouchableOpacity>
+              <View style={styles.portfolioGrid}>
+                {portfolioItems.map(item => (
+                  <View key={item.id} style={styles.portfolioThumbWrap}>
+                    <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} />
+                    <TouchableOpacity
+                      style={styles.portfolioRemoveBtn}
+                      onPress={() => handleRemovePortfolioItem(item)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.portfolioRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
 
-              {/* Accent Color Selector */}
-              <View style={{ marginTop: 15 }}>
-                <Text style={styles.inputLabel}>Accent Color</Text>
                 <TouchableOpacity
-                  style={styles.gradientSelector}
-                  onPress={() => setShowAccentColorPicker(true)}
+                  style={styles.portfolioAddTile}
+                  onPress={handleAddPortfolioImages}
+                  activeOpacity={0.8}
+                  disabled={portfolioUploading || !providerDbId}
                 >
-                  <View style={[styles.accentColorPreview, { backgroundColor: providerData.accentColor }]} />
-                  <Text style={styles.gradientSelectorText}>Tap to change accent color</Text>
+                  {portfolioUploading ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <>
+                      <Text style={styles.portfolioAddPlus}>+</Text>
+                      <Text style={styles.portfolioAddText}>Add Photos</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
+
+              {!providerDbId && (
+                <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
+              )}
             </BlurView>
 
             {/* About Section */}
@@ -2497,6 +2628,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   onChangeText={v => setPolicy('noShowNote', v)}
                 />
 
+                <View style={styles.policySep} />
+
+                {/* Booking instructions — stamped onto every new booking */}
+                <Text style={styles.policySectionTitle}>Booking Instructions</Text>
+                <Text style={styles.policyLabel}>SHOWN TO CLIENTS ON EVERY BOOKING (OPTIONAL)</Text>
+                <TextInput
+                  style={styles.policyNote}
+                  placeholder='e.g. "Please arrive 10 minutes early", parking info…'
+                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  value={policies.bookingInstructions}
+                  onChangeText={v => setPolicy('bookingInstructions', v)}
+                  multiline
+                />
+
                 {/* ── Business Setup ── */}
                 <View style={styles.policySep} />
                 <Text style={styles.policySectionTitle}>Business Setup</Text>
@@ -2731,6 +2876,61 @@ const styles = StyleSheet.create({
     height: 40,
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
+  },
+
+  // Portfolio manager
+  portfolioGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  portfolioThumbWrap: {
+    position: 'relative',
+    width: 84,
+    height: 84,
+  },
+  portfolioThumb: {
+    width: 84,
+    height: 84,
+    borderRadius: 14,
+  },
+  portfolioRemoveBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portfolioRemoveText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  portfolioAddTile: {
+    width: 84,
+    height: 84,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portfolioAddPlus: {
+    fontSize: 22,
+    color: 'rgba(0,0,0,0.5)',
+    fontWeight: '300',
+    lineHeight: 24,
+  },
+  portfolioAddText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 9,
+    color: 'rgba(0,0,0,0.5)',
+    marginTop: 2,
   },
 
   // Section Titles

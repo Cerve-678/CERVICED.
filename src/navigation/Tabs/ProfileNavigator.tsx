@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import UserProfileScreen from '../../screens/UserProfileScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
 import ProviderChatScreen from '../../screens/ProviderChatScreen';
+import MessagesScreen from '../../screens/MessagesScreen';
 import ProfileInfoScreen from '../../screens/ProfileInfoScreen';
 import BeautyProfileScreen from '../../screens/BeautyProfileScreen';
 import ChangePasswordScreen from '../../screens/ChangePasswordScreen';
@@ -96,6 +97,12 @@ export default function ProfileNavigator() {
         name="ProviderChat"
         component={ProviderChatScreen}
         options={{ headerShown: true, presentation: 'card', headerBackTitle: 'Back' }}
+      />
+
+      <ProfileStack.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{ headerShown: true, title: 'Messages', headerBackTitle: 'Back' }}
       />
 
       <ProfileStack.Screen

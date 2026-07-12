@@ -180,6 +180,42 @@ export async function getMyProviderProfile(): Promise<DbProvider | null> {
 // PORTFOLIO
 // ─────────────────────────────────────────────────────────
 
+/** Fetch one provider's portfolio items (client work gallery), newest first */
+export async function getProviderPortfolio(providerId: string): Promise<DbPortfolioItem[]> {
+  const { data, error } = await supabase
+    .from('portfolio_items')
+    .select('*')
+    .eq('provider_id', providerId)
+    .order('is_featured', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (error) throw error;
+  return (data ?? []) as DbPortfolioItem[];
+}
+
+/** Add a portfolio item for a provider (image already uploaded to storage) */
+export async function addPortfolioItem(
+  providerId: string,
+  imageUrl: string,
+  aspectRatio: number = 1
+): Promise<DbPortfolioItem> {
+  const { data, error } = await supabase
+    .from('portfolio_items')
+    .insert({ provider_id: providerId, image_url: imageUrl, aspect_ratio: aspectRatio })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as DbPortfolioItem;
+}
+
+/** Delete a portfolio item by id */
+export async function deletePortfolioItem(id: string): Promise<void> {
+  const { error } = await supabase.from('portfolio_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(category?: string): Promise<PortfolioItemWithProvider[]> {
   let query = supabase
@@ -371,12 +407,17 @@ export async function getMyProviderServices(): Promise<import('../types/database
   return data ?? [];
 }
 
-/** Mark a promotion's scheduled notification as sent */
-export async function markScheduledNotifSent(promoId: string): Promise<void> {
-  await supabase
+/** Claim a promotion's scheduled notification. Returns false when another
+ *  sender (the scheduled-promotion cron job) already claimed it — callers
+ *  must claim BEFORE sending so clients never get the blast twice. */
+export async function markScheduledNotifSent(promoId: string): Promise<boolean> {
+  const { data } = await supabase
     .from('promotions')
     .update({ notify_sent_at: new Date().toISOString() })
-    .eq('id', promoId);
+    .eq('id', promoId)
+    .is('notify_sent_at', null)
+    .select('id');
+  return (data ?? []).length > 0;
 }
 
 /** Get all unique clients who have booked this provider, with stats */
@@ -589,9 +630,12 @@ export async function sendAnnouncement(
   if (clientIds.length === 0) return { sent: 0 };
 
   const providerName = (provider as any).display_name ?? 'Your provider';
+  // 'announcement' (not 'provider_message') — provider_message is a
+  // provider-only type that NotificationsScreen hides in client mode,
+  // so announcements sent under it were invisible to clients.
   const notifications = clientIds.map(uid => ({
     user_id: uid,
-    type: 'provider_message' as const,
+    type: 'announcement' as const,
     title: `${providerName} — ${title}`,
     message: body,
     is_read: false,
@@ -700,6 +744,29 @@ export async function getProviderIdByDisplayName(name: string): Promise<string |
   return (data as any)?.id ?? null;
 }
 
+/**
+ * Check whether another active booking already occupies this exact slot.
+ * Mirrors the bookings_no_double_book_idx partial unique index — the index is
+ * the hard guarantee; this is the friendly pre-check so the user gets a clear
+ * "slot taken" message instead of a failed insert.
+ */
+export async function isSlotTaken(
+  providerId: string,
+  bookingDate: string,
+  bookingTime24: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id')
+    .eq('provider_id', providerId)
+    .eq('booking_date', bookingDate)
+    .eq('booking_time', bookingTime24)
+    .not('status', 'in', '(cancelled,no_show)')
+    .limit(1);
+  if (error) return false; // fail open — the unique index is the backstop
+  return (data?.length ?? 0) > 0;
+}
+
 /** Create a new booking with its add-ons */
 export async function createBooking(
   booking: Omit<DbBooking, 'id' | 'created_at' | 'updated_at' | 'confirmed_at'>,
@@ -712,7 +779,9 @@ export async function createBooking(
     throw new Error('Booking date cannot be in the past.');
   }
 
-  // 2. Provider must be open on that day of the week
+  // 2. Provider must have published a schedule, and be open on that day.
+  //    No availability row = the provider never set their hours — they are
+  //    not bookable until they do (no silent default schedule).
   const bookingDayOfWeek = new Date(booking.booking_date + 'T12:00:00').getDay(); // 0=Sun
   const { data: availability } = await supabase
     .from('provider_availability')
@@ -721,7 +790,10 @@ export async function createBooking(
     .eq('day_of_week', bookingDayOfWeek)
     .maybeSingle();
 
-  if (availability?.is_closed) {
+  if (!availability) {
+    throw new Error("This provider hasn't published their schedule yet, so they can't take bookings right now.");
+  }
+  if (availability.is_closed) {
     throw new Error('The provider is not available on that day.');
   }
 
@@ -737,10 +809,22 @@ export async function createBooking(
     throw new Error('The provider is unavailable on that date.');
   }
 
-  // 4. No overlapping confirmed/pending bookings for same provider + date
-  //    Determine the service duration (default 60 min if unknown)
-  let durationMinutes = 60;
-  if (booking.service_id) {
+  // 4. Determine this booking's real time span. Priority:
+  //    caller-provided end_time → service duration_minutes → 60 min default.
+  //    The span is what gets blocked in the calendar, so it must never be
+  //    zero-length — an end_time equal to the start would leave the rest of
+  //    the appointment open for someone else to book.
+  const toMinutes = (t: string): number => {
+    const [hh, mm] = t.split(':');
+    return Number(hh ?? 0) * 60 + Number(mm ?? 0);
+  };
+  const startMins = toMinutes(booking.booking_time);
+
+  let durationMinutes = 0;
+  if (booking.end_time && toMinutes(booking.end_time) > startMins) {
+    durationMinutes = toMinutes(booking.end_time) - startMins;
+  }
+  if (durationMinutes <= 0 && booking.service_id) {
     const { data: service } = await supabase
       .from('services')
       .select('duration_minutes')
@@ -748,19 +832,22 @@ export async function createBooking(
       .maybeSingle();
     if (service?.duration_minutes) durationMinutes = service.duration_minutes;
   }
+  if (durationMinutes <= 0) durationMinutes = 60;
 
-  const timeParts = booking.booking_time.split(':');
-  const h = Number(timeParts[0] ?? 0);
-  const m = Number(timeParts[1] ?? 0);
-  const startMins = h * 60 + m;
-  const endMins = startMins + durationMinutes;
+  const endMins = Math.min(startMins + durationMinutes, 23 * 60 + 59);
+  const endTimeStr = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}:00`;
 
+  // Persist the guaranteed end_time so every future overlap check, calendar
+  // view and auto-complete job sees the appointment's true span
+  booking = { ...booking, end_time: endTimeStr };
+
+  // 5. No overlapping active bookings for same provider + date
   const { data: conflicts } = await supabase
     .from('bookings')
     .select('booking_time, end_time, service_id')
     .eq('provider_id', booking.provider_id)
     .eq('booking_date', booking.booking_date)
-    .in('status', ['pending', 'confirmed']);
+    .in('status', ['pending', 'confirmed', 'in_progress']);
 
   if (conflicts) {
     for (const existing of conflicts) {
@@ -843,6 +930,70 @@ export async function getProviderBookings(): Promise<BookingWithAddOns[]> {
   return (data ?? []) as BookingWithAddOns[];
 }
 
+/** A provider_conversations row joined with the client's basic profile info */
+export interface ProviderConversationWithClient {
+  id: string;
+  provider_id: string;
+  user_id: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread_count_user: number;
+  unread_count_provider: number;
+  created_at: string;
+  updated_at: string;
+  client: { id: string; name: string; avatar_url: string | null } | null;
+}
+
+/** Fetch all conversations for the current provider, most recently updated first */
+export async function getProviderConversations(): Promise<ProviderConversationWithClient[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+
+  const { data, error } = await supabase
+    .from('provider_conversations')
+    .select(`
+      *,
+      client: users ( id, name, avatar_url )
+    `)
+    .eq('provider_id', provider.id)
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as unknown as ProviderConversationWithClient[];
+}
+
+/** A provider_conversations row joined with the provider's public info */
+export interface UserConversationWithProvider {
+  id: string;
+  provider_id: string;
+  user_id: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread_count_user: number;
+  unread_count_provider: number;
+  created_at: string;
+  updated_at: string;
+  provider: { id: string; slug: string; display_name: string; logo_url: string | null } | null;
+}
+
+/** Fetch all conversations for the current client user, most recently updated first */
+export async function getUserConversations(): Promise<UserConversationWithProvider[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('provider_conversations')
+    .select(`
+      *,
+      provider: providers ( id, slug, display_name, logo_url )
+    `)
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as unknown as UserConversationWithProvider[];
+}
+
 /** Fetch bookings for a provider on a specific date */
 export async function getProviderBookingsByDate(
   providerId: string,
@@ -921,7 +1072,7 @@ export async function insertProviderNotification(params: {
 
   if (!provider?.user_id) return; // provider not found or no linked user
 
-  await supabase.from('notifications').insert({
+  const { error } = await supabase.from('notifications').insert({
     user_id: provider.user_id,
     type: params.type,
     title: params.title,
@@ -931,6 +1082,12 @@ export async function insertProviderNotification(params: {
     booking_id: params.booking_id ?? null,
     provider_id: params.provider_id,
   });
+  if (error) {
+    // Surface the failure — callers decide whether it's fatal. Swallowing it
+    // here is how RLS-blocked inserts went unnoticed.
+    console.warn('[insertProviderNotification] insert failed:', error.message);
+    throw error;
+  }
 }
 
 /** Count unread notifications */
@@ -1052,7 +1209,9 @@ export async function getAvailableSlots(
   providerId: string,
   date: string
 ): Promise<string[]> {
-  const dayOfWeek = new Date(date).getDay();
+  // T12:00:00 keeps the day stable across timezones (bare YYYY-MM-DD parses
+  // as UTC midnight, which is the previous day west of Greenwich)
+  const dayOfWeek = new Date(date + 'T12:00:00').getDay();
 
   // Fetch provider's schedule for that day
   const { data: avail, error: availError } = await supabase
@@ -1064,7 +1223,16 @@ export async function getAvailableSlots(
 
   if (availError || !avail || avail.is_closed) return [];
 
-  // Fetch existing confirmed bookings on that date
+  // A blocked date has no slots regardless of the weekly schedule
+  const { data: blocked } = await supabase
+    .from('provider_blocked_dates')
+    .select('id')
+    .eq('provider_id', providerId)
+    .eq('blocked_date', date)
+    .maybeSingle();
+  if (blocked) return [];
+
+  // Fetch existing active bookings on that date
   const { data: existingBookings } = await supabase
     .from('bookings')
     .select('booking_time, end_time')
@@ -1072,23 +1240,31 @@ export async function getAvailableSlots(
     .eq('booking_date', date)
     .in('status', ['confirmed', 'pending', 'in_progress']);
 
-  // Generate 30-minute slots between open and close time
-  const slots: string[] = [];
-  const bookedTimes = new Set(
-    (existingBookings ?? []).map((b: any) => b.booking_time.slice(0, 5))
-  );
+  // Booked intervals in minutes-since-midnight (end falls back to start+60)
+  const toMins = (t: string): number => {
+    const [h, m] = t.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  const bookedIntervals = (existingBookings ?? []).map((b: any) => {
+    const start = toMins(b.booking_time);
+    const end = b.end_time ? toMins(b.end_time) : start + 60;
+    return [start, end > start ? end : start + 60] as const;
+  });
 
+  // Generate 30-minute slots between open and close time, skipping any slot
+  // that falls INSIDE an existing booking, not just ones sharing its start
+  const slots: string[] = [];
   const [openH, openM] = avail.open_time.split(':').map(Number);
   const [closeH, closeM] = avail.close_time.split(':').map(Number);
   let current = openH * 60 + openM;
   const end = closeH * 60 + closeM;
 
   while (current < end) {
-    const h = Math.floor(current / 60).toString().padStart(2, '0');
-    const m = (current % 60).toString().padStart(2, '0');
-    const slot = `${h}:${m}`;
-    if (!bookedTimes.has(slot)) {
-      slots.push(slot);
+    const overlapsBooking = bookedIntervals.some(([s, e]) => current >= s && current < e);
+    if (!overlapsBooking) {
+      const h = Math.floor(current / 60).toString().padStart(2, '0');
+      const m = (current % 60).toString().padStart(2, '0');
+      slots.push(`${h}:${m}`);
     }
     current += 30;
   }
@@ -1193,7 +1369,7 @@ export async function updateBookingDateTime(
 export async function markBalanceCollected(bookingId: string): Promise<void> {
   const { error } = await supabase
     .from('bookings')
-    .update({ remaining_balance: 0, payment_status: 'paid' })
+    .update({ remaining_balance: 0, payment_status: 'fully_paid' })
     .eq('id', bookingId);
   if (error) throw error;
 }
@@ -1241,7 +1417,7 @@ export async function insertBookingUserNotification(params: {
     .single();
   if (!booking?.user_id) return;
 
-  await supabase.from('notifications').insert({
+  const { error } = await supabase.from('notifications').insert({
     user_id: booking.user_id,
     type: params.type,
     title: params.title,
@@ -1251,6 +1427,10 @@ export async function insertBookingUserNotification(params: {
     booking_id: params.booking_id,
     provider_id: params.provider_id ?? null,
   });
+  if (error) {
+    console.warn('[insertBookingUserNotification] insert failed:', error.message);
+    throw error;
+  }
 }
 
 // ── Provider Availability ─────────────────────────────────────────────────────
@@ -1300,6 +1480,19 @@ export async function updateProviderCancellationPolicy(
   const { error } = await supabase
     .from('providers')
     .update({ cancellation_notice_hours: noticeHours })
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+/** Mirror the Automations screen settings onto the providers row so client
+ *  screens and pg_cron jobs can read them (auth user_metadata cannot be). */
+export async function updateProviderAutomationSettings(
+  providerId: string,
+  settings: NonNullable<DbProvider['automation_settings']>,
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update({ automation_settings: settings })
     .eq('id', providerId);
   if (error) throw error;
 }
@@ -1590,7 +1783,45 @@ export async function sendLibraryFormToClient(
     .update({ sent_count: (lf.sent_count ?? 0) + 1 })
     .eq('id', libraryFormId);
 
+  await notifyClientIntakeFormSent(clientUserId, bookingId, provider.id, lf.title, provider.display_name);
+
   return mapIntakeForm(data);
+}
+
+/** Tell the client (in-app + push via DB trigger) that a form is waiting for them.
+ *  Non-fatal — the form itself is already created when this runs. */
+async function notifyClientIntakeFormSent(
+  clientUserId: string,
+  bookingId: string,
+  providerId: string,
+  formTitle: string,
+  providerName?: string | null,
+): Promise<void> {
+  try {
+    let name = providerName;
+    if (!name) {
+      const { data } = await supabase
+        .from('providers')
+        .select('display_name')
+        .eq('id', providerId)
+        .maybeSingle();
+      name = (data as any)?.display_name ?? 'Your provider';
+    }
+    await supabase.from('notifications').insert({
+      user_id: clientUserId,
+      type: 'intake_form_received' as const,
+      title: 'Form to Complete',
+      message: `${name} sent you "${formTitle}" to fill in before your appointment.`,
+      is_read: false,
+      priority: 'high' as const,
+      is_actionable: true,
+      booking_id: bookingId,
+      provider_id: providerId,
+      metadata: {},
+    });
+  } catch {
+    // best-effort only
+  }
 }
 
 function mapLibraryForm(d: any): LibraryForm {
@@ -1621,6 +1852,9 @@ export async function createIntakeForm(
     .single();
 
   if (error) throw error;
+
+  await notifyClientIntakeFormSent(clientUserId, bookingId, providerId, title);
+
   return mapIntakeForm(data);
 }
 
@@ -1691,6 +1925,222 @@ export async function getMyProviderIntakeForms(): Promise<IntakeForm[]> {
     .order('created_at', { ascending: false })
     .limit(15);
   return (data ?? []).map(mapIntakeForm);
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDER FORMS INBOX (received responses — quick-access view)
+// ─────────────────────────────────────────────────────────
+
+export interface ReceivedIntakeForm extends IntakeForm {
+  customerName: string | null;
+  serviceName: string | null;
+  bookingDate: string | null;
+}
+
+/** All intake forms the provider has sent, newest activity first, with
+ *  booking context — powers the received-responses inbox. */
+export async function getMyReceivedIntakeForms(): Promise<ReceivedIntakeForm[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+  const { data, error } = await supabase
+    .from('booking_intake_forms')
+    .select('*, booking:bookings ( customer_name, service_name_snapshot, booking_date )')
+    .eq('provider_id', provider.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) return [];
+  return (data ?? []).map((d: any) => ({
+    ...mapIntakeForm(d),
+    customerName: d.booking?.customer_name ?? null,
+    serviceName:  d.booking?.service_name_snapshot ?? null,
+    bookingDate:  d.booking?.booking_date ?? null,
+  }));
+}
+
+export interface InfoPackReceipt {
+  id: string;
+  bookingId: string;
+  title: string;
+  service: string;
+  viewedAt: string | null;
+  createdAt: string;
+  customerName: string | null;
+  serviceName: string | null;
+  bookingDate: string | null;
+}
+
+/** Info packs sent with bookings + whether the client has read them. */
+export async function getMyInfoPackReceipts(): Promise<InfoPackReceipt[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+  const { data, error } = await supabase
+    .from('booking_info_packs')
+    .select('id, booking_id, title, service, viewed_at, created_at, booking:bookings ( customer_name, service_name_snapshot, booking_date )')
+    .eq('provider_id', provider.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) return [];
+  return (data ?? []).map((d: any) => ({
+    id:           d.id,
+    bookingId:    d.booking_id,
+    title:        d.title,
+    service:      d.service ?? 'GENERAL',
+    viewedAt:     d.viewed_at ?? null,
+    createdAt:    d.created_at,
+    customerName: d.booking?.customer_name ?? null,
+    serviceName:  d.booking?.service_name_snapshot ?? null,
+    bookingDate:  d.booking?.booking_date ?? null,
+  }));
+}
+
+// ─────────────────────────────────────────────────────────
+// BOOKING INFO PACKS (prep/aftercare info attached to bookings —
+// see supabase/info_packs_bookings.sql)
+// ─────────────────────────────────────────────────────────
+
+export interface BookingInfoPack {
+  id: string;
+  bookingId: string;
+  providerId: string;
+  title: string;
+  service: string;
+  content: string;
+  viewedAt: string | null;
+  createdAt: string;
+}
+
+function mapBookingInfoPack(d: any): BookingInfoPack {
+  return {
+    id:        d.id,
+    bookingId: d.booking_id,
+    providerId: d.provider_id,
+    title:     d.title,
+    service:   d.service ?? 'GENERAL',
+    content:   d.content,
+    viewedAt:  d.viewed_at ?? null,
+    createdAt: d.created_at,
+  };
+}
+
+/** Info packs the provider attached to one booking (client view) */
+export async function getInfoPacksByBooking(bookingId: string): Promise<BookingInfoPack[]> {
+  const { data, error } = await supabase
+    .from('booking_info_packs')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  return (data ?? []).map(mapBookingInfoPack);
+}
+
+/** Mark an info pack as read — clears it from the booking's attention badge */
+export async function markInfoPackViewed(packId: string): Promise<void> {
+  await supabase
+    .from('booking_info_packs')
+    .update({ viewed_at: new Date().toISOString() })
+    .eq('id', packId);
+}
+
+/** Booking ids that need the client's attention (pending intake forms +
+ *  unread info packs) → drives the "!" indicator on booking cards. */
+export async function getMyBookingActionItems(): Promise<Record<string, number>> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return {};
+
+  const counts: Record<string, number> = {};
+
+  const [{ data: forms }, { data: packs }] = await Promise.all([
+    supabase
+      .from('booking_intake_forms')
+      .select('booking_id')
+      .eq('client_user_id', user.id)
+      .eq('status', 'pending'),
+    supabase
+      .from('booking_info_packs')
+      .select('booking_id')
+      .eq('client_user_id', user.id)
+      .is('viewed_at', null),
+  ]);
+
+  for (const r of [...(forms ?? []), ...(packs ?? [])]) {
+    counts[r.booking_id] = (counts[r.booking_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
+// ─────────────────────────────────────────────────────────
+// PROMO CODES (client redemption at checkout)
+// ─────────────────────────────────────────────────────────
+
+/** Look up a live promotion by promo code for a provider (by display name).
+ *  Returns null when the code doesn't exist, is inactive, or is outside its
+ *  validity window. */
+export async function validatePromoCode(
+  providerDisplayName: string,
+  code: string,
+): Promise<DbPromotion | null> {
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+
+  const { data: provider } = await supabase
+    .from('providers')
+    .select('id')
+    .eq('display_name', providerDisplayName)
+    .maybeSingle();
+  if (!provider) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from('promotions')
+    .select('*')
+    .eq('provider_id', (provider as any).id)
+    .ilike('promo_code', trimmed)
+    .eq('is_active', true)
+    .lte('valid_from', today)
+    .gte('valid_until', today)
+    .limit(1)
+    .maybeSingle();
+
+  return (data as DbPromotion) ?? null;
+}
+
+// ─────────────────────────────────────────────────────────
+// RESCHEDULE POLICY (client-side enforcement of provider limits)
+// ─────────────────────────────────────────────────────────
+
+export interface ProviderReschedulePolicy {
+  /** null = unlimited */
+  maxReschedules: number | null;
+  /** hours of notice required before the appointment; 0 = same day allowed */
+  rescheduleNoticeHours: number;
+}
+
+/** Parse the provider's booking_policies reschedule settings.
+ *  Values come from registration: rescheduleNotice 'same_day'|'24h'|'48h'|'72h',
+ *  maxReschedules '1'|'2'|'unlimited'. Missing policy = 1 reschedule, 24h notice
+ *  (matches the app's historical defaults). */
+export async function getProviderReschedulePolicyByDisplayName(
+  displayName: string,
+): Promise<ProviderReschedulePolicy> {
+  const fallback: ProviderReschedulePolicy = { maxReschedules: 1, rescheduleNoticeHours: 24 };
+  const { data } = await supabase
+    .from('providers')
+    .select('booking_policies')
+    .eq('display_name', displayName)
+    .maybeSingle();
+
+  const bp = (data as any)?.booking_policies as {
+    rescheduleNotice?: string;
+    maxReschedules?: string;
+  } | null;
+  if (!bp) return fallback;
+
+  const max = bp.maxReschedules === 'unlimited'
+    ? null
+    : parseInt(bp.maxReschedules ?? '1', 10) || 1;
+  const noticeMap: Record<string, number> = { same_day: 0, '24h': 24, '48h': 48, '72h': 72 };
+  const notice = noticeMap[bp.rescheduleNotice ?? '24h'] ?? 24;
+  return { maxReschedules: max, rescheduleNoticeHours: notice };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2119,7 +2569,12 @@ export async function getProviderDepositPoliciesByDisplayNames(
       depositNote?: string;
     } | null;
 
-    if (policies && policies.depositAmount) {
+    // Provider explicitly turned deposits OFF → client pays in full, no
+    // deposit option in the cart. (Previously this switch was ignored and
+    // any leftover amount kept the deposit option alive.)
+    if (policies && policies.depositRequired === false) {
+      result[p.display_name] = { depositType: 'percentage', depositAmount: 0, depositAvailable: false };
+    } else if (policies && policies.depositAmount) {
       const depositType: 'percentage' | 'fixed' = policies.depositType === 'fixed' ? 'fixed' : 'percentage';
       const depositAmount = Number(policies.depositAmount);
       result[p.display_name] = {

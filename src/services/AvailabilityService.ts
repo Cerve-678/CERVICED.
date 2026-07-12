@@ -189,7 +189,9 @@ export const AvailabilityService = {
     serviceDuration?: string
   ): Promise<TimeSlot[]> {
     try {
-      const dateObj = new Date(date);
+      // T12:00:00 keeps the weekday stable across timezones (bare YYYY-MM-DD
+      // parses as UTC midnight — the previous day west of Greenwich)
+      const dateObj = new Date(date + 'T12:00:00');
       const dayOfWeek = dateObj.getDay();
 
       const today = new Date();
@@ -249,7 +251,10 @@ export const AvailabilityService = {
         let baseSlots: string[];
         let closeTimeMins: number | null = null;
         if (!avail) {
-          baseSlots = getDefaultProviderSchedule(providerName)[dayOfWeek] ?? [];
+          // Real provider with NO published hours for this day — not bookable.
+          // No silent default schedule: a provider must set their schedule
+          // before clients can see any slots.
+          return [];
         } else if (avail.is_closed) {
           return [];
         } else {
@@ -266,17 +271,16 @@ export const AvailabilityService = {
           });
         }
 
-        // Drop slots within minimum booking notice window
+        // Drop slots within minimum booking notice window — applied to EVERY
+        // date, not just today: a 48h notice policy must also hide tomorrow
+        // morning's slots.
         if (minNoticeHrs > 0) {
           const earliestAllowedMs = Date.now() + minNoticeHrs * 60 * 60 * 1000;
-          const isToday = date === new Date().toISOString().split('T')[0];
-          if (isToday) {
-            baseSlots = baseSlots.filter(time => {
-              const slotDate = new Date(`${date}T00:00:00`);
-              slotDate.setMinutes(parseTimeToMinutes(time));
-              return slotDate.getTime() >= earliestAllowedMs;
-            });
-          }
+          baseSlots = baseSlots.filter(time => {
+            const slotDate = new Date(`${date}T00:00:00`);
+            slotDate.setMinutes(parseTimeToMinutes(time));
+            return slotDate.getTime() >= earliestAllowedMs;
+          });
         }
 
         if (baseSlots.length === 0) return [];
@@ -287,7 +291,7 @@ export const AvailabilityService = {
           .select('booking_time, end_time')
           .eq('provider_id', providerId)
           .eq('booking_date', date)
-          .in('status', ['pending', 'confirmed']);
+          .in('status', ['pending', 'confirmed', 'in_progress']);
 
         return baseSlots.map(time => {
           const slotStart = parseTimeToMinutes(time);
@@ -367,7 +371,7 @@ export const AvailabilityService = {
         }
 
         // Check the slot falls within the provider's working hours
-        const dayOfWeek = new Date(date).getDay();
+        const dayOfWeek = new Date(date + 'T12:00:00').getDay();
         const { data: avail } = await supabase
           .from('provider_availability')
           .select('open_time, close_time, is_closed')
@@ -375,16 +379,18 @@ export const AvailabilityService = {
           .eq('day_of_week', dayOfWeek)
           .maybeSingle();
 
-        if (avail?.is_closed) {
+        if (!avail) {
+          // No published hours for this day — provider isn't bookable on it
+          return { hasConflict: true, message: "The provider hasn't published their schedule for this day." };
+        }
+        if (avail.is_closed) {
           return { hasConflict: true, message: 'Provider is closed on this day.' };
         }
 
-        if (avail) {
-          const openMins = parse24HTimeToMinutes(avail.open_time);
-          const closeMins = parse24HTimeToMinutes(avail.close_time);
-          if (newStartMinutes < openMins || newEndMinutes > closeMins) {
-            return { hasConflict: true, message: 'This time is outside the provider\'s working hours.' };
-          }
+        const openMins = parse24HTimeToMinutes(avail.open_time);
+        const closeMins = parse24HTimeToMinutes(avail.close_time);
+        if (newStartMinutes < openMins || newEndMinutes > closeMins) {
+          return { hasConflict: true, message: 'This time is outside the provider\'s working hours.' };
         }
 
         // Check existing Supabase bookings for overlap
@@ -393,7 +399,7 @@ export const AvailabilityService = {
           .select('booking_time, end_time')
           .eq('provider_id', providerId)
           .eq('booking_date', date)
-          .in('status', ['pending', 'confirmed']);
+          .in('status', ['pending', 'confirmed', 'in_progress']);
 
         const conflict = (existingBookings ?? []).find(booked => {
           const bookedStart = parse24HTimeToMinutes(booked.booking_time);

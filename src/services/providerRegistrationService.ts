@@ -42,6 +42,7 @@ export interface ProviderRegistrationData {
   slotsText: string;
   gradient: [string, string, ...string[]];
   accentColor: string;
+  profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
   logo: string | null;
   categories: Record<string, ServiceData[]>;
   // Contact info displayed to clients
@@ -172,6 +173,7 @@ export async function saveProviderToSupabase(
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
+        profile_theme: data.profileTheme || 'app',
         phone: data.phone || null,
         email: data.email || null,
         instagram: data.instagram || null,
@@ -206,6 +208,7 @@ export async function saveProviderToSupabase(
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
+        profile_theme: data.profileTheme || 'app',
         phone: data.phone || null,
         email: data.email || null,
         instagram: data.instagram || null,
@@ -400,6 +403,7 @@ export async function loadProviderFromSupabase(
     slotsText: provider.slots_text || '',
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
     accentColor: provider.accent_color || '#7B1FA2',
+    profileTheme: provider.profile_theme || 'app',
     logo: provider.logo_url || null,
     categories,
     phone: provider.phone || '',

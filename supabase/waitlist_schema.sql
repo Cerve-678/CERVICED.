@@ -56,4 +56,12 @@ CREATE POLICY "Waitlist participants can see and manage their entries"
   );
 
 -- Enable realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.provider_waitlist;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND tablename = 'provider_waitlist'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.provider_waitlist;
+  END IF;
+END $$;

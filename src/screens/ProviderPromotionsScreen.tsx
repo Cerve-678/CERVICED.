@@ -1425,15 +1425,17 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
       setClients(clientData);
       setServices(svcData);
 
-      // Auto-send any scheduled notifications that are now due
+      // Fallback sender for scheduled notifications that are now due — the
+      // scheduled-promotion cron job (client_automation_jobs.sql) normally
+      // handles these; claim first so clients never get the blast twice.
       const now = new Date();
       const duePromos = data.filter(
         p => p.scheduled_notify_at && !p.notify_sent_at && new Date(p.scheduled_notify_at) <= now
       );
       for (const p of duePromos) {
         try {
-          await sendPromotionNotificationsToClients(p, 'all');
-          await markScheduledNotifSent(p.id);
+          const claimed = await markScheduledNotifSent(p.id);
+          if (claimed) await sendPromotionNotificationsToClients(p, 'all');
         } catch {}
       }
       if (duePromos.length > 0) {

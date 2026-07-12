@@ -31,10 +31,10 @@ import * as Location from 'expo-location';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useFont } from '../contexts/FontContext';
-import { useBooking, ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
+import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../contexts/BookingContext';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, ProviderContactInfo, getProviderAddressSettingsByDisplayName, ProviderAddressSettings, getProviderCancellationPolicy } from '../services/databaseService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, ProviderContactInfo, getProviderAddressSettingsByDisplayName, ProviderAddressSettings, getProviderCancellationPolicy, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, ProviderReschedulePolicy } from '../services/databaseService';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -50,7 +50,8 @@ interface BookingCardProps {
   onPress: (booking: ConfirmedBooking) => void;
   isHighlighted?: boolean;
   isRecentlyAdded?: boolean;
-  rowHasTag?: boolean;
+  /** Pending intake forms + unread info packs — shows the "!" attention badge */
+  actionCount?: number;
 }
 
 type GroupedListItem = { kind: 'category'; serviceType: string; bookings: ConfirmedBooking[] };
@@ -602,7 +603,7 @@ const GroupBookingCard = React.memo<GroupBookingCardProps>(
 
 // ✅ OPTIMIZED BookingCard - NO INLINE FUNCTIONS
 const BookingCard = React.memo<BookingCardProps>(
-  ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, rowHasTag = false }) => {
+  ({ booking, onPress, isHighlighted = false, isRecentlyAdded = false, rowHasTag = false, actionCount = 0 }) => {
     const { theme, isDarkMode } = useTheme();
     const styles = useMemo(() => createStyles(theme, isDarkMode), [theme, isDarkMode]);
     const statusColors = {
@@ -690,6 +691,17 @@ const BookingCard = React.memo<BookingCardProps>(
               {isRecentlyAdded && booking.status === BookingStatus.UPCOMING && (
                 <View style={styles.recentlyAddedDot} />
               )}
+              {/* "!" — forms or info packs waiting for the client */}
+              {actionCount > 0 && booking.status !== BookingStatus.CANCELLED && (
+                <View style={{
+                  position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20,
+                  borderRadius: 10, backgroundColor: '#FF3B30', alignItems: 'center',
+                  justifyContent: 'center', paddingHorizontal: 4, zIndex: 2,
+                  borderWidth: 1.5, borderColor: '#fff',
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', lineHeight: 14 }}>!</Text>
+                </View>
+              )}
             </View>
             <View style={rowHasTag ? styles.providerInfoFixed : styles.providerInfo}>
               <Text style={styles.providerName} numberOfLines={1}>
@@ -776,6 +788,24 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       .catch(() => {});
   }, [user?.id]);
 
+  // Pending intake forms + unread info packs per booking — drives the "!" badge
+  const refreshBookingActionItems = useCallback(() => {
+    if (!user?.id) return;
+    getMyBookingActionItems()
+      .then(setBookingActionItems)
+      .catch(() => {});
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshBookingActionItems();
+  }, [refreshBookingActionItems, upcomingBookings.length]);
+
+  // Re-check when returning to this screen (e.g. after filling an intake form)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', refreshBookingActionItems);
+    return unsubscribe;
+  }, [navigation, refreshBookingActionItems]);
+
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
     setActiveFilters(prev => {
       if (prev.has(filter)) {
@@ -830,6 +860,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [selectedRescheduleMonth, setSelectedRescheduleMonth] = useState<Date>(new Date());
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
   const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
+  const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
+  const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
+  const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
+  const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
   const [selectedBookingAddrSettings, setSelectedBookingAddrSettings] = useState<ProviderAddressSettings | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
   const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
@@ -942,23 +976,27 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
 
-  // ✅ Check if messaging is available (within 72 hours before or after appointment)
-  const isMessagingAvailable = useCallback((bookingDate: string) => {
-    const appointmentDate = new Date(bookingDate);
-    const now = new Date();
-    const hoursDifference = Math.abs((appointmentDate.getTime() - now.getTime()) / (1000 * 60 * 60));
-    return hoursDifference <= 72;
-  }, []);
+  // In-app messaging is always available — the old ±72-hour window around the
+  // appointment is gone. (Signature kept so the call sites stay unchanged.)
+  const isMessagingAvailable = useCallback((_bookingDate: string) => true, []);
 
   const handleBookingPress = useCallback((booking: ConfirmedBooking) => {
     setSelectedBooking(booking);
     setBookingIntakeForm(null);
+    setBookingInfoPacks([]);
+    setReschedulePolicy(null);
     setSelectedBookingAddrSettings(null);
     setAddrCountdown('');
     setCancellationNoticeHrs(0);
     setModalVisible(true);
     getIntakeFormByBooking(booking.id)
       .then(f => setBookingIntakeForm(f))
+      .catch(() => {});
+    getInfoPacksByBooking(booking.id)
+      .then(p => setBookingInfoPacks(p))
+      .catch(() => {});
+    getProviderReschedulePolicyByDisplayName(booking.providerName)
+      .then(p => setReschedulePolicy(p))
       .catch(() => {});
     if (!booking.clientAddress) {
       getProviderAddressSettingsByDisplayName(booking.providerName)
@@ -1022,6 +1060,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       // No add-ons, add directly to cart
       const cartItem = {
         providerName: booking.providerName,
+        providerId: booking.providerId,
         providerImage: booking.providerImage,
         providerService: booking.providerService,
         service: {
@@ -1078,6 +1117,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const cartItem = {
       providerName: selectedBooking.providerName,
+      providerId: selectedBooking.providerId,
       providerImage: selectedBooking.providerImage,
       providerService: selectedBooking.providerService,
       service: {
@@ -1106,9 +1146,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const handleCancelBooking = useCallback(async () => {
     if (!selectedBooking) return;
 
-    // Enforce provider's cancellation notice window
+    // Enforce provider's cancellation notice window.
+    // bookingTime is a 12h display string ("2:30 PM") — template-literal Date
+    // parsing produced Invalid Date/NaN, which silently skipped this check.
     if (cancellationNoticeHrs > 0 && selectedBooking.bookingDate && selectedBooking.bookingTime) {
-      const appointmentMs = new Date(`${selectedBooking.bookingDate}T${selectedBooking.bookingTime}`).getTime();
+      const appointmentMs = createBookingDateTime(selectedBooking.bookingDate, selectedBooking.bookingTime).getTime();
       const hoursUntil = (appointmentMs - Date.now()) / 3_600_000;
       if (hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs) {
         Alert.alert(
@@ -1156,10 +1198,35 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
+    // Enforce the provider's own reschedule policy (set at registration)
+    if (reschedulePolicy) {
+      const used = selectedBooking.rescheduleRequest?.rescheduleCount ?? 0;
+      if (reschedulePolicy.maxReschedules !== null && used >= reschedulePolicy.maxReschedules) {
+        setModalVisible(false);
+        setCooldownMessage(
+          `${selectedBooking.providerName} allows ${reschedulePolicy.maxReschedules} reschedule${reschedulePolicy.maxReschedules === 1 ? '' : 's'} per booking. Please contact them directly to change this appointment.`
+        );
+        setShowCooldownModal(true);
+        return;
+      }
+      if (reschedulePolicy.rescheduleNoticeHours > 0 && selectedBooking.bookingDate && selectedBooking.bookingTime) {
+        const start = createBookingDateTime(selectedBooking.bookingDate, selectedBooking.bookingTime);
+        const hoursUntil = (start.getTime() - Date.now()) / 3_600_000;
+        if (hoursUntil >= 0 && hoursUntil < reschedulePolicy.rescheduleNoticeHours) {
+          setModalVisible(false);
+          setCooldownMessage(
+            `${selectedBooking.providerName} requires ${reschedulePolicy.rescheduleNoticeHours} hours' notice to reschedule. Please contact them directly.`
+          );
+          setShowCooldownModal(true);
+          return;
+        }
+      }
+    }
+
     setModalVisible(false);
     setSelectedRescheduleMonth(new Date()); // Reset to current month
     setShowRescheduleModal(true);
-  }, [selectedBooking, canReschedule]);
+  }, [selectedBooking, canReschedule, reschedulePolicy]);
 
   const handleRescheduleConfirm = useCallback(async () => {
     if (!selectedBooking || selectedDates.length === 0) {
@@ -1292,8 +1359,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
     setIsLoading(true);
     try {
-      // Look up Supabase provider UUID by display name
-      const providerId = await getProviderIdByDisplayName(selectedBooking.providerName);
+      // The booking's stored provider UUID is the source of truth; the
+      // display-name lookup is only a legacy fallback
+      const providerId = selectedBooking.providerId
+        ?? await getProviderIdByDisplayName(selectedBooking.providerName);
 
       if (providerId) {
         // Check not already reviewed
@@ -2355,6 +2424,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                 isHighlighted={highlightedBookingId === booking.id}
                                 isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
                                 rowHasTag={rowHasTag}
+                                actionCount={bookingActionItems[booking.id] ?? 0}
                               />
                             )}
                             showsHorizontalScrollIndicator={false}
@@ -2609,34 +2679,76 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                             </View>
                           </View>
 
-                          {/* ── TO DO: Intake Form ── */}
-                          {bookingIntakeForm && bookingIntakeForm.status === 'pending' && (
+                          {/* ── TO DO: Intake form + info packs from the provider ── */}
+                          {((bookingIntakeForm && bookingIntakeForm.status === 'pending') || bookingInfoPacks.length > 0) && (
                             <View style={styles.modalSection}>
                               <Text style={styles.modalSectionTitle}>TO DO</Text>
-                              <TouchableOpacity
-                                style={styles.intakeFormTodo}
-                                activeOpacity={0.8}
-                                onPress={() => {
-                                  setModalVisible(false);
-                                  navigation.navigate('ClientIntakeForm', {
-                                    formId: bookingIntakeForm.id,
-                                    bookingId: bookingIntakeForm.bookingId,
-                                  });
-                                }}
-                              >
-                                <View style={styles.intakeFormTodoIcon}>
-                                  <Text style={{ fontSize: 20 }}>📋</Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.intakeFormTodoTitle}>{bookingIntakeForm.title}</Text>
-                                  <Text style={styles.intakeFormTodoSub}>
-                                    Your provider needs this before your appointment — tap to fill out
-                                  </Text>
-                                </View>
-                                <View style={styles.intakeFormTodoBadge}>
-                                  <Text style={styles.intakeFormTodoBadgeText}>Required</Text>
-                                </View>
-                              </TouchableOpacity>
+                              {bookingIntakeForm && bookingIntakeForm.status === 'pending' && (
+                                <TouchableOpacity
+                                  style={styles.intakeFormTodo}
+                                  activeOpacity={0.8}
+                                  onPress={() => {
+                                    setModalVisible(false);
+                                    navigation.navigate('ClientIntakeForm', {
+                                      formId: bookingIntakeForm.id,
+                                      bookingId: bookingIntakeForm.bookingId,
+                                      serviceName: selectedBooking.serviceName,
+                                    });
+                                  }}
+                                >
+                                  <View style={styles.intakeFormTodoIcon}>
+                                    <Text style={{ fontSize: 20 }}>📋</Text>
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.intakeFormTodoTitle}>{bookingIntakeForm.title}</Text>
+                                    <Text style={styles.intakeFormTodoSub}>
+                                      Your provider needs this before your appointment — tap to fill out
+                                    </Text>
+                                  </View>
+                                  <View style={styles.intakeFormTodoBadge}>
+                                    <Text style={styles.intakeFormTodoBadgeText}>Required</Text>
+                                  </View>
+                                </TouchableOpacity>
+                              )}
+                              {bookingInfoPacks.map(pack => (
+                                <TouchableOpacity
+                                  key={pack.id}
+                                  style={[styles.intakeFormTodo, pack.viewedAt ? { opacity: 0.72 } : null]}
+                                  activeOpacity={0.8}
+                                  onPress={() => {
+                                    setViewingPack(pack);
+                                    if (!pack.viewedAt) {
+                                      const readAt = new Date().toISOString();
+                                      markInfoPackViewed(pack.id).catch(() => {});
+                                      setBookingInfoPacks(prev =>
+                                        prev.map(p => (p.id === pack.id ? { ...p, viewedAt: readAt } : p))
+                                      );
+                                      setBookingActionItems(prev => {
+                                        const next = { ...prev };
+                                        const left = (next[pack.bookingId] ?? 1) - 1;
+                                        if (left <= 0) delete next[pack.bookingId];
+                                        else next[pack.bookingId] = left;
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <View style={styles.intakeFormTodoIcon}>
+                                    <Text style={{ fontSize: 20 }}>📄</Text>
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.intakeFormTodoTitle}>{pack.title}</Text>
+                                    <Text style={styles.intakeFormTodoSub}>
+                                      Prep & aftercare info from your provider — tap to read
+                                    </Text>
+                                  </View>
+                                  {!pack.viewedAt && (
+                                    <View style={styles.intakeFormTodoBadge}>
+                                      <Text style={styles.intakeFormTodoBadgeText}>New</Text>
+                                    </View>
+                                  )}
+                                </TouchableOpacity>
+                              ))}
                             </View>
                           )}
 
@@ -2851,7 +2963,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           <View style={styles.receiptRow}>
                                             <Text style={styles.receiptLabel}>Payment Method</Text>
                                             <Text style={styles.receiptValue}>
-                                              {{ card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' }[(selectedBooking as any).paymentMethod] ?? 'Card'}
+                                              {({ card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' } as Record<string, string>)[selectedBooking.paymentMethod ?? ''] ?? 'Card'}
                                             </Text>
                                           </View>
                                         </View>
@@ -2893,7 +3005,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           <View style={styles.receiptRow}>
                                             <Text style={styles.receiptLabel}>Payment Method</Text>
                                             <Text style={styles.receiptValue}>
-                                              {{ card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' }[(selectedBooking as any).paymentMethod] ?? 'Card'}
+                                              {({ card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay' } as Record<string, string>)[selectedBooking.paymentMethod ?? ''] ?? 'Card'}
                                             </Text>
                                           </View>
                                           <View style={styles.receiptFullyPaidBadge}>
@@ -2998,15 +3110,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       ) : (() => {
                                         // Non-mobile: check real release state
                                         const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
+                                        // 12h display time needs the shared parser — template-literal
+                                        // Date parsing gave NaN, keeping the address locked forever
                                         const apptMs = selectedBooking.bookingDate && selectedBooking.bookingTime
-                                          ? new Date(`${selectedBooking.bookingDate}T${selectedBooking.bookingTime}`).getTime()
+                                          ? createBookingDateTime(selectedBooking.bookingDate, selectedBooking.bookingTime).getTime()
                                           : null;
-                                        const hoursUntilAppt = apptMs ? (apptMs - Date.now()) / 3_600_000 : null;
+                                        const hoursUntilAppt = apptMs && !isNaN(apptMs) ? (apptMs - Date.now()) / 3_600_000 : null;
                                         const policyHoursMap: Record<string, number> = {
                                           day_before: 24, two_days_before: 48, three_days_before: 72,
                                           five_days_before: 120, week_before: 168,
                                         };
-                                        const policyHrs = policy ? policyHoursMap[policy] : null;
+                                        const policyHrs = (policy ? policyHoursMap[policy] : null) ?? null;
                                         const timeBasedReleased = policyHrs !== null && hoursUntilAppt !== null && hoursUntilAppt <= policyHrs;
                                         const isReleased = !!selectedBooking.addressReleasedAt
                                           || policy === 'always'
@@ -3071,6 +3185,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       <Text style={{ fontFamily: 'Jura-SemiBold', fontSize: 13, color: '#FF9500' }}>Awaiting Confirmation</Text>
                                       <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: '#FF950099', marginTop: 2 }}>
                                         Your provider hasn't confirmed this booking yet. You'll be notified once it's confirmed.
+                                        If they don't respond within 48 hours the request expires automatically.
                                       </Text>
                                     </View>
                                   </View>
@@ -3668,6 +3783,55 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           </TouchableWithoutFeedback>
         </Modal>
 
+        {/* ── INFO PACK READER — prep/aftercare info sent by the provider ── */}
+        <Modal
+          visible={!!viewingPack}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setViewingPack(null)}
+          statusBarTranslucent
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+            <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setViewingPack(null)} />
+            <View style={{
+              maxHeight: '78%',
+              backgroundColor: isDarkMode ? '#201D1A' : '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 22,
+              paddingTop: 14,
+              paddingBottom: 36,
+            }}>
+              <View style={{ width: 38, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)' }} />
+              {viewingPack && (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 22 }}>📄</Text>
+                    <Text style={{ flex: 1, fontSize: 19, fontWeight: '800', letterSpacing: -0.4, color: isDarkMode ? '#F0ECE7' : '#1C1A18' }} numberOfLines={2}>
+                      {viewingPack.title}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: '#AF9197', marginBottom: 14 }}>
+                    {viewingPack.service.toUpperCase()} • FROM {selectedBooking?.providerName?.toUpperCase() ?? 'YOUR PROVIDER'}
+                  </Text>
+                  <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
+                    <Text style={{ fontSize: 15, lineHeight: 23, color: isDarkMode ? '#D8D2CB' : '#3A3733' }}>
+                      {viewingPack.content}
+                    </Text>
+                  </ScrollView>
+                  <TouchableOpacity
+                    style={{ marginTop: 18, borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: '#AF9197' }}
+                    activeOpacity={0.85}
+                    onPress={() => setViewingPack(null)}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Done</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         {/* ✅ RATING MODAL - LOCKS AFTER FIRST SUBMISSION */}
         <Modal
           visible={showRatingModal}
@@ -3883,7 +4047,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     activeOpacity={0.7}
                     onPress={() => {
                       setContactSheetVisible(false);
-                      if (contactSheetBooking) {
+                      if (!contactSheetBooking) return;
+                      if (contactSheetBooking.providerId) {
+                        // Real persistent chat — same screen as "Get In Touch"
+                        // on the provider profile. Provider sees it in their inbox.
+                        navigation.navigate('ProviderChat', {
+                          providerId: contactSheetBooking.providerId, // slug unused by the screen
+                          providerDbId: contactSheetBooking.providerId,
+                          providerName: contactSheetBooking.providerName,
+                        });
+                      } else {
+                        // Legacy local booking with no provider link — old modal fallback
                         setSelectedBooking(contactSheetBooking);
                         setShowMessageModal(true);
                       }

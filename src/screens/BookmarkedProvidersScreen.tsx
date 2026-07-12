@@ -9,6 +9,7 @@ import {
   StatusBar,
   Platform,
   Animated,
+  Easing,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -130,6 +131,32 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
 
   const serviceCategories: ServiceType[] = ['ALL', 'HAIR', 'NAILS', 'MUA', 'LASHES', 'AESTHETICS', 'BROWS'];
 
+  const sliderLeft   = useRef(new Animated.Value(0)).current;
+  const sliderWidth   = useRef(new Animated.Value(0)).current;
+  const tabLayouts    = useRef<Record<string, { x: number; width: number }>>({});
+  const sliderReady   = useRef(false);
+
+  const handleTabLayout = useCallback((key: string, x: number, width: number) => {
+    tabLayouts.current[key] = { x, width };
+    if (!sliderReady.current && key === 'ALL') {
+      sliderLeft.setValue(x);
+      sliderWidth.setValue(width);
+      sliderReady.current = true;
+    }
+  }, [sliderLeft, sliderWidth]);
+
+  const handleServicePress = useCallback((service: ServiceType) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedService(service);
+    const layout = tabLayouts.current[service];
+    if (layout) {
+      Animated.parallel([
+        Animated.timing(sliderLeft,  { toValue: layout.x,     duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+        Animated.timing(sliderWidth, { toValue: layout.width, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      ]).start();
+    }
+  }, [sliderLeft, sliderWidth]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
@@ -222,30 +249,35 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.tabsContent}
             >
-              {serviceCategories.map(service => (
-                <TouchableOpacity
-                  key={service}
-                  style={styles.serviceButton}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedService(service);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.servicePill,
-                    {
-                      backgroundColor: selectedService === service ? P.accent : P.surface,
-                      borderColor: P.border,
-                      borderWidth: StyleSheet.hairlineWidth,
-                    },
-                  ]}>
-                    <Text style={[styles.serviceText, { color: selectedService === service ? '#fff' : P.text }]}>
-                      {service}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+              <View style={styles.tabBarInner}>
+                <Animated.View
+                  style={[styles.tabSlider, { backgroundColor: P.accent, left: sliderLeft, width: sliderWidth }]}
+                />
+                {serviceCategories.map(service => {
+                  const active = selectedService === service;
+                  return (
+                    <TouchableOpacity
+                      key={service}
+                      style={styles.serviceButton}
+                      onLayout={e => handleTabLayout(service, e.nativeEvent.layout.x, e.nativeEvent.layout.width)}
+                      onPress={() => handleServicePress(service)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={[
+                        styles.servicePill,
+                        {
+                          borderColor: P.border,
+                          borderWidth: StyleSheet.hairlineWidth,
+                        },
+                      ]}>
+                        <Text style={[styles.serviceText, { color: active ? '#fff' : P.text }]}>
+                          {service}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </ScrollView>
           )}
         </View>
@@ -398,8 +430,18 @@ const styles = StyleSheet.create({
 
   tabsContent: {
     paddingRight: 16,
-    gap: 8,
     flexDirection: 'row',
+  },
+  tabBarInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tabSlider: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    borderRadius: 100,
   },
   serviceButton: { marginRight: 0 },
   servicePill: {

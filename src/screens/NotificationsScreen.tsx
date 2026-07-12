@@ -49,10 +49,14 @@ interface Notification {
   id: string;
   type: 'booking_pending'   | 'booking_confirmed'   | 'booking_declined'
       | 'booking_cancelled'  | 'booking_reminder'    | 'booking_in_progress'
+      | 'booking_not_started'
       | 'no_show'            | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_response' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'review_request'     | 'review_received'
-      | 'promotion';
+      | 'promotion'          | 'intake_form_reminder' | 'provider_message'
+      | 'balance_collected'  | 'balance_reminder'     | 'new_message'
+      | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
+      | 'info_pack_received' | 'intake_form_completed';
   title: string;
   message: string;
   timestamp: string;
@@ -117,11 +121,15 @@ const notifSkeletonStyles = StyleSheet.create({
 // Notification types that only make sense for a provider
 const PROVIDER_ONLY_TYPES: Notification['type'][] = [
   'booking_pending', 'no_show', 'review_received',
+  'booking_not_started', 'intake_form_reminder', 'provider_message', 'balance_reminder',
+  'intake_form_completed',
 ];
 // Notification types that only make sense for a client
 const CLIENT_ONLY_TYPES: Notification['type'][] = [
   'new_provider', 'promotion', 'review_request',
   'reschedule_provider_response', 'booking_declined',
+  'announcement', 'intake_form_received', 'waitlist_slot_available',
+  'info_pack_received',
 ];
 
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
@@ -312,7 +320,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'review_received' ||
         notification.type === 'reschedule_request' ||
         notification.type === 'reschedule_provider_response' ||
-        notification.type === 'reschedule_confirmed') {
+        notification.type === 'reschedule_confirmed' ||
+        notification.type === 'booking_not_started' ||
+        notification.type === 'balance_reminder' ||
+        notification.type === 'balance_collected' ||
+        notification.type === 'intake_form_received' ||
+        notification.type === 'info_pack_received') {
 
       const openReschedule = notification.type === 'reschedule_request' ||
                             notification.type === 'reschedule_provider_response';
@@ -341,6 +354,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           navigation.dispatch(StackActions.replace('Bookings', bookingsParams));
         }
       }, 300);
+    } else if (notification.type === 'waitlist_slot_available') {
+      // A slot opened up — take the client straight to the provider to book
+      if (!notification.providerId) return;
+      setTimeout(() => {
+        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' }));
+      }, 300);
     } else if (notification.type === 'new_provider') {
       if (__DEV__) console.log('Navigating to ProviderProfile');
       if (__DEV__) console.log('Provider ID:', notification.providerId);
@@ -360,6 +379,87 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         navigation.goBack();
         if (__DEV__) console.log('Navigation to Home executed');
       }, 300);
+    } else if (notification.type === 'announcement') {
+      // Provider broadcast — open that provider's profile if we know them
+      if (notification.providerId) {
+        const providerId = notification.providerId;
+        setTimeout(() => {
+          navigation.dispatch(StackActions.replace('ProviderProfile', { providerId, source: 'notification' }));
+        }, 300);
+      } else {
+        setTimeout(() => navigation.goBack(), 300);
+      }
+    } else if (notification.type === 'intake_form_reminder' || notification.type === 'intake_form_completed') {
+      // reminder → open the send-a-form flow; completed → open responses readonly
+      const viewResponses = notification.type === 'intake_form_completed';
+      if (!notification.bookingId) return;
+      const bookingId = notification.bookingId;
+      setTimeout(async () => {
+        const { data: booking } = await supabase
+          .from('bookings')
+          .select('user_id, service_name_snapshot')
+          .eq('id', bookingId)
+          .maybeSingle();
+        if (!booking) return;
+        navigation.dispatch(CommonActions.goBack() as any);
+        setTimeout(() => {
+          navigation.dispatch(
+            CommonActions.navigate({
+              name: 'ProviderIntakeForm',
+              params: {
+                bookingId,
+                clientUserId: booking.user_id,
+                serviceName: booking.service_name_snapshot,
+                ...(viewResponses ? { formId: 'view' } : {}),
+              },
+            }) as any
+          );
+          if (__DEV__) console.log('Provider — navigating to ProviderIntakeForm:', bookingId);
+        }, 500);
+      }, 300);
+    } else if (notification.type === 'provider_message') {
+      if (__DEV__) console.log('Navigating to ProviderInbox (Messages)');
+      setTimeout(() => {
+        navigation.dispatch(CommonActions.goBack() as any);
+        setTimeout(() => {
+          navigation.dispatch(
+            CommonActions.navigate({ name: 'ProviderInbox', params: { initialFilter: 'messages' } }) as any
+          );
+        }, 500);
+      }, 300);
+    } else if (notification.type === 'new_message') {
+      // Chat message — providers land in the inbox Messages tab; clients open
+      // the chat with that provider (slug + name looked up from provider_id)
+      if (isProviderRef.current) {
+        setTimeout(() => {
+          navigation.dispatch(CommonActions.goBack() as any);
+          setTimeout(() => {
+            navigation.dispatch(
+              CommonActions.navigate({ name: 'ProviderInbox', params: { initialFilter: 'messages' } }) as any
+            );
+          }, 500);
+        }, 300);
+      } else {
+        if (!notification.providerId) return;
+        const providerDbId = notification.providerId;
+        setTimeout(async () => {
+          const { data: prov } = await supabase
+            .from('providers')
+            .select('slug, display_name')
+            .eq('id', providerDbId)
+            .maybeSingle();
+          if (!prov) return;
+          navigation.dispatch(CommonActions.goBack() as any);
+          setTimeout(() => {
+            navigation.dispatch(
+              CommonActions.navigate({
+                name: 'ProviderChat',
+                params: { providerId: prov.slug, providerDbId, providerName: prov.display_name },
+              }) as any
+            );
+          }, 500);
+        }, 300);
+      }
     }
   }, [navigation]);
 
@@ -408,10 +508,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Bell color logic based on notification type
   const getBellColor = (type: string) => {
     if (['booking_cancelled', 'booking_declined', 'no_show'].includes(type)) return '#FF1744';
-    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress'].includes(type)) return '#4CAF50';
-    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response'].includes(type)) return '#FF9500';
+    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'balance_collected', 'intake_form_completed'].includes(type)) return '#4CAF50';
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'booking_not_started', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'balance_reminder'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider'].includes(type)) return '#AF9197';
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement'].includes(type)) return '#AF9197';
     return '#FF9800';
   };
 
@@ -444,6 +544,26 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Rate Now';
       case 'review_received':
         return 'View Review';
+      case 'booking_not_started':
+        return 'Start Booking';
+      case 'intake_form_reminder':
+        return 'Send Form';
+      case 'intake_form_received':
+        return 'Fill In Form';
+      case 'intake_form_completed':
+        return 'View Responses';
+      case 'info_pack_received':
+        return 'Read Info';
+      case 'announcement':
+        return 'View Provider';
+      case 'provider_message':
+        return 'Open Inbox';
+      case 'new_message':
+        return 'Open Chat';
+      case 'balance_reminder':
+        return 'Collect Payment';
+      case 'balance_collected':
+        return 'View Booking';
       default:
         return 'View';
     }

@@ -9,6 +9,11 @@
 ALTER TABLE public.notifications
   DROP CONSTRAINT IF EXISTS notifications_type_check;
 
+-- NOTE: this list must stay a SUPERSET of every type the app inserts —
+-- keep it in sync with provider_reminder_jobs.sql STEP 1 and
+-- src/types/database.ts NotificationType. A narrower list here silently
+-- breaks inserts (waitlist invites, provider messages, balance nudges…)
+-- if this file is re-run after the others.
 ALTER TABLE public.notifications
   ADD CONSTRAINT notifications_type_check CHECK (type IN (
     'booking_pending',        -- new booking awaiting provider confirmation
@@ -17,6 +22,7 @@ ALTER TABLE public.notifications
     'booking_cancelled',      -- booking cancelled (after confirmation)
     'booking_reminder',       -- upcoming appointment reminder
     'booking_in_progress',    -- provider started the session
+    'booking_not_started',    -- confirmed booking past start time, not started
     'no_show',                -- provider marked client as no-show
     'payment_success',        -- payment processed
     'new_provider',           -- new provider joined
@@ -25,8 +31,23 @@ ALTER TABLE public.notifications
     'reschedule_confirmed',          -- user confirmed a new date/time
     'review_request',         -- prompt user to leave a review
     'review_received',        -- provider received a new review
-    'promotion'               -- promotional offer
-  ));
+    'promotion',              -- promotional offer
+    'intake_form_reminder',   -- provider nudge: send intake form
+    'intake_form_received',   -- client got a form to fill in (client_automation_jobs.sql)
+    'intake_form_completed',  -- client sent a filled form back (info_packs_bookings.sql)
+    'info_pack_received',     -- client got prep/aftercare info (info_packs_bookings.sql)
+    'provider_message',       -- provider-side message nudges
+    'announcement',           -- provider broadcast to clients (client-visible)
+    'balance_collected',      -- remaining balance marked received
+    'balance_reminder',       -- provider nudge: outstanding balance
+    'waitlist_slot_available',-- waitlist invite after a cancellation
+    'new_message'             -- chat message received (chat_two_way_fix.sql)
+  )) NOT VALID; -- enforce new rows only; legacy rows must not fail the migration
+
+-- automation_settings mirror column (also created in client_automation_jobs.sql;
+-- repeated here because handle_booking_status_change below reads it at runtime)
+ALTER TABLE public.providers
+  ADD COLUMN IF NOT EXISTS automation_settings JSONB;
 
 -- ───────────────────────────────────────────────────────────
 -- 2. handle_new_booking is defined in automation_jobs.sql
@@ -155,20 +176,27 @@ BEGIN
   END IF;
 
   -- Booking completed → prompt user to leave a review
+  -- Honours the provider's Automations toggle (autoReviewRequest, default ON)
   IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
-    INSERT INTO public.notifications
-      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
-    VALUES (
-      NEW.user_id,
-      'review_request',
-      'How was your appointment?',
-      'Leave a review for ' || NEW.provider_name_snapshot ||
-        '. Your feedback helps others find great providers.',
-      'medium',
-      TRUE,
-      NEW.id,
-      NEW.provider_id
-    );
+    IF COALESCE((
+      SELECT (p.automation_settings->>'autoReviewRequest')::BOOLEAN
+        FROM public.providers p
+       WHERE p.id = NEW.provider_id
+    ), TRUE) THEN
+      INSERT INTO public.notifications
+        (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
+      VALUES (
+        NEW.user_id,
+        'review_request',
+        'How was your appointment?',
+        'Leave a review for ' || NEW.provider_name_snapshot ||
+          '. Your feedback helps others find great providers.',
+        'medium',
+        TRUE,
+        NEW.id,
+        NEW.provider_id
+      );
+    END IF;
     RETURN NEW;
   END IF;
 

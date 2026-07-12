@@ -29,6 +29,18 @@ export interface JoinWaitlistParams {
 }
 
 export async function joinWaitlist(params: JoinWaitlistParams): Promise<WaitlistEntry> {
+  // Remove any stale row (cancelled or otherwise) so re-joining always works
+  const staleQuery = supabase
+    .from('provider_waitlist')
+    .delete()
+    .eq('provider_id', params.providerId)
+    .eq('user_id', params.userId);
+  if (params.serviceId) {
+    await staleQuery.eq('service_id', params.serviceId);
+  } else {
+    await staleQuery.is('service_id', null);
+  }
+
   const { data, error } = await supabase
     .from('provider_waitlist')
     .insert({
@@ -50,7 +62,7 @@ export async function joinWaitlist(params: JoinWaitlistParams): Promise<Waitlist
 export async function leaveWaitlist(entryId: string): Promise<void> {
   const { error } = await supabase
     .from('provider_waitlist')
-    .update({ status: 'cancelled' })
+    .delete()
     .eq('id', entryId);
   if (error) throw error;
 }
@@ -106,7 +118,11 @@ export async function markAsBooked(entryId: string): Promise<void> {
   if (error) throw error;
 }
 
-// Called after a booking is cancelled — finds the first waiter for the same provider+service and notifies them
+// DEPRECATED: cancellations now invite the next waiter server-side via the
+// invite_next_waitlist_entry() function inside the booking status-change
+// trigger (supabase/booking_flow_fixes.sql). Client-side RLS hides other
+// users' waitlist rows, so calling this from the app was a silent no-op for
+// client cancellations — do not wire it back in.
 export async function notifyWaitlistOnCancellation(
   providerId: string,
   serviceId: string | null

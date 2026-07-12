@@ -26,7 +26,7 @@ const LIGHT = { bg: '#F5F1EC', card: '#FFFFFF', tile: '#E3DDD7', text: '#1C1A18'
 const ACCENT = '#AF9197';
 
 export default function ClientIntakeFormScreen({ route, navigation }: Props) {
-  const { formId } = route.params;
+  const { formId, serviceName } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
 
@@ -134,8 +134,13 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Form intro */}
+            {/* Form intro — leads with WHICH service this form is for */}
             <View style={[styles.introCard, { backgroundColor: ACCENT + '14', borderColor: ACCENT + '35' }]}>
+              {!!serviceName && (
+                <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1, color: ACCENT, marginBottom: 6 }}>
+                  FOR: {serviceName.toUpperCase()}
+                </Text>
+              )}
               <Text style={[styles.introTitle, { color: P.text }]}>{form.title}</Text>
               <Text style={[styles.introSub, { color: P.sub }]}>
                 Your provider needs this info before your appointment to give you the best possible service.

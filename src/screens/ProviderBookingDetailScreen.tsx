@@ -20,7 +20,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { useBooking, BookingStatus, ConfirmedBooking } from '../contexts/BookingContext';
+import { useBooking, BookingStatus, ConfirmedBooking, createBookingDateTime } from '../contexts/BookingContext';
 import { ProviderHomeScreenProps } from '../navigation/types';
 import { supabase } from '../lib/supabase';
 import {
@@ -33,15 +33,16 @@ import {
   getClientBeautyProfile,
   getClientBookingHistory,
   getIntakeFormByBooking,
+  getInfoPacksByBooking,
   getProviderAddressSettings,
   releaseBookingAddress,
   getBookingAddressReleasedAt,
   ClientBeautyProfile,
   IntakeForm,
+  BookingInfoPack,
   ProviderAddressSettings,
 } from '../services/databaseService';
 import type { DbBooking, ServiceCategory } from '../types/database';
-import { notifyWaitlistOnCancellation } from '../services/WaitlistService';
 import type { DbBookingRescheduleRequest } from '../types/database';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
@@ -256,10 +257,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [clientUserId, setClientUserId] = useState<string | null>(null);
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
   const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [messageText, setMessageText] = useState('');
-  const [messageSent, setMessageSent] = useState(false);
-  const [messageSending, setMessageSending] = useState(false);
+  const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [showSupportDropdown, setShowSupportDropdown] = useState(false);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
@@ -419,6 +417,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     getIntakeFormByBooking(bookingId)
       .then(f => setIntakeForm(f))
       .catch(() => {});
+    getInfoPacksByBooking(bookingId)
+      .then(p => setBookingInfoPacks(p))
+      .catch(() => {});
   }, [bookingId]);
 
   // Fetch current provider's service category once for profile filtering
@@ -508,7 +509,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       await respondToRescheduleRequest(booking.id, outboundSlots);
       await insertBookingUserNotification({
         booking_id: booking.id,
-        type: 'reschedule_response',
+        type: 'reschedule_provider_response',
         title: sendApology ? `${booking.providerName} can't make those dates` : 'Provider Responded',
         message: sendApology
           ? apologyText
@@ -638,41 +639,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     (newStatus: BookingStatus) => {
       if (!booking) return;
       const label = STATUS_LABELS[newStatus] || newStatus;
-      const notifMap: Partial<Record<BookingStatus, { type: any; title: string; message: string }>> = {
-        [BookingStatus.IN_PROGRESS]: {
-          type: 'booking_in_progress',
-          title: 'Your appointment has started',
-          message: `Your ${booking.serviceName} with ${booking.providerName} is now in progress.`,
-        },
-        [BookingStatus.COMPLETED]: {
-          type: 'review_request',
-          title: 'How was your experience?',
-          message: `Your ${booking.serviceName} with ${booking.providerName} is complete. Leave a review!`,
-        },
-        [BookingStatus.NO_SHOW]: {
-          type: 'no_show',
-          title: 'Marked as no-show',
-          message: `Your booking for ${booking.serviceName} on ${formatDisplayDate(booking.bookingDate)} was marked as a no-show.`,
-        },
-      };
       setPendingConfirm({
         title: `Mark as ${label}`,
         message: `The booking status will be updated to ${label}.`,
         confirmLabel: `Mark ${label}`,
         destructive: newStatus === BookingStatus.NO_SHOW,
         onConfirm: async () => {
+          // The on_booking_status_changed DB trigger notifies the client
+          // (in_progress / no_show / review request) — no app-side insert,
+          // or the client would be pinged twice.
           await updateBookingStatus(booking.id, newStatus);
-          const notif = notifMap[newStatus];
-          if (notif) {
-            insertBookingUserNotification({
-              booking_id: booking.id,
-              type: notif.type,
-              title: notif.title,
-              message: notif.message,
-              priority: newStatus === BookingStatus.NO_SHOW ? 'high' : 'medium',
-              provider_id: booking.providerId,
-            }).catch(() => {});
-          }
           navigation.goBack();
         },
       });
@@ -687,16 +663,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       message: 'The client will be notified that their booking is confirmed.',
       confirmLabel: 'Confirm Booking',
       onConfirm: async () => {
+        // pending → confirmed fires the DB trigger, which notifies the client
         await updateBookingStatus(booking.id, BookingStatus.UPCOMING);
-        insertBookingUserNotification({
-          booking_id: booking.id,
-          type: 'booking_confirmed',
-          title: 'Booking Confirmed',
-          message: `Your ${booking.serviceName} with ${booking.providerName} on ${formatDisplayDate(booking.bookingDate)} at ${booking.bookingTime} is confirmed.`,
-          priority: 'high',
-          is_actionable: true,
-          provider_id: booking.providerId,
-        }).catch(() => {});
         navigation.goBack();
       },
     });
@@ -710,16 +678,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       confirmLabel: 'Decline',
       destructive: true,
       onConfirm: async () => {
+        // pending → cancelled by the provider: the DB trigger sends the
+        // client the "declined" notification and invites the next waitlist
+        // entry — no app-side inserts, or both would fire twice.
         await cancelBooking(booking.id);
-        insertBookingUserNotification({
-          booking_id: booking.id,
-          type: 'booking_declined',
-          title: 'Booking Not Available',
-          message: `Unfortunately ${booking.providerName} isn't able to take your ${booking.serviceName} booking. Please rebook a different time.`,
-          priority: 'high',
-          provider_id: booking.providerId,
-        }).catch(() => {});
-        void (async () => { try { const { data } = await supabase.from('bookings').select('service_id').eq('id', booking.id).maybeSingle(); await notifyWaitlistOnCancellation(booking.providerId, data?.service_id ?? null); } catch {} })();
         navigation.goBack();
       },
     });
@@ -733,16 +695,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       confirmLabel: 'Cancel Booking',
       destructive: true,
       onConfirm: async () => {
+        // The DB trigger notifies the client and invites the next waitlist
+        // entry on cancellation — no app-side inserts needed.
         await cancelBooking(booking.id);
-        insertBookingUserNotification({
-          booking_id: booking.id,
-          type: 'booking_cancelled',
-          title: 'Booking Cancelled',
-          message: `Your ${booking.serviceName} appointment on ${formatDisplayDate(booking.bookingDate)} has been cancelled by ${booking.providerName}.`,
-          priority: 'high',
-          provider_id: booking.providerId,
-        }).catch(() => {});
-        void (async () => { try { const { data } = await supabase.from('bookings').select('service_id').eq('id', booking.id).maybeSingle(); await notifyWaitlistOnCancellation(booking.providerId, data?.service_id ?? null); } catch {} })();
         navigation.goBack();
       },
     });
@@ -775,24 +730,34 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     Linking.openURL(`tel:${booking.customerPhone}`);
   }, [booking]);
 
-  const handleSendMessage = useCallback(async () => {
-    if (!messageText.trim() || !booking) return;
-    setMessageSending(true);
+  const handleOpenChat = useCallback(async () => {
+    if (!booking?.providerId || !clientUserId) return;
     try {
-      await insertBookingUserNotification({
-        booking_id: booking.id,
-        type: 'provider_message',
-        title: `Message from ${booking.providerName}`,
-        message: messageText.trim(),
-        priority: 'high',
-        is_actionable: false,
-        provider_id: booking.providerId ?? null,
-      });
-      setMessageSent(true);
-      setMessageText('');
-    } catch {}
-    finally { setMessageSending(false); }
-  }, [booking, messageText]);
+      const clientName = booking.customerName ?? 'Client';
+
+      const { data: existing } = await supabase
+        .from('provider_conversations')
+        .select('id')
+        .eq('provider_id', booking.providerId)
+        .eq('user_id', clientUserId)
+        .maybeSingle();
+
+      if (existing?.id) {
+        navigation.navigate('ProviderConversation', { conversationId: existing.id, clientUserId, clientName });
+        return;
+      }
+
+      const { data: created, error } = await supabase
+        .from('provider_conversations')
+        .insert({ provider_id: booking.providerId, user_id: clientUserId })
+        .select('id')
+        .single();
+      if (error || !created) throw error;
+      navigation.navigate('ProviderConversation', { conversationId: created.id, clientUserId, clientName });
+    } catch {
+      Alert.alert('Error', 'Could not open chat. Try again.');
+    }
+  }, [booking, clientUserId, navigation]);
 
   const handleShare = useCallback(async () => {
     if (!booking) return;
@@ -871,6 +836,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const hasRescheduleRequest = dbReschedule?.status === 'pending' || dbReschedule?.status === 'provider_responded';
   const canRespondToReschedule = dbReschedule?.status === 'pending';
   const blurTint = isDarkMode ? 'dark' : 'light';
+
+  // ── Time-based action gating ──
+  // Start Appointment: only on the appointment day. No Show: only once the
+  // start time has passed (you can't no-show someone before they're due).
+  // Confirm: not for requests whose date/time has already gone by.
+  const apptStart = booking.bookingDate && booking.bookingTime
+    ? createBookingDateTime(booking.bookingDate, booking.bookingTime)
+    : null;
+  const isApptToday = booking.bookingDate === new Date().toISOString().split('T')[0];
+  const apptStartPassed = !!apptStart && apptStart.getTime() < Date.now();
+  const pendingExpired = isPendingConfirmation && apptStartPassed;
 
   const totalPrice = booking.price + (booking.addOns?.reduce((s: number, a: { price: number }) => s + a.price, 0) ?? 0);
   const initials = (booking.customerName || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -1222,7 +1198,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     ) : null}
                     <TouchableOpacity
                       style={[styles.contactBtn, { backgroundColor: '#a342c3' }]}
-                      onPress={() => { setMessageSent(false); setShowMessageModal(true); }}
+                      onPress={handleOpenChat}
                     >
                       <Text style={styles.contactBtnText}>Message</Text>
                     </TouchableOpacity>
@@ -1421,23 +1397,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 );
               })()}
 
-              {/* ── INTAKE FORM section ── */}
+              {/* ── FORMS & PACKS section — receiving area only, no creation here.
+                    Forms/packs are built in their own screens and auto-send. ── */}
               <View style={styles.section}>
                 <View style={styles.intakeFormHeader}>
-                  <Text style={[styles.sectionLabel, { color: P.sub }]}>INTAKE FORM</Text>
-                  {!intakeForm && clientUserId && booking && (
-                    <TouchableOpacity
-                      style={[styles.intakeFormPlusBtn, { backgroundColor: '#a342c3' + '20', borderColor: '#a342c3' + '55' }]}
-                      onPress={() => navigation.navigate('ProviderIntakeForm', {
-                        bookingId: booking.id,
-                        clientUserId: clientUserId,
-                        serviceName: booking.serviceName,
-                      })}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.intakeFormPlusBtnText, { color: '#a342c3' }]}>+ Create Form</Text>
-                    </TouchableOpacity>
-                  )}
+                  <Text style={[styles.sectionLabel, { color: P.sub }]}>FORMS & PACKS</Text>
                 </View>
                 {intakeForm ? (
                   <TouchableOpacity
@@ -1461,21 +1425,51 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         <Text style={[styles.intakeFormStatusText, {
                           color: intakeForm.status === 'completed' ? '#34C759' : '#FF9500',
                         }]}>
-                          {intakeForm.status === 'completed' ? '✓ Completed' : '⏳ Pending'}
+                          {intakeForm.status === 'completed' ? '✓ Received' : '⏳ Sent'}
                         </Text>
                       </View>
                     </View>
                     <Text style={[styles.intakeFormSub, { color: P.sub }]}>
                       {intakeForm.status === 'completed'
-                        ? 'Tap to view client responses'
-                        : 'Waiting for client to fill out'}
+                        ? 'Client responses received — tap to view'
+                        : 'Sent to client — waiting to receive'}
                     </Text>
                   </TouchableOpacity>
                 ) : (
                   <Text style={[styles.intakeFormEmpty, { color: P.sub }]}>
-                    No form sent yet — tap + Create Form to send one.
+                    No form on this booking — forms linked to this service send automatically.
                   </Text>
                 )}
+
+                {/* Info packs sent with this booking + read receipts */}
+                {bookingInfoPacks.map(pack => (
+                  <View
+                    key={pack.id}
+                    style={[styles.intakeFormCard, {
+                      marginTop: 8,
+                      backgroundColor: pack.viewedAt ? '#34C759' + '12' : P.card,
+                      borderColor: pack.viewedAt ? '#34C759' + '44' : P.border,
+                    }]}
+                  >
+                    <View style={styles.intakeFormCardInner}>
+                      <Text style={[styles.intakeFormTitle, { color: P.text }]}>📄 {pack.title}</Text>
+                      <View style={[styles.intakeFormStatus, {
+                        backgroundColor: pack.viewedAt ? '#34C759' + '22' : P.sub + '22',
+                      }]}>
+                        <Text style={[styles.intakeFormStatusText, {
+                          color: pack.viewedAt ? '#34C759' : P.sub,
+                        }]}>
+                          {pack.viewedAt ? '✓ Read' : '⏳ Sent'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.intakeFormSub, { color: P.sub }]}>
+                      {pack.viewedAt
+                        ? 'Client has read this info pack'
+                        : 'Sent to client — not read yet'}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
               {/* ── Perforated divider ── */}
@@ -1585,20 +1579,36 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         {/* ── Action buttons below the receipt ── */}
         {isPendingConfirmation && (
           <View style={styles.actions}>
-            <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+            {pendingExpired ? (
+              <Text style={{ textAlign: 'center', fontSize: 13, color: '#FF9500', marginBottom: 10 }}>
+                This request's appointment time has passed — it can no longer be confirmed.
+              </Text>
+            ) : (
+              <ActionButton color="#34C759" label="Confirm Booking" onPress={handleConfirm} />
+            )}
             <ActionButton color="#FF3B30" label="Decline Booking" onPress={handleDecline} ghost />
           </View>
         )}
         {isActive && (
           <View style={styles.actions}>
             {booking.status === BookingStatus.UPCOMING && (
-              <ActionButton color={P.accent} label="Start Appointment" onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
+              isApptToday ? (
+                <ActionButton color={P.accent} label="Start Appointment" onPress={() => handleStatusChange(BookingStatus.IN_PROGRESS)} />
+              ) : (
+                <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, marginBottom: 10 }}>
+                  {apptStartPassed
+                    ? 'The appointment day has passed — mark it No Show or Cancel.'
+                    : `You can start this appointment on ${formatDisplayDate(booking.bookingDate)}.`}
+                </Text>
+              )
             )}
             {booking.status === BookingStatus.IN_PROGRESS && (
               <ActionButton color={P.accent} label="Mark Complete" onPress={() => handleStatusChange(BookingStatus.COMPLETED)} />
             )}
             <View style={styles.secondaryActions}>
-              <ActionButton color="#FF9500" label="No Show" onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
+              {apptStartPassed && booking.status !== BookingStatus.IN_PROGRESS && (
+                <ActionButton color="#FF9500" label="No Show" onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
+              )}
               <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
             </View>
           </View>
@@ -1984,78 +1994,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── In-app message modal ── */}
-      <Modal
-        visible={showMessageModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowMessageModal(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
-            {messageSent ? (
-              <View style={styles.sentState}>
-                <Text style={styles.sentIcon}>✓</Text>
-                <Text style={[styles.sentTitle, { color: P.text }]}>Message sent</Text>
-                <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  {booking?.customerName ?? 'The client'} will see your message in their notifications.
-                </Text>
-                <TouchableOpacity
-                  style={[styles.respondModalBtn, { backgroundColor: '#a342c3', marginTop: 20, alignSelf: 'stretch' }]}
-                  onPress={() => setShowMessageModal(false)}
-                >
-                  <Text style={styles.respondModalBtnText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                <Text style={[styles.respondModalTitle, { color: P.text }]}>
-                  Message {booking?.customerName ?? 'Client'}
-                </Text>
-                <Text style={[styles.respondModalSub, { color: P.text + '88', marginBottom: 14 }]}>
-                  Sent as an in-app notification — they'll see it instantly.
-                </Text>
-                <TextInput
-                  style={[styles.respondInput, styles.apologyInput, {
-                    color: P.text,
-                    borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
-                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                  }]}
-                  value={messageText}
-                  onChangeText={setMessageText}
-                  placeholder="Type your message…"
-                  placeholderTextColor={P.text + '44'}
-                  multiline
-                  numberOfLines={4}
-                  autoFocus
-                />
-                <View style={[styles.respondModalActions, { marginTop: 12 }]}>
-                  <TouchableOpacity
-                    style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]}
-                    onPress={() => setShowMessageModal(false)}
-                  >
-                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.respondModalBtn, { backgroundColor: messageText.trim() ? '#a342c3' : '#a342c355', opacity: messageSending ? 0.6 : 1 }]}
-                    onPress={handleSendMessage}
-                    disabled={messageSending || !messageText.trim()}
-                  >
-                    {messageSending
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={styles.respondModalBtnText}>Send</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
       {/* ── Help dropdown ── */}
       <Modal
         visible={showHelpDropdown}
@@ -2160,7 +2098,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <TouchableOpacity
                 style={styles.dialogBtn}
                 activeOpacity={0.65}
-                onPress={() => { const fn = pendingConfirm.onConfirm; setPendingConfirm(null); fn(); }}
+                onPress={() => {
+                  const fn = pendingConfirm.onConfirm;
+                  setPendingConfirm(null);
+                  Promise.resolve(fn()).catch(() =>
+                    Alert.alert('Action failed', 'Could not complete this action. Check your connection and try again.')
+                  );
+                }}
               >
                 <Text style={[styles.dialogBtnText, { color: pendingConfirm.destructive ? '#FF3B30' : '#007AFF', fontWeight: '600' }]}>
                   {pendingConfirm.confirmLabel}

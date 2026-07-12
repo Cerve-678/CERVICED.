@@ -5,7 +5,7 @@ import { CartItem } from './CartContext';
 import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, isSlotTaken } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
 
@@ -203,6 +203,20 @@ export interface AppointmentData {
 
 const STORAGE_KEY = '@bookings';
 
+// Bookings that reached Supabase carry its UUID; legacy/local-only bookings
+// have "booking_…" ids and must never be sent to the DB (uuid cast error)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isDbBookingId = (id: string) => UUID_RE.test(id);
+
+// RFC4122-shaped v4 UUID (Math.random is fine here — these are correlation
+// ids, not security tokens)
+const generateUuid = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
 // ==================== HELPER FUNCTIONS ====================
@@ -274,7 +288,10 @@ const calculateEndTime = (startTime: string, duration: string): string => {
   }
 };
 
-const createBookingDateTime = (dateStr: string, timeStr: string): Date => {
+// Exported: the ONLY safe way to combine a YYYY-MM-DD date with a 12h/24h
+// display time. `new Date("YYYY-MM-DDT10:00 AM")` is Invalid Date — screens
+// that need booking timestamps must use this instead.
+export const createBookingDateTime = (dateStr: string, timeStr: string): Date => {
   try {
     if (!dateStr || typeof dateStr !== 'string' || dateStr.length < 10) {
       console.error('❌ Invalid date:', dateStr);
@@ -319,9 +336,12 @@ const determineBookingStatus = (
   currentStatus: BookingStatus
 ): BookingStatus => {
   if (
-    currentStatus === BookingStatus.CANCELLED || 
+    currentStatus === BookingStatus.CANCELLED ||
     currentStatus === BookingStatus.NO_SHOW ||
-    currentStatus === BookingStatus.COMPLETED
+    currentStatus === BookingStatus.COMPLETED ||
+    // Awaiting provider confirmation — only the provider's action (synced
+    // from the DB) moves a booking out of PENDING, never the passage of time
+    currentStatus === BookingStatus.PENDING
   ) {
     return currentStatus;
   }
@@ -342,6 +362,18 @@ const determineBookingStatus = (
     console.error('❌ Error determining status:', error);
     return BookingStatus.UPCOMING;
   }
+};
+
+// Convert "10:00 AM" → "10:00:00" for Postgres TIME type
+const timeTo24 = (t: string): string | null => {
+  const match = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return null;
+  let hh = parseInt(match[1] ?? '0');
+  const mm = parseInt(match[2] ?? '0');
+  const pp = (match[3] ?? 'AM').toUpperCase();
+  if (pp === 'PM' && hh !== 12) hh += 12;
+  else if (pp === 'AM' && hh === 12) hh = 0;
+  return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:00`;
 };
 
 const sortBookingsByDateTime = (bookings: ConfirmedBooking[]): ConfirmedBooking[] => {
@@ -410,7 +442,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     cartItemId: db.id,
     providerName: db.provider_name_snapshot,
     providerImage: db.provider_logo_snapshot ?? null,
-    providerService: '',
+    providerService: db.service_category_snapshot ?? '',
     serviceName: db.service_name_snapshot,
     serviceDescription: '',
     price: db.base_price,
@@ -519,7 +551,45 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           };
         });
         
-        const updatedBookings = migratedBookings.map((booking: ConfirmedBooking) => ({
+        // Merge authoritative fields from Supabase for bookings that exist
+        // there (status changes, provider-side reschedules, address release),
+        // and pick up bookings created on other devices. Local-only bookings
+        // (not yet synced) are kept as-is. Local reschedule/UI state is kept.
+        let mergedBookings: ConfirmedBooking[] = migratedBookings;
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const dbBookings = await getMyBookings();
+            if (dbBookings.length > 0) {
+              const dbById = new Map(dbBookings.map(d => [d.id, d]));
+              mergedBookings = migratedBookings.map((b: ConfirmedBooking) => {
+                const db = dbById.get(b.id);
+                if (!db) return b;
+                const fromDb = mapDbBookingToConfirmed(db);
+                return {
+                  ...b,
+                  status: fromDb.status,
+                  bookingDate: fromDb.bookingDate,
+                  bookingTime: fromDb.bookingTime,
+                  endTime: fromDb.endTime,
+                  providerId: fromDb.providerId ?? b.providerId,
+                  addressReleasedAt: fromDb.addressReleasedAt ?? b.addressReleasedAt,
+                  remainingBalance: fromDb.remainingBalance,
+                  paymentStatus: fromDb.paymentStatus,
+                };
+              });
+              const localIds = new Set(migratedBookings.map((b: ConfirmedBooking) => b.id));
+              const missingLocally = dbBookings
+                .filter(d => !localIds.has(d.id))
+                .map(mapDbBookingToConfirmed);
+              mergedBookings = [...mergedBookings, ...missingLocally];
+            }
+          }
+        } catch (_) {
+          // Offline or fetch failed — local copy stands
+        }
+
+        const updatedBookings = mergedBookings.map((booking: ConfirmedBooking) => ({
           ...booking,
           status: determineBookingStatus(
             booking.bookingDate,
@@ -528,10 +598,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             booking.status
           )
         }));
-        
+
         setBookings(updatedBookings);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings));
-        
+
       } else {
         if (__DEV__) console.log('No bookings in storage — trying Supabase fallback...');
         try {
@@ -731,8 +801,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         'reschedule_pending'
       );
 
-      // Notify provider in Supabase
-      const rescheduleProviderId = await getProviderIdByDisplayName(booking.providerName);
+      // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
+      const rescheduleProviderId = booking.providerId
+        ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
       if (rescheduleProviderId) {
         const dateList = preferredDates.slice(0, 3).join(', ');
         insertProviderNotification({
@@ -769,15 +840,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       if (!targetBooking) throw new Error('Booking not found');
 
-      // ✅ FIX: Skip if booking is no longer pending (was cancelled or already confirmed)
-      if (!targetBooking.isPendingReschedule) {
-        if (__DEV__) console.log(`[${targetBooking.providerName}] Skipping - booking ${bookingId} is no longer pending reschedule`);
-        return;
-      }
-
       // ✅ FIX: Skip if provider already responded (prevent duplicate responses)
       if (targetBooking.rescheduleRequest?.providerAvailableDates) {
         if (__DEV__) console.log(`[${targetBooking.providerName}] Skipping - provider already responded for booking ${bookingId}`);
+        return;
+      }
+
+      // Not pending locally + no client request on file = PROVIDER-initiated
+      // reschedule (provider proposed new slots directly). Only accept it for
+      // bookings that can still move; a cancelled/completed booking stays put.
+      if (!targetBooking.isPendingReschedule &&
+          targetBooking.status !== BookingStatus.UPCOMING &&
+          targetBooking.status !== BookingStatus.PENDING) {
+        if (__DEV__) console.log(`[${targetBooking.providerName}] Skipping - booking ${bookingId} is ${targetBooking.status}, cannot reschedule`);
         return;
       }
 
@@ -790,11 +865,13 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // ✅ Update only the specific booking
       const updatedBooking: ConfirmedBooking = {
         ...targetBooking,
-        isPendingReschedule: true, // ✅ Still true, but now has dates (AVAILABLE state)
+        isPendingReschedule: true, // ✅ AVAILABLE state (also entered directly for provider-initiated reschedules)
         rescheduleRequest: {
           ...targetBooking.rescheduleRequest,
-          originalDate: targetBooking.rescheduleRequest?.originalDate,
-          originalTime: targetBooking.rescheduleRequest?.originalTime,
+          // Provider-initiated requests have no prior originals — fall back to
+          // the booking's current date/time so the UI can show what's moving
+          originalDate: targetBooking.rescheduleRequest?.originalDate ?? targetBooking.bookingDate,
+          originalTime: targetBooking.rescheduleRequest?.originalTime ?? targetBooking.bookingTime,
           requestedDates: targetBooking.rescheduleRequest?.requestedDates,
           requestedAt: targetBooking.rescheduleRequest?.requestedAt,
           rescheduleCount: targetBooking.rescheduleRequest?.rescheduleCount,
@@ -831,6 +908,79 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [saveBookings]);
 
+  // Realtime: apply provider reschedule responses the moment they land, plus a
+  // catch-up sweep on mount for responses that arrived while the app was
+  // closed. Without this, the response only surfaced via the push-notification
+  // deep link — if push failed or the user opened Bookings manually, the
+  // provider's offered dates never appeared.
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyProviderResponse = async (
+      bookingId: string,
+      slots: AvailableDate[] | null | undefined
+    ) => {
+      if (!slots || slots.length === 0) return;
+      try {
+        await providerRespondToReschedule(bookingId, slots);
+      } catch (_) {
+        // Booking not on this device or already applied — safe to ignore
+      }
+    };
+
+    // Catch-up: local bookings still waiting on a provider response
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
+        const current: ConfirmedBooking[] = JSON.parse(stored);
+        const waiting = current.filter(
+          b =>
+            // Client requested, still waiting on the provider's dates…
+            (b.isPendingReschedule && !b.rescheduleRequest?.providerAvailableDates) ||
+            // …or an upcoming booking the PROVIDER may have asked to move
+            // while this app was closed (provider-initiated reschedule)
+            (!b.isPendingReschedule && b.status === BookingStatus.UPCOMING)
+        );
+        for (const b of waiting) {
+          if (cancelled) break;
+          const req = await getActiveRescheduleRequest(b.id).catch(() => null);
+          if (req?.status === 'provider_responded') {
+            await applyProviderResponse(
+              b.id,
+              req.provider_available_slots as AvailableDate[] | null
+            );
+          }
+        }
+      } catch (_) {
+        // Offline — realtime subscription below still covers the live case
+      }
+    })();
+
+    const channel = supabase
+      .channel('reschedule-responses')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'booking_reschedule_requests' },
+        (payload) => {
+          const row = payload.new as {
+            booking_id?: string;
+            status?: string;
+            provider_available_slots?: AvailableDate[] | null;
+          } | null;
+          if (row?.status === 'provider_responded' && row.booking_id) {
+            applyProviderResponse(row.booking_id, row.provider_available_slots);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [providerRespondToReschedule]);
+
   const confirmReschedule = useCallback(async (bookingId: string, newDate: string, newTime: string) => {
     try {
       if (__DEV__) console.log('Step 3: User confirming reschedule:', bookingId, newDate, newTime);
@@ -850,7 +1000,16 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      const newEndTime = calculateEndTime(newTime, booking.duration);
+      // Prefer the stated duration; when it's missing/unparseable (common for
+      // bookings synced from Supabase) fall back to the original start→end
+      // span so the rescheduled booking never ends the minute it starts —
+      // an end_time equal to booking_time makes the auto-complete cron close
+      // the appointment at its start.
+      let newEndTime = calculateEndTime(newTime, booking.duration);
+      if (newEndTime === newTime) {
+        const spanMins = parseTimeToMinutes(booking.endTime) - parseTimeToMinutes(booking.bookingTime);
+        newEndTime = calculateEndTime(newTime, `${spanMins > 0 ? spanMins : 60} minutes`);
+      }
 
       const originalDate = booking.rescheduleRequest?.originalDate || booking.bookingDate;
       const originalTime = booking.rescheduleRequest?.originalTime || booking.bookingTime;
@@ -892,8 +1051,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         'upcoming'
       );
 
-      // Notify provider in Supabase
-      const confirmedProviderId = await getProviderIdByDisplayName(booking.providerName);
+      // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
+      const confirmedProviderId = booking.providerId
+        ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
       if (confirmedProviderId) {
         insertProviderNotification({
           provider_id: confirmedProviderId,
@@ -922,8 +1082,21 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const currentBookings: ConfirmedBooking[] = stored ? JSON.parse(stored) : [];
       const booking = currentBookings.find(b => b.id === bookingId);
 
+      // Sync to Supabase FIRST — the DB row is what the other party sees.
+      // If this fails, nothing is changed locally and the caller gets the
+      // error. (Legacy local-only ids never existed in the DB — skip.)
+      // The status-change trigger handles the rest server-side: notifying
+      // the right party and inviting the next waitlist entry.
+      if (isDbBookingId(bookingId)) {
+        try {
+          await dbUpdateBookingStatus(bookingId, 'cancelled');
+        } catch (dbError) {
+          console.error('❌ Cancellation did not reach Supabase:', dbError);
+          throw new Error('Could not cancel the booking. Please check your connection and try again.');
+        }
+      }
+
       if (booking) {
-        // Booking is in local state — update locally then sync
         const updatedBookings = currentBookings.map(b =>
           b.id === bookingId
             ? {
@@ -945,11 +1118,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           booking.providerImage
         );
       }
-
-      // Always sync cancellation to Supabase
-      try {
-        await dbUpdateBookingStatus(bookingId, 'cancelled');
-      } catch (_) {}
 
       if (__DEV__) console.log('Booking cancelled successfully');
     } catch (error) {
@@ -973,9 +1141,13 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         [BookingStatus.CANCELLED]:    'cancelled',
         [BookingStatus.NO_SHOW]:      'no_show',
       };
+      // The DB is the source of truth the OTHER party sees — a provider
+      // confirming/starting/completing a booking must know if it didn't
+      // stick, so failures propagate to the caller instead of vanishing.
+      // (Legacy local-only ids never existed in the DB — nothing to sync.)
       const dbStatus = dbStatusMap[status];
-      if (dbStatus) {
-        dbUpdateBookingStatus(bookingId, dbStatus as any).catch(() => {});
+      if (dbStatus && isDbBookingId(bookingId)) {
+        await dbUpdateBookingStatus(bookingId, dbStatus as any);
       }
     } catch (error) {
       console.error('❌ Failed to update booking status:', error);
@@ -1039,14 +1211,27 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new Error(`Booking conflict detected: ${conflictMessages}`);
       }
 
-      // ── Fetch provider cap settings and enforce max-per-day ──────────────────
+      // ── Resolve every cart item to a real provider UUID up front ─────────────
+      // Chain: providerId carried on the cart item (canonical) → slug lookup →
+      // display-name lookup (legacy fallback). If any item can't be resolved we
+      // abort BEFORE saving anything, so the user never sees a phantom booking
+      // that the provider will never receive.
       const providerCapCache: Record<string, { auto_accept: boolean; max_per_day: number }> = {};
       const providerIdCache: Record<string, string | null> = {};
+
+      const resolveProviderId = async (item: CartItem): Promise<string | null> => {
+        if (item.providerId) return item.providerId;
+        if (item.providerSlug) {
+          const bySlug = await getProviderBySlug(item.providerSlug).catch(() => null);
+          if (bySlug?.id) return bySlug.id;
+        }
+        return getProviderIdByDisplayName(item.providerName).catch(() => null);
+      };
 
       for (const item of cartItems) {
         const name = item.providerName;
         if (providerIdCache[name] === undefined) {
-          providerIdCache[name] = await getProviderIdByDisplayName(name).catch(() => null);
+          providerIdCache[name] = await resolveProviderId(item);
         }
         const pid = providerIdCache[name];
         if (pid && !providerCapCache[name]) {
@@ -1057,6 +1242,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         if (!providerCapCache[name]) {
           providerCapCache[name] = { auto_accept: false, max_per_day: 0 };
         }
+      }
+
+      const unresolved = cartItems.filter(item => !providerIdCache[item.providerName]);
+      if (unresolved.length > 0) {
+        const names = [...new Set(unresolved.map(i => i.providerDisplayName ?? i.providerName))].join(', ');
+        throw new Error(
+          `We couldn't link ${names} to a registered provider, so the booking wasn't placed. ` +
+          `Please re-add the service from the provider's profile and try again.`
+        );
       }
 
       for (const item of cartItems) {
@@ -1072,11 +1266,31 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
+      // ── Slot conflict pre-check against ALL users' bookings ──────────────────
+      // validateBookingsBeforeCheckout only checks the current user's own
+      // bookings; another client may have taken the slot since the calendar
+      // loaded. The DB unique index is the hard guarantee — this check turns a
+      // cryptic insert failure into a clear message before anything is saved.
+      for (const item of cartItems) {
+        const apt = appointmentData.find(a => a.cartItemId === item.id);
+        const pid = providerIdCache[item.providerName];
+        if (!apt || !pid) continue;
+        const pgTime = timeTo24(apt.time);
+        if (pgTime && await isSlotTaken(pid, apt.date, pgTime)) {
+          const displayName = item.providerDisplayName ?? item.providerName;
+          throw new Error(
+            `${displayName} already has a booking at ${apt.time} on ${apt.date}. Please pick another time.`
+          );
+        }
+      }
+
       // Fetch real provider locations from DB before building appointment records
       const uniqueProviderNames = [...new Set(cartItems.map(i => i.providerDisplayName ?? i.providerName))];
       const providerLocations: Record<string, import('../services/databaseService').ProviderLocationData> = await getProviderLocationsByDisplayNames(uniqueProviderNames).catch(() => ({}));
 
-      const groupBookingId = `group_${Date.now()}`;
+      // Real UUID so it can be persisted to bookings.group_booking_id (UUID
+      // column) — the provider side can then group multi-service checkouts
+      const groupBookingId = generateUuid();
       const isGroupBooking = cartItems.length > 1;
 
       const newBookings: ConfirmedBooking[] = cartItems.map((item) => {
@@ -1098,10 +1312,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const baseServicePrice = item.price;
         const addOnsTotal = item.addOns?.reduce((sum, addon) => sum + (addon.price || 0), 0) || 0;
         const subtotal = baseServicePrice + addOnsTotal;
-        const serviceChargeRate = 0.05; // 5% service charge
+        // Derive the REAL rates from what was actually charged — providers set
+        // their own deposit policies, so no hardcoded 5%/20% on the receipt
         const serviceChargeAmount = appointment.serviceCharge;
+        const serviceChargeRate = subtotal > 0 ? serviceChargeAmount / subtotal : 0;
         const totalBeforePayment = subtotal + serviceChargeAmount;
-        const depositPercentage = appointment.paymentType === 'deposit' ? 0.20 : undefined;
+        const depositPercentage =
+          appointment.paymentType === 'deposit' && subtotal > 0 && appointment.depositAmount > 0
+            ? appointment.depositAmount / subtotal
+            : undefined;
 
         const paymentBreakdown: PaymentBreakdown = {
           baseServicePrice,
@@ -1168,14 +1387,22 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           confirmedAt: new Date().toISOString(),
-          bookingInstructions: 'Please arrive 10 minutes early. Bring your booking confirmation.',
+          // No fabricated instructions — only show instructions the provider
+          // actually wrote (booking_instructions is null in the DB row too)
+          bookingInstructions: undefined,
         };
       });
 
       const updatedBookings = [...bookings, ...newBookings];
       await saveBookings(updatedBookings);
 
-      // Persist to Supabase (silent fail — local booking already saved above)
+      // Persist to Supabase. A booking that never reaches the DB is invisible
+      // to the provider, so persistence failures are booking failures: the
+      // local copy is removed and the user sees the real reason.
+      const persistFailures: { cartItemId: string; message: string }[] = [];
+      // cartItemId → Supabase bookings.id, so local bookings can adopt the DB
+      // id after a successful save (reschedules/cancellations reference it)
+      const dbIdByCartItemId: Record<string, string> = {};
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -1183,24 +1410,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             const apt = appointmentData.find(a => a.cartItemId === item.id);
             if (!apt) continue;
 
-            const providerId = await getProviderIdByDisplayName(item.providerName);
-            if (!providerId) {
-              console.warn('[BookingContext] ⚠️ Could not find provider in Supabase. providerName:', JSON.stringify(item.providerName), '— booking NOT saved to DB. Check your providers table display_name column.');
-              continue;
-            }
+            const providerId = providerIdCache[item.providerName];
+            if (!providerId) continue; // unreachable — resolution guaranteed above
 
+            try {
 
-            // Convert "10:00 AM" → "10:00:00" for Postgres TIME type
-            const timeTo24 = (t: string): string | null => {
-              const match = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-              if (!match) return null;
-              let hh = parseInt(match[1] ?? '0');
-              const mm = parseInt(match[2] ?? '0');
-              const pp = (match[3] ?? 'AM').toUpperCase();
-              if (pp === 'PM' && hh !== 12) hh += 12;
-              else if (pp === 'AM' && hh === 12) hh = 0;
-              return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:00`;
-            };
             const pgTime = timeTo24(apt.time);
             if (!pgTime) continue;
             const endTimeStr = calculateEndTime(apt.time, item.duration);
@@ -1214,7 +1428,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               {
                 user_id: user.id,
                 provider_id: providerId,
-                service_id: null,
+                // Link the real service row when the cart item carries the DB
+                // UUID (static/demo services have numeric ids — store null).
+                // This powers waitlist service-matching, duration lookups and
+                // review linkage downstream.
+                service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
                 status: 'pending',
                 booking_date: apt.date,
                 booking_time: pgTime,
@@ -1232,10 +1450,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 payment_method: apt.paymentMethod ?? null,
                 payment_intent_id: null,
                 is_group_booking: cartItems.length > 1,
-                group_booking_id: null,
+                group_booking_id: cartItems.length > 1 ? groupBookingId : null,
                 group_booking_count: cartItems.length,
                 provider_name_snapshot: item.providerName,
                 service_name_snapshot: item.serviceName,
+                service_category_snapshot: item.providerService || null,
                 provider_logo_snapshot: logoUrl,
                 provider_address_snapshot: providerLocations[item.providerDisplayName ?? item.providerName]?.address ?? apt.address ?? null,
                 provider_phone_snapshot: providerLocations[item.providerDisplayName ?? item.providerName]?.phone ?? apt.phone ?? null,
@@ -1259,6 +1478,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               }))
             );
 
+            if (newDbBooking?.id) {
+              dbIdByCartItemId[item.id] = newDbBooking.id;
+            }
+
             // Auto-confirm if provider has auto_accept_bookings enabled
             if (providerCapCache[item.providerName]?.auto_accept && newDbBooking?.id) {
               await dbUpdateBookingStatus(newDbBooking.id, 'confirmed');
@@ -1275,13 +1498,68 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               });
               sendEmail(apt.customerEmail, subject, html).catch(() => {});
             }
+
+            } catch (itemError: any) {
+              const name = item.providerDisplayName ?? item.providerName;
+              let message: string;
+              if (itemError?.code === '23505') {
+                // Lost the race for this slot — another booking landed first
+                message = `That time slot with ${name} was just taken by another client. Please choose a different time.`;
+              } else if (itemError instanceof Error && !itemError.message.includes('Network') && !('code' in itemError)) {
+                // createBooking validation: closed day, blocked date, overlap…
+                message = itemError.message;
+              } else {
+                message = `Your booking with ${name} couldn't be placed. Please check your connection and try again.`;
+              }
+              console.error('[BookingContext] ❌ Booking not persisted for', name, itemError);
+              persistFailures.push({ cartItemId: item.id, message });
+            }
           }
         }
-      } catch (_) {
-        // Silent — local booking already saved
+      } catch (outerError) {
+        // Auth lookup failed — none of the bookings reached the DB. Remove the
+        // local copies and fail the checkout with a clear message.
+        console.error('[BookingContext] ❌ Could not persist bookings to Supabase:', outerError);
+        const newIds = new Set(newBookings.map(nb => nb.id));
+        await saveBookings(updatedBookings.filter(b => !newIds.has(b.id)));
+        throw new Error(
+          "We couldn't reach the server, so your booking wasn't placed. Please check your connection and try again."
+        );
       }
 
-      // ✅ NEW - Create notifications for each booking
+      // Adopt the Supabase booking ids locally so later operations (reschedule
+      // requests, cancellations, status updates) reference the same row the
+      // provider sees. Without this, reschedule requests carry a local-only id
+      // the provider side can never match.
+      const localIdToDbId: Record<string, string> = {};
+      for (const nb of newBookings) {
+        const dbId = dbIdByCartItemId[nb.cartItemId];
+        if (dbId) localIdToDbId[nb.id] = dbId;
+      }
+      const failedCartItemIds = new Set(persistFailures.map(f => f.cartItemId));
+      const failedLocalIds = new Set(
+        newBookings.filter(nb => failedCartItemIds.has(nb.cartItemId)).map(nb => nb.id)
+      );
+      if (Object.keys(localIdToDbId).length > 0 || failedLocalIds.size > 0) {
+        const reconciled = updatedBookings
+          // Drop local bookings that never reached the DB — the provider
+          // can't see them, so keeping them would show a phantom booking
+          .filter(b => !failedLocalIds.has(b.id))
+          .map(b => (localIdToDbId[b.id] ? { ...b, id: localIdToDbId[b.id]! } : b));
+        await saveBookings(reconciled);
+        for (const nb of newBookings) {
+          const dbId = localIdToDbId[nb.id];
+          if (dbId) nb.id = dbId;
+        }
+      }
+
+      // Fail the checkout with the real reason(s)
+      if (persistFailures.length > 0) {
+        throw new Error([...new Set(persistFailures.map(f => f.message))].join('\n'));
+      }
+
+      // Local notification per booking — honest about the state: auto-accept
+      // providers confirm instantly, everyone else is "awaiting confirmation"
       for (const booking of newBookings) {
         await NotificationService.addBookingConfirmation(
           booking.id,
@@ -1289,7 +1567,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           booking.serviceName,
           booking.bookingDate,
           booking.bookingTime,
-          booking.providerImage
+          booking.providerImage,
+          booking.status === BookingStatus.PENDING
         );
       }
 
