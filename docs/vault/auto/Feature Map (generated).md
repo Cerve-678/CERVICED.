@@ -6,24 +6,25 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **32 files**
+Curated: [[Address Release]] · **33 files**
 - `src/screens/ProviderChatScreen.tsx` _(78)_
 - `src/screens/ProviderBookingDetailScreen.tsx` _(65)_
 - `src/services/databaseService.ts` _(59)_
 - `src/screens/BookingsScreen.tsx` _(44)_
 - `src/screens/InfoRegScreen.tsx` _(33)_
-- `src/contexts/BookingContext.tsx` _(29)_
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(20)_
+- `src/contexts/BookingContext.tsx` _(17)_
 - `src/screens/CartScreen.tsx` _(16)_
 - `src/services/providerRegistrationService.ts` _(16)_
 - `src/utils/addressRelease.ts` _(15)_
 - `supabase/address_release_policy.sql` _(15)_
 - `supabase/fix_address_release_on_confirm.sql` _(14)_
+- `src/services/bookingService.ts` _(10)_
 - `src/screens/ProviderHomeScreen.tsx` _(9)_
+- `src/types/booking.ts` _(6)_
 - `src/types/database.ts` _(5)_
 - `src/screens/auth/ForgotPasswordScreen.tsx` _(4)_
-- `src/services/bookingService.ts` _(4)_
 - `src/screens/ProfileInfoScreen.tsx` _(3)_
 - `src/screens/ProviderBusinessEmailScreen.tsx` _(3)_
 - `supabase/client_address_migration.sql` _(3)_
@@ -36,18 +37,17 @@ Curated: [[Address Release]] · **32 files**
 - `src/screens/auth/SignUpStep5Screen.tsx` _(1)_
 - `src/screens/ChangeCredentialsScreen.tsx` _(1)_
 - `src/screens/ProviderCommunicationsScreen.tsx` _(1)_
-- `src/screens/ProviderInfoPackScreen.tsx` _(1)_
-- … +2 more
+- … +3 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **60 files**
+Curated: [[Availability & Slots]] · **61 files**
 - `src/services/AvailabilityService.ts` _(159)_
 - `src/services/databaseService.ts` _(103)_
 - `src/components/ModernBeautyCalendar.tsx` _(72)_
 - `src/screens/ProviderBookingDetailScreen.tsx` _(70)_
 - `src/screens/BookingsScreen.tsx` _(66)_
 - `supabase/availability_v2.sql` _(54)_
-- `src/contexts/BookingContext.tsx` _(47)_
+- `src/contexts/BookingContext.tsx` _(45)_
 - `src/screens/ProviderProfileScreen.tsx` _(42)_
 - `src/screens/InfoRegScreen.tsx` _(37)_
 - `src/screens/ProviderHomeScreen.tsx` _(36)_
@@ -71,14 +71,14 @@ Curated: [[Availability & Slots]] · **60 files**
 - `src/services/ProviderDataService.ts` _(6)_
 - `supabase/booking_flow_fixes.sql` _(6)_
 - `src/screens/auth/EmailVerificationScreen.tsx` _(5)_
-- … +30 more
+- … +31 more
 
 ## Payments
-Curated: [[Payments]] · **36 files**
+Curated: [[Payments]] · **37 files**
 - `src/screens/CartScreen.tsx` _(266)_
-- `src/contexts/BookingContext.tsx` _(144)_
 - `src/screens/BookingsScreen.tsx` _(112)_
-- `src/services/bookingService.ts` _(85)_
+- `src/services/bookingService.ts` _(108)_
+- `src/contexts/BookingContext.tsx` _(88)_
 - `src/screens/ProviderBookingDetailScreen.tsx` _(65)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(51)_
 - `src/services/databaseService.ts` _(48)_
@@ -87,6 +87,7 @@ Curated: [[Payments]] · **36 files**
 - `src/services/checkoutService.ts` _(33)_
 - `src/types/database.ts` _(29)_
 - `supabase/phase1_schema.sql` _(28)_
+- `src/types/booking.ts` _(25)_
 - `src/screens/ProviderHomeScreen.tsx` _(21)_
 - `supabase/notification_recipient_role.sql` _(18)_
 - `src/screens/ProviderAutomationsScreen.tsx` _(15)_
@@ -104,13 +105,12 @@ Curated: [[Payments]] · **36 files**
 - `src/screens/HelpCentreScreen.tsx` _(3)_
 - `src/screens/ProviderAnalyticsScreen.tsx` _(3)_
 - `src/screens/UserProfileScreen.tsx` _(3)_
-- `src/services/notificationTapHandler.ts` _(3)_
-- … +6 more
+- … +7 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **96 files**
-- `src/contexts/BookingContext.tsx` _(566)_
+Curated: [[Booking Flow]] · **99 files**
 - `src/screens/BookingsScreen.tsx` _(550)_
+- `src/contexts/BookingContext.tsx` _(542)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(467)_
 - `src/screens/ProviderBookingDetailScreen.tsx` _(385)_
 - `src/services/databaseService.ts` _(282)_
@@ -123,6 +123,7 @@ Curated: [[Booking Flow]] · **96 files**
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/screens/ProviderBookingHistoryScreen.tsx` _(92)_
 - `src/screens/NotificationsScreen.tsx` _(91)_
+- `src/services/bookingService.ts` _(74)_
 - `supabase/info_packs_bookings.sql` _(73)_
 - `src/services/AvailabilityService.ts` _(69)_
 - `supabase/notifications_full_matrix.sql` _(61)_
@@ -131,15 +132,14 @@ Curated: [[Booking Flow]] · **96 files**
 - `supabase/client_automation_jobs.sql` _(52)_
 - `src/screens/ProviderInboxScreen.tsx` _(51)_
 - `src/screens/ProviderProfileScreen.tsx` _(44)_
-- `src/services/bookingService.ts` _(37)_
+- `src/stores/useBookingStore.ts` _(36)_
 - `src/screens/DevSettingsScreen.tsx` _(35)_
 - `src/types/database.ts` _(34)_
 - `src/screens/ProviderAutomationsScreen.tsx` _(32)_
 - `src/screens/ProviderIntakeFormScreen.tsx` _(31)_
 - `src/services/notificationTapHandler.ts` _(29)_
 - `src/screens/InfoRegScreen.tsx` _(28)_
-- `supabase/availability_v2.sql` _(27)_
-- … +66 more
+- … +69 more
 
 ## Notifications
 Curated: [[Notifications]] · **76 files**
@@ -176,8 +176,8 @@ Curated: [[Notifications]] · **76 files**
 - … +46 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **28 files**
-- `src/contexts/RegistrationContext.tsx` _(18)_
+Curated: [[Provider Onboarding & Go-Live]] · **29 files**
+- `src/contexts/RegistrationContext.tsx` _(24)_
 - `src/services/databaseService.ts` _(17)_
 - `src/services/UploadService.ts` _(17)_
 - `src/screens/InfoRegScreen.tsx` _(12)_
@@ -199,6 +199,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **28 files**
 - `src/screens/UserProfileScreen.tsx` _(3)_
 - `supabase/availability_v2.sql` _(3)_
 - `src/utils/storage.ts` _(2)_
+- `src/utils/storageKeys.ts` _(2)_
 - `src/navigation/Tabs/ProfileNavigator.tsx` _(1)_
 - `src/screens/BookingsScreen.tsx` _(1)_
 - `src/screens/BrandingScreen.tsx` _(1)_
@@ -231,9 +232,9 @@ Curated: [[Booking Flow]] · **21 files**
 - `supabase/info_packs_bookings.sql` _(1)_
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **57 files**
+Curated: [[Booking Flow]] · **60 files**
 - `src/screens/BookingsScreen.tsx` _(349)_
-- `src/contexts/BookingContext.tsx` _(185)_
+- `src/contexts/BookingContext.tsx` _(178)_
 - `src/screens/ProviderBookingDetailScreen.tsx` _(114)_
 - `src/screens/InfoRegScreen.tsx` _(72)_
 - `src/services/databaseService.ts` _(64)_
@@ -258,14 +259,14 @@ Curated: [[Booking Flow]] · **57 files**
 - `src/screens/DevSettingsScreen.tsx` _(8)_
 - `src/screens/ProviderAccountScreen.tsx` _(8)_
 - `src/screens/UserProfileScreen.tsx` _(8)_
+- `src/services/bookingService.ts` _(8)_
+- `src/types/booking.ts` _(8)_
 - `src/screens/ProviderAnalyticsScreen.tsx` _(7)_
 - `src/services/WaitlistService.ts` _(7)_
-- `src/screens/EventDetailScreen.tsx` _(6)_
-- `src/screens/ProviderPromotionsScreen.tsx` _(6)_
-- … +27 more
+- … +30 more
 
 ## Auth
-Curated: [[Contexts]] · **77 files**
+Curated: [[Contexts]] · **79 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(112)_
 - `src/screens/auth/LoginScreen.tsx` _(111)_
 - `src/contexts/AuthContext.tsx` _(102)_
@@ -295,8 +296,8 @@ Curated: [[Contexts]] · **77 files**
 - `src/contexts/BookingContext.tsx` _(7)_
 - `supabase/info_packs_bookings.sql` _(7)_
 - `supabase/intake_forms_migration.sql` _(6)_
-- `src/navigation/types.ts` _(5)_
-- … +47 more
+- `src/contexts/RegistrationContext.tsx` _(5)_
+- … +49 more
 
 ## Becca / AI
 Curated: [[Services]] · **15 files**
@@ -317,11 +318,11 @@ Curated: [[Services]] · **15 files**
 - `supabase/becca_chat_migration_001.sql` _(2)_
 
 ## Cart & checkout
-Curated: [[Payments]] · **16 files**
+Curated: [[Payments]] · **17 files**
 - `src/screens/CartScreen.tsx` _(52)_
 - `src/screens/ProviderProfileScreen.tsx` _(39)_
 - `src/screens/BookingsScreen.tsx` _(24)_
-- `src/contexts/BookingContext.tsx` _(23)_
+- `src/contexts/BookingContext.tsx` _(17)_
 - `src/services/bookingService.ts` _(8)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/contexts/CartContext.tsx` _(5)_
@@ -333,4 +334,5 @@ Curated: [[Payments]] · **16 files**
 - `src/navigation/TabNavigator.tsx` _(1)_
 - `src/navigation/Tabs/ExploreNavigator.tsx` _(1)_
 - `src/navigation/Tabs/HomeNavigator.tsx` _(1)_
+- `src/stores/useBookingStore.ts` _(1)_
 - `supabase/backfill_provider_logo_snapshot.sql` _(1)_

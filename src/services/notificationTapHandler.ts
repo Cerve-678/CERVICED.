@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/navigationRef';
 import { requestMode } from '../navigation/modeController';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 export interface NotificationTapData {
   type?: string;
@@ -53,7 +54,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
-  const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
+  const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
   // Route by who the notification is FOR (recipient_role from the push payload),
   // not by whichever hat the app happens to be in. Fall back to the saved mode
   // only when the notification didn't carry a role.
@@ -65,7 +66,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // launch from a killed state also opens in the right mode.
   if (isProvider !== (savedMode === 'provider')) {
     const targetMode = isProvider ? 'provider' : 'client';
-    await AsyncStorage.setItem('@active_mode', targetMode).catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, targetMode).catch(() => {});
     requestMode(targetMode);
     await new Promise((r) => setTimeout(r, 350));
   }
