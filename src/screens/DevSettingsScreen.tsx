@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBooking } from '../contexts/BookingContext';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -43,7 +44,7 @@ export default function DevSettingsScreen({ navigation }: any) {
 
   const checkBookings = async () => {
     try {
-      const stored = await AsyncStorage.getItem('@bookings');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.BOOKINGS);
       if (stored) {
         const parsed = JSON.parse(stored);
         setBookingCount(parsed.length);
@@ -61,7 +62,7 @@ export default function DevSettingsScreen({ navigation }: any) {
 
   const viewBookings = async () => {
     try {
-      const stored = await AsyncStorage.getItem('@bookings');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.BOOKINGS);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (__DEV__) console.log('Current Bookings:', parsed);
@@ -85,7 +86,7 @@ export default function DevSettingsScreen({ navigation }: any) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await AsyncStorage.removeItem('@bookings');
+              await AsyncStorage.removeItem(STORAGE_KEYS.BOOKINGS);
               await reloadBookings();
               setBookingCount(0);
               setStorageSize('0 KB');
@@ -135,7 +136,7 @@ export default function DevSettingsScreen({ navigation }: any) {
 
   const exportBookings = async () => {
     try {
-      const stored = await AsyncStorage.getItem('@bookings');
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.BOOKINGS);
       if (stored) {
         if (__DEV__) console.log('EXPORT BOOKINGS:', stored);
         Alert.alert('Export Complete', 'Booking data logged to console. Copy from there.');

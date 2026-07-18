@@ -1,4 +1,4 @@
-// src/contexts/BookingContext.tsx - COMPLETE FIXED VERSION
+// src/contexts/BookingContext.tsx
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
@@ -6,155 +6,39 @@ import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
 import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, isSlotTaken } from '../services/databaseService';
-import type { BookingWithAddOns } from '../types/database';
+import { mapDbBookingToConfirmed } from '../services/bookingService';
+import { useBookingStore } from '../stores/useBookingStore';
+
+// ── Re-export all shared types so existing import paths stay unchanged ──────
+// Screens import BookingStatus, ConfirmedBooking, etc. from this file;
+// moving the definitions to src/types/booking.ts breaks nothing because we
+// re-export everything here.
+export type {
+  BookingCoordinates,
+  PaymentBreakdown,
+  ConfirmedBooking,
+  BookingsByDate,
+  BookingConflictResult,
+  AppointmentData,
+  AvailableDate,
+} from '../types/booking';
+export { BookingStatus, PaymentStatus } from '../types/booking';
+
+// Re-export the DB→local mapper so ProviderBookingHistoryScreen and others
+// can import it from here without changing their import paths.
+export { mapDbBookingToConfirmed };
+
+// Import types locally (for use within this file)
+import type {
+  BookingCoordinates,
+  ConfirmedBooking,
+  BookingsByDate,
+  BookingConflictResult,
+  AppointmentData,
+  AvailableDate,
+} from '../types/booking';
+import { BookingStatus, PaymentStatus, type PaymentBreakdown } from '../types/booking';
 import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
-
-export enum BookingStatus {
-  PENDING = 'pending',
-  UPCOMING = 'upcoming',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
-  NO_SHOW = 'no_show',
-}
-
-export interface BookingCoordinates {
-  latitude: number;
-  longitude: number;
-}
-
-interface AvailableDate {
-  date: string;
-  times: string[];
-}
-
-// Payment status for tracking payment state
-export enum PaymentStatus {
-  PENDING = 'pending',           // Payment not yet processed
-  DEPOSIT_PAID = 'deposit_paid', // Only deposit paid, balance due
-  PAID_IN_FULL = 'paid_in_full', // Full payment received
-  REFUND_PENDING = 'refund_pending',
-  REFUNDED = 'refunded',
-  FAILED = 'failed',
-}
-
-// Detailed payment breakdown for receipts
-export interface PaymentBreakdown {
-  baseServicePrice: number;      // Original service price
-  addOnsTotal: number;           // Total of all add-ons
-  subtotal: number;              // baseServicePrice + addOnsTotal
-  serviceChargeRate: number;     // The rate used (e.g., 0.05 for 5%)
-  serviceChargeAmount: number;   // Calculated service charge
-  totalBeforePayment: number;    // subtotal + serviceChargeAmount
-  depositPercentage?: number | undefined;    // If deposit, the % used (e.g., 0.20 for 20%)
-  depositAmount?: number | undefined;        // If deposit, the calculated amount
-  amountCharged: number;         // What was actually charged at checkout
-  remainingBalance: number;      // What's still owed
-  // Add-on itemization for receipt
-  addOnItems?: Array<{
-    name: string;
-    price: number;
-  }> | undefined;
-}
-
-export interface ConfirmedBooking {
-  id: string;
-  cartItemId: string;
-  providerName: string;
-  providerImage: any;
-  providerService: string;
-  serviceName: string;
-  serviceDescription: string;
-  price: number;
-  duration: string;
-  quantity: number;
-
-  // Booking specific
-  bookingDate: string;
-  bookingTime: string;
-  endTime: string;
-  status: BookingStatus;
-
-  // Location
-  address: string;
-  coordinates: BookingCoordinates;
-
-  // Contact
-  phone: string;
-
-  // Customer information (who made the booking)
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-
-  // Payment (per booking) - legacy fields kept for backwards compatibility
-  paymentType: 'full' | 'deposit';
-  amountPaid: number; // EXACT amount charged at checkout
-  depositAmount: number; // Isolated deposit on subtotal
-  remainingBalance: number;
-  serviceCharge: number;
-
-  // NEW: Enhanced payment tracking
-  paymentStatus: PaymentStatus;
-  paymentBreakdown?: PaymentBreakdown | undefined; // Detailed breakdown for receipts
-  paymentMethod?: string | undefined; // 'card', 'apple_pay', 'google_pay', etc.
-  paymentConfirmedAt?: string | undefined; // ISO timestamp when payment was confirmed
-  transactionId?: string | undefined; // External payment processor transaction ID
-
-  // Group booking
-  groupBookingId?: string | undefined;
-  isGroupBooking?: boolean | undefined;
-  groupBookingCount?: number | undefined;
-
-  // Reschedule tracking
-  isPendingReschedule?: boolean | undefined;
-  rescheduleRequest?: {
-    originalDate?: string | undefined;
-    originalTime?: string | undefined;
-    requestedDates?: string[] | undefined;
-    requestedAt?: string | undefined;
-    providerAvailableDates?: AvailableDate[] | undefined;
-    providerRespondedAt?: string | undefined;
-    rescheduleCount?: number | undefined;
-    lastRescheduledAt?: string | undefined;
-  } | undefined;
-
-  // Provider ID (for provider-facing screens)
-  providerId?: string | undefined;
-
-  // Client user ID (for provider-facing screens — the user who made the booking)
-  clientUserId?: string | undefined;
-
-  // Client address (for mobile providers who travel to the client)
-  clientAddress?: string | undefined;
-
-  // Address release tracking (for non-mobile providers)
-  addressReleasedAt?: string | undefined;
-
-  // Metadata
-  notes?: string | undefined;
-  addOns?: Array<{
-    id: string | number;
-    name: string;
-    price: number;
-  }> | undefined;
-  createdAt: string;
-  updatedAt: string;
-  confirmedAt?: string | undefined;
-  bookingInstructions?: string | undefined;
-}
-
-export interface BookingsByDate {
-  [date: string]: ConfirmedBooking[];
-}
-
-export interface BookingConflictResult {
-  isValid: boolean;
-  conflicts: Array<{
-    cartItemId: string;
-    message: string;
-  }>;
-}
 
 export interface BookingContextType {
   bookings: ConfirmedBooking[];
@@ -183,25 +67,6 @@ export interface BookingContextType {
   requestReschedule: (bookingId: string, preferredDates: string[]) => Promise<void>;
   providerRespondToReschedule: (bookingId: string, availableDates: AvailableDate[]) => Promise<void>;
   confirmReschedule: (bookingId: string, newDate: string, newTime: string) => Promise<void>;
-}
-
-export interface AppointmentData {
-  cartItemId: string;
-  date: string;
-  time: string;
-  address: string;
-  coordinates: BookingCoordinates | null;
-  phone: string;
-  notes?: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  paymentType: 'full' | 'deposit';
-  amountPaid: number; // EXACT amount paid at checkout
-  depositAmount: number; // Isolated deposit (NO service charge)
-  remainingBalance: number;
-  serviceCharge: number;
-  paymentMethod?: string; // 'card' | 'paypal' | 'apple' | 'google'
 }
 
 const STORAGE_KEY = '@bookings';
@@ -388,104 +253,6 @@ const sortBookingsByDateTime = (bookings: ConfirmedBooking[]): ConfirmedBooking[
 };
 
 
-// Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display
-export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
-  const toDisplayTime = (t: string): string => {
-    const parts = t.split(':');
-    let h = parseInt(parts[0] ?? '0');
-    const m = parseInt(parts[1] ?? '0');
-    const period = h >= 12 ? 'PM' : 'AM';
-    if (h > 12) h -= 12;
-    if (h === 0) h = 12;
-    return `${h}:${m.toString().padStart(2, '0')} ${period}`;
-  };
-  const mapSt = (s: string): BookingStatus => {
-    switch (s) {
-      case 'pending': return BookingStatus.PENDING;
-      case 'completed': return BookingStatus.COMPLETED;
-      case 'cancelled': return BookingStatus.CANCELLED;
-      case 'in_progress': return BookingStatus.IN_PROGRESS;
-      case 'no_show': return BookingStatus.NO_SHOW;
-      default: return BookingStatus.UPCOMING;
-    }
-  };
-  const mapPay = (s: string): PaymentStatus => {
-    switch (s) {
-      case 'fully_paid': return PaymentStatus.PAID_IN_FULL;
-      case 'deposit_paid': return PaymentStatus.DEPOSIT_PAID;
-      case 'refunded': return PaymentStatus.REFUNDED;
-      case 'failed': return PaymentStatus.FAILED;
-      default: return PaymentStatus.PENDING;
-    }
-  };
-  const startTime = toDisplayTime(db.booking_time);
-  const endTime   = toDisplayTime((db as any).end_time ?? db.booking_time);
-
-  // Compute duration string from start/end minutes
-  const toMin = (t: string | null | undefined): number => {
-    if (!t) return 0;
-    const clean = t.trim().toUpperCase();
-    const isPM = clean.includes('PM');
-    const isAM = clean.includes('AM');
-    const part  = clean.replace(/[AP]M/i, '').trim();
-    const [hs, ms] = part.split(':');
-    let h = parseInt(hs || '0', 10);
-    const m = parseInt(ms || '0', 10);
-    if (isAM && h === 12) h = 0;
-    if (isPM && h !== 12) h += 12;
-    return h * 60 + m;
-  };
-  const diffMin = toMin(endTime) - toMin(startTime);
-  const durationStr = diffMin > 0
-    ? (Math.floor(diffMin / 60) > 0 ? `${Math.floor(diffMin / 60)}h ` : '') + (diffMin % 60 > 0 ? `${diffMin % 60}m` : '')
-    : '';
-
-  return {
-    id: db.id,
-    cartItemId: db.id,
-    providerName: db.provider_name_snapshot,
-    providerImage: db.provider_logo_snapshot ?? null,
-    providerService: db.service_category_snapshot ?? '',
-    serviceName: db.service_name_snapshot,
-    serviceDescription: '',
-    price: db.base_price,
-    duration: durationStr,
-    quantity: 1,
-    bookingDate: db.booking_date,
-    bookingTime: startTime,
-    endTime,
-    status: mapSt(db.status),
-    address: db.provider_address_snapshot ?? '',
-    coordinates: db.provider_coordinates
-      ? (db.provider_coordinates as unknown as BookingCoordinates)
-      : (null as unknown as BookingCoordinates),
-    phone: db.provider_phone_snapshot ?? '',
-    customerName: db.customer_name ?? '',
-    customerEmail: db.customer_email ?? '',
-    customerPhone: db.customer_phone ?? '',
-    notes: db.notes ?? undefined,
-    bookingInstructions: db.booking_instructions ?? undefined,
-    clientAddress: (db as any).client_address ?? undefined,
-    addressReleasedAt: db.address_released_at ?? undefined,
-    providerId: (db as any).provider_id ?? undefined,
-    clientUserId: (db as any).user_id ?? undefined,
-    addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({
-      id: idx,
-      name: a.name_snapshot,
-      price: a.price_snapshot,
-    })),
-    paymentType: db.payment_type as 'full' | 'deposit',
-    amountPaid: db.amount_paid,
-    depositAmount: db.deposit_amount ?? 0,
-    remainingBalance: db.remaining_balance ?? 0,
-    serviceCharge: db.service_charge ?? 2.99,
-    paymentStatus: mapPay(db.payment_status),
-    paymentMethod: (db as any).payment_method ?? undefined,
-    createdAt: db.created_at ?? new Date().toISOString(),
-    updatedAt: db.updated_at ?? new Date().toISOString(),
-  };
-};
-
 // ==================== PROVIDER COMPONENT ====================
 
 export const BookingProvider = ({ children }: { children: ReactNode }) => {
@@ -660,8 +427,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             filter: `user_id=eq.${user.id}`,
           },
           () => {
-            // A booking was inserted/updated — reload to reflect latest status
+            // A booking was inserted/updated — reload to reflect latest status.
+            // Also update the Zustand store so non-context consumers stay fresh.
             loadBookings().catch(() => {});
+            useBookingStore.getState().refreshBookings(user.id).catch(() => {});
           }
         )
         .subscribe();
@@ -677,6 +446,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       if (__DEV__) console.log('Saving', bookingsToSave.length, 'bookings...');
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(bookingsToSave));
       setBookings(bookingsToSave);
+      // Keep the Zustand store in sync so non-context consumers stay current
+      useBookingStore.getState().setBookings(bookingsToSave);
       if (__DEV__) console.log('Bookings saved successfully');
     } catch (error) {
       console.error('❌ Failed to save bookings:', error);
@@ -1742,10 +1513,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useBooking = (): BookingContextType => {
+export const useBooking = (): BookingContextType & {
+  addBooking: (booking: ConfirmedBooking) => void;
+} => {
   const context = useContext(BookingContext);
   if (!context) {
     throw new Error('useBooking must be used within a BookingProvider');
   }
-  return context;
+  // Pull addBooking from the store (not in the original context API).
+  // Context values always take precedence — store is a supplemental layer.
+  const storeAddBooking = useBookingStore(s => s.addBooking);
+  return {
+    addBooking: storeAddBooking,
+    ...context,
+  };
 };

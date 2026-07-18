@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken } from '../services/pushNotificationService';
 import { updateBiometricToken, disableBiometric } from '../services/biometricService';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 export type AccountType = 'user' | 'provider';
 
@@ -168,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // using whatever is known from session metadata.
         console.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
-        const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
+        const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         setActiveMode(
           savedMode === 'provider' || savedMode === 'client'
             ? savedMode
@@ -206,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           needsEmailVerification: !session.user.email_confirmed_at,
           hasClientProfile: !!profile.dob,
         };
-        const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
+        const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         setActiveMode(
           savedMode === 'provider' || savedMode === 'client'
             ? savedMode
@@ -286,7 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Brief pause so the overlay renders before the navigator swaps
     await new Promise(resolve => setTimeout(resolve, 300));
     setActiveMode(next);
-    await AsyncStorage.setItem('@active_mode', next).catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, next).catch(() => {});
     await new Promise(resolve => setTimeout(resolve, 600));
     setIsSwitching(false);
   };
@@ -320,7 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     setUser(upgraded);
     setActiveMode('provider');
-    await AsyncStorage.setItem('@active_mode', 'provider').catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'provider').catch(() => {});
   };
 
   // Adds a client profile to an existing provider account in-place.
@@ -346,7 +347,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
     setUser({ ...user, dob, hasClientProfile: true });
     setActiveMode('client');
-    await AsyncStorage.setItem('@active_mode', 'client').catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   };
 
   // No-op: only called from AuthScreen which is not in the navigation stack.
@@ -381,7 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'saved_portfolio_items',
       'planner_events',
       '@bookings',
-      '@active_mode',
+      STORAGE_KEYS.ACTIVE_MODE,
     ]).catch(() => {});
     await unregisterPushToken().catch(() => {});
     disableBiometric().catch(() => {});

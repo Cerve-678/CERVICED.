@@ -1,6 +1,8 @@
 // src/contexts/RegistrationContext.tsx
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AccountType } from './AuthContext';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 export interface RegistrationData {
   accountType: AccountType;
@@ -86,13 +88,37 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 5;
 
+  // Rehydrate draft from AsyncStorage on mount so a user can resume
+  // a partially completed registration after closing the app.
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEYS.REGISTRATION_DRAFT)
+      .then(raw => {
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<RegistrationData>;
+          setData(prev => ({ ...prev, ...parsed }));
+        }
+      })
+      .catch(() => {}); // silent — don't block registration if storage fails
+  }, []);
+
   const updateData = useCallback((partial: Partial<RegistrationData>) => {
-    setData(prev => ({ ...prev, ...partial }));
+    setData(prev => {
+      const next = { ...prev, ...partial };
+      // Persist draft excluding password (sensitive — never stored on device)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password: _pw, ...safeData } = next;
+      AsyncStorage.setItem(
+        STORAGE_KEYS.REGISTRATION_DRAFT,
+        JSON.stringify(safeData)
+      ).catch(() => {});
+      return next;
+    });
   }, []);
 
   const resetData = useCallback(() => {
     setData(initialData);
     setCurrentStep(1);
+    AsyncStorage.removeItem(STORAGE_KEYS.REGISTRATION_DRAFT).catch(() => {});
   }, []);
 
   return (

@@ -1,7 +1,19 @@
 // src/services/bookingService.ts
 import { CartItem } from '../contexts/CartContext';
-import { AppointmentData } from '../contexts/BookingContext';
+import {
+  AppointmentData,
+  ConfirmedBooking,
+  BookingStatus,
+  PaymentStatus,
+  BookingCoordinates,
+} from '../types/booking';
+import type { BookingWithAddOns } from '../types/database';
 import type { ProviderLocationData } from './databaseService';
+import {
+  getMyBookings,
+  updateBookingStatus as dbUpdateBookingStatus,
+  updateBookingDateTime,
+} from './databaseService';
 
 
 export interface DepositPolicy {
@@ -313,4 +325,153 @@ export class BookingService {
 
     return summary.join('\n');
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Supabase-backed booking operations
+// These are the single implementations — do NOT duplicate in BookingContext.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display.
+ * This is the SINGLE SOURCE OF TRUTH for the DB→local mapping.
+ * Screens and contexts import this from here, never redefine it.
+ */
+export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
+  const toDisplayTime = (t: string): string => {
+    const parts = t.split(':');
+    let h = parseInt(parts[0] ?? '0');
+    const m = parseInt(parts[1] ?? '0');
+    const period = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    return `${h}:${m.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const mapSt = (s: string): BookingStatus => {
+    switch (s) {
+      case 'pending':     return BookingStatus.PENDING;
+      case 'completed':   return BookingStatus.COMPLETED;
+      case 'cancelled':   return BookingStatus.CANCELLED;
+      case 'in_progress': return BookingStatus.IN_PROGRESS;
+      case 'no_show':     return BookingStatus.NO_SHOW;
+      default:            return BookingStatus.UPCOMING;
+    }
+  };
+
+  const mapPay = (s: string): PaymentStatus => {
+    switch (s) {
+      case 'fully_paid':    return PaymentStatus.PAID_IN_FULL;
+      case 'deposit_paid':  return PaymentStatus.DEPOSIT_PAID;
+      case 'refunded':      return PaymentStatus.REFUNDED;
+      case 'failed':        return PaymentStatus.FAILED;
+      default:              return PaymentStatus.PENDING;
+    }
+  };
+
+  const startTime = toDisplayTime(db.booking_time);
+  const endTime   = toDisplayTime((db as any).end_time ?? db.booking_time);
+
+  // Compute duration string from start/end minutes
+  const toMin = (t: string | null | undefined): number => {
+    if (!t) return 0;
+    const clean = t.trim().toUpperCase();
+    const isPM = clean.includes('PM');
+    const isAM = clean.includes('AM');
+    const part  = clean.replace(/[AP]M/i, '').trim();
+    const [hs, ms] = part.split(':');
+    let h = parseInt(hs || '0', 10);
+    const m = parseInt(ms || '0', 10);
+    if (isAM && h === 12) h = 0;
+    if (isPM && h !== 12) h += 12;
+    return h * 60 + m;
+  };
+  const diffMin = toMin(endTime) - toMin(startTime);
+  const durationStr = diffMin > 0
+    ? (Math.floor(diffMin / 60) > 0 ? `${Math.floor(diffMin / 60)}h ` : '') +
+      (diffMin % 60 > 0 ? `${diffMin % 60}m` : '')
+    : '';
+
+  return {
+    id: db.id,
+    cartItemId: db.id,
+    providerName: db.provider_name_snapshot,
+    providerImage: db.provider_logo_snapshot ?? null,
+    providerService: db.service_category_snapshot ?? '',
+    serviceName: db.service_name_snapshot,
+    serviceDescription: '',
+    price: db.base_price,
+    duration: durationStr,
+    quantity: 1,
+    bookingDate: db.booking_date,
+    bookingTime: startTime,
+    endTime,
+    status: mapSt(db.status),
+    address: db.provider_address_snapshot ?? '',
+    coordinates: db.provider_coordinates
+      ? (db.provider_coordinates as unknown as BookingCoordinates)
+      : (null as unknown as BookingCoordinates),
+    phone: db.provider_phone_snapshot ?? '',
+    customerName: db.customer_name ?? '',
+    customerEmail: db.customer_email ?? '',
+    customerPhone: db.customer_phone ?? '',
+    notes: db.notes ?? undefined,
+    bookingInstructions: db.booking_instructions ?? undefined,
+    clientAddress: (db as any).client_address ?? undefined,
+    addressReleasedAt: db.address_released_at ?? undefined,
+    providerId: (db as any).provider_id ?? undefined,
+    clientUserId: (db as any).user_id ?? undefined,
+    addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({
+      id: idx,
+      name: a.name_snapshot,
+      price: a.price_snapshot,
+    })),
+    paymentType: db.payment_type as 'full' | 'deposit',
+    amountPaid: db.amount_paid,
+    depositAmount: db.deposit_amount ?? 0,
+    remainingBalance: db.remaining_balance ?? 0,
+    serviceCharge: db.service_charge ?? 2.99,
+    paymentStatus: mapPay(db.payment_status),
+    paymentMethod: (db as any).payment_method ?? undefined,
+    createdAt: db.created_at ?? new Date().toISOString(),
+    updatedAt: db.updated_at ?? new Date().toISOString(),
+  };
+};
+
+/**
+ * Fetch all bookings for the current authenticated user from Supabase,
+ * mapped to the local ConfirmedBooking shape.
+ * Throws on network / DB error so callers can handle loading state.
+ */
+export async function fetchBookingsFromSupabase(userId: string): Promise<ConfirmedBooking[]> {
+  // userId is accepted for interface clarity but getMyBookings() uses the
+  // session internally — keep consistent with the rest of the service layer.
+  void userId;
+  const rows = await getMyBookings();
+  return rows.map(mapDbBookingToConfirmed);
+}
+
+/**
+ * Mark a booking as cancelled in Supabase.
+ * The reason parameter is reserved for future cancellation-reason tracking.
+ * Throws on failure — callers must handle the error.
+ */
+export async function cancelBookingInSupabase(
+  bookingId: string,
+  _reason?: string
+): Promise<void> {
+  await dbUpdateBookingStatus(bookingId, 'cancelled');
+}
+
+/**
+ * Persist a rescheduled date/time for a booking in Supabase.
+ * Throws on failure — callers must handle the error.
+ */
+export async function rescheduleBookingInSupabase(
+  bookingId: string,
+  newDate: string,
+  newTime: string,
+  newEndTime: string
+): Promise<void> {
+  await updateBookingDateTime(bookingId, newDate, newTime, newEndTime);
 }

@@ -6,6 +6,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/navigationRef';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 export interface NotificationTapData {
   type?: string;
@@ -52,7 +53,7 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
-  const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
+  const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
   const isProvider = savedMode === 'provider';
 
   // ── Booking-related types ───────────────────────────────────────────────────
