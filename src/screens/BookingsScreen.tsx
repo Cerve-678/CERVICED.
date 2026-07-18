@@ -40,6 +40,7 @@ import type { WaitlistEntry } from '../services/WaitlistService';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { HomeScreenProps } from '../navigation/types';
+import { logger } from '../utils/logger';
 
 // ==================== TYPES ====================
 
@@ -440,7 +441,7 @@ const HiddenDevMenuTrigger = ({ navigation }: any) => {
     }, 2000);
 
     if (tapCountRef.current === 3) {
-      if (__DEV__) console.log('Opening Dev Settings...');
+      logger.log('Opening Dev Settings...');
       navigation.navigate('DevSettings');
       tapCountRef.current = 0;
       if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1194,7 +1195,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       // ✅ Clear any pending reschedule timeout for this booking
       const existingTimeout = rescheduleTimeoutsRef.current.get(bookingId);
       if (existingTimeout) {
-        if (__DEV__) console.log(`[Booking ${bookingId}] Clearing reschedule timeout (booking cancelled)`);
+        logger.log(`[Booking ${bookingId}] Clearing reschedule timeout (booking cancelled)`);
         clearTimeout(existingTimeout);
         rescheduleTimeoutsRef.current.delete(bookingId);
       }
@@ -1295,14 +1296,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         const bookingId = selectedBooking.id;
         const providerName = selectedBooking.providerName;
 
-        if (__DEV__) console.log(`[${providerName}] Step 3: User confirming booking ${bookingId} to ${date} at ${time}`);
+        logger.log(`[${providerName}] Step 3: User confirming booking ${bookingId} to ${date} at ${time}`);
         await confirmReschedule(bookingId, date, time);
-        if (__DEV__) console.log(`[${providerName}] Step 3 Complete: Booking ${bookingId} Status=UPCOMING`);
+        logger.log(`[${providerName}] Step 3 Complete: Booking ${bookingId} Status=UPCOMING`);
 
         // ✅ Clear any pending timeout for this booking since reschedule is complete
         const existingTimeout = rescheduleTimeoutsRef.current.get(bookingId);
         if (existingTimeout) {
-          if (__DEV__) console.log(`[${providerName}] Clearing timeout for booking ${bookingId} (confirmed)`);
+          logger.log(`[${providerName}] Clearing timeout for booking ${bookingId} (confirmed)`);
           clearTimeout(existingTimeout);
           rescheduleTimeoutsRef.current.delete(bookingId);
         }
@@ -1323,9 +1324,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         const currentMonth = new Date(selectedRescheduleMonth);
         const capturedSelections = [...selectedDates];
 
-        if (__DEV__) console.log(`[${providerName}] Step 1: User requesting reschedule for booking ${bookingId}`);
+        logger.log(`[${providerName}] Step 1: User requesting reschedule for booking ${bookingId}`);
         await requestReschedule(bookingId, selectedDates.map(resolveDateLabel));
-        if (__DEV__) console.log(`[${providerName}] Step 1 Complete: Booking ${bookingId} Status=PENDING`);
+        logger.log(`[${providerName}] Step 1 Complete: Booking ${bookingId} Status=PENDING`);
 
         setSuccessMessage(`Reschedule request sent! ${providerName} will respond with available dates.`);
         setSuccessIcon('✓');
@@ -1334,7 +1335,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // ✅ Clear any existing timeout for this booking to prevent interference
         const existingTimeout = rescheduleTimeoutsRef.current.get(bookingId);
         if (existingTimeout) {
-          if (__DEV__) console.log(`[${providerName}] Clearing previous timeout for booking ${bookingId}`);
+          logger.log(`[${providerName}] Clearing previous timeout for booking ${bookingId}`);
           clearTimeout(existingTimeout);
           rescheduleTimeoutsRef.current.delete(bookingId);
         }
@@ -1342,7 +1343,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // ✅ DEV ONLY: mock provider response after 30s (real response comes via Supabase notification)
         if (__DEV__) {
           const rescheduleTimeout = setTimeout(async () => {
-            console.log(`[${providerName}] DEV: 30s mock provider response for booking ${bookingId}`);
+            logger.log(`[${providerName}] DEV: 30s mock provider response for booking ${bookingId}`);
 
             const response = generateDynamicRescheduleDates(currentMonth, capturedSelections);
             setProviderResponseMessage(response.message);
@@ -1355,7 +1356,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             try {
               await providerRespondToReschedule(bookingId, mockAvailableDates);
             } catch (error) {
-              console.error(`[${providerName}] DEV mock error for booking ${bookingId}:`, error);
+              logger.error(`[${providerName}] DEV mock error for booking ${bookingId}:`, error);
             }
 
             rescheduleTimeoutsRef.current.delete(bookingId);
@@ -1365,7 +1366,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         }
       }
     } catch (error: any) {
-      console.error('❌ Reschedule error:', error);
+      logger.error('❌ Reschedule error:', error);
       Alert.alert('Error', 'Couldn\'t process the reschedule request. Please try again.');
     } finally {
       setIsLoading(false);
@@ -1461,7 +1462,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
-    if (__DEV__) console.log('Processing tip:', tipAmount);
+    logger.log('Processing tip:', tipAmount);
 
     // ✅ Mark as tipped
     setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
@@ -1546,7 +1547,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             longitude: location.coords.longitude,
           };
           setUserLocation(newLocation);
-          if (__DEV__) console.log('Location refreshed:', newLocation);
+          logger.log('Location refreshed:', newLocation);
 
           // Center map on user location if no active bookings
           if (mapRef.current && !currentBooking) {
@@ -1561,10 +1562,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           }
         }
       } catch (locationError) {
-        console.error('Error refreshing location:', locationError);
+        logger.error('Error refreshing location:', locationError);
       }
     } catch (error) {
-      console.error('Refresh failed:', error);
+      logger.error('Refresh failed:', error);
       setBookingsError('Failed to load bookings. Pull down to retry.');
     } finally {
       setRefreshing(false);
@@ -1649,7 +1650,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           }
         }
       } catch (error) {
-        console.error('Error getting location:', error);
+        logger.error('Error getting location:', error);
       }
     };
 
@@ -1666,9 +1667,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Cleanup all reschedule timeouts on unmount to prevent memory leaks
   useEffect(() => {
     return () => {
-      if (__DEV__) console.log('Cleaning up all reschedule timeouts');
+      logger.log('Cleaning up all reschedule timeouts');
       rescheduleTimeoutsRef.current.forEach((timeout, bookingId) => {
-        if (__DEV__) console.log(`Clearing timeout for booking ${bookingId}`);
+        logger.log(`Clearing timeout for booking ${bookingId}`);
         clearTimeout(timeout);
       });
       rescheduleTimeoutsRef.current.clear();
@@ -1678,7 +1679,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Reset map to user area when all bookings are completed
   useEffect(() => {
     if (allTodayBookingsCompleted && mapRef.current && userLocation) {
-      if (__DEV__) console.log('All bookings completed, centering map on user location');
+      logger.log('All bookings completed, centering map on user location');
       mapRef.current.animateToRegion(
         {
           ...userLocation,
@@ -1697,7 +1698,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       const shouldOpenReschedule = route.params.openReschedule;
       const shouldHighlight = !!route.params.highlightBookingId;
 
-      if (__DEV__) console.log('BookingsScreen received params:', { bookingId, shouldOpenReschedule, shouldHighlight });
+      logger.log('BookingsScreen received params:', { bookingId, shouldOpenReschedule, shouldHighlight });
 
       // Find booking in all lists
       const allBookings = [
@@ -1709,12 +1710,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       const booking = allBookings.find(b => b.id === bookingId);
 
       if (booking) {
-        if (__DEV__) console.log('Found booking:', booking.id);
+        logger.log('Found booking:', booking.id);
 
         // Auto-detect which tab the booking belongs to
         const isInPast = (pastBookings || []).some(b => b.id === bookingId);
         const correctTab: 'all' | 'past' = isInPast ? 'past' : 'all';
-        if (__DEV__) console.log('Auto-detected tab:', correctTab);
+        logger.log('Auto-detected tab:', correctTab);
         setActiveFilters(new Set([correctTab]));
 
         setSelectedBooking(booking);
@@ -1740,7 +1741,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               y: 200,
               animated: true,
             });
-            if (__DEV__) console.log('Scrolled to bookings section');
+            logger.log('Scrolled to bookings section');
           }
         }, 400);
 
@@ -1756,11 +1757,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 }
               } catch {}
             }
-            if (__DEV__) console.log('Opening reschedule modal');
+            logger.log('Opening reschedule modal');
             setShowRescheduleModal(true);
             setModalVisible(false);
           } else if (route.params?.openBookingId) {
-            if (__DEV__) console.log('Opening booking details modal');
+            logger.log('Opening booking details modal');
             setModalVisible(true);
           }
         }, 500);
@@ -1768,11 +1769,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         // Clear params after handling
         navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
       } else {
-        console.warn('⚠️ Booking not found:', bookingId);
+        logger.warn('⚠️ Booking not found:', bookingId);
       }
     } else if (route?.params?.initialTab) {
       // Fallback: handle initialTab when no bookingId (e.g. generic "view past bookings")
-      if (__DEV__) console.log('BookingsScreen: switching to tab:', route.params.initialTab);
+      logger.log('BookingsScreen: switching to tab:', route.params.initialTab);
       setActiveFilters(new Set([route.params.initialTab]));
       navigation.setParams({ initialTab: undefined } as any);
     }
@@ -1807,7 +1808,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       const datesCount = updatedBooking.rescheduleRequest?.providerAvailableDates?.length || 0;
       const hasDatesObject = !!updatedBooking.rescheduleRequest?.providerAvailableDates;
 
-      if (__DEV__) console.log(`[${updatedBooking.providerName}] Booking ${updatedBooking.id} state update:`, {
+      logger.log(`[${updatedBooking.providerName}] Booking ${updatedBooking.id} state update:`, {
         from: `${wasPending ? (oldDatesCount > 0 ? 'AVAILABLE' : 'PENDING') : 'UPCOMING'}`,
         to: `${isPending ? (datesCount > 0 ? 'AVAILABLE' : 'PENDING') : 'UPCOMING'}`,
         dates: `${oldDatesCount} → ${datesCount}`,
@@ -2429,7 +2430,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     data={listItems}
                     keyExtractor={(item) => item.serviceType}
                     onScrollToIndexFailed={(info) => {
-                      console.warn('Scroll to index failed:', info);
+                      logger.warn('Scroll to index failed:', info);
                       bookingsListRef.current?.scrollToOffset({
                         offset: info.averageItemLength * info.index,
                         animated: true,

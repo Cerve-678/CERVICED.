@@ -1,4 +1,5 @@
 import { Image } from 'react-native';
+import { logger } from './logger';
 
 interface ImageCache {
   [uri: string]: boolean;
@@ -21,7 +22,7 @@ class ImageService {
       await Image.prefetch(uri);
       this.cache[uri] = true;
     } catch (error) {
-      console.error(`Failed to preload image: ${uri}`, error);
+      logger.error(`Failed to preload image: ${uri}`, error);
     }
   }
 

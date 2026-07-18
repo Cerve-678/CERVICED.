@@ -12,6 +12,7 @@ import ProviderAccountNavigator from './Tabs/ProviderAccountNavigator';
 // Components
 import TabIcon from '../components/TabIcon';
 import IslandPillTabBar from '../components/IslandPillTabBar';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { useTheme } from '../contexts/ThemeContext';
 
 const Tab = createBottomTabNavigator<ProviderTabParamList>();
@@ -32,42 +33,62 @@ export default function ProviderTabNavigation() {
     >
       <Tab.Screen
         name="Becca"
-        component={BeccaNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon name="chat-dots" focused={focused} color={theme.text} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <BeccaNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="ProviderHome"
-        component={ProviderHomeNavigator}
         options={{
           title: 'Home',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="calendar-today" focused={focused} color={theme.text} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <ProviderHomeNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="MyServices"
-        component={ProviderServicesNavigator}
         options={{
           title: 'My Services',
           tabBarIcon: ({ focused }) => (
             <TabIcon name="grid-layout" focused={focused} color={theme.text} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <ProviderServicesNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="Profile"
-        component={ProviderAccountNavigator}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon name="user" focused={focused} color={theme.text} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <ProviderAccountNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }

@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken } from '../services/pushNotificationService';
 import { updateBiometricToken, disableBiometric } from '../services/biometricService';
+import { logger } from '../utils/logger';
 
 export type AccountType = 'user' | 'provider';
 
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
     // so we only use it as the single source of truth — no separate getSession() call.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
+      logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
         setSession(session);
@@ -143,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserProfile = async (session: Session) => {
     try {
-      console.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
+      logger.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
 
       // The ONLY hard block: unverified email. Every other failure (DB errors,
       // missing rows, RLS, expired token mid-refresh) must NOT kick a signed-in
@@ -166,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Transient failure — network, 401 from expired token before auto-refresh
         // completes, RLS policy, etc. Session is valid; keep the user logged in
         // using whatever is known from session metadata.
-        console.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
+        logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
         setActiveMode(
@@ -191,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (profile) {
-        console.log('[AuthContext] profile found — role:', profile.role);
+        logger.log('[AuthContext] profile found — role:', profile.role);
         const role = (profile.role as AccountType) ?? 'user';
         const userData: UserData = {
           id: profile.id,
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
         setUser(userData);
         setIsLoggedIn(true);
-        console.log('[AuthContext] setIsLoggedIn(true) — navigating in');
+        logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
         registerForPushNotifications().catch(() => {});
       } else {
         // PGRST116: no profile row yet.
@@ -223,7 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // (b) Missing row for an existing account.
         // In both cases: session is valid, keep the user logged in.
         if (meta?.['name']) {
-          console.log('[AuthContext] no profile row — signup race, using metadata fallback');
+          logger.log('[AuthContext] no profile row — signup race, using metadata fallback');
           const role = (meta['role'] as AccountType) ?? 'user';
           setUser({
             id: session.user.id,
@@ -242,7 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           // No profile row and no metadata — use email-derived name as minimal data.
           // User stays logged in; profile will populate once the DB row is created.
-          console.log('[AuthContext] no profile row and no metadata — logging in with minimal session data');
+          logger.log('[AuthContext] no profile row and no metadata — logging in with minimal session data');
           setUser({
             id: session.user.id,
             name: session.user.email?.split('@')[0] ?? '',
@@ -258,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       // Unexpected JS error. Don't sign the user out — the session is still valid.
       // Fall back to session metadata so they stay in the app.
-      console.error('[AuthContext] unexpected error in loadUserProfile:', error);
+      logger.error('[AuthContext] unexpected error in loadUserProfile:', error);
       try {
         const meta = session.user.user_metadata as Record<string, any>;
         setUser({
@@ -361,7 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: updated.name,
       phone: updated.phone,
     }).eq('id', updated.id);
-    if (error) console.warn('updateUser DB error:', error.message);
+    if (error) logger.warn('updateUser DB error:', error.message);
   };
 
   const logout = async () => {
@@ -388,7 +389,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Await signOut so the session is fully cleared in AsyncStorage before the
     // function returns. If the app is killed immediately after logout, the session
     // won't linger and re-log the user in on next launch.
-    await supabase.auth.signOut().catch(err => console.warn('signOut error:', err));
+    await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
   };
 
   return (

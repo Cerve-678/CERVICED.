@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { storage, STORAGE_KEYS } from '../utils/storage';
+import { logger } from '../utils/logger';
 
 export interface User {
   id: string;
@@ -71,7 +72,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       set({ isLoading: false, isAuthenticated: false });
       // Surface to caller — callers must wrap in try/catch or .catch()
       throw error;
@@ -85,7 +86,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
       await storage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
     } catch (error) {
       // Storage cleanup failed — still clear in-memory state so user isn't stuck
-      console.error('Logout storage cleanup error:', error);
+      logger.error('Logout storage cleanup error:', error);
     } finally {
       set({
         user: null,
@@ -116,7 +117,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
         isLoading: false,
       });
     } catch (error) {
-      console.error('App initialization error:', error);
+      logger.error('App initialization error:', error);
       set({
         isInitialized: true,
         isLoading: false,

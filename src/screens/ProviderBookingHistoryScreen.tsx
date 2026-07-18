@@ -25,6 +25,7 @@ import { ThemedBackground } from '../components/ThemedBackground';
 import { supabase } from '../lib/supabase';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
+import { logger } from '../utils/logger';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 
@@ -390,7 +391,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
       setInviteDate(null);
       setInviteTime(null);
     } catch (err) {
-      console.error('Invite failed:', err);
+      logger.error('Invite failed:', err);
       Alert.alert('Invite failed', 'The booking could not be created. Please check your connection and try again.');
     }
     setInviting(false);

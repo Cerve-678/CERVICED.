@@ -22,6 +22,7 @@ import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../servi
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
@@ -115,7 +116,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       }, { onConflict: 'id' });
 
       if (upsertError) {
-        console.warn('Profile upsert error:', upsertError.message);
+        logger.warn('Profile upsert error:', upsertError.message);
       }
 
       const toEmail = meta['role'] === 'provider'
@@ -133,7 +134,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       // finished yet. Navigation to MainTabs happens automatically when isLoggedIn flips true.
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      console.error('OTP verification error:', err);
+      logger.error('OTP verification error:', err);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setIsVerifying(false);

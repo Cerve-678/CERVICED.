@@ -17,6 +17,7 @@ import { usePlannerStore } from '../stores/usePlannerStore';
 import { PortfolioItem } from '../data/providerProfiles';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
+import { logger } from '../utils/logger';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -103,7 +104,7 @@ export const CreateEventModal = ({
       setSelectedDate('');
       onCreated(event.id);
     } catch (error) {
-      console.error('Failed to create event:', error);
+      logger.error('Failed to create event:', error);
     } finally {
       setIsCreating(false);
     }

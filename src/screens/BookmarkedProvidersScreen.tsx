@@ -23,6 +23,7 @@ import type { DbProvider } from '../types/database';
 import Icon from '../components/IconLibrary';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { logger } from '../utils/logger';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const L = {
@@ -189,7 +190,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
             setProviderIdsWithOffers(new Set(promos.map(p => p.provider_id)));
           } catch { /* silent */ }
         } catch (error) {
-          console.error('Failed to load bookmarks:', error);
+          logger.error('Failed to load bookmarks:', error);
         } finally {
           setLoading(false);
         }
@@ -204,7 +205,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       setLiveProviders(prev => prev.filter(p => p.id !== providerId));
       await removeBookmark(providerId);
     } catch (error) {
-      console.error('Failed to remove bookmark:', error);
+      logger.error('Failed to remove bookmark:', error);
     }
   };
 

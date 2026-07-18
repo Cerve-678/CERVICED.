@@ -8,6 +8,7 @@ import {
   savePortfolioItemToDb,
   unsavePortfolioItemFromDb,
 } from '../services/databaseService';
+import { logger } from '../utils/logger';
 
 interface BookmarkStore {
   // Provider bookmarks (existing)
@@ -42,7 +43,7 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
         await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, updated);
         await dbAddBookmark(id);
       } catch (error) {
-        console.error('Failed to save bookmark:', error);
+        logger.error('Failed to save bookmark:', error);
         set({ bookmarkedIds: current });
       }
     }
@@ -56,7 +57,7 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
       await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, updated);
       await dbRemoveBookmark(id);
     } catch (error) {
-      console.error('Failed to remove bookmark:', error);
+      logger.error('Failed to remove bookmark:', error);
       set({ bookmarkedIds: current });
     }
   },
@@ -70,16 +71,16 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
         const unique = [...new Set(ids)];
         set({ bookmarkedIds: unique });
         await storage.setItem(STORAGE_KEYS.BOOKMARKED_VIDEOS, unique);
-        if (__DEV__) console.log('Loaded bookmarks from Supabase:', unique.length);
+        logger.log('Loaded bookmarks from Supabase:', unique.length);
         return;
       }
       // Fallback to local cache
       const local = await storage.getItem<string[]>(STORAGE_KEYS.BOOKMARKED_VIDEOS) || [];
       const unique = [...new Set(local)];
       set({ bookmarkedIds: unique });
-      if (__DEV__) console.log('Loaded bookmarks from local:', unique.length);
+      logger.log('Loaded bookmarks from local:', unique.length);
     } catch (error) {
-      console.error('Failed to load bookmarks:', error);
+      logger.error('Failed to load bookmarks:', error);
       set({ bookmarkedIds: [] });
     }
   },
@@ -98,7 +99,7 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
         await storage.setItem(STORAGE_KEYS.SAVED_PORTFOLIO, updated);
         await savePortfolioItemToDb(id);
       } catch (error) {
-        console.error('Failed to save portfolio item:', error);
+        logger.error('Failed to save portfolio item:', error);
         set({ savedPortfolioIds: current });
       }
     }
@@ -112,7 +113,7 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
       await storage.setItem(STORAGE_KEYS.SAVED_PORTFOLIO, updated);
       await unsavePortfolioItemFromDb(id);
     } catch (error) {
-      console.error('Failed to unsave portfolio item:', error);
+      logger.error('Failed to unsave portfolio item:', error);
       set({ savedPortfolioIds: current });
     }
   },
@@ -125,15 +126,15 @@ export const useBookmarkStore = create<BookmarkStore>((set, get) => ({
         const unique = [...new Set(dbIds)];
         set({ savedPortfolioIds: unique });
         await storage.setItem(STORAGE_KEYS.SAVED_PORTFOLIO, unique);
-        if (__DEV__) console.log('Loaded saved portfolio from Supabase:', unique.length);
+        logger.log('Loaded saved portfolio from Supabase:', unique.length);
         return;
       }
       const saved = await storage.getItem<string[]>(STORAGE_KEYS.SAVED_PORTFOLIO) || [];
       const uniqueSaved = [...new Set(saved)];
       set({ savedPortfolioIds: uniqueSaved });
-      if (__DEV__) console.log('Loaded saved portfolio from local:', uniqueSaved.length);
+      logger.log('Loaded saved portfolio from local:', uniqueSaved.length);
     } catch (error) {
-      console.error('Failed to load saved portfolio:', error);
+      logger.error('Failed to load saved portfolio:', error);
       set({ savedPortfolioIds: [] });
     }
   },

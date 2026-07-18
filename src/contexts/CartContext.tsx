@@ -1,5 +1,6 @@
 // src/contexts/CartContext.tsx - COMPLETE UPDATED VERSION
 import React, { createContext, useContext, useReducer, useCallback, useMemo, ReactNode } from 'react';
+import { logger } from '../utils/logger';
 
 // CartItem interface
 export interface CartItem {
@@ -319,7 +320,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
         return state;
     }
   } catch (error) {
-    console.error('Cart reducer error:', error);
+    logger.error('Cart reducer error:', error);
     // Return state unchanged but surface the error via Alert so users know something went wrong
     const { Alert } = require('react-native');
     Alert.alert('Cart Error', 'Something went wrong updating your cart. Please try again.');

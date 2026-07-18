@@ -16,6 +16,7 @@ import {
   type BlurTint,
   type StatusBarStyle,
 } from '../theme/tokens';
+import { logger } from '../utils/logger';
 
 // ============================================
 // ENTERPRISE THEME TYPES
@@ -240,7 +241,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setThemePref('auto');
       }
     } catch (error) {
-      console.error('Failed to load theme preference:', error);
+      logger.error('Failed to load theme preference:', error);
       setThemePref('auto');
     } finally {
       setIsLoading(false);
@@ -251,7 +252,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, preference);
     } catch (error) {
-      console.error('Failed to save theme preference:', error);
+      logger.error('Failed to save theme preference:', error);
     }
   };
 

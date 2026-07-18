@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { storage, STORAGE_KEYS } from '../utils/storage';
 import { PortfolioItem } from '../data/providerProfiles';
+import { logger } from '../utils/logger';
 
 export interface PlanTask {
   id: string;
@@ -147,7 +148,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to save event:', error);
+      logger.error('Failed to save event:', error);
       set({ events: current, activeEventId: get().activeEventId });
     }
 
@@ -164,7 +165,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to update event:', error);
+      logger.error('Failed to update event:', error);
       set({ events: current });
     }
   },
@@ -178,7 +179,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to delete event:', error);
+      logger.error('Failed to delete event:', error);
       set({ events: current });
     }
   },
@@ -218,7 +219,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to add task:', error);
+      logger.error('Failed to add task:', error);
       set({ events: current });
     }
   },
@@ -240,7 +241,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to update task:', error);
+      logger.error('Failed to update task:', error);
       set({ events: current });
     }
   },
@@ -257,7 +258,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to remove task:', error);
+      logger.error('Failed to remove task:', error);
       set({ events: current });
     }
   },
@@ -281,7 +282,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to add checklist item:', error);
+      logger.error('Failed to add checklist item:', error);
       set({ events: current });
     }
   },
@@ -303,7 +304,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to toggle checklist item:', error);
+      logger.error('Failed to toggle checklist item:', error);
       set({ events: current });
     }
   },
@@ -320,7 +321,7 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
     try {
       await persistEvents(updated);
     } catch (error) {
-      console.error('Failed to remove checklist item:', error);
+      logger.error('Failed to remove checklist item:', error);
       set({ events: current });
     }
   },
@@ -330,10 +331,10 @@ export const usePlannerStore = create<PlannerStore>((set, get) => ({
       const events = await storage.getItem<PlanEvent[]>(STORAGE_KEYS.PLANNER_EVENTS) || [];
       set({ events });
       if (__DEV__) {
-        console.log('Loaded planner events:', events.length);
+        logger.log('Loaded planner events:', events.length);
       }
     } catch (error) {
-      console.error('Failed to load planner events:', error);
+      logger.error('Failed to load planner events:', error);
       set({ events: [] });
     }
   },

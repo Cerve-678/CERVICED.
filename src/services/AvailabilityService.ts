@@ -3,6 +3,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 const BOOKINGS_STORAGE_KEY = '@bookings';
 
@@ -172,7 +173,7 @@ export const AvailabilityService = {
         duration: booking.duration,
       }));
     } catch (error) {
-      console.error('Error fetching booked slots:', error);
+      logger.error('Error fetching booked slots:', error);
       return [];
     }
   },
@@ -335,7 +336,7 @@ export const AvailabilityService = {
         };
       });
     } catch (error) {
-      console.error('Error getting available slots:', error);
+      logger.error('Error getting available slots:', error);
       return [];
     }
   },
@@ -430,7 +431,7 @@ export const AvailabilityService = {
       }
       return { hasConflict: false };
     } catch (error) {
-      console.error('Error checking slot availability:', error);
+      logger.error('Error checking slot availability:', error);
       return {
         hasConflict: true,
         message: 'Unable to verify availability. Please try again.',

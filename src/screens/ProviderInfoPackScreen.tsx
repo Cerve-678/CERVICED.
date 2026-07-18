@@ -25,6 +25,7 @@ import { useProviderDialog } from '../components/ProviderDialog';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { supabase } from '../lib/supabase';
 import { getMyProviderServices } from '../services/databaseService';
+import { logger } from '../utils/logger';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -275,7 +276,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
       .eq('provider_id', user.id)
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (error) { console.warn('[InfoPacks] fetch error:', error.message); }
+        if (error) { logger.warn('[InfoPacks] fetch error:', error.message); }
         else setPacks((data ?? []).map(r => ({
           id: r.id,
           title: r.title,

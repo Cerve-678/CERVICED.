@@ -1,4 +1,5 @@
 import Reactotron from 'reactotron-react-native';
+import { logger } from './logger';
 
 if (__DEV__) {
   Reactotron
@@ -20,7 +21,7 @@ if (__DEV__) {
   // Clear Reactotron on each app load during development
   Reactotron.clear();
 
-  if (__DEV__) console.log('Reactotron Configured');
+  logger.log('Reactotron Configured');
 }
 
 export default Reactotron;

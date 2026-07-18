@@ -62,6 +62,7 @@ import {
 
 // Navigation types
 import { ProfileStackParamList } from '../navigation/types';
+import { logger } from '../utils/logger';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -1812,7 +1813,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
-      console.error('Error saving provider profile:', e);
+      logger.error('Error saving provider profile:', e);
       Alert.alert('Error', 'Couldn\'t save your profile. Please try again.');
     } finally {
       setIsSubmitting(false);

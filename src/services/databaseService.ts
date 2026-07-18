@@ -27,6 +27,7 @@ import type {
   DbProviderAvailability,
   DbProviderBlockedDate,
 } from '../types/database';
+import { logger } from '../utils/logger';
 
 // ─────────────────────────────────────────────────────────
 // PROVIDERS
@@ -1085,7 +1086,7 @@ export async function insertProviderNotification(params: {
   if (error) {
     // Surface the failure — callers decide whether it's fatal. Swallowing it
     // here is how RLS-blocked inserts went unnoticed.
-    console.warn('[insertProviderNotification] insert failed:', error.message);
+    logger.warn('[insertProviderNotification] insert failed:', error.message);
     throw error;
   }
 }
@@ -1428,7 +1429,7 @@ export async function insertBookingUserNotification(params: {
     provider_id: params.provider_id ?? null,
   });
   if (error) {
-    console.warn('[insertBookingUserNotification] insert failed:', error.message);
+    logger.warn('[insertBookingUserNotification] insert failed:', error.message);
     throw error;
   }
 }

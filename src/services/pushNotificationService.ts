@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 // Show banner + play sound even when the app is foregrounded
 Notifications.setNotificationHandler({
@@ -27,7 +28,7 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotifications(): Promise<string | null> {
   // Push tokens only work on real devices
   if (!Device.isDevice) {
-    if (__DEV__) console.log('[Push] Skipping — not a real device');
+    logger.log('[Push] Skipping — not a real device');
     return null;
   }
 
@@ -41,7 +42,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   if (finalStatus !== 'granted') {
-    if (__DEV__) console.log('[Push] Permission denied');
+    logger.log('[Push] Permission denied');
     return null;
   }
 
@@ -60,7 +61,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       projectId: '624d44eb-1d17-4c9a-b782-3675ee5e7863',
     });
     const token = tokenData.data;
-    if (__DEV__) console.log('[Push] Token obtained:', token);
+    logger.log('[Push] Token obtained:', token);
 
     // Save token to the current user's row in Supabase
     const { data: { user } } = await supabase.auth.getUser();
@@ -70,15 +71,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
         .update({ push_token: token })
         .eq('id', user.id);
       if (error) {
-        console.warn('[Push] Failed to save token to DB:', error.message);
+        logger.warn('[Push] Failed to save token to DB:', error.message);
       } else {
-        if (__DEV__) console.log('[Push] Token saved to Supabase');
+        logger.log('[Push] Token saved to Supabase');
       }
     }
 
     return token;
   } catch (err) {
-    console.warn('[Push] Failed to get token:', err);
+    logger.warn('[Push] Failed to get token:', err);
     return null;
   }
 }

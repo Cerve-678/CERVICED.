@@ -36,6 +36,7 @@ import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { getMobileProviderDisplayNames, getProviderSchedulingConstraints } from '../services/databaseService';
 import { supabase } from '../lib/supabase';
+import { logger } from '../utils/logger';
 
 // ─── Design tokens — matches app-wide palette ─────────────────────────────────
 const L = {
@@ -132,7 +133,7 @@ let ModernBeautyCalendar: React.FC<CalendarProps>;
 try {
   ModernBeautyCalendar = require('../components/ModernBeautyCalendar').ModernBeautyCalendar;
 } catch (error) {
-  console.warn('ModernBeautyCalendar not found, using fallback');
+  logger.warn('ModernBeautyCalendar not found, using fallback');
   ModernBeautyCalendar = FallbackCalendar;
 }
 
@@ -183,73 +184,73 @@ const handlePayment = useCallback(async () => {
   // ✅ CRITICAL: Prevent multiple simultaneous payment processing
   if (processingRef.current) {
     if (__DEV__) {
-      console.log(`[${timestamp()}] Payment already processing - ignoring duplicate call`);
+      logger.log(`[${timestamp()}] Payment already processing - ignoring duplicate call`);
     }
     return;
   }
 
   processingRef.current = true;
   if (__DEV__) {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`[${timestamp()}] PAY BUTTON PRESSED`);
-    console.log(`${'='.repeat(60)}\n`);
+    logger.log(`\n${'='.repeat(60)}`);
+    logger.log(`[${timestamp()}] PAY BUTTON PRESSED`);
+    logger.log(`${'='.repeat(60)}\n`);
   }
 
   setIsProcessing(true);
   try {
     if (__DEV__) {
-      console.log(`\n[${timestamp()}] Calling onPaymentSuccess...`);
+      logger.log(`\n[${timestamp()}] Calling onPaymentSuccess...`);
     }
     const startTime = Date.now();
     try {
       await onPaymentSuccess(selectedPaymentMethod);
       const duration = Date.now() - startTime;
       if (__DEV__) {
-        console.log(`[${timestamp()}] onPaymentSuccess completed in ${duration}ms`);
+        logger.log(`[${timestamp()}] onPaymentSuccess completed in ${duration}ms`);
       }
     } catch (bookingError) {
       const duration = Date.now() - startTime;
-      console.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED after ${duration}ms:`, bookingError);
+      logger.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED after ${duration}ms:`, bookingError);
       throw bookingError;
     }
 
     if (__DEV__) {
-      console.log(`\n[${timestamp()}] Waiting 500ms for AsyncStorage to complete...`);
+      logger.log(`\n[${timestamp()}] Waiting 500ms for AsyncStorage to complete...`);
     }
     await new Promise(resolve => setTimeout(resolve, 500));
     if (__DEV__) {
-      console.log(`[${timestamp()}] 500ms wait complete`);
+      logger.log(`[${timestamp()}] 500ms wait complete`);
     }
 
     if (__DEV__) {
-      console.log(`\n[${timestamp()}] Calling onPaymentComplete (clearing cart)...`);
+      logger.log(`\n[${timestamp()}] Calling onPaymentComplete (clearing cart)...`);
     }
     onPaymentComplete();
     if (__DEV__) {
-      console.log(`[${timestamp()}] Cart cleared successfully`);
+      logger.log(`[${timestamp()}] Cart cleared successfully`);
     }
 
     if (__DEV__) {
-      console.log(`\n[${timestamp()}] Setting success modal visible...`);
+      logger.log(`\n[${timestamp()}] Setting success modal visible...`);
     }
     setShowSuccessModal(true);
     if (__DEV__) {
-      console.log(`[${timestamp()}] Success modal set to visible`);
+      logger.log(`[${timestamp()}] Success modal set to visible`);
     }
 
     if (__DEV__) {
-      console.log(`\n${'='.repeat(60)}`);
-      console.log(`[${timestamp()}] PAYMENT FLOW COMPLETE`);
-      console.log(`${'='.repeat(60)}\n`);
+      logger.log(`\n${'='.repeat(60)}`);
+      logger.log(`[${timestamp()}] PAYMENT FLOW COMPLETE`);
+      logger.log(`${'='.repeat(60)}\n`);
     }
   } catch (error) {
-    console.error(`\n${'='.repeat(60)}`);
-    console.error(`❌ [${timestamp()}] PAYMENT ERROR`);
-    console.error(`${'='.repeat(60)}`);
-    console.error(`❌ [${timestamp()}] Error:`, error);
-    console.error(`❌ [${timestamp()}] Error message:`, (error as Error).message);
-    console.error(`❌ [${timestamp()}] Error stack:`, (error as Error).stack);
-    console.error(`${'='.repeat(60)}\n`);
+    logger.error(`\n${'='.repeat(60)}`);
+    logger.error(`❌ [${timestamp()}] PAYMENT ERROR`);
+    logger.error(`${'='.repeat(60)}`);
+    logger.error(`❌ [${timestamp()}] Error:`, error);
+    logger.error(`❌ [${timestamp()}] Error message:`, (error as Error).message);
+    logger.error(`❌ [${timestamp()}] Error stack:`, (error as Error).stack);
+    logger.error(`${'='.repeat(60)}\n`);
 
     Alert.alert(
       'Booking Failed',
@@ -257,12 +258,12 @@ const handlePayment = useCallback(async () => {
     );
   } finally {
     if (__DEV__) {
-      console.log(`[${timestamp()}] Setting isProcessing to false`);
+      logger.log(`[${timestamp()}] Setting isProcessing to false`);
     }
     setIsProcessing(false);
     processingRef.current = false; // ✅ Reset processing guard
     if (__DEV__) {
-      console.log(`[${timestamp()}] isProcessing set to false\n`);
+      logger.log(`[${timestamp()}] isProcessing set to false\n`);
     }
   }
 }, [totalAmount, onPaymentSuccess, onPaymentComplete, onClose]);
@@ -458,7 +459,7 @@ const NotesModal: React.FC<NotesModalProps> = memo(
         onSave(notes.trim());
         onClose();
       } catch (error) {
-        console.error('Error saving notes:', error);
+        logger.error('Error saving notes:', error);
         Alert.alert('Error', 'Failed to save notes. Please try again.');
       } finally {
         setIsLoading(false);
@@ -611,7 +612,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
         }, 0);
         return basePrice + addOnsTotal;
       } catch (error) {
-        console.error('Error calculating price:', error);
+        logger.error('Error calculating price:', error);
         return Number(item?.price) || 0;
       }
     }, [item?.price, item?.addOns]);
@@ -644,7 +645,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             selectedDate: date,
           });
         } catch (error) {
-          console.error('Error updating date:', error);
+          logger.error('Error updating date:', error);
           Alert.alert('Error', 'Failed to update date');
         }
       },
@@ -655,14 +656,14 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       (time: string) => {
         try {
           if (__DEV__) {
-            console.log('TIME SELECTED:', time); // ADD THIS
+            logger.log('TIME SELECTED:', time); // ADD THIS
           }
           onUpdateBooking(item.id, {
             ...serviceBooking,
             selectedTime: time,
           });
         } catch (error) {
-          console.error('Error updating time:', error);
+          logger.error('Error updating time:', error);
           Alert.alert('Error', 'Failed to update time');
         }
       },
@@ -680,7 +681,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               : undefined,
           });
         } catch (error) {
-          console.error('Error updating deposit toggle:', error);
+          logger.error('Error updating deposit toggle:', error);
         }
       },
       [item.id, serviceBooking, onUpdateBooking, depositPolicy]
@@ -698,7 +699,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           },
         ]);
       } catch (error) {
-        console.error('Error removing item:', error);
+        logger.error('Error removing item:', error);
       } finally {
         setIsLoading(false);
       }
@@ -1019,7 +1020,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     try {
       return getItemsByProvider();
     } catch (error) {
-      console.error('Error getting items by provider:', error);
+      logger.error('Error getting items by provider:', error);
       return {};
     }
   }, [items]);
@@ -1028,7 +1029,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     try {
       return getBookingSummary();
     } catch (error) {
-      console.error('Error getting booking summary:', error);
+      logger.error('Error getting booking summary:', error);
       return {
         totalProviders: 0,
         totalServices: 0,
@@ -1211,7 +1212,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         [itemId]: { ...prev[itemId], ...updates },
       }));
     } catch (error) {
-      console.error('Error updating booking:', error);
+      logger.error('Error updating booking:', error);
       setError('Failed to update booking');
     }
   }, []);
@@ -1271,7 +1272,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
             notes: notes.trim(),
           });
         } catch (error) {
-          console.error('Error saving notes:', error);
+          logger.error('Error saving notes:', error);
           Alert.alert('Error', 'Failed to save notes');
         }
       }
@@ -1310,7 +1311,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
             setServiceBookings({});
             setError(null);
           } catch (error) {
-            console.error('Error clearing cart:', error);
+            logger.error('Error clearing cart:', error);
             setError('Failed to clear cart');
           }
         },
@@ -1325,9 +1326,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setError(null);
 
     if (__DEV__) {
-      console.log('CHECKOUT - Starting...');
-      console.log('Items in cart:', items.length);
-      console.log('Items:', items.map(i => i.serviceName));
+      logger.log('CHECKOUT - Starting...');
+      logger.log('Items in cart:', items.length);
+      logger.log('Items:', items.map(i => i.serviceName));
     }
 
     // Validate all items have schedules
@@ -1364,7 +1365,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
     // ✅ CAPTURE SNAPSHOT OF ITEMS AND BOOKINGS
     if (__DEV__) {
-      console.log('Capturing checkout snapshot...');
+      logger.log('Capturing checkout snapshot...');
     }
     // Bake promo discounts into the snapshot so the discounted price flows
     // through validation, payment, and the saved booking. A note on the
@@ -1387,7 +1388,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       bookings: snapshotBookings,
     };
     if (__DEV__) {
-      console.log('Snapshot captured:', snapshot.items.length, 'items');
+      logger.log('Snapshot captured:', snapshot.items.length, 'items');
     }
     setCheckoutSnapshot(snapshot);
 
@@ -1401,7 +1402,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setIsEditingDetails(false);
     setShowReviewModal(true);
   } catch (error) {
-    console.error('Checkout error:', error);
+    logger.error('Checkout error:', error);
     Alert.alert('Error', 'Something went wrong during checkout. Please try again.');
   } finally {
     setIsLoading(false);
@@ -1440,61 +1441,61 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
 const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
   if (__DEV__) {
-    console.log('═══════════════════════════════════════');
-    console.log('PAYMENT SUCCESS - FUNCTION CALLED');
-    console.log('═══════════════════════════════════════');
+    logger.log('═══════════════════════════════════════');
+    logger.log('PAYMENT SUCCESS - FUNCTION CALLED');
+    logger.log('═══════════════════════════════════════');
   }
 
   try {
     // Step 0: Check snapshot
     if (__DEV__) {
-      console.log('STEP 0: Checking snapshot...');
-      console.log('Snapshot items count:', checkoutSnapshot.items.length);
-      console.log('Current items count:', items.length);
+      logger.log('STEP 0: Checking snapshot...');
+      logger.log('Snapshot items count:', checkoutSnapshot.items.length);
+      logger.log('Current items count:', items.length);
     }
     
     const itemsToBook = checkoutSnapshot.items;
     const bookingsData = checkoutSnapshot.bookings;
 
     if (itemsToBook.length === 0) {
-      console.error('CRITICAL: No items in snapshot!');
-      console.error('Snapshot:', JSON.stringify(checkoutSnapshot, null, 2));
+      logger.error('CRITICAL: No items in snapshot!');
+      logger.error('Snapshot:', JSON.stringify(checkoutSnapshot, null, 2));
       throw new Error('No items to book - snapshot is empty');
     }
 
     if (__DEV__) {
-      console.log('STEP 0 COMPLETE - Items:', itemsToBook.map(i => i.serviceName));
-      console.log('---');
+      logger.log('STEP 0 COMPLETE - Items:', itemsToBook.map(i => i.serviceName));
+      logger.log('---');
     }
 
     // Step 1: Validate
     if (__DEV__) {
-      console.log('STEP 1: Validating bookings...');
+      logger.log('STEP 1: Validating bookings...');
     }
     try {
       const validation = BookingService.validateBookings(itemsToBook, bookingsData);
       if (__DEV__) {
-        console.log('Validation result:', validation);
+        logger.log('Validation result:', validation);
       }
 
       if (!validation.valid) {
-        console.error('Validation failed:', validation.errors);
+        logger.error('Validation failed:', validation.errors);
         throw new Error('Validation failed: ' + validation.errors.join(', '));
       }
       if (__DEV__) {
-        console.log('STEP 1 COMPLETE - Validation passed');
+        logger.log('STEP 1 COMPLETE - Validation passed');
       }
     } catch (validationError) {
-      console.error('STEP 1 FAILED:', validationError);
+      logger.error('STEP 1 FAILED:', validationError);
       throw validationError;
     }
     if (__DEV__) {
-      console.log('---');
+      logger.log('---');
     }
 
     // Step 2: Create appointment data
     if (__DEV__) {
-      console.log('STEP 2: Creating appointment data...');
+      logger.log('STEP 2: Creating appointment data...');
     }
     let appointmentData: AppointmentData[];
     try {
@@ -1505,16 +1506,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
       };
       appointmentData = BookingService.createAppointmentData(itemsToBook, bookingsData, customerInfo);
       if (__DEV__) {
-        console.log('Appointment data created:', appointmentData.length);
-        console.log('Appointments:', JSON.stringify(appointmentData, null, 2));
-        console.log('STEP 2 COMPLETE');
+        logger.log('Appointment data created:', appointmentData.length);
+        logger.log('Appointments:', JSON.stringify(appointmentData, null, 2));
+        logger.log('STEP 2 COMPLETE');
       }
     } catch (appointmentError) {
-      console.error('STEP 2 FAILED:', appointmentError);
+      logger.error('STEP 2 FAILED:', appointmentError);
       throw appointmentError;
     }
     if (__DEV__) {
-      console.log('---');
+      logger.log('---');
     }
 
     // Stamp payment method on every appointment entry
@@ -1544,28 +1545,28 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
 
     // Step 3: Create bookings IN CONTEXT
     if (__DEV__) {
-      console.log('STEP 3: Creating bookings in BookingContext...');
-      console.log('About to call createBookingsFromCart with:');
-      console.log('- Items:', itemsToBook.length);
-      console.log('- Appointments:', appointmentData.length);
+      logger.log('STEP 3: Creating bookings in BookingContext...');
+      logger.log('About to call createBookingsFromCart with:');
+      logger.log('- Items:', itemsToBook.length);
+      logger.log('- Appointments:', appointmentData.length);
     }
     try {
       await createBookingsFromCart(itemsToBook, appointmentData, clientAddress.trim() || undefined);
       if (__DEV__) {
-        console.log('STEP 3 COMPLETE - createBookingsFromCart returned');
+        logger.log('STEP 3 COMPLETE - createBookingsFromCart returned');
       }
     } catch (bookingError) {
-      console.error('STEP 3 FAILED:', bookingError);
-      console.error('Error details:', JSON.stringify(bookingError, null, 2));
+      logger.error('STEP 3 FAILED:', bookingError);
+      logger.error('Error details:', JSON.stringify(bookingError, null, 2));
       throw bookingError;
     }
     if (__DEV__) {
-      console.log('---');
+      logger.log('---');
     }
 
     // Step 4: Send payment notification
     if (__DEV__) {
-      console.log('STEP 4: Sending payment notification...');
+      logger.log('STEP 4: Sending payment notification...');
     }
     try {
       await NotificationService.addPaymentSuccess(
@@ -1575,34 +1576,34 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
         itemsToBook[0]?.providerImage
       );
       if (__DEV__) {
-        console.log('STEP 4 COMPLETE - Payment notification sent');
+        logger.log('STEP 4 COMPLETE - Payment notification sent');
       }
     } catch (notifError) {
-      console.error('STEP 4 WARNING - Notification failed (non-critical):', notifError);
+      logger.error('STEP 4 WARNING - Notification failed (non-critical):', notifError);
       // Don't throw - notifications are not critical
     }
     if (__DEV__) {
-      console.log('---');
+      logger.log('---');
     }
 
     // Step 5: Booking confirmations are now sent by createBookingsFromCart in BookingContext
     // This ensures the correct booking.id (not cart item id) is used
     if (__DEV__) {
-      console.log('STEP 5: Booking confirmations sent by createBookingsFromCart');
-      console.log('---');
+      logger.log('STEP 5: Booking confirmations sent by createBookingsFromCart');
+      logger.log('---');
 
-      console.log('═══════════════════════════════════════');
-      console.log('ALL STEPS COMPLETE - PAYMENT SUCCESS FINISHED');
-      console.log('═══════════════════════════════════════');
+      logger.log('═══════════════════════════════════════');
+      logger.log('ALL STEPS COMPLETE - PAYMENT SUCCESS FINISHED');
+      logger.log('═══════════════════════════════════════');
     }
     
   } catch (error) {
-    console.error('═══════════════════════════════════════');
-    console.error('❌ PAYMENT SUCCESS FUNCTION FAILED');
-    console.error('Error:', error);
-    console.error('Error message:', (error as Error).message);
-    console.error('Error stack:', (error as Error).stack);
-    console.error('═══════════════════════════════════════');
+    logger.error('═══════════════════════════════════════');
+    logger.error('❌ PAYMENT SUCCESS FUNCTION FAILED');
+    logger.error('Error:', error);
+    logger.error('Error message:', (error as Error).message);
+    logger.error('Error stack:', (error as Error).stack);
+    logger.error('═══════════════════════════════════════');
     
     Alert.alert(
       'Booking Failed',
@@ -1701,7 +1702,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                   try {
                     navigation.navigate('Bookings'); // NAVIGATES TO BOOKINGS SCREEN
                   } catch (error) {
-                    console.error('Bookings navigation error:', error);
+                    logger.error('Bookings navigation error:', error);
                     Alert.alert('Navigation Error', 'Unable to open bookings');
                   }
                 }}

@@ -3,6 +3,7 @@
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+import { logger } from '../utils/logger';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
 
@@ -319,7 +320,7 @@ export async function loadProviderFromSupabase(
     .maybeSingle();
 
   if (error) {
-    console.warn('loadProviderFromSupabase error:', error.message);
+    logger.warn('loadProviderFromSupabase error:', error.message);
     return getCachedProviderData();
   }
   if (!provider) return getCachedProviderData();
@@ -353,7 +354,7 @@ export async function loadProviderFromSupabase(
     .order('sort_order');
 
   if (svcError) {
-    console.warn('loadProviderFromSupabase services error:', svcError.message);
+    logger.warn('loadProviderFromSupabase services error:', svcError.message);
     return getCachedProviderData();
   }
 
@@ -464,7 +465,7 @@ export async function getCachedProviderData(): Promise<ProviderRegistrationData 
     const stored = await AsyncStorage.getItem('@provider_reg_data');
     if (stored) return JSON.parse(stored) as ProviderRegistrationData;
   } catch (e) {
-    console.warn('getCachedProviderData error:', e);
+    logger.warn('getCachedProviderData error:', e);
   }
   return null;
 }

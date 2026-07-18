@@ -2,6 +2,7 @@
 import { CartItem } from '../contexts/CartContext';
 import { AppointmentData } from '../contexts/BookingContext';
 import type { ProviderLocationData } from './databaseService';
+import { logger } from '../utils/logger';
 
 
 export interface DepositPolicy {
@@ -116,7 +117,7 @@ export class BookingService {
     customerInfo: { name: string; email: string; phone: string },
     providerLocations: Record<string, ProviderLocationData> = {}
   ): AppointmentData[] {
-    if (__DEV__) console.log('Creating appointment data for', items.length, 'items');
+    logger.log('Creating appointment data for', items.length, 'items');
 
     // Step 1: Calculate cart-level totals for service charge distribution
     const cartSubtotal = items.reduce((total, item) => {
@@ -130,7 +131,7 @@ export class BookingService {
     // Service charge calculated on entire cart (5% or £2 min)
     const totalServiceCharge = calculateServiceCharge(cartSubtotal);
 
-    if (__DEV__) console.log('Cart totals:', {
+    logger.log('Cart totals:', {
       cartSubtotal,
       totalServiceCharge,
       itemCount: items.length
@@ -141,11 +142,11 @@ export class BookingService {
       const booking = bookings[item.id];
 
       if (!booking) {
-        console.error('Missing booking for:', item.serviceName);
+        logger.error('Missing booking for:', item.serviceName);
         throw new Error(`Missing booking data for ${item.serviceName}`);
       }
 
-      if (__DEV__) console.log('Processing:', item.serviceName);
+      logger.log('Processing:', item.serviceName);
 
       // Calculate item subtotal (base price + add-ons)
       const basePrice = Number(item.price) || 0;
@@ -184,7 +185,7 @@ export class BookingService {
         remainingBalance = 0;
       }
 
-      if (__DEV__) console.log(`Payment calculation for ${item.serviceName}:`, {
+      logger.log(`Payment calculation for ${item.serviceName}:`, {
         basePrice,
         addOnsTotal,
         itemSubtotal,
@@ -222,7 +223,7 @@ export class BookingService {
         serviceCharge: itemServiceCharge,
       };
 
-      if (__DEV__) console.log('Created appointment data:', {
+      logger.log('Created appointment data:', {
         service: item.serviceName,
         paymentType: appointmentData.paymentType,
         amountPaid: appointmentData.amountPaid,

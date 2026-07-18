@@ -1,5 +1,6 @@
 // src/services/notificationService.ts - NEW FILE
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '../utils/logger';
 
 export interface AppNotification {
   id: string;
@@ -34,7 +35,7 @@ export class NotificationService {
     status: 'upcoming' | 'completed' | 'cancelled' | 'reschedule_pending'
   ) {
     try {
-      if (__DEV__) console.log('Creating reschedule request notification for bookingId:', bookingId);
+      logger.log('Creating reschedule request notification for bookingId:', bookingId);
 
       const notification = {
         id: Date.now().toString(),
@@ -57,14 +58,14 @@ export class NotificationService {
       try {
         notifications = stored ? JSON.parse(stored) : [];
       } catch (parseError) {
-        console.error('Failed to parse stored notifications, resetting:', parseError);
+        logger.error('Failed to parse stored notifications, resetting:', parseError);
       }
       notifications.unshift(notification);
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
 
-      if (__DEV__) console.log('Reschedule request notification added with bookingId:', notification.bookingId);
+      logger.log('Reschedule request notification added with bookingId:', notification.bookingId);
     } catch (error) {
-      console.error('Failed to add reschedule request notification:', error);
+      logger.error('Failed to add reschedule request notification:', error);
     }
   }
 
@@ -76,7 +77,7 @@ export class NotificationService {
     status: 'upcoming' | 'completed' | 'cancelled' | 'reschedule_pending'
   ) {
     try {
-      if (__DEV__) console.log('Creating provider response notification for bookingId:', bookingId);
+      logger.log('Creating provider response notification for bookingId:', bookingId);
 
       const notification = {
         id: Date.now().toString(),
@@ -99,14 +100,14 @@ export class NotificationService {
       try {
         notifications = stored ? JSON.parse(stored) : [];
       } catch (parseError) {
-        console.error('Failed to parse stored notifications, resetting:', parseError);
+        logger.error('Failed to parse stored notifications, resetting:', parseError);
       }
       notifications.unshift(notification);
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
 
-      if (__DEV__) console.log('Provider response notification added with bookingId:', notification.bookingId);
+      logger.log('Provider response notification added with bookingId:', notification.bookingId);
     } catch (error) {
-      console.error('Failed to add provider response notification:', error);
+      logger.error('Failed to add provider response notification:', error);
     }
   }
 
@@ -120,7 +121,7 @@ export class NotificationService {
     status: 'upcoming' | 'completed' | 'cancelled' | 'reschedule_pending'
   ) {
     try {
-      if (__DEV__) console.log('Creating reschedule confirmed notification for bookingId:', bookingId);
+      logger.log('Creating reschedule confirmed notification for bookingId:', bookingId);
 
       const notification = {
         id: Date.now().toString(),
@@ -143,14 +144,14 @@ export class NotificationService {
       try {
         notifications = stored ? JSON.parse(stored) : [];
       } catch (parseError) {
-        console.error('Failed to parse stored notifications, resetting:', parseError);
+        logger.error('Failed to parse stored notifications, resetting:', parseError);
       }
       notifications.unshift(notification);
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
 
-      if (__DEV__) console.log('Reschedule confirmed notification added with bookingId:', notification.bookingId);
+      logger.log('Reschedule confirmed notification added with bookingId:', notification.bookingId);
     } catch (error) {
-      console.error('Failed to add reschedule confirmed notification:', error);
+      logger.error('Failed to add reschedule confirmed notification:', error);
     }
   }
   
@@ -163,7 +164,7 @@ export class NotificationService {
     providerImage?: any,
     isPending?: boolean
   ): Promise<void> {
-    if (__DEV__) console.log('Creating booking confirmation notification:', {
+    logger.log('Creating booking confirmation notification:', {
       bookingId,
       providerName,
       serviceName,
@@ -187,9 +188,9 @@ export class NotificationService {
       bookingId,
     };
 
-    if (__DEV__) console.log('Notification object created with bookingId:', notification.bookingId);
+    logger.log('Notification object created with bookingId:', notification.bookingId);
     await this.saveNotification(notification);
-    if (__DEV__) console.log('Booking confirmation notification saved');
+    logger.log('Booking confirmation notification saved');
   }
 
   // ✅ ADD THIS METHOD to notificationService.ts
@@ -283,7 +284,7 @@ export class NotificationService {
       const updated = [notification, ...existing];
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
     } catch (error) {
-      console.error('Failed to save notification:', error);
+      logger.error('Failed to save notification:', error);
     }
   }
 
@@ -297,12 +298,12 @@ export class NotificationService {
       try {
         return JSON.parse(stored);
       } catch (parseError) {
-        console.error('Corrupted notification data, resetting:', parseError);
+        logger.error('Corrupted notification data, resetting:', parseError);
         await AsyncStorage.removeItem(NOTIFICATIONS_KEY);
         return [];
       }
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      logger.error('Failed to load notifications:', error);
       return [];
     }
   }
@@ -318,7 +319,7 @@ export class NotificationService {
       );
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      logger.error('Failed to mark notification as read:', error);
     }
   }
 
@@ -331,7 +332,7 @@ export class NotificationService {
       const updated = notifications.filter(n => n.id !== notificationId);
       await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
     } catch (error) {
-      console.error('Failed to delete notification:', error);
+      logger.error('Failed to delete notification:', error);
     }
   }
 
@@ -344,7 +345,7 @@ export class NotificationService {
     providerService: string,
     providerImage?: any
   ): Promise<void> {
-    if (__DEV__) console.log('Creating new provider notification:', {
+    logger.log('Creating new provider notification:', {
       providerId,
       providerName,
       providerService,
@@ -365,8 +366,8 @@ export class NotificationService {
       providerId,
     };
 
-    if (__DEV__) console.log('New provider notification created with providerId:', notification.providerId);
+    logger.log('New provider notification created with providerId:', notification.providerId);
     await this.saveNotification(notification);
-    if (__DEV__) console.log('New provider notification saved');
+    logger.log('New provider notification saved');
   }
 }
