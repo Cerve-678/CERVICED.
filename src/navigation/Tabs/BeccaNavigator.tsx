@@ -1,6 +1,8 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import BeccaScreen from '../../screens/BeccaScreen';
+import BookingDetailScreen from '../../screens/BookingDetailScreen';
+import RescheduleScreen from '../../screens/RescheduleScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
 import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import NotificationsScreen from '../../screens/NotificationsScreen';
@@ -95,6 +97,16 @@ export default function BeccaNavigator() {
       <BeccaStack.Screen
         name="ClientIntakeForm"
         component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <BeccaStack.Screen
+        name="BookingDetail"
+        component={BookingDetailScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+      <BeccaStack.Screen
+        name="Reschedule"
+        component={RescheduleScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
       <BeccaStack.Screen

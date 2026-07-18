@@ -1,6 +1,8 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CartScreen from '../../screens/CartScreen';
+import BookingDetailScreen from '../../screens/BookingDetailScreen';
+import RescheduleScreen from '../../screens/RescheduleScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
 import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import BookingsScreen from '../../screens/BookingsScreen';
@@ -74,6 +76,18 @@ export default function CartNavigator() {
       <CartStack.Screen
         name="ClientIntakeForm"
         component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <CartStack.Screen
+        name="BookingDetail"
+        component={BookingDetailScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <CartStack.Screen
+        name="Reschedule"
+        component={RescheduleScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 
