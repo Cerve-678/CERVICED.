@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **32 files**
 - … +2 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **62 files**
+Curated: [[Availability & Slots]] · **60 files**
 - `src/services/AvailabilityService.ts` _(159)_
 - `src/services/databaseService.ts` _(100)_
 - `src/components/ModernBeautyCalendar.tsx` _(72)_
@@ -64,14 +64,14 @@ Curated: [[Availability & Slots]] · **62 files**
 - `src/screens/UserProfileScreen.tsx` _(10)_
 - `supabase/provider_schedule_gating.sql` _(10)_
 - `src/screens/ProviderBusinessEmailScreen.tsx` _(9)_
-- `src/components/AdaptiveTabBar.tsx` _(8)_
 - `src/screens/HomeScreen.tsx` _(8)_
 - `src/services/aiChatService.ts` _(8)_
 - `src/screens/ProviderMyProfileScreen.tsx` _(6)_
 - `src/services/acuityTransferService.ts` _(6)_
 - `src/services/ProviderDataService.ts` _(6)_
 - `supabase/booking_flow_fixes.sql` _(6)_
-- … +32 more
+- `src/screens/auth/EmailVerificationScreen.tsx` _(5)_
+- … +30 more
 
 ## Payments
 Curated: [[Payments]] · **36 files**

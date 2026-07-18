@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useMe
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  type AppTheme,
+  lightTheme as appLightTheme,
+  darkTheme as appDarkTheme,
+} from '../constants/theme';
+import {
   colors,
   typography,
   spacing,
@@ -183,6 +188,9 @@ interface ThemeContextType {
   // Enterprise theme (new token-based system)
   enterpriseTheme: EnterpriseTheme;
 
+  // Design token palette
+  palette: AppTheme;
+
   // Theme control methods
   toggleTheme: () => void;
   setDarkMode: (enabled: boolean) => void;
@@ -278,6 +286,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       isDarkMode,
       theme: legacyTheme,
       enterpriseTheme,
+      palette: (isDarkMode ? appDarkTheme : appLightTheme) as AppTheme,
       themePreference,
       toggleTheme,
       setDarkMode,

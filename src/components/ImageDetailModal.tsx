@@ -15,7 +15,7 @@ import { BlurView } from 'expo-blur';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { usePlannerStore } from '../stores/usePlannerStore';
-import { PortfolioItem } from '../data/providerProfiles';
+import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 

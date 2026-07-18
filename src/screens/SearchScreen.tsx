@@ -17,32 +17,18 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { ExploreStackParamList } from '../navigation/types';
 import { useCart } from '../contexts/CartContext';
 import { useTheme } from '../contexts/ThemeContext';
+import type { AppTheme } from '../constants/theme';
 import { ThemedBackground } from '../components/ThemedBackground';
 import TabIcon from '../components/TabIcon';
 import { getProviders, searchProviders, logSearchEvent } from '../services/databaseService';
 import type { DbProvider } from '../types/database';
 import userLearningService from '../services/userLearningService';
 import { useAuth } from '../contexts/AuthContext';
-
-// ── Design tokens — mirrors HomeScreen palette ────────────────────────────────
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
-};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -67,7 +53,7 @@ interface ProviderCardProps {
   provider: ProviderCardData;
   onPress: () => void;
   index: number;
-  P: typeof L;
+  P: AppTheme;
 }
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
@@ -139,15 +125,10 @@ ProviderCard.displayName = 'ProviderCard';
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function SearchScreen({ navigation, route }: Props) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
 
   const [searchQuery, setSearchQuery]     = useState('');
   const [refreshing, setRefreshing]       = useState(false);
@@ -319,13 +300,6 @@ export default function SearchScreen({ navigation, route }: Props) {
     </View>
   ), [filteredProviders.length, P]);
 
-  if (!fontsLoaded) {
-    return (
-      <View style={[styles.loading, { backgroundColor: P.bg }]}>
-        <Text style={[styles.loadingText, { color: P.sub }]}>Loading...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>

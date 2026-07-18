@@ -16,12 +16,8 @@ const STEP_LABELS: Record<number, string> = {
   4: 'Preferences',
 };
 
-const L = { sub: '#7E6667', text: '#000000', border: 'rgba(126,102,103,0.14)', accent: '#AF9197' };
-const D = { sub: '#7E6667', text: '#F0ECE7', border: 'rgba(126,102,103,0.25)', accent: '#AF9197' };
-
 export default function StepProgressIndicator({ currentStep, totalSteps, stepLabel }: StepProgressIndicatorProps) {
-  const { isDarkMode } = useTheme();
-  const t = isDarkMode ? D : L;
+  const { isDarkMode, palette: t } = useTheme();
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

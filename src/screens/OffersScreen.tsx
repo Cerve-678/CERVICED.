@@ -15,29 +15,16 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useTheme } from '../contexts/ThemeContext';
+import type { AppTheme } from '../constants/theme';
 import { HomeStackParamList } from '../navigation/types';
 import { getActivePromotions } from '../services/databaseService';
 import type { DbPromotionWithProvider } from '../types/database';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)',
-};
-
 interface Offer {
   id: string;
   title: string;
@@ -65,7 +52,7 @@ function mapPromotion(p: DbPromotionWithProvider): Offer {
 const TABS = ['ALL', 'HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS'];
 
 // ── Offer Card ────────────────────────────────────────────────────────────────
-interface OfferCardProps { offer: Offer; index: number; P: typeof L }
+interface OfferCardProps { offer: Offer; index: number; P: AppTheme }
 
 const OfferCard = React.memo<OfferCardProps>(({ offer, index, P }) => {
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -140,14 +127,9 @@ OfferCard.displayName = 'OfferCard';
 type Props = NativeStackScreenProps<HomeStackParamList, 'Offers'>;
 
 export default function OffersScreen({ navigation }: Props) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
 
   const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
   const [selectedTab, setSelectedTab]     = useState('ALL');
@@ -181,7 +163,6 @@ export default function OffersScreen({ navigation }: Props) {
     <OfferCard offer={item} index={index} P={P} />
   ), [P]);
 
-  if (!fontsLoaded) return null;
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>

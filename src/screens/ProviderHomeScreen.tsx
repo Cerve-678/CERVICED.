@@ -26,6 +26,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import type { AppTheme } from '../constants/theme';
 import { ThemedBackground } from '../components/ThemedBackground';
 import {
   useBooking,
@@ -48,50 +49,7 @@ type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
 const { width: SW } = Dimensions.get('window');
 
-// ─── Design tokens — Brand Palette (light + dark) ────────────────────────────
-// iBlack #000000 · Mink Violet #7E6667 · Mulberry Wine #AF9197
-
-const L = {
-  bg:        '#F5F1EC',
-  surface:   '#EDE8E2',
-  card:      '#FFFFFF',
-  accent:    '#AF9197',
-  ice:       '#FFFFFF',
-  text:      '#000000',
-  sub:       '#7E6667',
-  border:    'rgba(126,102,103,0.14)',
-  sep:       'rgba(126,102,103,0.08)',
-  iconBg:    'rgba(175,145,151,0.12)',
-  strip:     '#EDE8E2',
-  indicator: '#AF9197',
-  tileText:  '#FFFFFF',
-  tileSub:   '#FFFFFF',
-  banner:    '#AF9197',
-  bannerText:'#FFFFFF',
-  todayLabel:'rgba(0,0,0,0.45)',
-};
-
-const D = {
-  bg:        '#1A1815',
-  surface:   '#201D1A',
-  card:      '#252220',
-  accent:    '#AF9197',
-  ice:       '#FFFFFF',
-  text:      '#F0ECE7',
-  sub:       '#7E6667',
-  border:    'rgba(126,102,103,0.18)',
-  sep:       'rgba(126,102,103,0.10)',
-  iconBg:    'rgba(175,145,151,0.10)',
-  strip:     '#201D1A',
-  indicator: '#AF9197',
-  tileText:  '#1A1815',
-  tileSub:   '#1A1815',
-  banner:    '#3A2E2F',
-  bannerText:'#F0ECE7',
-  todayLabel:'rgba(240,236,231,0.50)',
-};
-
-const CP = D; // static StyleSheet fallback
+const CP = { card: '#252220', border: 'rgba(126,102,103,0.18)' }; // static StyleSheet fallback
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -273,7 +231,7 @@ interface BookingCardProps {
   onPress: () => void;
   onViewMessages: () => void;
   dark: boolean;
-  P: typeof L;
+  P: AppTheme;
 }
 
 function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
@@ -341,7 +299,7 @@ function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewM
         </Text>
         {!!eta && (
           <View style={[bc.etaBadge, { backgroundColor: dark ? P.iconBg : '#E4EEF8' }]}>
-            <Text style={[bc.etaTxt, { color: P.indicator }]}>{eta}</Text>
+            <Text style={[bc.etaTxt, { color: P.accent }]}>{eta}</Text>
           </View>
         )}
       </View>
@@ -379,7 +337,7 @@ function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewM
             <Text style={[bc.instructions, { color: P.sub }]}>*{booking.bookingInstructions}*</Text>
           )}
           <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
-          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.indicator }]} activeOpacity={0.75} onPress={onViewMessages}>
+          <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={onViewMessages}>
             <Text style={[bc.msgBtnTxt, { color: '#fff' }]}>View Messages</Text>
           </TouchableOpacity>
         </View>
@@ -388,7 +346,7 @@ function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewM
   );
 }
 
-function SummaryRow({ label, value, italic, P }: { label: string; value: string; italic?: boolean; P: typeof L }) {
+function SummaryRow({ label, value, italic, P }: { label: string; value: string; italic?: boolean; P: AppTheme }) {
   return (
     <View style={bc.payRow}>
       <Text style={[bc.summaryLabel, { color: P.sub }]}>{label} – </Text>
@@ -456,7 +414,7 @@ interface DayTimelineProps {
   bookings: ConfirmedBooking[];
   onPress: (booking: ConfirmedBooking) => void;
   dark: boolean;
-  P: typeof L;
+  P: AppTheme;
   refreshing: boolean;
   onRefresh: () => void;
   availability: DbProviderAvailability | null;
@@ -510,7 +468,7 @@ function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availa
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ height: TIMELINE_H + 80, paddingBottom: 100 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.indicator} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
     >
       <View style={{ flex: 1, flexDirection: 'row', marginHorizontal: 16 }}>
         {/* Time labels column */}
@@ -589,8 +547,8 @@ function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availa
           {/* Now indicator */}
           {showNowLine && (
             <View style={{ position: 'absolute', top: nowTop, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: P.indicator, marginLeft: -4 }} />
-              <View style={{ flex: 1, height: 1.5, backgroundColor: P.indicator }} />
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: P.accent, marginLeft: -4 }} />
+              <View style={{ flex: 1, height: 1.5, backgroundColor: P.accent }} />
             </View>
           )}
 
@@ -683,21 +641,25 @@ function SkeletonCard() {
 
 // ─── Section header ───────────────────────────────────────────────────────────
 
-function SectionBanner({ dateStr, P }: { dateStr: string; P: typeof L }) {
+function SectionBanner({ dateStr, P }: { dateStr: string; P: AppTheme }) {
+  const { isDarkMode: dark } = useTheme();
+  const banner = dark ? '#3A2E2F' : '#AF9197';
+  const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
+  const todayLabel = dark ? 'rgba(240,236,231,0.50)' : 'rgba(0,0,0,0.45)';
   const kind = sectionLabel(dateStr);
   if (kind === 'today') {
     return (
       <View style={sh.todayWrap}>
-        <Text style={[sh.todayText, { color: P.todayLabel }]}>Today</Text>
+        <Text style={[sh.todayText, { color: todayLabel }]}>Today</Text>
       </View>
     );
   }
   const title    = sectionTitle(dateStr);
   const subtitle = kind === 'tomorrow' ? 'Tomorrow' : kind === 'yesterday' ? 'Yesterday' : undefined;
   return (
-    <View style={[sh.banner, { backgroundColor: P.banner }]}>
-      <Text style={[sh.bannerTitle, { color: P.bannerText }]}>{title}</Text>
-      {!!subtitle && <Text style={[sh.bannerSub, { color: P.bannerText }]}>{subtitle}</Text>}
+    <View style={[sh.banner, { backgroundColor: banner }]}>
+      <Text style={[sh.bannerTitle, { color: bannerText }]}>{title}</Text>
+      {!!subtitle && <Text style={[sh.bannerSub, { color: bannerText }]}>{subtitle}</Text>}
     </View>
   );
 }
@@ -779,8 +741,10 @@ type ListRow =
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ProviderHomeScreen({ navigation }: Props) {
-  const { isDarkMode: dark } = useTheme();
-  const P = dark ? D : L;
+  const { isDarkMode: dark, palette: P } = useTheme();
+  const banner = dark ? '#3A2E2F' : '#AF9197';
+  const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
+  const todayLabel = dark ? 'rgba(240,236,231,0.50)' : 'rgba(0,0,0,0.45)';
   useBooking();
 
   const todayStr = TODAY_STR;
@@ -1224,7 +1188,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                   >
                     <View style={[
                       s.calCircle,
-                      isSel && [s.calCircleSel, { backgroundColor: P.indicator }],
+                      isSel && [s.calCircleSel, { backgroundColor: P.accent }],
                       isToday && !isSel && [s.calCircleToday, { backgroundColor: P.text }],
                     ]}>
                       <Text style={[
@@ -1237,7 +1201,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                       </Text>
                     </View>
                     {count > 0 && (
-                      <View style={[s.calDot, { backgroundColor: isSel ? '#fff' : P.indicator }]} />
+                      <View style={[s.calDot, { backgroundColor: isSel ? '#fff' : P.accent }]} />
                     )}
                   </TouchableOpacity>
                 );
@@ -1247,7 +1211,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
         )}
 
         {/* ── Date strip — hidden when month calendar is open ──── */}
-        {!showMonth && <View style={[s.stripWrap, { backgroundColor: P.strip, borderBottomColor: P.border }]}>
+        {!showMonth && <View style={[s.stripWrap, { backgroundColor: P.surface, borderBottomColor: P.border }]}>
           <FlatList
             ref={stripRef}
             data={STRIP_DATES}
@@ -1274,14 +1238,14 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                   style={[s.dateTile, { width: TILE_W, marginRight: TILE_GAP }]}
                 >
                   {/* Day letter */}
-                  <Text style={[s.tileDayLetter, { color: isToday && !isSel ? P.indicator : P.sub }]}>
+                  <Text style={[s.tileDayLetter, { color: isToday && !isSel ? P.accent : P.sub }]}>
                     {dayName}
                   </Text>
 
                   {/* Date circle */}
                   <View style={[
                     s.dateCircle,
-                    isSel && [s.dateCircleSel, { backgroundColor: P.indicator }],
+                    isSel && [s.dateCircleSel, { backgroundColor: P.accent }],
                     isToday && !isSel && [s.dateCircleToday, { backgroundColor: P.text }],
                   ]}>
                     <Text style={[
@@ -1296,7 +1260,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
                   {/* Booking dot */}
                   {count > 0 && (
-                    <View style={[s.dot, { backgroundColor: isSel ? '#fff' : P.indicator }]} />
+                    <View style={[s.dot, { backgroundColor: isSel ? '#fff' : P.accent }]} />
                   )}
                 </TouchableOpacity>
               );
@@ -1344,7 +1308,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 100, paddingTop: 4 }}
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.indicator} />
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />
               }
               renderItem={({ item }) => {
                 if (item.t === 'section') {

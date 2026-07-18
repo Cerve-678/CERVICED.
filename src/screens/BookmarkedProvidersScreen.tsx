@@ -16,7 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { HomeStackParamList } from '../navigation/types';
 import { useBooking, BookingStatus } from '../contexts/BookingContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
@@ -26,17 +25,6 @@ import Icon from '../components/IconLibrary';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', text: '#000000', sub: '#7E6667',
-  border: 'rgba(126,102,103,0.14)', sep: 'rgba(126,102,103,0.08)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667',
-  border: 'rgba(126,102,103,0.18)', sep: 'rgba(126,102,103,0.10)',
-};
 
 type ServiceType = 'ALL' | 'HAIR' | 'NAILS' | 'MUA' | 'LASHES' | 'AESTHETICS' | 'BROWS';
 type BookmarkedProvidersScreenNavigationProp = StackNavigationProp<HomeStackParamList, 'BookmarkedProviders'>;
@@ -69,6 +57,7 @@ function mapDbProvider(p: DbProvider): Provider {
 
 // ── Skeleton (mirrors the 2-col gallery grid) ─────────────────────────────────
 function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
+  const { palette: P } = useTheme();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -81,7 +70,6 @@ function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
     return () => loop.stop();
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const P = isDarkMode ? D : L;
   const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
   return (
     <View style={skeletonStyles.card}>
@@ -100,15 +88,9 @@ const skeletonStyles = StyleSheet.create({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
-  const { isDarkMode, theme } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
-
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
 
   const { removeBookmark, loadBookmarks } = useBookmarkStore();
   const { bookings } = useBooking();
@@ -225,7 +207,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     navigation.navigate('ProviderProfile', { providerId });
   };
 
-  if (loading || !fontsLoaded) {
+  if (loading) {
     return (
       <ThemedBackground>
         <StatusBar barStyle={theme.statusBar} />

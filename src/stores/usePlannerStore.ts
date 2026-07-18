@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { storage, STORAGE_KEYS } from '../utils/storage';
-import { PortfolioItem } from '../data/providerProfiles';
+import { PortfolioItem } from '../types/providers';
 
 export interface PlanTask {
   id: string;

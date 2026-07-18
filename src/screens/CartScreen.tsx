@@ -15,7 +15,6 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
 import { useNavigation } from '@react-navigation/native';
 import { useCart, CartItem } from '../contexts/CartContext';
 import { useBooking, AppointmentData } from '../contexts/BookingContext';
@@ -41,19 +40,6 @@ import { useAppDialog } from '../components/AppDialog';
 // Static/demo services carry numeric ids — only a real UUID resolves to a services row
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// ─── Design tokens — matches app-wide palette ─────────────────────────────────
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.12)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.22)',
-  sep: 'rgba(126,102,103,0.14)',
-};
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
 
@@ -164,8 +150,7 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     onPaymentComplete,
     onBookingFailed,
   }) => {
-    const { theme, isDarkMode } = useTheme();
-    const P = isDarkMode ? D : L;
+    const { theme, isDarkMode, palette: P } = useTheme();
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
       'card' | 'paypal' | 'apple' | 'google'
     >('card');
@@ -444,8 +429,7 @@ interface NotesModalProps {
 
 const NotesModal: React.FC<NotesModalProps> = memo(
   ({ isVisible, onClose, onSave, serviceName, providerName, instanceNumber, currentNotes }) => {
-    const { isDarkMode } = useTheme();
-    const P = isDarkMode ? D : L;
+    const { isDarkMode, palette: P } = useTheme();
     const { showAlert, DialogHost } = useAppDialog();
     const [notes, setNotes] = useState(currentNotes);
     const [isLoading, setIsLoading] = useState(false);
@@ -559,8 +543,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     onApplyPromo,
     onRemovePromo,
   }) => {
-    const { theme, isDarkMode } = useTheme();
-    const P = isDarkMode ? D : L;
+    const { theme, isDarkMode, palette: P } = useTheme();
     const { showAlert, showConfirm, DialogHost } = useAppDialog();
     const [showCalendar, setShowCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -958,13 +941,8 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 
 // Main Cart Screen Component
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
-  const { theme, isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { theme, isDarkMode, palette: P } = useTheme();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
 
   const {
     items,
@@ -1615,14 +1593,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
   );
 
   // Show loading while fonts are loading
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#AF9197" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
 
   // Create dynamic styles based on theme
   const dynamicStyles = useMemo(() => StyleSheet.create({

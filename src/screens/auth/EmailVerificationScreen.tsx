@@ -26,13 +26,10 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
 
-const L = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
-const D = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
 
 export default function EmailVerificationScreen({ navigation, route }: Props) {
   useAuth(); // keep context mounted so auth state is available
-  const { isDarkMode } = useTheme();
-  const t = isDarkMode ? D : L;
+  const { isDarkMode, palette: t } = useTheme();
   const insets = useSafeAreaInsets();
   const email = route.params?.email ?? '';
 

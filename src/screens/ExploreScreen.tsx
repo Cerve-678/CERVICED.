@@ -14,7 +14,6 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { ExploreStackParamList } from '../navigation/types';
 import { useCart } from '../contexts/CartContext';
@@ -30,7 +29,7 @@ import { ImageDetailModal } from '../components/ImageDetailModal';
 import { CreateEventModal } from '../components/CreateEventModal';
 
 // Data types
-import { PortfolioItem, ServiceCategory } from '../data/providerProfiles';
+import { PortfolioItem, ServiceCategory } from '../types/providers';
 import { getPortfolioItems, searchPortfolio as dbSearchPortfolio } from '../services/databaseService';
 import type { PortfolioItemWithProvider } from '../types/database';
 
@@ -39,19 +38,6 @@ import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { usePlannerStore } from '../stores/usePlannerStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
-};
 
 // ============================================================================
 // SUB-TAB SELECTOR
@@ -62,8 +48,7 @@ interface SubTabProps {
 }
 
 const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
   return (
     <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
       <TouchableOpacity
@@ -148,8 +133,7 @@ interface FilterChipProps {
 }
 
 const FilterChip = memo<FilterChipProps>(({ label, isSelected, onPress }) => {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
   return (
     <TouchableOpacity
       style={[
@@ -196,8 +180,7 @@ function getDaysUntil(dateStr: string): number {
 }
 
 const EventCard = memo<EventCardProps>(({ event, onPress }) => {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const daysUntil = getDaysUntil(event.date);
   const completedTasks = event.tasks.filter((t: any) => t.status === 'completed').length;
@@ -262,12 +245,7 @@ EventCard.displayName = 'EventCard';
 // ============================================================================
 const ExploreScreen = memo(() => {
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
+  const { isDarkMode, palette: P } = useTheme();
 
   // State
   const [activeTab, setActiveTab] = useState<'discover' | 'plans'>('discover');
@@ -471,13 +449,6 @@ const ExploreScreen = memo(() => {
     [columnWidth, handleImagePress]
   );
 
-  if (!fontsLoaded) {
-    return (
-      <View style={[styles.loading, { backgroundColor: P.bg }]}>
-        <Text style={[styles.loadingText, { color: P.sub }]}>Loading...</Text>
-      </View>
-    );
-  }
 
   return (
     <ThemedBackground style={styles.container}>

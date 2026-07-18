@@ -1,7 +1,7 @@
 // Portfolio data now comes from Supabase via databaseService.getPortfolioItems().
 // These stubs exist only for backward-compat during the transition.
 
-import { PortfolioItem, ProviderProfile } from './providerProfiles';
+import { PortfolioItem, ProviderProfile } from '../types/providers';
 
 export function getAllPortfolioItems(): PortfolioItem[] { return []; }
 export function getPortfolioByCategory(): PortfolioItem[] { return []; }

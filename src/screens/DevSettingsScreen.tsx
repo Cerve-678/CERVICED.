@@ -26,29 +26,14 @@ import {
   unregisterPushToken,
 } from '../services/pushNotificationService';
 
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
-  danger: '#C0392B', info: '#2E7D9E',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
-  danger: '#E05050', info: '#5BA3C9',
-};
-
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
   const [storageSize, setStorageSize] = useState<string>('0 KB');
   const { reloadBookings } = useBooking();
-  const { isDarkMode, themePreference, setDarkMode, setThemePreference } = useTheme();
+  const { isDarkMode, themePreference, setDarkMode, setThemePreference, palette: P } = useTheme();
   const { user, activeMode } = useAuth();
   const insets = useSafeAreaInsets();
-  const P = isDarkMode ? D : L;
+  const danger = isDarkMode ? '#E05050' : '#C0392B';
 
   // fullScreenModal presentation makes SafeAreaView under-report the top inset,
   // so the header rides up under the status bar. Pad manually with a fallback.
@@ -612,11 +597,11 @@ export default function DevSettingsScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${P.danger}18`, borderColor: `${P.danger}40` }]}
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40` }]}
                 onPress={clearBookings}
                 disabled={bookingCount === 0}
               >
-                <Text style={[styles.dangerButtonText, { color: P.danger }]}>
+                <Text style={[styles.dangerButtonText, { color: danger }]}>
                   Clear Bookings ({bookingCount})
                 </Text>
               </TouchableOpacity>
@@ -634,10 +619,10 @@ export default function DevSettingsScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${P.danger}18`, borderColor: `${P.danger}40` }]}
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40` }]}
                 onPress={clearAllAppData}
               >
-                <Text style={[styles.dangerButtonText, { color: P.danger }]}>Clear All App Data</Text>
+                <Text style={[styles.dangerButtonText, { color: danger }]}>Clear All App Data</Text>
               </TouchableOpacity>
             </View>
 

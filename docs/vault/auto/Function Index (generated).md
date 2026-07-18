@@ -5,20 +5,15 @@
 
 #generated
 
-**1156 functions** across **159 files**.
+**1125 functions** across **153 files**.
 
-### `src/components/` (33)
-- `AdaptiveTabBar.tsx` — AdaptiveTabBar · AndroidMaterialTabBar · IOSGlassTabBar · onLongPress · onPress
+### `src/components/` (25)
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
 - `CartTabBadge.tsx` — **useCartBadge**
 - `ChatComponents.tsx` — **ChatBubble** · **ChatInput** · **ProviderRecommendations** · **Suggestions**
 - `CreateEventModal.tsx` — **CreateEventModal** · formatDate · formatDisplayDate · getQuickDates · handleClose · handleCreate
-- `CustomTabBar.tsx` — CustomTabBar · onLongPress · onPress · TabBarButton
 - `EventTimelineCard.tsx` — **EventTimelineCard** · formatDisplayDate
-- `FilterModal.tsx` — chipStyles · createStyles · FilterModal · styles
-- `FloatingTabBar.tsx` — FloatingTabBar · FloatingTabButton · onLongPress · onPress
-- `FloatingTabBarFixed.tsx` — FloatingTabBarFixed · FloatingTabButton · onLongPress · onPress
 - `HairTypeSelector.tsx` — **HairTypeSelector**
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
 - `ImageDetailModal.tsx` — handleBookmark · handleBookNow · handlePlanThis · handleViewProfile · **ImageDetailModal**
@@ -26,10 +21,7 @@
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — chipStyles · createStyles · LocationModal · styles
 - `MasonryGrid.tsx` — columns · MasonryGridInner
-- `MinimalTabBar.tsx` — MinimalTabBar · MinimalTabButton · onLongPress · onPress
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek
-- `NativeGlassPillTabBar.tsx` — NativeGlassPillTabBar · onLongPress · onPress
-- `NativeIOSTabBar.tsx` — NativeIOSTabBar · onLongPress · onPress
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · TripleDots
