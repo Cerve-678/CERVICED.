@@ -25,7 +25,6 @@ import { BlurView } from 'expo-blur';
 import { Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFonts } from 'expo-font';
 import { StackScreenProps } from '@react-navigation/stack';
 
 // Correct icon imports - using your IconLibrary.tsx
@@ -1375,11 +1374,6 @@ function ProviderProfileSkeleton() {
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigation, route }) => {
   const { theme } = useTheme();
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-    'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
-  });
 
   const providerId = route.params?.providerId || 'styled-by-kathrine';
   // Provider state — seeded with local hardcoded data, overridden by Supabase if available
@@ -2144,7 +2138,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   }
 }, [notificationMessageType, isNotificationsEnabled, providerIsBookmarked, provider?.providerName, providerId]);
 
-  if (!fontsLoaded || loading || !provider) {
+  if (loading || !provider) {
     // Show skeleton while loading, error text only when not found
     if (!loading && !provider) {
       return (

@@ -24,7 +24,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFonts } from 'expo-font';
 import { StackScreenProps } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 // Icon imports
@@ -1372,11 +1371,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-    'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
-  });
 
   // Ref for main scrollview to enable auto-scroll to focused inputs
   const mainScrollViewRef = useRef<ScrollView>(null);
@@ -1826,7 +1820,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   const categoryNames = Object.keys(providerData.categories);
 
-  if (!fontsLoaded || isLoadingProvider) {
+  if (isLoadingProvider) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#AF9197" />

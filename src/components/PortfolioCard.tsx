@@ -10,7 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { PortfolioItem } from '../data/providerProfiles';
+import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 

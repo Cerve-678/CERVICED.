@@ -1,4 +1,3 @@
-import { useFonts } from 'expo-font';
 import { useState, useCallback } from 'react';
 import {
   KeyboardAvoidingView,
@@ -77,14 +76,7 @@ export default function AuthScreen({ navigation }: any) {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
 
-  if (!fontsLoaded) {
-    return <View style={styles.loading}><Text>Loading...</Text></View>;
-  }
 
   // ── Glass helpers ─────────────────────────────────────────────────
 

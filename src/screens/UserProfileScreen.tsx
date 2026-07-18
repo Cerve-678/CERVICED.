@@ -57,26 +57,11 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P,
   </TouchableOpacity>
 ));
 
-// ── Brand palette ────────────────────────────────────────────────────────────
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
-};
-
 // ── Main screen ─────────────────────────────────────────────────────────────
 
 export default function UserProfileScreen({ navigation }: any) {
   const { isLoggedIn, logout, user, switchMode } = useAuth();
-  const { isDarkMode, toggleTheme, theme: t } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, toggleTheme, theme: t, palette: P } = useTheme();
   const { resetData, updateData } = useRegistration();
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);

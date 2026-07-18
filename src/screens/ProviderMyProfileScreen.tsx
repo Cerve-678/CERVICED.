@@ -13,7 +13,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFonts } from 'expo-font';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,11 +36,6 @@ interface Props {
 export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-    'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
-  });
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
@@ -130,7 +124,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     : undefined;
 
   // Loading state — waiting for Supabase / fonts
-  if (isLoading || !fontsLoaded) {
+  if (isLoading) {
     return (
       <AppBackground>
         <SafeAreaView style={styles.container} edges={['top']}>

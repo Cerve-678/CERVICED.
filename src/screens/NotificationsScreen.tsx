@@ -15,7 +15,6 @@ import {
   Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFonts } from 'expo-font';
 import { useFont } from '../contexts/FontContext';
 import { BellIcon } from '../components/IconLibrary';
 import { NotificationService } from '../services/notificationService';
@@ -137,10 +136,6 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const { theme, isDarkMode } = useTheme();
   const P = isDarkMode ? ND : NL;
   const { textStyles } = useFont();
-  const [fontsLoaded] = useFonts({
-    BakbakOne: require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    Jura: require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
   const { user, activeMode } = useAuth();
   const isProvider = activeMode === 'provider';
   const isProviderRef = useRef(false);
@@ -493,7 +488,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setRefreshing(false);
   }, []);
 
-  if (!fontsLoaded || notificationsLoading) {
+  if (notificationsLoading) {
     return (
       <ThemedBackground style={{ flex: 1 }}>
         <SafeAreaView style={styles.safeArea}>

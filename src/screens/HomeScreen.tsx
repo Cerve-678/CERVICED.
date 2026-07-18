@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { useFonts } from 'expo-font';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 
@@ -42,20 +41,6 @@ import type { DbProvider, DbPromotionWithProvider } from '../types/database';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-// ─── Design tokens — mirrors ProviderHomeScreen palette ──────────────────────
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
-};
 
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
@@ -144,8 +129,7 @@ interface ServiceButtonProps {
 }
 
 const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle }) => {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
 
   return (
     <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.75}>
@@ -170,8 +154,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurSt
 });
 
 const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress }) => {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
 
   return (
     <TouchableOpacity style={styles.serviceButton} onPress={onPress} activeOpacity={0.7}>
@@ -191,8 +174,7 @@ const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress }
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { theme, isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { theme, isDarkMode, palette: P } = useTheme();
   const { bookings } = useBooking();
   const { user } = useAuth();
   const { bookmarkedIds, loadBookmarks } = useBookmarkStore();
@@ -201,10 +183,6 @@ export default function HomeScreen() {
   // Ref for main ScrollView to control scrolling
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const [fontsLoaded] = useFonts({
-    'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
-    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
-  });
 
   // Live providers from Supabase; starts empty until data loads
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
@@ -604,13 +582,6 @@ export default function HomeScreen() {
     });
   }, []);
 
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loading}>
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>

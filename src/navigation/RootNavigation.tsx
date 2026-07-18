@@ -3,6 +3,10 @@ import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import * as Notifications from 'expo-notifications';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+
+SplashScreen.preventAutoHideAsync();
 import TabNavigation from './TabNavigator';
 import ProviderTabNavigation from './ProviderTabNavigator';
 import { RootStackParamList } from './types';
@@ -29,6 +33,17 @@ const Stack = createStackNavigator<RootStackParamList>();
 export default function RootNavigation() {
   const { isLoggedIn, isLoading, activeMode, isSwitching, switchingTo } = useAuth();
   const { theme: colors } = useTheme();
+
+  const [fontsLoaded] = useFonts({
+    'BakbakOne-Regular':      require('../../assets/fonts/BakbakOne-Regular.ttf'),
+    'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
   const MainTabsComponent = activeMode === 'provider' ? ProviderTabNavigation : TabNavigation;
 
   // Track whether NavigationContainer has finished mounting

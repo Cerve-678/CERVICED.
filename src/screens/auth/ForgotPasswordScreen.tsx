@@ -23,12 +23,9 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = StackScreenProps<RootStackParamList, 'ForgotPassword'>;
 
-const L = { bg: '#F5F1EC', surface: '#EDE8E2', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
-const D = { bg: '#1A1815', surface: '#201D1A', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
 
 export default function ForgotPasswordScreen({ navigation }: Props) {
-  const { isDarkMode } = useTheme();
-  const t = isDarkMode ? D : L;
+  const { isDarkMode, palette: t } = useTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);

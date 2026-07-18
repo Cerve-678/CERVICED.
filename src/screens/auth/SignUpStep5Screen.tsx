@@ -30,12 +30,9 @@ const LOCATIONS = ['Birmingham', 'Manchester', 'London'];
 const FREQUENCIES = ['Every week', 'Bi-weekly', 'Monthly', '3 months', 'Occasionally'];
 const REFERRAL_SOURCES = ['Instagram', 'TikTok', 'Snapchat', 'X', 'Referral', 'Google', 'YouTube', 'Friend', 'Other'];
 
-const L = { bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF', accent: '#AF9197', text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)' };
-const D = { bg: '#1A1815', surface: '#201D1A', card: '#252220', accent: '#AF9197', text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)' };
 
 export default function SignUpStep5Screen({ navigation }: Props) {
-  const { isDarkMode } = useTheme();
-  const t = isDarkMode ? D : L;
+  const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
   const { user, activeMode, updateUser, switchMode, upgradeToProvider, addClientProfile } = useAuth();
   const insets = useSafeAreaInsets();
