@@ -27,6 +27,7 @@ import {
 } from '../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../components/ProviderThemePicker';
 import { uploadToStorage } from '../services/providerRegistrationService';
+import { getProviderBrandingByUserId, updateProviderBranding } from '../services/databaseService';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -82,11 +83,7 @@ export default function BrandingScreen({ navigation }: any) {
         if (!user) return;
         setUserId(user.id);
 
-        const { data } = await supabase
-          .from('providers')
-          .select('id, gradient, accent_color, background_image_url, profile_theme')
-          .eq('user_id', user.id)
-          .single();
+        const data = await getProviderBrandingByUserId(user.id);
 
         if (data) {
           setProviderId(data.id);
@@ -159,17 +156,12 @@ export default function BrandingScreen({ navigation }: any) {
       const resolvedBackdrop = isCustom ? customBackdrop : preset?.tokens.hero ?? SHEET_BG;
       const baseKey = isCustom ? encodeCustomTheme(customBackdrop, customCard, customAccent) : themeChoice;
 
-      const { error } = await supabase
-        .from('providers')
-        .update({
-          gradient: [resolvedBackdrop, sheetColor],
-          accent_color: resolvedAccent,
-          background_image_url: backgroundImage,
-          profile_theme: encodeThemeKey(baseKey, sheetColor),
-        })
-        .eq('id', providerId);
-
-      if (error) throw error;
+      await updateProviderBranding(providerId, {
+        gradient: [resolvedBackdrop, sheetColor],
+        accent_color: resolvedAccent,
+        background_image_url: backgroundImage,
+        profile_theme: encodeThemeKey(baseKey, sheetColor),
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();

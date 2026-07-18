@@ -42,6 +42,8 @@ import {
   getProviderAvailability,
   getProviderBlockedDates,
   getUnreadNotificationCount,
+  countProviderServices,
+  getOrCreateConversation,
 } from '../services/databaseService';
 import type { BookingWithAddOns, DbProviderAvailability, DbProviderBlockedDate } from '../types/database';
 
@@ -891,15 +893,15 @@ export default function ProviderHomeScreen({ navigation }: Props) {
       return Promise.all([
         getProviderAvailability(profile.id),
         getProviderBlockedDates(profile.id),
-        supabase.from('services').select('id', { count: 'exact', head: true }).eq('provider_id', profile.id),
-      ]).then(([avail, blocked, servicesRes]) => {
+        countProviderServices(profile.id),
+      ]).then(([avail, blocked, serviceCount]) => {
         if (cancelled) return;
         setAvailability(avail);
         setBlockedDates(blocked);
         const p = profile as unknown as { business_type?: string | null; full_address?: string | null; location_text?: string | null };
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
-          servicesSet: (servicesRes.count ?? 0) > 0,
+          servicesSet: serviceCount > 0,
           addressSet: p.business_type === 'mobile' ? true : !!(p.full_address || p.location_text),
         });
       });
@@ -1007,23 +1009,8 @@ export default function ProviderHomeScreen({ navigation }: Props) {
     if (!clientUserId || !providerId) return;
     try {
       const clientName = booking.customerName || 'Client';
-      const { data: existing } = await supabase
-        .from('provider_conversations')
-        .select('id')
-        .eq('provider_id', providerId)
-        .eq('user_id', clientUserId)
-        .maybeSingle();
-      if (existing?.id) {
-        navigation.navigate('ProviderConversation', { conversationId: existing.id, clientUserId, clientName });
-        return;
-      }
-      const { data: created, error } = await supabase
-        .from('provider_conversations')
-        .insert({ provider_id: providerId, user_id: clientUserId })
-        .select('id')
-        .single();
-      if (error || !created) throw error;
-      navigation.navigate('ProviderConversation', { conversationId: created.id, clientUserId, clientName });
+      const conversationId = await getOrCreateConversation(providerId, clientUserId);
+      navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
     } catch {
       Alert.alert('Error', 'Could not open chat. Try again.');
     }

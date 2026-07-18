@@ -23,6 +23,11 @@ import {
   getClientBookingsForAddressShare,
   setBookingClientAddress,
   insertProviderNotification,
+  getOrCreateConversation,
+  markConversationReadByUser,
+  getConversationMessages,
+  sendProviderMessage,
+  DbProviderMessage,
   ProviderAddressSettings,
   ClientBookingSummary,
 } from '../services/databaseService';
@@ -91,38 +96,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     async function initConversation() {
       setLoading(true);
       try {
-        // Guard: you can't hold a client chat with your OWN provider profile.
-        // Being both a provider and a client is fine — but only toward OTHER
-        // providers. A self-conversation is the "provider↔provider" bug.
-        const { data: selfCheck } = await supabase
-          .from('providers')
-          .select('user_id')
-          .eq('id', providerDbId)
-          .maybeSingle();
-        if (selfCheck?.user_id === userId) {
-          setLoading(false);
-          Alert.alert("That's your own profile", "You can't message your own provider profile.");
-          navigation.goBack();
-          return;
-        }
-
-        const { data: existing } = await supabase
-          .from('provider_conversations')
-          .select('id')
-          .eq('provider_id', providerDbId)
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (existing) {
-          setConversationId(existing.id);
-        } else {
-          const { data: newConv } = await supabase
-            .from('provider_conversations')
-            .insert({ provider_id: providerDbId, user_id: userId })
-            .select('id')
-            .single();
-          if (newConv) setConversationId(newConv.id);
-        }
+        const id = await getOrCreateConversation(providerDbId, userId!);
+        setConversationId(id);
       } catch {
         /* silent */
       }
@@ -135,24 +110,15 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   // Mark conversation as read by the user on open (mirrors provider side)
   useEffect(() => {
     if (!conversationId) return;
-    supabase
-      .from('provider_conversations')
-      .update({ unread_count_user: 0 })
-      .eq('id', conversationId)
-      .then(() => {});
+    markConversationReadByUser(conversationId).catch(() => {});
   }, [conversationId]);
 
   // Load initial messages
   useEffect(() => {
     if (!conversationId) return;
-    supabase
-      .from('provider_messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) setMessages(data as Message[]);
-      });
+    getConversationMessages(conversationId)
+      .then(data => { setMessages(data as Message[]); })
+      .catch(() => {});
   }, [conversationId]);
 
   // Realtime new messages
@@ -177,11 +143,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           });
           // Reading it live — clear the unread counter the sender just bumped
           if (msg.sender_type === 'provider') {
-            supabase
-              .from('provider_conversations')
-              .update({ unread_count_user: 0 })
-              .eq('id', conversationId)
-              .then(() => {});
+            markConversationReadByUser(conversationId).catch(() => {});
           }
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
         }
@@ -203,24 +165,18 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const postMessage = useCallback(async (text: string) => {
     if (!text || !conversationId || !userId) return;
 
-    const { data: inserted } = await supabase
-      .from('provider_messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_id: userId,
-        sender_type: 'user',
-        content: text,
-      })
-      .select('*')
-      .single();
+    const inserted: DbProviderMessage = await sendProviderMessage({
+      conversationId,
+      senderId: userId,
+      senderType: 'user',
+      content: text,
+    });
 
-    if (inserted) {
-      setMessages(prev => {
-        if (prev.find(m => m.id === inserted.id)) return prev;
-        return [...prev, inserted as Message];
-      });
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
-    }
+    setMessages(prev => {
+      if (prev.find(m => m.id === inserted.id)) return prev;
+      return [...prev, inserted as Message];
+    });
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
 
     await supabase.rpc('update_conversation_last_message', {
       conv_id: conversationId,

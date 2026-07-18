@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
+import { getUserBasicInfo, updateUserNamePhone, updateUserDob } from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -51,10 +52,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
         if (!user) return;
         setUserId(user.id);
         setAuthEmail(user.email ?? '');
-        const [{ data }, { data: providerData }] = await Promise.all([
-          supabase.from('users').select('name, phone, dob').eq('id', user.id).single(),
-          supabase.from('providers').select('display_name').eq('user_id', user.id).maybeSingle(),
-        ]);
+        const data = await getUserBasicInfo(user.id);
         if (data) {
           setName(data.name ?? '');
           setPhone(data.phone ?? '');
@@ -75,12 +73,11 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       if (userId) {
-        const { error } = await supabase.from('users').update({
-          dob: dob.trim() || null,
-        }).eq('id', userId);
-        if (error) throw error;
-        // Route name/phone through AuthContext so the in-memory user (and
-        // Settings' displayName) refreshes immediately instead of only on next login.
+        await Promise.all([
+          updateUserNamePhone(userId, name.trim(), phone.trim() || ''),
+          updateUserDob(userId, dob.trim() || null),
+        ]);
+        // Refresh in-memory user so Settings displayName updates immediately
         await updateUser({ name: name.trim(), phone: phone.trim() });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

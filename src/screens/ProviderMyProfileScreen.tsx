@@ -18,9 +18,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { loadProviderFromSupabase } from '../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../services/providerRegistrationService';
-import { getProviderPortfolio, getMyProviderReviews } from '../services/databaseService';
+import { getProviderPortfolio, getMyProviderReviews, getProviderIdForUserId } from '../services/databaseService';
 import type { DbPortfolioItem } from '../types/database';
-import { supabase } from '../lib/supabase';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../constants/providerThemes';
 import AppBackground from '../components/AppBackground';
 
@@ -54,14 +53,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
           if (user?.id) {
             parsed = await loadProviderFromSupabase(user.id);
-            const { data } = await supabase
-              .from('providers')
-              .select('id')
-              .eq('user_id', user.id)
-              .maybeSingle();
-            if (data?.id) {
-              setProviderDbId(data.id);
-              getProviderPortfolio(data.id).then(setPortfolio).catch(() => {});
+            const providerId = await getProviderIdForUserId(user.id);
+            if (providerId) {
+              setProviderDbId(providerId);
+              getProviderPortfolio(providerId).then(setPortfolio).catch(() => {});
               getMyProviderReviews()
                 .then(dbReviews => setReviews(dbReviews.map(r => ({
                   id: r.id,

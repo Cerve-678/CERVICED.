@@ -1,0 +1,13 @@
+#!/bin/sh
+# Auto-refresh the Obsidian vault's generated notes when code changes.
+# Only runs when src/ or supabase/ (or the generator) is part of the commit,
+# and never blocks the commit if something goes wrong.
+
+changed=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(src/|supabase/|scripts/gen-vault\.mjs)' || true)
+[ -z "$changed" ] && exit 0
+
+command -v node >/dev/null 2>&1 || exit 0
+node scripts/gen-vault.mjs >/dev/null 2>&1 || exit 0
+
+git add docs/vault/auto 2>/dev/null || true
+exit 0

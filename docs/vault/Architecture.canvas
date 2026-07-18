@@ -1,0 +1,42 @@
+{
+  "nodes": [
+    {"id":"home","type":"file","file":"Home.md","x":520,"y":-40,"width":260,"height":90,"color":"6"},
+    {"id":"arch","type":"file","file":"Architecture Overview.md","x":160,"y":150,"width":260,"height":90},
+    {"id":"auth","type":"file","file":"Client vs Server Authority.md","x":520,"y":150,"width":260,"height":90,"color":"1"},
+    {"id":"data","type":"file","file":"Data Layer — Supabase.md","x":880,"y":150,"width":260,"height":90,"color":"5"},
+    {"id":"book","type":"file","file":"Booking Flow.md","x":-40,"y":330,"width":260,"height":90},
+    {"id":"avail","type":"file","file":"Availability & Slots.md","x":300,"y":330,"width":260,"height":90},
+    {"id":"addr","type":"file","file":"Address Release.md","x":640,"y":330,"width":260,"height":90,"color":"1"},
+    {"id":"pay","type":"file","file":"Payments.md","x":980,"y":330,"width":260,"height":90,"color":"1"},
+    {"id":"notif","type":"file","file":"Notifications.md","x":1320,"y":330,"width":260,"height":90},
+    {"id":"onboard","type":"file","file":"Provider Onboarding & Go-Live.md","x":160,"y":510,"width":260,"height":90},
+    {"id":"screens","type":"file","file":"Screens & Navigation.md","x":500,"y":510,"width":260,"height":90},
+    {"id":"ctx","type":"file","file":"Contexts.md","x":840,"y":510,"width":260,"height":90},
+    {"id":"svc","type":"file","file":"Services.md","x":1180,"y":510,"width":260,"height":90},
+    {"id":"index","type":"file","file":"auto/Code Index.md","x":500,"y":690,"width":260,"height":90,"color":"5"},
+    {"id":"setup","type":"file","file":"Setup — Using This Vault.md","x":160,"y":690,"width":260,"height":90},
+    {"id":"legend","type":"text","text":"## Map\nRed = security boundary\nCyan = generated / data layer\n\n**Curated** notes explain the *why*; the **auto/** folder is generated from code.","x":880,"y":660,"width":300,"height":140,"color":"3"}
+  ],
+  "edges": [
+    {"id":"e1","fromNode":"home","toNode":"arch","fromSide":"bottom","toSide":"top"},
+    {"id":"e2","fromNode":"home","toNode":"auth","fromSide":"bottom","toSide":"top"},
+    {"id":"e3","fromNode":"home","toNode":"data","fromSide":"bottom","toSide":"top"},
+    {"id":"e4","fromNode":"arch","toNode":"auth","fromSide":"right","toSide":"left","label":"golden rule"},
+    {"id":"e5","fromNode":"auth","toNode":"addr","fromSide":"bottom","toSide":"top","label":"done ✓"},
+    {"id":"e6","fromNode":"auth","toNode":"pay","fromSide":"bottom","toSide":"top","label":"#1 gap"},
+    {"id":"e7","fromNode":"auth","toNode":"avail","fromSide":"bottom","toSide":"top"},
+    {"id":"e8","fromNode":"book","toNode":"avail","fromSide":"right","toSide":"left","label":"gated by"},
+    {"id":"e9","fromNode":"book","toNode":"addr","fromSide":"bottom","toSide":"left"},
+    {"id":"e10","fromNode":"book","toNode":"pay","fromSide":"bottom","toSide":"bottom"},
+    {"id":"e11","fromNode":"book","toNode":"notif","fromSide":"top","toSide":"top"},
+    {"id":"e12","fromNode":"data","toNode":"notif","fromSide":"right","toSide":"top","label":"triggers"},
+    {"id":"e13","fromNode":"data","toNode":"avail","fromSide":"bottom","toSide":"right","label":"enforces"},
+    {"id":"e14","fromNode":"data","toNode":"addr","fromSide":"bottom","toSide":"right","label":"view masks"},
+    {"id":"e15","fromNode":"onboard","toNode":"avail","fromSide":"top","toSide":"bottom"},
+    {"id":"e16","fromNode":"onboard","toNode":"addr","fromSide":"right","toSide":"bottom"},
+    {"id":"e17","fromNode":"screens","toNode":"ctx","fromSide":"right","toSide":"left"},
+    {"id":"e18","fromNode":"ctx","toNode":"svc","fromSide":"right","toSide":"left"},
+    {"id":"e19","fromNode":"svc","toNode":"data","fromSide":"top","toSide":"bottom","label":"calls"},
+    {"id":"e20","fromNode":"home","toNode":"index","fromSide":"bottom","toSide":"top"}
+  ]
+}

@@ -23,6 +23,7 @@ import {
   getProviderDepositPoliciesByDisplayNames,
   ProviderDepositPolicy,
   validatePromoCode,
+  getUserHealthProfile,
 } from '../services/databaseService';
 import type { DbPromotion } from '../types/database';
 import type { CartScreenProps } from '../navigation/types';
@@ -33,7 +34,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { getMobileProviderDisplayNames, getProviderSchedulingConstraints } from '../services/databaseService';
-import { supabase } from '../lib/supabase';
 import { BookingError } from '../contexts/BookingContext';
 import { useAppDialog } from '../components/AppDialog';
 
@@ -1514,11 +1514,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
     // Fetch client health data so the provider sees it immediately on the booking.
     // Allergies and medical notes are critical for the provider before accepting.
     try {
-      const { data: healthProfile } = await supabase
-        .from('users')
-        .select('allergies, medical_notes')
-        .eq('id', user?.id ?? '')
-        .single();
+      const healthProfile = await getUserHealthProfile(user?.id ?? '');
       const parts: string[] = [];
       if (healthProfile?.allergies?.length) parts.push(`Allergies: ${(healthProfile.allergies as string[]).join(', ')}`);
       if (healthProfile?.medical_notes) parts.push(`Medical notes: ${healthProfile.medical_notes}`);

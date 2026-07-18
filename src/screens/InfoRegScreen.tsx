@@ -42,7 +42,7 @@ import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies,
 import type { ProviderRegistrationData } from '../services/providerRegistrationService';
 import { transferFromAcuity } from '../services/acuityTransferService';
 import { supabase } from '../lib/supabase';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem } from '../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId } from '../services/databaseService';
 import type { DbPortfolioItem } from '../types/database';
 
 import {
@@ -1477,11 +1477,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   useEffect(() => {
     if (!user?.id) { setPortfolioLoading(false); return; }
-    supabase.from('providers').select('id').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => {
-        if (data?.id) setProviderDbId(data.id);
+    getProviderIdForUserId(user.id)
+      .then(id => {
+        if (id) setProviderDbId(id);
         else setPortfolioLoading(false); // no provider row yet — nothing to fetch
-      });
+      })
+      .catch(() => { setPortfolioLoading(false); });
   }, [user?.id, isEditMode]);
 
   useEffect(() => {

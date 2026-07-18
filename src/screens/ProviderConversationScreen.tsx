@@ -18,6 +18,12 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
+import {
+  markConversationReadByProvider,
+  getConversationMessages,
+  sendProviderMessage,
+  DbProviderMessage,
+} from '../services/databaseService';
 
 type Props = NativeStackScreenProps<ProviderHomeStackParamList, 'ProviderConversation'>;
 
@@ -65,25 +71,15 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   // Mark conversation as read by the provider on open
   useEffect(() => {
     if (!conversationId) return;
-    supabase
-      .from('provider_conversations')
-      .update({ unread_count_provider: 0 })
-      .eq('id', conversationId)
-      .then(() => {});
+    markConversationReadByProvider(conversationId).catch(() => {});
   }, [conversationId]);
 
   // Load initial messages
   useEffect(() => {
     if (!conversationId) return;
-    supabase
-      .from('provider_messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) setMessages(data as Message[]);
-        setLoading(false);
-      });
+    getConversationMessages(conversationId)
+      .then(data => { setMessages(data as Message[]); setLoading(false); })
+      .catch(() => { setLoading(false); });
   }, [conversationId]);
 
   // Realtime new messages
@@ -108,11 +104,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           });
           // Reading it live — clear the unread counter the sender just bumped
           if (msg.sender_type === 'user') {
-            supabase
-              .from('provider_conversations')
-              .update({ unread_count_provider: 0 })
-              .eq('id', conversationId)
-              .then(() => {});
+            markConversationReadByProvider(conversationId).catch(() => {});
           }
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
         }
@@ -132,25 +124,18 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
     Keyboard.dismiss();
 
     try {
-      const { data: inserted, error } = await supabase
-        .from('provider_messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: providerUserId,
-          sender_type: 'provider',
-          content: text,
-        })
-        .select('*')
-        .single();
-      if (error) throw error;
+      const inserted: DbProviderMessage = await sendProviderMessage({
+        conversationId,
+        senderId: providerUserId,
+        senderType: 'provider',
+        content: text,
+      });
 
-      if (inserted) {
-        setMessages(prev => {
-          if (prev.find(m => m.id === inserted.id)) return prev;
-          return [...prev, inserted as Message];
-        });
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
-      }
+      setMessages(prev => {
+        if (prev.find(m => m.id === inserted.id)) return prev;
+        return [...prev, inserted as Message];
+      });
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
 
       // Non-fatal: the message itself is already delivered; this only updates
       // the inbox preview + the client's unread badge
