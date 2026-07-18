@@ -35,8 +35,9 @@ import { useAuth } from '../contexts/AuthContext';
 import userLearningService from '../services/userLearningService';
 import { HairTypeSelector } from '../components/HairTypeSelector';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { getProviders, getActivePromotions } from '../services/databaseService';
+import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders } from '../services/databaseService';
 import type { DbProvider, DbPromotionWithProvider } from '../types/database';
+import { HOME_SECTIONS } from '../config/homeSections';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -299,6 +300,11 @@ export default function HomeScreen() {
     kidsProviders: [] as Provider[],
   });
 
+  // Phase 5.4 — new home sections
+  const [newProviders,    setNewProviders]    = useState<Provider[]>([]);
+  const [topRated,        setTopRated]        = useState<Provider[]>([]);
+  const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
+
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
     loadBookmarks();
@@ -346,6 +352,18 @@ export default function HomeScreen() {
     }).catch(() => {
       // Silent failure — keeps empty offers list
     });
+
+    // Phase 5.4 — new providers + top rated
+    const mapDbProvider = (p: DbProvider): Provider => ({
+      id: p.id,
+      slug: p.slug,
+      name: p.display_name,
+      service: p.service_category,
+      logo: p.logo_url ? { uri: p.logo_url } : null,
+    });
+
+    getNewProviders(10).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
+    getTopRatedProviders(10).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
   }, []); // Only run once on mount
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
@@ -389,6 +407,17 @@ export default function HomeScreen() {
           // Kids providers
           kidsProviders: liveProviders.filter(p => p.service === 'KIDS'),
         });
+
+        // Phase 5.4 — recently viewed from userLearningService interaction log
+        const recentViewInteractions = userLearningService.getRecentInteractions('view', 10);
+        const recentIds = recentViewInteractions
+          .map((i: any) => i.providerId ?? i.provider_id)
+          .filter(Boolean);
+        const recentViewedProviders = recentIds
+          .map((id: string) => liveProviders.find(p => p.id === id))
+          .filter((p): p is Provider => Boolean(p))
+          .slice(0, 5);
+        setRecentlyViewed(recentViewedProviders);
       } catch (error) {
         console.error('Failed to update provider data:', error);
         // Silent failure — providers fall back to defaults already set
@@ -442,6 +471,19 @@ export default function HomeScreen() {
       ? providersData.kidsProviders
       : providersData.kidsProviders.slice(0, 5);
   }, [viewAllKidsServices, providersData.kidsProviders]);
+
+  // Phase 5.2 — profile-aware gating for MALE and KIDS sections
+  // § config-driven — see src/config/homeSections.ts (id: 'male-services')
+  const showMaleSection = useMemo(() => {
+    const config = HOME_SECTIONS.find(s => s.id === 'male-services');
+    return config?.showWhen?.(user, providersData) ?? (providersData.maleProviders.length > 0);
+  }, [user, providersData]);
+
+  // § config-driven — see src/config/homeSections.ts (id: 'kids-services')
+  const showKidsSection = useMemo(() => {
+    const config = HOME_SECTIONS.find(s => s.id === 'kids-services');
+    return config?.showWhen?.(user, providersData) ?? (providersData.kidsProviders.length > 0);
+  }, [user, providersData]);
 
   const serviceProviders = useMemo(() => {
     if (!selectedService) return { left: [], right: [] };
@@ -662,6 +704,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* § config-driven — see src/config/homeSections.ts (id: 'your-providers') */}
         {/* Your Providers Section - Only show if there are bookmarked providers */}
         {!selectedService && providersData.yourProviders.length > 0 && (
           <View style={styles.section}>
@@ -1108,6 +1151,7 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
+            {/* § config-driven — see src/config/homeSections.ts (id: 'recommended') */}
             {/* Recommended Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1252,8 +1296,99 @@ export default function HomeScreen() {
               )}
             </View>
 
+            {/* § config-driven — see src/config/homeSections.ts (id: 'new-providers') */}
+            {/* NEW ON CERVICED */}
+            {newProviders.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
+                >
+                  {newProviders.map(provider => (
+                    <ProviderCard
+                      key={`new-${provider.id}`}
+                      provider={provider}
+                      onPress={() => navigateToProvider(provider)}
+                      style={styles.brandCard}
+                      blurStyle={styles.brandCardBlur}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'top-rated') */}
+            {/* TOP RATED */}
+            {topRated.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
+                >
+                  {topRated.map(provider => (
+                    <ProviderCard
+                      key={`toprated-${provider.id}`}
+                      provider={provider}
+                      onPress={() => navigateToProvider(provider)}
+                      style={styles.providerCard}
+                      blurStyle={styles.providerBlur}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'recently-viewed') */}
+            {/* RECENTLY VIEWED */}
+            {recentlyViewed.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
+                >
+                  {recentlyViewed.map(provider => (
+                    <TouchableOpacity
+                      key={`recent-${provider.id}`}
+                      style={styles.roundCard}
+                      onPress={() => navigateToProvider(provider)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                        {provider.logo && (
+                          <Image
+                            source={provider.logo}
+                            style={styles.roundCardImage}
+                            resizeMode="cover"
+                          />
+                        )}
+                      </View>
+                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
+                        {provider.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'male-services') */}
             {/* Male Services Section */}
-            {providersData.maleProviders && providersData.maleProviders.length > 0 && (
+            {showMaleSection && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
@@ -1342,8 +1477,9 @@ export default function HomeScreen() {
               )}
             </View>
 
+            {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') */}
             {/* Kids Services Section */}
-            {providersData.kidsProviders && providersData.kidsProviders.length > 0 && (
+            {showKidsSection && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>

@@ -698,6 +698,17 @@ class UserLearningService {
     }
   }
 
+  /**
+   * Return recent interactions of a given type, newest first.
+   * Used by HomeScreen to build the "Recently Viewed" section.
+   */
+  getRecentInteractions(type: UserInteraction['type'], limit = 10): UserInteraction[] {
+    return this.interactions
+      .filter(i => i.type === type)
+      .slice(-limit)
+      .reverse();
+  }
+
   async clearData(): Promise<void> {
     this.interactions = [];
     this.userProfile = null;

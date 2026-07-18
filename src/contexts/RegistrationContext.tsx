@@ -31,6 +31,9 @@ export interface RegistrationData {
   serviceLocations: string[];
   maintenanceFrequency: string;
   referralSource: string;
+  // Personalisation — affects home feed gating
+  gender: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids: boolean | null;
   // Set when a logged-in client starts the provider upgrade flow
   fromProviderSwitch: boolean;
   // Set when a logged-in provider starts the client registration flow
@@ -75,6 +78,9 @@ const initialData: RegistrationData = {
   serviceLocations: [],
   maintenanceFrequency: '',
   referralSource: '',
+  // Personalisation
+  gender: null,
+  has_kids: null,
   fromProviderSwitch: false,
   fromClientSwitch: false,
 };

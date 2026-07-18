@@ -112,6 +112,8 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         service_locations:     meta['service_locations']     ?? [],
         maintenance_frequency: meta['maintenance_frequency'] ?? null,
         referral_source:       meta['referral_source']       ?? null,
+        gender:                meta['gender']                ?? null,
+        has_kids:              meta['has_kids']              ?? false,
       }, { onConflict: 'id' });
 
       if (upsertError) {

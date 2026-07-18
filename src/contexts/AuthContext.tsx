@@ -21,6 +21,10 @@ export interface UserData {
   businessEmail?: string;
   needsEmailVerification?: boolean;
   hasClientProfile?: boolean;
+  gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids?: boolean | null;
+  birth_year?: number | null;
+  service_interests?: string[] | null;
 }
 
 export interface ClientProfileData {
@@ -39,6 +43,8 @@ export interface ClientProfileData {
   serviceLocations: string[];
   maintenanceFrequency: string;
   referralSource: string;
+  gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids?: boolean | null;
 }
 
 interface AuthContextType {
@@ -205,6 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           businessEmail: profile.business_email,
           needsEmailVerification: !session.user.email_confirmed_at,
           hasClientProfile: !!profile.dob,
+          gender: (profile as any).gender ?? null,
+          has_kids: (profile as any).has_kids ?? null,
+          birth_year: (profile as any).birth_year ?? null,
+          service_interests: profile.service_interests ?? null,
         };
         const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
         setActiveMode(
@@ -342,6 +352,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       service_locations: profileData.serviceLocations,
       maintenance_frequency: profileData.maintenanceFrequency || null,
       referral_source: profileData.referralSource || null,
+      ...(profileData.gender != null ? { gender: profileData.gender } : {}),
+      ...(profileData.has_kids != null ? { has_kids: profileData.has_kids } : {}),
     }).eq('id', user.id);
     if (error) throw error;
     setUser({ ...user, dob, hasClientProfile: true });
