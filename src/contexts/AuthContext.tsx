@@ -29,6 +29,10 @@ export interface UserData {
   businessEmail?: string;
   needsEmailVerification?: boolean;
   hasClientProfile?: boolean;
+  gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids?: boolean | null;
+  birth_year?: number | null;
+  service_interests?: string[] | null;
 }
 
 export interface ClientProfileData {
@@ -47,6 +51,8 @@ export interface ClientProfileData {
   serviceLocations: string[];
   maintenanceFrequency: string;
   referralSource: string;
+  gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids?: boolean | null;
 }
 
 interface AuthContextType {
@@ -232,6 +238,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...(profile.business_email != null ? { businessEmail: profile.business_email } : {}),
           needsEmailVerification: !session.user.email_confirmed_at,
           hasClientProfile: !!profile.dob,
+          gender: (profile as any).gender ?? null,
+          has_kids: (profile as any).has_kids ?? null,
+          birth_year: (profile as any).birth_year ?? null,
+          service_interests: profile.service_interests ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         setActiveMode(
@@ -355,7 +365,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const addClientProfile = async (profileData: ClientProfileData) => {
     if (!user) throw new Error('No logged-in user');
     const dob = `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`;
-    await updateClientProfileData(user.id, { ...profileData, dob });
+    const { error } = await supabase.from('users').update({
+      dob,
+      hair_type: profileData.hairType || null,
+      skin_type: profileData.skinType || null,
+      skin_concerns: profileData.skinConcerns,
+      style_vibe: profileData.styleVibe || null,
+      allergies: profileData.allergies,
+      treatment_history: profileData.treatmentHistory,
+      medical_notes: profileData.medicalNotes || null,
+      photography_consent: profileData.photographyConsent,
+      service_interests: profileData.serviceInterests,
+      service_locations: profileData.serviceLocations,
+      maintenance_frequency: profileData.maintenanceFrequency || null,
+      referral_source: profileData.referralSource || null,
+      ...(profileData.gender != null ? { gender: profileData.gender } : {}),
+      ...(profileData.has_kids != null ? { has_kids: profileData.has_kids } : {}),
+    }).eq('id', user.id);
+    if (error) throw error;
     setUser({ ...user, dob, hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});

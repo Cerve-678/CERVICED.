@@ -83,6 +83,9 @@ interface BeautyData {
   // General
   styleVibe:          string;
   serviceInterests:   string[];
+  // Personalisation
+  gender:             'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids:           boolean;
   // Health & Consent
   allergies:          string[];
   medicalNotes:       string;
@@ -96,6 +99,7 @@ const EMPTY: BeautyData = {
   lashStyle: '', lashStatus: '', browStyle: '', browCondition: '',
   makeupCoverage: '', makeupFinish: '', makeupEyes: '', makeupLips: '',
   styleVibe: '', serviceInterests: [],
+  gender: null, has_kids: false,
   allergies: [], medicalNotes: '', photographyConsent: true,
 };
 
@@ -147,6 +151,8 @@ export default function BeautyProfileScreen({ navigation }: any) {
         makeupLips:         m['makeup_lips']         ?? '',
         styleVibe:          m['style_vibe']          ?? '',
         serviceInterests:   m['service_interests']   ?? [],
+        gender:             (m['gender'] as 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null) ?? null,
+        has_kids:           m['has_kids']            ?? false,
         allergies:          m['allergies']           ?? [],
         medicalNotes:       m['medical_notes']       ?? '',
         photographyConsent: m['photography_consent'] ?? true,
@@ -188,6 +194,8 @@ export default function BeautyProfileScreen({ navigation }: any) {
         makeup_lips:         draft.makeupLips        || null,
         style_vibe:          draft.styleVibe         || null,
         service_interests:   draft.serviceInterests,
+        gender:              draft.gender            || null,
+        has_kids:            draft.has_kids,
         allergies:           draft.allergies,
         medical_notes:       draft.medicalNotes      || null,
         photography_consent: draft.photographyConsent,
@@ -206,7 +214,9 @@ export default function BeautyProfileScreen({ navigation }: any) {
         medical_notes:       draft.medicalNotes        || null,
         photography_consent: draft.photographyConsent,
         treatment_history:   draft.treatmentHistory,
-      }).catch(() => {});
+        gender:              draft.gender              || null,
+        has_kids:            draft.has_kids,
+      }, { onConflict: 'id' }).then(() => {});
     }
 
     setSaving(false);
@@ -576,6 +586,37 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {/* ══ PERSONALISATION ════════════════════════════════════════════════ */}
+        <CatDivider label="PERSONALISATION" theme={theme} />
+
+        {/* Gender */}
+        <SectionHead label="GENDER" sub="Helps us personalise your home feed" filled={!!draft.gender} editing={editing} theme={theme} optional />
+        <View style={styles.chips}>
+          {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => {
+            const label: Record<string, string> = { female: 'Female', male: 'Male', 'non-binary': 'Non-binary', 'prefer-not-to-say': 'Prefer not to say' };
+            return (
+              <TouchableOpacity key={g} style={chip(draft.gender === g)} onPress={() => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, gender: prev.gender === g ? null : g })); }} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.gender === g)}>{label[g]}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Kids services */}
+        <View style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', marginBottom: 32 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.consentLabel, { color: theme.text }]}>Kids beauty services</Text>
+            <Text style={[styles.consentSub, { color: theme.secondaryText }]}>Show me kids' beauty services in the home feed</Text>
+          </View>
+          <Switch
+            value={draft.has_kids}
+            onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
+            trackColor={{ false: '#D1D1D6', true: theme.accent }}
+            thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
+            disabled={!editing}
+          />
         </View>
 
         {/* ══ CONSENT ════════════════════════════════════════════════════════ */}

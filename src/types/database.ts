@@ -62,6 +62,9 @@ export interface DbUser {
   avatar_url: string | null;
   push_token: string | null;
   service_interests: string[] | null;
+  gender:     'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
+  has_kids:   boolean | null;
+  birth_year: number | null;
   is_verified: boolean;
   created_at: string;
   updated_at: string;

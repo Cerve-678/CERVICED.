@@ -7,6 +7,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -50,6 +51,9 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const [selectedLocations, setSelectedLocations] = useState<string[]>(data.serviceLocations);
   const [selectedFrequency, setSelectedFrequency] = useState<string>(data.maintenanceFrequency);
   const [selectedReferral,  setSelectedReferral]  = useState<string>(data.referralSource);
+  // Personalisation — optional, affects home feed section gating
+  const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
+  const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
 
   const chipStyle = (isSelected: boolean) => ({
     borderRadius: 100,
@@ -123,6 +127,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       serviceLocations: selectedLocations,
       maintenanceFrequency: selectedFrequency,
       referralSource: selectedReferral,
+      gender: selectedGender,
+      has_kids: hasKids,
     });
     setIsLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
@@ -136,6 +142,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           medicalNotes: data.medicalNotes, photographyConsent: data.photographyConsent,
           serviceInterests: selectedInterests, serviceLocations: selectedLocations,
           maintenanceFrequency: selectedFrequency, referralSource: selectedReferral,
+          gender: selectedGender,
+          has_kids: hasKids,
         });
         if (user?.email) {
           const { subject, html } = clientWelcomeEmail({ name: data.name || user.name });
@@ -191,6 +199,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
             service_interests: selectedInterests, service_locations: selectedLocations,
             maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
+            gender: selectedGender || null, has_kids: hasKids,
           },
         },
       });
@@ -298,6 +307,42 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             {renderSection(locationY, 'LOCATION', 'Where are you willing to get services from?', LOCATIONS, item => selectedLocations.includes(item), toggleLocation, true)}
             {renderSection(frequencyY, 'FREQUENCY', 'How often do you get your maintenance done?', FREQUENCIES, item => selectedFrequency === item, selectFrequency, true)}
             {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral, true)}
+
+            {/* Gender — optional, personalises the home feed */}
+            <View>
+              <Text style={[styles.sectionLabel, { color: t.text }]}>GENDER  <Text style={[styles.skipText, { color: t.sub, fontSize: 11 }]}>optional</Text></Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Helps us show you relevant services</Text>
+              <View style={styles.chipsContainer}>
+                {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => {
+                  const label: Record<string, string> = { female: 'FEMALE', male: 'MALE', 'non-binary': 'NON-BINARY', 'prefer-not-to-say': 'PREFER NOT TO SAY' };
+                  const isSelected = selectedGender === g;
+                  return (
+                    <TouchableOpacity
+                      key={g}
+                      style={{ borderRadius: 100, borderWidth: 1, paddingVertical: 11, paddingHorizontal: 18, backgroundColor: isSelected ? t.accent : t.surface, borderColor: isSelected ? t.accent : t.border }}
+                      onPress={() => { Haptics.selectionAsync().catch(() => {}); setSelectedGender(isSelected ? null : g); }}
+                      activeOpacity={0.6}
+                    >
+                      <Text style={{ fontFamily: 'BakbakOne-Regular' as const, fontSize: 13, letterSpacing: 0.8, color: isSelected ? '#FFFFFF' : t.sub }}>{label[g]}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Kids toggle — optional */}
+            <View style={[styles.kidsToggleRow, { backgroundColor: t.card, borderColor: t.border }]}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={[styles.sectionLabel, { color: t.text, marginBottom: 4 }]}>KIDS BEAUTY SERVICES</Text>
+                <Text style={[styles.sectionSub, { color: t.sub, marginBottom: 0 }]}>Show me kids' beauty services</Text>
+              </View>
+              <Switch
+                value={hasKids}
+                onValueChange={v => { Haptics.selectionAsync().catch(() => {}); setHasKids(v); }}
+                trackColor={{ false: '#D1D1D6', true: t.accent }}
+                thumbColor={hasKids ? '#fff' : '#f4f3f4'}
+              />
+            </View>
           </>
         )}
 
@@ -343,4 +388,12 @@ const styles = StyleSheet.create({
   completeBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },
   skipBtn: { marginTop: 16, paddingVertical: 8 },
   skipText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, fontWeight: '600' },
+  kidsToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 32,
+  },
 });

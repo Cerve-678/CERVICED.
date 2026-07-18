@@ -108,7 +108,7 @@ Curated: [[Payments]] · **38 files**
 - … +8 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **101 files**
+Curated: [[Booking Flow]] · **102 files**
 - `src/contexts/BookingContext.tsx` _(542)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(467)_
 - `src/screens/BookingsScreen.tsx` _(463)_
@@ -139,7 +139,7 @@ Curated: [[Booking Flow]] · **101 files**
 - `src/types/database.ts` _(34)_
 - `src/screens/ProviderAutomationsScreen.tsx` _(32)_
 - `src/navigation/types.ts` _(31)_
-- … +71 more
+- … +72 more
 
 ## Notifications
 Curated: [[Notifications]] · **78 files**
@@ -178,7 +178,7 @@ Curated: [[Notifications]] · **78 files**
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **29 files**
 - `src/contexts/RegistrationContext.tsx` _(24)_
-- `src/services/databaseService.ts` _(17)_
+- `src/services/databaseService.ts` _(19)_
 - `src/services/UploadService.ts` _(17)_
 - `src/screens/InfoRegScreen.tsx` _(12)_
 - `src/services/providerRegistrationService.ts` _(11)_
@@ -232,7 +232,7 @@ Curated: [[Booking Flow]] · **21 files**
 - `supabase/info_packs_bookings.sql` _(1)_
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **66 files**
+Curated: [[Booking Flow]] · **67 files**
 - `src/screens/BookingsScreen.tsx` _(185)_
 - `src/contexts/BookingContext.tsx` _(178)_
 - `src/screens/ProviderBookingDetailScreen.tsx` _(114)_
@@ -263,10 +263,10 @@ Curated: [[Booking Flow]] · **66 files**
 - `src/screens/ProviderAccountScreen.tsx` _(8)_
 - `src/screens/UserProfileScreen.tsx` _(8)_
 - `src/services/bookingService.ts` _(8)_
-- … +36 more
+- … +37 more
 
 ## Auth
-Curated: [[Contexts]] · **80 files**
+Curated: [[Contexts]] · **81 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(112)_
 - `src/screens/auth/LoginScreen.tsx` _(111)_
 - `src/contexts/AuthContext.tsx` _(102)_
@@ -297,7 +297,7 @@ Curated: [[Contexts]] · **80 files**
 - `supabase/info_packs_bookings.sql` _(7)_
 - `supabase/intake_forms_migration.sql` _(6)_
 - `src/contexts/RegistrationContext.tsx` _(5)_
-- … +50 more
+- … +51 more
 
 ## Becca / AI
 Curated: [[Services]] · **15 files**

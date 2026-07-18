@@ -85,36 +85,38 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       const meta = session.user.user_metadata as Record<string, any>;
       const dob = meta['dob'] ?? '';
 
-      try {
-        await upsertUserAfterVerification({
-          id:                    session.user.id,
-          email:                 session.user.email ?? email,
-          name:                  meta['name']                  ?? '',
-          phone:                 meta['phone']                 ?? '',
-          dob:                   dob || null,
-          role:                  meta['role']                  ?? 'user',
-          login_method:          'email',
-          service_interests:     meta['service_interests']     ?? [],
-          business_name:         meta['business_name']         ?? null,
-          business_email:        meta['business_email']        ?? null,
-          business_phone:        meta['business_phone']        ?? null,
-          instagram:             meta['instagram']             ?? null,
-          tiktok:                meta['tiktok']                ?? null,
-          website:               meta['website']               ?? null,
-          hair_type:             meta['hair_type']             ?? null,
-          skin_type:             meta['skin_type']             ?? null,
-          allergies:             meta['allergies']             ?? [],
-          skin_concerns:         meta['skin_concerns']         ?? [],
-          style_vibe:            meta['style_vibe']            ?? null,
-          treatment_history:     meta['treatment_history']     ?? [],
-          medical_notes:         meta['medical_notes']         ?? null,
-          photography_consent:   meta['photography_consent']   ?? true,
-          service_locations:     meta['service_locations']     ?? [],
-          maintenance_frequency: meta['maintenance_frequency'] ?? null,
-          referral_source:       meta['referral_source']       ?? null,
-        });
-      } catch (upsertErr: any) {
-        console.warn('Profile upsert error:', upsertErr.message);
+      const { error: upsertError } = await supabase.from('users').upsert({
+        id: session.user.id,
+        email: session.user.email ?? email,
+        name: meta['name'] ?? '',
+        phone: meta['phone'] ?? '',
+        dob: dob || null,
+        role: meta['role'] ?? 'user',
+        login_method: 'email',
+        service_interests:     meta['service_interests']     ?? [],
+        business_name:         meta['business_name']         ?? null,
+        business_email:        meta['business_email']        ?? null,
+        business_phone:        meta['business_phone']        ?? null,
+        instagram:             meta['instagram']             ?? null,
+        tiktok:                meta['tiktok']                ?? null,
+        website:               meta['website']               ?? null,
+        hair_type:             meta['hair_type']             ?? null,
+        skin_type:             meta['skin_type']             ?? null,
+        allergies:             meta['allergies']             ?? [],
+        skin_concerns:         meta['skin_concerns']         ?? [],
+        style_vibe:            meta['style_vibe']            ?? null,
+        treatment_history:     meta['treatment_history']     ?? [],
+        medical_notes:         meta['medical_notes']         ?? null,
+        photography_consent:   meta['photography_consent']   ?? true,
+        service_locations:     meta['service_locations']     ?? [],
+        maintenance_frequency: meta['maintenance_frequency'] ?? null,
+        referral_source:       meta['referral_source']       ?? null,
+        gender:                meta['gender']                ?? null,
+        has_kids:              meta['has_kids']              ?? false,
+      }, { onConflict: 'id' });
+
+      if (upsertError) {
+        console.warn('Profile upsert error:', upsertError.message);
       }
 
       const toEmail = meta['role'] === 'provider'

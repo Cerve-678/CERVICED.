@@ -42,6 +42,54 @@ import type {
 // PROVIDERS
 // ─────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────
+// PHASE 5.4 — PERSONALISED HOME FEED
+// ─────────────────────────────────────────────────────────
+
+/** Providers who joined in the last 30 days — "New on CERVICED" section */
+export async function getNewProviders(limit = 10): Promise<DbProvider[]> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('providers')
+    .select('*')
+    .eq('has_gone_live', true)
+    .eq('is_active', true)
+    .gte('created_at', thirtyDaysAgo)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DbProvider[];
+}
+
+/** Top-rated providers — "Top Rated" section (≥3 reviews, rating ≥4.0) */
+export async function getTopRatedProviders(limit = 10): Promise<DbProvider[]> {
+  const { data, error } = await supabase
+    .from('providers')
+    .select('*')
+    .eq('has_gone_live', true)
+    .eq('is_active', true)
+    .gte('review_count', 3)
+    .gte('rating', 4.0)
+    .order('rating', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as DbProvider[];
+}
+
+/** Provider IDs trending this week — from the trending_providers view */
+export async function getTrendingProviderIds(limit = 10): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('trending_providers')
+    .select('provider_id')
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(r => r.provider_id as string);
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDERS
+// ─────────────────────────────────────────────────────────
+
 /** Fetch all active providers, optionally filtered by service category */
 export async function getProviders(category?: string): Promise<DbProvider[]> {
   let query = supabase
