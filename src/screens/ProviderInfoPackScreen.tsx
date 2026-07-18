@@ -30,6 +30,7 @@ import {
   deleteInfoPack,
   ProviderInfoPackRow,
 } from '../services/databaseService';
+import { logger } from '../utils/logger';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 

@@ -26,6 +26,7 @@ import {
   registerForPushNotifications,
   unregisterPushToken,
 } from '../services/pushNotificationService';
+import { logger } from '../utils/logger';
 
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
@@ -69,7 +70,7 @@ export default function DevSettingsScreen({ navigation }: any) {
         setStorageSize('0 KB');
       }
     } catch (error) {
-      console.error('Error checking bookings:', error);
+      logger.error('Error checking bookings:', error);
     }
   };
 
@@ -78,7 +79,7 @@ export default function DevSettingsScreen({ navigation }: any) {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.BOOKINGS);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (__DEV__) console.log('Current Bookings:', parsed);
+        logger.log('Current Bookings:', parsed);
         Alert.alert('Bookings Data', `Found ${parsed.length} bookings. Check console for details.`);
       } else {
         Alert.alert('No Bookings', 'No booking data found in storage');
@@ -140,7 +141,7 @@ export default function DevSettingsScreen({ navigation }: any) {
   const viewAllStorageKeys = async () => {
     try {
       const keys = await AsyncStorage.getAllKeys();
-      if (__DEV__) console.log('Storage Keys:', keys);
+      logger.log('Storage Keys:', keys);
       Alert.alert('Storage Keys', `Found ${keys.length} keys:\n${keys.join('\n')}\n\nCheck console for details.`);
     } catch (error) {
       Alert.alert('Error', 'Failed to read storage keys');
@@ -151,7 +152,7 @@ export default function DevSettingsScreen({ navigation }: any) {
     try {
       const stored = await AsyncStorage.getItem(STORAGE_KEYS.BOOKINGS);
       if (stored) {
-        if (__DEV__) console.log('EXPORT BOOKINGS:', stored);
+        logger.log('EXPORT BOOKINGS:', stored);
         Alert.alert('Export Complete', 'Booking data logged to console. Copy from there.');
       } else {
         Alert.alert('No Data', 'No bookings to export');

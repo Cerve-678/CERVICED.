@@ -25,6 +25,7 @@ import type {
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
 } from '../types/database';
+import { logger } from '../utils/logger';
 
 /**
  * DATABASE SERVICE — SINGLE ACCESS POINT
@@ -1240,7 +1241,7 @@ export async function insertProviderNotification(params: {
   if (error) {
     // Surface the failure — callers decide whether it's fatal. Swallowing it
     // here is how RLS-blocked inserts went unnoticed.
-    console.warn('[insertProviderNotification] insert failed:', error.message);
+    logger.warn('[insertProviderNotification] insert failed:', error.message);
     throw error;
   }
 }
@@ -1544,7 +1545,7 @@ export async function insertBookingUserNotification(params: {
     recipient_role: 'client',
   });
   if (error) {
-    console.warn('[insertBookingUserNotification] insert failed:', error.message);
+    logger.warn('[insertBookingUserNotification] insert failed:', error.message);
     throw error;
   }
 }

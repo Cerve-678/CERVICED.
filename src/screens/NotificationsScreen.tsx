@@ -33,9 +33,10 @@ import { HomeScreenProps } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
-import { CommonActions } from '@react-navigation/native';
+import { CommonActions, StackActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
+import { logger } from '../utils/logger';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const NL = {
@@ -213,7 +214,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       const dbRows = await getMyNotifications(role);
       setNotifications(dbRows.map(mapDbNotification));
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      logger.error('Failed to load notifications:', error);
       setLoadError('Failed to load notifications. Pull down to retry.');
     } finally {
       setNotificationsLoading(false);
@@ -264,7 +265,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // Sync to Supabase (silent fail)
       markNotificationRead(notificationId).catch(() => {});
     } catch (error) {
-      console.error('Failed to mark as read:', error);
+      logger.error('Failed to mark as read:', error);
     }
   }, []);
 
@@ -275,7 +276,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // Sync to Supabase (silent fail)
       markAllNotificationsRead().catch(() => {});
     } catch (error) {
-      console.error('Failed to mark all as read:', error);
+      logger.error('Failed to mark all as read:', error);
     }
   }, [notifications]);
 
@@ -286,7 +287,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // Delete from Supabase (silent fail)
       dbDeleteNotification(notificationId).catch(() => {});
     } catch (error) {
-      console.error('Failed to delete notification:', error);
+      logger.error('Failed to delete notification:', error);
     }
   }, []);
 
@@ -304,9 +305,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
-    if (__DEV__) console.log('[NotificationsScreen] handleNotificationAction called');
-    if (__DEV__) console.log('Notification type:', notification.type);
-    if (__DEV__) console.log('Booking ID:', notification.bookingId);
+    logger.log('[NotificationsScreen] handleNotificationAction called');
+    logger.log('Notification type:', notification.type);
+    logger.log('Booking ID:', notification.bookingId);
 
     // Close modal immediately so the user gets instant feedback
     setShowMessagePopup(false);
@@ -347,7 +348,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               navigation.dispatch(
                 CommonActions.navigate({ name: 'BookingDetail', params: { bookingId } }) as any
               );
-              if (__DEV__) console.log('Provider — navigating to BookingDetail:', bookingId);
+              logger.log('Provider — navigating to BookingDetail:', bookingId);
             }, 500);
           }
         } else {
@@ -359,13 +360,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           const bookingsParams = notification.bookingId
             ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
             : {};
-          navigation.dispatch(CommonActions.goBack() as any);
-          setTimeout(() => {
-            navigation.dispatch(
-              CommonActions.navigate({ name: 'Bookings', params: bookingsParams }) as any
-            );
-            if (__DEV__) console.log('Client — navigating to Bookings:', bookingsParams);
-          }, 500);
+          logger.log('Client — navigating to Bookings:', bookingsParams);
+          navigation.dispatch(StackActions.replace('Bookings', bookingsParams));
         }
       }, 300);
     } else if (notification.type === 'waitlist_slot_available') {
@@ -381,29 +377,24 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         }, 500);
       }, 300);
     } else if (notification.type === 'new_provider') {
-      if (__DEV__) console.log('Navigating to ProviderProfile');
-      if (__DEV__) console.log('Provider ID:', notification.providerId);
+      logger.log('Navigating to ProviderProfile');
+      logger.log('Provider ID:', notification.providerId);
 
       if (!notification.providerId) {
-        console.error('No providerId found in notification');
+        logger.error('No providerId found in notification');
         return;
       }
       const providerId = notification.providerId;
 
       setTimeout(() => {
-        navigation.dispatch(CommonActions.goBack() as any);
-        setTimeout(() => {
-          navigation.dispatch(
-            CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
-          );
-          if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', providerId);
-        }, 500);
+        logger.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
+        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' }));
       }, 300);
     } else if (notification.type === 'promotion') {
-      if (__DEV__) console.log('Navigating to Home');
+      logger.log('Navigating to Home');
       setTimeout(() => {
         navigation.goBack();
-        if (__DEV__) console.log('Navigation to Home executed');
+        logger.log('Navigation to Home executed');
       }, 300);
     } else if (notification.type === 'announcement') {
       // Provider broadcast — open that provider's profile if we know them
@@ -441,11 +432,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
               },
             }) as any
           );
-          if (__DEV__) console.log('Provider — navigating to ProviderIntakeForm:', bookingId);
+          logger.log('Provider — navigating to ProviderIntakeForm:', bookingId);
         }, 500);
       }, 300);
     } else if (notification.type === 'provider_message') {
-      if (__DEV__) console.log('Navigating to ProviderInbox (Messages)');
+      logger.log('Navigating to ProviderInbox (Messages)');
       setTimeout(() => {
         navigation.dispatch(CommonActions.goBack() as any);
         setTimeout(() => {
@@ -746,6 +737,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
                 ]}
                 onPress={() => setSelectedFilter(filter.key)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedFilter === filter.key }}
               >
                 <Text style={[
                   styles.filterButtonText,

@@ -1,5 +1,6 @@
 // src/services/ImageLoader.ts
 import { ImageSourcePropType } from 'react-native';
+import { logger } from '../utils/logger';
 
 /**
  * Dynamic Image Loading Service
@@ -42,10 +43,10 @@ class ImageLoaderService {
         return image;
       }
 
-      console.warn(`Image not found: ${imageId}`);
+      logger.warn(`Image not found: ${imageId}`);
       return this.getPlaceholderImage();
     } catch (error) {
-      console.error(`Failed to load image ${imageId}:`, error);
+      logger.error(`Failed to load image ${imageId}:`, error);
       return this.getPlaceholderImage();
     }
   }
@@ -64,16 +65,16 @@ class ImageLoaderService {
             }
             resolve();
           } catch (error) {
-            console.warn(`Failed to preload image: ${imageId}`, error);
+            logger.warn(`Failed to preload image: ${imageId}`, error);
             resolve();
           }
         });
       });
 
       await Promise.all(preloadPromises);
-      if (__DEV__) console.log(`Preloaded ${this.preloadedImages.size} images`);
+      logger.log(`Preloaded ${this.preloadedImages.size} images`);
     } catch (error) {
-      console.error('Preload images failed:', error);
+      logger.error('Preload images failed:', error);
     }
   }
 

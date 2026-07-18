@@ -14,6 +14,7 @@ import ProfileNavigator from './Tabs/ProfileNavigator';
 // Components
 import TabIcon from '../components/TabIcon';
 import IslandPillTabBar from '../components/IslandPillTabBar';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { useCart } from '../contexts/CartContext';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -51,47 +52,72 @@ export default function TabNavigation() {
     >
       <Tab.Screen
         name="Becca"
-        component={BeccaNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="chat-dots" focused={focused} color={color} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <BeccaNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="Explore"
-        component={ExploreNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="earth" focused={focused} color={color} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <ExploreNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="Home"
-        component={HomeNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="house" focused={focused} color={color} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <HomeNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="Cart"
-        component={CartNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => <CartTabIcon focused={focused} color={color} />,
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <CartNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
       <Tab.Screen
         name="Profile"
-        component={ProfileNavigator}
         options={{
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="user" focused={focused} color={color} size={26} />
           ),
         }}
-      />
+      >
+        {() => (
+          <ErrorBoundary>
+            <ProfileNavigator />
+          </ErrorBoundary>
+        )}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }

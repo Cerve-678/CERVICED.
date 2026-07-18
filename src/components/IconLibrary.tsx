@@ -2,6 +2,7 @@
 import React from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { logger } from '../utils/logger';
 
 interface IconProps {
   name: string;
@@ -68,7 +69,7 @@ export default function Icon({ name, size = 24, color = '#666', style }: IconPro
   const pathData = iconPaths[name as keyof typeof iconPaths];
 
   if (!pathData) {
-    console.warn(`Icon "${name}" not found`);
+    logger.warn(`Icon "${name}" not found`);
     return null;
   }
 

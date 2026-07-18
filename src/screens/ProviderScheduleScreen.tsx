@@ -30,6 +30,7 @@ import {
 } from '../services/databaseService';
 import type { DbProviderAvailability, DbProviderBlockedDate } from '../types/database';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { logger } from '../utils/logger';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -195,7 +196,7 @@ export default function ProviderScheduleScreen() {
       }
       setBlockedDates(blocked);
     } catch (e) {
-      console.error('ProviderScheduleScreen loadData:', e);
+      logger.error('ProviderScheduleScreen loadData:', e);
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,7 @@
 
 #generated
 
-**0 items.**
+**1 items.**
 
-_No TODO/FIXME comments found. 🎉_
+## TODO (1)
+- `src/utils/logger.ts:20` — wire Sentry here when added — Sentry.captureException(error, { tags: { context } })

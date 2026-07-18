@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { logger } from './logger';
 
 export interface EnvConfig {
   API_URL: string;
@@ -56,7 +57,7 @@ class EnvironmentService {
 
   logConfig(): void {
     if (this.isDebug && __DEV__) {
-      console.log('Environment Configuration:', this.fullConfig);
+      logger.log('Environment Configuration:', this.fullConfig);
     }
   }
 }

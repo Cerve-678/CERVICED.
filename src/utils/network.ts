@@ -1,5 +1,6 @@
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { create } from 'zustand';
+import { logger } from './logger';
 
 interface NetworkState {
   isConnected: boolean;
@@ -95,7 +96,7 @@ class OfflineQueue {
 };
         await fetch(request.url, fetchOptions);
       } catch (error) {
-        console.error('Failed to process queued request:', error);
+        logger.error('Failed to process queued request:', error);
         // Re-add failed request to queue
         this.queue.push(request);
       }

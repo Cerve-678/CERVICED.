@@ -31,6 +31,7 @@ import {
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
@@ -131,10 +132,10 @@ export default function LoginScreen({ navigation }: Props) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
-    console.log('[Login] Attempting signInWithPassword for:', email.trim());
+    logger.log('[Login] Attempting signInWithPassword for:', email.trim());
     setIsLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    console.log('[Login] signInWithPassword result — error:', error?.message ?? 'none', '| session:', data?.session?.user?.id ?? 'no session');
+    logger.log('[Login] signInWithPassword result — error:', error?.message ?? 'none', '| session:', data?.session?.user?.id ?? 'no session');
     setIsLoading(false);
 
     if (error) {
@@ -142,8 +143,24 @@ export default function LoginScreen({ navigation }: Props) {
       return;
     }
 
-    maybePromptEnableBiometric(data.session?.refresh_token);
-    console.log('[Login] Success — waiting for onAuthStateChange...');
+    if (biometricAvailable && !biometricEnabled && data.session?.refresh_token) {
+      const token = data.session.refresh_token;
+      Alert.alert(
+        `Enable ${biometricLabel}?`,
+        `Sign in faster next time using ${biometricLabel} instead of your password.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              await enableBiometric(token);
+              setBiometricEnabled(true);
+            },
+          },
+        ]
+      );
+    }
+    logger.log('[Login] Success — waiting for onAuthStateChange...');
   };
 
   const handleSocialLogin = (provider: string) => {

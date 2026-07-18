@@ -1,6 +1,7 @@
 // src/services/UploadService.ts - Future provider registration
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { logger } from '../utils/logger';
 
 // Provider type definition
 export interface Provider {
@@ -94,7 +95,7 @@ class UploadService {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       return status === 'granted';
     } catch (error) {
-      console.error('Permission request failed:', error);
+      logger.error('Permission request failed:', error);
       return false;
     }
   }
@@ -134,7 +135,7 @@ class UploadService {
         ...(image.base64 && { base64: image.base64 })
       };
     } catch (error) {
-      console.error('Image picker failed:', error);
+      logger.error('Image picker failed:', error);
       throw error;
     }
   }
@@ -194,7 +195,7 @@ class UploadService {
         };
       }
     } catch (error) {
-      console.error('Provider registration failed:', error);
+      logger.error('Provider registration failed:', error);
       return { 
         success: false, 
         error: 'Registration failed. Please try again.' 
@@ -312,7 +313,7 @@ class UploadService {
         };
       }
     } catch (error) {
-      console.error('Cloud upload failed:', error);
+      logger.error('Cloud upload failed:', error);
       return { 
         success: false, 
         error: 'Network error. Please check your connection.' 
@@ -346,9 +347,9 @@ class UploadService {
       // In production, add to your provider data service
       // providerDataService.addProvider(newProvider);
 
-      if (__DEV__) console.log('Provider saved locally:', newProvider);
+      logger.log('Provider saved locally:', newProvider);
     } catch (error) {
-      console.error('Local save failed:', error);
+      logger.error('Local save failed:', error);
       // Don't throw - this is not critical for registration success
     }
   }

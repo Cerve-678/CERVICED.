@@ -5,7 +5,7 @@
 
 #generated
 
-**1190 functions** across **159 files**.
+**1192 functions** across **160 files**.
 
 ### `src/components/` (25)
 - `AppBackground.tsx` — AppBackground
@@ -155,9 +155,10 @@
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles
 
-### `src/utils/` (5)
+### `src/utils/` (6)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `cartUtils.ts` — **getCartSummary**
 - `FontManager.ts` — **createTextStyles** · getFontFamily · to
+- `logger.ts` — noop · **reportError**
 - `performance.ts` — for
 - `validation.ts` — **getPasswordStrength**

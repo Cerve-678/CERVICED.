@@ -44,6 +44,7 @@ import type {
 } from '../types/booking';
 import { BookingStatus, PaymentStatus, type PaymentBreakdown } from '../types/booking';
 import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
+import { logger } from '../utils/logger';
 
 export interface BookingContextType {
   bookings: ConfirmedBooking[];
@@ -126,7 +127,7 @@ const parseTimeToMinutes = (timeStr: string): number => {
     
     return hours * 60 + minutes;
   } catch (error) {
-    console.error('❌ Error parsing time:', error);
+    logger.error('❌ Error parsing time:', error);
     return 0;
   }
 };
@@ -162,7 +163,7 @@ const calculateEndTime = (startTime: string, duration: string): string => {
     
     return `${displayHours}:${endMinutes.toString().padStart(2, '0')} ${period}`;
   } catch (error) {
-    console.error('❌ Error calculating end time:', error);
+    logger.error('❌ Error calculating end time:', error);
     return startTime;
   }
 };
@@ -173,18 +174,18 @@ const calculateEndTime = (startTime: string, duration: string): string => {
 export const createBookingDateTime = (dateStr: string, timeStr: string): Date => {
   try {
     if (!dateStr || typeof dateStr !== 'string' || dateStr.length < 10) {
-      console.error('❌ Invalid date:', dateStr);
+      logger.error('❌ Invalid date:', dateStr);
       return new Date();
     }
     
     if (!timeStr || typeof timeStr !== 'string') {
-      console.error('❌ Invalid time:', timeStr);
+      logger.error('❌ Invalid time:', timeStr);
       return new Date();
     }
     
     const dateParts = dateStr.split('-');
     if (dateParts.length !== 3) {
-      console.error('❌ Invalid date format:', dateStr);
+      logger.error('❌ Invalid date format:', dateStr);
       return new Date();
     }
     
@@ -193,7 +194,7 @@ export const createBookingDateTime = (dateStr: string, timeStr: string): Date =>
     const day = parseInt(dateParts[2] || '0');
     
     if (isNaN(year) || isNaN(month) || isNaN(day)) {
-      console.error('❌ Invalid date parts:', { year, month, day });
+      logger.error('❌ Invalid date parts:', { year, month, day });
       return new Date();
     }
     
@@ -203,7 +204,7 @@ export const createBookingDateTime = (dateStr: string, timeStr: string): Date =>
     
     return new Date(year, month - 1, day, hours, mins, 0, 0);
   } catch (error) {
-    console.error('❌ Error creating booking datetime:', error);
+    logger.error('❌ Error creating booking datetime:', error);
     return new Date();
   }
 };
@@ -238,7 +239,7 @@ const determineBookingStatus = (
       return BookingStatus.COMPLETED;
     }
   } catch (error) {
-    console.error('❌ Error determining status:', error);
+    logger.error('❌ Error determining status:', error);
     return BookingStatus.UPCOMING;
   }
 };
@@ -291,27 +292,27 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const loadBookings = useCallback(async () => {
     try {
-      if (__DEV__) console.log('Loading bookings from storage...');
+      logger.log('Loading bookings from storage...');
       setIsLoading(true);
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (__DEV__) console.log('Loaded', parsed.length, 'bookings from storage');
+        logger.log('Loaded', parsed.length, 'bookings from storage');
         
         const cleanedBookings = parsed.map((booking: any) => {
           if (!booking.bookingDate || typeof booking.bookingDate !== 'string' || booking.bookingDate.length < 10) {
-            if (__DEV__) console.warn('Fixing corrupted date for booking:', booking.id);
+            logger.warn('Fixing corrupted date for booking:', booking.id);
             booking.bookingDate = new Date().toISOString().split('T')[0];
           }
           
           if (!booking.bookingTime || typeof booking.bookingTime !== 'string') {
-            if (__DEV__) console.warn('Fixing missing time for booking:', booking.id);
+            logger.warn('Fixing missing time for booking:', booking.id);
             booking.bookingTime = '10:00 AM';
           }
           
           if (booking.rescheduleRequest?.originalDate && booking.rescheduleRequest.originalDate.length < 10) {
-            if (__DEV__) console.warn('Fixing corrupted originalDate');
+            logger.warn('Fixing corrupted originalDate');
             booking.rescheduleRequest.originalDate = booking.bookingDate;
           }
           
@@ -426,7 +427,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings));
 
       } else {
-        if (__DEV__) console.log('No bookings in storage — trying Supabase fallback...');
+        logger.log('No bookings in storage — trying Supabase fallback...');
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
@@ -435,7 +436,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               const mapped = dbBookings.map(mapDbBookingToConfirmed);
               setBookings(mapped);
               await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mapped));
-              if (__DEV__) console.log('Loaded', mapped.length, 'bookings from Supabase');
+              logger.log('Loaded', mapped.length, 'bookings from Supabase');
             } else {
               setBookings([]);
             }
@@ -447,7 +448,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
       }
     } catch (error) {
-      console.error('❌ Failed to load bookings:', error);
+      logger.error('❌ Failed to load bookings:', error);
       setBookings([]);
       throw error; // Re-throw so screens can show UI feedback
     } finally {
@@ -495,14 +496,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const saveBookings = useCallback(async (bookingsToSave: ConfirmedBooking[]) => {
     try {
-      if (__DEV__) console.log('Saving', bookingsToSave.length, 'bookings...');
+      logger.log('Saving', bookingsToSave.length, 'bookings...');
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(bookingsToSave));
       setBookings(bookingsToSave);
       // Keep the Zustand store in sync so non-context consumers stay current
       useBookingStore.getState().setBookings(bookingsToSave);
-      if (__DEV__) console.log('Bookings saved successfully');
+      logger.log('Bookings saved successfully');
     } catch (error) {
-      console.error('❌ Failed to save bookings:', error);
+      logger.error('❌ Failed to save bookings:', error);
       throw error;
     }
   }, []);
@@ -585,7 +586,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      if (__DEV__) console.log('Step 1: User requesting reschedule for:', bookingId);
+      logger.log('Step 1: User requesting reschedule for:', bookingId);
 
       // ✅ Preserve original date/time from FIRST reschedule request
       const originalDate = booking.rescheduleRequest?.originalDate || booking.bookingDate;
@@ -636,9 +637,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }).catch(() => {});
       }
 
-      if (__DEV__) console.log('Step 1 Complete: Status=PENDING, waiting for provider response');
+      logger.log('Step 1 Complete: Status=PENDING, waiting for provider response');
     } catch (error) {
-      console.error('❌ Failed to request reschedule:', error);
+      logger.error('❌ Failed to request reschedule:', error);
       throw error;
     }
   }, [saveBookings]);
@@ -648,7 +649,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     availableDates: AvailableDate[]
   ) => {
     try {
-      if (__DEV__) console.log('Step 2: Provider responding with available dates for:', bookingId);
+      logger.log('Step 2: Provider responding with available dates for:', bookingId);
 
       // ✅ FIX: Read fresh from AsyncStorage to avoid stale closure issues with concurrent reschedules
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -661,7 +662,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       // ✅ FIX: Skip if provider already responded (prevent duplicate responses)
       if (targetBooking.rescheduleRequest?.providerAvailableDates) {
-        if (__DEV__) console.log(`[${targetBooking.providerName}] Skipping - provider already responded for booking ${bookingId}`);
+        logger.log(`[${targetBooking.providerName}] Skipping - provider already responded for booking ${bookingId}`);
         return;
       }
 
@@ -671,11 +672,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       if (!targetBooking.isPendingReschedule &&
           targetBooking.status !== BookingStatus.UPCOMING &&
           targetBooking.status !== BookingStatus.PENDING) {
-        if (__DEV__) console.log(`[${targetBooking.providerName}] Skipping - booking ${bookingId} is ${targetBooking.status}, cannot reschedule`);
+        logger.log(`[${targetBooking.providerName}] Skipping - booking ${bookingId} is ${targetBooking.status}, cannot reschedule`);
         return;
       }
 
-      if (__DEV__) console.log(`[${targetBooking.providerName}] Before update:`, {
+      logger.log(`[${targetBooking.providerName}] Before update:`, {
         isPending: targetBooking.isPendingReschedule,
         hasDates: !!targetBooking.rescheduleRequest?.providerAvailableDates,
         datesCount: targetBooking.rescheduleRequest?.providerAvailableDates?.length || 0
@@ -701,7 +702,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         updatedAt: new Date().toISOString(),
       };
 
-      if (__DEV__) console.log(`[${targetBooking.providerName}] After update:`, {
+      logger.log(`[${targetBooking.providerName}] After update:`, {
         isPending: updatedBooking.isPendingReschedule,
         hasDates: !!updatedBooking.rescheduleRequest?.providerAvailableDates,
         datesCount: updatedBooking.rescheduleRequest?.providerAvailableDates?.length || 0
@@ -712,9 +713,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
-      if (__DEV__) console.log('Step 2 Complete: Status=AVAILABLE, user can now select date');
+      logger.log('Step 2 Complete: Status=AVAILABLE, user can now select date');
     } catch (error) {
-      console.error('❌ Failed to process provider response:', error);
+      logger.error('❌ Failed to process provider response:', error);
       throw error;
     }
   }, [saveBookings]);
@@ -794,7 +795,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   const confirmReschedule = useCallback(async (bookingId: string, newDate: string, newTime: string) => {
     try {
-      if (__DEV__) console.log('Step 3: User confirming reschedule:', bookingId, newDate, newTime);
+      logger.log('Step 3: User confirming reschedule:', bookingId, newDate, newTime);
 
       // ✅ FIX: Read fresh from AsyncStorage to avoid stale closure issues with concurrent reschedules
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -807,7 +808,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       // ✅ FIX: Skip if booking is no longer pending (was cancelled or already confirmed)
       if (!booking.isPendingReschedule) {
-        if (__DEV__) console.log(`[${booking.providerName}] Skipping confirm - booking ${bookingId} is no longer pending reschedule`);
+        logger.log(`[${booking.providerName}] Skipping confirm - booking ${bookingId} is no longer pending reschedule`);
         return;
       }
 
@@ -867,16 +868,16 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }).catch(() => {});
       }
 
-      if (__DEV__) console.log('Step 3 Complete: Status=UPCOMING, 24hr cooldown active, total reschedules:', rescheduleCount);
+      logger.log('Step 3 Complete: Status=UPCOMING, 24hr cooldown active, total reschedules:', rescheduleCount);
     } catch (error) {
-      console.error('❌ Failed to confirm reschedule:', error);
+      logger.error('❌ Failed to confirm reschedule:', error);
       throw error;
     }
   }, [saveBookings]);
 
   const cancelBooking = useCallback(async (bookingId: string) => {
     try {
-      if (__DEV__) console.log('Cancelling booking:', bookingId);
+      logger.log('Cancelling booking:', bookingId);
 
       // ✅ FIX: Read fresh from AsyncStorage to avoid stale closure issues
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -892,7 +893,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         try {
           await dbUpdateBookingStatus(bookingId, 'cancelled');
         } catch (dbError) {
-          console.error('❌ Cancellation did not reach Supabase:', dbError);
+          logger.error('❌ Cancellation did not reach Supabase:', dbError);
           throw new Error('Could not cancel the booking. Please check your connection and try again.');
         }
       }
@@ -911,9 +912,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         await saveBookings(updatedBookings);
       }
 
-      if (__DEV__) console.log('Booking cancelled successfully');
+      logger.log('Booking cancelled successfully');
     } catch (error) {
-      console.error('❌ Failed to cancel booking:', error);
+      logger.error('❌ Failed to cancel booking:', error);
       throw error;
     }
   }, [saveBookings]);
@@ -942,7 +943,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         await dbUpdateBookingStatus(bookingId, dbStatus as any);
       }
     } catch (error) {
-      console.error('❌ Failed to update booking status:', error);
+      logger.error('❌ Failed to update booking status:', error);
       throw error;
     }
   }, [bookings, saveBookings]);
@@ -952,7 +953,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     appointmentData: AppointmentData[]
   ): Promise<BookingConflictResult> => {
     try {
-      if (__DEV__) console.log('Validating bookings before checkout...');
+      logger.log('Validating bookings before checkout...');
 
       // Build list of bookings to validate
       const bookingsToValidate = cartItems.map(item => {
@@ -971,14 +972,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const result = await AvailabilityService.validateCartBookings(bookingsToValidate);
 
       if (!result.isValid) {
-        if (__DEV__) console.log('Booking conflicts found:', result.conflicts);
+        logger.log('Booking conflicts found:', result.conflicts);
       } else {
-        if (__DEV__) console.log('All bookings validated - no conflicts');
+        logger.log('All bookings validated - no conflicts');
       }
 
       return result;
     } catch (error) {
-      console.error('❌ Error validating bookings:', error);
+      logger.error('❌ Error validating bookings:', error);
       // User-facing copy stays booking-flavoured even though the cause here
       // is usually a network/server hiccup — "unable to validate" reads as
       // an alarming technical failure for something the client can just retry.
@@ -998,7 +999,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     clientAddress?: string
   ) => {
     try {
-      if (__DEV__) console.log('Creating bookings from cart...');
+      logger.log('Creating bookings from cart...');
 
       // Validate bookings before creating to prevent double-booking
       const validation = await validateBookingsBeforeCheckout(cartItems, appointmentData);
@@ -1311,7 +1312,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               } else {
                 message = `Your booking with ${name} couldn't be placed. Please check your connection and try again.`;
               }
-              console.error('[BookingContext] ❌ Booking not persisted for', name, itemError);
+              logger.error('[BookingContext] ❌ Booking not persisted for', name, itemError);
               persistFailures.push({ cartItemId: item.id, message });
             }
           }
@@ -1319,7 +1320,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       } catch (outerError) {
         // Auth lookup failed — none of the bookings reached the DB. Remove the
         // local copies and fail the checkout with a clear message.
-        console.error('[BookingContext] ❌ Could not persist bookings to Supabase:', outerError);
+        logger.error('[BookingContext] ❌ Could not persist bookings to Supabase:', outerError);
         const newIds = new Set(newBookings.map(nb => nb.id));
         await saveBookings(updatedBookings.filter(b => !newIds.has(b.id)));
         throw new BookingError(
@@ -1402,9 +1403,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         throw new BookingError(message, succeededBookings.map(b => b.cartItemId));
       }
 
-      if (__DEV__) console.log('All bookings created successfully');
+      logger.log('All bookings created successfully');
     } catch (error) {
-      console.error('❌ Failed to create bookings:', error);
+      logger.error('❌ Failed to create bookings:', error);
       throw error;
     }
   }, [bookings, saveBookings]);

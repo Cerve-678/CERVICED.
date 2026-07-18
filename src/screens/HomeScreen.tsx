@@ -35,6 +35,7 @@ import { useBookmarkStore } from '../stores/useBookmarkStore';
 import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders } from '../services/databaseService';
 import type { DbProvider, DbPromotionWithProvider } from '../types/database';
 import { HOME_SECTIONS } from '../config/homeSections';
+import { logger } from '../utils/logger';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -244,7 +245,7 @@ export default function HomeScreen() {
       const unread = await getUnreadNotificationCount('client');
       setUnreadCount(unread);
     } catch (error) {
-      console.error('Failed to load unread count:', error);
+      logger.error('Failed to load unread count:', error);
     }
   }, []);
 
@@ -390,7 +391,7 @@ export default function HomeScreen() {
           .slice(0, 5);
         setRecentlyViewed(recentViewedProviders);
       } catch (error) {
-        console.error('Failed to update provider data:', error);
+        logger.error('Failed to update provider data:', error);
         // Silent failure — providers fall back to defaults already set
       }
     };
@@ -652,6 +653,8 @@ export default function HomeScreen() {
               style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
               onPress={navigateToSearch}
               activeOpacity={0.7}
+              accessibilityLabel="Search providers"
+              accessibilityRole="button"
             >
               <SearchIcon size={18} color={P.sub} />
             </TouchableOpacity>
@@ -659,6 +662,8 @@ export default function HomeScreen() {
               style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
               onPress={navigateToNotifications}
               activeOpacity={0.7}
+              accessibilityLabel="Notifications"
+              accessibilityRole="button"
             >
               <BellIcon size={18} color={P.sub} />
               {unreadCount > 0 && (
@@ -759,6 +764,9 @@ export default function HomeScreen() {
                     style={styles.filterButtonActive}
                     onPress={toggleFilters}
                     activeOpacity={0.7}
+                    accessibilityLabel="Filters"
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: filtersExpanded }}
                   >
                     <View style={styles.filterButtonBlur}>
                       <Text style={styles.filterButtonText}>
@@ -826,6 +834,8 @@ export default function HomeScreen() {
                                     }
                                   ]}
                                   onPress={() => updateFilter('sortBy', sort)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isActive }}
                                 >
                                   <Text
                                     style={[
@@ -869,6 +879,8 @@ export default function HomeScreen() {
                                     }
                                   ]}
                                   onPress={() => updateFilter('priceRange', range.value)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isActive }}
                                 >
                                   <Text
                                     style={[
@@ -910,6 +922,8 @@ export default function HomeScreen() {
                                     }
                                   ]}
                                   onPress={() => updateFilter('rating', rating.value)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isActive }}
                                 >
                                   <Text
                                     style={[
@@ -951,6 +965,8 @@ export default function HomeScreen() {
                                     }
                                   ]}
                                   onPress={() => updateFilter('distance', distance.value)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isActive }}
                                 >
                                   <Text
                                     style={[
@@ -991,6 +1007,8 @@ export default function HomeScreen() {
                                     }
                                   ]}
                                   onPress={() => updateFilter('availability', avail.value)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isActive }}
                                 >
                                   <Text
                                     style={[
@@ -1032,6 +1050,8 @@ export default function HomeScreen() {
                                     }
                                   ]}
                                   onPress={() => updateFilter('serviceType', type.value)}
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: isActive }}
                                 >
                                   <Text
                                     style={[

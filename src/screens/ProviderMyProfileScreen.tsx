@@ -22,6 +22,7 @@ import { getProviderPortfolio, getMyProviderReviews, getProviderIdForUserId } fr
 import type { DbPortfolioItem } from '../types/database';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../constants/providerThemes';
 import AppBackground from '../components/AppBackground';
+import { logger } from '../utils/logger';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -79,7 +80,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             }
           }
         } catch (e) {
-          console.error('Error loading provider data:', e);
+          logger.error('Error loading provider data:', e);
         } finally {
           setIsLoading(false);
         }

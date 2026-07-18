@@ -2,6 +2,9 @@
 // Manages provider availability and prevents double-booking
 
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+const BOOKINGS_STORAGE_KEY = '@cerviced_bookings';
+import { logger } from '../utils/logger';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -175,6 +178,43 @@ export const AvailabilityService = {
    */
   async resolveProvider(providerIdOrName: string): Promise<string | null> {
     return resolveProviderId(providerIdOrName);
+  async getBookedSlots(providerName: string, date: string): Promise<Array<{
+    time: string;
+    endTime: string;
+    bookingId: string;
+    serviceName: string;
+    duration: string;
+  }>> {
+    try {
+      const stored = await AsyncStorage.getItem(BOOKINGS_STORAGE_KEY);
+      if (!stored) return [];
+
+      const bookings = JSON.parse(stored);
+
+      // Filter bookings for this provider on this date that are not cancelled
+      const providerBookings = bookings.filter((booking: any) => {
+        const nameMatch =
+          booking.providerName?.toLowerCase() === providerName.toLowerCase() ||
+          booking.providerName?.toLowerCase().includes(providerName.toLowerCase()) ||
+          providerName.toLowerCase().includes(booking.providerName?.toLowerCase() || '');
+
+        const dateMatch = booking.bookingDate === date;
+        const notCancelled = booking.status !== 'cancelled' && booking.status !== 'no_show';
+
+        return nameMatch && dateMatch && notCancelled;
+      });
+
+      return providerBookings.map((booking: any) => ({
+        time: booking.bookingTime,
+        endTime: booking.endTime,
+        bookingId: booking.id,
+        serviceName: booking.serviceName,
+        duration: booking.duration,
+      }));
+    } catch (error) {
+      logger.error('Error fetching booked slots:', error);
+      return [];
+    }
   },
 
   /**
@@ -319,7 +359,7 @@ export const AvailabilityService = {
       // protection, since there's no booking store left to check against.
       return [];
     } catch (error) {
-      console.error('Error getting available slots:', error);
+      logger.error('Error getting available slots:', error);
       return [];
     }
   },
@@ -430,7 +470,7 @@ export const AvailabilityService = {
       // against a schedule we can't actually verify.
       return { hasConflict: true, message: "This provider isn't set up for booking yet." };
     } catch (error) {
-      console.error('Error checking slot availability:', error);
+      logger.error('Error checking slot availability:', error);
       // User-facing copy stays booking-flavoured even though the cause here
       // is usually a network/server hiccup — "network error" reads as scary
       // and technical for something the client can just retry.

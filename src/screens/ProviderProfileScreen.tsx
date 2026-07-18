@@ -55,6 +55,7 @@ import {
   isDarkColor,
   type ProviderThemeTokens,
 } from '../constants/providerThemes';
+import { logger } from '../utils/logger';
 
 type ProviderProfileScreenProps = StackScreenProps<HomeStackParamList, 'ProviderProfile'>;
 
@@ -1648,7 +1649,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
   // Notification toggle handler
   const handleNotificationToggle = useCallback(() => {
-  console.warn('Bell button pressed');
+  logger.warn('Bell button pressed');
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   const newState = !isNotificationsEnabled;
   setIsNotificationsEnabled(newState);
@@ -1675,7 +1676,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   try {
     if (providerIsBookmarked) {
       await removeBookmark(providerDbId ?? providerId);
-      if (__DEV__) console.log('Bookmark removed:', providerId);
+      logger.log('Bookmark removed:', providerId);
       setNotificationMessageType('bookmark'); // BOOKMARK MESSAGE TYPE
       
       // Show slide-in message
@@ -1700,7 +1701,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       });
     } else {
       await addBookmark(providerDbId ?? providerId);
-      if (__DEV__) console.log('Provider bookmarked:', providerId);
+      logger.log('Provider bookmarked:', providerId);
       setNotificationMessageType('bookmark'); // BOOKMARK MESSAGE TYPE
       
       // Show slide-in message
@@ -1725,7 +1726,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       });
     }
   } catch (error) {
-    console.error('Bookmark toggle failed:', error);
+    logger.error('Bookmark toggle failed:', error);
     Alert.alert('Error', 'Failed to update bookmark');
   } finally {
     setIsBookmarkLoading(false);
@@ -1746,15 +1747,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
       if (result.action === Share.sharedAction) {
         if (result.activityType) {
-          if (__DEV__) console.log('Shared via:', result.activityType);
+          logger.log('Shared via:', result.activityType);
         } else {
-          if (__DEV__) console.log('Shared successfully');
+          logger.log('Shared successfully');
         }
       } else if (result.action === Share.dismissedAction) {
-        if (__DEV__) console.log('Share dismissed');
+        logger.log('Share dismissed');
       }
     } catch (error) {
-      console.error('Error sharing:', error);
+      logger.error('Error sharing:', error);
       Alert.alert('Error', 'Unable to share at this time.');
     }
   }, [provider]);
@@ -1876,6 +1877,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           style={styles.navBackButton}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
         >
           <Text style={styles.navBackText}>←</Text>
         </TouchableOpacity>
@@ -1890,6 +1893,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
             onPress={handleBookmarkToggle}
             activeOpacity={0.7}
             disabled={isBookmarkLoading}
+            accessibilityLabel={providerIsBookmarked ? 'Remove bookmark' : 'Bookmark provider'}
+            accessibilityRole="button"
           >
             <BookmarkIcon size={18} color={providerIsBookmarked ? adaptiveAccentColor : '#000'} />
           </TouchableOpacity>
@@ -1897,6 +1902,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
             style={styles.headerActionButton}
             onPress={handleShare}
             activeOpacity={0.7}
+            accessibilityLabel="Share"
+            accessibilityRole="button"
           >
             <ShareIcon size={18} color="#000" />
           </TouchableOpacity>
@@ -1964,8 +1971,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
   // ===== UPDATED CART HANDLERS FOR COMPATIBILITY =====
   const handleQuickBook = useCallback(
-    (service: ServiceData, promo?: DbPromotion) => {
-      if (__DEV__) console.log('Quick Book - Redirecting to checkout:', service.name);
+    (service: ServiceData) => {
+      logger.log('Quick Book - Redirecting to checkout:', service.name);
       if (!provider) return;
 
       try {
@@ -2013,7 +2020,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           navigation.navigate('CartMain');
         }, 1500);
       } catch (error) {
-        console.error('Error in Quick Book:', error);
+        logger.error('Error in Quick Book:', error);
         Alert.alert('Error', 'Failed to process quick booking. Please try again.');
       }
     },
@@ -2069,14 +2076,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       setSelectedService(service);
       setShowAddOnsModal(true);
     } catch (error) {
-      console.error('Error opening add-ons modal:', error);
+      logger.error('Error opening add-ons modal:', error);
       Alert.alert('Error', 'Failed to open booking options. Please try again.');
     }
   }, []);
 
   const handleAddToCartWithAddOns = useCallback(
     (service: ServiceData, selectedAddOns: Array<{ id: string | number; name: string; price: number }>) => {
-      if (__DEV__) console.log('Book with Add-ons - Adding to cart:', service.name, selectedAddOns);
+      logger.log('Book with Add-ons - Adding to cart:', service.name, selectedAddOns);
       if (!provider) return;
 
       try {
@@ -2122,7 +2129,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           'cart'
         );
       } catch (error) {
-        console.error('Error adding service with add-ons:', error);
+        logger.error('Error adding service with add-ons:', error);
         Alert.alert('Error', 'Failed to add service to cart. Please try again.');
       }
     },
@@ -2132,14 +2139,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   const handleViewCart = useCallback(() => {
     try {
       hideSuccessMessage();
-      if (__DEV__) console.log('Navigating to cart tab');
+      logger.log('Navigating to cart tab');
 
      const parent = navigation.getParent();
     if (parent) {
       parent.navigate('Cart', { screen: 'CartMain' }); // Navigate to Cart tab and CartMain screen
     }
   } catch (error) {
-    console.error('Cart navigation error:', error);
+    logger.error('Cart navigation error:', error);
     Alert.alert('Navigation Error', 'Unable to navigate to cart');
   }
 }, [hideSuccessMessage, navigation]);
@@ -2611,6 +2618,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                       style={styles.bellButtonInline}
                       onPress={handleNotificationToggle}
                       activeOpacity={0.8}
+                      accessibilityLabel="Notifications"
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isNotificationsEnabled }}
                     >
                       <BellIcon size={16} color={isNotificationsEnabled ? '#4CAF50' : OP.sub} />
                     </TouchableOpacity>

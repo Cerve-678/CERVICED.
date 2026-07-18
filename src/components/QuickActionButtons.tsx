@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Animated } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { logger } from '../utils/logger';
 
 interface Service {
   id: string | number;
@@ -37,7 +38,7 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
 
   // SAFETY CHECK: Ensure service exists and has required properties
   if (!service || !service.id || !service.name) {
-    if (__DEV__) console.log('Service is missing required properties:', service);
+    logger.log('Service is missing required properties:', service);
     return null;
   }
 
@@ -67,7 +68,7 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
     try {
       onQuickBook(service);
     } catch (error) {
-      console.error('Quick book error:', error);
+      logger.error('Quick book error:', error);
     }
   };
 
@@ -75,7 +76,7 @@ export const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
     try {
       onAddOns(service);
     } catch (error) {
-      console.error('Add-ons error:', error);
+      logger.error('Add-ons error:', error);
     }
   };
 

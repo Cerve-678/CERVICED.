@@ -5,7 +5,7 @@
 
 #generated
 
-**84 edges** across **24 screens**. Curated overview: [[Screens & Navigation]].
+**86 edges** across **25 screens**. Curated overview: [[Screens & Navigation]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -47,6 +47,8 @@ graph LR
   HomeScreen --> ProviderProfile
   HomeScreen --> Search
   MessagesScreen --> ProviderChat
+  NotificationsScreen --> Bookings
+  NotificationsScreen --> ProviderProfile
   ProviderAccountScreen --> About
   ProviderAccountScreen --> AccountInfo
   ProviderAccountScreen --> Analytics
@@ -111,6 +113,7 @@ graph LR
 - `ExploreScreen` → `BookmarkedProviders`, `EventDetail`, `ProviderProfile`
 - `HomeScreen` → `Bookings`, `BookmarkedProviders`, `Notifications`, `Offers`, `ProviderProfile`, `Search`
 - `MessagesScreen` → `ProviderChat`
+- `NotificationsScreen` → `Bookings`, `ProviderProfile`
 - `ProviderAccountScreen` → `About`, `AccountInfo`, `Analytics`, `BookingHistory`, `BusinessProfile`, `ChangePassword`, `Clientele`, `HelpCentre`, `Notifications`, `Promotions`, `ReportProblem`, `SignUpStep1`, `SignUpStep2`, `Terms`
 - `ProviderAnalyticsScreen` → `BookingDetail`, `BookingHistory`
 - `ProviderBookingDetailScreen` → `ProviderConversation`, `ProviderIntakeForm`
