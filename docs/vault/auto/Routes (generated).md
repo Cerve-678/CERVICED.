@@ -24,6 +24,8 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderChat`
 - `Search`
 - `Bookings`
+- `BookingDetail`
+- `Reschedule`
 - `BookmarkedProviders`
 - `Notifications`
 - `CartMain`
@@ -49,7 +51,6 @@ Curated overview: [[Screens & Navigation]].
 - `InfoReg`
 - `ProviderHomeMain`
 - `ProviderSchedule`
-- `BookingDetail`
 - `ProviderIntakeForm`
 - `ProviderInbox`
 - `ProviderConversation`

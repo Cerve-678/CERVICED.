@@ -1,6 +1,8 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../../screens/HomeScreen';
+import BookingDetailScreen from '../../screens/BookingDetailScreen';
+import RescheduleScreen from '../../screens/RescheduleScreen';
 import ProviderProfileScreen from '../../screens/ProviderProfileScreen';
 import ProviderChatScreen from '../../screens/ProviderChatScreen';
 import SearchScreen from '../../screens/SearchScreen';
@@ -127,6 +129,18 @@ export default function HomeNavigator() {
       <HomeStack.Screen
         name="Offers"
         component={OffersScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <HomeStack.Screen
+        name="BookingDetail"
+        component={BookingDetailScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <HomeStack.Screen
+        name="Reschedule"
+        component={RescheduleScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

@@ -5,7 +5,7 @@
 
 #generated
 
-**1162 functions** across **156 files**.
+**1185 functions** across **158 files**.
 
 ### `src/components/` (25)
 - `AppBackground.tsx` — AppBackground
@@ -66,12 +66,13 @@
 - `ProviderHomeNavigator.tsx` — ProviderHomeNavigator
 - `ProviderServicesNavigator.tsx` — ProviderServicesNavigator
 
-### `src/screens/` (51)
+### `src/screens/` (53)
 - `AboutScreen.tsx` — AboutScreen · ExpandableSection
 - `AuthScreen.tsx` — AuthScreen · glassStyle · handleSocialLogin · handleSubmit · inputGlass · markTouched · renderError · validate · validateEmail
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — allergyChip · BeautyProfileScreen · CatDivider · chip · cText · glassStyle · handleCancel · handleSave · loadProfile · scrollTo · SectionHead · setSingle · toggleAllergen · toggleMulti
 - `BeccaScreen.tsx` — animate · BeccaScreen · buildWelcomeMessage · dotStyle · handleDeleteChat · handleImagePick · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleSuggestionPress · refreshSessions · TypingDots
+- `BookingDetailScreen.tsx` — booking · BookingDetailScreen · calculatePaymentBreakdown · confirmRebook · formatDisplayDate · getStatusColor · handleCancelBooking · handleRatingSubmit · handleRebook · handleReschedulePress · handleSendMessage · handleTipSubmit · openContactSheet · openInMaps · shareReceipt · tick
 - `BookingsScreen.tsx` — addDate · badgeColor · badgeText · BookingsScreen · buildClientReceiptHTML · calculatePaymentBreakdown · computeCountdown · confirmRebook · const · createStyles · filteredPastBookings · filteredUpcomingBookings · fmt · focusMapOnLocation · formatDisplayDate · formattedDate · getNextDay · getStatusColor · getUserLocation · handleBookingPress · handleCancelBooking · handlePress · handleRatingSubmit · handleRebook · handleRescheduleConfirm · handleRescheduleRequest · handleSendMessage · handleShareReceipt · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · listItems · nextDay · onRefresh · openContactSheet · openInMaps · overallStatus · platformFee · refreshBookingActionItems · resolveDateLabel · resolveServiceCategory · retryLoadBookings · routeCoordinates · styles · toggleFilter · toggleGroup · totalBasePrice
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · handleRemoveBookmark · handleServicePress · handleTabLayout · handleViewProfile · load · mapDbProvider · SkeletonProviderCard
 - `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
@@ -114,6 +115,7 @@
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · dateToYMD · formatTime · formatYMD · handleAddBlock · handleRemoveBlock · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
+- `RescheduleScreen.tsx` — booking · formatDisplayDate · generateDynamicRescheduleDates · handleDateSelect · handleSubmit · handleTimeSelect · RescheduleScreen
 - `SearchScreen.tsx` — availColor · filteredProviders · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · mapDbToCardData · renderHeader · SearchScreen · specialtiesFor
 - `SubscriptionScreen.tsx` — SubscriptionScreen
 - `TermsScreen.tsx` — TermsScreen

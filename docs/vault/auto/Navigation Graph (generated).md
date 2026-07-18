@@ -5,7 +5,7 @@
 
 #generated
 
-**81 edges** across **23 screens**. Curated overview: [[Screens & Navigation]].
+**84 edges** across **24 screens**. Curated overview: [[Screens & Navigation]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -19,11 +19,14 @@ graph LR
   BeccaScreen --> Bookings
   BeccaScreen --> Explore
   BeccaScreen --> ProviderProfile
-  BookingsScreen --> Cart
-  BookingsScreen --> ClientIntakeForm
+  BookingDetailScreen --> Cart
+  BookingDetailScreen --> ClientIntakeForm
+  BookingDetailScreen --> ProviderChat
+  BookingDetailScreen --> Reschedule
+  BookingsScreen --> BookingDetail
   BookingsScreen --> DevSettings
-  BookingsScreen --> ProviderChat
   BookingsScreen --> ProviderProfile
+  BookingsScreen --> Reschedule
   BookmarkedProvidersScreen --> ProviderProfile
   BusinessProfileScreen --> Automations
   BusinessProfileScreen --> Branding
@@ -99,7 +102,8 @@ graph LR
 - `AuthScreen` → `Home`
 - `BeautyBillingScreen` → `BeautyProfile`, `PaymentMethods`, `Subscription`
 - `BeccaScreen` → `Bookings`, `Explore`, `ProviderProfile`
-- `BookingsScreen` → `Cart`, `ClientIntakeForm`, `DevSettings`, `ProviderChat`, `ProviderProfile`
+- `BookingDetailScreen` → `Cart`, `ClientIntakeForm`, `ProviderChat`, `Reschedule`
+- `BookingsScreen` → `BookingDetail`, `DevSettings`, `ProviderProfile`, `Reschedule`
 - `BookmarkedProvidersScreen` → `ProviderProfile`
 - `BusinessProfileScreen` → `Automations`, `Branding`, `BusinessDetails`, `Communications`, `EditProfile`
 - `CartScreen` → `Bookings`, `Home`, `ProviderProfile`

@@ -225,7 +225,7 @@ export default function HomeScreen() {
     const uniqueProviders = new Map<string, Provider>();
 
     bookings.forEach(booking => {
-      const provider = liveProviders.find(p => p.name === booking.providerName);
+      const provider = liveProviders.find(p => p.id === (booking as any).providerId);
       if (provider && !uniqueProviders.has(provider.id)) {
         uniqueProviders.set(provider.id, provider);
       }
@@ -454,11 +454,20 @@ export default function HomeScreen() {
         providers = liveProviders;
     }
 
+    // Apply active filters
+    const sortBy = activeFilters.sortBy as string;
+    if (sortBy === 'highest-rated' || sortBy === 'rating') {
+      providers = [...providers].sort((a, b) => ((b as any).rating ?? 0) - ((a as any).rating ?? 0));
+    }
+    if (activeFilters.rating && activeFilters.rating > 0) {
+      providers = providers.filter(p => ((p as any).rating ?? 0) >= activeFilters.rating!);
+    }
+
     return {
       left: providers.slice(0, 6),
       right: providers.slice(6, 12),
     };
-  }, [selectedService, providersData]);
+  }, [selectedService, providersData, activeFilters]);
 
   const handleServicePress = useCallback(async (service: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -484,8 +493,6 @@ export default function HomeScreen() {
 
   const navigateToProvider = useCallback(
     async (provider: Provider) => {
-      if (!provider.logo) return;
-
       // Haptic feedback
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -1127,7 +1134,7 @@ export default function HomeScreen() {
             {/* Provider of the Week */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>PROVIDER OF THE WEEK</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY CATEGORY</Text>
                 <TouchableOpacity
                   onPress={toggleViewAllProviders}
                   style={styles.viewAllButton}
@@ -1271,7 +1278,7 @@ export default function HomeScreen() {
             {/* Near Me Section - Location-based providers */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>NEAR ME</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>ALL PROVIDERS</Text>
               </View>
 
               {providersLoading ? (
@@ -1378,6 +1385,7 @@ export default function HomeScreen() {
                     key={offer.id}
                     style={styles.offerCard}
                     activeOpacity={0.7}
+                    onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                       <View style={[styles.offerDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>

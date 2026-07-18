@@ -31,6 +31,8 @@ export type HomeStackParamList = {
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
   Search: { initialQuery?: string; category?: string };
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
+  BookingDetail: { bookingId: string };
+  Reschedule: { bookingId: string };
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
@@ -58,6 +60,8 @@ export type BeccaStackParamList = {
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
   Notifications: undefined;
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
+  BookingDetail: { bookingId: string };
+  Reschedule: { bookingId: string };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   CartMain: undefined;
   DevSettings: undefined;
@@ -69,6 +73,8 @@ export type CartStackParamList = {
   ProviderProfile: { providerId: string; source?: string };
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
+  BookingDetail: { bookingId: string };
+  Reschedule: { bookingId: string };
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   Notifications: undefined;
   DevSettings: undefined;
@@ -92,6 +98,8 @@ export type ProfileStackParamList = {
   ProviderChat: { providerId: string; providerDbId: string; providerName: string };
   Messages: undefined;
   Bookings: { openBookingId?: string; openReschedule?: boolean; highlightBookingId?: string; initialTab?: 'all' | 'past' } | undefined;
+  BookingDetail: { bookingId: string };
+  Reschedule: { bookingId: string };
   BookmarkedProviders: undefined;
   Notifications: undefined;
   CartMain: undefined;
