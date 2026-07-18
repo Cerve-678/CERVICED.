@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   View,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import Icon from '../components/IconLibrary';
 import { useAuth } from '../contexts/AuthContext';
@@ -27,6 +28,7 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../services/biometricService';
+import { getUnreadNotificationCount } from '../services/databaseService';
 import { ThemedBackground } from '../components/ThemedBackground';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
@@ -94,6 +96,15 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
+  const [providerDisplayName, setProviderDisplayName] = useState<string | null>(null);
+  // Unread notifications waiting in the *other* (client) hat, surfaced on the
+  // switch control so a dual-role user never misses them while in provider mode.
+  const [clientUnread, setClientUnread] = useState(0);
+
+  useFocusEffect(useCallback(() => {
+    if (!user?.hasClientProfile) { setClientUnread(0); return; }
+    getUnreadNotificationCount('client').then(setClientUnread).catch(() => {});
+  }, [user?.hasClientProfile]));
 
   useEffect(() => {
     (async () => {
@@ -105,6 +116,25 @@ export default function ProviderAccountScreen({ navigation }: any) {
       setBiometricLabel(label);
     })();
   }, []);
+
+  // Re-fetch the live public-profile name every time Settings is focused, so
+  // edits made in Edit Profile (which write providers.display_name, not
+  // users.business_name) show up here instead of the stale sign-up name.
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      let cancelled = false;
+      supabase
+        .from('providers')
+        .select('display_name')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!cancelled) setProviderDisplayName(data?.display_name ?? null);
+        });
+      return () => { cancelled = true; };
+    }, [user?.id])
+  );
 
   const handleBiometricToggle = async (value: boolean) => {
     Haptics.selectionAsync().catch(() => {});
@@ -135,7 +165,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
     logout();
   };
 
-  const displayName = user?.businessName || user?.name || 'My Business';
+  const displayName = providerDisplayName || user?.businessName || user?.name || 'My Business';
   const firstName = displayName.split(' ')[0];
   const initials = displayName
     .split(' ')
@@ -159,7 +189,14 @@ export default function ProviderAccountScreen({ navigation }: any) {
             <View style={styles.heroLeft}>
               <View style={styles.heroTextBlock}>
                 <Text style={[styles.heroSub, { color: P.sub }]}>Hello,</Text>
-                <Text style={[styles.heroName, { color: P.text }]}>{firstName}.</Text>
+                <Text
+                  style={[styles.heroName, { color: P.text }]}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                >
+                  {displayName}
+                </Text>
                 <View style={[styles.badge, { backgroundColor: P.iconBg }]}>
                   <Text style={[styles.badgeText, { color: P.accent }]}>Provider</Text>
                 </View>
@@ -340,6 +377,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
                   {user?.hasClientProfile ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
                 </Text>
               </View>
+              {clientUnread > 0 && (
+                <View style={styles.modeBtnBadge}>
+                  <Text style={styles.modeBtnBadgeText}>{clientUnread > 99 ? '99+' : clientUnread}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -526,6 +568,8 @@ const styles = StyleSheet.create({
   },
   modeBtnTitle: { fontSize: 15, fontWeight: '700' },
   modeBtnSub: { fontSize: 12, fontWeight: '400' },
+  modeBtnBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#FF1744', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, marginLeft: 8 },
+  modeBtnBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
 
   // Logout
   logoutBtn: {

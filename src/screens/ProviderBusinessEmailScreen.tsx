@@ -322,6 +322,8 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           setWhatsappNumber((providerData as any).whatsapp_number ?? '');
           setPreferredContact((providerData as any).preferred_contact_methods ?? []);
           setServiceCategory((providerData as any).service_category ?? '');
+          setOnlineConsult(providerData.online_consultations_available ?? false);
+          setConsultRequired(providerData.consultation_required_new_clients ?? false);
         }
 
         const stored = await AsyncStorage.getItem(EXTRAS_KEY).catch(() => null);
@@ -342,8 +344,6 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           setIsInsured(ex.isInsured ?? false);
           setDbsChecked(ex.dbsChecked ?? false);
           setPatchTest(ex.patchTest ?? '');
-          setOnlineConsult(ex.onlineConsult ?? false);
-          setConsultRequired(ex.consultRequired ?? false);
           setStyleAesthetic(ex.styleAesthetic ?? []);
           setProductsUsed(ex.productsUsed ?? '');
           setIsVegan(ex.isVegan ?? false);
@@ -392,6 +392,8 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           email: bookingEmail.trim() || null,
           whatsapp_number: whatsappNumber.trim() || null,
           preferred_contact_methods: preferredContact.length ? preferredContact : null,
+          online_consultations_available: onlineConsult,
+          consultation_required_new_clients: consultRequired,
         }).eq('id', providerId)));
       }
 
@@ -402,12 +404,12 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
       await AsyncStorage.setItem(EXTRAS_KEY, JSON.stringify({
         instagram, website, serviceSetting, travelRadius, specialties,
         clientele, priceTier, availWindows, acceptsNew, walkIns, groupBookings,
-        qualifications, isInsured, dbsChecked, patchTest, onlineConsult,
-        consultRequired, styleAesthetic, productsUsed, isVegan, languages, accessibility,
+        qualifications, isInsured, dbsChecked, patchTest, styleAesthetic,
+        productsUsed, isVegan, languages, accessibility,
       }));
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      flash('Account info saved', 'success');
+      navigation.goBack();
     } catch (e: any) {
       flash(e.message ?? 'Could not save changes', 'error');
     } finally {

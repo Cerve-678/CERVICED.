@@ -107,6 +107,7 @@ export async function inviteFromWaitlist(entry: WaitlistEntry): Promise<void> {
     priority: 'high',
     is_actionable: true,
     provider_id: entry.provider_id,
+    recipient_role: 'client',
   });
 }
 

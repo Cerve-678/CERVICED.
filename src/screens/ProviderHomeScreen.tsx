@@ -40,6 +40,7 @@ import {
   getMyProviderProfile,
   getProviderAvailability,
   getProviderBlockedDates,
+  getUnreadNotificationCount,
 } from '../services/databaseService';
 import type { BookingWithAddOns, DbProviderAvailability, DbProviderBlockedDate } from '../types/database';
 
@@ -803,6 +804,9 @@ export default function ProviderHomeScreen({ navigation }: Props) {
   // Live bookings
   const [bookings,  setBookings]    = useState<ConfirmedBooking[]>([]);
   const [loading,   setLoading]     = useState(true);
+  // Provider-role unread badge for the header bell. Counts only recipient_role
+  // = 'provider' rows, so it never reflects the same user's client-side unread.
+  const [unreadCount, setUnreadCount] = useState(0);
   const [refreshing,setRefreshing]  = useState(false);
 
   // Provider availability
@@ -909,6 +913,11 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
   useEffect(() => { loadBookings(true); }, [loadBookings]);
   useFocusEffect(useCallback(() => { loadBookings(); }, [loadBookings]));
+
+  // Keep the header bell's unread badge in sync (provider-role notifications only)
+  useFocusEffect(useCallback(() => {
+    getUnreadNotificationCount('provider').then(setUnreadCount).catch(() => {});
+  }, []));
 
   // Reload availability/blocked dates whenever screen is focused (e.g. after editing in ProviderScheduleScreen)
   useFocusEffect(useCallback(() => {
@@ -1103,6 +1112,11 @@ export default function ProviderHomeScreen({ navigation }: Props) {
               style={[s.iconBtn, { backgroundColor: P.iconBg }]}
             >
               <Ionicons name="notifications-outline" size={17} color={P.sub} />
+              {unreadCount > 0 && (
+                <View style={s.notifBadge}>
+                  <Text style={s.notifBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1401,7 +1415,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
             { icon: 'pricetag-outline',        title: 'Promotions', sub: 'Create & manage offers',            route: 'Promotions'       },
             { icon: 'people-outline',          title: 'Clientele',  sub: 'View & manage your client list',    route: 'Clientele'        },
             { icon: 'document-text-outline',   title: 'Info Pack',  sub: 'Share service details with clients',route: 'InfoPacks'        },
-            { icon: 'clipboard-outline',       title: 'Intake Forms', sub: 'Create & manage your forms',      route: 'ProviderIntakeForm' },
+            { icon: 'clipboard-outline',       title: 'Forms',      sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
             { icon: 'chatbubble-outline',      title: 'Inbox',      sub: 'Messages with your clients',        route: 'ProviderInbox'    },
           ] as const).map((item, idx, arr) => (
             <React.Fragment key={item.route}>
@@ -1448,6 +1462,8 @@ const s = StyleSheet.create({
   todayChip:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
   todayChipTxt:    { fontSize: 13, fontWeight: '600' },
   iconBtn:         { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  notifBadge:      { position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#FF1744', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  notifBadgeText:  { color: '#fff', fontSize: 9, fontWeight: 'bold' },
 
   // Month calendar
   monthView:     { marginHorizontal: 12, marginBottom: 8, borderRadius: 18, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, padding: 14 },

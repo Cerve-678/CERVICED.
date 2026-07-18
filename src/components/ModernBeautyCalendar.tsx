@@ -34,27 +34,23 @@ type ModernBeautyCalendarProps = {
   selectedTime?: string;
   providerName?: string;
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
+  serviceId?: string | undefined; // Real services.id UUID — resolves this service's own buffer override
   style?: ViewStyle;
   /** Last date clients can book (today + bookingWindowDays). Undefined = no limit. */
   maxDate?: Date;
-  /** Minimum hours of notice required. Slots sooner than this are filtered out. */
-  minBookingNoticeHrs?: number;
 };
 
-// Parse "9:00 AM" / "10:30 PM" style time string to total minutes since midnight
-const parseSlotTimeToMinutes = (timeStr: string): number => {
-  const clean = timeStr.trim().toUpperCase();
-  const isPM = clean.includes('PM');
-  const isAM = clean.includes('AM');
-  const timeOnly = clean.replace(/\s*(AM|PM)/gi, '').trim();
-  const parts = timeOnly.split(':');
-  if (parts.length !== 2) return 0;
-  let h = parseInt(parts[0] ?? '0', 10);
-  const m = parseInt(parts[1] ?? '0', 10);
-  if (isNaN(h) || isNaN(m)) return 0;
-  if (isPM && h !== 12) h += 12;
-  else if (isAM && h === 12) h = 0;
-  return h * 60 + m;
+// Local YYYY-MM-DD — date.toISOString() converts to UTC first, which shifts
+// the calendar date by one for any non-zero UTC offset near midnight (e.g. a
+// date picked as "Wednesday" at local midnight can serialize as Tuesday's
+// date in UTC+ zones). That wrong date then gets sent to AvailabilityService,
+// which re-derives day-of-week from it — silently querying the wrong
+// weekday's hours.
+const toLocalDateString = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
@@ -64,9 +60,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   selectedTime,
   providerName,
   serviceDuration,
+  serviceId,
   style = {},
   maxDate,
-  minBookingNoticeHrs = 0,
 }) => {
   const { theme, isDarkMode } = useTheme();
   const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
@@ -75,10 +71,25 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(false);
   const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  // null = still checking, true = resolved to a real provider, false = no match
+  const [providerFound, setProviderFound] = useState<boolean | null>(null);
+
+  // Resolve the provider ONCE up front so a bad/stale name shows a clear
+  // message instead of rendering as an indistinguishable "fully booked"
+  // week — the two currently look identical (empty slot lists) to a client.
+  useEffect(() => {
+    let cancelled = false;
+    if (!providerName) { setProviderFound(true); return; }
+    setProviderFound(null);
+    AvailabilityService.resolveProvider(providerName).then(id => {
+      if (!cancelled) setProviderFound(!!id);
+    });
+    return () => { cancelled = true; };
+  }, [providerName]);
 
   useEffect(() => {
     generateWeeklyAvailability();
-  }, [currentWeek, providerName, serviceDuration, maxDate, minBookingNoticeHrs]);
+  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -96,15 +107,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const startOfWeek = getStartOfWeek(currentWeek);
     const slots: SlotsMap = {};
 
-    // Earliest datetime a slot can start (enforces minBookingNoticeHrs)
-    const earliestAllowedMs = minBookingNoticeHrs > 0
-      ? Date.now() + minBookingNoticeHrs * 60 * 60 * 1000
-      : null;
-
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
-      const dateString = date.toISOString().split('T')[0]!; // Non-null assertion: ISO date string always has 'T'
+      const dateString = toLocalDateString(date);
       const isPast = date < new Date() && date.toDateString() !== new Date().toDateString();
 
       if (isPast) {
@@ -122,30 +128,18 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         }
       }
 
-      // Helper to apply notice-hour filter to a list of time strings
-      const applyNoticeFilter = (times: string[]): string[] => {
-        if (!earliestAllowedMs) return times;
-        return times.filter(time => {
-          const slotDate = new Date(`${dateString}T00:00:00`);
-          slotDate.setMinutes(parseSlotTimeToMinutes(time));
-          return slotDate.getTime() >= earliestAllowedMs;
-        });
-      };
-
       // Use AvailabilityService to get slots filtered by existing bookings
       if (providerName) {
         try {
           const availableTimeSlots = await AvailabilityService.getAvailableSlots(
             providerName,
             dateString,
-            serviceDuration
+            serviceDuration,
+            serviceId
           );
-          // Only include slots that are not already booked and satisfy notice window
-          const openSlots = applyNoticeFilter(
-            availableTimeSlots
-              .filter(slot => !slot.isBooked)
-              .map(slot => slot.time)
-          );
+          const openSlots = availableTimeSlots
+            .filter(slot => !slot.isBooked)
+            .map(slot => slot.time);
 
           slots[dateString] = {
             available: openSlots.length,
@@ -155,7 +149,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         } catch (error) {
           // Fallback to base schedule without booking filter
           const dayOfWeek = date.getDay();
-          const times = applyNoticeFilter(generateBeautyTimeSlots(dateString, dayOfWeek, providerName));
+          const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
           slots[dateString] = {
             available: times.length,
             status: times.length > 0 ? 'available' : 'closed',
@@ -165,7 +159,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       } else {
         // No provider specified, use default slots
         const dayOfWeek = date.getDay();
-        const times = applyNoticeFilter(generateBeautyTimeSlots(dateString, dayOfWeek, providerName));
+        const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
         slots[dateString] = {
           available: times.length,
           status: times.length > 0 ? 'available' : 'closed',
@@ -231,7 +225,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   };
 
   const handleCalendarDaySelect = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0]!;
+    const dateString = toLocalDateString(date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (date < today) return; // Don't allow past dates
@@ -262,8 +256,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const startOfWeek = getStartOfWeek(currentWeek);
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
-    const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'short' });
-    const endMonth = endOfWeek.toLocaleDateString('en-US', { month: 'short' });
+    const startMonth = startOfWeek.toLocaleDateString('en-GB', { month: 'short' });
+    const endMonth = endOfWeek.toLocaleDateString('en-GB', { month: 'short' });
     const startDay = startOfWeek.getDate();
     const endDay = endOfWeek.getDate();
     return startMonth === endMonth
@@ -278,7 +272,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
-      const dateString = date.toISOString().split('T')[0]!; // Non-null assertion: ISO date string always has 'T'
+      const dateString = toLocalDateString(date);
       const dayData = availableSlots[dateString] || {
         available: 0,
         status: 'unavailable' as const,
@@ -288,7 +282,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       days.push({
         date,
         dateString,
-        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        dayName: date.toLocaleDateString('en-GB', { weekday: 'short' }),
         dayNumber: date.getDate(),
         isToday: date.toDateString() === new Date().toDateString(),
         ...dayData
@@ -312,7 +306,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     calendarDays.forEach(date => {
       if (!date) return;
       if (date < today) return;
-      const dateString = date.toISOString().split('T')[0]!;
+      const dateString = toLocalDateString(date);
       // If the real week-slot data already loaded for this date, use it
       if (availableSlots[dateString] !== undefined) {
         result[dateString] = availableSlots[dateString].available > 0;
@@ -373,7 +367,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               {calendarDays.map((date, index) => {
                 if (!date) return <View key={`empty-${index}`} style={styles.calendarDay} />;
 
-                const dateString = date.toISOString().split('T')[0]!;
+                const dateString = toLocalDateString(date);
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const isPast     = date < today;
@@ -445,7 +439,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* ── Provider not found ──────────────────────────────────────────
+          Distinct from "no hours today" — this means the identifier we
+          were given never matched a real provider row at all, so every
+          day would otherwise render as an indistinguishable blank/closed
+          grid with no way to tell the two failures apart. */}
+      {providerFound === false && (
+        <View style={styles.notFoundBanner}>
+          <Text style={[styles.notFoundText, { color: theme.text }]}>
+            We couldn't find this provider's schedule. Try reopening their profile and scheduling again.
+          </Text>
+        </View>
+      )}
+
       {/* ── Day pills ────────────────────────────────────────────────── */}
+      {providerFound !== false && (
       <View style={styles.daysRow}>
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
@@ -481,9 +489,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           );
         })}
       </View>
+      )}
 
       {/* ── Time slots ───────────────────────────────────────────────── */}
-      {showTimeSelection && selectedDate && (() => {
+      {providerFound !== false && showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
         if (!currentSlots?.times || currentSlots.times.length === 0) return null;
         const chunkedTimes = chunkArray(currentSlots.times, Math.ceil(currentSlots.times.length / 3));
@@ -530,6 +539,10 @@ const chunkArray = <T,>(arr: T[], size: number): T[][] => {
 const styles = StyleSheet.create({
   // ── Main container ──────────────────────────────────────────────────
   container: { paddingVertical: 10, paddingHorizontal: 4 },
+
+  // ── Provider-not-found banner ─────────────────────────────────────────
+  notFoundBanner: { paddingVertical: 14, paddingHorizontal: 10 },
+  notFoundText:   { fontSize: 13, textAlign: 'center', lineHeight: 18 },
 
   // ── Week navigation header ──────────────────────────────────────────
   header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingBottom: 8 },

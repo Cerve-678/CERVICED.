@@ -159,7 +159,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
 
       if (error) throw error;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      flash('Contact preferences saved', 'success');
+      navigation.goBack();
     } catch (e: any) {
       flash(e.message ?? 'Could not save changes', 'error');
     } finally {

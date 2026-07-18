@@ -67,7 +67,6 @@ interface ProviderAutomations {
   maxBookingsPerDay:      string;     // 'unlimited' | '4' | '6' | '8' | '10' | '12'
   bookingWindowDays:      string;     // '14' | '30' | '60' | '90' | '180' | '0' (unlimited)
   slotIntervalMins:       string;     // '15' | '30' | '60'
-  minBookingNoticeHrs:    string;     // '0' | '1' | '2' | '4' | '8' | '24' | '48'
 }
 
 const DEFAULTS: ProviderAutomations = {
@@ -86,7 +85,6 @@ const DEFAULTS: ProviderAutomations = {
   maxBookingsPerDay:       'unlimited',
   bookingWindowDays:       '60',
   slotIntervalMins:        '60',
-  minBookingNoticeHrs:     '0',
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -220,7 +218,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           maxBookingsPerDay:       m['pa_max_bookings_per_day']        ?? DEFAULTS.maxBookingsPerDay,
           bookingWindowDays:       String(profile?.booking_window_days    ?? m['pa_booking_window_days']    ?? DEFAULTS.bookingWindowDays),
           slotIntervalMins:        String(profile?.slot_interval_mins     ?? m['pa_slot_interval_mins']     ?? DEFAULTS.slotIntervalMins),
-          minBookingNoticeHrs:     String(profile?.min_booking_notice_hrs ?? m['pa_min_booking_notice_hrs'] ?? DEFAULTS.minBookingNoticeHrs),
         });
       } finally {
         setLoading(false);
@@ -257,7 +254,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           booking_window_days:    parseInt(d.bookingWindowDays, 10)    || 60,
           slot_interval_mins:     parseInt(d.slotIntervalMins, 10)     || 60,
           buffer_mins:            parseInt(d.bufferMins, 10)           || 0,
-          min_booking_notice_hrs: parseInt(d.minBookingNoticeHrs, 10)  || 0,
         }));
         // Persist daily cap to providers table (0 = unlimited)
         const capInt = d.maxBookingsPerDay === 'unlimited'
@@ -282,14 +278,14 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
       }
       await Promise.all(saves);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      showToast('Saved', true);
+      navigation.goBack();
     } catch {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       showToast('Could not save — try again', false);
     } finally {
       setSaving(false);
     }
-  }, [d, providerId]);
+  }, [d, providerId, navigation]);
 
   const set = useCallback(<K extends keyof ProviderAutomations>(key: K, val: ProviderAutomations[K]) => {
     setD(prev => ({ ...prev, [key]: val }));
@@ -550,27 +546,6 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         />
         <Text style={[st.chipHint, { color: C.sub }]}>
           Dates beyond this window won't appear on your booking calendar.
-        </Text>
-
-        {/* Minimum booking notice */}
-        <ChipSelect
-          label="Minimum notice to book"
-          options={[
-            { v: '0',  l: 'Instant'  },
-            { v: '1',  l: '1 hr'     },
-            { v: '2',  l: '2 hrs'    },
-            { v: '4',  l: '4 hrs'    },
-            { v: '8',  l: '8 hrs'    },
-            { v: '24', l: '24 hrs'   },
-            { v: '48', l: '48 hrs'   },
-          ]}
-          selected={d.minBookingNoticeHrs}
-          multi={false}
-          onSelect={v => set('minBookingNoticeHrs', v)}
-          C={C}
-        />
-        <Text style={[st.chipHint, { color: C.sub }]}>
-          Clients can't book a same-day appointment within this window.
         </Text>
 
         {/* Slot start-time interval */}

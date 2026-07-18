@@ -302,7 +302,7 @@ export class BookingService {
         return `• ${item.serviceName} - Not scheduled`;
       }
       
-      const date = new Date(booking.selectedDate).toLocaleDateString('en-US', {
+      const date = new Date(booking.selectedDate).toLocaleDateString('en-GB', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',

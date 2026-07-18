@@ -18,7 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { useFont } from '../contexts/FontContext';
 import { BellIcon } from '../components/IconLibrary';
-import { NotificationService } from '../services/notificationService';
 import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../services/databaseService';
 import { supabase } from '../lib/supabase';
 import type { DbNotification } from '../types/database';
@@ -28,7 +27,7 @@ import { HomeScreenProps } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useAuth } from '../contexts/AuthContext';
-import { CommonActions, StackActions } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -119,19 +118,14 @@ const notifSkeletonStyles = StyleSheet.create({
   line: { height: 12, borderRadius: 6 },
 });
 
-// Notification types that only make sense for a provider
-const PROVIDER_ONLY_TYPES: Notification['type'][] = [
-  'booking_pending', 'no_show', 'review_received',
-  'booking_not_started', 'intake_form_reminder', 'provider_message', 'balance_reminder',
-  'intake_form_completed',
-];
-// Notification types that only make sense for a client
-const CLIENT_ONLY_TYPES: Notification['type'][] = [
-  'new_provider', 'promotion', 'review_request',
-  'reschedule_provider_response', 'booking_declined',
-  'announcement', 'intake_form_received', 'waitlist_slot_available',
-  'info_pack_received',
-];
+// Role separation is server-authoritative: every notification row carries a
+// `recipient_role` ('provider' | 'client') set at creation time, and both the
+// initial fetch (getMyNotifications) and the realtime subscription filter by it.
+// The client therefore never second-guesses the audience by notification type —
+// that legacy approach (hardcoded PROVIDER_ONLY/CLIENT_ONLY lists) drifted out of
+// sync with the DB and hid valid rows (e.g. a client's own booking_pending
+// "request sent" notification). Adding a new notification type now requires zero
+// changes here: just set recipient_role correctly where the row is inserted.
 
 export default function NotificationsScreen({ navigation }: HomeScreenProps<'Notifications'>) {
   const { theme, isDarkMode } = useTheme();
@@ -170,20 +164,29 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     providerId: db.provider_id ?? undefined,
   });
 
-  // ✅ Load notifications on mount and when screen focuses
+  // Reload and re-subscribe whenever the active role changes so the list
+  // switches cleanly between provider and client notifications.
   useEffect(() => {
     loadNotifications();
     Notifications.setBadgeCountAsync(0).catch(() => {});
 
-    // Realtime subscription — new notifications pop in instantly
+    const role = isProvider ? 'provider' : 'client';
     const channel = supabase
-      .channel('notifications-screen')
+      .channel(`notifications-screen-${role}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user?.id}`,
+        },
         (payload) => {
-          const n = mapDbNotification(payload.new as DbNotification);
-          setNotifications(prev => [n, ...prev]);
+          const row = payload.new as DbNotification;
+          // Only prepend if it belongs to the currently viewed role
+          if (row.recipient_role === role) {
+            setNotifications(prev => [mapDbNotification(row), ...prev]);
+          }
         }
       )
       .on(
@@ -199,12 +202,13 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [isProvider]);
 
   const loadNotifications = async () => {
     try {
       setLoadError(null);
-      const dbRows = await getMyNotifications();
+      const role = isProvider ? 'provider' : 'client';
+      const dbRows = await getMyNotifications(role);
       setNotifications(dbRows.map(mapDbNotification));
     } catch (error) {
       console.error('Failed to load notifications:', error);
@@ -221,12 +225,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
 
   // ✅ Filter notifications based on selected filter
   const filteredNotifications = useMemo(() => {
-    // First strip notifications that belong to the other mode
-    const modeFiltered = notifications.filter(n =>
-      isProvider
-        ? !CLIENT_ONLY_TYPES.includes(n.type)
-        : !PROVIDER_ONLY_TYPES.includes(n.type)
-    );
+    // `notifications` is already scoped to the active role by the DB query and
+    // realtime filter (recipient_role), so no per-type mode stripping is needed.
+    const modeFiltered = notifications;
 
     switch (selectedFilter) {
       case 'unread':
@@ -348,19 +349,34 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
             }, 500);
           }
         } else {
-          // Client: replace Notifications with Bookings so the modal dismisses cleanly
+          // Client: dismiss the modal first, then navigate to Bookings.
+          // StackActions.replace() straight from a modal-presented route to a
+          // card-presented one fights the native dismiss/push transitions and
+          // hangs the screen — every other path here dismisses first, then
+          // navigates after the dismiss animation finishes.
           const bookingsParams = notification.bookingId
             ? { openBookingId: notification.bookingId, openReschedule, highlightBookingId: notification.bookingId }
             : {};
-          if (__DEV__) console.log('Client — navigating to Bookings:', bookingsParams);
-          navigation.dispatch(StackActions.replace('Bookings', bookingsParams));
+          navigation.dispatch(CommonActions.goBack() as any);
+          setTimeout(() => {
+            navigation.dispatch(
+              CommonActions.navigate({ name: 'Bookings', params: bookingsParams }) as any
+            );
+            if (__DEV__) console.log('Client — navigating to Bookings:', bookingsParams);
+          }, 500);
         }
       }, 300);
     } else if (notification.type === 'waitlist_slot_available') {
       // A slot opened up — take the client straight to the provider to book
       if (!notification.providerId) return;
+      const providerId = notification.providerId;
       setTimeout(() => {
-        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' }));
+        navigation.dispatch(CommonActions.goBack() as any);
+        setTimeout(() => {
+          navigation.dispatch(
+            CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
+          );
+        }, 500);
       }, 300);
     } else if (notification.type === 'new_provider') {
       if (__DEV__) console.log('Navigating to ProviderProfile');
@@ -370,10 +386,16 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         console.error('No providerId found in notification');
         return;
       }
+      const providerId = notification.providerId;
 
       setTimeout(() => {
-        if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
-        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' }));
+        navigation.dispatch(CommonActions.goBack() as any);
+        setTimeout(() => {
+          navigation.dispatch(
+            CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
+          );
+          if (__DEV__) console.log('Navigation to ProviderProfile executed with ID:', providerId);
+        }, 500);
       }, 300);
     } else if (notification.type === 'promotion') {
       if (__DEV__) console.log('Navigating to Home');
@@ -386,7 +408,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       if (notification.providerId) {
         const providerId = notification.providerId;
         setTimeout(() => {
-          navigation.dispatch(StackActions.replace('ProviderProfile', { providerId, source: 'notification' }));
+          navigation.dispatch(CommonActions.goBack() as any);
+          setTimeout(() => {
+            navigation.dispatch(
+              CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
+            );
+          }, 500);
         }, 300);
       } else {
         setTimeout(() => navigation.goBack(), 300);

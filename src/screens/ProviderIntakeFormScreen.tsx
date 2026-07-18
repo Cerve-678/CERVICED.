@@ -27,7 +27,6 @@ import {
   updateLibraryForm,
   deleteLibraryForm,
   sendLibraryFormToClient,
-  insertBookingUserNotification,
   IntakeFormQuestion,
   IntakeForm,
   LibraryForm,
@@ -46,9 +45,15 @@ const TAB_BAR_CLEARANCE = 80;
 function makeId() { return Math.random().toString(36).slice(2, 9); }
 
 // ── Templates ────────────────────────────────────────────────────────────────
+// Each provider category gets the form TYPES that are actually relevant to it —
+// every category gets a Consultation Form, but only categories with a real
+// patch-test / medical-history requirement (chemical services, injectables,
+// peels) get those extra template types offered alongside it. A provider can
+// always build a fully custom form regardless of category.
 
 interface Template {
   id:        string;
+  kind:      'consultation' | 'patchTest' | 'medicalHistory';
   label:     string;
   subtitle:  string;
   keywords:  string[];
@@ -56,8 +61,9 @@ interface Template {
 }
 
 const TEMPLATES: Template[] = [
+  // ── Consultation forms (one per category — the general "what are we doing today" form) ──
   {
-    id: 'hair', label: 'Hair', subtitle: 'Colour, cuts, treatments',
+    id: 'hair', kind: 'consultation', label: 'Hair Consultation Form', subtitle: 'Colour, cuts, treatments',
     keywords: ['hair', 'colour', 'color', 'cut', 'blowout', 'blow dry', 'highlight', 'balayage', 'keratin', 'relaxer', 'perm', 'toner', 'gloss', 'trim', 'extension', 'weave', 'loc', 'braids'],
     questions: [
       { type: 'choice', label: 'What is your hair type?', required: true, options: ['Straight', 'Wavy', 'Curly', 'Coily', '4A', '4B', '4C'] },
@@ -71,7 +77,7 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
-    id: 'nails', label: 'Nails', subtitle: 'Gel, acrylic, nail art',
+    id: 'nails', kind: 'consultation', label: 'Nail Consultation Form', subtitle: 'Gel, acrylic, nail art',
     keywords: ['nail', 'gel', 'acrylic', 'manicure', 'pedicure', 'infill', 'removal', 'shellac', 'sns', 'dip'],
     questions: [
       { type: 'choice', label: 'Service booked', required: true, options: ['Gel manicure', 'Acrylic set', 'Nail art', 'Pedicure', 'Infill', 'Removal'] },
@@ -84,7 +90,7 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
-    id: 'lashes', label: 'Lashes', subtitle: 'Extensions, lifts, tints',
+    id: 'lashes', kind: 'consultation', label: 'Lash Consultation Form', subtitle: 'Extensions, lifts, tints',
     keywords: ['lash', 'extension', 'lash lift', 'tint', 'classic set', 'hybrid', 'volume', 'mega volume'],
     questions: [
       { type: 'choice', label: 'Type of lash service', required: true, options: ['Classic set', 'Hybrid set', 'Volume set', 'Infill', 'Removal', 'Lash lift & tint'] },
@@ -97,7 +103,7 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
-    id: 'brows', label: 'Brows', subtitle: 'Wax, thread, lamination',
+    id: 'brows', kind: 'consultation', label: 'Brow Consultation Form', subtitle: 'Wax, thread, lamination',
     keywords: ['brow', 'eyebrow', 'thread', 'threading', 'lamination', 'microblading', 'powder brow', 'henna'],
     questions: [
       { type: 'choice', label: 'Brow service booked', required: true, options: ['Wax & tint', 'Thread & tint', 'Lamination', 'Microblading', 'Powder brows', 'Combo brows'] },
@@ -110,7 +116,7 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
-    id: 'skin', label: 'Skin', subtitle: 'Facials, peels, aesthetics',
+    id: 'skin', kind: 'consultation', label: 'Skin Consultation Form', subtitle: 'Facials, peels, aesthetics',
     keywords: ['skin', 'facial', 'peel', 'derma', 'aesthetic', 'hydra', 'microneedle', 'botox', 'filler', 'glow', 'led', 'microdermabrasion', 'hifu'],
     questions: [
       { type: 'choice', label: 'Skin type', required: true, options: ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'] },
@@ -125,7 +131,7 @@ const TEMPLATES: Template[] = [
     ],
   },
   {
-    id: 'mua', label: 'Makeup', subtitle: 'Glam, bridal, editorial',
+    id: 'mua', kind: 'consultation', label: 'Makeup Consultation Form', subtitle: 'Glam, bridal, editorial',
     keywords: ['makeup', 'make-up', 'mua', 'bridal', 'glam', 'foundation', 'airbrush', 'makeover'],
     questions: [
       { type: 'choice', label: 'Skin type', required: true, options: ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'] },
@@ -138,25 +144,97 @@ const TEMPLATES: Template[] = [
       { type: 'yesno',  label: 'Happy with before/after photos on social media?', required: false },
     ],
   },
+
+  // ── Patch test forms — only offered to categories where a patch test is
+  // standard practice for the chemicals/adhesives involved. ──
+  {
+    id: 'patchtest-hair', kind: 'patchTest', label: 'Patch Test Consent Form', subtitle: 'Required 48hrs before colour or chemical services',
+    keywords: ['colour', 'color', 'highlight', 'balayage', 'keratin', 'relaxer', 'perm', 'toner', 'gloss', 'bleach'],
+    questions: [
+      { type: 'yesno', label: 'Have you had a patch test for this product within the last 6 months?', required: true },
+      { type: 'text',  label: 'Date of patch test (if applicable)', required: false },
+      { type: 'yesno', label: 'Any reaction at the patch test site (redness, itching, swelling)?', required: true },
+      { type: 'text',  label: 'If yes, please describe', required: false },
+      { type: 'yesno', label: 'Do you understand a patch test is required 48 hours before this appointment and that your appointment may be declined without one?', required: true },
+    ],
+  },
+  {
+    id: 'patchtest-lashes', kind: 'patchTest', label: 'Patch Test Consent Form', subtitle: 'Required 48hrs before lash tint or extensions',
+    keywords: ['lash', 'extension', 'tint', 'classic set', 'hybrid', 'volume'],
+    questions: [
+      { type: 'yesno', label: 'Have you had a patch test for lash glue/tint within the last 6 months?', required: true },
+      { type: 'text',  label: 'Date of patch test (if applicable)', required: false },
+      { type: 'yesno', label: 'Any reaction at the patch test site (redness, itching, swelling)?', required: true },
+      { type: 'text',  label: 'If yes, please describe', required: false },
+      { type: 'yesno', label: 'Do you understand a patch test is required 48 hours before this appointment and that your appointment may be declined without one?', required: true },
+    ],
+  },
+  {
+    id: 'patchtest-brows', kind: 'patchTest', label: 'Patch Test Consent Form', subtitle: 'Required 48hrs before brow tint or henna',
+    keywords: ['brow', 'eyebrow', 'henna', 'lamination', 'microblading'],
+    questions: [
+      { type: 'yesno', label: 'Have you had a patch test for tint/henna within the last 6 months?', required: true },
+      { type: 'text',  label: 'Date of patch test (if applicable)', required: false },
+      { type: 'yesno', label: 'Any reaction at the patch test site (redness, itching, swelling)?', required: true },
+      { type: 'text',  label: 'If yes, please describe', required: false },
+      { type: 'yesno', label: 'Do you understand a patch test is required 48 hours before this appointment and that your appointment may be declined without one?', required: true },
+    ],
+  },
+  {
+    id: 'patchtest-skin', kind: 'patchTest', label: 'Patch Test Consent Form', subtitle: 'Required before chemical peels or new product use',
+    keywords: ['peel', 'derma', 'microneedle', 'hydra', 'microdermabrasion'],
+    questions: [
+      { type: 'yesno', label: 'Have you had a patch test for this product within the last 6 months?', required: true },
+      { type: 'text',  label: 'Date of patch test (if applicable)', required: false },
+      { type: 'yesno', label: 'Any reaction at the patch test site (redness, itching, swelling)?', required: true },
+      { type: 'text',  label: 'If yes, please describe', required: false },
+      { type: 'yesno', label: 'Do you understand a patch test is required before this treatment and that your appointment may be declined without one?', required: true },
+    ],
+  },
+
+  // ── Medical history — offered to Skin/Aesthetics, where injectables, peels
+  // and advanced treatments carry real medical contraindications. ──
+  {
+    id: 'medicalhistory-skin', kind: 'medicalHistory', label: 'Medical History Form', subtitle: 'Required before injectables, peels & advanced treatments',
+    keywords: ['botox', 'filler', 'aesthetic', 'peel', 'microneedle', 'hifu'],
+    questions: [
+      { type: 'text',  label: 'List any medical conditions we should be aware of', required: true },
+      { type: 'yesno', label: 'Are you currently taking any medications?', required: true },
+      { type: 'text',  label: 'If yes, please list', required: false },
+      { type: 'yesno', label: 'Any known allergies (medications, skincare ingredients, latex)?', required: true },
+      { type: 'text',  label: 'If yes, please describe', required: false },
+      { type: 'yesno', label: 'Are you pregnant or breastfeeding?', required: true },
+      { type: 'yesno', label: 'Do you have a pacemaker or other implanted medical device?', required: true },
+      { type: 'yesno', label: 'Any history of keloid scarring or skin cancer?', required: true },
+      { type: 'yesno', label: 'Currently under the care of a dermatologist or doctor for a skin condition?', required: true },
+    ],
+  },
 ];
 
+// Auto-suggested "for this booking" match is always the general Consultation
+// Form for the booked service — patch test / medical history are deliberate
+// picks the provider makes from "Other templates", not a one-click default.
 function detectTemplate(serviceName: string): Template | null {
   const lower = serviceName.toLowerCase();
   let best: Template | null = null, bestScore = 0;
   for (const tpl of TEMPLATES) {
+    if (tpl.kind !== 'consultation') continue;
     const score = tpl.keywords.filter(k => lower.includes(k)).length;
     if (score > bestScore) { bestScore = score; best = tpl; }
   }
   return bestScore > 0 ? best : null;
 }
 
+// All template kinds relevant to the provider's own category/services —
+// e.g. a lash artist sees the Lash Consultation Form AND the lash Patch Test
+// Consent Form, while a nail tech only sees the Nail Consultation Form.
 function getRelevantTemplates(serviceCategory: string, serviceNames: string[]): Template[] {
   const pool = [serviceCategory, ...serviceNames].join(' ').toLowerCase();
   const scored = TEMPLATES.map(tpl => ({
     tpl,
     score: tpl.keywords.filter(k => pool.includes(k)).length,
   })).filter(({ score }) => score > 0);
-  if (scored.length === 0) return TEMPLATES;
+  if (scored.length === 0) return TEMPLATES.filter(t => t.kind === 'consultation');
   return scored.sort((a, b) => b.score - a.score).map(({ tpl }) => tpl);
 }
 
@@ -268,7 +346,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const openBuilderFromTemplate = useCallback((tpl: Template) => {
     Haptics.selectionAsync().catch(() => {});
     setEditingId(null);
-    setTitle(`${tpl.label} Consultation Form`);
+    setTitle(tpl.label);
     setQuestions(tpl.questions.map(q => ({ ...q, id: makeId() })));
     setSelectedServices([]);
     setAutoSend(false);
@@ -397,18 +475,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
 
     setSaving(true);
     try {
-      const provider = await getMyProviderProfile();
-      if (!provider) throw new Error();
-      const form = await sendLibraryFormToClient(libraryFormId, toBookingId, toClientUserId);
-      await insertBookingUserNotification({
-        booking_id: toBookingId,
-        type: 'booking_confirmed',
-        title: `${provider.display_name} sent you a form`,
-        message: `Please fill out: "${form.title}" before your appointment.`,
-        priority: 'high',
-        is_actionable: true,
-        provider_id: provider.id,
-      });
+      // sendLibraryFormToClient looks up the provider profile itself and already
+      // notifies the client (intake_form_received / "Form to Complete") — a second
+      // insert here used to double-send the push.
+      await sendLibraryFormToClient(libraryFormId, toBookingId, toClientUserId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       showToast('Form sent to client.', 'success');
       setPickingBookingFor(null);
@@ -469,7 +539,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             <Text style={[styles.headerTitle, { color: P.text }]}>
               {mode === 'readonly' ? 'Form Responses'
                 : mode === 'builder' ? (editingId ? 'Edit Form' : 'Create Form')
-                : 'Intake Forms'}
+                : 'Forms'}
             </Text>
             {mode === 'builder' && questions.length > 0 && (
               <View style={[styles.qPill, { backgroundColor: P.surface, borderColor: P.border }]}>
@@ -634,11 +704,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                   Select which services this form applies to. Toggle Auto-send to send it automatically when the service is booked.
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceChipsScroll} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {providerServiceNames.map(name => {
+                  {providerServiceNames.map((name, idx) => {
                     const selected = selectedServices.includes(name);
                     return (
                       <TouchableOpacity
-                        key={name}
+                        key={`${idx}-${name}`}
                         style={[styles.serviceChip,
                           { borderColor: selected ? P.accent : P.border,
                             backgroundColor: selected ? P.accent + '18' : P.card }]}

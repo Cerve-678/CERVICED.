@@ -36,6 +36,7 @@ export type HomeStackParamList = {
   CartMain: undefined;
   ClientIntakeForm: { formId: string; bookingId: string; serviceName?: string };
   DevSettings: undefined;
+  Offers: undefined;
 };
 
 // Explore Stack
@@ -103,7 +104,7 @@ export type ProfileStackParamList = {
 export type ProviderHomeStackParamList = {
   ProviderHomeMain: undefined;
   ProviderSchedule: undefined;
-  BookingDetail: { bookingId: string; booking?: any };
+  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean };
   ProviderIntakeForm: { bookingId: string; clientUserId: string; serviceName: string; formId?: string } | undefined;
   Notifications: undefined;
   ProviderInbox: { initialFilter?: 'all' | 'pending' | 'confirmed' | 'done' | 'messages' } | undefined;
@@ -236,63 +237,22 @@ export type ProviderServicesScreenProps<T extends keyof ProviderServicesStackPar
 export type CartMainScreenProps = CartScreenProps<'CartMain'>;
 
 // ============================================================================
-// PROVIDER ID MAPPING
+// PROVIDER ID HELPERS
 // ============================================================================
 
-export const PROVIDER_ID_MAP: Record<string, string> = {
-  'JENNIFER': 'hair-by-jennifer',
-  'Hair by Jennifer': 'hair-by-jennifer',
-  'KATHRINE': 'styled-by-kathrine',
-  'Styled by Kathrine': 'styled-by-kathrine',
-  'DIVANA': 'diva-nails',
-  'Diva Nails': 'diva-nails',
-  'JANA': 'jana-aesthetics',
-  'Jana Aesthetics': 'jana-aesthetics',
-  'HER BROWS': 'her-brows',
-  'Her Brows': 'her-brows',
-  'KIKI': 'kiki-nails',
-  'Kiki Nails': 'kiki-nails',
-  'MYA': 'makeup-by-mya',
-  'Makeup by Mya': 'makeup-by-mya',
-  'VIKKI': 'vikki-laid',
-  'Vikki Laid': 'vikki-laid',
-  'LASHED': 'your-lashed',
-  'Your Lashed': 'your-lashed',
-  'styled-by-kathrine': 'styled-by-kathrine',
-  'hair-by-jennifer': 'hair-by-jennifer',
-  'diva-nails': 'diva-nails',
-  'makeup-by-mya': 'makeup-by-mya',
-  'your-lashed': 'your-lashed',
-  'vikki-laid': 'vikki-laid',
-  'kiki-nails': 'kiki-nails',
-  'jana-aesthetics': 'jana-aesthetics',
-  'her-brows': 'her-brows',
-};
-
-export const getProviderIdFromName = (providerName: string): string => {
-  const directMapping = PROVIDER_ID_MAP[providerName];
-  if (directMapping) return directMapping;
-  
-  return providerName
+export const getProviderIdFromName = (providerName: string): string =>
+  providerName
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
-};
 
-export const getProviderDisplayName = (providerId: string): string => {
-  for (const [displayName, id] of Object.entries(PROVIDER_ID_MAP)) {
-    if (id === providerId) {
-      return displayName;
-    }
-  }
-  
-  return providerId
+export const getProviderDisplayName = (providerId: string): string =>
+  providerId
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-};
 
 export const NAVIGATION_SOURCES = {
   HOME: 'home',
@@ -304,6 +264,4 @@ export const NAVIGATION_SOURCES = {
 
 export type NavigationSource = typeof NAVIGATION_SOURCES[keyof typeof NAVIGATION_SOURCES];
 
-export const isValidProviderId = (id: string): boolean => {
-  return Object.values(PROVIDER_ID_MAP).includes(id) || /^[a-z0-9-]+$/.test(id);
-};
+export const isValidProviderId = (id: string): boolean => /^[a-z0-9-]+$/.test(id);

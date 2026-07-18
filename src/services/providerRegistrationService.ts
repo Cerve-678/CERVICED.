@@ -17,6 +17,9 @@ export interface ServiceData {
   name: string;
   price: number;
   duration: string;
+  // Blank = no override. before defaults to 0; after inherits the provider's global buffer.
+  bufferBeforeMins: number | null;
+  bufferAfterMins: number | null;
   description: string;
   images: string[];
   addOns: AddOnData[];
@@ -30,7 +33,7 @@ export interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | '';
+  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
 }
 
 export interface ProviderRegistrationData {
@@ -152,11 +155,18 @@ export async function saveProviderToSupabase(
   }
 
   // 2. Upsert provider row
-  const { data: existingProvider } = await supabase
+  const { data: existingProvider, error: existingProviderError } = await supabase
     .from('providers')
     .select('id')
     .eq('user_id', userId)
     .maybeSingle();
+  // maybeSingle() errors (rather than returning null) if more than one row
+  // matches — if we ignore that, the code below falls through to inserting a
+  // duplicate provider row instead of updating the existing one, and future
+  // edits silently split across rows. Fail loudly instead.
+  if (existingProviderError) {
+    throw new Error(`Provider lookup failed: ${existingProviderError.message}`);
+  }
 
   let providerId: string;
 
@@ -249,6 +259,8 @@ export async function saveProviderToSupabase(
           description: svc.description || null,
           price: svc.price,
           duration_minutes: parseDurationToMinutes(svc.duration),
+          buffer_before_mins: svc.bufferBeforeMins ?? null,
+          buffer_after_mins: svc.bufferAfterMins ?? null,
           is_active: true,
           sort_order: sortOrder,
           tags: svc.tags?.length ? svc.tags : null,
@@ -302,7 +314,7 @@ export async function saveProviderToSupabase(
 
   // 6. Refresh AsyncStorage cache with resolved URLs
   const cached: ProviderRegistrationData = { ...data, logo: logoUrl };
-  await AsyncStorage.setItem('@provider_reg_data', JSON.stringify(cached));
+  await AsyncStorage.setItem(`@provider_reg_data_${userId}`, JSON.stringify(cached));
 }
 
 // ── loadProviderFromSupabase ─────────────────────────────────────────────────
@@ -320,9 +332,9 @@ export async function loadProviderFromSupabase(
 
   if (error) {
     console.warn('loadProviderFromSupabase error:', error.message);
-    return getCachedProviderData();
+    return getCachedProviderData(userId);
   }
-  if (!provider) return getCachedProviderData();
+  if (!provider) return getCachedProviderData(userId);
 
   const { data: services, error: svcError } = await supabase
     .from('services')
@@ -333,6 +345,8 @@ export async function loadProviderFromSupabase(
       description,
       price,
       duration_minutes,
+      buffer_before_mins,
+      buffer_after_mins,
       sort_order,
       tags,
       technique_tags,
@@ -354,7 +368,7 @@ export async function loadProviderFromSupabase(
 
   if (svcError) {
     console.warn('loadProviderFromSupabase services error:', svcError.message);
-    return getCachedProviderData();
+    return getCachedProviderData(userId);
   }
 
   // Reconstruct categories
@@ -381,6 +395,8 @@ export async function loadProviderFromSupabase(
       name: svc.name,
       price: Number(svc.price),
       duration: minutesToDuration(svc.duration_minutes),
+      bufferBeforeMins: svc.buffer_before_mins ?? null,
+      bufferAfterMins: svc.buffer_after_mins ?? null,
       description: svc.description || '',
       images,
       addOns,
@@ -398,7 +414,7 @@ export async function loadProviderFromSupabase(
     });
   }
 
-  const cached = await getCachedProviderData().catch(() => null);
+  const cached = await getCachedProviderData(userId).catch(() => null);
 
   return {
     providerName: provider.display_name,
@@ -459,9 +475,9 @@ export async function loadProviderPolicies(userId: string): Promise<Record<strin
 
 // ── AsyncStorage cache helpers ───────────────────────────────────────────────
 
-export async function getCachedProviderData(): Promise<ProviderRegistrationData | null> {
+export async function getCachedProviderData(userId: string): Promise<ProviderRegistrationData | null> {
   try {
-    const stored = await AsyncStorage.getItem('@provider_reg_data');
+    const stored = await AsyncStorage.getItem(`@provider_reg_data_${userId}`);
     if (stored) return JSON.parse(stored) as ProviderRegistrationData;
   } catch (e) {
     console.warn('getCachedProviderData error:', e);

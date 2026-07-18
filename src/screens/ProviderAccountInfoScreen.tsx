@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const CP_DARK = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
@@ -32,14 +33,16 @@ const CP_LIGHT = {
 export default function ProviderAccountInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
+  const { updateUser } = useAuth();
 
-  const [userId, setUserId]   = useState<string | null>(null);
-  const [authEmail, setAuthEmail] = useState('');
-  const [name, setName]       = useState('');
-  const [phone, setPhone]     = useState('');
-  const [dob, setDob]         = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
+  const [userId, setUserId]         = useState<string | null>(null);
+  const [authEmail, setAuthEmail]   = useState('');
+  const [name, setName]             = useState('');
+  const [phone, setPhone]           = useState('');
+  const [dob, setDob]               = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -48,15 +51,17 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
         if (!user) return;
         setUserId(user.id);
         setAuthEmail(user.email ?? '');
-        const { data } = await supabase
-          .from('users')
-          .select('name, phone, dob')
-          .eq('id', user.id)
-          .single();
+        const [{ data }, { data: providerData }] = await Promise.all([
+          supabase.from('users').select('name, phone, dob').eq('id', user.id).single(),
+          supabase.from('providers').select('display_name').eq('user_id', user.id).maybeSingle(),
+        ]);
         if (data) {
           setName(data.name ?? '');
           setPhone(data.phone ?? '');
           setDob(data.dob ?? '');
+        }
+        if (providerData) {
+          setBusinessName(providerData.display_name ?? '');
         }
       } finally {
         setLoading(false);
@@ -71,11 +76,12 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     try {
       if (userId) {
         const { error } = await supabase.from('users').update({
-          name: name.trim(),
-          phone: phone.trim() || null,
           dob: dob.trim() || null,
         }).eq('id', userId);
         if (error) throw error;
+        // Route name/phone through AuthContext so the in-memory user (and
+        // Settings' displayName) refreshes immediately instead of only on next login.
+        await updateUser({ name: name.trim(), phone: phone.trim() });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
@@ -121,6 +127,18 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Business Name */}
+            {!!businessName && (
+              <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+                <Text style={[styles.cardTitle, { color: C.text }]}>Business Name</Text>
+                <Text style={[styles.cardSub, { color: C.sub }]}>Your public provider name. Edit in My Profile.</Text>
+                <View style={[styles.lockedRow, { backgroundColor: C.card, borderColor: C.border, marginTop: 10 }]}>
+                  <Text style={[styles.lockedText, { color: C.text }]}>{businessName}</Text>
+                  <Ionicons name="storefront-outline" size={14} color={C.sub} />
+                </View>
+              </View>
+            )}
+
             {/* Personal Details */}
             <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
               <Text style={[styles.cardTitle, { color: C.text }]}>Personal Details</Text>

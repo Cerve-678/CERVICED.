@@ -442,7 +442,9 @@ class UserLearningService {
   }>(providers: T[], limit?: number): Promise<T[]> {
     await this.initialize();
 
-    if (this.preferences.totalInteractions < 3 && !this.userProfile) return providers;
+    if (this.preferences.totalInteractions < 3 && !this.userProfile) {
+      return limit ? providers.slice(0, limit) : providers;
+    }
 
     const scored = providers.map(provider => ({
       provider,

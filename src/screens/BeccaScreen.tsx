@@ -435,7 +435,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
                           {item.preview}
                         </Text>
                         <Text style={[styles.historyItemDate, { color: theme.secondaryText }]}>
-                          {new Date(item.updated_at).toLocaleDateString('en-US', {
+                          {new Date(item.updated_at).toLocaleDateString('en-GB', {
                             month: 'short',
                             day: 'numeric',
                             hour: 'numeric',

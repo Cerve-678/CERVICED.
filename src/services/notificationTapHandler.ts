@@ -6,6 +6,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/navigationRef';
+import { requestMode } from '../navigation/modeController';
 
 export interface NotificationTapData {
   type?: string;
@@ -53,7 +54,21 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   }
 
   const savedMode = await AsyncStorage.getItem('@active_mode').catch(() => null);
-  const isProvider = savedMode === 'provider';
+  // Route by who the notification is FOR (recipient_role from the push payload),
+  // not by whichever hat the app happens to be in. Fall back to the saved mode
+  // only when the notification didn't carry a role.
+  const role = typeof data.recipient_role === 'string' ? data.recipient_role : null;
+  const isProvider = role ? role === 'provider' : savedMode === 'provider';
+
+  // If the notification is for the OTHER hat, switch into it first so the correct
+  // navigator stack is mounted before we deep-link — and persist it so a cold
+  // launch from a killed state also opens in the right mode.
+  if (isProvider !== (savedMode === 'provider')) {
+    const targetMode = isProvider ? 'provider' : 'client';
+    await AsyncStorage.setItem('@active_mode', targetMode).catch(() => {});
+    requestMode(targetMode);
+    await new Promise((r) => setTimeout(r, 350));
+  }
 
   // ── Booking-related types ───────────────────────────────────────────────────
   if (BOOKING_TYPES.has(type)) {
@@ -61,11 +76,15 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
       type === 'reschedule_request' || type === 'reschedule_provider_response';
 
     if (isProvider) {
-      // Provider: straight to booking detail
+      // Provider: navigate through the ProviderHome tab so the correct stack
+      // is selected regardless of which tab is currently focused.
       if (booking_id) {
-        navigate('BookingDetail', { bookingId: booking_id });
+        navigate('ProviderHome', {
+          screen: 'BookingDetail',
+          params: { bookingId: booking_id, openReschedule: openReschedule || undefined },
+        });
       } else {
-        navigate('Notifications');
+        navigate('ProviderHome', { screen: 'Notifications' });
       }
     } else {
       // Client: open bookings list with the booking pre-opened

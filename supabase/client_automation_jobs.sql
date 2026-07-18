@@ -77,12 +77,16 @@ ALTER TABLE public.notifications
 -- ───────────────────────────────────────────────────────────
 -- STEP 3: process_scheduled_promotion_notifications()
 --   Runs every 15 minutes.
---   Sends promotions whose scheduled_notify_at has passed to every client
---   of the provider (same "all" audience as the in-app sender in
---   ProviderPromotionsScreen — distinct users with a confirmed/completed
---   booking). Previously these only went out if the provider happened to
---   open the Promotions screen after the scheduled time.
---   Claims notify_sent_at up-front so it cannot race the in-app fallback.
+--   Sends promotions whose scheduled_notify_at has passed. Previously
+--   these only went out if the provider happened to open the Promotions
+--   screen after the scheduled time. Claims notify_sent_at up-front so
+--   it cannot race the in-app fallback.
+--   SUPERSEDED by supabase/promotion_interest_targeting.sql, which
+--   CREATE OR REPLACEs this function to also include provider_follows
+--   (previously ignored entirely) alongside bookmarks/booking history —
+--   still strictly this provider's own audience. Run that file too —
+--   order doesn't matter, it always wins since it's the more specific
+--   migration.
 -- ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.process_scheduled_promotion_notifications()
 RETURNS VOID AS $$

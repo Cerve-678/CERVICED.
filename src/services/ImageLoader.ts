@@ -19,25 +19,7 @@ class ImageLoaderService {
 
   // Define your image mappings
   private readonly imageMap: Record<string, () => ImageSourcePropType> = {
-    // Provider logos
-    'provider_kathrine': () => require('../assets/images/providers/kathrine.png'),
-    'provider_kiki': () => require('../assets/images/providers/kiki.png'),
-    'provider_jennifer': () => require('../assets/images/providers/jennifer.png'),
-    'provider_sleeked': () => require('../assets/images/providers/sleeked.png'),
-
-    // Service images
-    'service_kathrine': () => require('../assets/images/services/Kathrine.png'),
-    'service_diva': () => require('../assets/images/services/Diva.png'),
-    'service_lashed': () => require('../assets/images/services/Lashed.png'),
-    'service_vikki': () => require('../assets/images/services/Vikki_laid.png'),
-    'service_mya': () => require('../assets/images/services/Mya.png'),
-    'service_jennifer': () => require('../assets/images/services/Jennifer.png'),
-
-    // Background images
     'background_default': () => require('../assets/images/backgrounds/background.png'),
-    'background_kathrine': () => require('../assets/images/backgrounds/background2.png'),
-
-    // Placeholder images
     'placeholder_service': () => require('../assets/images/placeholders/service_placeholder.png'),
     'placeholder_provider': () => require('../assets/images/placeholders/provider_placeholder.png'),
   };
@@ -140,26 +122,14 @@ class ImageLoaderService {
   /**
    * Get background image
    */
-  getBackgroundImage(providerName?: string): ImageSourcePropType | null {
-    if (providerName === 'KATHRINE') {
-      return this.getImage('background_kathrine');
-    }
+  getBackgroundImage(): ImageSourcePropType | null {
     return this.getImage('background_default');
   }
 
   /**
    * Extract service key from image path/name
    */
-  private extractServiceKey(imageName: string): string {
-    const name = imageName.toString().toLowerCase();
-    
-    if (name.includes('mya')) return 'service_mya';
-    if (name.includes('lashed')) return 'service_lashed';
-    if (name.includes('diva')) return 'service_diva';
-    if (name.includes('vikki')) return 'service_vikki';
-    if (name.includes('jennifer')) return 'service_jennifer';
-    if (name.includes('kathrine')) return 'service_kathrine';
-    
+  private extractServiceKey(_imageName: string): string {
     return 'placeholder_service';
   }
 }
@@ -173,7 +143,7 @@ export const useImageLoader = () => {
     getImage: (imageId: string) => imageLoader.getImage(imageId),
     getProviderLogo: (providerName: string) => imageLoader.getProviderLogo(providerName),
     getServiceImage: (imageName: string) => imageLoader.getServiceImage(imageName),
-    getBackgroundImage: (providerName?: string) => imageLoader.getBackgroundImage(providerName),
+    getBackgroundImage: () => imageLoader.getBackgroundImage(),
     preloadImages: (imageIds: string[]) => imageLoader.preloadImages(imageIds),
     clearCache: () => imageLoader.clearCache(),
     getCacheStats: () => imageLoader.getCacheStats(),

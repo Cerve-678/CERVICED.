@@ -352,12 +352,14 @@ ALTER TABLE public.providers
 ALTER TABLE public.bookings
   ADD COLUMN IF NOT EXISTS address_released_at TIMESTAMPTZ;
 
--- Automatically release address when booking status moves to 'upcoming'
--- (handles the on_confirmation policy at the DB level as a safety net)
+-- Automatically release address when a booking becomes 'confirmed'
+-- (handles the on_confirmation policy at the DB level as a safety net).
+-- NOTE: the DB stores 'confirmed' — the app's 'upcoming' is a display-only
+-- alias that maps to 'confirmed' on write, so we must match 'confirmed' here.
 CREATE OR REPLACE FUNCTION public.auto_release_address()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.status = 'upcoming' AND OLD.status = 'pending' THEN
+  IF NEW.status = 'confirmed' AND OLD.status IS DISTINCT FROM 'confirmed' THEN
     UPDATE public.bookings
     SET address_released_at = NOW()
     WHERE id = NEW.id
@@ -1102,10 +1104,11 @@ ALTER TABLE public.becca_chat_messages ALTER COLUMN id TYPE TEXT;
 -- 1. Create buckets (skip if already created via the dashboard UI)
 INSERT INTO storage.buckets (id, name, public)
 VALUES
-  ('provider-logos',  'provider-logos',  true),
-  ('service-images',  'service-images',  true),
-  ('portfolio',       'portfolio',        true),
-  ('avatars',         'avatars',          true)
+  ('provider-logos',       'provider-logos',       true),
+  ('service-images',       'service-images',       true),
+  ('portfolio',            'portfolio',            true),
+  ('avatars',              'avatars',              true),
+  ('provider-backgrounds', 'provider-backgrounds', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -1256,6 +1259,42 @@ CREATE POLICY "avatars: authenticated delete"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- provider-backgrounds
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "provider-backgrounds: public read" ON storage.objects;
+CREATE POLICY "provider-backgrounds: public read"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'provider-backgrounds');
+
+DROP POLICY IF EXISTS "provider-backgrounds: authenticated upload" ON storage.objects;
+CREATE POLICY "provider-backgrounds: authenticated upload"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'provider-backgrounds'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "provider-backgrounds: authenticated update" ON storage.objects;
+CREATE POLICY "provider-backgrounds: authenticated update"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'provider-backgrounds'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "provider-backgrounds: authenticated delete" ON storage.objects;
+CREATE POLICY "provider-backgrounds: authenticated delete"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'provider-backgrounds'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
 -- ════════════════════════════════════════════════════
 -- automation_jobs.sql
 -- ════════════════════════════════════════════════════
@@ -1347,6 +1386,25 @@ BEGIN
        SET status       = 'confirmed',
            confirmed_at = NOW()
      WHERE id = NEW.id;
+
+    -- …but still tell the PROVIDER a booking landed (informational — nothing
+    -- to confirm/decline). Without this, instant-booking providers get no
+    -- notification of new bookings at all.
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
+    VALUES (
+      v_provider_user_id,
+      'booking_confirmed',
+      'New Booking',
+      COALESCE(NEW.customer_name, 'A client') || ' booked ' ||
+        NEW.service_name_snapshot ||
+        ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') || '.',
+      'high',
+      FALSE,
+      NEW.id,
+      NEW.provider_id
+    );
 
   ELSE
     -- Manual flow: notify provider to review the request
@@ -2243,7 +2301,10 @@ BEGIN
       'schema', TG_TABLE_SCHEMA,
       'record', row_to_json(NEW)
     ),
-    timeout_milliseconds := 5000
+    -- Edge function executions have been observed taking up to ~12s (cold
+    -- starts / Expo API latency) — 5s was silently dropping ~1 in 4 pushes
+    -- with no error surfaced anywhere. 15s gives real headroom.
+    timeout_milliseconds := 15000
   );
   RETURN NEW;
 END;
@@ -2381,12 +2442,15 @@ ALTER TABLE public.notifications
 -- ───────────────────────────────────────────────────────────
 -- STEP 3: process_scheduled_promotion_notifications()
 --   Runs every 15 minutes.
---   Sends promotions whose scheduled_notify_at has passed to every client
---   of the provider (same "all" audience as the in-app sender in
---   ProviderPromotionsScreen — distinct users with a confirmed/completed
---   booking). Previously these only went out if the provider happened to
---   open the Promotions screen after the scheduled time.
---   Claims notify_sent_at up-front so it cannot race the in-app fallback.
+--   Sends promotions whose scheduled_notify_at has passed. Previously
+--   these only went out if the provider happened to open the Promotions
+--   screen after the scheduled time. Claims notify_sent_at up-front so
+--   it cannot race the in-app fallback.
+--   Targeting delegates to get_promotion_audience() (defined in
+--   supabase/promotion_interest_targeting.sql — run that file too, or
+--   this CREATE FUNCTION fails at call time with "function does not
+--   exist"): this provider's own bookmarks/follows/booking history only —
+--   promotions never cross into other providers' clients.
 -- ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.process_scheduled_promotion_notifications()
 RETURNS VOID AS $$
@@ -2420,8 +2484,8 @@ BEGIN
 
     INSERT INTO public.notifications
       (user_id, type, title, message, priority, is_actionable, provider_id, metadata)
-    SELECT DISTINCT
-      b.user_id,
+    SELECT
+      aud.user_id,
       'promotion',
       v_badge || ' — ' || COALESCE(promo.display_name, 'Your provider'),
       promo.title,
@@ -2429,9 +2493,7 @@ BEGIN
       FALSE,
       promo.provider_id,
       jsonb_build_object('promo_id', promo.id)
-    FROM public.bookings b
-    WHERE b.provider_id = promo.provider_id
-      AND b.status IN ('completed', 'confirmed');
+    FROM public.get_promotion_audience(promo.id) aud;
   END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

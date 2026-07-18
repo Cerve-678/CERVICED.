@@ -48,6 +48,7 @@ import userLearningService from '../services/userLearningService';
 import { supabase } from '../lib/supabase';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
+import { AvailabilityService } from '../services/AvailabilityService';
 import type { ProviderWithServices, DbPromotion, DbPortfolioItem } from '../types/database';
 import {
   resolveProviderTheme,
@@ -139,19 +140,6 @@ interface ServiceData {
 }
 
 
-// Get service-specific gradient - Memoized
-const getServiceGradient = (image: any): [string, string, ...string[]] => {
-  const imagePath = image?.toString() || '';
-  if (imagePath.includes('hairbyjennifer')) {
-    return ['#CC99FF', '#FF99CC'];
-  } else if (imagePath.includes('divanails')) {
-    return ['#FF69B4', '#FFB6C1'];
-  } else if (imagePath.includes('styledbykathrine')) {
-    return ['#87CEEB', '#98FB98'];
-  } else {
-    return ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)'];
-  }
-};
 
 // ─── Duration formatter ────────────────────────────────────────────────────
 function formatDuration(minutes: number): string {
@@ -210,7 +198,7 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     displayName: p.display_name,
     providerName: p.display_name.toUpperCase(),
     providerService: p.service_category,
-    providerLogo: p.logo_url ? { uri: p.logo_url } : require('../../assets/logos/styledbykathrine.png'),
+    providerLogo: p.logo_url ? { uri: p.logo_url } : null,
     location: p.location_text ?? '',
     rating: Number(p.rating),
     slotsText: p.slots_text ?? '',
@@ -1381,7 +1369,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     'Prata-Regular': require('../../assets/fonts/Prata-Regular.ttf'),
   });
 
-  const providerId = route.params?.providerId || 'styled-by-kathrine';
+  const providerId = route.params?.providerId ?? '';
   // Provider state — seeded with local hardcoded data, overridden by Supabase if available
   const [provider, setProvider] = useState<ProviderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1472,6 +1460,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [userWaitlistMap, setUserWaitlistMap] = useState<Record<string, WaitlistEntry>>({});
+  // service.dbId -> "has a bookable slot in the next 14 days". The Waitlist
+  // button only makes sense once we've confirmed there's genuinely nothing
+  // to book soon — absent from this map means "still checking", not "full".
+  const [serviceNearTermAvailability, setServiceNearTermAvailability] = useState<Record<string, boolean>>({});
   const [waitlistModal, setWaitlistModal] = useState<{ visible: boolean; service: ServiceData | null }>({ visible: false, service: null });
   const [waitlistNotes, setWaitlistNotes] = useState('');
   const [waitlistJoining, setWaitlistJoining] = useState(false);
@@ -1594,6 +1586,26 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       setUserWaitlistMap(map);
     }).catch(() => {});
   }, [currentUserId, providerDbId]);
+
+  // Check near-term availability per service so the Waitlist button only
+  // shows once a service is confirmed to have nothing bookable soon —
+  // otherwise it decorated every service unconditionally.
+  useEffect(() => {
+    if (!provider || !providerDbId || !provider.waitlistEnabled) return;
+    const allServices = Object.values(provider.categories).flat();
+    if (allServices.length === 0) return;
+    let cancelled = false;
+    allServices.forEach(service => {
+      if (!service.dbId) return;
+      AvailabilityService.hasNearTermAvailability(providerDbId, service.dbId, service.duration)
+        .then(hasAvailability => {
+          if (cancelled) return;
+          setServiceNearTermAvailability(prev => ({ ...prev, [service.dbId as string]: hasAvailability }));
+        })
+        .catch(() => {});
+    });
+    return () => { cancelled = true; };
+  }, [provider, providerDbId]);
 
   const openOffersPanel = useCallback(() => {
     setShowOffersModal(true);
@@ -1957,7 +1969,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
   // ===== UPDATED CART HANDLERS FOR COMPATIBILITY =====
   const handleQuickBook = useCallback(
-    (service: ServiceData) => {
+    (service: ServiceData, promo?: DbPromotion) => {
       if (__DEV__) console.log('Quick Book - Redirecting to checkout:', service.name);
       if (!provider) return;
 
@@ -1968,10 +1980,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           providerDisplayName: provider.displayName,
           providerSlug: provider.id,
           providerId: providerDbId ?? undefined,
+          // Carry the offer's code into the cart so "Book Now" on a promo
+          // actually applies it, instead of silently landing at full price.
+          initialPromoCode: promo?.promo_code ?? undefined,
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
-            id: service.id,
+            // dbId is the real services.id UUID — carrying it into the cart
+            // (and from there into bookings.service_id) is what lets
+            // per-service buffer/duration lookups and waitlist matching work.
+            id: service.dbId || service.id,
             name: service.name,
             price: service.price,
             duration: service.duration,
@@ -2024,7 +2042,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     }
 
     if (target) {
-      setTimeout(() => handleQuickBook(target!), 350); // let the panel slide out first
+      setTimeout(() => handleQuickBook(target!, promo), 350); // let the panel slide out first
       return;
     }
 
@@ -2079,7 +2097,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
-            id: service.id,
+            // dbId is the real services.id UUID — see handleQuickBook for why
+            // this must flow through instead of the local numeric id.
+            id: service.dbId || service.id,
             name: service.name,
             price: service.price,
             duration: service.duration,
@@ -2526,11 +2546,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
               {/* Provider Logo - Bigger */}
               <View style={styles.logoContainer}>
                 <View style={styles.logoWrapper}>
-                  <Image
-                    source={provider.providerLogo}
-                    style={styles.providerLogo}
-                    resizeMode="cover"
-                  />
+                  {provider.providerLogo ? (
+                    <Image
+                      source={provider.providerLogo}
+                      style={styles.providerLogo}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={[styles.providerLogo, { backgroundColor: provider.accentColor ?? '#AF9197', alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
+                        {provider.displayName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
                   <LinearGradient
                     colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
                     style={styles.logoGloss}
@@ -2860,6 +2888,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                             // Provider turned waitlists off in Automations —
                             // existing entries above still show so they can leave
                             if (!provider.waitlistEnabled) return null;
+                            // Only offer the waitlist once we've confirmed there's
+                            // nothing bookable in the next 14 days — undefined
+                            // means "still checking" and true means "still has
+                            // openings", so both hide the button.
+                            if (serviceNearTermAvailability[service.dbId] !== false) return null;
                             return (
                               <TouchableOpacity
                                 style={[styles.waitlistJoinBtn, { borderColor: adaptiveAccentColor + '70', backgroundColor: adaptiveAccentColor + '0D' }]}

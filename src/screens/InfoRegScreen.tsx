@@ -46,15 +46,7 @@ import { supabase } from '../lib/supabase';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem } from '../services/databaseService';
 import type { DbPortfolioItem } from '../types/database';
 
-// Colour theme picker (shared with BrandingScreen)
-import ProviderThemePicker, { type ThemeSelection } from '../components/ProviderThemePicker';
 import {
-  PROVIDER_THEMES,
-  SHEET_BG,
-  encodeThemeKey,
-  encodeCustomTheme,
-  parseThemeKey,
-  decodeCustomTheme,
   resolveProviderTheme,
   withAlpha,
   isDarkColor,
@@ -177,6 +169,9 @@ interface ServiceData {
   name: string;
   price: number;
   duration: string;
+  // Blank = no override. before defaults to 0; after inherits the provider's global buffer.
+  bufferBeforeMins: number | null;
+  bufferAfterMins: number | null;
   description: string;
   images: string[];
   addOns: AddOnData[];
@@ -192,7 +187,7 @@ interface ServiceData {
   minAge: number | null;
   contraindications: string[];
   aftercareNotes: string;
-  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | '';
+  serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
 }
 
 // ─── Tag presets per context ─────────────────────────────────────────────────
@@ -415,6 +410,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [name, setName] = useState(service?.name || '');
   const [price, setPrice] = useState(service?.price?.toString() || '');
   const [duration, setDuration] = useState(service?.duration || '');
+  const [bufferBefore, setBufferBefore] = useState(service?.bufferBeforeMins?.toString() || '');
+  const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
   const [description, setDescription] = useState(service?.description || '');
   const [images, setImages] = useState<string[]>(service?.images || []);
   const [addOns, setAddOns] = useState<AddOnData[]>(service?.addOns || []);
@@ -442,6 +439,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setName(service?.name || '');
     setPrice(service?.price?.toString() || '');
     setDuration(service?.duration || '');
+    setBufferBefore(service?.bufferBeforeMins?.toString() || '');
+    setBufferAfter(service?.bufferAfterMins?.toString() || '');
     setDescription(service?.description || '');
     setImages(service?.images || []);
     setAddOns(service?.addOns || []);
@@ -515,6 +514,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       name: name.trim(),
       price: parseFloat(price) || 0,
       duration: duration.trim() || '1 hour',
+      bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
+      bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
       description: description.trim(),
       images,
       addOns,
@@ -542,6 +543,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     { value: 'enhancement',  label: 'Enhancement' },
     { value: 'maintenance',  label: 'Maintenance' },
     { value: 'restorative',  label: 'Restorative' },
+    { value: 'consultation', label: 'Consultation' },
   ];
 
   return (
@@ -598,6 +600,26 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <BlurView intensity={15} tint="light" style={styles.inputBlur}>
                   <TextInput style={styles.textInput} value={duration} onChangeText={setDuration} placeholder="e.g., 2 hours" placeholderTextColor="rgba(0,0,0,0.4)" />
                 </BlurView>
+              </View>
+
+              {/* Buffer time before/after — overrides the account-wide default from Automations */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Buffer Time (optional)</Text>
+                <Text style={styles.inputHint}>Blocks extra minutes around this service so back-to-back bookings can't crowd it. Leave blank to use your account default.</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inputHint, { marginBottom: 4 }]}>Before</Text>
+                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                      <TextInput style={styles.textInput} value={bufferBefore} onChangeText={setBufferBefore} placeholder="0" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" />
+                    </BlurView>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.inputHint, { marginBottom: 4 }]}>After</Text>
+                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                      <TextInput style={styles.textInput} value={bufferAfter} onChangeText={setBufferAfter} placeholder="Default" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" />
+                    </BlurView>
+                  </View>
+                </View>
               </View>
 
               {/* Description */}
@@ -1424,7 +1446,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'policies'>('profile');
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
-  const [policiesSaved, setPoliciesSaved] = useState(false);
 
   // True until the existing-provider fetch settles — without this the form
   // renders with empty defaults ('Provider Registration', blank fields, the
@@ -1453,45 +1474,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       .then(saved => { if (saved) setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) }); })
       .catch(() => {});
   }, [user?.id]);
-
-  // ── Colour theme selection (shared picker, same as Branding & Style) ──────
-  const [themeSel, setThemeSel] = useState<ThemeSelection>({
-    themeChoice: 'app',
-    customBackdrop: '#E3C7CF',
-    customCard: '#F9E9EE',
-    customAccent: '#D98BA6',
-    sheetColor: SHEET_BG,
-  });
-
-  // Derive picker state whenever the stored key changes (initial load / save)
-  useEffect(() => {
-    const { base, sheet } = parseThemeKey(providerData.profileTheme);
-    const custom = decodeCustomTheme(base);
-    setThemeSel(prev => ({
-      themeChoice: custom ? 'custom' : (base ?? 'app'),
-      customBackdrop: custom?.backdrop ?? prev.customBackdrop,
-      customCard: custom?.card ?? prev.customCard,
-      customAccent: custom?.accent ?? prev.customAccent,
-      sheetColor: sheet,
-    }));
-  }, [providerData.profileTheme]);
-
-  const handleThemeChange = useCallback((next: ThemeSelection) => {
-    setThemeSel(next);
-    const isCustom = next.themeChoice === 'custom';
-    const preset = PROVIDER_THEMES.find(t => t.key === next.themeChoice);
-    const accent = isCustom ? next.customAccent : preset?.tokens.accent ?? next.customAccent;
-    const backdrop = isCustom ? next.customBackdrop : preset?.tokens.hero ?? next.customBackdrop;
-    const baseKey = isCustom
-      ? encodeCustomTheme(next.customBackdrop, next.customCard, next.customAccent)
-      : next.themeChoice;
-    setProviderData(prev => ({
-      ...prev,
-      accentColor: accent,
-      gradient: [backdrop, next.sheetColor],
-      profileTheme: encodeThemeKey(baseKey, next.sheetColor),
-    }));
-  }, []);
 
   // ── Portfolio (client work gallery shown on the public profile) ───────────
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
@@ -1770,20 +1752,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  const handleSavePolicies = useCallback(async () => {
-    if (!user?.id) return;
-    // The Policies tab's own "Business Setup" section (business type, address,
-    // address release timing) lives in providerData, not the policies object —
-    // it must be saved here too, or it's silently lost when this is the only
-    // save button the provider ever presses.
-    await Promise.all([
-      saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>),
-      saveProviderToSupabase(user.id, providerData),
-    ]);
-    setPoliciesSaved(true);
-    setTimeout(() => setPoliciesSaved(false), 2000);
-  }, [policies, providerData, user?.id]);
-
   const handleSubmit = useCallback(async () => {
     if (!providerData.providerName.trim()) {
       Alert.alert('Missing Information', 'Please enter your business name.');
@@ -1793,8 +1761,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your location.');
       return;
     }
-    if (Object.keys(providerData.categories).length === 0) {
-      Alert.alert('Missing Services', 'Please add at least one service category.');
+    // A category can exist as an empty tab (added but never filled in) — check
+    // actual service count, not just category-key count, or a provider can
+    // submit with zero real services while this check silently passes.
+    const totalServiceCount = Object.values(providerData.categories)
+      .reduce((sum, services) => sum + services.length, 0);
+    if (totalServiceCount === 0) {
+      Alert.alert('Missing Services', 'Please add at least one service before saving.');
       return;
     }
     if (!user?.id) {
@@ -1903,7 +1876,23 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>{isEditMode ? 'Edit Profile' : 'Provider Registration'}</Text>
-            <View style={{ width: 40 }} />
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => setShowPreviewModal(true)}
+              >
+                <Ionicons name="eye-outline" size={20} color="#000" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.headerIconButton, isSubmitting && { opacity: 0.6 }]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting
+                  ? <ActivityIndicator size="small" color="#000" />
+                  : <Ionicons name="checkmark" size={22} color="#000" />}
+              </TouchableOpacity>
+            </View>
           </View>
 
             <ScrollView
@@ -2112,30 +2101,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   />
                 </BlurView>
               </View>
-            </BlurView>
-
-            {/* Profile Theme — accent + card colour + backdrop, shared with Branding & Style */}
-            <BlurView intensity={50} tint="light" style={styles.card}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <Text style={styles.sectionTitle}>Profile Theme</Text>
-              <Text style={styles.sectionSubtitle}>
-                Each option is three colours — accent, card colour, and backdrop (shown behind
-                your profile as a gradient). Pick a set or build your own with Custom, then
-                choose the content-area colour below.
-              </Text>
-              <ProviderThemePicker
-                value={themeSel}
-                onChange={handleThemeChange}
-                textColor="#000"
-                subColor="rgba(0,0,0,0.6)"
-                borderColor="rgba(0,0,0,0.15)"
-                sepColor="rgba(0,0,0,0.1)"
-              />
             </BlurView>
 
             {/* Portfolio — client work gallery shown on your public profile */}
@@ -2491,27 +2456,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               )}
             </View>
 
-            {/* Submit Button */}
-            <TouchableOpacity
-              style={[styles.submitButton, { backgroundColor: adaptiveAccentColor, opacity: isSubmitting ? 0.6 : 1 }]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              <Text style={styles.submitButtonText}>
-                {isSubmitting ? 'Saving...' : isEditMode ? 'Save Changes' : 'Submit for Review'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Preview Button */}
-            <TouchableOpacity
-              style={styles.previewButton}
-              onPress={() => setShowPreviewModal(true)}
-            >
-              <Text style={[styles.previewButtonText, { color: adaptiveAccentColor }]}>
-                Preview Profile
-              </Text>
-            </TouchableOpacity>
-
             </>)}
 
             {activeTab === 'policies' && (
@@ -2785,17 +2729,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     You travel to your clients — no fixed address is shared. Make sure your location text describes your service area.
                   </Text>
                 )}
-
-                {/* Save */}
-                <TouchableOpacity
-                  style={[styles.savePoliciesBtn, { backgroundColor: policiesSaved ? '#34C759' : adaptiveAccentColor }]}
-                  onPress={handleSavePolicies}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.savePoliciesBtnText}>
-                    {policiesSaved ? '✓ Saved' : 'Save Policies'}
-                  </Text>
-                </TouchableOpacity>
               </BlurView>
             )}
 
@@ -2843,6 +2776,18 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'BakbakOne-Regular',
     color: '#000',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 20,
   },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -3289,37 +3234,6 @@ const styles = StyleSheet.create({
   addServiceText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-  },
-
-  // Submit Button
-  submitButton: {
-    paddingVertical: 16,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  submitButtonText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
-    color: '#fff',
-  },
-  previewButton: {
-    paddingVertical: 14,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.2)',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  previewButtonText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
   },
 
   // Modals

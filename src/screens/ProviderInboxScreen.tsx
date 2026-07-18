@@ -15,6 +15,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { getProviderBookings, getProviderConversations, ProviderConversationWithClient } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 import { ThemedBackground } from '../components/ThemedBackground';
+import { mapDbBookingToConfirmed } from '../contexts/BookingContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -559,7 +560,7 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
                   text={P.text}
                   sub={P.sub}
                   border={P.border}
-                  onPress={() => navigation.navigate('BookingDetail', { bookingId: item.booking.id })}
+                  onPress={() => navigation.navigate('BookingDetail', { bookingId: item.booking.id, booking: mapDbBookingToConfirmed(item.booking) })}
                 />
               );
             }}

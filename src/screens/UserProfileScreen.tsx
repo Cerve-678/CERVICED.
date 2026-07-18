@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Modal,
@@ -28,6 +28,8 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../services/biometricService';
+import { getUnreadNotificationCount } from '../services/databaseService';
+import { useFocusEffect } from '@react-navigation/native';
 
 // ── Settings row ────────────────────────────────────────────────────────────
 
@@ -83,6 +85,14 @@ export default function UserProfileScreen({ navigation }: any) {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
+  // Unread notifications waiting in the *other* (provider) hat, so a dual-role
+  // user sees a signal on the switch control instead of missing them silently.
+  const [providerUnread, setProviderUnread] = useState(0);
+
+  useFocusEffect(useCallback(() => {
+    if (user?.accountType !== 'provider') { setProviderUnread(0); return; }
+    getUnreadNotificationCount('provider').then(setProviderUnread).catch(() => {});
+  }, [user?.accountType]));
 
   useEffect(() => {
     (async () => {
@@ -251,6 +261,11 @@ export default function UserProfileScreen({ navigation }: any) {
                   <Text style={[styles.providerBtnTitle, { color: P.text }]}>Switch to Provider Mode</Text>
                   <Text style={[styles.providerBtnSub, { color: P.sub }]}>Go to your provider dashboard</Text>
                 </View>
+                {providerUnread > 0 && (
+                  <View style={styles.switchBadge}>
+                    <Text style={styles.switchBadgeText}>{providerUnread > 99 ? '99+' : providerUnread}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -260,7 +275,10 @@ export default function UserProfileScreen({ navigation }: any) {
                 }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                  switchMode();
+                  // A client with no provider profile must NOT be flipped into provider
+                  // mode (that lands them in an empty provider dashboard — the "different
+                  // account" bug). Open the in-place upgrade flow instead.
+                  setShowProviderModal(true);
                 }}
                 activeOpacity={0.8}
               >
@@ -302,7 +320,8 @@ export default function UserProfileScreen({ navigation }: any) {
           <View style={[styles.modalCard, { backgroundColor: isDarkMode ? '#252220' : '#FFFFFF', borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Become a Provider</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
-              Would you like to use your existing account details (name, email, phone)?
+              We'll add a provider profile to your current account — same login, same details.
+              You can switch between client and provider mode any time.
             </Text>
 
             <TouchableOpacity
@@ -315,19 +334,7 @@ export default function UserProfileScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>Yes, use my details</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalBtnOutline, { borderColor: P.border }]}
-              onPress={() => {
-                setShowProviderModal(false);
-                resetData();
-                (navigation as any).getParent()?.getParent()?.navigate('SignUpStep1');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.modalBtnOutlineText, { color: P.text }]}>Create new account</Text>
+              <Text style={styles.modalBtnText}>Set up my provider profile</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowProviderModal(false)} activeOpacity={0.6}>
@@ -450,6 +457,8 @@ const styles = StyleSheet.create({
   },
   providerBtnTitle: { fontSize: 15, fontWeight: '700' },
   providerBtnSub: { fontSize: 12, fontWeight: '400' },
+  switchBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#FF1744', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, marginLeft: 8 },
+  switchBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
 
   // Logout
   logoutBtn: {

@@ -12,7 +12,6 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -27,7 +26,6 @@ import { HomeStackParamList } from '../navigation/types';
 
 // Import your icons from IconLibrary
 import Icon, { BellIcon, SearchIcon } from '../components/IconLibrary';
-import { NotificationService } from '../services/notificationService';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useBooking } from '../contexts/BookingContext';
@@ -35,7 +33,7 @@ import { useAuth } from '../contexts/AuthContext';
 import userLearningService from '../services/userLearningService';
 import { HairTypeSelector } from '../components/HairTypeSelector';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { getProviders, getActivePromotions } from '../services/databaseService';
+import { getProviders, getActivePromotions, getUnreadNotificationCount } from '../services/databaseService';
 import type { DbProvider, DbPromotionWithProvider } from '../types/database';
 
 // Enable LayoutAnimation on Android
@@ -218,7 +216,6 @@ export default function HomeScreen() {
   const [viewAllServices, setViewAllServices] = useState(false);
   const [viewAllMaleServices, setViewAllMaleServices] = useState(false);
   const [viewAllKidsServices, setViewAllKidsServices] = useState(false);
-  const [selectedOfferTab, setSelectedOfferTab] = useState<string>('ALL');
   const [unreadCount, setUnreadCount] = useState(0);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
@@ -243,12 +240,6 @@ export default function HomeScreen() {
     })),
   [rawPromotions]);
 
-  // Filter offers by selected tab
-  const filteredOffers = useMemo(() => {
-    if (selectedOfferTab === 'ALL') return allOffers;
-    return allOffers.filter(offer => offer.service === selectedOfferTab);
-  }, [allOffers, selectedOfferTab]);
-
   const currentOffers = useMemo(() => allOffers.slice(0, 3), [allOffers]);
 
   // Get previously booked providers from bookings
@@ -265,11 +256,13 @@ export default function HomeScreen() {
     return Array.from(uniqueProviders.values());
   }, [bookings, liveProviders]);
 
-  // Load unread notification count
+  // Load unread notification count — reads the same Supabase notifications
+  // table NotificationsScreen shows, so the bell badge always matches what's
+  // actually in the list it opens (previously read from a local-only
+  // AsyncStorage store that screen never wrote to or read from).
   const loadUnreadCount = useCallback(async () => {
     try {
-      const notifications = await NotificationService.getAllNotifications();
-      const unread = notifications.filter(n => !n.read).length;
+      const unread = await getUnreadNotificationCount('client');
       setUnreadCount(unread);
     } catch (error) {
       console.error('Failed to load unread count:', error);
@@ -414,15 +407,22 @@ export default function HomeScreen() {
   // Memoize recommended providers list to prevent unnecessary rerenders
   const recommendedProvidersList = useMemo(() => {
     if (viewAllRecommended) {
-      // When expanded, show 10 providers from all categories
-      return providersData.recommended
+      // When expanded, show 10 providers from all categories (deduped — recommended
+      // overlaps with the category buckets it was drawn from)
+      const combined = providersData.recommended
         .concat(providersData.hairProviders)
         .concat(providersData.nailProviders)
         .concat(providersData.lashProviders)
         .concat(providersData.muaProviders)
         .concat(providersData.browProviders)
-        .concat(providersData.aestheticsProviders)
-        .slice(0, 10);
+        .concat(providersData.aestheticsProviders);
+      const seen = new Set<string>();
+      const deduped = combined.filter(p => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+      return deduped.slice(0, 10);
     } else {
       // When collapsed, show 7 providers
       return providersData.recommended.slice(0, 7);
@@ -575,15 +575,10 @@ export default function HomeScreen() {
     setViewAllKidsServices(prev => !prev);
   }, []);
 
-  const [offersModalVisible, setOffersModalVisible] = useState(false);
-
-  const toggleViewAllOffers = useCallback(() => {
+  const handleViewAllOffers = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setOffersModalVisible(prev => !prev);
-    if (!offersModalVisible) {
-      setSelectedOfferTab('ALL');
-    }
-  }, [offersModalVisible]);
+    navigation.navigate('Offers');
+  }, [navigation]);
 
   const toggleFilters = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1127,8 +1122,8 @@ export default function HomeScreen() {
                 <SkeletonSection isDarkMode={isDarkMode} cardWidth={176} cardHeight={64} borderRadius={16} />
               ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>
-                  {recommendedProvidersList.map((provider, index) => (
-                    <View key={`recommended-expanded-${index}-${provider.id}`} style={styles.gridItem}>
+                  {recommendedProvidersList.map((provider) => (
+                    <View key={`recommended-expanded-${provider.id}`} style={styles.gridItem}>
                       <ProviderCard
                         provider={provider}
                         onPress={() => navigateToProvider(provider)}
@@ -1145,9 +1140,9 @@ export default function HomeScreen() {
                   style={styles.categoryScroll}
                   nestedScrollEnabled={true}
                 >
-                  {recommendedProvidersList.map((provider, index) => (
+                  {recommendedProvidersList.map((provider) => (
                     <ProviderCard
-                      key={`recommended-${index}-${provider.id}`}
+                      key={`recommended-${provider.id}`}
                       provider={provider}
                       onPress={() => navigateToProvider(provider)}
                       style={styles.brandCard}
@@ -1396,7 +1391,7 @@ export default function HomeScreen() {
             {currentOffers.length > 0 && <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>CURRENT OFFERS</Text>
-                <TouchableOpacity onPress={toggleViewAllOffers}>
+                <TouchableOpacity onPress={handleViewAllOffers}>
                   <Text style={[styles.viewAll, { color: P.sub }]}>VIEW ALL {'>'}</Text>
                 </TouchableOpacity>
               </View>
@@ -1426,7 +1421,7 @@ export default function HomeScreen() {
                           {offer.description}
                         </Text>
                         <Text style={[styles.offerValidText, { color: P.sub }]} numberOfLines={1}>
-                          Exp {new Date(offer.validUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          Exp {new Date(offer.validUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </Text>
                       </View>
                     </View>
@@ -1478,91 +1473,6 @@ export default function HomeScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Offers Modal Popup */}
-      <Modal
-        visible={offersModalVisible}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={toggleViewAllOffers}
-      >
-        <ThemedBackground style={styles.modalBackground}>
-          <StatusBar barStyle={theme.statusBar} />
-          <View style={styles.modalContainer}>
-            {/* Modal Header */}
-            <View style={[styles.modalHeader, { paddingTop: insets.top + 16 }]}>
-              <Text style={[styles.modalTitle, { color: P.text }]}>ALL OFFERS</Text>
-              <TouchableOpacity onPress={toggleViewAllOffers} style={[styles.modalCloseButton, { backgroundColor: P.surface, borderColor: P.border }]}>
-                <Text style={[styles.modalCloseText, { color: P.sub }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Service Tabs */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.modalTabsScroll}
-              contentContainerStyle={styles.modalTabsContent}
-            >
-              {['ALL', 'HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS', 'MALE', 'KIDS'].map(tab => (
-                <TouchableOpacity
-                  key={tab}
-                  style={[
-                    styles.modalTab,
-                    selectedOfferTab === tab && styles.modalTabActive
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedOfferTab(tab);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    styles.modalTabText,
-                    { color: selectedOfferTab === tab ? P.accent : P.sub }
-                  ]}>
-                    {tab}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            {/* Offers Grid */}
-            <ScrollView
-              style={styles.modalOffersScroll}
-              contentContainerStyle={styles.modalOffersContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.modalOffersGrid}>
-                {filteredOffers.map(offer => (
-                  <TouchableOpacity
-                    key={offer.id}
-                    style={styles.modalOfferCard}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.modalOfferCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      <View style={[styles.modalOfferDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
-                        <Text style={[styles.offerDiscountText, { color: P.ice }]}>{offer.discount}</Text>
-                      </View>
-                      {offer.logo ? <Image source={offer.logo} style={styles.modalOfferLogo} resizeMode="cover" /> : <View style={styles.modalOfferLogo} />}
-                      <View style={styles.modalOfferContent}>
-                        <Text style={[styles.modalOfferTitle, { color: P.text }]} numberOfLines={2}>
-                          {offer.title}
-                        </Text>
-                        <Text style={[styles.modalOfferDescription, { color: P.sub }]} numberOfLines={2}>
-                          {offer.description}
-                        </Text>
-                        <Text style={[styles.modalOfferValidText, { color: P.sub }]} numberOfLines={1}>
-                          Exp {new Date(offer.validUntil).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </ThemedBackground>
-      </Modal>
     </View>
   );
 }
@@ -1627,12 +1537,12 @@ const styles = StyleSheet.create({
   },
   notificationBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: -5,
+    right: -5,
     backgroundColor: '#FF1744',
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
+    borderRadius: 10.5,
+    minWidth: 21,
+    height: 21,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -1640,7 +1550,7 @@ const styles = StyleSheet.create({
   },
   notificationBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -2134,130 +2044,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
     overflow: 'hidden',
     padding: 12,
-  },
-  // Modal styles
-  modalSafeArea: {
-    flex: 1,
-  },
-  modalBackground: {
-    flex: 1,
-  },
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(126,102,103,0.10)',
-  },
-  modalTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  modalCloseButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  modalCloseText: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  modalTabsScroll: {
-    maxHeight: 59,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(126,102,103,0.10)',
-  },
-  modalTabsContent: {
-    paddingHorizontal: 16,
-  },
-  modalTab: {
-    borderRadius: 100,
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    marginRight: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(126,102,103,0.14)',
-    backgroundColor: 'rgba(126,102,103,0.06)',
-  },
-  modalTabActive: {
-    backgroundColor: 'rgba(175,145,151,0.18)',
-    borderColor: '#AF9197',
-  },
-  modalTabText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  modalOffersScroll: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  modalOffersContent: {
-    paddingVertical: 16,
-  },
-  modalOffersGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    gap: 12,
-  },
-  modalOfferCard: {
-    width: '48%',
-    marginBottom: 16,
-  },
-  modalOfferCardBlur: {
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    padding: 14,
-  },
-  modalOfferLogo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    marginBottom: 10,
-    alignSelf: 'center',
-  },
-  modalOfferContent: {
-    flex: 1,
-  },
-  modalOfferTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  modalOfferDescription: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '400',
-    opacity: 0.8,
-    marginBottom: 6,
-  },
-  modalOfferValidText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    fontWeight: '500',
-    opacity: 0.6,
-  },
-  modalOfferDiscountBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 100,
-    zIndex: 10,
   },
   // Provider Modal Styles
   modalProvidersGrid: {

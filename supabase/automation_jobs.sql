@@ -87,6 +87,25 @@ BEGIN
            confirmed_at = NOW()
      WHERE id = NEW.id;
 
+    -- …but still tell the PROVIDER a booking landed (informational — nothing
+    -- to confirm/decline). Without this, instant-booking providers get no
+    -- notification of new bookings at all.
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
+    VALUES (
+      v_provider_user_id,
+      'booking_confirmed',
+      'New Booking',
+      COALESCE(NEW.customer_name, 'A client') || ' booked ' ||
+        NEW.service_name_snapshot ||
+        ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') || '.',
+      'high',
+      FALSE,
+      NEW.id,
+      NEW.provider_id
+    );
+
   ELSE
     -- Manual flow: notify provider to review the request
     INSERT INTO public.notifications

@@ -20,7 +20,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { useBooking, BookingStatus, ConfirmedBooking, createBookingDateTime } from '../contexts/BookingContext';
+import { useBooking, BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../contexts/BookingContext';
 import { ProviderHomeScreenProps } from '../navigation/types';
 import { supabase } from '../lib/supabase';
 import {
@@ -44,6 +44,7 @@ import {
 } from '../services/databaseService';
 import type { DbBooking, ServiceCategory } from '../types/database';
 import type { DbBookingRescheduleRequest } from '../types/database';
+import { isAddressReleasedByPolicy } from '../utils/addressRelease';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -345,7 +346,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           bookingTime: rawStart ? to12(rawStart) : '',
           endTime: rawEnd ? to12(rawEnd) : '',
           address: d.provider_address_snapshot ?? '',
-          status: d.status as BookingStatus,
+          status: mapDbBookingStatus(d.status),
           paymentType: d.payment_type ?? 'full',
           amountPaid: d.amount_paid ?? 0,
           depositAmount: d.deposit_amount ?? 0,
@@ -419,7 +420,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             ...(d.booking_date && { bookingDate: d.booking_date }),
             ...(rawStart && { bookingTime: to12(rawStart) }),
             ...(rawEnd && { endTime: to12(rawEnd) }),
-            ...(d.status && { status: d.status }),
+            ...(d.status && { status: mapDbBookingStatus(d.status) }),
           }));
         }
       )
@@ -708,13 +709,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const isAddressReleased = useMemo(() => {
     if (!booking) return false;
-    return !!addressReleasedAt
-      || addressPolicy === 'always'
-      || (addressPolicy === 'on_confirmation' && (
+    const apptMs = booking.bookingDate && booking.bookingTime
+      ? createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime()
+      : null;
+    return isAddressReleasedByPolicy({
+      policy: addressPolicy,
+      isConfirmed:
         booking.status === BookingStatus.UPCOMING ||
         booking.status === BookingStatus.IN_PROGRESS ||
-        booking.status === BookingStatus.COMPLETED
-      ));
+        booking.status === BookingStatus.COMPLETED,
+      appointmentAtMs: apptMs,
+      addressReleasedAt,
+    });
   }, [booking, addressReleasedAt, addressPolicy]);
 
   const handleStatusChange = useCallback(
@@ -1055,7 +1061,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
-                {addressSettings?.business_type !== 'mobile' && addressPolicy === 'manual' ? (
+                {addressSettings?.business_type !== 'mobile' && addressPolicy !== 'always' ? (
                   isAddressReleased ? (
                     <Row
                       label="Location"

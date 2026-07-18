@@ -1,11 +1,12 @@
 // src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { Alert, AppState } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { registerForPushNotifications, unregisterPushToken } from '../services/pushNotificationService';
+import { registerForPushNotifications, unregisterPushToken, startExpoGoNotificationBridge } from '../services/pushNotificationService';
 import { updateBiometricToken, disableBiometric } from '../services/biometricService';
+import { registerModeSetter } from '../navigation/modeController';
 
 export type AccountType = 'user' | 'provider';
 
@@ -70,13 +71,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Tracks user-initiated logouts so SIGNED_OUT doesn't show a spurious alert
   const intentionalLogoutRef = useRef(false);
 
+  // Expo Go can't receive remote push (dropped in SDK 53) — mirror notification
+  // rows as local notifications instead so content is still visible while
+  // testing there. No-op on real builds. Re-subscribes whenever the logged-in
+  // user changes, tears down on logout.
+  useEffect(() => {
+    if (!user?.id) return;
+    const stopBridge = startExpoGoNotificationBridge(user.id);
+    return stopBridge;
+  }, [user?.id]);
+
   useEffect(() => {
     // Stop auto-refresh while backgrounded; restart when foregrounded.
     // Without this, the access token can expire while the app is in the background
     // and the first API call on foreground will get a 401 before the refresh completes.
     const appStateSub = AppState.addEventListener('change', state => {
-      if (state === 'active') supabase.auth.startAutoRefresh();
-      else supabase.auth.stopAutoRefresh();
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+        // Keep the push token fresh on every resume, not just on cold launch / login.
+        // This self-heals tokens after an APNs-key rotation or EAS project migration
+        // without requiring the user to sign out and back in. Safe no-op when logged out.
+        registerForPushNotifications().catch((err) => console.warn('[Push] foreground refresh failed:', err));
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
     });
 
     // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
@@ -186,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           businessEmail: meta?.['business_email'],
         });
         setIsLoggedIn(true);
-        registerForPushNotifications().catch(() => {});
+        registerForPushNotifications().catch((err) => console.warn('[Push] registration failed:', err));
         return;
       }
 
@@ -215,7 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData);
         setIsLoggedIn(true);
         console.log('[AuthContext] setIsLoggedIn(true) — navigating in');
-        registerForPushNotifications().catch(() => {});
+        registerForPushNotifications().catch((err) => console.warn('[Push] registration failed:', err));
       } else {
         // PGRST116: no profile row yet.
         // (a) New signup race — upsert in EmailVerificationScreen hasn't completed.
@@ -238,7 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           setActiveMode(role === 'provider' ? 'provider' : 'client');
           setIsLoggedIn(true);
-          registerForPushNotifications().catch(() => {});
+          registerForPushNotifications().catch((err) => console.warn('[Push] registration failed:', err));
         } else {
           // No profile row and no metadata — use email-derived name as minimal data.
           // User stays logged in; profile will populate once the DB row is created.
@@ -278,6 +296,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   };
+
+  // Directly set the mode (used by notification taps / deep-links that must land
+  // in a specific hat). Exposed to non-React code via the mode controller so the
+  // push tap handler can switch hats before deep-linking.
+  const applyMode = useCallback(async (mode: 'provider' | 'client') => {
+    setActiveMode(mode);
+    await AsyncStorage.setItem('@active_mode', mode).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    registerModeSetter((mode) => { applyMode(mode).catch(() => {}); });
+  }, [applyMode]);
 
   const switchMode = async () => {
     const next = activeMode === 'provider' ? 'client' : 'provider';
@@ -367,6 +397,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     // Mark as intentional so the SIGNED_OUT event handler suppresses the alert
     intentionalLogoutRef.current = true;
+    const loggedOutUserId = user?.id;
     // Clear local state immediately — navigator switches to auth screens right away
     setUser(null);
     setIsLoggedIn(false);
@@ -376,7 +407,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.multiRemove([
       '@app_notifications',
       '@user_learning_data',
-      '@provider_reg_data',
+      ...(loggedOutUserId ? [`@provider_reg_data_${loggedOutUserId}`] : []),
       'bookmarked_videos',
       'saved_portfolio_items',
       'planner_events',

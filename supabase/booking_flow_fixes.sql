@@ -414,6 +414,25 @@ BEGIN
            confirmed_at = NOW()
      WHERE id = NEW.id;
 
+    -- Auto-accept is not silence: a booking still just landed, so the provider
+    -- must be told — just informational (nothing to confirm/decline). Without
+    -- this, instant-booking providers get no notification of new bookings at all.
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id)
+    VALUES (
+      v_provider_user_id,
+      'booking_confirmed',
+      'New Booking',
+      COALESCE(NEW.customer_name, 'A client') || ' booked ' ||
+        NEW.service_name_snapshot ||
+        ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') || '.',
+      'high',
+      FALSE,
+      NEW.id,
+      NEW.provider_id
+    );
+
   ELSE
     -- Manual flow: tell the client the request is awaiting confirmation…
     INSERT INTO public.notifications

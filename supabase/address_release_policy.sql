@@ -17,12 +17,14 @@ ALTER TABLE public.providers
 ALTER TABLE public.bookings
   ADD COLUMN IF NOT EXISTS address_released_at TIMESTAMPTZ;
 
--- Automatically release address when booking status moves to 'upcoming'
--- (handles the on_confirmation policy at the DB level as a safety net)
+-- Automatically release address when a booking becomes 'confirmed'
+-- (handles the on_confirmation policy at the DB level as a safety net).
+-- NOTE: the DB stores 'confirmed' — the app's 'upcoming' is a display-only
+-- alias that maps to 'confirmed' on write, so we must match 'confirmed' here.
 CREATE OR REPLACE FUNCTION public.auto_release_address()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.status = 'upcoming' AND OLD.status = 'pending' THEN
+  IF NEW.status = 'confirmed' AND OLD.status IS DISTINCT FROM 'confirmed' THEN
     UPDATE public.bookings
     SET address_released_at = NOW()
     WHERE id = NEW.id

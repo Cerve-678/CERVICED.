@@ -21,6 +21,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import {
   getMyProviderProfile,
   getProviderAvailability,
+  getProviderAvailabilityWindows,
+  replaceProviderAvailabilityWindows,
   upsertProviderAvailability,
   getProviderBlockedDates,
   addProviderBlockedDate,
@@ -67,6 +69,7 @@ type DayRow = {
   closeTime: string;
   dirty: boolean;
 };
+type ExtraPeriod = { openTime: string; closeTime: string };
 
 function makeDefault(): DayRow[] {
   return DISPLAY_ORDER.map(dow => ({
@@ -131,10 +134,11 @@ export default function ProviderScheduleScreen() {
 
   // Hours tab state
   const [days, setDays] = useState<DayRow[]>(makeDefault());
+  const [extraPeriods, setExtraPeriods] = useState<Record<number, ExtraPeriod[]>>({});
 
   // Time picker state
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerTarget, setPickerTarget] = useState<{ dow: number; field: 'open' | 'close' } | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<{ dow: number; field: 'open' | 'close'; periodIndex?: number | undefined } | null>(null);
   const [pickerDate, setPickerDate] = useState<Date>(new Date());
 
   // Blocked dates tab state
@@ -152,14 +156,33 @@ export default function ProviderScheduleScreen() {
       if (!profile) return;
       setProviderId(profile.id);
 
-      const [avail, blocked] = await Promise.all([
+      const [avail, windows, blocked] = await Promise.all([
         getProviderAvailability(profile.id),
+        getProviderAvailabilityWindows(profile.id).catch(() => []),
         getProviderBlockedDates(profile.id),
       ]);
 
-      if (avail.length > 0) {
+      if (windows.length > 0 || avail.length > 0) {
+        const extras: Record<number, ExtraPeriod[]> = {};
+        for (const day of DISPLAY_ORDER) {
+          extras[day] = windows
+            .filter(w => w.day_of_week === day)
+            .slice(1)
+            .map(w => ({ openTime: w.start_time, closeTime: w.end_time }));
+        }
+        setExtraPeriods(extras);
         setDays(makeDefault().map(row => {
+          // Existing schedules created by older versions have one period per
+          // day; display that period in this concise weekly editor.
+          const window = windows.find(w => w.day_of_week === row.dow);
           const dbRow = avail.find((a: DbProviderAvailability) => a.day_of_week === row.dow);
+          if (window) return {
+            ...row,
+            isOpen: true,
+            openTime: window.start_time,
+            closeTime: window.end_time,
+            dirty: false,
+          };
           if (!dbRow) return row;
           return {
             ...row,
@@ -185,10 +208,11 @@ export default function ProviderScheduleScreen() {
     setDays(prev => prev.map(d => d.dow === dow ? { ...d, isOpen: !d.isOpen, dirty: true } : d));
   }
 
-  function openTimePicker(dow: number, field: 'open' | 'close') {
+  function openTimePicker(dow: number, field: 'open' | 'close', periodIndex?: number) {
     const row = days.find(d => d.dow === dow)!;
-    setPickerTarget({ dow, field });
-    setPickerDate(timeToDate(field === 'open' ? row.openTime : row.closeTime));
+    const extra = periodIndex === undefined ? null : extraPeriods[dow]?.[periodIndex];
+    setPickerTarget({ dow, field, periodIndex });
+    setPickerDate(timeToDate(field === 'open' ? (extra?.openTime ?? row.openTime) : (extra?.closeTime ?? row.closeTime)));
     setPickerVisible(true);
   }
 
@@ -196,6 +220,17 @@ export default function ProviderScheduleScreen() {
     if (!date || !pickerTarget) return;
     if (Platform.OS === 'android') setPickerVisible(false);
     const timeStr = hhmmss(date);
+    if (pickerTarget.periodIndex !== undefined) {
+      setExtraPeriods(prev => ({
+        ...prev,
+        [pickerTarget.dow]: (prev[pickerTarget.dow] ?? []).map((period, index) =>
+          index === pickerTarget.periodIndex
+            ? (pickerTarget.field === 'open' ? { ...period, openTime: timeStr } : { ...period, closeTime: timeStr })
+            : period,
+        ),
+      }));
+      return;
+    }
     setDays(prev => prev.map(d => {
       if (d.dow !== pickerTarget.dow) return d;
       return pickerTarget.field === 'open'
@@ -204,15 +239,55 @@ export default function ProviderScheduleScreen() {
     }));
   }
 
+  function addSplitPeriod(dow: number) {
+    const row = days.find(d => d.dow === dow);
+    if (!row) return;
+    const [oh, om] = row.openTime.split(':').map(Number);
+    const [ch, cm] = row.closeTime.split(':').map(Number);
+    const open = (oh ?? 0) * 60 + (om ?? 0);
+    const close = (ch ?? 0) * 60 + (cm ?? 0);
+    if (close - open < 180) { showToast('Use at least three working hours before adding a break.', 'info'); return; }
+    const breakStart = Math.floor((open + close - 60) / 2 / 15) * 15;
+    const toTime = (mins: number) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:00`;
+    setDays(prev => prev.map(d => d.dow === dow ? { ...d, closeTime: toTime(breakStart), dirty: true } : d));
+    setExtraPeriods(prev => ({ ...prev, [dow]: [...(prev[dow] ?? []), { openTime: toTime(breakStart + 60), closeTime: row.closeTime }] }));
+  }
+
+  function removeExtraPeriod(dow: number, index: number) {
+    setExtraPeriods(prev => ({ ...prev, [dow]: (prev[dow] ?? []).filter((_, i) => i !== index) }));
+  }
+
   async function handleSaveHours() {
     if (!providerId) return;
-    const dirty = days.filter(d => d.dirty);
-    if (dirty.length === 0) { navigation.goBack(); return; }
+    // Write EVERY day, not just the ones the provider touched. The rows the
+    // provider never toggled still render as open Mon-Fri 9-6 (makeDefault())
+    // — that's what they see and believe they're saving — but a day with no
+    // row in provider_availability is treated as closed everywhere a client
+    // checks availability (AvailabilityService, createBooking). Saving only
+    // "dirty" days meant a provider who accepted the shown defaults, or only
+    // edited one day, ended up with some or all days silently un-persisted:
+    // the screen looked fully configured but clients could never book those
+    // days at all.
     setSaving(true);
     try {
-      await Promise.all(dirty.map(d =>
+      const allWindows = days.flatMap(d => d.isOpen ? [
+        { day_of_week: d.dow, start_time: d.openTime, end_time: d.closeTime },
+        ...(extraPeriods[d.dow] ?? []).map(period => ({ day_of_week: d.dow, start_time: period.openTime, end_time: period.closeTime })),
+      ] : []);
+      const invalid = allWindows.some(w => w.start_time >= w.end_time)
+        || allWindows.some((w, index) => allWindows.some((other, otherIndex) =>
+          index !== otherIndex && w.day_of_week === other.day_of_week && w.start_time < other.end_time && w.end_time > other.start_time,
+        ));
+      if (invalid) { showToast('Each working period must be valid and cannot overlap another period.', 'error'); return; }
+      await Promise.all(days.map(d =>
         upsertProviderAvailability(providerId, d.dow, d.openTime, d.closeTime, !d.isOpen),
       ));
+      // v2 is the booking source for newly saved schedules. This editor saves
+      // one period per open day; the data model also supports split shifts.
+      await replaceProviderAvailabilityWindows(
+        providerId,
+        allWindows,
+      );
       setDays(prev => prev.map(d => ({ ...d, dirty: false })));
       navigation.goBack();
     } catch (e) {
@@ -302,13 +377,33 @@ export default function ProviderScheduleScreen() {
                   </View>
                   <View style={s.dayRight}>
                     {day.isOpen && (
-                      <View style={s.timeRow}>
-                        <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open')}>
-                          <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)}</Text>
-                        </TouchableOpacity>
-                        <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
-                        <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close')}>
-                          <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.closeTime)}</Text>
+                      <View style={s.periodStack}>
+                        <View style={s.timeRow}>
+                          <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open')}>
+                            <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.openTime)}</Text>
+                          </TouchableOpacity>
+                          <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
+                          <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close')}>
+                            <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(day.closeTime)}</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {(extraPeriods[day.dow] ?? []).map((period, periodIndex) => (
+                          <View key={`${day.dow}-${periodIndex}`} style={s.timeRow}>
+                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'open', periodIndex)}>
+                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.openTime)}</Text>
+                            </TouchableOpacity>
+                            <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
+                            <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card }]} onPress={() => openTimePicker(day.dow, 'close', periodIndex)}>
+                              <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(period.closeTime)}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => removeExtraPeriod(day.dow, periodIndex)} hitSlop={8}>
+                              <Ionicons name="close-circle-outline" size={17} color={P.sub} />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                        <TouchableOpacity style={s.breakBtn} onPress={() => addSplitPeriod(day.dow)}>
+                          <Ionicons name="add" size={14} color={P.accent} />
+                          <Text style={[s.breakTxt, { color: P.accent }]}>Add break</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -511,9 +606,12 @@ const s = StyleSheet.create({
   closedTag:    { fontSize: 12, marginTop: 2 },
   dayRight:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
   timeRow:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  periodStack:  { gap: 5, alignItems: 'flex-end' },
   timeBtn:      { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   timeTxt:      { fontSize: 13, fontWeight: '600' },
   timeSep:      { fontSize: 12 },
+  breakBtn:     { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-end', paddingVertical: 2 },
+  breakTxt:     { fontSize: 11, fontWeight: '700' },
 
   // Footer save button
   footer:      { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },

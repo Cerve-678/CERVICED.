@@ -34,7 +34,7 @@ import { useFont } from '../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../contexts/BookingContext';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, ProviderContactInfo, getProviderAddressSettingsByDisplayName, ProviderAddressSettings, getProviderCancellationPolicy, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, ProviderReschedulePolicy } from '../services/databaseService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderAddressPolicy, getProviderAddressPolicyByDisplayName, ProviderAddressPolicy, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy } from '../services/databaseService';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -696,7 +696,15 @@ const BookingCard = React.memo<BookingCardProps>(
             ]}
           >
             <View style={styles.providerImageWrapper}>
-              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.providerLogo} resizeMode="cover" />
+              {booking.providerImage ? (
+                <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.providerLogo} resizeMode="cover" />
+              ) : (
+                <View style={[styles.providerLogo, { backgroundColor: '#AF9197', alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>
+                    {booking.providerName?.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() || 'P'}
+                  </Text>
+                </View>
+              )}
               {/* Status dot (e.g. orange = awaiting confirmation) — top-left so it
                   never collides with the "recently added" / "!" dots on the right */}
               {showStatusBadge && (
@@ -713,7 +721,7 @@ const BookingCard = React.memo<BookingCardProps>(
               {/* "!" — forms or info packs waiting for the client */}
               {actionCount > 0 && booking.status !== BookingStatus.CANCELLED && (
                 <View style={{
-                  position: 'absolute', top: -4, right: -4, minWidth: 20, height: 20,
+                  position: 'absolute', bottom: -4, right: -4, minWidth: 20, height: 20,
                   borderRadius: 10, backgroundColor: '#FF3B30', alignItems: 'center',
                   justifyContent: 'center', paddingHorizontal: 4, zIndex: 2,
                   borderWidth: 1.5, borderColor: '#fff',
@@ -799,6 +807,16 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ✅ Track active reschedule timeouts per booking to prevent interference
   const rescheduleTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Give-up timer for the "open booking from notification" effect below — a
+  // booking that never resolves (e.g. it belongs to another user's stale
+  // notification) must not leave openBookingId/highlightBookingId set forever,
+  // or every later bookings-list refresh (realtime, focus, etc.) re-runs that
+  // whole effect indefinitely and the screen appears to freeze.
+  const notifBookingGiveUpRef = useRef<{ id: string; timer: ReturnType<typeof setTimeout> } | null>(null);
+  useEffect(() => () => {
+    if (notifBookingGiveUpRef.current) clearTimeout(notifBookingGiveUpRef.current.timer);
+  }, []);
 
   const [activeFilters, setActiveFilters] = useState<Set<'all' | 'past'>>(new Set());
   const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
@@ -887,7 +905,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
-  const [selectedBookingAddrSettings, setSelectedBookingAddrSettings] = useState<ProviderAddressSettings | null>(null);
+  const [selectedBookingAddrSettings, setSelectedBookingAddrSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
   const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -989,7 +1007,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setContactSheetVisible(true);
     setContactSheetLoading(true);
     try {
-      const info = await getProviderContactByDisplayName(booking.providerName);
+      // Prefer provider id (stable); fall back to name for legacy bookings.
+      const info = booking.providerId
+        ? await getProviderContactById(booking.providerId)
+        : await getProviderContactByDisplayName(booking.providerName);
       setContactSheetInfo(info);
     } catch {
       setContactSheetInfo({ preferred_contact_methods: ['in_app'], whatsapp_number: null, email: null, phone: null });
@@ -1018,15 +1039,27 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     getInfoPacksByBooking(booking.id)
       .then(p => setBookingInfoPacks(p))
       .catch(() => {});
-    getProviderReschedulePolicyByDisplayName(booking.providerName)
+    (booking.providerId
+      ? getProviderReschedulePolicyById(booking.providerId)
+      : getProviderReschedulePolicyByDisplayName(booking.providerName))
       .then(p => setReschedulePolicy(p))
       .catch(() => {});
     if (!booking.clientAddress) {
-      getProviderAddressSettingsByDisplayName(booking.providerName)
-        .then(s => setSelectedBookingAddrSettings(s))
-        .catch(() => {});
+      // Client only needs the release POLICY (to word the locked-state copy) —
+      // never the address itself, which arrives already gated via the
+      // client_bookings view. Prefer provider id; fall back to name for legacy
+      // bookings that predate provider_id.
+      (async () => {
+        let policy = booking.providerId
+          ? await getProviderAddressPolicy(booking.providerId)
+          : null;
+        if (!policy) policy = await getProviderAddressPolicyByDisplayName(booking.providerName);
+        setSelectedBookingAddrSettings(policy);
+      })().catch(() => {});
     }
-    getProviderCancellationPolicy(booking.providerName)
+    (booking.providerId
+      ? getProviderCancellationPolicyById(booking.providerId)
+      : getProviderCancellationPolicy(booking.providerName))
       .then(hrs => setCancellationNoticeHrs(hrs))
       .catch(() => {});
   }, []);
@@ -1039,10 +1072,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ✅ FIXED: Book Again - checks cart, shows proper modals
   const handleRebook = useCallback((booking: ConfirmedBooking) => {
-    // Check if already in cart
+    // Check if already in cart — prefer matching by the real service/provider
+    // IDs (name text can collide, e.g. two providers both offering
+    // "Haircut"); fall back to name matching only for legacy bookings that
+    // predate serviceId being tracked.
     const alreadyInCart = cartItems.some(item =>
-      item.serviceName === booking.serviceName &&
-      item.providerName === booking.providerName
+      booking.serviceId && item.serviceId
+        ? item.serviceId === booking.serviceId && item.providerId === booking.providerId
+        : item.serviceName === booking.serviceName && item.providerName === booking.providerName
     );
 
     if (alreadyInCart) {
@@ -1087,7 +1124,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         providerImage: booking.providerImage,
         providerService: booking.providerService,
         service: {
-          id: `rebook_${Date.now()}`,
+          // Real services.id when we have it, so the new booking keeps its
+          // service link (buffers, waitlist matching); only synthesize an
+          // id for the rare case the original service was deleted.
+          id: booking.serviceId ?? `rebook_${Date.now()}`,
           name: booking.serviceName,
           price: booking.price,
           duration: booking.duration,
@@ -1112,10 +1152,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     const finalSelection = selection || rebookSelection;
     if (!selectedBooking || !finalSelection) return;
 
-    // Check if already in cart before adding
+    // Check if already in cart before adding — see handleRebook for why IDs
+    // are preferred over name matching.
     const alreadyInCart = cartItems.some(item =>
-      item.serviceName === selectedBooking.serviceName &&
-      item.providerName === selectedBooking.providerName
+      selectedBooking.serviceId && item.serviceId
+        ? item.serviceId === selectedBooking.serviceId && item.providerId === selectedBooking.providerId
+        : item.serviceName === selectedBooking.serviceName && item.providerName === selectedBooking.providerName
     );
 
     if (alreadyInCart) {
@@ -1144,7 +1186,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       providerImage: selectedBooking.providerImage,
       providerService: selectedBooking.providerService,
       service: {
-        id: `rebook_${Date.now()}`,
+        id: selectedBooking.serviceId ?? `rebook_${Date.now()}`,
         name: selectedBooking.serviceName,
         price: selectedBooking.price,
         duration: selectedBooking.duration,
@@ -1718,6 +1760,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         setActiveFilters(new Set([correctTab]));
 
         setSelectedBooking(booking);
+        setBookingIntakeForm(null);
+        setBookingInfoPacks([]);
+        getIntakeFormByBooking(booking.id)
+          .then(f => setBookingIntakeForm(f))
+          .catch(() => {});
+        getInfoPacksByBooking(booking.id)
+          .then(p => setBookingInfoPacks(p))
+          .catch(() => {});
 
         // Auto-expand the group card if this booking belongs to one
         if (booking.groupBookingId) {
@@ -1767,8 +1817,26 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
         // Clear params after handling
         navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+        if (notifBookingGiveUpRef.current) {
+          clearTimeout(notifBookingGiveUpRef.current.timer);
+          notifBookingGiveUpRef.current = null;
+        }
       } else {
         console.warn('⚠️ Booking not found:', bookingId);
+        // Bookings may still be loading — allow a few seconds of retries as
+        // the list refreshes, but give up and clear the params once that
+        // window passes so this effect stops re-running on every future
+        // bookings-list change (which is what caused the freeze).
+        if (notifBookingGiveUpRef.current?.id !== bookingId) {
+          if (notifBookingGiveUpRef.current) clearTimeout(notifBookingGiveUpRef.current.timer);
+          notifBookingGiveUpRef.current = {
+            id: bookingId!,
+            timer: setTimeout(() => {
+              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+              notifBookingGiveUpRef.current = null;
+            }, 8000),
+          };
+        }
       }
     } else if (route?.params?.initialTab) {
       // Fallback: handle initialTab when no bookingId (e.g. generic "view past bookings")
@@ -2619,11 +2687,19 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       >
                           {/* Header */}
                           <View style={styles.modalHeader}>
-                            <Image
-                              source={typeof selectedBooking.providerImage === 'string' ? { uri: selectedBooking.providerImage } : selectedBooking.providerImage}
-                              style={styles.modalProviderImage}
-                              resizeMode="cover"
-                            />
+                            {selectedBooking.providerImage ? (
+                              <Image
+                                source={typeof selectedBooking.providerImage === 'string' ? { uri: selectedBooking.providerImage } : selectedBooking.providerImage}
+                                style={styles.modalProviderImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={[styles.modalProviderImage, { backgroundColor: '#AF9197', alignItems: 'center', justifyContent: 'center' }]}>
+                                <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>
+                                  {selectedBooking.providerName?.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() || 'P'}
+                                </Text>
+                              </View>
+                            )}
                             <Text style={styles.modalProviderName}>
                               {selectedBooking.providerName}
                             </Text>
@@ -3142,35 +3218,11 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           </Text>
                                         </View>
                                       ) : (() => {
-                                        // Non-mobile: check real release state
-                                        // If the address hasn't been manually released yet, wait for the
-                                        // policy to load before rendering anything — avoids a flash where
-                                        // the generic locked badge briefly appears then disappears.
-                                        if (!selectedBooking.addressReleasedAt && selectedBookingAddrSettings === null) {
-                                          return null;
-                                        }
-                                        const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
-                                        // 12h display time needs the shared parser — template-literal
-                                        // Date parsing gave NaN, keeping the address locked forever
-                                        const apptMs = selectedBooking.bookingDate && selectedBooking.bookingTime
-                                          ? createBookingDateTime(selectedBooking.bookingDate, selectedBooking.bookingTime).getTime()
-                                          : null;
-                                        const hoursUntilAppt = apptMs && !isNaN(apptMs) ? (apptMs - Date.now()) / 3_600_000 : null;
-                                        const policyHoursMap: Record<string, number> = {
-                                          day_before: 24, two_days_before: 48, three_days_before: 72,
-                                          five_days_before: 120, week_before: 168,
-                                        };
-                                        const policyHrs = (policy ? policyHoursMap[policy] : null) ?? null;
-                                        const timeBasedReleased = policyHrs !== null && hoursUntilAppt !== null && hoursUntilAppt <= policyHrs;
-                                        const isReleased = !!selectedBooking.addressReleasedAt
-                                          || policy === 'always'
-                                          || timeBasedReleased
-                                          || (policy === 'on_confirmation' && (
-                                            selectedBooking.status === BookingStatus.UPCOMING ||
-                                            selectedBooking.status === BookingStatus.IN_PROGRESS
-                                          ));
-
-                                        if (isReleased && selectedBooking.address) {
+                                        // Address is enforced server-side: the client_bookings view masks
+                                        // provider_address_snapshot until the release policy allows it, so
+                                        // the address being present here *is* the release signal — the
+                                        // screen no longer decides.
+                                        if (selectedBooking.address) {
                                           return (
                                             <>
                                               <Text style={styles.modalAddressText}>
@@ -3187,7 +3239,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           );
                                         }
 
-                                        // Not yet released — show countdown or policy message
+                                        // Not released yet. Wait for the policy to load to avoid a copy
+                                        // flash, then show the policy-specific message / countdown.
+                                        if (selectedBookingAddrSettings === null) return null;
+                                        const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
                                         const policyLabel: Record<string, string> = {
                                           on_confirmation: 'Address shared once your booking is confirmed',
                                           day_before: 'Address released 24 hours before your appointment',

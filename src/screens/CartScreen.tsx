@@ -26,7 +26,6 @@ import {
   validatePromoCode,
 } from '../services/databaseService';
 import type { DbPromotion } from '../types/database';
-import { NotificationService } from '../services/notificationService';
 import type { CartScreenProps } from '../navigation/types';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { FONT_SIZES } from '../constants/Typeography';
@@ -36,6 +35,11 @@ import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { getMobileProviderDisplayNames, getProviderSchedulingConstraints } from '../services/databaseService';
 import { supabase } from '../lib/supabase';
+import { BookingError } from '../contexts/BookingContext';
+import { useAppDialog } from '../components/AppDialog';
+
+// Static/demo services carry numeric ids — only a real UUID resolves to a services row
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ─── Design tokens — matches app-wide palette ─────────────────────────────────
 const L = {
@@ -77,8 +81,8 @@ interface CalendarProps {
   selectedTime: string;
   providerName: string;
   serviceDuration?: string;
+  serviceId?: string | undefined;
   maxDate?: Date;
-  minBookingNoticeHrs?: number;
 }
 
 const FallbackCalendar: React.FC<CalendarProps> = ({
@@ -144,6 +148,10 @@ interface PaymentModalProps {
   totalAmount: number;
   onPaymentSuccess: (paymentMethod: string) => Promise<void>;
   onPaymentComplete: () => void;
+  // Rendered via the parent CartScreen's own DialogHost, not this modal's —
+  // the alert would otherwise be nested inside this component's own <Modal>,
+  // so closing the payment sheet on failure would dismiss the alert with it.
+  onBookingFailed: (message: string) => void;
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = memo(
@@ -154,6 +162,7 @@ const PaymentModal: React.FC<PaymentModalProps> = memo(
     totalAmount,
     onPaymentSuccess,
     onPaymentComplete,
+    onBookingFailed,
   }) => {
     const { theme, isDarkMode } = useTheme();
     const P = isDarkMode ? D : L;
@@ -201,16 +210,9 @@ const handlePayment = useCallback(async () => {
       console.log(`\n[${timestamp()}] Calling onPaymentSuccess...`);
     }
     const startTime = Date.now();
-    try {
-      await onPaymentSuccess(selectedPaymentMethod);
-      const duration = Date.now() - startTime;
-      if (__DEV__) {
-        console.log(`[${timestamp()}] onPaymentSuccess completed in ${duration}ms`);
-      }
-    } catch (bookingError) {
-      const duration = Date.now() - startTime;
-      console.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED after ${duration}ms:`, bookingError);
-      throw bookingError;
+    await onPaymentSuccess(selectedPaymentMethod);
+    if (__DEV__) {
+      console.log(`[${timestamp()}] onPaymentSuccess completed in ${Date.now() - startTime}ms`);
     }
 
     if (__DEV__) {
@@ -243,17 +245,17 @@ const handlePayment = useCallback(async () => {
       console.log(`${'='.repeat(60)}\n`);
     }
   } catch (error) {
-    console.error(`\n${'='.repeat(60)}`);
-    console.error(`❌ [${timestamp()}] PAYMENT ERROR`);
-    console.error(`${'='.repeat(60)}`);
-    console.error(`❌ [${timestamp()}] Error:`, error);
-    console.error(`❌ [${timestamp()}] Error message:`, (error as Error).message);
-    console.error(`❌ [${timestamp()}] Error stack:`, (error as Error).stack);
-    console.error(`${'='.repeat(60)}\n`);
+    console.error(`❌ [${timestamp()}] Booking failed:`, error);
 
-    Alert.alert(
-      'Booking Failed',
-      (error as Error).message || 'Something went wrong. Please try again.'
+    // Close the payment sheet first — its own DialogHost is nested inside
+    // this component's <Modal>, so showing the alert here without closing
+    // would leave the payment form visible behind/around it. The alert is
+    // shown via the parent's DialogHost instead, which survives the close.
+    onClose();
+    onBookingFailed(
+      error instanceof BookingError
+        ? error.message
+        : "We couldn't complete this booking. Please try again."
     );
   } finally {
     if (__DEV__) {
@@ -265,7 +267,7 @@ const handlePayment = useCallback(async () => {
       console.log(`[${timestamp()}] isProcessing set to false\n`);
     }
   }
-}, [totalAmount, onPaymentSuccess, onPaymentComplete, onClose]);
+}, [totalAmount, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed]);
 
     const formatCardNumber = (text: string) => {
       const cleaned = text.replace(/\s/g, '');
@@ -444,6 +446,7 @@ const NotesModal: React.FC<NotesModalProps> = memo(
   ({ isVisible, onClose, onSave, serviceName, providerName, instanceNumber, currentNotes }) => {
     const { isDarkMode } = useTheme();
     const P = isDarkMode ? D : L;
+    const { showAlert, DialogHost } = useAppDialog();
     const [notes, setNotes] = useState(currentNotes);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -459,11 +462,11 @@ const NotesModal: React.FC<NotesModalProps> = memo(
         onClose();
       } catch (error) {
         console.error('Error saving notes:', error);
-        Alert.alert('Error', 'Failed to save notes. Please try again.');
+        showAlert('Couldn\'t save your note', 'Please try again.');
       } finally {
         setIsLoading(false);
       }
-    }, [notes, onSave, onClose]);
+    }, [notes, onSave, onClose, showAlert]);
 
     return (
       <Modal visible={isVisible} animationType="slide" transparent={true}>
@@ -513,6 +516,7 @@ const NotesModal: React.FC<NotesModalProps> = memo(
             </View>
           </View>
         </View>
+        <DialogHost />
       </Modal>
     );
   }
@@ -557,6 +561,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
   }) => {
     const { theme, isDarkMode } = useTheme();
     const P = isDarkMode ? D : L;
+    const { showAlert, showConfirm, DialogHost } = useAppDialog();
     const [showCalendar, setShowCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -580,19 +585,22 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 
     // Scheduling constraints fetched once per provider
     const [constraints, setConstraints] = useState<{
-      minBookingNoticeHrs: number;
       bookingWindowDays: number;
-    }>({ minBookingNoticeHrs: 0, bookingWindowDays: 60 });
+    }>({ bookingWindowDays: 60 });
     const constraintsFetched = useRef(false);
 
-    // Fetch constraints the first time the calendar is opened
+    // Fetch constraints the first time the calendar is opened. Prefer the
+    // real provider UUID (set on the cart item when it was added) over the
+    // display name — an exact-match name lookup silently returns nothing on
+    // any case/punctuation drift, which is indistinguishable from "provider
+    // has no constraints" and was masking real lookup failures.
     useEffect(() => {
       if (!showCalendar || constraintsFetched.current) return;
       constraintsFetched.current = true;
-      getProviderSchedulingConstraints(providerName).then(setConstraints).catch(() => {
+      getProviderSchedulingConstraints(item.providerId ?? item.providerDisplayName ?? providerName).then(setConstraints).catch(() => {
         // keep defaults on error
       });
-    }, [showCalendar, providerName]);
+    }, [showCalendar, providerName, item.providerId, item.providerDisplayName]);
 
     // Compute maxDate from booking window (0 = no limit)
     const maxDate = useMemo<Date | undefined>(() => {
@@ -645,10 +653,10 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           });
         } catch (error) {
           console.error('Error updating date:', error);
-          Alert.alert('Error', 'Failed to update date');
+          showAlert('Couldn\'t update date', 'Please try selecting it again.');
         }
       },
-      [item.id, serviceBooking, onUpdateBooking]
+      [item.id, serviceBooking, onUpdateBooking, showAlert]
     );
 
     const handleTimeSelect = useCallback(
@@ -663,10 +671,10 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           });
         } catch (error) {
           console.error('Error updating time:', error);
-          Alert.alert('Error', 'Failed to update time');
+          showAlert('Couldn\'t update time', 'Please try selecting it again.');
         }
       },
-      [item.id, serviceBooking, onUpdateBooking]
+      [item.id, serviceBooking, onUpdateBooking, showAlert]
     );
 
     const handleDepositToggle = useCallback(
@@ -675,9 +683,9 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           onUpdateBooking(item.id, {
             ...serviceBooking,
             isDepositOnly: isDeposit,
-            depositPolicy: isDeposit && depositPolicy
-              ? { type: depositPolicy.depositType, amount: depositPolicy.depositAmount }
-              : undefined,
+            ...(isDeposit && depositPolicy
+              ? { depositPolicy: { type: depositPolicy.depositType, amount: depositPolicy.depositAmount } }
+              : {}),
           });
         } catch (error) {
           console.error('Error updating deposit toggle:', error);
@@ -689,7 +697,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     const handleRemove = useCallback(async () => {
       try {
         setIsLoading(true);
-        Alert.alert('Remove Service', `Remove ${item.serviceName} from cart?`, [
+        showConfirm('Remove Service', `Remove ${item.serviceName} from cart?`, [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Remove',
@@ -702,7 +710,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       } finally {
         setIsLoading(false);
       }
-    }, [item.id, item.serviceName, onRemove]);
+    }, [item.id, item.serviceName, onRemove, showConfirm]);
 
     const isScheduled = Boolean(serviceBooking?.selectedDate && serviceBooking?.selectedTime);
 
@@ -783,7 +791,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               style={[styles.scheduleButtonText, isScheduled && styles.scheduleButtonTextScheduled]}
             >
               {isScheduled
-                ? `${new Date(serviceBooking.selectedDate).toLocaleDateString()} at ${serviceBooking.selectedTime}`
+                ? `${new Date(serviceBooking.selectedDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} at ${serviceBooking.selectedTime}`
                 : 'Tap to Schedule'}
             </Text>
           </TouchableOpacity>
@@ -906,20 +914,15 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           {/* Calendar */}
           {showCalendar && (
             <View style={styles.calendarContainer}>
-              {constraints.minBookingNoticeHrs > 0 && (
-                <Text style={[styles.noticeText, { color: theme.secondaryText }]}>
-                  {`${constraints.minBookingNoticeHrs}h notice required`}
-                </Text>
-              )}
               <ModernBeautyCalendar
                 selectedDate={serviceBooking.selectedDate}
                 onDateSelect={handleDateSelect}
                 onTimeSelect={handleTimeSelect}
                 selectedTime={serviceBooking.selectedTime}
-                providerName={providerName}
+                providerName={item.providerId ?? item.providerDisplayName ?? providerName}
                 serviceDuration={duration}
-                maxDate={maxDate}
-                minBookingNoticeHrs={constraints.minBookingNoticeHrs}
+                {...(item.serviceId && UUID_RE.test(item.serviceId) ? { serviceId: item.serviceId } : {})}
+                {...(maxDate !== undefined ? { maxDate } : {})}
               />
             </View>
           )}
@@ -947,6 +950,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             </Text>
           </TouchableOpacity>
         </View>
+        <DialogHost />
       </ErrorBoundary>
     );
   }
@@ -956,6 +960,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const { theme, isDarkMode } = useTheme();
   const P = isDarkMode ? D : L;
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const [fontsLoaded] = useFonts({
     'BakbakOne-Regular': require('../../assets/fonts/BakbakOne-Regular.ttf'),
     'Jura-VariableFont_wght': require('../../assets/fonts/Jura-VariableFont_wght.ttf'),
@@ -1096,6 +1101,21 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       return next;
     });
   }, [items]);
+
+  // Auto-apply the offer code an item was added with (e.g. via a promotion's
+  // "Book Now" button), so tapping that button actually gets the discount
+  // instead of silently landing at full price. Re-validates through the same
+  // path as manual entry — one attempt per item, and it backs off if the
+  // client removes it, rather than reapplying every render.
+  const autoAppliedPromoIds = useRef(new Set<string>());
+  useEffect(() => {
+    for (const item of items) {
+      if (!item.initialPromoCode) continue;
+      if (autoAppliedPromoIds.current.has(item.id)) continue;
+      autoAppliedPromoIds.current.add(item.id);
+      handleApplyPromoToItem(item.id, item.initialPromoCode).catch(() => {});
+    }
+  }, [items, handleApplyPromoToItem]);
 
   // Absolute £ discount per cart item (off base+add-ons, capped at the base price).
   const itemPromoDiscounts = useMemo((): Record<string, number> => {
@@ -1272,11 +1292,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           });
         } catch (error) {
           console.error('Error saving notes:', error);
-          Alert.alert('Error', 'Failed to save notes');
+          showAlert('Couldn\'t save your note', 'Please try again.');
         }
       }
     },
-    [currentNotesItem, getServiceBooking, updateServiceBooking]
+    [currentNotesItem, getServiceBooking, updateServiceBooking, showAlert]
   );
 
   // Detect if any provider in the cart is mobile (travels to client)
@@ -1299,7 +1319,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [navigation]);
 
   const handleClearCart = useCallback(() => {
-    Alert.alert('Clear Cart', 'Remove all items from cart?', [
+    showConfirm('Clear Cart', 'Remove all items from cart?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Clear',
@@ -1316,7 +1336,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         },
       },
     ]);
-  }, [clearCart]);
+  }, [clearCart, showConfirm]);
 
   // Enhanced checkout with payment modal integration - USE EFFECTIVE TOTAL
   const handleCheckout = useCallback(async () => {
@@ -1337,28 +1357,21 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     });
 
     if (unscheduled.length > 0) {
-      Alert.alert(
+      showAlert(
         'Schedule Required',
-        `Please schedule ${unscheduled.length} appointment(s) before checkout.`,
-        [{ text: 'OK' }]
+        `Please schedule ${unscheduled.length} appointment(s) before checkout.`
       );
       return;
     }
 
     // Validate booking data
-    const bookingErrors: string[] = [];
-    items.forEach(item => {
+    const hasInvalidDate = items.some(item => {
       const booking = getServiceBooking(item.id);
-      if (booking.selectedDate) {
-        const date = new Date(booking.selectedDate);
-        if (isNaN(date.getTime())) {
-          bookingErrors.push(`Invalid date for ${item.serviceName}`);
-        }
-      }
+      return booking.selectedDate && isNaN(new Date(booking.selectedDate).getTime());
     });
 
-    if (bookingErrors.length > 0) {
-      Alert.alert('Booking Errors', bookingErrors.join('\n'));
+    if (hasInvalidDate) {
+      showAlert('Check your appointment times', 'One of your appointment dates isn\'t valid. Please pick it again.');
       return;
     }
 
@@ -1402,26 +1415,26 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setShowReviewModal(true);
   } catch (error) {
     console.error('Checkout error:', error);
-    Alert.alert('Error', 'Something went wrong during checkout. Please try again.');
+    showAlert('Something went wrong', 'We couldn\'t start checkout. Please try again.');
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, serviceBookings, user, appliedPromos, itemPromoDiscounts]);
+}, [items, getServiceBooking, effectiveFinalTotal, serviceBookings, user, appliedPromos, itemPromoDiscounts, showAlert]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
     // Validate phone is provided
     if (!reviewPhone.trim()) {
-      Alert.alert('Phone Required', 'Please enter your phone number to continue.');
+      showAlert('Phone Required', 'Please enter your phone number to continue.');
       return;
     }
     const digitsOnly = reviewPhone.replace(/[\s\-()+ ]/g, '');
     if (digitsOnly.length < 10) {
-      Alert.alert('Invalid Phone', 'Please enter a valid phone number (at least 10 digits).');
+      showAlert('Check your phone number', 'Please enter a valid phone number.');
       return;
     }
     if (hasMobileProvider && !clientAddress.trim()) {
-      Alert.alert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
+      showAlert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
       return;
     }
 
@@ -1436,7 +1449,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
-  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser]);
+  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showAlert, hasMobileProvider, clientAddress]);
 
 const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
   if (__DEV__) {
@@ -1555,38 +1568,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
         console.log('STEP 3 COMPLETE - createBookingsFromCart returned');
       }
     } catch (bookingError) {
-      console.error('STEP 3 FAILED:', bookingError);
-      console.error('Error details:', JSON.stringify(bookingError, null, 2));
       throw bookingError;
     }
     if (__DEV__) {
       console.log('---');
     }
 
-    // Step 4: Send payment notification
-    if (__DEV__) {
-      console.log('STEP 4: Sending payment notification...');
-    }
-    try {
-      await NotificationService.addPaymentSuccess(
-        effectiveFinalTotal,
-        itemsToBook[0]?.providerName || 'Provider',
-        itemsToBook.length > 1 ? `${itemsToBook.length} services` : itemsToBook[0]?.serviceName || 'Service',
-        itemsToBook[0]?.providerImage
-      );
-      if (__DEV__) {
-        console.log('STEP 4 COMPLETE - Payment notification sent');
-      }
-    } catch (notifError) {
-      console.error('STEP 4 WARNING - Notification failed (non-critical):', notifError);
-      // Don't throw - notifications are not critical
-    }
-    if (__DEV__) {
-      console.log('---');
-    }
-
-    // Step 5: Booking confirmations are now sent by createBookingsFromCart in BookingContext
-    // This ensures the correct booking.id (not cart item id) is used
+    // Step 4: Booking-request and payment-received notifications are now
+    // sent by createBookingsFromCart in BookingContext, using the real
+    // Supabase booking id (not the cart item id) and the real notifications
+    // table NotificationsScreen actually reads.
     if (__DEV__) {
       console.log('STEP 5: Booking confirmations sent by createBookingsFromCart');
       console.log('---');
@@ -1597,31 +1588,30 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
     }
     
   } catch (error) {
-    console.error('═══════════════════════════════════════');
-    console.error('❌ PAYMENT SUCCESS FUNCTION FAILED');
-    console.error('Error:', error);
-    console.error('Error message:', (error as Error).message);
-    console.error('Error stack:', (error as Error).stack);
-    console.error('═══════════════════════════════════════');
-    
-    Alert.alert(
-      'Booking Failed',
-      'Failed to create bookings: ' + (error as Error).message
-    );
+    // A multi-service checkout can partially succeed — clear only the
+    // services that actually booked, so the ones that failed stay in the
+    // cart for the client to retry without re-booking (and re-paying for)
+    // the ones that already went through.
+    if (error instanceof BookingError) {
+      error.succeededCartItemIds.forEach(id => removeFromCart(id));
+    }
+    // Not logged/alerted here — the caller (PaymentModal.handlePayment) owns
+    // showing the single "Booking Failed" alert and closing the payment
+    // sheet, so this only needs to propagate the error up to it.
     throw error;
   }
-}, [checkoutSnapshot, createBookingsFromCart, effectiveFinalTotal, items, confirmedCustomerInfo, user]);
+}, [checkoutSnapshot, createBookingsFromCart, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart]);
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
       const slug = providerItems[0]?.providerSlug;
       if (!slug) {
-        Alert.alert('Error', 'Unable to open provider profile');
+        showAlert('Something went wrong', "We couldn't open that provider's profile.");
         return;
       }
       navigation.navigate('ProviderProfile', { providerId: slug, source: 'cart' });
     },
-    [navigation]
+    [navigation, showAlert]
   );
 
   // Show loading while fonts are loading
@@ -2007,6 +1997,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
               setShowPaymentModal(false);
               setShowPaymentSuccessModal(true);
             }}
+            onBookingFailed={(message) => showAlert('Booking Failed', message)}
           />
 
           {/* Liquid Glass Payment Success Modal - ADDED CONTINUE SHOPPING BUTTON */}
@@ -2176,8 +2167,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                                 onShowNotes={handleShowNotes}
                                 providerName={providerName}
                                 allCartItems={items}
-                                depositPolicy={providerDepositPolicies[providerName]}
-                                appliedPromo={appliedPromos[item.id]}
+                                {...(providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] !== undefined
+                                  ? { depositPolicy: providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] }
+                                  : {})}
+                                {...(appliedPromos[item.id] !== undefined ? { appliedPromo: appliedPromos[item.id] } : {})}
                                 promoDiscount={itemPromoDiscounts[item.id] ?? 0}
                                 onApplyPromo={handleApplyPromoToItem}
                                 onRemovePromo={handleRemovePromoFromItem}
@@ -2270,6 +2263,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
           </ScrollView>
         </SafeAreaView>
       </ThemedBackground>
+      <DialogHost />
     </ErrorBoundary>
   );
 };
@@ -2682,12 +2676,6 @@ const styles = StyleSheet.create({
   // Calendar Container
   calendarContainer: {
     marginBottom: spacing.sm,
-  },
-  noticeText: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginBottom: 4,
-    opacity: 0.75,
   },
 
   // Fallback Calendar

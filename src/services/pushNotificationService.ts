@@ -6,8 +6,15 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
+
+// Expo Go dropped remote push support in SDK 53 — getExpoPushTokenAsync() fails
+// there and no APNs/FCM delivery is possible, by design, no matter how the
+// backend is configured. startExpoGoNotificationBridge() below is the only way
+// to see notification content while testing in Expo Go.
+export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 // Show banner + play sound even when the app is foregrounded
 Notifications.setNotificationHandler({
@@ -55,10 +62,14 @@ export async function registerForPushNotifications(): Promise<string | null> {
     });
   }
 
+  const projectId = Constants.expoConfig?.extra?.['eas']?.projectId ?? Constants.easConfig?.projectId;
+  if (!projectId) {
+    console.warn('[Push] No EAS projectId found in app config — cannot get push token');
+    return null;
+  }
+
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: '624d44eb-1d17-4c9a-b782-3675ee5e7863',
-    });
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
     if (__DEV__) console.log('[Push] Token obtained:', token);
 
@@ -81,6 +92,61 @@ export async function registerForPushNotifications(): Promise<string | null> {
     console.warn('[Push] Failed to get token:', err);
     return null;
   }
+}
+
+/**
+ * Expo Go can't receive remote push, so this mirrors each new row inserted into
+ * `notifications` for the given user as a local notification instead — same
+ * title/body/sound, fired immediately. Real builds get the actual push and
+ * don't need this; call only while running in Expo Go.
+ * Returns an unsubscribe function.
+ */
+export function startExpoGoNotificationBridge(userId: string): () => void {
+  if (!isExpoGo) return () => {};
+
+  // Look up this user's business name once so provider-role notifications can be
+  // labelled with it (mirrors the production push edge function). Falls back to
+  // "Provider" until it resolves / if the user has no provider profile.
+  let businessName = 'Provider';
+  supabase
+    .from('providers')
+    .select('display_name')
+    .eq('user_id', userId)
+    .maybeSingle()
+    .then(({ data }) => { if (data?.display_name) businessName = data.display_name; });
+
+  const channel = supabase
+    .channel(`expo-go-notification-bridge-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+      (payload) => {
+        const row = payload.new as {
+          id: string;
+          title: string;
+          message: string;
+          type: string;
+          booking_id: string | null;
+          recipient_role: 'provider' | 'client';
+        };
+        // Match the production push label: provider-role notifications are
+        // prefixed with the business name so a dual-role user knows which hat
+        // they're for.
+        const displayTitle = row.recipient_role === 'provider' ? `${businessName} · ${row.title}` : row.title;
+        Notifications.scheduleNotificationAsync({
+          content: {
+            title: displayTitle,
+            body: row.message,
+            sound: 'default',
+            data: { booking_id: row.booking_id, notification_id: row.id, type: row.type, recipient_role: row.recipient_role },
+          },
+          trigger: null,
+        }).catch(() => {});
+      }
+    )
+    .subscribe();
+
+  return () => { supabase.removeChannel(channel); };
 }
 
 /**

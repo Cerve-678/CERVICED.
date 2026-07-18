@@ -2,12 +2,31 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
-import { NotificationService } from '../services/notificationService';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, isSlotTaken } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, isSlotTaken } from '../services/databaseService';
 import type { BookingWithAddOns } from '../types/database';
 import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
+
+/**
+ * Thrown for known, already-plain-language booking failures (fully booked,
+ * slot taken, provider not linked, etc). Callers can safely show
+ * `error.message` to the client. Anything else (network/Supabase errors)
+ * should NOT be shown verbatim — those are unexpected and may contain raw
+ * technical text.
+ */
+export class BookingError extends Error {
+  // Cart item ids that DID successfully book, for the partial-failure case in
+  // a multi-service checkout — lets the caller clear only those from the
+  // cart instead of leaving already-booked services sitting there for a
+  // retry to (harmlessly, but confusingly) collide with.
+  succeededCartItemIds: string[];
+  constructor(message: string, succeededCartItemIds: string[] = []) {
+    super(message);
+    this.name = 'BookingError';
+    this.succeededCartItemIds = succeededCartItemIds;
+  }
+}
 
 export enum BookingStatus {
   PENDING = 'pending',
@@ -63,6 +82,11 @@ export interface ConfirmedBooking {
   providerName: string;
   providerImage: any;
   providerService: string;
+  // Real services.id UUID this booking is for — used to carry a stable ID
+  // into "Book Again" instead of matching by name. May be undefined if the
+  // underlying service was since deleted, or for bookings created before
+  // this field existed.
+  serviceId?: string | undefined;
   serviceName: string;
   serviceDescription: string;
   price: number;
@@ -178,6 +202,12 @@ export interface BookingContextType {
   canReschedule: (bookingId: string) => { canReschedule: boolean; reason?: string };
   refreshBookingStatuses: () => void;
   reloadBookings: () => Promise<void>;
+
+  // getMyBookings() only loads a recent window (default 90 days) plus
+  // everything upcoming, for scale — call this to page further back.
+  hasMoreHistory: boolean;
+  loadingMoreHistory: boolean;
+  loadOlderBookings: () => Promise<void>;
 
   // Reschedule functions
   requestReschedule: (bookingId: string, preferredDates: string[]) => Promise<void>;
@@ -388,6 +418,21 @@ const sortBookingsByDateTime = (bookings: ConfirmedBooking[]): ConfirmedBooking[
 };
 
 
+// Map a raw DB bookings.status string → app BookingStatus enum. Single source
+// of truth — screens must never cast a raw DB status string directly, since
+// 'confirmed' (DB) has no identically-named BookingStatus member (it maps to
+// UPCOMING) and a raw cast silently produces an unmatched status.
+export const mapDbBookingStatus = (s: string): BookingStatus => {
+  switch (s) {
+    case 'pending': return BookingStatus.PENDING;
+    case 'completed': return BookingStatus.COMPLETED;
+    case 'cancelled': return BookingStatus.CANCELLED;
+    case 'in_progress': return BookingStatus.IN_PROGRESS;
+    case 'no_show': return BookingStatus.NO_SHOW;
+    default: return BookingStatus.UPCOMING;
+  }
+};
+
 // Map a Supabase BookingWithAddOns row → ConfirmedBooking shape for local display
 export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
   const toDisplayTime = (t: string): string => {
@@ -399,16 +444,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     if (h === 0) h = 12;
     return `${h}:${m.toString().padStart(2, '0')} ${period}`;
   };
-  const mapSt = (s: string): BookingStatus => {
-    switch (s) {
-      case 'pending': return BookingStatus.PENDING;
-      case 'completed': return BookingStatus.COMPLETED;
-      case 'cancelled': return BookingStatus.CANCELLED;
-      case 'in_progress': return BookingStatus.IN_PROGRESS;
-      case 'no_show': return BookingStatus.NO_SHOW;
-      default: return BookingStatus.UPCOMING;
-    }
-  };
+  const mapSt = mapDbBookingStatus;
   const mapPay = (s: string): PaymentStatus => {
     switch (s) {
       case 'fully_paid': return PaymentStatus.PAID_IN_FULL;
@@ -444,8 +480,12 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     id: db.id,
     cartItemId: db.id,
     providerName: db.provider_name_snapshot,
-    providerImage: db.provider_logo_snapshot ?? null,
+    // Snapshot is frozen at booking time and is null on older rows (a since-fixed
+    // write bug) or when the provider hadn't uploaded a logo yet — fall back to
+    // their current logo so the image isn't permanently blank for those bookings.
+    providerImage: db.provider_logo_snapshot ?? db.provider?.logo_url ?? null,
     providerService: db.service_category_snapshot ?? '',
+    serviceId: (db as any).service_id ?? undefined,
     serviceName: db.service_name_snapshot,
     serviceDescription: '',
     price: db.base_price,
@@ -491,6 +531,9 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
 export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const [bookings, setBookings] = useState<ConfirmedBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Paging state for history beyond getMyBookings()'s default recent window.
+  const [hasMoreHistory, setHasMoreHistory] = useState(true);
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
 
   const loadBookings = useCallback(async () => {
     try {
@@ -554,7 +597,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             customerPhone: booking.customerPhone || '',
           };
         });
-        
+
+        // Show the cached copy immediately instead of blocking the screen on
+        // the network merge below — the merge still runs and re-renders with
+        // authoritative data once it resolves, but the user isn't staring at
+        // a loading state for a round-trip that isn't needed to show *something*.
+        setBookings(migratedBookings);
+        setIsLoading(false);
+
         // Merge authoritative fields from Supabase for bookings that exist
         // there (status changes, provider-side reschedules, address release),
         // and pick up bookings created on other devices. Local-only bookings
@@ -577,6 +627,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   bookingTime: fromDb.bookingTime,
                   endTime: fromDb.endTime,
                   providerId: fromDb.providerId ?? b.providerId,
+                  // Refresh from DB rather than trusting the cached copy — a
+                  // provider adding/changing their logo after this booking was
+                  // first cached should show up without the image staying
+                  // stuck on whatever (possibly null) value was cached then.
+                  providerImage: fromDb.providerImage ?? b.providerImage,
                   addressReleasedAt: fromDb.addressReleasedAt ?? b.addressReleasedAt,
                   remainingBalance: fromDb.remainingBalance,
                   paymentStatus: fromDb.paymentStatus,
@@ -593,15 +648,25 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           // Offline or fetch failed — local copy stands
         }
 
-        const updatedBookings = mergedBookings.map((booking: ConfirmedBooking) => ({
-          ...booking,
-          status: determineBookingStatus(
-            booking.bookingDate,
-            booking.bookingTime,
-            booking.endTime,
-            booking.status
-          )
-        }));
+        const updatedBookings = mergedBookings.map((booking: ConfirmedBooking) => {
+          // A booking mid-reschedule should not be auto-expired based on the
+          // original appointment date — the date is being replaced, so treat
+          // it as still upcoming until the reschedule is resolved.
+          if (booking.isPendingReschedule &&
+              booking.status !== BookingStatus.CANCELLED &&
+              booking.status !== BookingStatus.NO_SHOW) {
+            return { ...booking, status: BookingStatus.UPCOMING };
+          }
+          return {
+            ...booking,
+            status: determineBookingStatus(
+              booking.bookingDate,
+              booking.bookingTime,
+              booking.endTime,
+              booking.status
+            )
+          };
+        });
 
         setBookings(updatedBookings);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedBookings));
@@ -797,14 +862,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         requested_dates: preferredDates,
       }).catch(() => {});
 
-      await NotificationService.addRescheduleRequest(
-        booking.providerName,
-        booking.serviceName,
-        booking.providerImage,
-        bookingId,
-        'reschedule_pending'
-      );
-
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const rescheduleProviderId = booking.providerId
         ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
@@ -896,14 +953,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const updatedBookings = currentBookings.map(b => b.id === bookingId ? updatedBooking : b);
 
       await saveBookings(updatedBookings);
-
-      await NotificationService.addRescheduleProviderResponse(
-          targetBooking.providerName,
-          targetBooking.serviceName,
-          targetBooking.providerImage,
-          bookingId,
-          'reschedule_pending'
-        );
 
       if (__DEV__) console.log('Step 2 Complete: Status=AVAILABLE, user can now select date');
     } catch (error) {
@@ -1045,16 +1094,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       updateBookingDateTime(bookingId, newDate, newTime, newEndTime).catch(() => {});
       closeRescheduleRequest(bookingId, 'confirmed').catch(() => {});
 
-      await NotificationService.addRescheduleConfirmed(
-        booking.providerName,
-        booking.serviceName,
-        booking.providerImage,
-        bookingId,
-        newDate,
-        newTime,
-        'upcoming'
-      );
-
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const confirmedProviderId = booking.providerId
         ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
@@ -1112,15 +1151,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             : b
         );
         await saveBookings(updatedBookings);
-
-        await NotificationService.addBookingCancelled(
-          booking.id,
-          booking.providerName,
-          booking.serviceName,
-          booking.bookingDate,
-          booking.bookingTime,
-          booking.providerImage
-        );
       }
 
       if (__DEV__) console.log('Booking cancelled successfully');
@@ -1175,6 +1205,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           time: appointment?.time || '',
           duration: item.duration,
           cartItemId: item.id,
+          serviceId: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : undefined,
         };
       }).filter(b => b.date && b.time);
 
@@ -1190,12 +1221,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       return result;
     } catch (error) {
       console.error('❌ Error validating bookings:', error);
+      // User-facing copy stays booking-flavoured even though the cause here
+      // is usually a network/server hiccup — "unable to validate" reads as
+      // an alarming technical failure for something the client can just retry.
       return {
         isValid: false,
-        conflicts: [{
-          cartItemId: 'unknown',
-          message: 'Unable to validate bookings. Please try again.',
-        }],
+        conflicts: cartItems.map(item => ({
+          cartItemId: item.id,
+          message: "Couldn't confirm this time is still available — please try again.",
+        })),
       };
     }
   }, []);
@@ -1211,8 +1245,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // Validate bookings before creating to prevent double-booking
       const validation = await validateBookingsBeforeCheckout(cartItems, appointmentData);
       if (!validation.isValid) {
-        const conflictMessages = validation.conflicts.map(c => c.message).join('; ');
-        throw new Error(`Booking conflict detected: ${conflictMessages}`);
+        const conflictMessages = validation.conflicts.map(c => c.message).join(' ');
+        throw new BookingError(conflictMessages || "We couldn't book that time. Please pick another.");
       }
 
       // ── Resolve every cart item to a real provider UUID up front ─────────────
@@ -1251,7 +1285,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const unresolved = cartItems.filter(item => !providerIdCache[item.providerName]);
       if (unresolved.length > 0) {
         const names = [...new Set(unresolved.map(i => i.providerDisplayName ?? i.providerName))].join(', ');
-        throw new Error(
+        throw new BookingError(
           `We couldn't link ${names} to a registered provider, so the booking wasn't placed. ` +
           `Please re-add the service from the provider's profile and try again.`
         );
@@ -1265,7 +1299,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           const existingCount = await countProviderBookingsOnDate(pid, apt.date);
           if (existingCount >= caps.max_per_day) {
             const displayName = item.providerDisplayName ?? item.providerName;
-            throw new Error(`${displayName} is fully booked on that date. Please choose a different day.`);
+            throw new BookingError(`${displayName} is fully booked on that date. Please choose a different day.`);
           }
         }
       }
@@ -1282,7 +1316,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const pgTime = timeTo24(apt.time);
         if (pgTime && await isSlotTaken(pid, apt.date, pgTime)) {
           const displayName = item.providerDisplayName ?? item.providerName;
-          throw new Error(
+          throw new BookingError(
             `${displayName} already has a booking at ${apt.time} on ${apt.date}. Please pick another time.`
           );
         }
@@ -1425,7 +1459,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             const pgEndTime = timeTo24(endTimeStr);
 
             const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
-            const logoUrl = typeof item.providerImage === 'string' ? item.providerImage : null;
+            const logoUrl = typeof item.providerImage === 'string'
+              ? item.providerImage
+              : (item.providerImage && typeof item.providerImage === 'object' && 'uri' in item.providerImage
+                  ? (item.providerImage as { uri?: string }).uri ?? null
+                  : null);
             const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
 
             const newDbBooking = await dbCreateBooking(
@@ -1526,7 +1564,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         console.error('[BookingContext] ❌ Could not persist bookings to Supabase:', outerError);
         const newIds = new Set(newBookings.map(nb => nb.id));
         await saveBookings(updatedBookings.filter(b => !newIds.has(b.id)));
-        throw new Error(
+        throw new BookingError(
           "We couldn't reach the server, so your booking wasn't placed. Please check your connection and try again."
         );
       }
@@ -1557,23 +1595,53 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // Fail the checkout with the real reason(s)
-      if (persistFailures.length > 0) {
-        throw new Error([...new Set(persistFailures.map(f => f.message))].join('\n'));
+      // Real notification per booking — client-facing, in the same Supabase
+      // table NotificationsScreen actually reads (previously this wrote to a
+      // local-only AsyncStorage store nothing in the app ever displayed, so
+      // clients never saw a "booking request sent" / "payment received"
+      // entry in their inbox at all). Sent for every booking that actually
+      // persisted, even if a sibling item in the same multi-service checkout
+      // failed — a client who successfully booked 2 of 3 services should
+      // still be told about those 2, not left with silence because item 3
+      // blew up. Auto-accept providers get their own booking_confirmed
+      // notification a moment later from the status-change trigger (see the
+      // auto-confirm step above); a still-pending booking has no such
+      // trigger to rely on, so it needs its own "request sent" notification.
+      const succeededBookings = newBookings.filter(nb => !failedCartItemIds.has(nb.cartItemId));
+      for (const booking of succeededBookings) {
+        if (booking.status !== BookingStatus.PENDING) continue;
+        insertBookingUserNotification({
+          booking_id: booking.id,
+          type: 'booking_pending',
+          title: 'Booking Request Sent',
+          message: `Your request for ${booking.serviceName} with ${booking.providerName} on ${booking.bookingDate} at ${booking.bookingTime} has been sent — awaiting confirmation.`,
+          priority: 'medium',
+          is_actionable: true,
+        }).catch(() => {});
+      }
+      if (succeededBookings.length > 0) {
+        const totalPaid = succeededBookings.reduce((sum, b) => sum + b.amountPaid, 0);
+        insertBookingUserNotification({
+          booking_id: succeededBookings[0]!.id,
+          type: 'payment_success',
+          title: 'Payment Received',
+          message: succeededBookings.length > 1
+            ? `We received your payment of £${totalPaid.toFixed(2)} for ${succeededBookings.length} services.`
+            : `We received your payment of £${totalPaid.toFixed(2)} for ${succeededBookings[0]!.serviceName}.`,
+          priority: 'medium',
+          is_actionable: false,
+        }).catch(() => {});
       }
 
-      // Local notification per booking — honest about the state: auto-accept
-      // providers confirm instantly, everyone else is "awaiting confirmation"
-      for (const booking of newBookings) {
-        await NotificationService.addBookingConfirmation(
-          booking.id,
-          booking.providerName,
-          booking.serviceName,
-          booking.bookingDate,
-          booking.bookingTime,
-          booking.providerImage,
-          booking.status === BookingStatus.PENDING
-        );
+      // Fail the checkout with the real reason(s) — but make clear when it
+      // was only PART of a multi-service checkout, and carry the cart item
+      // ids that DID book so the caller can clear just those from the cart.
+      if (persistFailures.length > 0) {
+        const reasons = [...new Set(persistFailures.map(f => f.message))].join('\n');
+        const message = succeededBookings.length > 0
+          ? `${succeededBookings.length} of ${newBookings.length} services were booked successfully. The rest couldn't be placed:\n${reasons}`
+          : reasons;
+        throw new BookingError(message, succeededBookings.map(b => b.cartItemId));
       }
 
       if (__DEV__) console.log('All bookings created successfully');
@@ -1631,6 +1699,41 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const reloadBookings = useCallback(async () => {
     await loadBookings();
   }, [loadBookings]);
+
+  // Pages further back than getMyBookings()'s default recent window, using
+  // the oldest currently-loaded booking_date as the cursor.
+  const loadOlderBookings = useCallback(async () => {
+    if (loadingMoreHistory || !hasMoreHistory) return;
+    setLoadingMoreHistory(true);
+    try {
+      const oldest = bookings.reduce(
+        (min: string, b) => (!min || b.bookingDate < min ? b.bookingDate : min),
+        ''
+      );
+      if (!oldest) {
+        setHasMoreHistory(false);
+        return;
+      }
+
+      const PAGE_SIZE = 30;
+      const older = await getOlderBookings(oldest, PAGE_SIZE);
+      if (older.length === 0) {
+        setHasMoreHistory(false);
+        return;
+      }
+
+      const existingIds = new Set(bookings.map(b => b.id));
+      const mapped = older.map(mapDbBookingToConfirmed).filter(b => !existingIds.has(b.id));
+      const updated = [...bookings, ...mapped];
+      setBookings(updated);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      if (older.length < PAGE_SIZE) setHasMoreHistory(false);
+    } catch (error) {
+      console.error('Failed to load older bookings:', error);
+    } finally {
+      setLoadingMoreHistory(false);
+    }
+  }, [bookings, hasMoreHistory, loadingMoreHistory]);
 
   const upcomingBookings = useMemo(() => {
     if (isLoading) return [];
@@ -1733,6 +1836,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
+    hasMoreHistory,
+    loadingMoreHistory,
+    loadOlderBookings,
   };
 
   return (

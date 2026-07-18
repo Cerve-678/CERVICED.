@@ -62,6 +62,26 @@ export default function LoginScreen({ navigation }: Props) {
     })();
   }, []);
 
+  // Shared by every successful sign-in path (password, Apple) — offers to
+  // remember this device via biometrics instead of typing credentials again.
+  const maybePromptEnableBiometric = useCallback((refreshToken: string | undefined) => {
+    if (!biometricAvailable || biometricEnabled || !refreshToken) return;
+    Alert.alert(
+      `Enable ${biometricLabel}?`,
+      `Sign in faster next time using ${biometricLabel} instead of your password.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Enable',
+          onPress: async () => {
+            await enableBiometric(refreshToken);
+            setBiometricEnabled(true);
+          },
+        },
+      ]
+    );
+  }, [biometricAvailable, biometricEnabled, biometricLabel]);
+
   const validate = useCallback(() => {
     const errs: { email?: string; password?: string } = {};
     if (!email.trim()) errs.email = 'Email is required';
@@ -125,23 +145,7 @@ export default function LoginScreen({ navigation }: Props) {
       return;
     }
 
-    if (biometricAvailable && !biometricEnabled && data.session?.refresh_token) {
-      const token = data.session.refresh_token;
-      Alert.alert(
-        `Enable ${biometricLabel}?`,
-        `Sign in faster next time using ${biometricLabel} instead of your password.`,
-        [
-          { text: 'Not now', style: 'cancel' },
-          {
-            text: 'Enable',
-            onPress: async () => {
-              await enableBiometric(token);
-              setBiometricEnabled(true);
-            },
-          },
-        ]
-      );
-    }
+    maybePromptEnableBiometric(data.session?.refresh_token);
     console.log('[Login] Success — waiting for onAuthStateChange...');
   };
 
@@ -164,12 +168,16 @@ export default function LoginScreen({ navigation }: Props) {
         return;
       }
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken,
       });
       setIsLoading(false);
-      if (error) Alert.alert('Sign in failed', error.message);
+      if (error) {
+        Alert.alert('Sign in failed', error.message);
+        return;
+      }
+      maybePromptEnableBiometric(data.session?.refresh_token);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
       if (e.code !== 'ERR_REQUEST_CANCELED') {

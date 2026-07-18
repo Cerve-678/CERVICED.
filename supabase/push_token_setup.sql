@@ -67,7 +67,10 @@ BEGIN
       'schema', TG_TABLE_SCHEMA,
       'record', row_to_json(NEW)
     ),
-    timeout_milliseconds := 5000
+    -- Edge function executions have been observed taking up to ~12s (cold
+    -- starts / Expo API latency) — 5s was silently dropping ~1 in 4 pushes
+    -- with no error surfaced anywhere. 15s gives real headroom.
+    timeout_milliseconds := 15000
   );
   RETURN NEW;
 END;

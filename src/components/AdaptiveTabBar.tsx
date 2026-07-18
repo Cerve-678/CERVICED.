@@ -91,8 +91,9 @@ const IOSGlassTabBar: React.FC<AdaptiveTabBarProps> = ({ state, descriptors, nav
           stiffness: 200,
         }).start();
 
-        if (targetIdx !== s.index) {
-          navigation.navigate(s.routes[targetIdx].name);
+        const targetRoute = s.routes[targetIdx];
+        if (targetIdx !== s.index && targetRoute) {
+          navigation.navigate(targetRoute.name);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         }
       },
@@ -281,8 +282,9 @@ const AndroidMaterialTabBar: React.FC<AdaptiveTabBarProps> = ({ state, descripto
           stiffness: 200,
         }).start();
 
-        if (targetIdx !== s.index) {
-          navigation.navigate(s.routes[targetIdx].name);
+        const targetRoute = s.routes[targetIdx];
+        if (targetIdx !== s.index && targetRoute) {
+          navigation.navigate(targetRoute.name);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         }
       },

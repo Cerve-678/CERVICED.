@@ -65,6 +65,7 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
     }).start();
     if (clamped !== currentIdxRef.current) {
       const route = routesRef.current[clamped];
+      if (!route) return;
       const event = navigationRef.current.emit({
         type: 'tabPress',
         target: route.key,
@@ -142,7 +143,7 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
 
           {/* Tab buttons */}
           {state.routes.map((route, index) => {
-            const { options } = descriptors[route.key];
+            const options = descriptors[route.key]?.options;
             const isFocused = state.index === index;
             return (
               <TouchableOpacity
@@ -153,7 +154,7 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
                 accessibilityRole="button"
                 accessibilityState={isFocused ? { selected: true } : {}}
               >
-                {options.tabBarIcon?.({
+                {options?.tabBarIcon?.({
                   focused: isFocused,
                   color: isFocused ? activeColor : inactiveColor,
                   size: 24,

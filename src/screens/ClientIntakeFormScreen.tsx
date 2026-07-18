@@ -105,7 +105,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: P.text }]}>Intake Form</Text>
+          <Text style={[styles.headerTitle, { color: P.text }]}>Form</Text>
           <View style={{ width: 36 }} />
         </View>
       </SafeAreaView>

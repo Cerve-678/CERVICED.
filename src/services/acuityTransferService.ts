@@ -130,6 +130,8 @@ Rules:
       name: svc.name || 'Unnamed Service',
       price: Number(svc.price) || 0,
       duration: svc.duration || '1 hr',
+      bufferBeforeMins: null,
+      bufferAfterMins: null,
       description: svc.description || '',
       images: [],
       addOns: [],

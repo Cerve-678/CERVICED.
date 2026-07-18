@@ -19,7 +19,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { loadProviderFromSupabase } from '../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../services/providerRegistrationService';
-import { getProviderPortfolio } from '../services/databaseService';
+import { getProviderPortfolio, getMyProviderReviews } from '../services/databaseService';
 import type { DbPortfolioItem } from '../types/database';
 import { supabase } from '../lib/supabase';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../constants/providerThemes';
@@ -45,6 +45,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
+  const [reviews, setReviews] = useState<{ id: string; name: string; rating: number; comment: string; date: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showFullAbout, setShowFullAbout] = useState(false);
@@ -67,6 +68,17 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             if (data?.id) {
               setProviderDbId(data.id);
               getProviderPortfolio(data.id).then(setPortfolio).catch(() => {});
+              getMyProviderReviews()
+                .then(dbReviews => setReviews(dbReviews.map(r => ({
+                  id: r.id,
+                  name: r.user?.name ?? 'Anonymous',
+                  rating: r.rating,
+                  comment: r.comment ?? '',
+                  date: new Date(r.created_at).toLocaleDateString('en-GB', {
+                    day: 'numeric', month: 'short', year: 'numeric',
+                  }),
+                }))))
+                .catch(() => {});
             }
           }
 
@@ -356,6 +368,34 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             </View>
           )}
 
+          {/* Reviews */}
+          {reviews.length > 0 && (
+            <View style={[styles.card, { backgroundColor: cardBg, borderColor: PP.border }]}>
+              <Text style={[styles.sectionTitle, { color: PP.text }]}>Reviews</Text>
+              {reviews.slice(0, 5).map(review => (
+                <View key={review.id} style={[styles.reviewItem, { borderBottomColor: PP.border }]}>
+                  <View style={styles.reviewHeader}>
+                    <Text style={[styles.reviewerName, { color: PP.text }]}>{review.name}</Text>
+                    <View style={styles.reviewRating}>
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <Ionicons
+                          key={star}
+                          name="star"
+                          size={12}
+                          color={star <= review.rating ? '#FFD700' : PP.border}
+                        />
+                      ))}
+                    </View>
+                    <Text style={[styles.reviewDate, { color: PP.sub }]}>{review.date}</Text>
+                  </View>
+                  {review.comment ? (
+                    <Text style={[styles.reviewComment, { color: PP.sub }]}>{review.comment}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Contact Info */}
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: PP.border }]}>
             <Text style={[styles.sectionTitle, { color: PP.text }]}>Contact</Text>
@@ -612,6 +652,39 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+
+  // Reviews
+  reviewItem: {
+    marginBottom: 15,
+    paddingBottom: 15,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  reviewerName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+  },
+  reviewRating: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  reviewDate: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 10,
+    marginLeft: 'auto',
+  },
+  reviewComment: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
   },
 
   // Services section

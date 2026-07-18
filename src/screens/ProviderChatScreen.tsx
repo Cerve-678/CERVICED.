@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Keyboard,
   Modal,
+  Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,6 +91,21 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     async function initConversation() {
       setLoading(true);
       try {
+        // Guard: you can't hold a client chat with your OWN provider profile.
+        // Being both a provider and a client is fine — but only toward OTHER
+        // providers. A self-conversation is the "provider↔provider" bug.
+        const { data: selfCheck } = await supabase
+          .from('providers')
+          .select('user_id')
+          .eq('id', providerDbId)
+          .maybeSingle();
+        if (selfCheck?.user_id === userId) {
+          setLoading(false);
+          Alert.alert("That's your own profile", "You can't message your own provider profile.");
+          navigation.goBack();
+          return;
+        }
+
         const { data: existing } = await supabase
           .from('provider_conversations')
           .select('id')

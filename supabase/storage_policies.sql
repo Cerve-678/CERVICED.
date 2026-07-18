@@ -6,10 +6,11 @@
 -- 1. Create buckets (skip if already created via the dashboard UI)
 INSERT INTO storage.buckets (id, name, public)
 VALUES
-  ('provider-logos',  'provider-logos',  true),
-  ('service-images',  'service-images',  true),
-  ('portfolio',       'portfolio',        true),
-  ('avatars',         'avatars',          true)
+  ('provider-logos',       'provider-logos',       true),
+  ('service-images',       'service-images',       true),
+  ('portfolio',            'portfolio',            true),
+  ('avatars',              'avatars',              true),
+  ('provider-backgrounds', 'provider-backgrounds', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -157,5 +158,41 @@ CREATE POLICY "avatars: authenticated delete"
   TO authenticated
   USING (
     bucket_id = 'avatars'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- provider-backgrounds
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "provider-backgrounds: public read" ON storage.objects;
+CREATE POLICY "provider-backgrounds: public read"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'provider-backgrounds');
+
+DROP POLICY IF EXISTS "provider-backgrounds: authenticated upload" ON storage.objects;
+CREATE POLICY "provider-backgrounds: authenticated upload"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'provider-backgrounds'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "provider-backgrounds: authenticated update" ON storage.objects;
+CREATE POLICY "provider-backgrounds: authenticated update"
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'provider-backgrounds'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "provider-backgrounds: authenticated delete" ON storage.objects;
+CREATE POLICY "provider-backgrounds: authenticated delete"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'provider-backgrounds'
     AND (storage.foldername(name))[1] = auth.uid()::text
   );

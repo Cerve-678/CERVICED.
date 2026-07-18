@@ -9,6 +9,9 @@ export interface CartItem {
   providerSlug?: string;
   /** Supabase providers.id (UUID) — the canonical link used when saving bookings */
   providerId?: string;
+  /** Promo code to auto-apply in the cart — set when the item was added via
+   *  a promotion's "Book Now" button, so the offer isn't silently dropped. */
+  initialPromoCode?: string;
   providerImage: any;
   providerService: string;
   serviceName: string;
@@ -62,6 +65,8 @@ export interface AddToCartParams {
   providerSlug?: string | undefined;
   /** Supabase providers.id (UUID) — pass whenever the caller has it loaded */
   providerId?: string | undefined;
+  /** Promo code to auto-apply in the cart (see CartItem.initialPromoCode) */
+  initialPromoCode?: string | undefined;
   providerImage: any;
   providerService: string;
   service: {
@@ -178,6 +183,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           providerDisplayName,
           providerSlug,
           providerId,
+          initialPromoCode,
           providerImage,
           providerService,
           service,
@@ -212,6 +218,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             ...(providerDisplayName ? { providerDisplayName } : {}),
             ...(providerSlug ? { providerSlug } : {}),
             ...(providerId ? { providerId } : {}),
+            ...(initialPromoCode ? { initialPromoCode } : {}),
             providerImage: providerImage || null,
             providerService: String(providerService || 'General'),
             serviceName: String(safeGet(service, 'name', 'Unknown Service')),

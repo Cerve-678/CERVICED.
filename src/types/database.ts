@@ -60,7 +60,7 @@ export interface DbUser {
   business_name: string | null;
   business_email: string | null;
   avatar_url: string | null;
-  expo_push_token: string | null;
+  push_token: string | null;
   service_interests: string[] | null;
   is_verified: boolean;
   created_at: string;
@@ -96,6 +96,7 @@ export interface DbProvider {
   is_active: boolean;
   is_featured: boolean;
   is_verified: boolean;
+  has_gone_live: boolean;
   booking_policies: {
     cancelNotice?: string;
     cancelPenalty?: string;
@@ -113,6 +114,8 @@ export interface DbProvider {
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   full_address: string | null;
   address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
+  online_consultations_available: boolean;
+  consultation_required_new_clients: boolean;
   style_tags: string[] | null;
   occasion_tags: string[] | null;
   expertise_tags: string[] | null;
@@ -157,6 +160,9 @@ export interface DbService {
   price: number;
   price_max: number | null;
   duration_minutes: number;
+  // NULL = no override. before defaults to 0; after inherits providers.buffer_mins.
+  buffer_before_mins: number | null;
+  buffer_after_mins: number | null;
   is_active: boolean;
   sort_order: number;
   created_at: string;
@@ -173,7 +179,7 @@ export interface DbService {
   contraindications: string[] | null;
   // Context
   aftercare_notes: string | null;
-  service_type: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | null;
+  service_type: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | null;
 }
 
 export interface DbServiceImage {
@@ -206,6 +212,30 @@ export interface DbProviderBlockedDate {
   provider_id: string;
   blocked_date: string; // 'YYYY-MM-DD'
   reason: string | null;
+}
+
+/** A bookable period in a provider's recurring weekly schedule. */
+export interface DbProviderAvailabilityWindow {
+  id: string;
+  provider_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A one-off closure or replacement working period for a calendar date. */
+export interface DbProviderAvailabilityOverride {
+  id: string;
+  provider_id: string;
+  availability_date: string;
+  is_closed: boolean;
+  start_time: string | null;
+  end_time: string | null;
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DbPortfolioItem {
@@ -320,6 +350,7 @@ export interface DbNotification {
   provider_id: string | null;
   metadata: Json;
   created_at: string;
+  recipient_role: 'provider' | 'client';
 }
 
 export interface DbBookmark {
@@ -443,6 +474,8 @@ export interface PortfolioItemWithProvider extends DbPortfolioItem {
 /** Booking with add-ons — used by BookingsScreen and ProviderHomeScreen */
 export interface BookingWithAddOns extends DbBooking {
   add_ons: DbBookingAddOn[];
+  /** Live provider logo — only present when the query joins it; snapshot is frozen at booking time and may be null for older rows. */
+  provider?: { logo_url: string | null } | null;
 }
 
 /** Review with user name — used by ProviderProfileScreen */

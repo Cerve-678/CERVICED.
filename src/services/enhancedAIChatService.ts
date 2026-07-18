@@ -326,7 +326,7 @@ class EnhancedAIChatService {
           responseText = `You have ${upcomingBookings.length} upcoming booking${upcomingBookings.length > 1 ? 's' : ''}:\n\n`;
 
           upcomingBookings.slice(0, 5).forEach((booking, index) => {
-            const date = new Date(booking.bookingDate).toLocaleDateString('en-US', {
+            const date = new Date(booking.bookingDate).toLocaleDateString('en-GB', {
               month: 'short',
               day: 'numeric',
             });

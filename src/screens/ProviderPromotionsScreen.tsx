@@ -454,7 +454,7 @@ const tpSt = StyleSheet.create({
 
 // ── Notify Modal ───────────────────────────────────────────────────────────────
 
-type Audience = 'all' | 'repeat' | 'bookmarked';
+type Audience = 'interested' | 'all' | 'repeat' | 'bookmarked';
 
 function tomorrow9am() {
   const d = new Date();
@@ -472,7 +472,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
 }) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
-  const [audience, setAudience] = useState<Audience>('all');
+  const [audience, setAudience] = useState<Audience>('interested');
   const [sending, setSending] = useState(false);
   const [scheduleMode, setScheduleMode] = useState(false);
   const [schedAt, setSchedAt] = useState<Date>(tomorrow9am);
@@ -481,7 +481,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
 
   useEffect(() => {
     if (visible) {
-      setAudience('all');
+      setAudience('interested');
       setSending(false);
       setScheduleMode(false);
       setSchedAt(tomorrow9am());
@@ -493,6 +493,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   const repeatCount = clients.filter(c => c.booking_count >= 2).length;
 
   const audienceOptions: { key: Audience; label: string; sub: string; count: number | null }[] = [
+    { key: 'interested', label: 'Interested', sub: 'Booked, saved, or following you', count: null },
     { key: 'all',        label: 'All',       sub: 'Everyone who has booked you',    count: clients.length },
     { key: 'repeat',     label: 'Repeat',    sub: '2+ bookings with you',           count: repeatCount },
     { key: 'bookmarked', label: 'Followers', sub: 'People who saved your profile',  count: null },
@@ -1029,39 +1030,27 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
                     )}
                   </View>
                 </View>
-                <View style={[fmSt.serviceSectionCard, { backgroundColor: C.card, borderColor: C.border }]}>
-                  {Object.entries(serviceGroups).map(([cat, svcs], gi) => (
-                    <View key={cat} style={{ marginBottom: gi < Object.keys(serviceGroups).length - 1 ? 12 : 0 }}>
-                      {Object.keys(serviceGroups).length > 1 && (
-                        <Text style={[fmSt.serviceGroupLabel, { color: C.sub }]}>{cat}</Text>
-                      )}
-                      <View style={fmSt.serviceGrid}>
-                        {svcs.map(svc => {
-                          const selected = form.serviceIds.includes(svc.id);
-                          return (
-                            <TouchableOpacity
-                              key={svc.id}
-                              style={[fmSt.serviceChip, { backgroundColor: C.surface, borderColor: C.border }, selected && fmSt.serviceChipActive]}
-                              onPress={() => { Haptics.selectionAsync().catch(() => {}); toggleServiceId(svc.id); }}
-                              activeOpacity={0.7}
-                            >
-                              {selected
-                                ? <Ionicons name="checkmark-circle" size={14} color={C.ice} />
-                                : <View style={[fmSt.serviceChipCircle, { borderColor: C.border }]} />
-                              }
-                              <View style={{ flex: 1 }}>
-                                <Text style={[fmSt.serviceChipName, { color: selected ? C.ice : C.text }]} numberOfLines={1}>
-                                  {svc.name}
-                                </Text>
-                                <Text style={[fmSt.serviceChipPrice, { color: selected ? C.ice + 'AA' : C.sub }]}>£{svc.price.toFixed(0)}</Text>
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  ))}
-                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={fmSt.serviceChipsScroll} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                  {services.map(svc => {
+                    const selected = form.serviceIds.includes(svc.id);
+                    return (
+                      <TouchableOpacity
+                        key={svc.id}
+                        style={[fmSt.serviceChip, {
+                          borderColor: selected ? C.accent : C.border,
+                          backgroundColor: selected ? C.accent + '18' : C.card,
+                        }]}
+                        onPress={() => { Haptics.selectionAsync().catch(() => {}); toggleServiceId(svc.id); }}
+                        activeOpacity={0.7}
+                      >
+                        {selected && <Ionicons name="checkmark" size={12} color={C.accent} />}
+                        <Text style={[fmSt.serviceChipName, { color: selected ? C.accent : C.sub }]} numberOfLines={1}>
+                          {svc.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </>
             )}
 
@@ -1287,14 +1276,9 @@ const fmSt = StyleSheet.create({
   genBtnText: { color: CP.ice, fontSize: 12, fontWeight: '700' },
   serviceHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 14, marginBottom: 10 },
   serviceSub: { fontSize: 11, color: CP.sub, marginTop: 2 },
-  serviceSectionCard: { backgroundColor: CP.card, borderRadius: 12, padding: 12, borderWidth: 0.5, borderColor: CP.border, marginBottom: 4 },
-  serviceGroupLabel: { fontSize: 10, color: CP.sub, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
-  serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  serviceChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: CP.border, backgroundColor: CP.surface, maxWidth: (SW - 60) / 2 },
-  serviceChipActive: { backgroundColor: CP.accent, borderColor: CP.ice + '30' },
-  serviceChipCircle: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: CP.border },
-  serviceChipName: { fontSize: 12, fontWeight: '600' },
-  serviceChipPrice: { fontSize: 11, marginTop: 1 },
+  serviceChipsScroll: { marginBottom: 4 },
+  serviceChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  serviceChipName: { fontSize: 13, fontWeight: '500' },
   clearAll: { fontSize: 12, color: CP.danger, fontWeight: '600', opacity: 0.8 },
   selectAllPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: CP.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 0.5, borderColor: CP.ice + '30' },
   selectAllDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: CP.ice },
@@ -1435,7 +1419,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
       for (const p of duePromos) {
         try {
           const claimed = await markScheduledNotifSent(p.id);
-          if (claimed) await sendPromotionNotificationsToClients(p, 'all');
+          if (claimed) await sendPromotionNotificationsToClients(p, 'interested');
         } catch {}
       }
       if (duePromos.length > 0) {

@@ -74,7 +74,6 @@ export default function BrandingScreen({ navigation }: any) {
   const [sheetColor, setSheetColor]           = useState(SHEET_BG);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage]   = useState(false);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -172,15 +171,14 @@ export default function BrandingScreen({ navigation }: any) {
 
       if (error) throw error;
 
-      setSaved(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setTimeout(() => setSaved(false), 2200);
+      navigation.goBack();
     } catch (e: any) {
       Alert.alert('Save failed', e.message);
     } finally {
       setSaving(false);
     }
-  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor]);
+  }, [providerId, accentColor, backgroundImage, themeChoice, customBackdrop, customCard, customAccent, sheetColor, navigation]);
 
   // Single handler for the shared picker — keeps the live preview in sync
   const handleThemeChange = useCallback((next: ThemeSelection) => {
@@ -310,7 +308,7 @@ export default function BrandingScreen({ navigation }: any) {
 
           {/* Save */}
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: saved ? '#2E7D32' : accentColor, opacity: saving ? 0.7 : 1 }]}
+            style={[styles.saveBtn, { backgroundColor: accentColor, opacity: saving ? 0.7 : 1 }]}
             onPress={handleSave}
             activeOpacity={0.85}
             disabled={saving}
@@ -318,7 +316,7 @@ export default function BrandingScreen({ navigation }: any) {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.saveBtnText}>{saved ? '✓ Saved' : 'Save Changes'}</Text>
+              <Text style={styles.saveBtnText}>Save Changes</Text>
             )}
           </TouchableOpacity>
 

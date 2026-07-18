@@ -19,6 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
+import { isBiometricAvailable, getBiometricLabel, enableBiometric } from '../../services/biometricService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -131,6 +132,26 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       // No manual login() call needed — avoids double-write and the race where loadUserProfile
       // would override an early login() call with setIsLoggedIn(false) if the upsert hadn't
       // finished yet. Navigation to MainTabs happens automatically when isLoggedIn flips true.
+
+      // Offer biometric sign-in for this brand-new account right away. Uses
+      // Alert.alert (not a custom modal) because RootNavigation unmounts this
+      // whole screen the instant isLoggedIn flips true — a native Alert is
+      // OS-level and survives that unmount, a React modal wouldn't.
+      if (session.refresh_token) {
+        const refreshToken = session.refresh_token;
+        isBiometricAvailable().then(async (available) => {
+          if (!available) return;
+          const label = await getBiometricLabel();
+          Alert.alert(
+            `Enable ${label}?`,
+            `Sign in faster next time using ${label} instead of your password.`,
+            [
+              { text: 'Not now', style: 'cancel' },
+              { text: 'Enable', onPress: () => { enableBiometric(refreshToken).catch(() => {}); } },
+            ]
+          );
+        }).catch(() => {});
+      }
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       console.error('OTP verification error:', err);

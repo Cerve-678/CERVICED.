@@ -20,7 +20,10 @@
     "submit:android": "eas submit --platform android",
     "submit:ios": "eas submit --platform ios",
     "update": "eas update",
-    "clean": "expo r -c"
+    "clean": "expo r -c",
+    "vault": "node scripts/gen-vault.mjs",
+    "vault:watch": "node scripts/gen-vault.mjs --watch",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",

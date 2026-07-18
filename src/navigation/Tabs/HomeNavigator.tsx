@@ -10,6 +10,7 @@ import NotificationsScreen from '../../screens/NotificationsScreen';
 import CartScreen from '../../screens/CartScreen';
 import ClientIntakeFormScreen from '../../screens/ClientIntakeFormScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
+import OffersScreen from '../../screens/OffersScreen';
 import { HomeStackParamList } from '../types';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -120,6 +121,12 @@ export default function HomeNavigator() {
       <HomeStack.Screen
         name="ClientIntakeForm"
         component={ClientIntakeFormScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <HomeStack.Screen
+        name="Offers"
+        component={OffersScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 
