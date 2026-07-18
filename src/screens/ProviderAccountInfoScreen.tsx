@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
+import { getUserBasicInfo, updateUserNamePhone, updateUserDob } from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
 
 const CP_DARK = {
@@ -48,11 +49,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
         if (!user) return;
         setUserId(user.id);
         setAuthEmail(user.email ?? '');
-        const { data } = await supabase
-          .from('users')
-          .select('name, phone, dob')
-          .eq('id', user.id)
-          .single();
+        const data = await getUserBasicInfo(user.id);
         if (data) {
           setName(data.name ?? '');
           setPhone(data.phone ?? '');
@@ -70,12 +67,10 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       if (userId) {
-        const { error } = await supabase.from('users').update({
-          name: name.trim(),
-          phone: phone.trim() || null,
-          dob: dob.trim() || null,
-        }).eq('id', userId);
-        if (error) throw error;
+        await Promise.all([
+          updateUserNamePhone(userId, name.trim(), phone.trim() || ''),
+          updateUserDob(userId, dob.trim() || null),
+        ]);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();

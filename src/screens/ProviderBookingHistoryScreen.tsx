@@ -18,11 +18,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
-import { getProviderBookings } from '../services/databaseService';
+import {
+  getProviderBookings,
+  getMyProviderProfile,
+  getServicePrice,
+  insertDirectBooking,
+} from '../services/databaseService';
 import { mapDbBookingToConfirmed } from '../contexts/BookingContext';
 import type { BookingWithAddOns } from '../types/database';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { supabase } from '../lib/supabase';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
 
@@ -251,11 +255,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
 
   // Load the current provider's DB id for waitlist queries
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      supabase.from('providers').select('id').eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => { if (data?.id) setProviderDbId(data.id); });
-    });
+    getMyProviderProfile().then(p => { if (p?.id) setProviderDbId(p.id); });
   }, []);
 
   const listRef     = useRef<FlatList>(null);
@@ -358,12 +358,11 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
       const entry = inviteModal.entry;
       let basePrice = 0;
       if (entry.service_id) {
-        const { data: svc } = await supabase.from('services').select('price').eq('id', entry.service_id).maybeSingle();
-        basePrice = Number(svc?.price ?? 0);
+        basePrice = await getServicePrice(entry.service_id);
       }
       const bookingDate = inviteDate.toISOString().split('T')[0]!;
       const bookingTime = inviteTime.toTimeString().split(' ')[0]!;
-      const { error } = await supabase.from('bookings').insert({
+      await insertDirectBooking({
         user_id: entry.user_id,
         provider_id: providerDbId,
         service_id: entry.service_id,
@@ -383,7 +382,6 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
         provider_name_snapshot: entry.provider_name_snapshot,
         service_name_snapshot: entry.service_name_snapshot,
       });
-      if (error) throw error;
       await WaitlistService.inviteFromWaitlist(entry);
       setWaitlist(prev => prev.map(e => e.id === entry.id ? { ...e, status: 'notified' as const } : e));
       setInviteModal({ visible: false, entry: null });

@@ -37,6 +37,10 @@ import {
   getProviderAddressSettings,
   releaseBookingAddress,
   getBookingAddressReleasedAt,
+  getBookingWithAddOnsById,
+  getBookingUserId,
+  getProviderServiceCategoryByUserId,
+  getOrCreateConversation,
   ClientBeautyProfile,
   IntakeForm,
   BookingInfoPack,
@@ -314,14 +318,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   useEffect(() => {
     if (contextBooking || !bookingId) return;
     setFetching(true);
-    supabase
-      .from('bookings')
-      .select('*, add_ons: booking_add_ons(*)')
-      .eq('id', bookingId)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) { setFetching(false); return; }
-        const d = data as any;
+    getBookingWithAddOnsById(bookingId)
+      .then(raw => {
+        if (!raw) { setFetching(false); return; }
+        const d = raw as any;
         const to12 = (t: string) => {
           const [hs, ms] = t.split(':');
           let h = parseInt(hs ?? '0');
@@ -365,7 +365,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         setFetchedBooking(mapped);
         if (d.user_id) setClientUserId(d.user_id);
         setFetching(false);
-      });
+      })
+      .catch(() => { setFetching(false); });
   }, [bookingId, contextBooking]);
 
   useEffect(() => {
@@ -446,16 +447,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // For context-passed bookings we also look up user_id from Supabase
   useEffect(() => {
     if (!bookingId || clientUserId) return;
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from('bookings')
-          .select('user_id')
-          .eq('id', bookingId)
-          .single();
-        if ((data as any)?.user_id) setClientUserId((data as any).user_id);
-      } catch {}
-    })();
+    getBookingUserId(bookingId)
+      .then(uid => { if (uid) setClientUserId(uid); })
+      .catch(() => {});
   }, [bookingId, clientUserId]);
 
   useEffect(() => {
@@ -487,14 +481,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase
-          .from('providers')
-          .select('service_category')
-          .eq('user_id', user.id)
-          .single();
-        if ((data as any)?.service_category) {
-          setProviderServiceCategory((data as any).service_category as ServiceCategory);
-        }
+        const category = await getProviderServiceCategoryByUserId(user.id);
+        if (category) setProviderServiceCategory(category as ServiceCategory);
       } catch {}
     })();
   }, []);
@@ -816,26 +804,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!booking?.providerId || !clientUserId) return;
     try {
       const clientName = booking.customerName ?? 'Client';
-
-      const { data: existing } = await supabase
-        .from('provider_conversations')
-        .select('id')
-        .eq('provider_id', booking.providerId)
-        .eq('user_id', clientUserId)
-        .maybeSingle();
-
-      if (existing?.id) {
-        navigation.navigate('ProviderConversation', { conversationId: existing.id, clientUserId, clientName });
-        return;
-      }
-
-      const { data: created, error } = await supabase
-        .from('provider_conversations')
-        .insert({ provider_id: booking.providerId, user_id: clientUserId })
-        .select('id')
-        .single();
-      if (error || !created) throw error;
-      navigation.navigate('ProviderConversation', { conversationId: created.id, clientUserId, clientName });
+      const conversationId = await getOrCreateConversation(booking.providerId, clientUserId);
+      navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
     } catch {
       Alert.alert('Error', 'Could not open chat. Try again.');
     }

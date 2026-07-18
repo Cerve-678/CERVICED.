@@ -15,8 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../lib/supabase';
-import { getMyProviderProfile } from '../services/databaseService';
+import { getMyProviderProfile, updateProviderContactDetails } from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -152,12 +151,10 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      const { error } = await supabase.from('providers').update({
+      await updateProviderContactDetails(providerId!, {
         preferred_contact_methods: Array.from(enabled),
         whatsapp_number: whatsappNumber.trim() || null,
-      }).eq('id', providerId!);
-
-      if (error) throw error;
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       flash('Contact preferences saved', 'success');
     } catch (e: any) {

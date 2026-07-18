@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { supabase } from '../lib/supabase';
+import { upsertUserBeautyProfile } from '../services/databaseService';
 
 // ── Option lists ────────────────────────────────────────────────────────────
 
@@ -196,8 +197,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
     // Sync all beauty profile fields to users table so providers can read them.
     // Uses upsert in case the users row doesn't exist yet.
     if (user?.id) {
-      supabase.from('users').upsert({
-        id:                  user.id,
+      upsertUserBeautyProfile(user.id, {
         hair_type:           draft.hairType            || null,
         skin_type:           draft.skinType            || null,
         allergies:           draft.allergies,
@@ -206,7 +206,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
         medical_notes:       draft.medicalNotes        || null,
         photography_consent: draft.photographyConsent,
         treatment_history:   draft.treatmentHistory,
-      }, { onConflict: 'id' }).then(() => {});
+      }).catch(() => {});
     }
 
     setSaving(false);

@@ -1,13 +1,8 @@
-/**
- * Supabase data service — Phase 1
- * Central place for all database queries.
- * Import from here in screens instead of calling supabase directly.
- */
-
 import { supabase } from '../lib/supabase';
 import type {
   DbProvider,
   DbBooking,
+  DbUser,
   DbNotification,
   DbBookmark,
   DbPromotion,
@@ -28,6 +23,18 @@ import type {
   DbProviderBlockedDate,
 } from '../types/database';
 
+/**
+ * DATABASE SERVICE — SINGLE ACCESS POINT
+ *
+ * RULES:
+ * 1. This is the ONLY file that may import the Supabase client and call .from().
+ *    Screens import functions from here — they never touch supabase directly.
+ * 2. Every client-facing provider query MUST include .eq('has_gone_live', true)
+ *    unless the provider is reading their own record (document that exception).
+ * 3. Functions throw on error — never swallow errors or return null on failure.
+ * 4. All parameters and return types must be explicitly typed — no `any`.
+ */
+
 // ─────────────────────────────────────────────────────────
 // PROVIDERS
 // ─────────────────────────────────────────────────────────
@@ -38,6 +45,7 @@ export async function getProviders(category?: string): Promise<DbProvider[]> {
     .from('providers')
     .select('*')
     .eq('is_active', true)
+    .eq('has_gone_live', true)
     .order('is_featured', { ascending: false })
     .order('rating', { ascending: false });
 
@@ -89,6 +97,7 @@ export async function searchProviders(
     .select('*')
     .in('id', allIds)
     .eq('is_active', true)
+    .eq('has_gone_live', true)
     .order('is_featured', { ascending: false })
     .order('rating', { ascending: false });
 
@@ -139,6 +148,7 @@ export async function getProviderBySlug(slug: string): Promise<ProviderWithServi
     `)
     .eq('slug', slug)
     .eq('is_active', true)
+    .eq('has_gone_live', true)
     .single();
 
   if (error) {
@@ -218,12 +228,17 @@ export async function deletePortfolioItem(id: string): Promise<void> {
 
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(category?: string): Promise<PortfolioItemWithProvider[]> {
+  // !inner + provider.has_gone_live excludes portfolio items belonging to a
+  // provider who hasn't published a schedule yet — they shouldn't surface
+  // anywhere client-facing, not just in browse/search/profile.
   let query = supabase
     .from('portfolio_items')
     .select(`
       *,
-      provider: providers ( id, slug, display_name, service_category, logo_url, rating, review_count )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
     `)
+    .eq('provider.is_active', true)
+    .eq('provider.has_gone_live', true)
     .order('created_at', { ascending: false });
 
   if (category && category !== 'All') {
@@ -241,8 +256,10 @@ export async function searchPortfolio(query: string): Promise<PortfolioItemWithP
     .from('portfolio_items')
     .select(`
       *,
-      provider: providers ( id, slug, display_name, service_category, logo_url )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url )
     `)
+    .eq('provider.is_active', true)
+    .eq('provider.has_gone_live', true)
     .or(`caption.ilike.%${query}%,tags.cs.{${query}}`)
     .order('created_at', { ascending: false })
     .limit(50);
@@ -259,7 +276,9 @@ export async function searchPortfolio(query: string): Promise<PortfolioItemWithP
 export async function getActivePromotions(category?: string): Promise<DbPromotionWithProvider[]> {
   let query = supabase
     .from('promotions')
-    .select('*, providers(display_name, logo_url)')
+    .select('*, providers!inner(display_name, logo_url)')
+    .eq('providers.is_active', true)
+    .eq('providers.has_gone_live', true)
     .eq('is_active', true)
     .gte('valid_until', new Date().toISOString().split('T')[0])
     .order('created_at', { ascending: false });
@@ -657,7 +676,8 @@ export async function sendAnnouncement(
 export async function getBookmarkedProviders(): Promise<DbProvider[]> {
   const { data, error } = await supabase
     .from('bookmarks')
-    .select('provider: providers ( * )')
+    .select('provider: providers!inner ( * )')
+    .eq('provider.has_gone_live', true)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -2574,4 +2594,593 @@ export async function getProviderSchedulingConstraints(displayName: string): Pro
     minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
   };
+}
+
+// ─────────────────────────────────────────────────────────
+// USERS — profile reads
+// ─────────────────────────────────────────────────────────
+
+/** Fetch the full users row by ID. Returns null on PGRST116 (row missing); throws on other errors. */
+export async function getUserProfileById(userId: string): Promise<DbUser | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  return data as DbUser;
+}
+
+/** Fetch name, phone, and dob for a user — for the account-info edit screen */
+export async function getUserBasicInfo(
+  userId: string
+): Promise<{ name: string | null; phone: string | null; dob: string | null } | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('name, phone, dob')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return data as { name: string | null; phone: string | null; dob: string | null };
+}
+
+/** Fetch business_name and business_email for a user */
+export async function getUserBusinessInfo(
+  userId: string
+): Promise<{ business_name: string | null; business_email: string | null } | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('business_name, business_email')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return data as { business_name: string | null; business_email: string | null };
+}
+
+/** Fetch allergies and medical_notes — attached to bookings at checkout so the provider is briefed */
+export async function getUserHealthProfile(
+  userId: string
+): Promise<{ allergies: string[]; medical_notes: string | null } | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('allergies, medical_notes')
+    .eq('id', userId)
+    .single();
+  if (error) return null; // non-fatal — health data is best-effort
+  return data as { allergies: string[]; medical_notes: string | null };
+}
+
+/** Fetch the display_name field from the users table (distinct from providers.display_name) */
+export async function getUserDisplayName(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('users')
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle();
+  return (data as any)?.display_name ?? null;
+}
+
+// ─────────────────────────────────────────────────────────
+// USERS — profile writes
+// ─────────────────────────────────────────────────────────
+
+/** Upgrade a user account to provider role, writing business info alongside */
+export async function upgradeUserToProvider(
+  userId: string,
+  businessName: string,
+  businessEmail: string,
+  extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({
+      role: 'provider',
+      business_name: businessName,
+      business_email: businessEmail,
+      ...(extras?.businessPhone ? { business_phone: extras.businessPhone } : {}),
+      ...(extras?.instagram     ? { instagram: extras.instagram }           : {}),
+      ...(extras?.tiktok        ? { tiktok: extras.tiktok }                 : {}),
+      ...(extras?.website       ? { website: extras.website }               : {}),
+    })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/** Persist the client beauty/health/preference profile for an account being upgraded to dual-role */
+export async function updateClientProfileData(
+  userId: string,
+  data: {
+    dob: string;
+    hairType: string;
+    skinType: string;
+    skinConcerns: string[];
+    styleVibe: string;
+    allergies: string[];
+    treatmentHistory: string[];
+    medicalNotes: string;
+    photographyConsent: boolean;
+    serviceInterests: string[];
+    serviceLocations: string[];
+    maintenanceFrequency: string;
+    referralSource: string;
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({
+      dob:                   data.dob,
+      hair_type:             data.hairType || null,
+      skin_type:             data.skinType || null,
+      skin_concerns:         data.skinConcerns,
+      style_vibe:            data.styleVibe || null,
+      allergies:             data.allergies,
+      treatment_history:     data.treatmentHistory,
+      medical_notes:         data.medicalNotes || null,
+      photography_consent:   data.photographyConsent,
+      service_interests:     data.serviceInterests,
+      service_locations:     data.serviceLocations,
+      maintenance_frequency: data.maintenanceFrequency || null,
+      referral_source:       data.referralSource || null,
+    })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/** Update name and phone — called from AuthContext so in-memory user stays fresh */
+export async function updateUserNamePhone(
+  userId: string,
+  name: string,
+  phone: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ name, phone })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/** Update the date-of-birth field for a user */
+export async function updateUserDob(userId: string, dob: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ dob: dob || null })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/** Update business_name and business_email on the users row */
+export async function updateUserBusinessInfo(
+  userId: string,
+  businessName: string | null,
+  businessEmail: string | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ business_name: businessName, business_email: businessEmail })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
+/** Sync beauty profile fields to the users table (fire-and-forget compatible) */
+export async function upsertUserBeautyProfile(
+  userId: string,
+  data: {
+    hair_type?: string | null;
+    skin_type?: string | null;
+    allergies?: string[];
+    skin_concerns?: string[];
+    style_vibe?: string | null;
+    medical_notes?: string | null;
+    photography_consent?: boolean;
+    treatment_history?: string[];
+    makeup_coverage?: string | null;
+    makeup_finish?: string | null;
+    makeup_eyes?: string | null;
+    makeup_lips?: string | null;
+    nail_length?: string | null;
+    nail_shape?: string | null;
+    lash_style?: string | null;
+    lash_status?: string | null;
+    brow_style?: string | null;
+    brow_condition?: string | null;
+    scalp_condition?: string | null;
+    hair_goals?: string[];
+    service_interests?: string[];
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .upsert({ id: userId, ...data }, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+/** Upsert the full user profile row immediately after email OTP verification */
+export async function upsertUserAfterVerification(data: {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  dob: string | null;
+  role: string;
+  login_method: string;
+  service_interests: string[];
+  business_name: string | null;
+  business_email: string | null;
+  business_phone: string | null;
+  instagram: string | null;
+  tiktok: string | null;
+  website: string | null;
+  hair_type: string | null;
+  skin_type: string | null;
+  allergies: string[];
+  skin_concerns: string[];
+  style_vibe: string | null;
+  treatment_history: string[];
+  medical_notes: string | null;
+  photography_consent: boolean;
+  service_locations: string[];
+  maintenance_frequency: string | null;
+  referral_source: string | null;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .upsert(data, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDERS — additional reads
+// ─────────────────────────────────────────────────────────
+
+/** Fetch the provider's DB id for a given auth user id.
+ * No has_gone_live filter — provider reading their own record. */
+export async function getProviderIdForUserId(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('providers')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as any)?.id ?? null;
+}
+
+/** Fetch branding fields for the provider owned by the given user (Branding screen).
+ * No has_gone_live filter — provider reading their own record. */
+export async function getProviderBrandingByUserId(userId: string): Promise<{
+  id: string;
+  gradient: string[] | null;
+  accent_color: string | null;
+  background_image_url: string | null;
+  profile_theme: string | null;
+} | null> {
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, gradient, accent_color, background_image_url, profile_theme')
+    .eq('user_id', userId)
+    .single();
+  if (error) return null;
+  return data as {
+    id: string;
+    gradient: string[] | null;
+    accent_color: string | null;
+    background_image_url: string | null;
+    profile_theme: string | null;
+  };
+}
+
+/** Fetch the display_name for the provider owned by a given user (settings / account screens).
+ * No has_gone_live filter — provider reading their own record. */
+export async function getProviderDisplayNameByUserId(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('providers')
+    .select('display_name')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as any)?.display_name ?? null;
+}
+
+/** Fetch the auth user_id that owns a specific provider — used to detect self-chat attempts.
+ * No has_gone_live filter — identity resolution, not client discovery. */
+export async function getProviderUserIdById(providerId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('providers')
+    .select('user_id')
+    .eq('id', providerId)
+    .maybeSingle();
+  return (data as any)?.user_id ?? null;
+}
+
+/** Fetch service_category for the provider owned by a given user.
+ * No has_gone_live filter — provider reading their own record. */
+export async function getProviderServiceCategoryByUserId(userId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('providers')
+    .select('service_category')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return (data as any)?.service_category ?? null;
+}
+
+/** Fetch id, slug, and display_name for a provider by their DB id.
+ * No has_gone_live filter — called from notification taps where the user already
+ * has an existing booking relationship with this provider; filtering by has_gone_live
+ * would break navigation for clients whose provider temporarily went unlive. */
+export async function getProviderBasicById(
+  providerId: string
+): Promise<{ id: string; slug: string; display_name: string } | null> {
+  const { data } = await supabase
+    .from('providers')
+    .select('id, slug, display_name')
+    .eq('id', providerId)
+    .maybeSingle();
+  return data as { id: string; slug: string; display_name: string } | null;
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDERS — additional writes
+// ─────────────────────────────────────────────────────────
+
+/** Persist provider branding choices (gradient, accent colour, background, theme key) */
+export async function updateProviderBranding(
+  providerId: string,
+  data: {
+    gradient: string[];
+    accent_color: string;
+    background_image_url: string | null;
+    profile_theme: string;
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update(data)
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+/** Update provider contact details. Only the fields present in patch are changed. */
+export async function updateProviderContactDetails(
+  providerId: string,
+  patch: {
+    email?: string | null;
+    whatsapp_number?: string | null;
+    preferred_contact_methods?: string[] | null;
+    online_consultations_available?: boolean;
+    consultation_required_new_clients?: boolean;
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from('providers')
+    .update(patch)
+    .eq('id', providerId);
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
+// BOOKINGS — additional queries
+// ─────────────────────────────────────────────────────────
+
+/** Fetch a single booking with its add-ons by ID — provider booking detail screen */
+export async function getBookingWithAddOnsById(
+  bookingId: string
+): Promise<BookingWithAddOns | null> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*, add_ons: booking_add_ons(*)')
+    .eq('id', bookingId)
+    .single();
+  if (error) return null;
+  return data as BookingWithAddOns;
+}
+
+/** Return only the user_id for a booking — avoids fetching the full row when only identity is needed */
+export async function getBookingUserId(bookingId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('bookings')
+    .select('user_id')
+    .eq('id', bookingId)
+    .single();
+  return (data as any)?.user_id ?? null;
+}
+
+/** Insert a booking directly without overlap/availability validation.
+ *  Used for provider-initiated waitlist invites where the provider has explicitly chosen a slot. */
+export async function insertDirectBooking(data: {
+  user_id: string;
+  provider_id: string;
+  service_id: string | null;
+  status: string;
+  booking_date: string;
+  booking_time: string;
+  payment_type: string;
+  base_price: number;
+  add_ons_total: number;
+  service_charge: number;
+  deposit_amount: number;
+  amount_paid: number;
+  remaining_balance: number;
+  payment_status: string;
+  is_group_booking: boolean;
+  group_booking_count: number;
+  provider_name_snapshot?: string;
+  service_name_snapshot?: string;
+}): Promise<void> {
+  const { error } = await supabase.from('bookings').insert(data);
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
+// SERVICES — additional queries
+// ─────────────────────────────────────────────────────────
+
+/** Fetch the price for a single service by ID */
+export async function getServicePrice(serviceId: string): Promise<number> {
+  const { data } = await supabase
+    .from('services')
+    .select('price')
+    .eq('id', serviceId)
+    .maybeSingle();
+  return Number((data as any)?.price ?? 0);
+}
+
+/** Count the number of active services for a provider — drives the setup-status indicator */
+export async function countProviderServices(providerId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('services')
+    .select('id', { count: 'exact', head: true })
+    .eq('provider_id', providerId);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+// ─────────────────────────────────────────────────────────
+// NOTIFICATIONS — delete
+// ─────────────────────────────────────────────────────────
+
+/** Permanently delete a notification row (swipe-to-delete in NotificationsScreen) */
+export async function deleteNotification(notificationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('id', notificationId);
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
+// INFO PACKS (provider-level reference packs, not booking instances)
+// ─────────────────────────────────────────────────────────
+
+export interface ProviderInfoPackRow {
+  id: string;
+  provider_id: string;
+  title: string;
+  service: string;
+  service_names: string[];
+  content: string;
+  created_at: string;
+}
+
+/** Fetch all info packs for a provider (keyed by provider user_id, not provider row id) */
+export async function getProviderInfoPacksByUserId(
+  providerUserId: string
+): Promise<ProviderInfoPackRow[]> {
+  const { data, error } = await supabase
+    .from('info_packs')
+    .select('*')
+    .eq('provider_id', providerUserId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ProviderInfoPackRow[];
+}
+
+/** Create a new info pack */
+export async function createInfoPack(data: {
+  provider_id: string;
+  title: string;
+  service: string;
+  service_names: string[];
+  content: string;
+}): Promise<ProviderInfoPackRow> {
+  const { data: row, error } = await supabase
+    .from('info_packs')
+    .insert(data)
+    .select()
+    .single();
+  if (error) throw error;
+  return row as ProviderInfoPackRow;
+}
+
+/** Delete an info pack by id */
+export async function deleteInfoPack(id: string): Promise<void> {
+  const { error } = await supabase.from('info_packs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────
+// PROVIDER CONVERSATIONS & MESSAGES
+// ─────────────────────────────────────────────────────────
+
+export interface DbProviderMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  sender_type: 'user' | 'provider';
+  content: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+/** Find an existing conversation or create one. Returns the conversation ID. */
+export async function getOrCreateConversation(
+  providerId: string,
+  userId: string
+): Promise<string> {
+  const { data: existing } = await supabase
+    .from('provider_conversations')
+    .select('id')
+    .eq('provider_id', providerId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing?.id) return existing.id;
+
+  const { data: created, error } = await supabase
+    .from('provider_conversations')
+    .insert({ provider_id: providerId, user_id: userId })
+    .select('id')
+    .single();
+
+  if (error || !created) throw error ?? new Error('Could not create conversation');
+  return created.id;
+}
+
+/** Clear the provider's unread badge for a conversation */
+export async function markConversationReadByProvider(conversationId: string): Promise<void> {
+  await supabase
+    .from('provider_conversations')
+    .update({ unread_count_provider: 0 })
+    .eq('id', conversationId);
+}
+
+/** Clear the client/user's unread badge for a conversation */
+export async function markConversationReadByUser(conversationId: string): Promise<void> {
+  await supabase
+    .from('provider_conversations')
+    .update({ unread_count_user: 0 })
+    .eq('id', conversationId);
+}
+
+/** Fetch all messages for a conversation, oldest first */
+export async function getConversationMessages(
+  conversationId: string
+): Promise<DbProviderMessage[]> {
+  const { data, error } = await supabase
+    .from('provider_messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as DbProviderMessage[];
+}
+
+/** Insert a new message into a conversation */
+export async function sendProviderMessage(params: {
+  conversationId: string;
+  senderId: string;
+  senderType: 'provider' | 'user';
+  content: string;
+}): Promise<DbProviderMessage> {
+  const { data, error } = await supabase
+    .from('provider_messages')
+    .insert({
+      conversation_id: params.conversationId,
+      sender_id:       params.senderId,
+      sender_type:     params.senderType,
+      content:         params.content,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as DbProviderMessage;
 }

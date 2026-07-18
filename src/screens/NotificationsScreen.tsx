@@ -19,7 +19,14 @@ import { useFonts } from 'expo-font';
 import { useFont } from '../contexts/FontContext';
 import { BellIcon } from '../components/IconLibrary';
 import { NotificationService } from '../services/notificationService';
-import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../services/databaseService';
+import {
+  getMyNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification as dbDeleteNotification,
+  getBookingWithAddOnsById,
+  getProviderBasicById,
+} from '../services/databaseService';
 import { supabase } from '../lib/supabase';
 import type { DbNotification } from '../types/database';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -281,7 +288,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     try {
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
       // Delete from Supabase (silent fail)
-      supabase.from('notifications').delete().eq('id', notificationId).then(() => {});
+      dbDeleteNotification(notificationId).catch(() => {});
     } catch (error) {
       console.error('Failed to delete notification:', error);
     }
@@ -397,11 +404,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       if (!notification.bookingId) return;
       const bookingId = notification.bookingId;
       setTimeout(async () => {
-        const { data: booking } = await supabase
-          .from('bookings')
-          .select('user_id, service_name_snapshot')
-          .eq('id', bookingId)
-          .maybeSingle();
+        const booking = await getBookingWithAddOnsById(bookingId);
         if (!booking) return;
         navigation.dispatch(CommonActions.goBack() as any);
         setTimeout(() => {
@@ -445,11 +448,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         if (!notification.providerId) return;
         const providerDbId = notification.providerId;
         setTimeout(async () => {
-          const { data: prov } = await supabase
-            .from('providers')
-            .select('slug, display_name')
-            .eq('id', providerDbId)
-            .maybeSingle();
+          const prov = await getProviderBasicById(providerDbId);
           if (!prov) return;
           navigation.dispatch(CommonActions.goBack() as any);
           setTimeout(() => {

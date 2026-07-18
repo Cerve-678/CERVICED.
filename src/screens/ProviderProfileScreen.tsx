@@ -43,7 +43,7 @@ import { HomeStackParamList } from '../navigation/types';
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { getProviderBySlug, getProviderReviews, addBookmark as dbAddBookmark, removeBookmark as dbRemoveBookmark, trackUserInteraction, getProviderActivePromotions, getProviderPortfolio } from '../services/databaseService';
+import { getProviderBySlug, getProviderReviews, addBookmark as dbAddBookmark, removeBookmark as dbRemoveBookmark, trackUserInteraction, getProviderActivePromotions, getProviderPortfolio, getUserDisplayName } from '../services/databaseService';
 import userLearningService from '../services/userLearningService';
 import { supabase } from '../lib/supabase';
 import * as WaitlistService from '../services/WaitlistService';
@@ -1579,8 +1579,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       if (!user) return;
       setCurrentUserId(user.id);
       // Try to get display name from users table
-      supabase.from('users').select('display_name').eq('id', user.id).maybeSingle()
-        .then(({ data }) => { if (data?.display_name) setCurrentUserName(data.display_name); });
+      getUserDisplayName(user.id)
+        .then(name => { if (name) setCurrentUserName(name); })
+        .catch(() => {});
     });
   }, []);
 

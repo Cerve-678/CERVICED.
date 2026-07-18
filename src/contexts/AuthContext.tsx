@@ -6,6 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken } from '../services/pushNotificationService';
 import { updateBiometricToken, disableBiometric } from '../services/biometricService';
+import {
+  getUserProfileById,
+  upgradeUserToProvider,
+  updateClientProfileData,
+  updateUserNamePhone,
+} from '../services/databaseService';
 
 export type AccountType = 'user' | 'provider';
 
@@ -156,13 +162,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const meta = session.user.user_metadata as Record<string, any>;
 
-      const { data: profile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+      let profile = null;
+      let profileError: Error | null = null;
+      try {
+        profile = await getUserProfileById(session.user.id);
+      } catch (err: any) {
+        profileError = err;
+      }
 
-      if (profileError && profileError.code !== 'PGRST116') {
+      if (profileError) {
         // Transient failure — network, 401 from expired token before auto-refresh
         // completes, RLS policy, etc. Session is valid; keep the user logged in
         // using whatever is known from session metadata.
@@ -201,8 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           dob: profile.dob ?? '',
           accountType: role,
           loginMethod: profile.login_method ?? 'email',
-          businessName: profile.business_name,
-          businessEmail: profile.business_email,
+          ...(profile.business_name != null ? { businessName: profile.business_name } : {}),
+          ...(profile.business_email != null ? { businessEmail: profile.business_email } : {}),
           needsEmailVerification: !session.user.email_confirmed_at,
           hasClientProfile: !!profile.dob,
         };
@@ -299,19 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string }
   ) => {
     if (!user) throw new Error('No logged-in user');
-    const { error } = await supabase
-      .from('users')
-      .update({
-        role: 'provider',
-        business_name: businessName,
-        business_email: businessEmail,
-        ...(extras?.businessPhone ? { business_phone: extras.businessPhone } : {}),
-        ...(extras?.instagram    ? { instagram: extras.instagram }           : {}),
-        ...(extras?.tiktok       ? { tiktok: extras.tiktok }                 : {}),
-        ...(extras?.website      ? { website: extras.website }               : {}),
-      })
-      .eq('id', user.id);
-    if (error) throw error;
+    await upgradeUserToProvider(user.id, businessName, businessEmail, extras);
     const upgraded: UserData = {
       ...user,
       accountType: 'provider',
@@ -328,22 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const addClientProfile = async (profileData: ClientProfileData) => {
     if (!user) throw new Error('No logged-in user');
     const dob = `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`;
-    const { error } = await supabase.from('users').update({
-      dob,
-      hair_type: profileData.hairType || null,
-      skin_type: profileData.skinType || null,
-      skin_concerns: profileData.skinConcerns,
-      style_vibe: profileData.styleVibe || null,
-      allergies: profileData.allergies,
-      treatment_history: profileData.treatmentHistory,
-      medical_notes: profileData.medicalNotes || null,
-      photography_consent: profileData.photographyConsent,
-      service_interests: profileData.serviceInterests,
-      service_locations: profileData.serviceLocations,
-      maintenance_frequency: profileData.maintenanceFrequency || null,
-      referral_source: profileData.referralSource || null,
-    }).eq('id', user.id);
-    if (error) throw error;
+    await updateClientProfileData(user.id, { ...profileData, dob });
     setUser({ ...user, dob, hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem('@active_mode', 'client').catch(() => {});
@@ -357,11 +338,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
     setUser(updated);
-    const { error } = await supabase.from('users').update({
-      name: updated.name,
-      phone: updated.phone,
-    }).eq('id', updated.id);
-    if (error) console.warn('updateUser DB error:', error.message);
+    try {
+      await updateUserNamePhone(updated.id, updated.name, updated.phone ?? '');
+    } catch (err: any) {
+      console.warn('updateUser DB error:', err.message);
+    }
   };
 
   const logout = async () => {

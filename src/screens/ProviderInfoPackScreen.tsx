@@ -23,8 +23,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { ProviderAccountStackParamList } from '../navigation/types';
 import { useProviderDialog } from '../components/ProviderDialog';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { supabase } from '../lib/supabase';
-import { getMyProviderServices } from '../services/databaseService';
+import {
+  getMyProviderServices,
+  getProviderInfoPacksByUserId,
+  createInfoPack,
+  deleteInfoPack,
+  ProviderInfoPackRow,
+} from '../services/databaseService';
 
 type Props = NativeStackScreenProps<ProviderAccountStackParamList, 'InfoPacks'>;
 
@@ -269,21 +274,20 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
     getMyProviderServices()
       .then(services => setMyServices(services.map((s: any) => s.name)))
       .catch(() => {});
-    supabase
-      .from('info_packs')
-      .select('*')
-      .eq('provider_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.warn('[InfoPacks] fetch error:', error.message); }
-        else setPacks((data ?? []).map(r => ({
+    getProviderInfoPacksByUserId(user.id)
+      .then((rows: ProviderInfoPackRow[]) => {
+        setPacks(rows.map(r => ({
           id: r.id,
           title: r.title,
           service: r.service ?? 'GENERAL',
           serviceNames: r.service_names ?? [],
           content: r.content,
-          createdAt: (r.created_at as string).split('T')[0]!,
+          createdAt: r.created_at.split('T')[0]!,
         })));
+        setIsLoading(false);
+      })
+      .catch(e => {
+        console.warn('[InfoPacks] fetch error:', e.message);
         setIsLoading(false);
       });
   }, [user?.id]);
@@ -291,26 +295,26 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
   const handleSave = useCallback(async () => {
     if (!title.trim() || !content.trim()) { showToast('Please add a title and content.', 'warning'); return; }
     if (!user?.id) return;
-    const { data, error } = await supabase
-      .from('info_packs')
-      .insert({
+    let data: ProviderInfoPackRow;
+    try {
+      data = await createInfoPack({
         provider_id: user.id,
         title: title.trim(),
         // Legacy display label — matching now runs on service_names
         service: selectedServices.length > 0 ? selectedServices[0]!.toUpperCase() : 'GENERAL',
         service_names: selectedServices,
         content: content.trim(),
-      })
-      .select()
-      .single();
-    if (error) { showToast('Could not save info pack.', 'error'); return; }
+      });
+    } catch {
+      showToast('Could not save info pack.', 'error'); return;
+    }
     const newPack: InfoPack = {
       id: data.id,
       title: data.title,
       service: data.service ?? 'GENERAL',
       serviceNames: data.service_names ?? [],
       content: data.content,
-      createdAt: (data.created_at as string).split('T')[0]!,
+      createdAt: data.created_at.split('T')[0]!,
     };
     setPacks(prev => [newPack, ...prev]);
     resetForm();
@@ -320,7 +324,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
 
   const handleDelete = useCallback(async (id: string) => {
     setPacks(prev => prev.filter(p => p.id !== id));
-    await Promise.resolve(supabase.from('info_packs').delete().eq('id', id)).catch(() => {});
+    deleteInfoPack(id).catch(() => {});
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 

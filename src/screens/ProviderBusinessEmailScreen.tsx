@@ -17,7 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../lib/supabase';
-import { getMyProviderProfile } from '../services/databaseService';
+import {
+  getMyProviderProfile,
+  getUserBusinessInfo,
+  updateUserBusinessInfo,
+  updateProviderContactDetails,
+} from '../services/databaseService';
 import { useTheme } from '../contexts/ThemeContext';
 
 const EXTRAS_KEY = '@provider_extras';
@@ -306,14 +311,14 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
         if (!user) return;
         setUserId(user.id);
 
-        const [profileRes, providerData] = await Promise.all([
-          supabase.from('users').select('business_name, business_email').eq('id', user.id).single(),
+        const [userBizInfo, providerData] = await Promise.all([
+          getUserBusinessInfo(user.id),
           getMyProviderProfile(),
         ]);
 
-        if (profileRes.data) {
-          setBusinessName(profileRes.data.business_name ?? '');
-          setBusinessEmail(profileRes.data.business_email ?? '');
+        if (userBizInfo) {
+          setBusinessName(userBizInfo.business_name ?? '');
+          setBusinessEmail(userBizInfo.business_email ?? '');
         }
 
         if (providerData) {
@@ -378,26 +383,25 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      const ops: Promise<any>[] = [];
+      const ops: Promise<void>[] = [];
 
       if (userId) {
-        ops.push(Promise.resolve(supabase.from('users').update({
-          business_name: businessName.trim() || null,
-          business_email: businessEmail.trim() || null,
-        }).eq('id', userId)));
+        ops.push(updateUserBusinessInfo(
+          userId,
+          businessName.trim() || null,
+          businessEmail.trim() || null,
+        ));
       }
 
       if (providerId) {
-        ops.push(Promise.resolve(supabase.from('providers').update({
+        ops.push(updateProviderContactDetails(providerId, {
           email: bookingEmail.trim() || null,
           whatsapp_number: whatsappNumber.trim() || null,
           preferred_contact_methods: preferredContact.length ? preferredContact : null,
-        }).eq('id', providerId)));
+        }));
       }
 
-      const results = await Promise.all(ops);
-      const failed = results.find(r => r.error);
-      if (failed) throw new Error(failed.error.message);
+      await Promise.all(ops);
 
       await AsyncStorage.setItem(EXTRAS_KEY, JSON.stringify({
         instagram, website, serviceSetting, travelRadius, specialties,
