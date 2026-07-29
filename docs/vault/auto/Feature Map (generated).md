@@ -47,7 +47,7 @@ Curated: [[Availability & Slots]] · **70 files**
 - `src/screens/ProviderBookingDetailScreen.tsx` _(72)_
 - `supabase/availability_v2.sql` _(54)_
 - `src/contexts/BookingContext.tsx` _(52)_
-- `src/screens/InfoRegScreen.tsx` _(47)_
+- `src/screens/InfoRegScreen.tsx` _(48)_
 - `src/screens/ProviderProfileScreen.tsx` _(42)_
 - `src/screens/BookingsScreen.tsx` _(36)_
 - `src/screens/ProviderHomeScreen.tsx` _(36)_
@@ -117,7 +117,7 @@ Curated: [[Booking Flow]] · **114 files**
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/BookingDetailScreen.tsx` _(262)_
 - `supabase/notification_recipient_role.sql` _(178)_
-- `src/screens/CartScreen.tsx` _(163)_
+- `src/screens/CartScreen.tsx` _(174)_
 - `src/screens/ProviderHomeScreen.tsx` _(162)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/booking_flow_fixes.sql` _(116)_
@@ -328,7 +328,7 @@ Curated: [[Services]] · **20 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **21 files**
-- `src/screens/CartScreen.tsx` _(52)_
+- `src/screens/CartScreen.tsx` _(56)_
 - `src/screens/ProviderProfileScreen.tsx` _(39)_
 - `src/contexts/BookingContext.tsx` _(18)_
 - `src/screens/BookingDetailScreen.tsx` _(18)_

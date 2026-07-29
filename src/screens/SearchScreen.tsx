@@ -275,13 +275,8 @@ export default function SearchScreen({ navigation, route }: Props) {
   }, [searchQuery, selectedFilter]);
 
   const handleProviderPress = useCallback((provider: ProviderCardData) => {
-    userLearningService.trackInteraction({
-      type: 'view',
-      providerId: provider.id,
-      providerName: provider.name,
-      serviceCategory: provider.service,
-      timestamp: new Date().toISOString(),
-    }).catch(() => {});
+    // The 'view' interaction is tracked once, by ProviderProfileScreen itself
+    // on load — tracking it again here double-counted every visit.
     navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
   }, [navigation]);
 

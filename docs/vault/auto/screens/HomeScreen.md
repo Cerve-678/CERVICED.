@@ -7,8 +7,8 @@ tags: [screen, client]
 **Registered route(s):** `HomeMain`
 
 ## → Navigates to
-- [[ProviderProfileScreen\|ProviderProfile]]
 - [[SearchScreen\|Search]]
+- [[ProviderProfileScreen\|ProviderProfile]]
 - [[NotificationsScreen\|Notifications]]
 - [[BookingsScreen\|Bookings]]
 - [[BookmarkedProvidersScreen\|BookmarkedProviders]]

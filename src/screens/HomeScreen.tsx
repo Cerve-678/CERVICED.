@@ -405,6 +405,15 @@ export default function HomeScreen() {
 
   // Memoize recommended providers list to prevent unnecessary rerenders
   const recommendedProvidersList = useMemo(() => {
+    // Bookmarked providers already have their own "Your Providers" section —
+    // exclude them here too, in both collapsed and expanded views. Without this,
+    // View All (which draws from the raw per-category buckets) re-included
+    // bookmarked providers that the collapsed row deliberately hid, which showed
+    // up as a provider "duplicated" from Your Providers, and — in the extreme
+    // case where every live provider is bookmarked — left the collapsed row
+    // empty while View All still had (bookmarked) providers to show.
+    const bookmarkedIds = new Set(providersData.yourProviders.map(p => p.id));
+
     if (viewAllRecommended) {
       // When expanded, show 10 providers from all categories (deduped — recommended
       // overlaps with the category buckets it was drawn from)
@@ -417,13 +426,15 @@ export default function HomeScreen() {
         .concat(providersData.aestheticsProviders);
       const seen = new Set<string>();
       const deduped = combined.filter(p => {
+        if (bookmarkedIds.has(p.id)) return false;
         if (seen.has(p.id)) return false;
         seen.add(p.id);
         return true;
       });
       return deduped.slice(0, 10);
     } else {
-      // When collapsed, show 7 providers
+      // When collapsed, show 7 providers (providersData.recommended already
+      // excludes bookmarked providers upstream)
       return providersData.recommended.slice(0, 7);
     }
   }, [viewAllRecommended, providersData]);
@@ -544,19 +555,12 @@ export default function HomeScreen() {
   }, []);
 
   const navigateToProvider = useCallback(
-    async (provider: Provider) => {
+    (provider: Provider) => {
       // Haptic feedback
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      // Track provider view interaction
-      await userLearningService.trackInteraction({
-        type: 'view',
-        providerId: provider.id,
-        providerName: provider.name,
-        serviceCategory: provider.service,
-        timestamp: new Date().toISOString(),
-      });
-
+      // The 'view' interaction is tracked once, by ProviderProfileScreen itself
+      // on load — tracking it again here double-counted every visit.
       navigation.navigate('ProviderProfile', {
         providerId: provider.slug,
         source: 'home',
@@ -1154,7 +1158,12 @@ export default function HomeScreen() {
         ) : (
           <>
             {/* § config-driven — see src/config/homeSections.ts (id: 'recommended') */}
-            {/* Recommended Section */}
+            {/* Recommended Section — hidden once loaded if there's genuinely
+                nothing left to recommend (e.g. every live provider is already
+                bookmarked), matching the empty-state guard every sibling
+                section below already has. Without this it rendered a header
+                + empty scroller that looked broken. */}
+            {(providersLoading || providersData.recommended.length > 0) && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>RECOMMENDED FOR YOU</Text>
@@ -1203,6 +1212,7 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
             </View>
+            )}
 
             {/* Provider of the Week */}
             <View style={styles.section}>
