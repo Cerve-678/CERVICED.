@@ -30,20 +30,22 @@ import * as Sentry from "@sentry/react-native";
 Sentry.init({
   dsn: "https://ab030af3bc295ecbc70a310530bbfb6d@o4511817937453056.ingest.de.sentry.io/4511817960325200",
 
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
-  sendDefaultPii: true,
+  // Privacy-first for a health-adjacent app (medical notes, allergies, DOB,
+  // addresses, payment). Do NOT attach IP / cookies / user PII to events.
+  sendDefaultPii: false,
 
-  // Enable Logs
-  enableLogs: true,
+  // Capture from release builds only — in dev, errors already show in the
+  // terminal via logger. Flip to `true` temporarily to test capture in dev.
+  enabled: !__DEV__,
+  environment: __DEV__ ? "development" : "production",
 
-  // Configure Session Replay
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1,
-  integrations: [
-    Sentry.mobileReplayIntegration(),
-    Sentry.feedbackIntegration(),
-  ],
+  // Errors only — no performance tracing.
+  tracesSampleRate: 0,
+
+  // Session Replay intentionally OFF: it records screen sessions, which for this
+  // app would capture sensitive personal/health data. Re-enable only with full
+  // masking if ever needed.
+  integrations: [Sentry.feedbackIntegration()],
 
   // uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: __DEV__,
