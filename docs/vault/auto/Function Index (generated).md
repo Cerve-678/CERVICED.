@@ -5,7 +5,7 @@
 
 #generated
 
-**1238 functions** across **162 files**.
+**1239 functions** across **163 files**.
 
 ### `src/components/` (25)
 - `AppBackground.tsx` — AppBackground
@@ -59,13 +59,14 @@
 - `RootNavigation.tsx` — RootNavigation
 - `TabNavigator.tsx` — CartBadge · CartTabIcon · TabNavigation
 
-### `src/navigation/Tabs/` (8)
+### `src/navigation/Tabs/` (9)
 - `BeccaNavigator.tsx` — BeccaNavigator
 - `CartNavigator.tsx` — CartNavigator
 - `ExploreNavigator.tsx` — ExploreNavigator
 - `HomeNavigator.tsx` — HomeNavigator
 - `ProfileNavigator.tsx` — ProfileNavigator
 - `ProviderAccountNavigator.tsx` — ProviderAccountNavigator
+- `ProviderBeccaNavigator.tsx` — ProviderBeccaNavigator
 - `ProviderHomeNavigator.tsx` — ProviderHomeNavigator
 - `ProviderServicesNavigator.tsx` — ProviderServicesNavigator
 

@@ -45,3 +45,5 @@ supabase/push_webhook_trigger.sql
 
 # Supabase CLI local state
 supabase/.temp/
+
+.env.local
