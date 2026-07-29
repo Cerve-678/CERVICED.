@@ -1,8 +1,8 @@
 // Enhanced AI Chat Service for Becca - Stage 1: Tier 1 Features
-import type { Provider } from './ProviderDataService';
-import { getProviders } from './databaseService';
-import type { DbProvider } from '../types/database';
-import { ConfirmedBooking, BookingStatus } from '../contexts/BookingContext';
+import type { Provider } from "./ProviderDataService";
+import { getProviders } from "./databaseService";
+import type { DbProvider } from "../types/database";
+import { ConfirmedBooking, BookingStatus } from "../contexts/BookingContext";
 
 function dbToProvider(p: DbProvider): Provider {
   return {
@@ -14,7 +14,7 @@ function dbToProvider(p: DbProvider): Provider {
   };
 }
 
-export type MessageRole = 'user' | 'assistant';
+export type MessageRole = "user" | "assistant";
 
 export interface ChatMessage {
   id: string;
@@ -30,7 +30,7 @@ export interface ChatMessage {
 export interface ChatSuggestion {
   id: string;
   text: string;
-  action: 'navigate' | 'search' | 'message';
+  action: "navigate" | "search" | "message";
   data?: any;
   icon?: any;
   serviceType?: string;
@@ -56,7 +56,7 @@ export interface ConversationMemory {
   viewedProviders: string[];
 
   // Current session context
-  currentIntent?: 'browse' | 'book' | 'search' | 'info' | 'manage_bookings';
+  currentIntent?: "browse" | "book" | "search" | "info" | "manage_bookings";
   conversationTopic?: string;
 
   // Booking context
@@ -85,55 +85,207 @@ class EnhancedAIChatService {
   // Bookings reference (injected from context)
   private bookings: ConfirmedBooking[] = [];
 
+  // Which hat Becca is wearing. In 'provider' mode she is a BUSINESS assistant
+  // (bookings, clients, schedule, promotions, analytics, services) and never
+  // surfaces client-side flows. Set from BeccaScreen based on the active mode.
+  private mode: "client" | "provider" = "client";
+  public setMode(mode: "client" | "provider"): void {
+    this.mode = mode;
+  }
+
   // ==================== SERVICE MATCHING DATABASE ====================
   private readonly serviceDatabase: Record<string, ServiceMatch[]> = {
-    'NAILS': [
-      { category: 'NAILS', specificService: 'gel manicure', keywords: ['gel', 'gel mani', 'gel manicure', 'shellac'] },
-      { category: 'NAILS', specificService: 'acrylic nails', keywords: ['acrylic', 'acrylics', 'full set', 'tips'] },
-      { category: 'NAILS', specificService: 'dip powder', keywords: ['dip', 'dip powder', 'sns'] },
-      { category: 'NAILS', specificService: 'pedicure', keywords: ['pedicure', 'pedi', 'foot spa'] },
-      { category: 'NAILS', specificService: 'manicure', keywords: ['manicure', 'mani', 'polish'] },
-      { category: 'NAILS', specificService: 'nail art', keywords: ['nail art', 'designs', 'nail design', 'custom nails'] },
-      { category: 'NAILS', specificService: 'nail repair', keywords: ['fix', 'repair', 'broken nail'] },
+    NAILS: [
+      {
+        category: "NAILS",
+        specificService: "gel manicure",
+        keywords: ["gel", "gel mani", "gel manicure", "shellac"],
+      },
+      {
+        category: "NAILS",
+        specificService: "acrylic nails",
+        keywords: ["acrylic", "acrylics", "full set", "tips"],
+      },
+      {
+        category: "NAILS",
+        specificService: "dip powder",
+        keywords: ["dip", "dip powder", "sns"],
+      },
+      {
+        category: "NAILS",
+        specificService: "pedicure",
+        keywords: ["pedicure", "pedi", "foot spa"],
+      },
+      {
+        category: "NAILS",
+        specificService: "manicure",
+        keywords: ["manicure", "mani", "polish"],
+      },
+      {
+        category: "NAILS",
+        specificService: "nail art",
+        keywords: ["nail art", "designs", "nail design", "custom nails"],
+      },
+      {
+        category: "NAILS",
+        specificService: "nail repair",
+        keywords: ["fix", "repair", "broken nail"],
+      },
     ],
-    'HAIR': [
-      { category: 'HAIR', specificService: 'balayage', keywords: ['balayage', 'painted highlights'] },
-      { category: 'HAIR', specificService: 'highlights', keywords: ['highlights', 'lowlights', 'foils'] },
-      { category: 'HAIR', specificService: 'hair color', keywords: ['color', 'dye', 'tint', 'root touch up'] },
-      { category: 'HAIR', specificService: 'haircut', keywords: ['cut', 'haircut', 'trim', 'bang trim'] },
-      { category: 'HAIR', specificService: 'blowout', keywords: ['blowout', 'blow dry', 'styling'] },
-      { category: 'HAIR', specificService: 'keratin treatment', keywords: ['keratin', 'smoothing', 'brazilian blowout'] },
-      { category: 'HAIR', specificService: 'extensions', keywords: ['extensions', 'hair extensions', 'length'] },
-      { category: 'HAIR', specificService: 'updo', keywords: ['updo', 'bun', 'formal style', 'wedding hair'] },
+    HAIR: [
+      {
+        category: "HAIR",
+        specificService: "balayage",
+        keywords: ["balayage", "painted highlights"],
+      },
+      {
+        category: "HAIR",
+        specificService: "highlights",
+        keywords: ["highlights", "lowlights", "foils"],
+      },
+      {
+        category: "HAIR",
+        specificService: "hair color",
+        keywords: ["color", "dye", "tint", "root touch up"],
+      },
+      {
+        category: "HAIR",
+        specificService: "haircut",
+        keywords: ["cut", "haircut", "trim", "bang trim"],
+      },
+      {
+        category: "HAIR",
+        specificService: "blowout",
+        keywords: ["blowout", "blow dry", "styling"],
+      },
+      {
+        category: "HAIR",
+        specificService: "keratin treatment",
+        keywords: ["keratin", "smoothing", "brazilian blowout"],
+      },
+      {
+        category: "HAIR",
+        specificService: "extensions",
+        keywords: ["extensions", "hair extensions", "length"],
+      },
+      {
+        category: "HAIR",
+        specificService: "updo",
+        keywords: ["updo", "bun", "formal style", "wedding hair"],
+      },
     ],
-    'LASHES': [
-      { category: 'LASHES', specificService: 'classic lashes', keywords: ['classic lashes', 'individual lashes'] },
-      { category: 'LASHES', specificService: 'volume lashes', keywords: ['volume', 'russian volume', 'mega volume'] },
-      { category: 'LASHES', specificService: 'lash lift', keywords: ['lash lift', 'lift', 'perm'] },
-      { category: 'LASHES', specificService: 'lash tint', keywords: ['tint', 'lash tint', 'tinting'] },
-      { category: 'LASHES', specificService: 'lash fill', keywords: ['fill', 'refill', 'touch up'] },
+    LASHES: [
+      {
+        category: "LASHES",
+        specificService: "classic lashes",
+        keywords: ["classic lashes", "individual lashes"],
+      },
+      {
+        category: "LASHES",
+        specificService: "volume lashes",
+        keywords: ["volume", "russian volume", "mega volume"],
+      },
+      {
+        category: "LASHES",
+        specificService: "lash lift",
+        keywords: ["lash lift", "lift", "perm"],
+      },
+      {
+        category: "LASHES",
+        specificService: "lash tint",
+        keywords: ["tint", "lash tint", "tinting"],
+      },
+      {
+        category: "LASHES",
+        specificService: "lash fill",
+        keywords: ["fill", "refill", "touch up"],
+      },
     ],
-    'BROWS': [
-      { category: 'BROWS', specificService: 'brow shaping', keywords: ['brow shaping', 'shape', 'arch'] },
-      { category: 'BROWS', specificService: 'brow tint', keywords: ['brow tint', 'tinting'] },
-      { category: 'BROWS', specificService: 'microblading', keywords: ['microblading', 'blade', 'semi permanent'] },
-      { category: 'BROWS', specificService: 'brow lamination', keywords: ['lamination', 'brow lam', 'laminated'] },
-      { category: 'BROWS', specificService: 'threading', keywords: ['threading', 'thread'] },
-      { category: 'BROWS', specificService: 'waxing', keywords: ['wax', 'waxing', 'brow wax'] },
+    BROWS: [
+      {
+        category: "BROWS",
+        specificService: "brow shaping",
+        keywords: ["brow shaping", "shape", "arch"],
+      },
+      {
+        category: "BROWS",
+        specificService: "brow tint",
+        keywords: ["brow tint", "tinting"],
+      },
+      {
+        category: "BROWS",
+        specificService: "microblading",
+        keywords: ["microblading", "blade", "semi permanent"],
+      },
+      {
+        category: "BROWS",
+        specificService: "brow lamination",
+        keywords: ["lamination", "brow lam", "laminated"],
+      },
+      {
+        category: "BROWS",
+        specificService: "threading",
+        keywords: ["threading", "thread"],
+      },
+      {
+        category: "BROWS",
+        specificService: "waxing",
+        keywords: ["wax", "waxing", "brow wax"],
+      },
     ],
-    'MUA': [
-      { category: 'MUA', specificService: 'bridal makeup', keywords: ['bridal', 'wedding', 'bride'] },
-      { category: 'MUA', specificService: 'special event', keywords: ['event', 'party', 'prom', 'formal'] },
-      { category: 'MUA', specificService: 'glam makeup', keywords: ['glam', 'full glam', 'beat face'] },
-      { category: 'MUA', specificService: 'natural makeup', keywords: ['natural', 'no makeup makeup', 'soft glam'] },
-      { category: 'MUA', specificService: 'makeup lesson', keywords: ['lesson', 'tutorial', 'learn'] },
+    MUA: [
+      {
+        category: "MUA",
+        specificService: "bridal makeup",
+        keywords: ["bridal", "wedding", "bride"],
+      },
+      {
+        category: "MUA",
+        specificService: "special event",
+        keywords: ["event", "party", "prom", "formal"],
+      },
+      {
+        category: "MUA",
+        specificService: "glam makeup",
+        keywords: ["glam", "full glam", "beat face"],
+      },
+      {
+        category: "MUA",
+        specificService: "natural makeup",
+        keywords: ["natural", "no makeup makeup", "soft glam"],
+      },
+      {
+        category: "MUA",
+        specificService: "makeup lesson",
+        keywords: ["lesson", "tutorial", "learn"],
+      },
     ],
-    'AESTHETICS': [
-      { category: 'AESTHETICS', specificService: 'facial', keywords: ['facial', 'face treatment'] },
-      { category: 'AESTHETICS', specificService: 'microneedling', keywords: ['microneedling', 'needling'] },
-      { category: 'AESTHETICS', specificService: 'chemical peel', keywords: ['peel', 'chemical peel'] },
-      { category: 'AESTHETICS', specificService: 'dermaplaning', keywords: ['dermaplaning', 'shaving'] },
-      { category: 'AESTHETICS', specificService: 'hydrafacial', keywords: ['hydrafacial', 'hydra'] },
+    AESTHETICS: [
+      {
+        category: "AESTHETICS",
+        specificService: "facial",
+        keywords: ["facial", "face treatment"],
+      },
+      {
+        category: "AESTHETICS",
+        specificService: "microneedling",
+        keywords: ["microneedling", "needling"],
+      },
+      {
+        category: "AESTHETICS",
+        specificService: "chemical peel",
+        keywords: ["peel", "chemical peel"],
+      },
+      {
+        category: "AESTHETICS",
+        specificService: "dermaplaning",
+        keywords: ["dermaplaning", "shaving"],
+      },
+      {
+        category: "AESTHETICS",
+        specificService: "hydrafacial",
+        keywords: ["hydrafacial", "hydra"],
+      },
     ],
   };
 
@@ -141,22 +293,27 @@ class EnhancedAIChatService {
   public setBookings(bookings: ConfirmedBooking[]): void {
     this.bookings = bookings;
     this.conversationMemory.activeBookings = bookings
-      .filter(b => b.status === BookingStatus.UPCOMING)
-      .map(b => b.id);
+      .filter((b) => b.status === BookingStatus.UPCOMING)
+      .map((b) => b.id);
     this.conversationMemory.upcomingBookingsCount = bookings.filter(
-      b => b.status === BookingStatus.UPCOMING
+      (b) => b.status === BookingStatus.UPCOMING,
     ).length;
   }
 
   // ==================== FEATURE 4: ENHANCED SERVICE MATCHING ====================
-  private extractServiceType(message: string): { category: string | null; specificService?: string | undefined } {
+  private extractServiceType(message: string): {
+    category: string | null;
+    specificService?: string | undefined;
+  } {
     const lowerMessage = message.toLowerCase();
 
     // Check all service types
     for (const [category, services] of Object.entries(this.serviceDatabase)) {
       for (const service of services) {
         // Check if any keyword matches
-        if (service.keywords.some(keyword => lowerMessage.includes(keyword))) {
+        if (
+          service.keywords.some((keyword) => lowerMessage.includes(keyword))
+        ) {
           return {
             category: service.category,
             specificService: service.specificService,
@@ -167,16 +324,16 @@ class EnhancedAIChatService {
 
     // Fallback to basic category matching
     const basicKeywords: Record<string, string[]> = {
-      'NAILS': ['nail', 'nails'],
-      'HAIR': ['hair'],
-      'LASHES': ['lash', 'lashes', 'eyelash'],
-      'BROWS': ['brow', 'brows', 'eyebrow'],
-      'MUA': ['makeup', 'mua'],
-      'AESTHETICS': ['aesthetic', 'aesthetics', 'skin'],
+      NAILS: ["nail", "nails"],
+      HAIR: ["hair"],
+      LASHES: ["lash", "lashes", "eyelash"],
+      BROWS: ["brow", "brows", "eyebrow"],
+      MUA: ["makeup", "mua"],
+      AESTHETICS: ["aesthetic", "aesthetics", "skin"],
     };
 
     for (const [service, keywords] of Object.entries(basicKeywords)) {
-      if (keywords.some(keyword => lowerMessage.includes(keyword))) {
+      if (keywords.some((keyword) => lowerMessage.includes(keyword))) {
         return { category: service };
       }
     }
@@ -185,31 +342,43 @@ class EnhancedAIChatService {
   }
 
   // ==================== FEATURE 3: PRICE FILTERING ====================
-  private extractPriceFilter(message: string): { min?: number; max?: number } | null {
+  private extractPriceFilter(
+    message: string,
+  ): { min?: number; max?: number } | null {
     const lowerMessage = message.toLowerCase();
 
     // Pattern: "under $50", "below $100"
-    const underMatch = lowerMessage.match(/(?:under|below|less than)\s*\$?(\d+)/);
+    const underMatch = lowerMessage.match(
+      /(?:under|below|less than)\s*\$?(\d+)/,
+    );
     if (underMatch) {
-      return { max: parseInt(underMatch[1] ?? '0') };
+      return { max: parseInt(underMatch[1] ?? "0") };
     }
 
     // Pattern: "over $50", "above $100", "more than $75"
     const overMatch = lowerMessage.match(/(?:over|above|more than)\s*\$?(\d+)/);
     if (overMatch) {
-      return { min: parseInt(overMatch[1] ?? '0') };
+      return { min: parseInt(overMatch[1] ?? "0") };
     }
 
     // Pattern: "between $50 and $100"
-    const betweenMatch = lowerMessage.match(/between\s*\$?(\d+)\s*(?:and|-)\s*\$?(\d+)/);
+    const betweenMatch = lowerMessage.match(
+      /between\s*\$?(\d+)\s*(?:and|-)\s*\$?(\d+)/,
+    );
     if (betweenMatch) {
-      return { min: parseInt(betweenMatch[1] ?? '0'), max: parseInt(betweenMatch[2] ?? '0') };
+      return {
+        min: parseInt(betweenMatch[1] ?? "0"),
+        max: parseInt(betweenMatch[2] ?? "0"),
+      };
     }
 
     // Pattern: "$50-$100", "$50 - $100"
     const rangeMatch = lowerMessage.match(/\$?(\d+)\s*-\s*\$?(\d+)/);
     if (rangeMatch) {
-      return { min: parseInt(rangeMatch[1] ?? '0'), max: parseInt(rangeMatch[2] ?? '0') };
+      return {
+        min: parseInt(rangeMatch[1] ?? "0"),
+        max: parseInt(rangeMatch[2] ?? "0"),
+      };
     }
 
     return null;
@@ -217,7 +386,7 @@ class EnhancedAIChatService {
 
   private filterProvidersByPrice(
     providers: Provider[],
-    priceRange: { min?: number; max?: number }
+    priceRange: { min?: number; max?: number },
   ): Provider[] {
     // NOTE: In a real app, providers would have price data
     // For now, we'll simulate by filtering a subset
@@ -226,25 +395,35 @@ class EnhancedAIChatService {
   }
 
   // ==================== FEATURE 2: BOOKING MANAGEMENT ====================
-  private handleBookingManagement(message: string): { intent: string; bookingData?: any } | null {
+  private handleBookingManagement(
+    message: string,
+  ): { intent: string; bookingData?: any } | null {
     const lowerMessage = message.toLowerCase();
 
     // Show bookings
     if (
-      lowerMessage.match(/\b(show|view|see|my|check)\b.*\b(booking|appointment|schedule)/i) ||
+      lowerMessage.match(
+        /\b(show|view|see|my|check)\b.*\b(booking|appointment|schedule)/i,
+      ) ||
       lowerMessage.match(/\b(upcoming|next|future)\b.*\b(appointment|booking)/i)
     ) {
-      return { intent: 'show_bookings' };
+      return { intent: "show_bookings" };
     }
 
     // Cancel booking
-    if (lowerMessage.match(/\b(cancel|delete|remove)\b.*\b(booking|appointment)/i)) {
-      return { intent: 'cancel_booking' };
+    if (
+      lowerMessage.match(/\b(cancel|delete|remove)\b.*\b(booking|appointment)/i)
+    ) {
+      return { intent: "cancel_booking" };
     }
 
     // Reschedule booking
-    if (lowerMessage.match(/\b(reschedule|change|move)\b.*\b(booking|appointment)/i)) {
-      return { intent: 'reschedule_booking' };
+    if (
+      lowerMessage.match(
+        /\b(reschedule|change|move)\b.*\b(booking|appointment)/i,
+      )
+    ) {
+      return { intent: "reschedule_booking" };
     }
 
     return null;
@@ -257,27 +436,161 @@ class EnhancedAIChatService {
     // Check for booking management first
     const bookingIntent = this.handleBookingManagement(message);
     if (bookingIntent) {
-      return 'manage_bookings';
+      return "manage_bookings";
     }
 
     if (lowerMessage.match(/\b(book|appointment|schedule|reserve)\b/i)) {
-      return 'book';
+      return "book";
     }
     if (lowerMessage.match(/\b(find|looking for|search|need|want)\b/i)) {
-      return 'search';
+      return "search";
     }
     if (lowerMessage.match(/\b(browse|explore|show me|recommend)\b/i)) {
-      return 'browse';
+      return "browse";
     }
     if (lowerMessage.match(/\b(what|how|when|where|why|info|tell me)\b/i)) {
-      return 'info';
+      return "info";
     }
 
-    return 'general';
+    return "general";
+  }
+
+  // ==================== PROVIDER-MODE RESPONSE GENERATOR ====================
+  // Becca as a business assistant. Every navigate suggestion targets a PROVIDER
+  // screen (BeccaScreen maps the semantic `screen` key to the right provider
+  // tab/stack), so a provider is never routed into a client screen.
+  private generateProviderResponse(userMessage: string): ChatMessage {
+    const m = userMessage.toLowerCase();
+    const nav = (screen: string, text: string): ChatSuggestion => ({
+      id: `pv-${screen}`,
+      text,
+      action: "navigate",
+      data: { screen },
+    });
+    const ask = (
+      id: string,
+      text: string,
+      message: string,
+    ): ChatSuggestion => ({
+      id,
+      text,
+      action: "message",
+      data: { message },
+    });
+
+    let responseText = "";
+    let suggestions: ChatSuggestion[] = [];
+
+    if (
+      /\b(schedule|agenda|today|calendar|upcoming|diary|appointment|booking)\b/.test(
+        m,
+      )
+    ) {
+      responseText =
+        "Let's manage your day. Your home dashboard shows today's appointments, and your schedule is where you set working hours and availability.";
+      suggestions = [
+        nav("home", "Today's Bookings"),
+        nav("schedule", "My Schedule & Hours"),
+        nav("history", "Booking History"),
+      ];
+    } else if (/\b(client|customer|clientele|regular|guest)\b/.test(m)) {
+      responseText =
+        "You can see your client list, their booking history and notes in your Clientele.";
+      suggestions = [
+        nav("clients", "Open Clientele"),
+        nav("messages", "Message a Client"),
+      ];
+    } else if (/\b(message|inbox|chat|reply|dm|respond)\b/.test(m)) {
+      responseText =
+        "Your client conversations live in your Inbox — unread threads are highlighted there.";
+      suggestions = [nav("messages", "Open Inbox")];
+    } else if (
+      /\b(promo|promotion|discount|offer|deal|voucher|marketing)\b/.test(m)
+    ) {
+      responseText =
+        "Create and manage discounts, limited offers and deals in Promotions.";
+      suggestions = [nav("promotions", "Open Promotions")];
+    } else if (
+      /\b(earning|revenue|income|money|analytic|stat|report|performance|insight|busiest)\b/.test(
+        m,
+      )
+    ) {
+      responseText =
+        "Your earnings, booking trends and performance breakdowns are in Analytics.";
+      suggestions = [
+        nav("analytics", "Open Analytics"),
+        nav("history", "Booking History"),
+      ];
+    } else if (
+      /\b(availab|hours|open|clos|day off|time off|holiday|block|break)\b/.test(
+        m,
+      )
+    ) {
+      responseText =
+        "Set your working hours, days off and availability in your Schedule.";
+      suggestions = [nav("schedule", "Set Availability")];
+    } else if (
+      /\b(service|price|pricing|menu|catalog|catalogue|portfolio|edit profile|add.*service)\b/.test(
+        m,
+      )
+    ) {
+      responseText =
+        "Edit your services, prices, photos and profile from My Services.";
+      suggestions = [nav("services", "Edit My Services")];
+    } else if (
+      /\b(form|intake|consultation|consent|info pack|aftercare|prep)\b/.test(m)
+    ) {
+      responseText =
+        "Send or review a client intake form from their booking, or manage your info packs.";
+      suggestions = [
+        nav("home", "Today's Bookings"),
+        nav("infopacks", "Info Packs"),
+      ];
+    } else if (
+      /\b(automation|auto|reminder|deposit|setting|policy|policies)\b/.test(m)
+    ) {
+      responseText =
+        "Reminders, auto-messages, deposits and booking policies are set up in Automations.";
+      suggestions = [nav("automations", "Open Automations")];
+    } else if (/\b(help|how do i|support|what can you|guide)\b/.test(m)) {
+      responseText =
+        "I'm your business assistant. I can take you to:\n\n📅 Today's bookings & schedule\n👥 Your clients\n💬 Messages\n🏷️ Promotions\n📊 Analytics & earnings\n✂️ Your services & prices\n\nWhat would you like to open?";
+      suggestions = [
+        nav("home", "Bookings"),
+        nav("clients", "Clients"),
+        nav("promotions", "Promotions"),
+        nav("analytics", "Analytics"),
+      ];
+    } else {
+      responseText =
+        "I'm your business assistant — I can help with your bookings, clients, schedule, promotions, analytics and services. What would you like to do?";
+      suggestions = [
+        nav("home", "Today's Bookings"),
+        nav("clients", "My Clients"),
+        nav("messages", "Messages"),
+        nav("analytics", "Analytics"),
+      ];
+    }
+
+    return {
+      id: Date.now().toString(),
+      role: "assistant",
+      content: responseText,
+      timestamp: new Date(),
+      suggestions,
+    };
   }
 
   // ==================== MAIN RESPONSE GENERATOR ====================
-  public async generateResponse(userMessage: string, imageUri?: string): Promise<ChatMessage> {
+  public async generateResponse(
+    userMessage: string,
+    imageUri?: string,
+  ): Promise<ChatMessage> {
+    // Provider hat → business assistant only (never client flows).
+    if (this.mode === "provider") {
+      return this.generateProviderResponse(userMessage);
+    }
+
     const intent = this.extractIntent(userMessage);
     const serviceMatch = this.extractServiceType(userMessage);
     const priceFilter = this.extractPriceFilter(userMessage);
@@ -294,88 +607,101 @@ class EnhancedAIChatService {
     }
     this.conversationMemory.currentIntent = intent as any;
 
-    let responseText = '';
+    let responseText = "";
     let suggestions: ChatSuggestion[] = [];
     let providerRecommendations: Provider[] = [];
 
     // ==================== FEATURE 2: BOOKING MANAGEMENT ====================
-    if (intent === 'manage_bookings') {
+    if (intent === "manage_bookings") {
       const bookingIntent = this.handleBookingManagement(userMessage);
 
-      if (bookingIntent?.intent === 'show_bookings') {
-        const upcomingBookings = this.bookings.filter(b => b.status === BookingStatus.UPCOMING);
+      if (bookingIntent?.intent === "show_bookings") {
+        const upcomingBookings = this.bookings.filter(
+          (b) => b.status === BookingStatus.UPCOMING,
+        );
 
         if (upcomingBookings.length === 0) {
-          responseText = "You don't have any upcoming bookings right now. Would you like to book a service?";
+          responseText =
+            "You don't have any upcoming bookings right now. Would you like to book a service?";
 
           suggestions = [
             {
-              id: 'browse-services',
-              text: 'Browse Services',
-              action: 'message',
-              data: { message: 'Show me all services' }
+              id: "browse-services",
+              text: "Browse Services",
+              action: "message",
+              data: { message: "Show me all services" },
             },
             {
-              id: 'find-provider',
-              text: 'Find Provider',
-              action: 'message',
-              data: { message: 'Find services near me' }
-            }
+              id: "find-provider",
+              text: "Find Provider",
+              action: "message",
+              data: { message: "Find services near me" },
+            },
           ];
         } else {
-          responseText = `You have ${upcomingBookings.length} upcoming booking${upcomingBookings.length > 1 ? 's' : ''}:\n\n`;
+          responseText = `You have ${upcomingBookings.length} upcoming booking${upcomingBookings.length > 1 ? "s" : ""}:\n\n`;
 
           upcomingBookings.slice(0, 5).forEach((booking, index) => {
-            const date = new Date(booking.bookingDate).toLocaleDateString('en-GB', {
-              month: 'short',
-              day: 'numeric',
-            });
+            const date = new Date(booking.bookingDate).toLocaleDateString(
+              "en-GB",
+              {
+                month: "short",
+                day: "numeric",
+              },
+            );
             responseText += `${index + 1}. **${booking.serviceName}** with ${booking.providerName}\n`;
             responseText += `   📅 ${date} at ${booking.bookingTime}\n\n`;
           });
 
           suggestions = [
             {
-              id: 'view-all-bookings',
-              text: 'View All Bookings',
-              action: 'navigate',
-              data: { screen: 'Bookings' }
+              id: "view-all-bookings",
+              text: "View All Bookings",
+              action: "navigate",
+              data: { screen: "Bookings" },
             },
             {
-              id: 'book-another',
-              text: 'Book Another',
-              action: 'message',
-              data: { message: 'I want to book another service' }
-            }
+              id: "book-another",
+              text: "Book Another",
+              action: "message",
+              data: { message: "I want to book another service" },
+            },
           ];
         }
-      } else if (bookingIntent?.intent === 'cancel_booking') {
-        responseText = "I can help you cancel a booking. Please visit your Bookings page to select which appointment you'd like to cancel.";
+      } else if (bookingIntent?.intent === "cancel_booking") {
+        responseText =
+          "I can help you cancel a booking. Please visit your Bookings page to select which appointment you'd like to cancel.";
 
         suggestions = [
           {
-            id: 'go-to-bookings',
-            text: 'Go to Bookings',
-            action: 'navigate',
-            data: { screen: 'Bookings' }
-          }
+            id: "go-to-bookings",
+            text: "Go to Bookings",
+            action: "navigate",
+            data: { screen: "Bookings" },
+          },
         ];
-      } else if (bookingIntent?.intent === 'reschedule_booking') {
-        responseText = "I can help you reschedule. Please visit your Bookings page to select the appointment you'd like to change.";
+      } else if (bookingIntent?.intent === "reschedule_booking") {
+        responseText =
+          "I can help you reschedule. Please visit your Bookings page to select the appointment you'd like to change.";
 
         suggestions = [
           {
-            id: 'go-to-bookings',
-            text: 'Go to Bookings',
-            action: 'navigate',
-            data: { screen: 'Bookings' }
-          }
+            id: "go-to-bookings",
+            text: "Go to Bookings",
+            action: "navigate",
+            data: { screen: "Bookings" },
+          },
         ];
       }
     }
     // ==================== FEATURE 3 & 4: PRICE FILTERING + SERVICE MATCHING ====================
-    else if ((intent === 'search' || intent === 'book') && serviceMatch.category) {
-      let providers = (await getProviders(serviceMatch.category)).map(dbToProvider);
+    else if (
+      (intent === "search" || intent === "book") &&
+      serviceMatch.category
+    ) {
+      let providers = (await getProviders(serviceMatch.category)).map(
+        dbToProvider,
+      );
 
       // Apply price filter if specified
       if (priceFilter) {
@@ -386,11 +712,12 @@ class EnhancedAIChatService {
       providerRecommendations = providers;
 
       // Build response with specific service mention
-      const serviceDesc = serviceMatch.specificService || serviceMatch.category.toLowerCase();
+      const serviceDesc =
+        serviceMatch.specificService || serviceMatch.category.toLowerCase();
 
       responseText = priceFilter
-        ? `I found ${providers.length} ${serviceDesc} provider${providers.length !== 1 ? 's' : ''} `
-        : `Perfect! I found ${providers.length} amazing ${serviceDesc} provider${providers.length !== 1 ? 's' : ''} `;
+        ? `I found ${providers.length} ${serviceDesc} provider${providers.length !== 1 ? "s" : ""} `
+        : `Perfect! I found ${providers.length} amazing ${serviceDesc} provider${providers.length !== 1 ? "s" : ""} `;
 
       if (priceFilter?.max) {
         responseText += `under $${priceFilter.max}`;
@@ -410,27 +737,27 @@ class EnhancedAIChatService {
 
       suggestions = [
         {
-          id: 'compare-prices',
-          text: 'Compare Prices',
-          action: 'message',
-          data: { message: `Compare ${serviceDesc} prices` }
+          id: "compare-prices",
+          text: "Compare Prices",
+          action: "message",
+          data: { message: `Compare ${serviceDesc} prices` },
         },
         {
-          id: 'see-reviews',
-          text: 'See Reviews',
-          action: 'message',
-          data: { message: `Show reviews for ${serviceDesc}` }
+          id: "see-reviews",
+          text: "See Reviews",
+          action: "message",
+          data: { message: `Show reviews for ${serviceDesc}` },
         },
         {
-          id: 'view-all',
-          text: 'View All',
-          action: 'message',
-          data: { message: `Show all ${serviceDesc} providers` }
-        }
+          id: "view-all",
+          text: "View All",
+          action: "message",
+          data: { message: `Show all ${serviceDesc} providers` },
+        },
       ];
     }
     // Handle browse intent
-    else if (intent === 'browse') {
+    else if (intent === "browse") {
       responseText = `I'd love to help you discover amazing beauty services! We offer:\n\n`;
       responseText += `💅 Nails - Gel, Acrylic, Nail Art\n`;
       responseText += `💇 Hair - Cuts, Color, Styling\n`;
@@ -441,10 +768,30 @@ class EnhancedAIChatService {
       responseText += `What service interests you?`;
 
       suggestions = [
-        { id: 'nails', text: 'Nails', action: 'message', data: { message: 'Show me nail services' } },
-        { id: 'hair', text: 'Hair', action: 'message', data: { message: 'I need hair services' } },
-        { id: 'lashes', text: 'Lashes', action: 'message', data: { message: 'I want lash extensions' } },
-        { id: 'brows', text: 'Brows', action: 'message', data: { message: 'Looking for brow services' } },
+        {
+          id: "nails",
+          text: "Nails",
+          action: "message",
+          data: { message: "Show me nail services" },
+        },
+        {
+          id: "hair",
+          text: "Hair",
+          action: "message",
+          data: { message: "I need hair services" },
+        },
+        {
+          id: "lashes",
+          text: "Lashes",
+          action: "message",
+          data: { message: "I want lash extensions" },
+        },
+        {
+          id: "brows",
+          text: "Brows",
+          action: "message",
+          data: { message: "Looking for brow services" },
+        },
       ];
     }
     // Default response
@@ -452,22 +799,40 @@ class EnhancedAIChatService {
       responseText = `Hi! I'm Becca, your beauty assistant! 💜\n\n`;
 
       // Personalize based on memory
-      if (this.conversationMemory.upcomingBookingsCount && this.conversationMemory.upcomingBookingsCount > 0) {
-        responseText += `You have ${this.conversationMemory.upcomingBookingsCount} upcoming appointment${this.conversationMemory.upcomingBookingsCount > 1 ? 's' : ''}. `;
+      if (
+        this.conversationMemory.upcomingBookingsCount &&
+        this.conversationMemory.upcomingBookingsCount > 0
+      ) {
+        responseText += `You have ${this.conversationMemory.upcomingBookingsCount} upcoming appointment${this.conversationMemory.upcomingBookingsCount > 1 ? "s" : ""}. `;
       }
 
       responseText += `What can I help you with today?`;
 
       suggestions = [
-        { id: 'browse', text: 'Browse Services', action: 'message', data: { message: 'Show me all services' } },
-        { id: 'bookings', text: 'My Bookings', action: 'navigate', data: { screen: 'Bookings' } },
-        { id: 'near-me', text: 'Find Nearby', action: 'message', data: { message: 'Find services near me' } },
+        {
+          id: "browse",
+          text: "Browse Services",
+          action: "message",
+          data: { message: "Show me all services" },
+        },
+        {
+          id: "bookings",
+          text: "My Bookings",
+          action: "navigate",
+          data: { screen: "Bookings" },
+        },
+        {
+          id: "near-me",
+          text: "Find Nearby",
+          action: "message",
+          data: { message: "Find services near me" },
+        },
       ];
     }
 
     const message: ChatMessage = {
       id: Date.now().toString(),
-      role: 'assistant',
+      role: "assistant",
       content: responseText,
       timestamp: new Date(),
       suggestions,

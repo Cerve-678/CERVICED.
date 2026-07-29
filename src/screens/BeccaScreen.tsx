@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,19 +13,29 @@ import {
   Animated,
   Modal,
   FlatList,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import * as ImagePicker from 'expo-image-picker';
-import { BeccaScreenProps } from '../navigation/types';
-import enhancedAIChatService, { ChatMessage, ChatSuggestion } from '../services/enhancedAIChatService';
-import beccaStorageService, { StoredSession } from '../services/beccaStorageService';
-import { ChatBubble, Suggestions, ProviderRecommendations, ChatInput } from '../components/ChatComponents';
-import { Provider } from '../services/ProviderDataService';
-import { useTheme } from '../contexts/ThemeContext';
-import { useBooking } from '../contexts/BookingContext';
-import { useAuth } from '../contexts/AuthContext';
-import { ThemedBackground } from '../components/ThemedBackground';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import * as ImagePicker from "expo-image-picker";
+import { BeccaScreenProps } from "../navigation/types";
+import enhancedAIChatService, {
+  ChatMessage,
+  ChatSuggestion,
+} from "../services/enhancedAIChatService";
+import beccaStorageService, {
+  StoredSession,
+} from "../services/beccaStorageService";
+import {
+  ChatBubble,
+  Suggestions,
+  ProviderRecommendations,
+  ChatInput,
+} from "../components/ChatComponents";
+import { Provider } from "../services/ProviderDataService";
+import { useTheme } from "../contexts/ThemeContext";
+import { useBooking } from "../contexts/BookingContext";
+import { useAuth } from "../contexts/AuthContext";
+import { ThemedBackground } from "../components/ThemedBackground";
 
 // ==================== TYPES ====================
 
@@ -44,8 +54,16 @@ function TypingDots() {
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
         ]),
       );
 
@@ -56,23 +74,43 @@ function TypingDots() {
     a2.start();
     a3.start();
 
-    return () => { a1.stop(); a2.stop(); a3.stop(); };
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
   }, [dot1, dot2, dot3]);
 
   const dotStyle = (anim: Animated.Value) => ({
     opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
-    transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+    transform: [
+      {
+        translateY: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -4],
+        }),
+      },
+    ],
   });
 
   return (
     <View style={styles.typingRow}>
-      <View style={[styles.typingBubble, { backgroundColor: isDarkMode ? 'rgba(58,58,60,0.7)' : 'rgba(255,255,255,0.6)' }]}>
+      <View
+        style={[
+          styles.typingBubble,
+          {
+            backgroundColor: isDarkMode
+              ? "rgba(58,58,60,0.7)"
+              : "rgba(255,255,255,0.6)",
+          },
+        ]}
+      >
         {[dot1, dot2, dot3].map((dot, i) => (
           <Animated.View
             key={i}
             style={[
               styles.typingDot,
-              { backgroundColor: isDarkMode ? '#E580E8' : '#a342c3' },
+              { backgroundColor: isDarkMode ? "#E580E8" : "#a342c3" },
               dotStyle(dot),
             ]}
           />
@@ -84,12 +122,15 @@ function TypingDots() {
 
 // ==================== MAIN SCREEN ====================
 
-export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'>) {
+export default function BeccaScreen({
+  navigation,
+}: BeccaScreenProps<"BeccaMain">) {
   const { theme, isDarkMode } = useTheme();
   const { bookings } = useBooking();
-  const { user } = useAuth();
+  const { user, activeMode } = useAuth();
+  const isProviderMode = activeMode === "provider";
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -101,37 +142,97 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const buildWelcomeMessage = useCallback((): ChatMessage => {
-    const upcomingCount = bookings.filter(b => b.status === 'upcoming').length;
+    const base = {
+      id: `welcome-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      role: "assistant" as const,
+      timestamp: new Date(),
+    };
+
+    // Provider hat → business assistant. Suggestions route to provider screens
+    // only (semantic `screen` keys resolved in handleSuggestionPress).
+    if (isProviderMode) {
+      return {
+        ...base,
+        content:
+          "Hi! I'm Becca, your business assistant.\n\nI can help you manage your bookings, clients, schedule, promotions, analytics and services. What do you need?",
+        suggestions: [
+          {
+            id: "today",
+            text: "Today's Bookings",
+            action: "navigate",
+            data: { screen: "home" },
+          },
+          {
+            id: "clients",
+            text: "My Clients",
+            action: "navigate",
+            data: { screen: "clients" },
+          },
+          {
+            id: "messages",
+            text: "Messages",
+            action: "navigate",
+            data: { screen: "messages" },
+          },
+          {
+            id: "analytics",
+            text: "Analytics",
+            action: "navigate",
+            data: { screen: "analytics" },
+          },
+        ],
+      };
+    }
+
+    const upcomingCount = bookings.filter(
+      (b) => b.status === "upcoming",
+    ).length;
     let welcomeText = "Hi! I'm Becca, your beauty booking assistant!\n\n";
     if (upcomingCount > 0) {
-      welcomeText += `You have ${upcomingCount} upcoming appointment${upcomingCount > 1 ? 's' : ''}. `;
+      welcomeText += `You have ${upcomingCount} upcoming appointment${upcomingCount > 1 ? "s" : ""}. `;
     }
-    welcomeText += 'I can help you find and book amazing beauty services. What are you looking for today?';
+    welcomeText +=
+      "I can help you find and book amazing beauty services. What are you looking for today?";
 
     return {
-      id: `welcome-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      role: 'assistant',
+      ...base,
       content: welcomeText,
-      timestamp: new Date(),
       suggestions: [
-        { id: 'my-bookings', text: 'My Bookings', action: 'navigate', data: { screen: 'Bookings' } },
-        { id: 'find-near-me', text: 'Find Services Near Me', action: 'message', data: { message: 'Find beauty services near me' } },
-        { id: 'browse', text: 'Browse All Services', action: 'message', data: { message: 'Show me all services' } },
+        {
+          id: "my-bookings",
+          text: "My Bookings",
+          action: "navigate",
+          data: { screen: "Bookings" },
+        },
+        {
+          id: "find-near-me",
+          text: "Find Services Near Me",
+          action: "message",
+          data: { message: "Find beauty services near me" },
+        },
+        {
+          id: "browse",
+          text: "Browse All Services",
+          action: "message",
+          data: { message: "Show me all services" },
+        },
       ],
     };
-  }, [bookings]);
+  }, [bookings, isProviderMode]);
 
   // Initialize
   useEffect(() => {
+    enhancedAIChatService.setMode(isProviderMode ? "provider" : "client");
     enhancedAIChatService.setBookings(bookings);
     setMessages([buildWelcomeMessage()]);
-  }, [bookings, buildWelcomeMessage]);
+  }, [bookings, buildWelcomeMessage, isProviderMode]);
 
   // Load sessions from Supabase on mount
   useEffect(() => {
     if (!user?.id) return;
     setHistoryLoading(true);
-    beccaStorageService.loadSessions(user.id)
+    beccaStorageService
+      .loadSessions(user.id)
       .then(setSessions)
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
@@ -155,14 +256,18 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
 
   const handleImagePick = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to your photo library in Settings.');
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo library in Settings.",
+        );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -172,7 +277,7 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
         setSelectedImage(result.assets[0].uri);
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Couldn\'t open photo library. Please try again.');
+      Alert.alert("Error", "Couldn't open photo library. Please try again.");
     }
   };
 
@@ -183,14 +288,14 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      role: 'user',
-      content: textToSend || 'Sent an image',
+      role: "user",
+      content: textToSend || "Sent an image",
       timestamp: new Date(),
     };
     if (imageToSend) userMessage.imageUri = imageToSend;
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
+    setMessages((prev) => [...prev, userMessage]);
+    setInputText("");
     setSelectedImage(null);
     setIsTyping(true);
 
@@ -198,10 +303,15 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     let sessionId = currentSessionId;
     if (!sessionId && user?.id) {
       try {
-        const title = userMessage.content.length > 40
-          ? userMessage.content.substring(0, 40) + '...'
-          : userMessage.content;
-        sessionId = await beccaStorageService.createSession(user.id, title, userMessage.content.substring(0, 80));
+        const title =
+          userMessage.content.length > 40
+            ? userMessage.content.substring(0, 40) + "..."
+            : userMessage.content;
+        sessionId = await beccaStorageService.createSession(
+          user.id,
+          title,
+          userMessage.content.substring(0, 80),
+        );
         setCurrentSessionId(sessionId);
         // Save welcome message too
         const welcome = messages[0];
@@ -215,35 +325,45 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     }
 
     setTimeout(async () => {
+      // Singleton service is shared across modes — pin the hat before replying.
+      enhancedAIChatService.setMode(isProviderMode ? "provider" : "client");
       const response = await enhancedAIChatService.generateResponse(
-        textToSend || 'What can you tell me about this?',
+        textToSend || "What can you tell me about this?",
         imageToSend || undefined,
       );
-      setMessages(prev => [...prev, response]);
+      setMessages((prev) => [...prev, response]);
       setIsTyping(false);
 
       // Save assistant response
       if (sessionId) {
         beccaStorageService.saveMessage(sessionId, response).catch(() => {});
         // Update session preview with last assistant message
-        const preview = response.content.length > 80 ? response.content.substring(0, 80) + '...' : response.content;
-        const title = messages.find(m => m.role === 'user')?.content ?? userMessage.content;
-        const shortTitle = title.length > 40 ? title.substring(0, 40) + '...' : title;
-        beccaStorageService.updateSession(sessionId, shortTitle, preview).catch(() => {});
+        const preview =
+          response.content.length > 80
+            ? response.content.substring(0, 80) + "..."
+            : response.content;
+        const title =
+          messages.find((m) => m.role === "user")?.content ??
+          userMessage.content;
+        const shortTitle =
+          title.length > 40 ? title.substring(0, 40) + "..." : title;
+        beccaStorageService
+          .updateSession(sessionId, shortTitle, preview)
+          .catch(() => {});
         refreshSessions();
       }
     }, 800);
   };
 
   const handleNewChat = () => {
-    Alert.alert('New Chat', 'Start a new conversation?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("New Chat", "Start a new conversation?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'New Chat',
+        text: "New Chat",
         onPress: () => {
           setCurrentSessionId(null);
           setMessages([buildWelcomeMessage()]);
-          setInputText('');
+          setInputText("");
           setSelectedImage(null);
           enhancedAIChatService.resetConversation();
         },
@@ -259,14 +379,14 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
       setCurrentSessionId(session.id);
       enhancedAIChatService.resetConversation();
     } catch (_) {
-      Alert.alert('Error', 'Could not load chat.');
+      Alert.alert("Error", "Could not load chat.");
     }
   };
 
   const handleDeleteChat = async (sessionId: string) => {
     try {
       await beccaStorageService.deleteSession(sessionId);
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
         setMessages([buildWelcomeMessage()]);
@@ -275,57 +395,141 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
     } catch (_) {}
   };
 
+  // Provider Becca routes to sibling PROVIDER tabs only, so the assistant can
+  // action business concerns while staying fully isolated from client screens.
+  // Keys here match the semantic `screen` values emitted by the AI service.
+  const PROVIDER_NAV: Record<string, { tab: string; screen: string }> = {
+    home: { tab: "ProviderHome", screen: "ProviderHomeMain" },
+    schedule: { tab: "ProviderHome", screen: "ProviderSchedule" },
+    clients: { tab: "ProviderHome", screen: "Clientele" },
+    messages: { tab: "ProviderHome", screen: "ProviderInbox" },
+    promotions: { tab: "ProviderHome", screen: "Promotions" },
+    infopacks: { tab: "ProviderHome", screen: "InfoPacks" },
+    analytics: { tab: "Profile", screen: "Analytics" },
+    history: { tab: "Profile", screen: "BookingHistory" },
+    automations: { tab: "Profile", screen: "Automations" },
+    services: { tab: "MyServices", screen: "ProviderServicesMain" },
+  };
+
   const handleSuggestionPress = (suggestion: ChatSuggestion) => {
-    if (suggestion.action === 'message') {
+    if (suggestion.action === "message") {
       handleSend(suggestion.data.message);
-    } else if (suggestion.action === 'navigate') {
-      if (suggestion.data.screen === 'Bookings') {
-        navigation.navigate('Bookings');
-      } else if (suggestion.data.screen === 'Explore') {
-        navigation.getParent()?.navigate('Explore', { screen: 'ExploreMain' });
+      return;
+    }
+    if (suggestion.action !== "navigate") return;
+
+    if (isProviderMode) {
+      // Provider hat → jump to the matching provider tab/screen. Client-side
+      // targets simply have no mapping here, so they can never fire.
+      const target = PROVIDER_NAV[suggestion.data?.screen];
+      if (target) {
+        (navigation.getParent() as any)?.navigate(target.tab, {
+          screen: target.screen,
+        });
       }
+      return;
+    }
+
+    if (suggestion.data.screen === "Bookings") {
+      navigation.navigate("Bookings");
+    } else if (suggestion.data.screen === "Explore") {
+      navigation.getParent()?.navigate("Explore", { screen: "ExploreMain" });
     }
   };
 
   const handleProviderPress = (provider: Provider) => {
-    navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'becca' });
+    if (isProviderMode) return;
+    navigation.navigate("ProviderProfile", {
+      providerId: provider.id,
+      source: "becca",
+    });
   };
 
   const lastMessage = messages[messages.length - 1];
-  const showSuggestions = lastMessage?.role === 'assistant' && lastMessage?.suggestions;
-  const showRecommendations = lastMessage?.role === 'assistant' && lastMessage?.providerRecommendations;
+  const showSuggestions =
+    lastMessage?.role === "assistant" && lastMessage?.suggestions;
+  const showRecommendations =
+    lastMessage?.role === "assistant" && lastMessage?.providerRecommendations;
 
   return (
-    <View style={[styles.background, { backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }]}>
+    <View
+      style={[
+        styles.background,
+        { backgroundColor: isDarkMode ? "#1A1815" : "#F5F1EC" },
+      ]}
+    >
       <StatusBar barStyle={theme.statusBar} />
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <KeyboardAvoidingView
           style={styles.keyboardView}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
           {/* ==================== HEADER ==================== */}
-          <View style={[styles.header, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+          <View
+            style={[
+              styles.header,
+              {
+                borderBottomColor: isDarkMode
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.06)",
+              },
+            ]}
+          >
             <View style={styles.headerLeft}>
-              <Text style={[styles.headerName, { color: theme.text }]}>Becca</Text>
-              <Text style={[styles.headerSubtitle, { color: theme.secondaryText }]}>AI Beauty Assistant</Text>
+              <Text style={[styles.headerName, { color: theme.text }]}>
+                Becca
+              </Text>
+              <Text
+                style={[styles.headerSubtitle, { color: theme.secondaryText }]}
+              >
+                AI Beauty Assistant
+              </Text>
             </View>
             <View style={styles.headerButtons}>
               {/* Chat History Button */}
               <TouchableOpacity
-                style={[styles.headerBtn, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }]}
+                style={[
+                  styles.headerBtn,
+                  {
+                    backgroundColor: isDarkMode
+                      ? "rgba(255,255,255,0.08)"
+                      : "rgba(0,0,0,0.04)",
+                  },
+                ]}
                 onPress={() => setShowHistory(true)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.headerBtnIcon, { color: isDarkMode ? '#E580E8' : '#a342c3' }]}>☰</Text>
+                <Text
+                  style={[
+                    styles.headerBtnIcon,
+                    { color: isDarkMode ? "#E580E8" : "#a342c3" },
+                  ]}
+                >
+                  ☰
+                </Text>
               </TouchableOpacity>
               {/* New Chat Button */}
               <TouchableOpacity
-                style={[styles.headerBtn, { backgroundColor: isDarkMode ? 'rgba(220,50,50,0.15)' : 'rgba(200,30,30,0.1)' }]}
+                style={[
+                  styles.headerBtn,
+                  {
+                    backgroundColor: isDarkMode
+                      ? "rgba(220,50,50,0.15)"
+                      : "rgba(200,30,30,0.1)",
+                  },
+                ]}
                 onPress={handleNewChat}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.headerBtnIcon, { color: isDarkMode ? '#FF4444' : '#CC1111' }]}>+</Text>
+                <Text
+                  style={[
+                    styles.headerBtnIcon,
+                    { color: isDarkMode ? "#FF4444" : "#CC1111" },
+                  ]}
+                >
+                  +
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -346,19 +550,34 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
             {isTyping && <TypingDots />}
 
             {showSuggestions && (
-              <Suggestions suggestions={lastMessage.suggestions!} onSuggestionPress={handleSuggestionPress} />
+              <Suggestions
+                suggestions={lastMessage.suggestions!}
+                onSuggestionPress={handleSuggestionPress}
+              />
             )}
 
             {showRecommendations && (
-              <ProviderRecommendations providers={lastMessage.providerRecommendations!} onProviderPress={handleProviderPress} />
+              <ProviderRecommendations
+                providers={lastMessage.providerRecommendations!}
+                onProviderPress={handleProviderPress}
+              />
             )}
           </ScrollView>
 
           {/* ==================== IMAGE PREVIEW ==================== */}
           {selectedImage && (
             <View style={styles.imagePreviewContainer}>
-              <View style={[styles.imagePreviewCard, { backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF' }]}>
-                <Image source={{ uri: selectedImage }} style={styles.imagePreview} resizeMode="cover" />
+              <View
+                style={[
+                  styles.imagePreviewCard,
+                  { backgroundColor: isDarkMode ? "#2C2C2E" : "#FFFFFF" },
+                ]}
+              >
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
+                />
                 <TouchableOpacity
                   style={styles.removeImageButton}
                   onPress={() => setSelectedImage(null)}
@@ -390,22 +609,61 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
         onRequestClose={() => setShowHistory(false)}
       >
         <View style={styles.historyOverlay}>
-          <View style={[styles.historyPanel, { backgroundColor: isDarkMode ? '#1C1C1E' : '#FFFFFF' }]}>
-            <View style={[styles.historyHeader, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-              <Text style={[styles.historyTitle, { color: theme.text }]}>Chat History</Text>
-              <TouchableOpacity onPress={() => setShowHistory(false)} activeOpacity={0.7}>
-                <Text style={[styles.historyClose, { color: isDarkMode ? '#E580E8' : '#a342c3' }]}>Done</Text>
+          <View
+            style={[
+              styles.historyPanel,
+              { backgroundColor: isDarkMode ? "#1C1C1E" : "#FFFFFF" },
+            ]}
+          >
+            <View
+              style={[
+                styles.historyHeader,
+                {
+                  borderBottomColor: isDarkMode
+                    ? "rgba(255,255,255,0.08)"
+                    : "rgba(0,0,0,0.06)",
+                },
+              ]}
+            >
+              <Text style={[styles.historyTitle, { color: theme.text }]}>
+                Chat History
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowHistory(false)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.historyClose,
+                    { color: isDarkMode ? "#E580E8" : "#a342c3" },
+                  ]}
+                >
+                  Done
+                </Text>
               </TouchableOpacity>
             </View>
 
             {historyLoading ? (
               <View style={styles.historyEmpty}>
-                <Text style={[styles.historyEmptyText, { color: theme.secondaryText }]}>Loading...</Text>
+                <Text
+                  style={[
+                    styles.historyEmptyText,
+                    { color: theme.secondaryText },
+                  ]}
+                >
+                  Loading...
+                </Text>
               </View>
             ) : sessions.length === 0 ? (
               <View style={styles.historyEmpty}>
-                <Text style={[styles.historyEmptyText, { color: theme.secondaryText }]}>
-                  No saved chats yet. Start a conversation and it will appear here.
+                <Text
+                  style={[
+                    styles.historyEmptyText,
+                    { color: theme.secondaryText },
+                  ]}
+                >
+                  No saved chats yet. Start a conversation and it will appear
+                  here.
                 </Text>
               </View>
             ) : (
@@ -417,9 +675,16 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
                   <View
                     style={[
                       styles.historyItem,
-                      { backgroundColor: item.id === currentSessionId
-                          ? (isDarkMode ? 'rgba(229,128,232,0.12)' : 'rgba(163,66,195,0.08)')
-                          : (isDarkMode ? '#2C2C2E' : '#F8F8F8') },
+                      {
+                        backgroundColor:
+                          item.id === currentSessionId
+                            ? isDarkMode
+                              ? "rgba(229,128,232,0.12)"
+                              : "rgba(163,66,195,0.08)"
+                            : isDarkMode
+                              ? "#2C2C2E"
+                              : "#F8F8F8",
+                      },
                     ]}
                   >
                     <TouchableOpacity
@@ -428,19 +693,39 @@ export default function BeccaScreen({ navigation }: BeccaScreenProps<'BeccaMain'
                       activeOpacity={0.7}
                     >
                       <View style={styles.historyItemContent}>
-                        <Text style={[styles.historyItemTitle, { color: theme.text }]} numberOfLines={1}>
+                        <Text
+                          style={[
+                            styles.historyItemTitle,
+                            { color: theme.text },
+                          ]}
+                          numberOfLines={1}
+                        >
                           {item.title}
                         </Text>
-                        <Text style={[styles.historyItemPreview, { color: theme.secondaryText }]} numberOfLines={2}>
+                        <Text
+                          style={[
+                            styles.historyItemPreview,
+                            { color: theme.secondaryText },
+                          ]}
+                          numberOfLines={2}
+                        >
                           {item.preview}
                         </Text>
-                        <Text style={[styles.historyItemDate, { color: theme.secondaryText }]}>
-                          {new Date(item.updated_at).toLocaleDateString('en-GB', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                        <Text
+                          style={[
+                            styles.historyItemDate,
+                            { color: theme.secondaryText },
+                          ]}
+                        >
+                          {new Date(item.updated_at).toLocaleDateString(
+                            "en-GB",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            },
+                          )}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -470,7 +755,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   keyboardView: {
     flex: 1,
@@ -478,41 +763,41 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerLeft: {
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   headerName: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: "BakbakOne-Regular",
     fontSize: 24,
     letterSpacing: 0.5,
   },
   headerSubtitle: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: "500",
     marginTop: -2,
   },
   headerButtons: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   headerBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerBtnIcon: {
     fontSize: 20,
-    fontWeight: '400',
+    fontWeight: "400",
   },
 
   // Chat area
@@ -526,14 +811,14 @@ const styles = StyleSheet.create({
 
   // Typing indicator
   typingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     paddingHorizontal: 12,
     marginBottom: 10,
   },
   typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -552,73 +837,73 @@ const styles = StyleSheet.create({
   },
   imagePreviewCard: {
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
     padding: 8,
   },
   imagePreview: {
-    width: '100%',
+    width: "100%",
     height: 120,
     borderRadius: 12,
   },
   removeImageButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 14,
     right: 14,
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   removeImageText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 
   // Chat History Modal
   historyOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
   },
   historyPanel: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '75%',
-    minHeight: '40%',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    maxHeight: "75%",
+    minHeight: "40%",
+    paddingBottom: Platform.OS === "ios" ? 34 : 16,
   },
   historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   historyTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: "BakbakOne-Regular",
     fontSize: 20,
     letterSpacing: 0.5,
   },
   historyClose: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   historyEmpty: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 40,
     paddingVertical: 60,
   },
   historyEmptyText: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 15,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 22,
   },
   historyList: {
@@ -626,8 +911,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   historyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 14,
     borderRadius: 14,
   },
@@ -636,31 +921,31 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   historyItemTitle: {
-    fontFamily: 'BakbakOne-Regular',
+    fontFamily: "BakbakOne-Regular",
     fontSize: 15,
     marginBottom: 4,
   },
   historyItemPreview: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 4,
   },
   historyItemDate: {
-    fontFamily: 'Jura-VariableFont_wght',
+    fontFamily: "Jura-VariableFont_wght",
     fontSize: 11,
   },
   historyDeleteBtn: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,59,48,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(255,59,48,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   historyDeleteText: {
-    color: '#FF3B30',
+    color: "#FF3B30",
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: "700",
   },
 });

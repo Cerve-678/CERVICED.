@@ -1,19 +1,21 @@
-import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React from "react";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
-import { ProviderTabParamList } from './types';
+import { ProviderTabParamList } from "./types";
 
 // Navigators
-import BeccaNavigator from './Tabs/BeccaNavigator';
-import ProviderHomeNavigator from './Tabs/ProviderHomeNavigator';
-import ProviderServicesNavigator from './Tabs/ProviderServicesNavigator';
-import ProviderAccountNavigator from './Tabs/ProviderAccountNavigator';
+// Provider mode uses the ISOLATED Becca stack (no client screens) so a provider
+// can never bubble into a client-facing screen from the Becca tab.
+import ProviderBeccaNavigator from "./Tabs/ProviderBeccaNavigator";
+import ProviderHomeNavigator from "./Tabs/ProviderHomeNavigator";
+import ProviderServicesNavigator from "./Tabs/ProviderServicesNavigator";
+import ProviderAccountNavigator from "./Tabs/ProviderAccountNavigator";
 
 // Components
-import TabIcon from '../components/TabIcon';
-import IslandPillTabBar from '../components/IslandPillTabBar';
-import ErrorBoundary from '../components/ErrorBoundary';
-import { useTheme } from '../contexts/ThemeContext';
+import TabIcon from "../components/TabIcon";
+import IslandPillTabBar from "../components/IslandPillTabBar";
+import ErrorBoundary from "../components/ErrorBoundary";
+import { useTheme } from "../contexts/ThemeContext";
 
 const Tab = createBottomTabNavigator<ProviderTabParamList>();
 
@@ -29,8 +31,8 @@ export default function ProviderTabNavigation() {
       tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
+        tabBarActiveTintColor: "#007AFF",
+        tabBarInactiveTintColor: "#8E8E93",
         tabBarHideOnKeyboard: true,
       }}
     >
@@ -38,22 +40,32 @@ export default function ProviderTabNavigation() {
         name="Becca"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="chat-dots" focused={focused} color={theme.text} size={26} />
+            <TabIcon
+              name="chat-dots"
+              focused={focused}
+              color={theme.text}
+              size={26}
+            />
           ),
         }}
       >
         {() => (
           <ErrorBoundary>
-            <BeccaNavigator />
+            <ProviderBeccaNavigator />
           </ErrorBoundary>
         )}
       </Tab.Screen>
       <Tab.Screen
         name="ProviderHome"
         options={{
-          title: 'Home',
+          title: "Home",
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="calendar-today" focused={focused} color={theme.text} size={26} />
+            <TabIcon
+              name="calendar-today"
+              focused={focused}
+              color={theme.text}
+              size={26}
+            />
           ),
         }}
       >
@@ -66,9 +78,14 @@ export default function ProviderTabNavigation() {
       <Tab.Screen
         name="MyServices"
         options={{
-          title: 'My Services',
+          title: "My Services",
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="grid-layout" focused={focused} color={theme.text} size={26} />
+            <TabIcon
+              name="grid-layout"
+              focused={focused}
+              color={theme.text}
+              size={26}
+            />
           ),
         }}
       >
@@ -82,7 +99,12 @@ export default function ProviderTabNavigation() {
         name="Profile"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="user" focused={focused} color={theme.text} size={26} />
+            <TabIcon
+              name="user"
+              focused={focused}
+              color={theme.text}
+              size={26}
+            />
           ),
         }}
       >
