@@ -6,10 +6,16 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     },
     "preview-simulator": {
       "ios": {
@@ -17,13 +23,19 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ztrfpfvvejzaysrelmfm.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0cmZwZnZ2ZWp6YXlzcmVsbWZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNDkwNzYsImV4cCI6MjA4OTkyNTA3Nn0.ZTBga3-C1dZ-WQIw2rniyqv29So7L9y6rxk2omn4SjI"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp0cmZwZnZ2ZWp6YXlzcmVsbWZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNDkwNzYsImV4cCI6MjA4OTkyNTA3Nn0.ZTBga3-C1dZ-WQIw2rniyqv29So7L9y6rxk2omn4SjI",
+        "SENTRY_ORG": "cerviced",
+        "SENTRY_PROJECT": "react-native",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },
