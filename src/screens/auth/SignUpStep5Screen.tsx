@@ -20,6 +20,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
 import { supabase } from '../../lib/supabase';
 import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
+import { reportError } from '../../utils/logger';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -152,6 +153,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } catch (e: any) {
+        reportError(e, 'signup:addClientProfile');
         Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
       } finally {
         setIsLoading(false);
@@ -171,6 +173,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } catch (e: any) {
+        reportError(e, 'signup:upgradeToProvider');
         Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
       } finally {
         setIsLoading(false);
@@ -205,6 +208,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       });
 
       if (signUpError) {
+        reportError(signUpError, 'signup:authSignUp');
         Alert.alert('Oops!', getFriendlyError(signUpError.message));
         return;
       }
@@ -221,6 +225,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       resetData();
       navigation.navigate('EmailVerification', { email: personalEmail });
     } catch (e: any) {
+      reportError(e, 'signup:submit');
       Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
     } finally {
       setIsLoading(false);
@@ -228,7 +233,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   };
 
   const handleComplete = () => {
-    if (data.fromProviderSwitch || data.fromClientSwitch) { submitSignUp(); return; }
+    // Every flow — fresh signup AND provider/client switches — must complete
+    // Step 5's required fields before submitting. (Switches used to skip this.)
     const firstEmptyY = isProvider
       ? (!selectedInterests.length ? servicesY : !selectedLocations.length ? locationY : !selectedReferral ? referralY : null)
       : (!selectedInterests.length ? servicesY : !selectedLocations.length ? locationY : !selectedFrequency ? frequencyY : !selectedReferral ? referralY : null);

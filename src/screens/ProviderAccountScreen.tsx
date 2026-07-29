@@ -93,6 +93,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { isDarkMode, toggleTheme } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const [showClientModal, setShowClientModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
@@ -157,7 +158,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
 
   const handleSwitchToClient = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    switchMode();
+    if (user?.hasClientProfile) {
+      switchMode();
+    } else {
+      setShowClientModal(true);
+    }
   };
 
   const handleLogout = () => {
@@ -411,7 +416,11 @@ export default function ProviderAccountScreen({ navigation }: any) {
             />
           </View>
 
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); setShowLogoutModal(true); }}
+            activeOpacity={0.7}
+          >
             <Icon name="logout" size={16} color="#fff" />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
@@ -462,6 +471,30 @@ export default function ProviderAccountScreen({ navigation }: any) {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowClientModal(false)} activeOpacity={0.6}>
+              <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </BlurView>
+      </Modal>
+
+      {/* ── Log out confirmation modal ──────────────────────────────────── */}
+      <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
+        <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.modalTitle, { color: P.text }]}>Log Out</Text>
+            <Text style={[styles.modalBody, { color: P.sub }]}>
+              Are you sure you want to log out?
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: '#c0392b' }]}
+              onPress={() => { setShowLogoutModal(false); handleLogout(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalBtnText}>Yes, log out</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowLogoutModal(false)} activeOpacity={0.6}>
               <Text style={[styles.modalCancelText, { color: P.sub }]}>Cancel</Text>
             </TouchableOpacity>
           </View>

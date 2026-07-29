@@ -64,7 +64,8 @@
           "faceIDPermission": "Allow CERVICED to use Face ID for faster sign-in."
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true
@@ -73,7 +74,8 @@
       "router": {},
       "eas": {
         "projectId": "124a2960-5455-41f8-bbb5-820013f52951"
-      }
+      },
+      "sentryDsn": ""
     },
     "owner": "naoa"
   }

@@ -73,10 +73,16 @@ const ProviderThemePicker: React.FC<ProviderThemePickerProps> = ({
           return (
             <TouchableOpacity
               key={t.key}
-              onPress={() => select(
-                { themeChoice: t.key },
-                { accent: t.tokens.accent, backdrop: t.tokens.hero }
-              )}
+              onPress={() => {
+                // Switching theme also defaults the content-area colour to
+                // whichever one best complements this palette — still
+                // overridable afterwards via the CONTENT AREA row below.
+                const suggested = SHEET_OPTIONS.find(o => o.key === t.suggestedSheet);
+                select(
+                  { themeChoice: t.key, ...(suggested ? { sheetColor: suggested.color } : {}) },
+                  { accent: t.tokens.accent, backdrop: t.tokens.hero }
+                );
+              }}
               activeOpacity={0.8}
               style={[
                 styles.option,

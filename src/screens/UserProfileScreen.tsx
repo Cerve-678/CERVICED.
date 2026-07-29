@@ -315,7 +315,7 @@ export default function UserProfileScreen({ navigation }: any) {
                 setShowProviderModal(false);
                 resetData();
                 updateData({ accountType: 'provider', fromProviderSwitch: true, name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
-                navigation.navigate('SignUpStep3' as any);
+                navigation.navigate('SignUpStep3');
               }}
               activeOpacity={0.8}
             >

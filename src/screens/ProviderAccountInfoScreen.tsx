@@ -34,7 +34,7 @@ const CP_LIGHT = {
 export default function ProviderAccountInfoScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
-  const { updateUser } = useAuth();
+  const { user, updateUser, deleteProviderProfile } = useAuth();
 
   const [userId, setUserId]         = useState<string | null>(null);
   const [authEmail, setAuthEmail]   = useState('');
@@ -44,6 +44,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
   const [businessName, setBusinessName] = useState('');
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -58,9 +59,12 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
           setPhone(data.phone ?? '');
           setDob(data.dob ?? '');
         }
-        if (providerData) {
-          setBusinessName(providerData.display_name ?? '');
-        }
+        const { data: prov } = await supabase
+          .from('providers')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (prov) setBusinessName(prov.display_name ?? '');
       } finally {
         setLoading(false);
       }
@@ -88,6 +92,39 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
       setSaving(false);
     }
   }
+
+  const handleDeleteAccount = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    // This button only ever removes the provider side. If the account also
+    // has a client profile, it's kept untouched and the user stays signed in.
+    const isDualRole = !!user?.hasClientProfile;
+    Alert.alert(
+      'Delete Account',
+      isDualRole
+        ? 'This removes your business profile, services, portfolio and provider bookings. Your client account is not affected and you\'ll remain signed in.'
+        : 'You\'ll be signed out immediately and your account will be permanently deleted in 30 days. Log back in before then to reactivate it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await deleteProviderProfile();
+              // Success: if this was the user's only hat, AuthContext clears
+              // the session and the navigator switches to the auth screens,
+              // unmounting this component. Otherwise it drops them into
+              // client mode and this screen unmounts the same way.
+            } catch (err: any) {
+              setDeletingAccount(false);
+              Alert.alert('Error', err?.message || 'Could not delete your account. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const inputStyle = [styles.input, { color: C.text, backgroundColor: C.card, borderColor: C.border }];
   const labelStyle = [styles.label, { color: C.sub }];
@@ -192,6 +229,19 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
                 : <Text style={[styles.saveTxt, { color: C.ice }]}>Save Changes</Text>
               }
             </TouchableOpacity>
+
+            {/* Delete account */}
+            <TouchableOpacity
+              style={styles.deleteAccountBtn}
+              onPress={handleDeleteAccount}
+              disabled={deletingAccount}
+              activeOpacity={0.7}
+            >
+              {deletingAccount
+                ? <ActivityIndicator color="#c0392b" size="small" />
+                : <Text style={styles.deleteAccountText}>Delete Account</Text>
+              }
+            </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -223,4 +273,7 @@ const styles = StyleSheet.create({
 
   saveBtn: { borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 6, marginBottom: 8 },
   saveTxt: { fontSize: 15, fontWeight: '700' },
+
+  deleteAccountBtn: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 16 },
+  deleteAccountText: { fontSize: 13, fontWeight: '600', color: '#c0392b' },
 });

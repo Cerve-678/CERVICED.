@@ -19,6 +19,10 @@ import {
   NativeSyntheticEvent,
   TextInputFocusEventData,
   Switch,
+  Animated,
+  PanResponder,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -26,9 +30,28 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 // Icon imports
 import { BellIcon } from '../components/IconLibrary';
 import { Ionicons } from '@expo/vector-icons';
+
+// Category pills support drag-to-reorder via LayoutAnimation — must be
+// explicitly enabled on Android (iOS has it on by default).
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// LayoutAnimation is purely a smoothing hint and is known to throw or no-op
+// on React Native's New Architecture (Fabric, on by default since Expo SDK
+// 52+) — callers must never let a failure here block the state update it's
+// meant to be animating, or the update silently never happens.
+function safeConfigureLayoutAnimation() {
+  try {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  } catch {
+    // Reflow still happens, just without the slide animation.
+  }
+}
 
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
@@ -49,6 +72,7 @@ import {
   resolveProviderTheme,
   withAlpha,
   isDarkColor,
+  blend,
 } from '../constants/providerThemes';
 
 // Navigation types
@@ -190,36 +214,426 @@ interface ServiceData {
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
 }
 
-// ─── Tag presets per context ─────────────────────────────────────────────────
+// ─── Category kinds ──────────────────────────────────────────────────────────
+// Every category a provider adds is tied to one of these "kinds". The kind is
+// what drives the smart suggestions below (templates, tags, trend names), so a
+// category named "Braids" or "Injectables" still gets HAIR / AESTHETICS help.
+type CategoryKind = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'MUA' | 'AESTHETICS' | 'OTHER';
 
-const STYLE_TAGS = ['natural', 'glam', 'editorial', 'classic', 'boho', 'edgy', 'soft-girl', 'baddie', 'minimalist', 'bold'];
+const CATEGORY_KINDS: CategoryKind[] = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
-const OCCASION_TAGS = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party'];
+// icon = an Ionicons glyph name (no emoji — rendered via <Ionicons name={...} />)
+const CATEGORY_META: Record<CategoryKind, { icon: string; label: string; blurb: string }> = {
+  HAIR:       { icon: 'cut-outline',            label: 'Hair',       blurb: 'Cuts, colour, braids, extensions' },
+  NAILS:      { icon: 'color-palette-outline',  label: 'Nails',      blurb: 'Gel, acrylic, BIAB, nail art' },
+  LASHES:     { icon: 'eye-outline',            label: 'Lashes',     blurb: 'Classic, volume, lifts' },
+  BROWS:      { icon: 'contrast-outline',       label: 'Brows',      blurb: 'Lamination, microblading, tint' },
+  MUA:        { icon: 'brush-outline',          label: 'Makeup',     blurb: 'Glam, bridal, editorial' },
+  AESTHETICS: { icon: 'sparkles-outline',       label: 'Aesthetics', blurb: 'Facials, peels, injectables' },
+  OTHER:      { icon: 'apps-outline',           label: 'Other',      blurb: 'Anything else you offer' },
+};
 
-const TECHNIQUE_TAGS_BY_CATEGORY: { [key: string]: string[] } = {
-  HAIR:       ['balayage', 'highlights', 'ombre', 'keratin', 'relaxer', 'braids', 'locs', 'twists', 'extensions', 'colour'],
-  NAILS:      ['gel', 'acrylic', 'biab', 'nail-art', 'french', 'ombre', 'chrome', 'dip-powder', 'gel-x'],
-  LASHES:     ['classic', 'hybrid', 'volume', 'mega-volume', 'lash-lift', 'lash-tint', 'russian', 'wispy'],
-  BROWS:      ['microblading', 'powder-brow', 'combo-brow', 'lamination', 'tinting', 'hd-brows', 'threading', 'waxing'],
-  MUA:        ['airbrush', 'full-glam', 'editorial', 'natural', 'bridal', 'sfx', 'cut-crease', 'dewy'],
-  AESTHETICS: ['microneedling', 'chemical-peel', 'dermaplaning', 'hifu', 'filler', 'botox', 'laser', 'hydrafacial', 'mesotherapy', 'prp'],
+// Subcategory suggestions shown when a provider adds a category — scoped to
+// their OWN declared business type (providerData.providerService) instead of
+// the generic Hair/Nails/etc list, so an aesthetics provider sees "Lip
+// Fillers", "Botox", "Chemical Peels"… not "Hair", "Nails". Tapping one adds
+// it directly as a named category (same as typing it manually).
+const SUBCATEGORY_SUGGESTIONS_BY_CATEGORY: Record<CategoryKind, string[]> = {
+  HAIR:       ['Cuts & Styling', 'Colour', 'Balayage & Highlights', 'Braids & Locs', 'Extensions & Wigs', 'Treatments', 'Blow Dry Bar', "Men's Hair"],
+  NAILS:      ['Manicure', 'Pedicure', 'Gel', 'Acrylic', 'BIAB', 'Nail Art', 'Extensions'],
+  LASHES:     ['Classic Lashes', 'Hybrid Lashes', 'Volume Lashes', 'Lash Lifts', 'Lash Tinting'],
+  BROWS:      ['Brow Shaping', 'Brow Tinting', 'Brow Lamination', 'Microblading', 'Ombré Brows', 'Threading'],
+  MUA:        ['Bridal Makeup', 'Special Occasion', 'Editorial', 'Makeup Lessons'],
+  AESTHETICS: ['Lip Fillers', 'Anti-Wrinkle', 'Dermal Fillers', 'Chemical Peels', 'Microneedling', 'Skin Boosters', 'HydraFacial', 'Dermaplaning', 'Thread Lifts', 'Fat Dissolving', 'LED Light Therapy', 'Radiofrequency', 'Cryotherapy', 'Lymphatic Drainage'],
   OTHER:      [],
 };
 
-const OUTCOME_TAGS_BY_CATEGORY: { [key: string]: string[] } = {
-  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition'],
-  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability'],
-  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic'],
-  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched'],
-  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity'],
-  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting'],
-  OTHER:      ['results', 'enhancement', 'maintenance'],
+// Placeholder example for the "name your own" category field — matches the
+// provider's own business type instead of a fixed hair-specific example.
+const CATEGORY_NAME_EXAMPLE_BY_CATEGORY: Record<CategoryKind, string> = {
+  HAIR:       'e.g., Knotless Braids',
+  NAILS:      'e.g., Ombré Nails',
+  LASHES:     'e.g., Wet-Look Lashes',
+  BROWS:      'e.g., Ombré Brows',
+  MUA:        'e.g., Editorial Makeup',
+  AESTHETICS: 'e.g., Lip Fillers',
+  OTHER:      'e.g., Bridal Package',
 };
 
-const TREND_SUGGESTIONS = ['glazed-donut', 'clean-girl', 'mob-wife', 'coquette', 'soap-brows', 'butterfly-lashes', 'old-money', 'cherry-cola', 'strawberry-girl'];
+// Keyword hints so free-text / imported category names still resolve to a kind.
+const CATEGORY_KEYWORDS: Record<CategoryKind, string[]> = {
+  HAIR:       ['hair', 'braid', 'loc', 'weave', 'wig', 'silk press', 'blow', 'cut', 'colour', 'color', 'balayage', 'extension', 'twist', 'cornrow'],
+  NAILS:      ['nail', 'mani', 'pedi', 'acrylic', 'gel', 'biab', 'polish'],
+  LASHES:     ['lash', 'extension set', 'lift'],
+  BROWS:      ['brow', 'microblad', 'lamination', 'threading'],
+  MUA:        ['makeup', 'make up', 'mua', 'glam', 'bridal face'],
+  AESTHETICS: ['aesthetic', 'facial', 'skin', 'peel', 'filler', 'botox', 'injectable', 'needling', 'wax', 'laser', 'hifu', 'derma'],
+  OTHER:      [],
+};
 
-const AESTHETICS_CATEGORIES = ['AESTHETICS'];
-const isAestheticsService = (cat: string) => AESTHETICS_CATEGORIES.includes(cat.toUpperCase());
+/** Resolve a category name to a kind — exact match → keyword match → fallback. */
+const inferCategoryKind = (name: string, fallback: string = 'OTHER'): CategoryKind => {
+  const upper = (name || '').trim().toUpperCase();
+  if ((CATEGORY_KINDS as string[]).includes(upper)) return upper as CategoryKind;
+  const lower = (name || '').toLowerCase();
+  for (const kind of CATEGORY_KINDS) {
+    if (kind === 'OTHER') continue;
+    if (CATEGORY_KEYWORDS[kind].some(kw => lower.includes(kw))) return kind;
+  }
+  const fb = (fallback || '').trim().toUpperCase();
+  return (CATEGORY_KINDS as string[]).includes(fb) ? (fb as CategoryKind) : 'OTHER';
+};
+
+const isAestheticsService = (cat: string, fallback?: string) => inferCategoryKind(cat, fallback) === 'AESTHETICS';
+
+// ─── Tag presets per context ─────────────────────────────────────────────────
+
+// "Style / Vibe" — a shared core plus a few flavours that fit each kind.
+const STYLE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
+  HAIR:       ['natural', 'glam', 'sleek', 'lived-in', 'boho', 'edgy', 'classic', 'bold', 'romantic', 'textured', 'polished', 'undone', 'vintage'],
+  NAILS:      ['natural', 'glam', 'minimalist', 'y2k', 'baddie', 'soft-girl', 'editorial', 'bold', 'chrome', 'french-inspired', 'grunge', 'coquette', 'clean-girl'],
+  LASHES:     ['natural', 'glam', 'wispy', 'doll', 'baddie', 'dramatic', 'classic', 'bold', 'fluffy', 'cat-eye', 'anime', 'soft-glam'],
+  BROWS:      ['natural', 'fluffy', 'defined', 'soft-girl', 'bold', 'editorial', 'classic', 'feathered', 'sculpted', 'arched', 'minimal'],
+  MUA:        ['natural', 'glam', 'editorial', 'soft-girl', 'clean-girl', 'bridal', 'bold', 'dewy', 'matte', 'sun-kissed', 'vintage-glam', 'monochrome'],
+  AESTHETICS: ['natural', 'glow-up', 'subtle', 'preventative', 'rejuvenating', 'clinical', 'natural-enhancement', 'restorative', 'youthful', 'refined'],
+  OTHER:      ['natural', 'glam', 'editorial', 'classic', 'minimalist', 'bold', 'modern', 'timeless'],
+};
+
+// "Best for (occasion)" — universal set, with a tailored list for aesthetics.
+const OCCASION_TAGS_DEFAULT = ['bridal', 'everyday', 'date-night', 'prom', 'photoshoot', 'festival', 'birthday', 'event', 'party', 'graduation', 'holiday', 'girls-night', 'anniversary', 'vacation'];
+const OCCASION_TAGS_BY_CATEGORY: Partial<Record<CategoryKind, string[]>> = {
+  AESTHETICS: ['pre-wedding', 'event-prep', 'maintenance', 'glow-up', 'confidence-boost', 'anti-ageing', 'everyday', 'special-occasion', 'seasonal-refresh', 'first-treatment'],
+};
+
+const TECHNIQUE_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
+  HAIR:       ['balayage', 'highlights', 'ombre', 'keratin', 'relaxer', 'braids', 'locs', 'twists', 'extensions', 'colour', 'foilyage', 'colour-correction', 'perm', 'silk-press', 'weave', 'toner'],
+  NAILS:      ['gel', 'acrylic', 'biab', 'nail-art', 'french', 'ombre', 'chrome', 'dip-powder', 'gel-x', 'polygel', 'encapsulated', 'hand-painted', '3d-art', 'cat-eye-gel'],
+  LASHES:     ['classic', 'hybrid', 'volume', 'mega-volume', 'lash-lift', 'lash-tint', 'russian', 'wispy', 'mink', 'faux-mink', 'colored-lashes', 'bottom-lashes'],
+  BROWS:      ['microblading', 'powder-brow', 'combo-brow', 'lamination', 'tinting', 'hd-brows', 'threading', 'waxing', 'nano-brows', 'brow-mapping', 'henna-brows', 'wax-and-thread'],
+  MUA:        ['airbrush', 'full-glam', 'editorial', 'natural', 'bridal', 'sfx', 'cut-crease', 'dewy', 'contour-and-highlight', 'strobing', 'baking', 'graphic-liner'],
+  AESTHETICS: ['microneedling', 'chemical-peel', 'dermaplaning', 'hifu', 'filler', 'botox', 'laser', 'hydrafacial', 'mesotherapy', 'prp', 'led-therapy', 'radiofrequency', 'cryotherapy', 'lymphatic-drainage'],
+  OTHER:      [],
+};
+
+const OUTCOME_TAGS_BY_CATEGORY: Record<CategoryKind, string[]> = {
+  HAIR:       ['volume', 'length', 'shine', 'grey-coverage', 'protection', 'growth', 'smoothness', 'definition', 'texture', 'colour-vibrancy', 'repair', 'bounce'],
+  NAILS:      ['length', 'art', 'colour', 'strength', 'natural-look', 'durability', 'shine', 'flexibility', 'precision'],
+  LASHES:     ['volume', 'length', 'definition', 'lift', 'curl', 'dramatic', 'natural-look', 'symmetry', 'longevity'],
+  BROWS:      ['definition', 'shape', 'fullness', 'natural', 'bold', 'arched', 'symmetry', 'longevity', 'precision'],
+  MUA:        ['glow', 'coverage', 'definition', 'lifted', 'natural-look', 'dramatic', 'longevity', 'radiance', 'flawless-finish', 'camera-ready'],
+  AESTHETICS: ['glow', 'firmness', 'smoothness', 'rejuvenation', 'definition', 'hydration', 'reduction', 'lifting', 'even-tone', 'collagen-boost', 'pore-refinement', 'radiance'],
+  OTHER:      ['results', 'enhancement', 'maintenance', 'confidence', 'refresh'],
+};
+
+// Viral / trend names clients actually search for — now per kind so a lash artist
+// never sees "soap-brows" and a nail tech never sees "butterfly-lashes".
+const TREND_NAMES_BY_CATEGORY: Record<CategoryKind, string[]> = {
+  HAIR:       ['butterfly-cut', 'money-piece', 'expensive-brunette', 'old-money', 'mob-wife', 'cherry-cola', 'copper', 'lived-in', 'curtain-bangs', 'jellyfish-cut', 'clean-girl-bun', 'wolf-cut', 'chocolate-cherry', 'buttery-blonde'],
+  NAILS:      ['glazed-donut', 'blueberry-milk', 'cherry-cola', 'chrome', 'aura-nails', 'milky-white', 'strawberry-girl', 'velvet', 'lip-gloss', 'jelly-nails', 'cat-eye', 'french-tip-revival', 'mob-wife-nails'],
+  LASHES:     ['butterfly-lashes', 'manga-lashes', 'anime-lashes', 'wet-look', 'fox-eye', 'natural-classic', 'kim-k', 'angel-lashes', 'clean-girl-lashes', 'doll-eye', 'colored-tips'],
+  BROWS:      ['soap-brows', 'brow-lamination', 'fluffy-brows', 'fox-brows', 'feathered', 'snatched-arch', 'nano-brows', 'skinny-brow-revival', 'laminated-and-tinted'],
+  MUA:        ['clean-girl', 'latte-makeup', 'strawberry-girl', 'sunburn-blush', 'cold-girl', 'douyin', 'siren-eyes', 'glazed', 'tomato-girl', 'mob-wife-glam', 'espresso-makeup'],
+  AESTHETICS: ['glass-skin', 'baby-botox', 'russian-lips', 'lip-flip', 'skinboosters', 'glazed-donut-skin', 'snatched', 'fox-eye-lift', 'preventative-botox', 'liquid-facelift', 'tear-trough-filler'],
+  OTHER:      ['clean-girl', 'old-money', 'that-girl', 'quiet-luxury', 'coastal-grandma', 'mob-wife'],
+};
+
+// Starter contraindications for aesthetic treatments — common, well-established
+// conditions practitioners routinely screen for. Tap to add instantly; providers
+// can still type their own for anything treatment-specific.
+// TODO: revisit with a proper pass on current per-treatment guidance — see the
+// research prompt in the PR/commit notes for sourcing more specific ones.
+const COMMON_CONTRAINDICATIONS = [
+  'Pregnant or breastfeeding',
+  'Active cold sore / skin infection in area',
+  'Blood thinning medication',
+  'Autoimmune condition',
+  'Keloid scarring history',
+  'Active acne in treatment area',
+  'Allergy to local anaesthetic',
+  'Recent sunburn / sun exposure',
+  'Uncontrolled diabetes',
+  'Under 18 without guardian consent',
+];
+
+// Pre-built service starting points offered the moment a provider taps "Add
+// Service" — pre-fills name + duration so most services are two taps to save.
+interface ServiceTemplate {
+  name: string;
+  duration: string;
+  serviceType?: ServiceData['serviceType'];
+  description?: string;
+  styleTags?: string[];
+  techniqueTags?: string[];
+  outcomeTags?: string[];
+  occasionTags?: string[];
+  trendNames?: string[];
+  /** Always offered as a starting point, regardless of which specific
+   *  subcategory is selected — e.g. a consultation. Not filtered out even
+   *  when a subcategory's template list is otherwise narrowed. */
+  generic?: boolean;
+}
+const SERVICE_TEMPLATES_BY_CATEGORY: Record<CategoryKind, ServiceTemplate[]> = {
+  HAIR: [
+    { name: 'Consultation',          duration: '20 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
+    { name: 'Cut & Blow Dry',        duration: '1 hr',      description: 'A fresh cut finished with a smooth, salon-quality blow dry.', styleTags: ['sleek'], techniqueTags: [], outcomeTags: ['shine', 'definition'] },
+    { name: 'Blow Dry',              duration: '45 min',    description: 'Wash and blow dry for a bouncy, salon-fresh finish.', styleTags: ['sleek', 'glam'], outcomeTags: ['volume', 'shine'] },
+    { name: 'Full Head Highlights',  duration: '3 hr',       description: 'Dimensional highlights all over for a lighter, sun-kissed look.', techniqueTags: ['highlights', 'colour'], outcomeTags: ['shine', 'definition'], trendNames: ['expensive-brunette', 'money-piece'] },
+    { name: 'Balayage',              duration: '3 hr',       description: 'Hand-painted, low-maintenance colour that grows out beautifully.', techniqueTags: ['balayage', 'colour'], outcomeTags: ['shine', 'definition'], trendNames: ['lived-in', 'money-piece', 'expensive-brunette'] },
+    { name: 'Root Tint',             duration: '1 hr 30',    description: 'Root touch-up to keep your colour looking fresh between full appointments.', techniqueTags: ['colour'], outcomeTags: ['grey-coverage', 'shine'] },
+    { name: 'Toner / Gloss',         duration: '30 min',     description: 'A quick gloss to refresh tone and add mirror-like shine.', techniqueTags: ['colour'], outcomeTags: ['shine'] },
+    { name: 'Keratin Treatment',     duration: '2 hr 30',    description: 'Smoothing treatment that cuts frizz and adds long-lasting shine.', techniqueTags: ['keratin'], outcomeTags: ['smoothness', 'shine', 'protection'] },
+    { name: 'Knotless Braids',       duration: '4 hr',       description: 'Tension-free knotless braids, neat at the root and lightweight to wear.', techniqueTags: ['braids'], outcomeTags: ['protection', 'length'], trendNames: [] },
+    { name: 'Silk Press',            duration: '1 hr 30',    description: 'Silky, salon-smooth press that shows off your natural length and shine.', outcomeTags: ['shine', 'smoothness'] },
+    { name: 'Wig Install',           duration: '2 hr',       description: 'Melted, natural-looking wig install customised to your hairline.', techniqueTags: ['extensions'], outcomeTags: ['definition', 'volume'] },
+    { name: 'Dry Cut',               duration: '30 min',     description: 'A precision cut with no wash or blow dry — quick shape-up between appointments.', outcomeTags: ['definition'] },
+    { name: 'Half Head Highlights',  duration: '2 hr',       description: 'Highlights around the face and crown for a lighter look without going full head.', techniqueTags: ['highlights', 'colour'], outcomeTags: ['shine', 'definition'] },
+    { name: 'Cornrows',              duration: '2 hr 30',    description: 'Neat, close-to-the-scalp cornrows — straight back or in a custom pattern.', techniqueTags: ['braids'], outcomeTags: ['protection', 'length'] },
+    { name: 'Deep Conditioning Treatment', duration: '45 min', description: 'Intensive moisture treatment to restore softness and strength to dry or damaged hair.', outcomeTags: ['smoothness', 'shine', 'growth'] },
+    { name: "Men's Haircut",         duration: '30 min',     description: "A tailored men's cut, clippers or scissor work to your preferred style.", outcomeTags: ['definition'] },
+    { name: 'Beard Trim',            duration: '20 min',     description: 'Shape and tidy for a sharp, well-defined beard line.', outcomeTags: ['definition'] },
+    { name: 'Foilyage',              duration: '2 hr 30',    description: 'Foil-placed balayage for brighter, more blended dimension.', techniqueTags: ['foilyage', 'highlights'], outcomeTags: ['shine', 'colour-vibrancy'], trendNames: ['money-piece'] },
+    { name: 'Colour Correction',     duration: '4 hr',       serviceType: 'restorative', description: 'Corrective colour work to fix tone, banding or previous colour gone wrong.', techniqueTags: ['colour-correction'], outcomeTags: ['colour-vibrancy', 'repair'] },
+    { name: 'Perm',                  duration: '2 hr',       description: 'Chemical wave treatment for lasting curl or texture.', techniqueTags: ['perm'], outcomeTags: ['texture', 'bounce'] },
+    { name: 'Weave Install',         duration: '3 hr',       description: 'Sewn-in weave for extra length and volume with a seamless blend.', techniqueTags: ['weave', 'extensions'], outcomeTags: ['length', 'volume'] },
+    { name: 'Fringe / Bangs Trim',   duration: '15 min',     description: 'Quick shape-up to keep your fringe fresh between full cuts.', outcomeTags: ['definition'] },
+  ],
+  NAILS: [
+    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
+    { name: 'Gel Manicure',          duration: '45 min',    description: 'Chip-resistant gel polish with shaping and cuticle care.', techniqueTags: ['gel'], outcomeTags: ['colour', 'durability'] },
+    { name: 'BIAB Overlay',          duration: '1 hr',       description: 'Strengthening builder gel overlay for stronger, healthier natural nails.', techniqueTags: ['biab'], outcomeTags: ['strength', 'durability'] },
+    { name: 'Acrylic Full Set',      duration: '1 hr 30',    description: 'Full set of acrylic extensions, shaped and finished to your choice of length.', techniqueTags: ['acrylic'], outcomeTags: ['length', 'durability'] },
+    { name: 'Gel-X Extensions',      duration: '1 hr 30',    description: 'Lightweight, flexible gel-x tips for a natural-feeling extension.', techniqueTags: ['gel-x'], outcomeTags: ['length', 'natural-look'], trendNames: ['milky-white'] },
+    { name: 'Infill',                duration: '1 hr',       description: 'Infill to keep your extensions neat as your natural nail grows through.', techniqueTags: ['acrylic', 'gel'], outcomeTags: ['durability'] },
+    { name: 'Soak Off & Removal',    duration: '30 min',     description: 'Gentle removal of gel or acrylic with nail and cuticle care after.', outcomeTags: ['natural-look'] },
+    { name: 'Gel Pedicure',          duration: '45 min',     description: 'Full pedicure with long-lasting gel polish and a relaxing soak.', techniqueTags: ['gel'], outcomeTags: ['colour', 'durability'] },
+    { name: 'Nail Art (per nail)',   duration: '15 min',     description: 'Custom nail art add-on, priced per nail — hand-painted or with embellishments.', techniqueTags: ['nail-art'], outcomeTags: ['art', 'colour'], trendNames: ['chrome', 'aura-nails'] },
+    { name: 'Classic Manicure',      duration: '30 min',     description: 'Shape, cuticle care and regular polish for a clean, natural finish.', outcomeTags: ['natural-look'] },
+    { name: 'Classic Pedicure',      duration: '30 min',     description: 'Soak, shape and regular polish with a relaxing foot massage.', outcomeTags: ['natural-look'] },
+    { name: 'French Tips',           duration: '45 min',     description: 'The timeless French manicure — clean white tips over a natural base.', techniqueTags: ['french'], outcomeTags: ['art', 'colour'] },
+    { name: 'Dip Powder Set',        duration: '1 hr',       description: 'Durable dip powder colour, built up in layers for strength and shine.', techniqueTags: ['dip-powder'], outcomeTags: ['colour', 'durability'] },
+    { name: 'Polygel Full Set',      duration: '1 hr 30',    description: 'Lightweight, flexible polygel extensions built up on tips or forms.', techniqueTags: ['polygel'], outcomeTags: ['length', 'flexibility'] },
+    { name: 'Cat Eye Gel Manicure',  duration: '1 hr',       description: 'Magnetic cat-eye gel polish for a shimmering, dimensional finish.', techniqueTags: ['cat-eye-gel', 'gel'], outcomeTags: ['colour', 'shine'], trendNames: ['cat-eye'] },
+    { name: '3D Nail Art (per nail)', duration: '20 min',    description: 'Sculpted 3D embellishments and charms, priced per nail.', techniqueTags: ['3d-art'], outcomeTags: ['art', 'precision'] },
+    { name: 'Encapsulated Nail Art', duration: '1 hr 15',    description: 'Delicate design or foil sealed under a clear gel layer for lasting shine.', techniqueTags: ['encapsulated', 'nail-art'], outcomeTags: ['art', 'durability'] },
+    { name: 'Nail Repair (per nail)', duration: '10 min',    description: 'Fixes a broken or lifted nail without a full new set.', outcomeTags: ['strength', 'durability'] },
+  ],
+  LASHES: [
+    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
+    { name: 'Classic Full Set',      duration: '1 hr 30',    description: 'One extension per natural lash for a subtle, everyday enhancement.', techniqueTags: ['classic'], outcomeTags: ['length', 'definition'], trendNames: ['natural-classic'] },
+    { name: 'Hybrid Full Set',       duration: '2 hr',       description: 'A mix of classic and volume fans for texture with added fullness.', techniqueTags: ['hybrid'], outcomeTags: ['volume', 'definition'] },
+    { name: 'Volume Full Set',       duration: '2 hr 30',    description: 'Lightweight fans of fine lashes for a fuller, fluffier look.', techniqueTags: ['volume'], outcomeTags: ['volume', 'dramatic'], trendNames: ['wet-look'] },
+    { name: 'Mega Volume',           duration: '2 hr 30',    description: 'Maximum density fans for a bold, glam lash look.', techniqueTags: ['mega-volume'], outcomeTags: ['volume', 'dramatic'], trendNames: ['kim-k'] },
+    { name: 'Infill (2–3 weeks)',    duration: '1 hr',       description: 'Top-up on natural lash growth to keep your set full.', outcomeTags: ['volume'] },
+    { name: 'Lash Lift & Tint',      duration: '1 hr',       description: 'Curls and tints your natural lashes for an extension-free lift.', techniqueTags: ['lash-lift', 'lash-tint'], outcomeTags: ['curl', 'definition'], trendNames: ['natural-classic'] },
+    { name: 'Lash Removal',          duration: '30 min',     description: 'Safe, gentle removal of extensions without damaging natural lashes.' },
+    { name: 'Wispy Lash Set',        duration: '2 hr',       description: 'Textured, spiky fans mixed through the set for a fluttery, wispy finish.', techniqueTags: ['wispy'], outcomeTags: ['definition', 'volume'] },
+    { name: 'Russian Volume Set',    duration: '2 hr 30',    description: 'Handmade Russian fans for ultra-fluffy, full volume lashes.', techniqueTags: ['russian'], outcomeTags: ['volume', 'dramatic'] },
+    { name: 'Lash Tint Only',        duration: '20 min',     description: 'Tints natural lashes darker — no extensions, just definition.', techniqueTags: ['lash-tint'], outcomeTags: ['definition'] },
+    { name: 'Mink Full Set',         duration: '2 hr',       description: 'Ultra-soft mink lashes for a naturally glamorous, long-lasting set.', techniqueTags: ['mink'], outcomeTags: ['volume', 'longevity'] },
+    { name: 'Faux Mink Full Set',    duration: '2 hr',       description: 'Cruelty-free faux mink lashes with a soft, natural-looking finish.', techniqueTags: ['faux-mink'], outcomeTags: ['volume', 'natural-look'] },
+    { name: 'Colored Lash Set',      duration: '2 hr',       description: 'Coloured lash extensions mixed through the set for a fun pop of colour.', techniqueTags: ['colored-lashes'], outcomeTags: ['dramatic', 'definition'], trendNames: ['colored-tips'] },
+    { name: 'Bottom Lash Set',       duration: '45 min',     description: 'Fine extensions on the lower lash line to frame the eyes.', techniqueTags: ['bottom-lashes'], outcomeTags: ['definition', 'symmetry'] },
+  ],
+  BROWS: [
+    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
+    { name: 'Brow Wax & Tint',       duration: '30 min',    description: 'Shaping wax with tint to define and fill your natural brow.', techniqueTags: ['waxing', 'tinting'], outcomeTags: ['definition', 'shape'] },
+    { name: 'Brow Lamination',       duration: '45 min',     description: 'Brushed-up, fluffy brows that hold their shape for weeks.', techniqueTags: ['lamination'], outcomeTags: ['fullness', 'shape'], trendNames: ['soap-brows', 'fluffy-brows'] },
+    { name: 'HD Brows',              duration: '45 min',     description: 'Tailored shape using tint, wax and precision trimming for a defined finish.', techniqueTags: ['hd-brows'], outcomeTags: ['definition', 'arched'] },
+    { name: 'Microblading',          duration: '2 hr',       serviceType: 'treatment', description: 'Semi-permanent hair-stroke tattoo for naturally fuller-looking brows.', techniqueTags: ['microblading'], outcomeTags: ['fullness', 'natural'] },
+    { name: 'Powder / Ombré Brows',  duration: '2 hr',       serviceType: 'treatment', description: 'Soft, powdered semi-permanent makeup finish for defined, filled-in brows.', techniqueTags: ['powder-brow', 'combo-brow'], outcomeTags: ['definition', 'bold'], trendNames: ['snatched-arch'] },
+    { name: 'Threading',             duration: '15 min',     description: 'Precise thread shaping for clean, natural brow lines.', techniqueTags: ['threading'], outcomeTags: ['shape', 'natural'] },
+    { name: 'Brow Henna',            duration: '30 min',     description: 'Natural henna tint that stains both the hairs and the skin beneath for extra fullness.', techniqueTags: ['tinting'], outcomeTags: ['fullness', 'natural'] },
+    { name: 'Combo Brows',           duration: '2 hr',       serviceType: 'treatment', description: 'Microblading strokes with shaded powder underneath for a soft, defined finish.', techniqueTags: ['combo-brow'], outcomeTags: ['definition', 'fullness'] },
+    { name: 'Brow Mapping Consultation', duration: '20 min', serviceType: 'consultation', description: 'Measuring and mapping your ideal brow shape before a semi-permanent treatment.' },
+    { name: 'Nano Brows',            duration: '2 hr',       serviceType: 'treatment', description: 'Ultra-fine hair-stroke semi-permanent brows for a crisp, natural finish.', techniqueTags: ['nano-brows'], outcomeTags: ['precision', 'fullness'], trendNames: ['nano-brows'] },
+    { name: 'Wax & Thread Combo',    duration: '25 min',     description: 'Wax for the bulk of the shape, thread for precision around the brow line.', techniqueTags: ['wax-and-thread'], outcomeTags: ['shape', 'precision'] },
+    { name: 'Brow Lamination & Tint', duration: '1 hr',      description: 'Lamination for hold plus a tint for fuller, longer-lasting definition.', techniqueTags: ['lamination', 'tinting'], outcomeTags: ['fullness', 'longevity'], trendNames: ['laminated-and-tinted'] },
+  ],
+  MUA: [
+    { name: 'Consultation',          duration: '15 min', serviceType: 'consultation', description: 'A quick chat about what you want before booking in for the full service.', generic: true },
+    { name: 'Full Glam',             duration: '1 hr',       description: 'Full-coverage glam makeup built for photos and a big night out.', styleTags: ['glam'], techniqueTags: ['full-glam'], outcomeTags: ['glow', 'coverage', 'dramatic'] },
+    { name: 'Soft Glam',             duration: '1 hr',       description: 'Everyday-wearable glam with soft definition and a lit-from-within glow.', styleTags: ['soft-girl', 'glam'], outcomeTags: ['glow', 'natural-look'], trendNames: ['clean-girl', 'latte-makeup'] },
+    { name: 'Bridal Makeup',         duration: '1 hr 30',    description: 'Long-wear bridal makeup designed to look flawless all day and in photos.', styleTags: ['bridal'], techniqueTags: ['bridal'], outcomeTags: ['longevity', 'glow'], occasionTags: ['bridal'] },
+    { name: 'Bridal Trial',          duration: '1 hr 30',    description: 'Full trial run of your bridal look ahead of the big day.', styleTags: ['bridal'], techniqueTags: ['bridal'], occasionTags: ['bridal'] },
+    { name: 'Natural / Everyday',    duration: '45 min',     description: 'Fresh, skin-like makeup that enhances your features without heavy coverage.', styleTags: ['natural', 'clean-girl'], techniqueTags: ['natural'], outcomeTags: ['natural-look', 'glow'], trendNames: ['clean-girl'] },
+    { name: 'Makeup Lesson',         duration: '2 hr',       description: 'One-to-one lesson to learn techniques tailored to your face and routine.', outcomeTags: ['definition'] },
+    { name: 'Airbrush Makeup',       duration: '1 hr 15',    description: 'Lightweight, buildable airbrush foundation for flawless, long-wear coverage.', techniqueTags: ['airbrush'], outcomeTags: ['coverage', 'longevity'] },
+    { name: 'Editorial / Photoshoot Makeup', duration: '1 hr 30', description: 'Bold, camera-ready looks designed for photography and editorial shoots.', techniqueTags: ['editorial'], outcomeTags: ['dramatic', 'definition'], occasionTags: ['photoshoot'] },
+    { name: 'SFX Makeup',            duration: '2 hr',       description: 'Special-effects makeup for creative, theatrical or costume looks.', techniqueTags: ['sfx'], outcomeTags: ['dramatic'] },
+    { name: 'Contour & Highlight Session', duration: '45 min', description: 'Sculpted contour and highlight for a defined, camera-ready glow.', techniqueTags: ['contour-and-highlight'], outcomeTags: ['definition', 'radiance'] },
+    { name: 'Strobing Glow Makeup',  duration: '1 hr',       description: 'Dewy, light-reflecting strobing technique for a lit-from-within glow.', techniqueTags: ['strobing'], outcomeTags: ['glow', 'radiance'] },
+    { name: 'Graphic Liner Look',    duration: '45 min',     description: 'Bold graphic eyeliner styling for a striking, editorial-ready eye.', techniqueTags: ['graphic-liner'], outcomeTags: ['dramatic', 'definition'] },
+    { name: 'Baking & Setting Makeup', duration: '1 hr',     description: 'Baked, set-in-place base makeup built to last all day and photograph flawlessly.', techniqueTags: ['baking'], outcomeTags: ['flawless-finish', 'longevity'] },
+  ],
+  AESTHETICS: [
+    { name: 'Skin Consultation',        duration: '30 min', serviceType: 'consultation', description: 'In-depth skin assessment and a personalised treatment plan.', generic: true },
+    { name: 'Anti-Wrinkle (1 area)',    duration: '30 min', serviceType: 'treatment',    description: 'Targeted anti-wrinkle treatment for one area to soften fine lines.', techniqueTags: ['botox'], outcomeTags: ['smoothness'], trendNames: ['baby-botox'] },
+    { name: 'Anti-Wrinkle (3 areas)',   duration: '45 min', serviceType: 'treatment',    description: 'Full upper-face anti-wrinkle treatment across three areas.', techniqueTags: ['botox'], outcomeTags: ['smoothness', 'rejuvenation'] },
+    { name: 'Lip Filler (0.5ml)',       duration: '45 min', serviceType: 'enhancement',  description: 'Subtle lip enhancement for natural volume and hydration.', techniqueTags: ['filler'], outcomeTags: ['hydration', 'definition'], trendNames: ['lip-flip'] },
+    { name: 'Lip Filler (1ml)',         duration: '1 hr',   serviceType: 'enhancement',  description: 'Fuller lip enhancement with balanced, natural-looking volume.', techniqueTags: ['filler'], outcomeTags: ['hydration', 'definition'], trendNames: ['russian-lips'] },
+    { name: 'Cheek Filler',             duration: '45 min', serviceType: 'enhancement',  description: 'Contours and lifts the mid-face for a naturally sculpted look.', techniqueTags: ['filler'], outcomeTags: ['lifting', 'definition'], trendNames: ['snatched'] },
+    { name: 'Chemical Peel',            duration: '45 min', serviceType: 'treatment',    description: 'Resurfacing peel to brighten tone and refine texture.', techniqueTags: ['chemical-peel'], outcomeTags: ['glow', 'smoothness'], trendNames: ['glass-skin'] },
+    { name: 'Microneedling',            duration: '1 hr',   serviceType: 'treatment',    description: 'Collagen-boosting microneedling to improve texture and firmness.', techniqueTags: ['microneedling'], outcomeTags: ['firmness', 'rejuvenation'] },
+    { name: 'HydraFacial',              duration: '1 hr',   serviceType: 'treatment',    description: 'Deep cleanse, exfoliation and hydration for an instant glow.', techniqueTags: ['hydrafacial'], outcomeTags: ['glow', 'hydration'], trendNames: ['glass-skin', 'glazed-donut-skin'] },
+    { name: 'Dermaplaning',             duration: '45 min', serviceType: 'treatment',    description: 'Gentle exfoliation that removes peach fuzz for smoother, brighter skin.', techniqueTags: ['dermaplaning'], outcomeTags: ['smoothness', 'glow'] },
+    { name: 'Skin Booster Treatment',   duration: '45 min', serviceType: 'treatment',    description: 'Micro-injections of hyaluronic acid to deeply hydrate and improve skin quality over a course of sessions.', techniqueTags: ['mesotherapy'], outcomeTags: ['hydration', 'glow'] },
+    { name: 'Fat Dissolving Injections', duration: '30 min', serviceType: 'treatment',   description: 'Targeted injections to break down small pockets of stubborn fat.', techniqueTags: ['mesotherapy'], outcomeTags: ['reduction'] },
+    { name: 'Thread Lift',              duration: '1 hr',   serviceType: 'treatment',    description: 'Dissolvable threads inserted to lift and tighten sagging skin without surgery.', outcomeTags: ['lifting', 'firmness'] },
+    { name: 'HIFU Facial',              duration: '1 hr',   serviceType: 'treatment',    description: 'Ultrasound energy to lift and tighten deeper skin layers, non-invasively.', techniqueTags: ['hifu'], outcomeTags: ['lifting', 'firmness'] },
+    { name: 'Laser Skin Treatment',     duration: '30 min', serviceType: 'treatment',    description: 'Laser resurfacing to even tone, reduce pigmentation and refine texture.', techniqueTags: ['laser'], outcomeTags: ['smoothness', 'rejuvenation'] },
+    // LED Light Therapy, Radiofrequency, Cryotherapy and Lymphatic Drainage
+    // each live under their own subcategory (see SUBCATEGORY_SUGGESTIONS_BY_CATEGORY
+    // + SUBCATEGORY_SCOPE below) instead of a single flat entry here, so picking
+    // that subcategory shows every type of that treatment, not just one option.
+    { name: 'Red Light Therapy (Anti-Ageing)', duration: '30 min', serviceType: 'treatment', description: 'Red/near-infrared light to boost collagen and calm ageing skin.', techniqueTags: ['led-therapy'], outcomeTags: ['radiance', 'collagen-boost'] },
+    { name: 'Blue Light Therapy (Acne)', duration: '30 min', serviceType: 'treatment', description: 'Blue light wavelengths to target acne-causing bacteria and even tone.', techniqueTags: ['led-therapy'], outcomeTags: ['even-tone', 'pore-refinement'] },
+    { name: 'Combination LED Therapy',  duration: '45 min', serviceType: 'treatment',    description: 'Multi-wavelength LED protocol combining red and blue light for an all-round glow.', techniqueTags: ['led-therapy'], outcomeTags: ['radiance', 'even-tone'] },
+    { name: 'Radiofrequency Face Tightening', duration: '45 min', serviceType: 'treatment', description: 'Heat energy to stimulate collagen and firm sagging facial skin.', techniqueTags: ['radiofrequency'], outcomeTags: ['firmness', 'collagen-boost'] },
+    { name: 'Radiofrequency Body Contouring', duration: '1 hr', serviceType: 'treatment', description: 'Radiofrequency energy to tighten and contour looser body skin.', techniqueTags: ['radiofrequency'], outcomeTags: ['firmness', 'reduction'] },
+    { name: 'Cryotherapy Facial',       duration: '30 min', serviceType: 'treatment',    description: 'Cooling facial treatment to de-puff, tighten pores and boost radiance.', techniqueTags: ['cryotherapy'], outcomeTags: ['radiance', 'pore-refinement'] },
+    { name: 'Localised Cryotherapy (Fat Freezing)', duration: '45 min', serviceType: 'treatment', description: 'Targeted cooling to reduce stubborn fat pockets and firm the area.', techniqueTags: ['cryotherapy'], outcomeTags: ['reduction', 'firmness'] },
+    { name: 'Facial Lymphatic Drainage Massage', duration: '45 min', serviceType: 'treatment', description: 'Gentle facial massage technique to reduce puffiness and support circulation.', techniqueTags: ['lymphatic-drainage'], outcomeTags: ['reduction', 'glow'] },
+    { name: 'Full Body Lymphatic Drainage Massage', duration: '1 hr', serviceType: 'treatment', description: 'Full-body massage technique to ease fluid retention and support circulation.', techniqueTags: ['lymphatic-drainage'], outcomeTags: ['reduction', 'firmness'] },
+  ],
+  OTHER: [
+    { name: 'Consultation',          duration: '30 min', serviceType: 'consultation', description: 'A chance to talk through what you are looking for before booking in.', generic: true },
+    { name: 'Standard Appointment',  duration: '1 hr',    description: 'Standard appointment slot — details confirmed with your provider.' },
+    { name: 'Group Session',         duration: '2 hr',    description: 'A session booked for a group — details confirmed with your provider.' },
+    { name: 'Follow-up Appointment', duration: '30 min',  description: 'A shorter check-in or top-up following a previous appointment.' },
+    { name: 'Trial / Sample Session', duration: '30 min', description: 'A low-commitment taster session before booking the full service.', outcomeTags: ['confidence'] },
+    { name: 'Refresh / Top-up',      duration: '20 min',  description: 'A quick refresh between full appointments.', outcomeTags: ['refresh'] },
+  ],
+};
+
+// Narrows templates + technique/outcome tags to the SPECIFIC subcategory a
+// provider picked (e.g. "Microneedling"), instead of the whole parent kind's
+// generic list (which would show every Aesthetics technique — botox, filler,
+// laser — under a Microneedling category). Keyed by exact subcategory name
+// from SUBCATEGORY_SUGGESTIONS_BY_CATEGORY; every string reused here must
+// already exist in the relevant TECHNIQUE/OUTCOME pool or template list —
+// no new tag values are invented here, only narrowed subsets.
+interface SubcategoryVariantGroup {
+  /** e.g. "Volume", "Areas" — shown above the option chips. */
+  label: string;
+  /** e.g. ["0.5ml", "1ml", "1.5ml", "2ml"] for Lip Fillers, ["1 area", "2 areas", ...] for Anti-Wrinkle. */
+  options: string[];
+  duration?: string;
+  serviceType?: ServiceData['serviceType'];
+}
+interface SubcategoryScope {
+  templates?: string[];
+  techniques?: string[];
+  outcomes?: string[];
+  /** Treatment-specific option rows (e.g. ml size, area count) offered as
+   *  chips in the template picker, instead of every subcategory sharing the
+   *  same flat template list — a lip filler and an anti-wrinkle treatment
+   *  have genuinely different variant shapes. */
+  variantGroups?: SubcategoryVariantGroup[];
+}
+// Builds a one-off ServiceTemplate for a tapped variant chip (e.g. "0.5ml"
+// under Lip Fillers) — keeps variant naming/tags consistent without needing
+// a hand-written template entry for every possible size/area combination.
+const buildVariantTemplate = (
+  categoryName: string,
+  group: SubcategoryVariantGroup,
+  option: string,
+  scope?: SubcategoryScope,
+): ServiceTemplate => ({
+  name: `${categoryName} (${option})`,
+  duration: group.duration ?? '30 min',
+  serviceType: group.serviceType ?? 'treatment',
+  description: `${categoryName} — ${option}.`,
+  ...(scope?.techniques ? { techniqueTags: scope.techniques } : {}),
+  ...(scope?.outcomes ? { outcomeTags: scope.outcomes } : {}),
+});
+const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
+  // HAIR
+  'Cuts & Styling':        { templates: ['Cut & Blow Dry', 'Dry Cut'] },
+  'Colour':                { templates: ['Root Tint', 'Toner / Gloss', 'Half Head Highlights'], techniques: ['colour', 'ombre'] },
+  'Balayage & Highlights':  { templates: ['Full Head Highlights', 'Balayage', 'Half Head Highlights'], techniques: ['balayage', 'highlights'] },
+  'Braids & Locs':          { templates: ['Knotless Braids', 'Cornrows'], techniques: ['braids', 'locs', 'twists'] },
+  'Extensions & Wigs':      { templates: ['Wig Install'], techniques: ['extensions'] },
+  'Treatments':             { templates: ['Keratin Treatment', 'Silk Press', 'Deep Conditioning Treatment'], techniques: ['keratin', 'relaxer'] },
+  'Blow Dry Bar':           { templates: ['Blow Dry'] },
+  "Men's Hair":             { templates: ['Cut & Blow Dry', "Men's Haircut", 'Beard Trim'] },
+  // NAILS
+  'Manicure':               { templates: ['Gel Manicure', 'Soak Off & Removal', 'Classic Manicure'], techniques: ['gel'] },
+  'Pedicure':               { templates: ['Gel Pedicure', 'Classic Pedicure'], techniques: ['gel'] },
+  'Gel':                    { templates: ['Gel Manicure', 'Gel-X Extensions', 'Gel Pedicure', 'Dip Powder Set'], techniques: ['gel', 'gel-x', 'dip-powder'] },
+  'Acrylic':                { templates: ['Acrylic Full Set', 'Infill'], techniques: ['acrylic'] },
+  'BIAB':                   { templates: ['BIAB Overlay'], techniques: ['biab'] },
+  'Nail Art':               { templates: ['Nail Art (per nail)', 'French Tips'], techniques: ['nail-art', 'chrome', 'french'] },
+  // NAILS "Extensions" collides in name with HAIR's "Extensions & Wigs" — fine,
+  // they're different exact strings so both resolve independently.
+  'Extensions':             { templates: ['Acrylic Full Set', 'Gel-X Extensions', 'Infill'], techniques: ['acrylic', 'gel-x'] },
+  // LASHES
+  'Classic Lashes':         { templates: ['Classic Full Set', 'Infill (2–3 weeks)'], techniques: ['classic'] },
+  'Hybrid Lashes':          { templates: ['Hybrid Full Set', 'Infill (2–3 weeks)'], techniques: ['hybrid'] },
+  'Volume Lashes':          { templates: ['Volume Full Set', 'Mega Volume', 'Infill (2–3 weeks)', 'Wispy Lash Set', 'Russian Volume Set'], techniques: ['volume', 'mega-volume', 'russian', 'wispy'] },
+  'Lash Lifts':             { templates: ['Lash Lift & Tint'], techniques: ['lash-lift'] },
+  'Lash Tinting':           { templates: ['Lash Lift & Tint', 'Lash Tint Only'], techniques: ['lash-tint'] },
+  // BROWS
+  'Brow Shaping':           { templates: ['Brow Wax & Tint', 'HD Brows'], techniques: ['waxing', 'hd-brows'] },
+  'Brow Tinting':           { templates: ['Brow Wax & Tint', 'Brow Henna'], techniques: ['tinting'] },
+  'Brow Lamination':        { templates: ['Brow Lamination'], techniques: ['lamination'] },
+  'Microblading':           { templates: ['Microblading', 'Brow Mapping Consultation'], techniques: ['microblading'] },
+  'Ombré Brows':            { templates: ['Powder / Ombré Brows', 'Combo Brows'], techniques: ['powder-brow', 'combo-brow'] },
+  'Threading':              { templates: ['Threading'], techniques: ['threading'] },
+  // MUA
+  'Bridal Makeup':          { templates: ['Bridal Makeup', 'Bridal Trial'], techniques: ['bridal'] },
+  'Special Occasion':       { templates: ['Full Glam', 'Soft Glam', 'Airbrush Makeup'], techniques: ['full-glam', 'airbrush'] },
+  'Editorial':              { templates: ['Full Glam', 'Editorial / Photoshoot Makeup', 'SFX Makeup'], techniques: ['editorial', 'sfx', 'cut-crease'] },
+  'Makeup Lessons':         { templates: ['Makeup Lesson'] },
+  // AESTHETICS
+  'Lip Fillers':            { templates: ['Skin Consultation'], techniques: ['filler'], outcomes: ['hydration', 'definition'],
+                              variantGroups: [{ label: 'Volume', options: ['0.5ml', '1ml', '1.5ml', '2ml'], duration: '45 min', serviceType: 'enhancement' }] },
+  'Anti-Wrinkle':           { templates: ['Skin Consultation'], techniques: ['botox'], outcomes: ['smoothness', 'rejuvenation'],
+                              variantGroups: [{ label: 'Areas', options: ['1 area', '2 areas', '3 areas', 'Full Face'], duration: '30 min', serviceType: 'treatment' }] },
+  'Dermal Fillers':         { templates: ['Skin Consultation'], techniques: ['filler'], outcomes: ['lifting', 'definition', 'firmness'],
+                              variantGroups: [{ label: 'Area', options: ['Cheeks', 'Jawline', 'Chin', 'Tear Trough'], duration: '45 min', serviceType: 'enhancement' }] },
+  'Chemical Peels':         { templates: ['Chemical Peel', 'Skin Consultation'], techniques: ['chemical-peel'], outcomes: ['glow', 'smoothness'],
+                              variantGroups: [{ label: 'Depth', options: ['Light', 'Medium', 'Deep'], duration: '30 min', serviceType: 'treatment' }] },
+  'Microneedling':          { templates: ['Microneedling', 'Skin Consultation'], techniques: ['microneedling', 'prp'], outcomes: ['firmness', 'rejuvenation', 'smoothness'] },
+  'Skin Boosters':          { templates: ['Skin Booster Treatment', 'Skin Consultation'], techniques: ['mesotherapy', 'filler'], outcomes: ['hydration', 'glow'] },
+  'HydraFacial':            { templates: ['HydraFacial', 'Skin Consultation'], techniques: ['hydrafacial'], outcomes: ['glow', 'hydration'],
+                              variantGroups: [{ label: 'Tier', options: ['Signature', 'Deluxe', 'Platinum'], duration: '1 hr', serviceType: 'treatment' }] },
+  'Dermaplaning':           { templates: ['Dermaplaning', 'Skin Consultation'], techniques: ['dermaplaning'], outcomes: ['smoothness', 'glow'] },
+  'Thread Lifts':           { templates: ['Thread Lift', 'Skin Consultation'], techniques: ['filler'], outcomes: ['lifting', 'firmness'] },
+  'Fat Dissolving':         { templates: ['Skin Consultation'], techniques: ['mesotherapy'], outcomes: ['reduction'],
+                              variantGroups: [{ label: 'Areas', options: ['1 area', '2 areas', '3+ areas'], duration: '30 min', serviceType: 'treatment' }] },
+  'LED Light Therapy':      { templates: ['Red Light Therapy (Anti-Ageing)', 'Blue Light Therapy (Acne)', 'Combination LED Therapy', 'Skin Consultation'], techniques: ['led-therapy'], outcomes: ['radiance', 'even-tone', 'collagen-boost', 'pore-refinement'] },
+  'Radiofrequency':         { templates: ['Radiofrequency Face Tightening', 'Radiofrequency Body Contouring', 'Skin Consultation'], techniques: ['radiofrequency'], outcomes: ['firmness', 'collagen-boost', 'reduction'] },
+  'Cryotherapy':            { templates: ['Cryotherapy Facial', 'Localised Cryotherapy (Fat Freezing)', 'Skin Consultation'], techniques: ['cryotherapy'], outcomes: ['radiance', 'pore-refinement', 'reduction', 'firmness'] },
+  'Lymphatic Drainage':     { templates: ['Facial Lymphatic Drainage Massage', 'Full Body Lymphatic Drainage Massage', 'Skin Consultation'], techniques: ['lymphatic-drainage'], outcomes: ['reduction', 'glow', 'firmness'] },
+};
+
+// Quick-pick durations — providers tap instead of typing "1 hour".
+const DURATION_PRESETS = ['15 min', '30 min', '45 min', '1 hr', '1 hr 30', '2 hr', '2 hr 30', '3 hr', '3 hr 30', '4 hr'];
+
+// A fresh, empty service — optionally seeded from a template so name + duration
+// (+ a sensible service type) arrive pre-filled.
+const makeServiceDraft = (template?: ServiceTemplate | null): ServiceData => ({
+  id: Date.now(),
+  name: template?.name ?? '',
+  price: 0,
+  duration: template?.duration ?? '',
+  bufferBeforeMins: null,
+  bufferAfterMins: null,
+  description: template?.description ?? '',
+  images: [],
+  addOns: [],
+  tags: template?.styleTags ?? [],
+  techniqueTags: template?.techniqueTags ?? [],
+  outcomeTags: template?.outcomeTags ?? [],
+  occasionTags: template?.occasionTags ?? [],
+  trendNames: template?.trendNames ?? [],
+  isPregnancySafe: false,
+  patchTestRequired: false,
+  minAge: null,
+  contraindications: [],
+  aftercareNotes: '',
+  serviceType: template?.serviceType ?? '',
+});
 
 // Service Image Carousel Component
 interface ServiceImageCarouselProps {
@@ -386,6 +800,144 @@ const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onToggle, ac
   </View>
 );
 
+// ─── Label with a red required asterisk ───────────────────────────────────────
+const RequiredLabel: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => (
+  <Text style={styles.inputLabel}>
+    {children}
+    {required && <Text style={styles.requiredStar}> *</Text>}
+  </Text>
+);
+
+// ─── Duration quick-picker ────────────────────────────────────────────────────
+// Providers tap a preset instead of typing "1 hour". A value that isn't a preset
+// (older data / imports) shows as its own selected chip so nothing is ever lost.
+interface DurationPickerProps {
+  value: string;
+  onChange: (v: string) => void;
+  accentColor?: string;
+}
+const DurationPicker: React.FC<DurationPickerProps> = ({ value, onChange, accentColor = '#AF9197' }) => {
+  const presets = DURATION_PRESETS.includes(value) || !value
+    ? DURATION_PRESETS
+    : [value, ...DURATION_PRESETS];
+  return (
+    <View style={styles.chipGrid}>
+      {presets.map(opt => {
+        const active = value === opt;
+        return (
+          <TouchableOpacity
+            key={opt}
+            style={[styles.durationChip, active && { backgroundColor: accentColor, borderColor: accentColor }]}
+            onPress={() => onChange(active ? '' : opt)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.durationChipText, active && styles.durationChipTextActive]}>{opt}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+// ─── Service template picker ──────────────────────────────────────────────────
+// Shown the moment a provider taps "Add Service" — pre-built options for the
+// category's kind, so most services are a single tap to pre-fill.
+interface ServiceTemplatePickerProps {
+  visible: boolean;
+  categoryName: string;
+  fallbackKind?: string;
+  accentColor: string;
+  onPick: (template: ServiceTemplate | null) => void;
+  onClose: () => void;
+}
+const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
+  visible, categoryName, fallbackKind, accentColor, onPick, onClose,
+}) => {
+  const kind = inferCategoryKind(categoryName, fallbackKind);
+  const allTemplates = SERVICE_TEMPLATES_BY_CATEGORY[kind] ?? SERVICE_TEMPLATES_BY_CATEGORY.OTHER;
+  const meta = CATEGORY_META[kind];
+  // If the category is a specific subcategory (e.g. "Microneedling"), narrow
+  // the suggestions to just that treatment instead of every Aesthetics
+  // template. Falls back to the full kind list for generic/free-typed names.
+  // Generic templates (e.g. "Consultation") always show either way, so
+  // there's always a safe starting point regardless of subcategory.
+  const scope = SUBCATEGORY_SCOPE[categoryName.trim()];
+  const templates = scope?.templates
+    ? allTemplates.filter(t => t.generic || scope.templates!.includes(t.name))
+    : allTemplates;
+  const groupLabel = scope?.templates ? categoryName.trim().toLowerCase() : meta.label.toLowerCase();
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <BlurView intensity={30} tint="light" style={styles.templateSheet}>
+          <SafeAreaView style={styles.modalSafeArea}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Add a {categoryName || meta.label} Service</Text>
+                <Text style={styles.templateSheetSub}>Pick a starting point or build your own</Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              <TouchableOpacity style={[styles.templateScratchCard, { borderColor: accentColor }]} onPress={() => onPick(null)} activeOpacity={0.85}>
+                <Ionicons name="create-outline" size={20} color={accentColor} style={styles.templateScratchIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.templateScratchTitle}>Start from scratch</Text>
+                  <Text style={styles.templateScratchSub}>Blank service — fill in your own details</Text>
+                </View>
+              </TouchableOpacity>
+
+              {templates.length > 0 && (
+                <Text style={styles.templateGroupLabel}>Popular {groupLabel} services</Text>
+              )}
+              {templates.map(t => (
+                <TouchableOpacity key={t.name} style={styles.templateCard} onPress={() => onPick(t)} activeOpacity={0.85}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.templateName}>{t.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="time-outline" size={12} color="rgba(0,0,0,0.5)" />
+                      <Text style={styles.templateDuration}>{t.duration}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
+                </TouchableOpacity>
+              ))}
+
+              {/* Size / area variants — shown as the same long template-card
+                  row as the popular services above, underneath them. */}
+              {scope?.variantGroups?.map(group => (
+                <View key={group.label}>
+                  <Text style={styles.templateGroupLabel}>{categoryName.trim()} — {group.label}</Text>
+                  {group.options.map(opt => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={styles.templateCard}
+                      onPress={() => onPick(buildVariantTemplate(categoryName.trim(), group, opt, scope))}
+                      activeOpacity={0.85}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.templateName}>{categoryName.trim()} ({opt})</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="time-outline" size={12} color="rgba(0,0,0,0.5)" />
+                          <Text style={styles.templateDuration}>{group.duration ?? '30 min'}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.templateAdd, { color: accentColor }]}>Use →</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          </SafeAreaView>
+        </BlurView>
+      </View>
+    </Modal>
+  );
+};
+
 // Add/Edit Service Modal
 interface ServiceModalProps {
   visible: boolean;
@@ -393,6 +945,11 @@ interface ServiceModalProps {
   onSave: (service: ServiceData) => void;
   service?: ServiceData | null;
   categoryName: string;
+  /** True when editing an existing service (vs adding / template pre-fill). */
+  isEditing?: boolean;
+  /** Business-level service type, used when a category name can't be resolved. */
+  fallbackKind?: string;
+  accentColor?: string;
 }
 
 const ServiceModal: React.FC<ServiceModalProps> = ({
@@ -401,14 +958,32 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   onSave,
   service,
   categoryName,
+  isEditing = false,
+  fallbackKind,
+  accentColor = '#AF9197',
 }) => {
-  const catKey = categoryName.toUpperCase();
-  const isAesthetics = isAestheticsService(catKey);
-  const techniquOptions: string[] = TECHNIQUE_TAGS_BY_CATEGORY[catKey] ?? TECHNIQUE_TAGS_BY_CATEGORY['OTHER'] ?? [];
-  const outcomeOptions: string[] = OUTCOME_TAGS_BY_CATEGORY[catKey] ?? OUTCOME_TAGS_BY_CATEGORY['OTHER'] ?? [];
+  // Text boxes and modal background stay tinted with the provider's own
+  // accent colour (matching their chosen brand aesthetic) instead of a
+  // generic white/grey — just blended much closer to white so they stay
+  // bright and legible rather than being noticeably tinted.
+  const inputTint = blend(accentColor, '#FFFFFF', 0.96);
+  const modalTintTop = blend(accentColor, '#FFFFFF', 0.93);
+  const modalTintBottom = blend(accentColor, '#FFFFFF', 0.82);
+  const catKey = inferCategoryKind(categoryName, fallbackKind);
+  const isAesthetics = catKey === 'AESTHETICS';
+  // If the category is a specific subcategory (e.g. "Microneedling"), narrow
+  // technique/outcome options to just what's relevant to it — otherwise a
+  // Microneedling service would offer botox/filler/laser tags too, since
+  // those all technically belong to the wider Aesthetics kind.
+  const subScope = SUBCATEGORY_SCOPE[categoryName.trim()];
+  const techniquOptions: string[] = subScope?.techniques ?? TECHNIQUE_TAGS_BY_CATEGORY[catKey] ?? TECHNIQUE_TAGS_BY_CATEGORY.OTHER;
+  const outcomeOptions: string[] = subScope?.outcomes ?? OUTCOME_TAGS_BY_CATEGORY[catKey] ?? OUTCOME_TAGS_BY_CATEGORY.OTHER;
+  const styleOptions: string[] = STYLE_TAGS_BY_CATEGORY[catKey] ?? STYLE_TAGS_BY_CATEGORY.OTHER;
+  const occasionOptions: string[] = OCCASION_TAGS_BY_CATEGORY[catKey] ?? OCCASION_TAGS_DEFAULT;
+  const trendOptions: string[] = TREND_NAMES_BY_CATEGORY[catKey] ?? TREND_NAMES_BY_CATEGORY.OTHER;
 
   const [name, setName] = useState(service?.name || '');
-  const [price, setPrice] = useState(service?.price?.toString() || '');
+  const [price, setPrice] = useState(service?.price ? String(service.price) : '');
   const [duration, setDuration] = useState(service?.duration || '');
   const [bufferBefore, setBufferBefore] = useState(service?.bufferBeforeMins?.toString() || '');
   const [bufferAfter, setBufferAfter] = useState(service?.bufferAfterMins?.toString() || '');
@@ -434,10 +1009,31 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [aftercareNotes, setAftercareNotes] = useState(service?.aftercareNotes || '');
 
   const scrollViewRef = useRef<ScrollView>(null);
+  // Measured Y position of each input group, captured via onLayout — lets
+  // focus scroll precisely to just above the field instead of always
+  // jumping to the very bottom of the form.
+  const serviceInputPositions = useRef<Record<string, number>>({});
+  // Real viewport height (measured, not guessed) and real keyboard height
+  // (from native events) — together these tell us exactly how much visible
+  // space is left ABOVE the keyboard, so a focused field can be scrolled to
+  // sit just above it instead of landing behind it.
+  const scrollViewHeight = useRef(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => setKeyboardHeight(e.endCoordinates?.height ?? 0));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardHeight(0));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   React.useEffect(() => {
     setName(service?.name || '');
-    setPrice(service?.price?.toString() || '');
+    setPrice(service?.price ? String(service.price) : '');
     setDuration(service?.duration || '');
     setBufferBefore(service?.bufferBeforeMins?.toString() || '');
     setBufferAfter(service?.bufferAfterMins?.toString() || '');
@@ -470,11 +1066,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
+      allowsMultipleSelection: true,   // pick several photos at once
+      selectionLimit: 10,
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) setImages([...images, result.assets[0].uri]);
+    if (!result.canceled && result.assets?.length) {
+      setImages([...images, ...result.assets.map(a => a.uri)]);
+    }
   };
 
   const handleRemoveImage = (index: number) => setImages(images.filter((_, i) => i !== index));
@@ -505,15 +1103,15 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   };
 
   const handleSave = () => {
-    if (!name.trim() || !price.trim()) {
-      Alert.alert('Missing Information', 'Please enter a service name and price.');
+    if (!name.trim() || !price.trim() || !duration.trim()) {
+      Alert.alert('Missing Information', 'Please add a service name, price and duration (the fields marked with a red *).');
       return;
     }
     onSave({
       id: service?.id || Date.now(),
       name: name.trim(),
       price: parseFloat(price) || 0,
-      duration: duration.trim() || '1 hour',
+      duration: duration.trim(),
       bufferBeforeMins: bufferBefore.trim() ? parseInt(bufferBefore, 10) || 0 : null,
       bufferAfterMins: bufferAfter.trim() ? parseInt(bufferAfter, 10) || 0 : null,
       description: description.trim(),
@@ -534,8 +1132,20 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     onClose();
   };
 
-  const handleInputFocus = () => {
-    setTimeout(() => { scrollViewRef.current?.scrollToEnd({ animated: true }); }, 300);
+  const handleInputFocus = (inputName: string) => {
+    const y = serviceInputPositions.current[inputName] ?? 0;
+    // Wait for the keyboard height to be known (keyboardWillShow on iOS fires
+    // almost immediately; Android only gets keyboardDidShow, which lands
+    // after the keyboard is already up) before computing where to scroll.
+    setTimeout(() => {
+      const viewportH = scrollViewHeight.current || Dimensions.get('window').height * 0.5;
+      // Real space still visible above the keyboard, minus a margin so the
+      // field's label sits comfortably clear of the keyboard's top edge —
+      // not jammed right against it.
+      const visibleAboveKeyboard = Math.max(150, viewportH - keyboardHeight - 24);
+      const target = Math.max(0, y - visibleAboveKeyboard + 140);
+      scrollViewRef.current?.scrollTo({ y: target, animated: true });
+    }, 350);
   };
 
   const SERVICE_TYPES: { value: ServiceData['serviceType']; label: string }[] = [
@@ -553,14 +1163,14 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <BlurView intensity={30} tint="light" style={styles.serviceModal}>
+        <LinearGradient colors={[modalTintTop, modalTintBottom]} start={{ x: 0, y: 0 }} end={{ x: 0.3, y: 1 }} style={styles.serviceModal}>
           <SafeAreaView style={styles.modalSafeArea}>
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { borderBottomColor: `${accentColor}33`, borderBottomWidth: 2 }]}>
               <Text style={styles.modalTitle}>
-                {service ? 'Edit Service' : `Add ${categoryName} Service`}
+                {isEditing ? 'Edit Service' : `New ${categoryName} Service`}
               </Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                <Text style={styles.modalCloseText}>✕</Text>
+              <TouchableOpacity style={[styles.modalCloseButton, { backgroundColor: `${accentColor}22` }]} onPress={onClose}>
+                <Text style={[styles.modalCloseText, { color: accentColor }]}>✕</Text>
               </TouchableOpacity>
             </View>
 
@@ -569,7 +1179,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               style={styles.modalContent}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 20 }}
+              contentContainerStyle={{ paddingBottom: 60 }}
+              onLayout={(e) => { scrollViewHeight.current = e.nativeEvent.layout.height; }}
             >
               {/* Service Images */}
               <View style={styles.inputGroup}>
@@ -579,140 +1190,63 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               </View>
 
               {/* Service Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Service Name *</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                  <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor="rgba(0,0,0,0.4)" />
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
+                <RequiredLabel required>Service Name</RequiredLabel>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                  <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor="rgba(0,0,0,0.4)" onFocus={() => handleInputFocus('name')} />
                 </BlurView>
               </View>
 
               {/* Price */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Price (£) *</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                  <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" />
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['price'] = e.nativeEvent.layout.y; }}>
+                <RequiredLabel required>Price (£)</RequiredLabel>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                  <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('price')} />
                 </BlurView>
               </View>
 
-              {/* Duration */}
+              {/* Duration — tap a preset instead of typing */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Duration</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                  <TextInput style={styles.textInput} value={duration} onChangeText={setDuration} placeholder="e.g., 2 hours" placeholderTextColor="rgba(0,0,0,0.4)" />
-                </BlurView>
+                <RequiredLabel required>Duration</RequiredLabel>
+                <Text style={styles.inputHint}>Tap how long this service takes</Text>
+                <DurationPicker value={duration} onChange={setDuration} accentColor={accentColor} />
               </View>
 
               {/* Buffer time before/after — overrides the account-wide default from Automations */}
-              <View style={styles.inputGroup}>
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['bufferBefore'] = e.nativeEvent.layout.y; serviceInputPositions.current['bufferAfter'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.inputLabel}>Buffer Time (optional)</Text>
                 <Text style={styles.inputHint}>Blocks extra minutes around this service so back-to-back bookings can't crowd it. Leave blank to use your account default.</Text>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.inputHint, { marginBottom: 4 }]}>Before</Text>
-                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                      <TextInput style={styles.textInput} value={bufferBefore} onChangeText={setBufferBefore} placeholder="0" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" />
+                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                      <TextInput style={styles.textInput} value={bufferBefore} onChangeText={setBufferBefore} placeholder="0" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('bufferBefore')} />
                     </BlurView>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.inputHint, { marginBottom: 4 }]}>After</Text>
-                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                      <TextInput style={styles.textInput} value={bufferAfter} onChangeText={setBufferAfter} placeholder="Default" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" />
+                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                      <TextInput style={styles.textInput} value={bufferAfter} onChangeText={setBufferAfter} placeholder="Default" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('bufferAfter')} />
                     </BlurView>
                   </View>
                 </View>
               </View>
 
               {/* Description */}
-              <View style={styles.inputGroup}>
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlurMultiline}>
-                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={description} onChangeText={setDescription} placeholder="Describe your service..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={4} textAlignVertical="top" onFocus={handleInputFocus} />
+                <BlurView intensity={15} tint="light" style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
+                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={description} onChangeText={setDescription} placeholder="Describe your service..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={4} textAlignVertical="top" onFocus={() => handleInputFocus('serviceDescription')} />
                 </BlurView>
               </View>
 
-              {/* ── Service Type ─────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Service Type</Text>
-                <Text style={styles.inputHint}>Helps clients understand what kind of service this is</Text>
-                <View style={styles.chipGrid}>
-                  {SERVICE_TYPES.map(({ value, label }) => {
-                    const active = serviceType === value;
-                    return (
-                      <TouchableOpacity key={value} style={[styles.chip, active && styles.chipActive]} onPress={() => setServiceType(active ? '' : value)}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* ── Style Tags ───────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Style / Vibe</Text>
-                <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
-                <ChipSelect options={STYLE_TAGS} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} />
-              </View>
-
-              {/* ── Occasion Tags ────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Best For (Occasion)</Text>
-                <Text style={styles.inputHint}>When would a client typically book this?</Text>
-                <ChipSelect options={OCCASION_TAGS} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} />
-              </View>
-
-              {/* ── Technique Tags ───────────────────────────────────── */}
-              {techniquOptions.length > 0 && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Techniques Used</Text>
-                  <Text style={styles.inputHint}>Select every technique this service involves</Text>
-                  <ChipSelect options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} />
-                </View>
-              )}
-
-              {/* ── Outcome Tags ─────────────────────────────────────── */}
-              {outcomeOptions.length > 0 && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Results / Outcomes</Text>
-                  <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
-                  <ChipSelect options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} />
-                </View>
-              )}
-
-              {/* ── Trend Names ──────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Trend Names (Optional)</Text>
-                <Text style={styles.inputHint}>Add viral or trend names clients search for (e.g. glazed-donut, soap-brows)</Text>
-                {trendNames.length > 0 && (
-                  <View style={styles.chipGrid}>
-                    {trendNames.map(t => (
-                      <TouchableOpacity key={t} style={[styles.chip, styles.chipActive]} onPress={() => setTrendNames(trendNames.filter(x => x !== t))}>
-                        <Text style={styles.chipTextActive}>{t} ×</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-                <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1 }]}>
-                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddTrend} returnKeyType="done" />
-                  </BlurView>
-                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
-                    <Text style={styles.addAddOnButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.chipGrid}>
-                  {TREND_SUGGESTIONS.filter(t => !trendNames.includes(t)).map(t => (
-                    <TouchableOpacity key={t} style={styles.chip} onPress={() => setTrendNames([...trendNames, t])}>
-                      <Text style={styles.chipText}>{t}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* ── Aesthetics Safety Section (AESTHETICS only) ──────── */}
+              {/* ── Aesthetics Safety Section (AESTHETICS only) — shown right
+                   under the description, since this is what clients need to
+                   see before booking a treatment ─────────────────────── */}
               {isAesthetics && (
                 <View style={[styles.inputGroup, styles.safetyCard]}>
                   <Text style={styles.safetySectionTitle}>Treatment Safety</Text>
-                  <Text style={styles.inputHint}>Required for aesthetic treatments — helps clients book safely</Text>
+                  <Text style={styles.inputHint}>Required for aesthetic treatments — shown to clients under the service description</Text>
 
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
@@ -730,16 +1264,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                     <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
-                  <View style={styles.inputGroup}>
+                  <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
                     <Text style={styles.inputLabel}>Minimum Age</Text>
-                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-                      <TextInput style={styles.textInput} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={handleInputFocus} />
+                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                      <TextInput style={styles.textInput} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('minAge')} />
                     </BlurView>
                   </View>
 
-                  <View style={styles.inputGroup}>
+                  <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['contraindicationInput'] = e.nativeEvent.layout.y; }}>
                     <Text style={styles.inputLabel}>Contraindications</Text>
-                    <Text style={styles.inputHint}>Conditions that prevent this treatment (e.g. active acne, blood thinners)</Text>
+                    <Text style={styles.inputHint}>Conditions that prevent this treatment — type your own, or tap a common one below</Text>
                     {contraindications.length > 0 && (
                       <View style={styles.chipGrid}>
                         {contraindications.map(c => (
@@ -750,12 +1284,21 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       </View>
                     )}
                     <View style={styles.addAddOnRow}>
-                      <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1 }]}>
-                        <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={handleInputFocus} />
+                      <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
+                        <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
                       </BlurView>
                       <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddContraindication}>
                         <Text style={styles.addAddOnButtonText}>+</Text>
                       </TouchableOpacity>
+                    </View>
+                    {/* Starter suggestions — common contraindications across aesthetic
+                        treatments. Below the textbox so typing stays the primary action. */}
+                    <View style={[styles.chipGrid, { marginTop: 8 }]}>
+                      {COMMON_CONTRAINDICATIONS.filter(c => !contraindications.includes(c)).map(c => (
+                        <TouchableOpacity key={c} style={styles.chip} onPress={() => setContraindications([...contraindications, c])}>
+                          <Text style={styles.chipText}>{c}</Text>
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   </View>
                 </View>
@@ -775,15 +1318,93 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               )}
 
               {/* ── Aftercare Notes ──────────────────────────────────── */}
-              <View style={styles.inputGroup}>
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['aftercareNotes'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.inputLabel}>Aftercare Notes (Optional)</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlurMultiline}>
-                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={3} textAlignVertical="top" onFocus={handleInputFocus} />
+                <BlurView intensity={15} tint="light" style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
+                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={3} textAlignVertical="top" onFocus={() => handleInputFocus('aftercareNotes')} />
                 </BlurView>
               </View>
 
-              {/* ── Add-Ons ──────────────────────────────────────────── */}
+              {/* ── Service Type ─────────────────────────────────────── */}
               <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Service Type</Text>
+                <Text style={styles.inputHint}>Helps clients understand what kind of service this is</Text>
+                <View style={styles.chipGrid}>
+                  {SERVICE_TYPES.map(({ value, label }) => {
+                    const active = serviceType === value;
+                    return (
+                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setServiceType(active ? '' : value)}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* ── Style Tags ───────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Style / Vibe</Text>
+                <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
+                <ChipSelect options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} accentColor={accentColor} />
+              </View>
+
+              {/* ── Occasion Tags ────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Best For (Occasion)</Text>
+                <Text style={styles.inputHint}>When would a client typically book this?</Text>
+                <ChipSelect options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} />
+              </View>
+
+              {/* ── Technique Tags ───────────────────────────────────── */}
+              {techniquOptions.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Techniques Used</Text>
+                  <Text style={styles.inputHint}>Select every technique this service involves</Text>
+                  <ChipSelect options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} />
+                </View>
+              )}
+
+              {/* ── Outcome Tags ─────────────────────────────────────── */}
+              {outcomeOptions.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Results / Outcomes</Text>
+                  <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
+                  <ChipSelect options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} />
+                </View>
+              )}
+
+              {/* ── Trend Names ──────────────────────────────────────── */}
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['trendInput'] = e.nativeEvent.layout.y; }}>
+                <Text style={styles.inputLabel}>Trend Names (Optional)</Text>
+                <Text style={styles.inputHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
+                {trendNames.length > 0 && (
+                  <View style={styles.chipGrid}>
+                    {trendNames.map(t => (
+                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setTrendNames(trendNames.filter(x => x !== t))}>
+                        <Text style={styles.chipTextActive}>{t} ×</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.addAddOnRow}>
+                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  </BlurView>
+                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
+                    <Text style={styles.addAddOnButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.chipGrid}>
+                  {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
+                    <TouchableOpacity key={t} style={styles.chip} onPress={() => setTrendNames([...trendNames, t])}>
+                      <Text style={styles.chipText}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* ── Add-Ons ──────────────────────────────────────────── */}
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['newAddOnName'] = e.nativeEvent.layout.y; serviceInputPositions.current['newAddOnPrice'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.inputLabel}>Add-Ons (Optional)</Text>
                 <Text style={styles.inputHint}>Optional extras clients can add to this service</Text>
                 {addOns.length > 0 && (
@@ -802,11 +1423,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnNameInput]}>
-                    <TextInput style={styles.textInput} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor="rgba(0,0,0,0.4)" onFocus={handleInputFocus} />
+                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnNameInput, { backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor="rgba(0,0,0,0.4)" onFocus={() => handleInputFocus('newAddOnName')} />
                   </BlurView>
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnPriceInput]}>
-                    <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={handleInputFocus} />
+                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnPriceInput, { backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('newAddOnPrice')} />
                   </BlurView>
                   <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddAddOn}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
@@ -819,60 +1440,138 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.saveButtonText}>Save Service</Text>
+              <TouchableOpacity style={[styles.saveButton, { backgroundColor: accentColor }]} onPress={handleSave}>
+                <Text style={styles.saveButtonText}>{isEditing ? 'Save Changes' : 'Add Service'}</Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
-        </BlurView>
+        </LinearGradient>
       </KeyboardAvoidingView>
     </Modal>
   );
 };
 
-// Add Category Modal
+// Add Category Modal — pick a type (drives smart suggestions) or name your own.
 interface AddCategoryModalProps {
   visible: boolean;
   onClose: () => void;
   onAdd: (name: string) => void;
+  existing: string[];
+  /** The provider's own declared business type (providerData.providerService)
+   *  — drives which subcategories are suggested, e.g. Aesthetics providers
+   *  see "Lip Fillers" / "Botox", not a generic Hair/Nails/Lashes list. */
+  businessKind?: string;
+  accentColor?: string;
 }
 
-const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, onAdd }) => {
+const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, onAdd, existing, businessKind, accentColor = '#AF9197' }) => {
   const [categoryName, setCategoryName] = useState('');
 
-  const handleAdd = () => {
-    if (!categoryName.trim()) {
+  const existingLower = existing.map(e => e.trim().toLowerCase());
+  const isDuplicate = (name: string) => existingLower.includes(name.trim().toLowerCase());
+
+  const myKind = (CATEGORY_KINDS as string[]).includes((businessKind ?? '').toUpperCase())
+    ? (businessKind!.toUpperCase() as CategoryKind)
+    : 'OTHER';
+  const subcategories = SUBCATEGORY_SUGGESTIONS_BY_CATEGORY[myKind];
+  // A real business type with its own subcategory list → show those instead
+  // of the generic Hair/Nails/Lashes/etc grid.
+  const showSubcategories = myKind !== 'OTHER' && subcategories.length > 0;
+
+  const addCategory = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) {
       Alert.alert('Missing Name', 'Please enter a category name.');
       return;
     }
-    onAdd(categoryName.trim());
+    if (isDuplicate(trimmed)) {
+      Alert.alert('Already Added', `You already have a "${trimmed}" category.`);
+      return;
+    }
+    onAdd(trimmed);
     setCategoryName('');
     onClose();
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint="light" style={styles.smallModal}>
-          <Text style={styles.smallModalTitle}>Add Service Category</Text>
-          <BlurView intensity={15} tint="light" style={styles.inputBlur}>
-            <TextInput
-              style={styles.textInput}
-              value={categoryName}
-              onChangeText={setCategoryName}
-              placeholder="e.g., Braids, Treatments"
-              placeholderTextColor="rgba(0,0,0,0.4)"
-              autoFocus
-            />
-          </BlurView>
-          <View style={styles.smallModalButtons}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleAdd}>
-              <Text style={styles.saveButtonText}>Add</Text>
-            </TouchableOpacity>
-          </View>
+        <BlurView intensity={30} tint="light" style={styles.templateSheet}>
+          <SafeAreaView style={styles.modalSafeArea}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Add a Category</Text>
+                <Text style={styles.templateSheetSub}>
+                  {showSubcategories
+                    ? `Suggested for your ${CATEGORY_META[myKind].label} business — tap to add`
+                    : "Pick a type — we'll suggest matching services & tags"}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              <Text style={styles.templateGroupLabel}>Category Name</Text>
+              <Text style={styles.inputHint}>Type your own, or tap a suggestion below.</Text>
+              <View style={styles.addAddOnRow}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1 }]}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={categoryName}
+                    onChangeText={setCategoryName}
+                    placeholder={CATEGORY_NAME_EXAMPLE_BY_CATEGORY[myKind]}
+                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    onSubmitEditing={() => addCategory(categoryName)}
+                    returnKeyType="done"
+                  />
+                </BlurView>
+                <TouchableOpacity style={[styles.addAddOnButton, { backgroundColor: accentColor }]} onPress={() => addCategory(categoryName)}>
+                  <Text style={styles.addAddOnButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showSubcategories ? (
+                <View style={styles.categoryTypeGrid}>
+                  {subcategories.map(name => {
+                    const used = isDuplicate(name);
+                    return (
+                      <TouchableOpacity
+                        key={name}
+                        style={[styles.categoryTypeCard, used && styles.categoryTypeCardUsed]}
+                        onPress={() => !used && addCategory(name)}
+                        activeOpacity={used ? 1 : 0.85}
+                        disabled={used}
+                      >
+                        <Text style={styles.categoryTypeLabel}>{name}</Text>
+                        <Text style={styles.categoryTypeBlurb}>{used ? 'Added' : 'Tap to add'}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.categoryTypeGrid}>
+                  {CATEGORY_KINDS.map(kind => {
+                    const meta = CATEGORY_META[kind];
+                    const used = isDuplicate(meta.label);
+                    return (
+                      <TouchableOpacity
+                        key={kind}
+                        style={[styles.categoryTypeCard, used && styles.categoryTypeCardUsed]}
+                        onPress={() => !used && addCategory(meta.label)}
+                        activeOpacity={used ? 1 : 0.85}
+                        disabled={used}
+                      >
+                        <Text style={styles.categoryTypeLabel}>{meta.label}</Text>
+                        <Text style={styles.categoryTypeBlurb}>{used ? 'Added' : meta.blurb}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
+          </SafeAreaView>
         </BlurView>
       </View>
     </Modal>
@@ -1590,6 +2289,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Modal states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -1597,7 +2297,63 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [currentCategory, setCurrentCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingService, setEditingService] = useState<ServiceData | null>(null);
+  // Distinguishes editing an existing service from adding a new (possibly
+  // template pre-filled) one, so the modal title & save copy stay correct.
+  const [isEditingService, setIsEditingService] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  // Keeps the selected category tab in view — panning back to the start of
+  // the strip every time you pick a category (especially one further along
+  // the list) was disorienting.
+  const categoryScrollRef = useRef<ScrollView>(null);
+  // Live-reorder state for the category pill strip — categoryOrder mirrors
+  // categoryNames but can diverge mid-drag (LayoutAnimation-driven reflow)
+  // before the final order is committed back into providerData.categories.
+  // Pills are variable-width (sized to the category name), so reordering is
+  // driven by each pill's measured x/width rather than a fixed step size.
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  // Mirrors categoryOrder but read/written synchronously inside the gesture
+  // handlers below — touchmove events can fire faster than React commits a
+  // re-render, so reading the `categoryOrder` state directly there was
+  // occasionally acting on a one-step-stale order and glitching the reorder.
+  const categoryOrderRef = useRef<string[]>([]);
+  const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
+  const dragX = useRef(new Animated.Value(0)).current;
+  // Per-pill PanResponder cache — PanResponder.create() must run exactly once
+  // per pill and be reused across renders. Calling it fresh on every render
+  // (as this used to) hands the actively-dragged pill a brand-new responder
+  // object mid-gesture the moment ANY state changes — including the reorder's
+  // own setCategoryOrder call — which drops/stalls in-flight touch events and
+  // is what made the drag intermittently freeze.
+  const categoryDragRespondersRef = useRef<Record<string, ReturnType<typeof PanResponder.create>>>({});
+  const pillLayoutRef = useRef<Record<string, { x: number; y: number; width: number }>>({});
+  // Frozen snapshot of every pill's position, taken once when a drag starts.
+  // The target-index math below reads ONLY this — not the live pillLayoutRef
+  // — because live positions update asynchronously (via onLayout, after the
+  // LayoutAnimation-driven reflow settles) and lag behind fast finger
+  // movement, which was causing the drag to glitch/stall after one swap.
+  // The relative order of every OTHER pill never changes during a single
+  // drag (only the dragged pill's insertion point among them does), so the
+  // original snapshot stays geometrically valid for the whole gesture.
+  const dragBaselineRef = useRef<Record<string, { x: number; y: number; width: number }>>({});
+  const dragGrantXRef = useRef(0);
+  const dragTargetRef = useRef(0);
+
+  // Auto-scroll while dragging near either edge of the category strip — without
+  // this, a pill can never be dragged past whatever happens to already be
+  // visible on screen, so there was no way to place it at the very end of a
+  // long list. scrollEnabled is turned off during a drag (below), so nothing
+  // else moves categoryScrollXRef during a gesture — it's safe to treat as the
+  // single source of truth for the current scroll offset.
+  const categoryScrollXRef = useRef(0);
+  const categoryViewportRef = useRef({ x: 0, width: 0 }); // screen-space frame of the ScrollView
+  const categoryContentWidthRef = useRef(0);
+  const dragLatestPageXRef = useRef(0);
+  const dragLatestDxRef = useRef(0);
+  const dragAutoScrollDeltaRef = useRef(0); // accumulated scroll since this gesture's grant
+  const dragAutoScrollFrameRef = useRef<number | null>(null);
+  const AUTOSCROLL_EDGE = 56;
+  const AUTOSCROLL_MAX_SPEED = 14;
+  const CATEGORY_STRIP_TRAILING_PADDING = 20; // matches categoryTabsContent's paddingRight
 
   // Handle logo selection
   const handleSelectLogo = async () => {
@@ -1642,6 +2398,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     }));
     setSelectedCategory(name);
   }, []);
+
 
   // Delete category
   const handleDeleteCategory = useCallback((name: string) => {
@@ -1691,6 +2448,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setShowEditCategoryModal(false);
     setEditingCategory('');
   }, [selectedCategory]);
+
+  // Reorder a category left (-1) or right (+1). Categories live in an ordered
+  // object, so we rebuild the object with the two keys swapped.
+  const handleReorderCategory = useCallback((name: string, direction: -1 | 1) => {
+    setProviderData(prev => {
+      const keys = Object.keys(prev.categories);
+      const from = keys.indexOf(name);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= keys.length) return prev;
+      const reordered = [...keys];
+      const moved = reordered.splice(from, 1)[0];
+      if (moved === undefined) return prev;
+      reordered.splice(to, 0, moved);
+      const newCategories: Record<string, ServiceData[]> = {};
+      reordered.forEach(key => { newCategories[key] = prev.categories[key] || []; });
+      return { ...prev, categories: newCategories };
+    });
+  }, []);
 
   // Add/Edit service
   const handleSaveService = useCallback((service: ServiceData) => {
@@ -1757,15 +2532,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your location.');
       return;
     }
-    // A category can exist as an empty tab (added but never filled in) — check
-    // actual service count, not just category-key count, or a provider can
-    // submit with zero real services while this check silently passes.
-    const totalServiceCount = Object.values(providerData.categories)
-      .reduce((sum, services) => sum + services.length, 0);
-    if (totalServiceCount === 0) {
-      Alert.alert('Missing Services', 'Please add at least one service before saving.');
-      return;
-    }
     if (!user?.id) {
       Alert.alert('Not Logged In', 'Please log in to save your profile.');
       return;
@@ -1782,7 +2548,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       );
     } catch (e: any) {
       logger.error('Error saving provider profile:', e);
-      Alert.alert('Error', 'Couldn\'t save your profile. Please try again.');
+      // Surface the real reason (saveProviderToSupabase prefixes it with the
+      // failing step) instead of a generic message, so failures are diagnosable.
+      Alert.alert('Couldn\'t save your profile', e?.message ?? 'Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1794,6 +2562,201 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, [providerData.accentColor]);
 
   const categoryNames = Object.keys(providerData.categories);
+
+  // Keep the draggable order in sync with the real data — but never while a
+  // drag is in progress, or the live reflow would get stomped mid-gesture.
+  useEffect(() => {
+    if (draggingCategory) return;
+    categoryOrderRef.current = categoryNames;
+    setCategoryOrder(categoryNames);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerData.categories, draggingCategory]);
+
+  // Stop the auto-scroll RAF loop if the screen unmounts mid-drag.
+  useEffect(() => () => {
+    if (dragAutoScrollFrameRef.current != null) cancelAnimationFrame(dragAutoScrollFrameRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    const t = setTimeout(() => {
+      const L = pillLayoutRef.current[selectedCategory];
+      if (L) categoryScrollRef.current?.scrollTo({ x: Math.max(0, L.x - 20), animated: true });
+    }, 50);
+    return () => clearTimeout(t);
+  }, [selectedCategory]);
+
+  const handleSetCategoryOrder = useCallback((order: string[]) => {
+    setProviderData(prev => {
+      const newCategories: Record<string, ServiceData[]> = {};
+      order.forEach(key => { newCategories[key] = prev.categories[key] || []; });
+      return { ...prev, categories: newCategories };
+    });
+  }, []);
+
+  const stopCategoryAutoScroll = useCallback(() => {
+    if (dragAutoScrollFrameRef.current != null) {
+      cancelAnimationFrame(dragAutoScrollFrameRef.current);
+      dragAutoScrollFrameRef.current = null;
+    }
+  }, []);
+
+  // Shared by onPanResponderMove and the auto-scroll loop below — both need to
+  // move the dragged pill and re-evaluate its swap target, the only
+  // difference being where the "effective" finger offset comes from (a fresh
+  // touch event vs. content having scrolled under a stationary finger).
+  const applyDragPosition = useCallback((name: string, effectiveDx: number) => {
+    dragX.setValue(effectiveDx);
+    const draggedWidth = dragBaselineRef.current[name]?.width ?? 80;
+    const fingerCenter = dragGrantXRef.current + draggedWidth / 2 + effectiveDx;
+    const others = categoryOrderRef.current.filter(n => n !== name);
+    let target = others.length;
+    for (let i = 0; i < others.length; i++) {
+      const otherName = others[i];
+      const L = otherName ? dragBaselineRef.current[otherName] : undefined;
+      if (!L) continue;
+      if (fingerCenter < L.x + L.width / 2) { target = i; break; }
+    }
+    if (target !== dragTargetRef.current) {
+      // Purely a smoothing hint for the reflow — must never be able to block
+      // the actual reorder below. LayoutAnimation is known to throw/no-op on
+      // React Native's New Architecture (Fabric, on by default since Expo
+      // SDK 52+), and this call used to sit BEFORE the state update with
+      // nothing catching it: if it threw, the whole rest of this block
+      // (including setCategoryOrder, the thing that actually moves the other
+      // pills) silently never ran, while dragX.setValue above kept the
+      // dragged pill tracking the finger fine — which is exactly why it
+      // looked like "the pill drags but nothing else ever moves."
+      safeConfigureLayoutAnimation();
+      const next = [...others];
+      next.splice(target, 0, name);
+      categoryOrderRef.current = next;
+      setCategoryOrder(next);
+      dragTargetRef.current = target;
+      Haptics.selectionAsync().catch(() => {});
+    }
+  }, [dragX]);
+
+  // Auto-scrolls the strip while the finger holds near either edge, so a pill
+  // can be dragged all the way to the start/end of a list longer than one
+  // screen — without this the drag was capped at whatever already happened to
+  // be visible. Keeps rescheduling itself every frame for the life of the
+  // gesture (release/terminate cancel it) so it reacts the instant the finger
+  // nears an edge, not just at the moment the gesture started.
+  const startCategoryAutoScroll = useCallback((name: string) => {
+    const tick = () => {
+      const { x: vpX, width: vpWidth } = categoryViewportRef.current;
+      const pageX = dragLatestPageXRef.current;
+      let speed = 0;
+      if (vpWidth > 0) {
+        if (pageX < vpX + AUTOSCROLL_EDGE) {
+          const depth = (vpX + AUTOSCROLL_EDGE - pageX) / AUTOSCROLL_EDGE;
+          speed = -AUTOSCROLL_MAX_SPEED * Math.min(1, Math.max(0, depth));
+        } else if (pageX > vpX + vpWidth - AUTOSCROLL_EDGE) {
+          const depth = (pageX - (vpX + vpWidth - AUTOSCROLL_EDGE)) / AUTOSCROLL_EDGE;
+          speed = AUTOSCROLL_MAX_SPEED * Math.min(1, Math.max(0, depth));
+        }
+      }
+
+      if (speed !== 0) {
+        const maxScrollX = Math.max(0, categoryContentWidthRef.current - categoryViewportRef.current.width);
+        const nextX = Math.max(0, Math.min(maxScrollX, categoryScrollXRef.current + speed));
+        const applied = nextX - categoryScrollXRef.current;
+        if (applied !== 0) {
+          categoryScrollXRef.current = nextX;
+          dragAutoScrollDeltaRef.current += applied;
+          categoryScrollRef.current?.scrollTo({ x: nextX, animated: false });
+          applyDragPosition(name, dragLatestDxRef.current + dragAutoScrollDeltaRef.current);
+        }
+      }
+
+      dragAutoScrollFrameRef.current = requestAnimationFrame(tick);
+    };
+    dragAutoScrollFrameRef.current = requestAnimationFrame(tick);
+  }, [applyDragPosition]);
+
+  // Pills are variable-width, so the drag target is resolved by comparing
+  // the dragged pill's live centre X against every other pill's measured
+  // midpoint — not a fixed step size like a uniform grid would use.
+  // Bound only to the small drag-handle icon (not the whole pill), so it
+  // never competes with tapping to select, long-press for the rename/delete
+  // menu, or side-to-side scrolling of the strip. All internal bookkeeping
+  // reads/writes categoryOrderRef (not the categoryOrder state) so rapid
+  // touchmove events always see the latest order — React's re-render can
+  // lag a step behind the gesture, which was the source of the glitching.
+  //
+  // Memoized per pill name and created exactly once (see
+  // categoryDragRespondersRef) — recreating PanResponder.create() on every
+  // render was handing the actively-dragged pill a new responder object
+  // mid-gesture and stalling touch delivery.
+  const getCategoryDragResponder = useCallback((name: string) => {
+    const cached = categoryDragRespondersRef.current[name];
+    if (cached) return cached;
+
+    const responder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      // Without this, the surrounding horizontal ScrollView reclaims the touch
+      // the moment it sees any movement (its native scroll recognizer requests
+      // termination), which snapped the drag straight back before it could go
+      // anywhere. The handle is a small, dedicated target, so holding onto the
+      // gesture once granted here is safe and doesn't block scrolling anywhere else.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (evt) => {
+        dragBaselineRef.current = { ...pillLayoutRef.current };
+        dragGrantXRef.current = dragBaselineRef.current[name]?.x ?? 0;
+        dragTargetRef.current = categoryOrderRef.current.indexOf(name);
+        dragAutoScrollDeltaRef.current = 0;
+        dragLatestDxRef.current = 0;
+        dragLatestPageXRef.current = evt.nativeEvent.pageX;
+        dragX.setValue(0);
+        setDraggingCategory(name);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        // Computed directly from every pill's own measured layout rather than
+        // trusted from onContentSizeChange — that callback firing (and firing
+        // with the right value) before the user's first drag isn't guaranteed,
+        // and when it hadn't, categoryContentWidthRef stayed at its 0 default,
+        // which clamped auto-scroll to zero distance and made a drag look like
+        // it couldn't reach the end of the row at all.
+        const rightmost = Object.values(dragBaselineRef.current)
+          .reduce((max, p) => Math.max(max, p.x + p.width), 0);
+        categoryContentWidthRef.current = rightmost + CATEGORY_STRIP_TRAILING_PADDING;
+        // measureInWindow exists on the underlying native view via the
+        // NativeMethods mixin, but isn't in ScrollView's TS surface.
+        (categoryScrollRef.current as unknown as { measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void } | null)
+          ?.measureInWindow((x, _y, width) => {
+            categoryViewportRef.current = { x, width };
+          });
+        startCategoryAutoScroll(name);
+      },
+      onPanResponderMove: (evt, g) => {
+        // Track the finger 1:1 — the pill is rendered as a position:absolute
+        // overlay pinned to its frozen grant-time origin (see the render
+        // below), so this offset is the ONLY thing moving it. Nothing about
+        // reordering ever touches this pill's base position anymore, which
+        // is what made a lerp/smoothing hack necessary before: that was
+        // papering over the dragged pill's flex position jumping every time
+        // the underlying array reordered out from under it.
+        dragLatestDxRef.current = g.dx;
+        dragLatestPageXRef.current = evt.nativeEvent.pageX;
+        applyDragPosition(name, g.dx + dragAutoScrollDeltaRef.current);
+      },
+      onPanResponderRelease: () => {
+        stopCategoryAutoScroll();
+        safeConfigureLayoutAnimation();
+        setDraggingCategory(null);
+        Animated.timing(dragX, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+        handleSetCategoryOrder(categoryOrderRef.current);
+      },
+      onPanResponderTerminate: () => {
+        stopCategoryAutoScroll();
+        safeConfigureLayoutAnimation();
+        setDraggingCategory(null);
+        dragX.setValue(0);
+      },
+    });
+    categoryDragRespondersRef.current[name] = responder;
+    return responder;
+  }, [dragX, handleSetCategoryOrder, applyDragPosition, startCategoryAutoScroll, stopCategoryAutoScroll]);
 
   if (isLoadingProvider) {
     return (
@@ -1828,6 +2791,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           visible={showCategoryModal}
           onClose={() => setShowCategoryModal(false)}
           onAdd={handleAddCategory}
+          existing={categoryNames}
+          businessKind={providerData.providerService}
+          accentColor={adaptiveAccentColor}
+        />
+
+        {/* Service Template Picker — shown first when adding a service */}
+        <ServiceTemplatePicker
+          visible={showTemplatePicker}
+          categoryName={currentCategory}
+          fallbackKind={providerData.providerService}
+          accentColor={adaptiveAccentColor}
+          onClose={() => setShowTemplatePicker(false)}
+          onPick={(template) => {
+            setShowTemplatePicker(false);
+            setIsEditingService(false);
+            setEditingService(makeServiceDraft(template));
+            setShowServiceModal(true);
+          }}
         />
 
         {/* Add/Edit Service Modal */}
@@ -1840,6 +2821,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onSave={handleSaveService}
           service={editingService}
           categoryName={currentCategory}
+          isEditing={isEditingService}
+          fallbackKind={providerData.providerService}
+          accentColor={adaptiveAccentColor}
         />
 
         {/* Edit Category Modal */}
@@ -1899,6 +2883,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
               automaticallyAdjustKeyboardInsets={true}
+              // The category-pill drag handle refuses to give up its responder to
+              // the horizontal strip it lives in, but this outer vertical
+              // ScrollView is a separate native scroll recognizer one level up —
+              // without gating it too, it kept fighting the drag for ownership of
+              // the touch (the whole page would scroll instead of, or as well as,
+              // the pill dragging), and would occasionally win outright and cut
+              // the drag gesture short, which is also why reordering could look
+              // like the other pills weren't reacting to the drag at all.
+              scrollEnabled={!draggingCategory}
             >
             {/* Logo Section */}
             <View style={styles.logoSection}>
@@ -1946,6 +2939,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             {activeTab === 'profile' && (<>
 
             {/* Business Name */}
+            <View style={styles.cardShadowWrap}>
             <BlurView intensity={50} tint="light" style={styles.card}>
               <LinearGradient
                 colors={['rgba(255,255,255,0.3)', 'transparent']}
@@ -1957,8 +2951,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 onLayout={(e) => { inputPositions.current['businessName'] = e.nativeEvent.layout.y; }}
               >
-                <Text style={styles.inputLabel}>Business Name *</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <RequiredLabel required>Business Name</RequiredLabel>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.providerName}
@@ -1972,45 +2966,60 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </BlurView>
               </View>
 
-              {/* Service Category */}
+              {/* Service Category — free to pick at sign-up, but locked once the
+                  profile exists: everything else (subcategory suggestions, tag
+                  pools, templates) is scoped off this choice, so changing it
+                  later would silently orphan existing categories/services. */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Service Type *</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.serviceCategoryScroll}
-                >
-                  {SERVICE_CATEGORIES.map((category) => (
-                    <TouchableOpacity
-                      key={category}
-                      style={[
-                        styles.serviceCategoryChip,
-                        providerData.providerService === category &&
-                          styles.serviceCategoryChipSelected,
-                      ]}
-                      onPress={() =>
-                        setProviderData({ ...providerData, providerService: category })
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.serviceCategoryText,
-                          providerData.providerService === category &&
-                            styles.serviceCategoryTextSelected,
-                        ]}
-                      >
-                        {category}
+                <RequiredLabel required>Service Type</RequiredLabel>
+                {isEditMode ? (
+                  <>
+                    <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
+                      <Ionicons name="lock-closed" size={11} color="rgba(0,0,0,0.5)" />
+                      <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
+                        {providerData.providerService}
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                    </View>
+                    <Text style={styles.inputHint}>Set at sign-up — your business type can't be changed here.</Text>
+                  </>
+                ) : (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.serviceCategoryScroll}
+                  >
+                    {SERVICE_CATEGORIES.map((category) => (
+                      <TouchableOpacity
+                        key={category}
+                        style={[
+                          styles.serviceCategoryChip,
+                          providerData.providerService === category &&
+                            styles.serviceCategoryChipSelected,
+                        ]}
+                        onPress={() =>
+                          setProviderData({ ...providerData, providerService: category })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.serviceCategoryText,
+                            providerData.providerService === category &&
+                              styles.serviceCategoryTextSelected,
+                          ]}
+                        >
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
                 {/* Custom Service Type Input when OTHER is selected */}
                 {providerData.providerService === 'OTHER' && (
                   <View
                     style={styles.customServiceInput}
                     onLayout={(e) => { inputPositions.current['customService'] = e.nativeEvent.layout.y + 150; }}
                   >
-                    <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                       <TextInput
                         style={styles.textInput}
                         value={providerData.customServiceType}
@@ -2032,8 +3041,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 onLayout={(e) => { inputPositions.current['location'] = e.nativeEvent.layout.y + 200; }}
               >
-                <Text style={styles.inputLabel}>Location *</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <RequiredLabel required>Location</RequiredLabel>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.location}
@@ -2047,8 +3056,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </BlurView>
               </View>
             </BlurView>
+            </View>
 
             {/* About Section */}
+            <View style={styles.cardShadowWrap}>
             <BlurView intensity={50} tint="light" style={styles.card}>
               <LinearGradient
                 colors={['rgba(255,255,255,0.3)', 'transparent']}
@@ -2062,7 +3073,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['about'] = e.nativeEvent.layout.y + 500; }}
               >
                 <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlurMultiline}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlurMultiline, styles.profileInputBox]}>
                   <TextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
@@ -2084,7 +3095,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['slots'] = e.nativeEvent.layout.y + 600; }}
               >
                 <Text style={styles.inputLabel}>Availability Message</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.slotsText}
@@ -2098,8 +3109,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </BlurView>
               </View>
             </BlurView>
+            </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
+            <View style={styles.cardShadowWrap}>
             <BlurView intensity={50} tint="light" style={styles.card}>
               <LinearGradient
                 colors={['rgba(255,255,255,0.3)', 'transparent']}
@@ -2153,8 +3166,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
               )}
             </BlurView>
+            </View>
 
             {/* Contact Information */}
+            <View style={styles.cardShadowWrap}>
             <BlurView intensity={50} tint="light" style={styles.card}>
               <LinearGradient
                 colors={['rgba(255,255,255,0.3)', 'transparent']}
@@ -2172,7 +3187,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['phone'] = e.nativeEvent.layout.y + 700; }}
               >
                 <Text style={styles.inputLabel}>Phone Number</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.phone}
@@ -2190,7 +3205,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['contactEmail'] = e.nativeEvent.layout.y + 750; }}
               >
                 <Text style={styles.inputLabel}>Contact Email</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.email}
@@ -2210,7 +3225,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['instagram'] = e.nativeEvent.layout.y + 800; }}
               >
                 <Text style={styles.inputLabel}>Instagram Handle</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.instagram}
@@ -2231,7 +3246,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['website'] = e.nativeEvent.layout.y + 850; }}
               >
                 <Text style={styles.inputLabel}>Website</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.website}
@@ -2251,7 +3266,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['experience'] = e.nativeEvent.layout.y + 900; }}
               >
                 <Text style={styles.inputLabel}>Years of Experience</Text>
-                <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.yearsExperience}
@@ -2264,6 +3279,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </BlurView>
               </View>
             </BlurView>
+            </View>
 
             {/* Services Section */}
             <View style={styles.servicesSection}>
@@ -2279,70 +3295,131 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               {categoryNames.length === 0 ? (
                 <BlurView intensity={50} tint="light" style={styles.emptyServicesCard}>
+                  <Ionicons name="folder-open-outline" size={36} color="rgba(0,0,0,0.35)" style={styles.emptyServicesEmoji} />
                   <Text style={styles.emptyServicesText}>
-                    Add service categories (e.g., "Classic Lashes", "Volume Lashes") and then add
-                    your services to each category.
+                    Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
+                    (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
                   </Text>
                 </BlurView>
               ) : (
                 <>
+                  <Text style={styles.categoryHint}>
+                    Tap to open · drag ☰ to reorder · long-press to rename or delete
+                  </Text>
                   {/* Category Tabs */}
-                  <FlatList
-                    data={categoryNames}
+                  <ScrollView
+                    ref={categoryScrollRef}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.categoryTabs}
-                    keyExtractor={(item, index) => `cat-${item}-${index}`}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={[
-                          styles.categoryTab,
-                          selectedCategory === item && styles.selectedCategoryTab,
-                        ]}
-                        onPress={() => setSelectedCategory(item)}
-                        onLongPress={() => {
-                          Alert.alert(
-                            'Edit Category',
-                            `What would you like to do with "${item}"?`,
-                            [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Rename',
-                                onPress: () => {
-                                  setEditingCategory(item);
-                                  setShowEditCategoryModal(true);
-                                },
-                              },
-                              {
-                                text: 'Delete',
-                                style: 'destructive',
-                                onPress: () => handleDeleteCategory(item),
-                              },
-                            ]
-                          );
-                        }}
-                      >
-                        <BlurView
-                          intensity={selectedCategory === item ? 20 : 12}
-                          tint="light"
+                    contentContainerStyle={styles.categoryTabsContent}
+                    scrollEnabled={!draggingCategory}
+                    onScroll={(e) => { categoryScrollXRef.current = e.nativeEvent.contentOffset.x; }}
+                    scrollEventThrottle={16}
+                    onContentSizeChange={(w) => { categoryContentWidthRef.current = w; }}
+                  >
+                    {categoryOrder.map((item, index) => {
+                      const isSel = selectedCategory === item;
+                      const isDragging = draggingCategory === item;
+                      const panResponder = getCategoryDragResponder(item);
+                      // While dragging, the pill is pulled out of the flex flow and
+                      // pinned (via `left`) to exactly where it was when the gesture
+                      // started — dragBaselineRef is frozen for the whole gesture, so
+                      // this position never moves. `translateX` then follows the
+                      // finger on top of that fixed point (raw gesture dx, plus
+                      // whatever the auto-scroll loop has scrolled the strip by —
+                      // since `left` stays fixed in content space, that scrolled
+                      // amount has to be added back so the pill still tracks the
+                      // finger's actual screen position while the content moves
+                      // underneath it). Because the pill no longer participates in
+                      // flex layout while dragging, reordering the array (which
+                      // reflows the OTHER pills via LayoutAnimation) can't yank its
+                      // base position out from under it — that fight between "flex
+                      // position just jumped to the new slot" and "translateX still
+                      // assumes the old slot" was the source of the snap/bounce-back
+                      // glitch at every swap.
+                      const dragOrigin = isDragging ? dragBaselineRef.current[item] : undefined;
+                      return (
+                        <Animated.View
+                          key={item}
+                          onLayout={(e) => {
+                            pillLayoutRef.current[item] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, width: e.nativeEvent.layout.width };
+                          }}
                           style={[
-                            styles.categoryTabBlur,
-                            selectedCategory === item && styles.selectedCategoryTabBlur,
+                            { transform: [{ translateX: isDragging ? dragX : 0 }] },
+                            // `top` uses the pill's own measured y rather than a
+                            // hardcoded 0 — assuming every pill sits flush at the
+                            // row's top edge doesn't hold once padding/alignment on
+                            // the strip is accounted for, and being off even a few
+                            // px reads as the pill visibly popping out of the row
+                            // into its own floating card instead of sliding along it.
+                            isDragging && dragOrigin && {
+                              position: 'absolute',
+                              left: dragOrigin.x,
+                              top: dragOrigin.y,
+                              zIndex: 10,
+                            },
                           ]}
                         >
-                          <Text
+                          <TouchableOpacity
                             style={[
-                              styles.categoryTabText,
-                              selectedCategory === item && styles.selectedCategoryTabText,
+                              styles.categoryTab,
+                              isSel && styles.selectedCategoryTab,
                             ]}
+                            activeOpacity={0.8}
+                            onPress={() => setSelectedCategory(item)}
+                            onLongPress={() => {
+                              Alert.alert(
+                                `“${item}”`,
+                                'What would you like to do?',
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  { text: 'Rename', onPress: () => { setEditingCategory(item); setShowEditCategoryModal(true); } },
+                                  ...(index > 0 ? [{ text: '← Move left', onPress: () => handleReorderCategory(item, -1) }] : []),
+                                  ...(index < categoryOrder.length - 1 ? [{ text: 'Move right →', onPress: () => handleReorderCategory(item, 1) }] : []),
+                                  { text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteCategory(item) },
+                                ]
+                              );
+                            }}
                           >
-                            {item}
-                          </Text>
-                        </BlurView>
-                      </TouchableOpacity>
-                    )}
-                    contentContainerStyle={styles.categoryTabsContent}
-                  />
+                            <BlurView
+                              intensity={isDragging ? 40 : isSel ? 20 : 12}
+                              tint="light"
+                              style={[
+                                styles.categoryTabBlur,
+                                isSel && styles.selectedCategoryTabBlur,
+                                // The blur/tint look here depends on what's actually
+                                // rendered behind the pill. Inline, that's the busy
+                                // strip of neighboring pills; but once dragging pulls
+                                // it out to float above wherever it started, its
+                                // neighbors have already slid away underneath it, so
+                                // the same translucent background reads as washed-out
+                                // instead of frosted glass. Bumping its own opacity
+                                // while dragging keeps it looking like a normal, solid
+                                // pill regardless of what's now behind it.
+                                isDragging && styles.draggingCategoryTabBlur,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.categoryTabText,
+                                  isSel && styles.selectedCategoryTabText,
+                                ]}
+                              >
+                                {item}
+                              </Text>
+                              {/* Dedicated drag handle — the only part of the pill that
+                                  starts a reorder, so tapping, long-pressing and
+                                  side-scrolling the strip are never mistaken for a drag. */}
+                              <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}>
+                                <Ionicons name="reorder-three-outline" size={20} color="rgba(0,0,0,0.4)" />
+                              </View>
+                            </BlurView>
+                          </TouchableOpacity>
+                        </Animated.View>
+                      );
+                    })}
+                  </ScrollView>
 
                   {/* Services in Selected Category */}
                   {selectedCategory && (
@@ -2376,7 +3453,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   />
                                 ) : (
                                   <View style={styles.serviceImagePlaceholder}>
-                                    <Text style={styles.serviceImagePlaceholderText}>📷</Text>
+                                    <Ionicons name="camera-outline" size={24} color="rgba(0,0,0,0.3)" />
                                   </View>
                                 )}
                                 {service.images.length > 1 && (
@@ -2412,6 +3489,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   onPress={() => {
                                     setCurrentCategory(selectedCategory);
                                     setEditingService(service);
+                                    setIsEditingService(true);
                                     setShowServiceModal(true);
                                   }}
                                 >
@@ -2431,14 +3509,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         </View>
                       ))}
 
-                      {/* Add Service Button */}
+                      {/* Add Service Button — opens the template picker first */}
                       <TouchableOpacity
                         style={styles.addServiceButton}
                         onPress={() => {
                           setCurrentCategory(selectedCategory);
-                          setEditingService(null);
-                          setShowServiceModal(true);
+                          setShowTemplatePicker(true);
                         }}
+                        activeOpacity={0.85}
                       >
                         <BlurView intensity={30} tint="light" style={styles.addServiceBlur}>
                           <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
@@ -2854,14 +3932,27 @@ const styles = StyleSheet.create({
   },
 
   // Cards
+  // Shadow lives on the OUTER wrapper (cardShadowWrap), not here — this is a
+  // BlurView, and overflow:hidden is required for the native blur effect to
+  // clip to the rounded corners (without it, the blur renders as a square
+  // block poking past the rounded border). overflow:hidden also silently
+  // kills a shadow on the same view, hence the separate wrapper.
   card: {
     padding: 20,
     borderRadius: 25,
-    marginBottom: 20,
     backgroundColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  cardShadowWrap: {
+    borderRadius: 25,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 20,
+    elevation: 6,
   },
   cardHighlight: {
     position: 'absolute',
@@ -2957,25 +4048,53 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
+    fontSize: 14,
     color: '#000',
     marginBottom: 8,
   },
   inputHint: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-    color: 'rgba(0, 0, 0, 0.5)',
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.72)',
     marginTop: 6,
   },
+  // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
+  // white fill that washed out against the modal's own light background.
   inputBlur: {
-    borderRadius: 15,
+    borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
   inputBlurMultiline: {
-    borderRadius: 15,
+    borderRadius: 14,
     overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  // Reverts the main provider profile form's fields back to their original
+  // translucent look (only the Add Service modal's boxes got the brighter
+  // card treatment) — merged over inputBlur/inputBlurMultiline to cancel
+  // out the border/shadow/solid-fill additions.
+  profileInputBox: {
+    borderRadius: 15,
     backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   textInput: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -3058,6 +4177,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
+  emptyServicesEmoji: {
+    fontSize: 30,
+    marginBottom: 10,
+  },
   emptyServicesText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
@@ -3067,9 +4190,16 @@ const styles = StyleSheet.create({
   },
 
   // Category Tabs
+  categoryHint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.6)',
+    marginBottom: 10,
+  },
   categoryTabs: {
     marginBottom: 15,
-    maxHeight: 50,
+    maxHeight: 52,
   },
   categoryTabsContent: {
     paddingRight: 20,
@@ -3085,12 +4215,20 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.4)',
   },
   categoryTabBlur: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 18,
     paddingVertical: 10,
     backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   selectedCategoryTabBlur: {
     backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  draggingCategoryTabBlur: {
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   categoryTabText: {
     fontFamily: 'BakbakOne-Regular',
@@ -3099,6 +4237,163 @@ const styles = StyleSheet.create({
   },
   selectedCategoryTabText: {
     color: '#000',
+  },
+  categoryDragHandle: {
+    marginLeft: 6,
+    paddingHorizontal: 2,
+  },
+
+  // Required-field asterisk
+  requiredStar: {
+    color: '#E53935',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+  },
+
+  // Duration quick-picker chips
+  durationChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  durationChipText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: 'rgba(0,0,0,0.7)',
+  },
+  durationChipTextActive: {
+    color: '#fff',
+  },
+
+  // Bottom-sheet modals (template picker, add category)
+  templateSheet: {
+    height: '82%',
+    marginTop: 'auto',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  templateSheetSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.5)',
+    marginTop: 3,
+  },
+  templateGroupLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: 'rgba(0,0,0,0.6)',
+    marginTop: 22,
+    marginBottom: 4,
+  },
+  templateScratchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  templateScratchIcon: {
+    fontSize: 22,
+  },
+  templateScratchTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    color: '#000',
+  },
+  templateScratchSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.5)',
+    marginTop: 2,
+  },
+  templateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 16,
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  templateName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    color: '#000',
+  },
+  templateDuration: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    color: 'rgba(0,0,0,0.5)',
+    marginTop: 3,
+  },
+  templateAdd: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+  },
+
+  // Category type picker cards
+  categoryTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 18,
+  },
+  categoryTypeCard: {
+    // Math.floor avoids a sub-pixel rounding overflow that can push the 3rd
+    // column onto its own row (3 fractional widths + 2 gaps summing to just
+    // over the available width).
+    width: Math.floor((screenWidth - 40 - 24) / 3),
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 18,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryTypeCardUsed: {
+    opacity: 0.45,
+  },
+  categoryTypeLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: '#000',
+  },
+  categoryTypeBlurb: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 10,
+    color: 'rgba(0,0,0,0.5)',
+    textAlign: 'center',
+    marginTop: 3,
+    lineHeight: 13,
   },
 
   // Service Cards
@@ -3139,9 +4434,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
-  },
-  serviceImagePlaceholderText: {
-    fontSize: 24,
   },
   imageCountBadge: {
     position: 'absolute',
@@ -3959,8 +5251,9 @@ const styles = StyleSheet.create({
   // Category Edit Hint
   categoryEditHint: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 9,
-    color: 'rgba(0,0,0,0.4)',
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.55)',
     marginTop: 2,
   },
 
@@ -4036,38 +5329,40 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // ── Chip select ──
+  // ── Chip select — styled like the service template cards (templateCard)
+  // so tag options read as small pickable cards, not flat pills. ──
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 10,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.55)',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  chipActive: {
-    backgroundColor: 'rgba(218,112,214,0.2)',
-    borderColor: 'rgba(218,112,214,0.4)',
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   chipWarning: {
     backgroundColor: '#FF6868',
     borderColor: '#FF6868',
   },
   chipText: {
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.65)',
-    fontWeight: '500',
+    color: '#000',
   },
   chipTextActive: {
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: '#fff',
-    fontWeight: '600',
   },
 
   // ── Safety card (Aesthetics) ──
@@ -4101,8 +5396,9 @@ const styles = StyleSheet.create({
     color: 'rgba(0,0,0,0.75)',
   },
   toggleHint: {
-    fontSize: 11,
-    color: 'rgba(0,0,0,0.45)',
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.6)',
     marginTop: 1,
   },
 
@@ -4220,11 +5516,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   addressHint: {
-    fontSize: 12,
-    color: 'rgba(0,0,0,0.45)',
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.6)',
     marginTop: 6,
     marginBottom: 4,
-    lineHeight: 17,
+    lineHeight: 18,
   },
 
 });

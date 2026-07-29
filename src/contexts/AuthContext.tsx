@@ -69,7 +69,51 @@ interface AuthContextType {
   addClientProfile: (profileData: ClientProfileData) => Promise<void>;
   login: (userData?: UserData) => void;
   logout: () => Promise<void>;
+  deleteClientProfile: () => Promise<void>;
+  deleteProviderProfile: () => Promise<void>;
   updateUser: (partial: Partial<UserData>) => Promise<void>;
+  /** Set (to the ISO deletion_requested_at) when this login belongs to an
+   *  account mid-30-day grace period — RootNavigation shows ReactivateAccountScreen
+   *  instead of the normal app while this is non-null. */
+  pendingReactivation: string | null;
+  isReactivating: boolean;
+  reactivateAccount: () => Promise<void>;
+  declineReactivation: () => Promise<void>;
+}
+
+/** Turns a failed delete_client_profile/delete_provider_profile RPC result
+ *  into a message worth showing the user (as opposed to a raw error code). */
+function accountDeletionError(data: any): Error {
+  if (data?.error === 'upcoming_bookings') {
+    const count = data?.count ?? 0;
+    return new Error(
+      `You have ${count} upcoming appointment${count === 1 ? '' : 's'}. Please cancel or complete ${count === 1 ? 'it' : 'them'} first.`
+    );
+  }
+  return new Error(data?.error || 'Could not delete your account.');
+}
+
+/** Best-effort cleanup of a user's own <uid>/ folder in a storage bucket —
+ *  deleting the DB rows that referenced these files doesn't remove the
+ *  actual objects, which would otherwise stay publicly reachable forever.
+ *  Failures must never block account deletion, but they also must never
+ *  vanish silently — log them so an orphaned file is at least debuggable. */
+async function clearStorageFolder(bucket: string, uid: string): Promise<void> {
+  try {
+    const { data, error: listError } = await supabase.storage.from(bucket).list(uid);
+    if (listError) {
+      logger.warn(`[AuthContext] storage list failed (${bucket}/${uid}):`, listError.message);
+      return;
+    }
+    if (data && data.length > 0) {
+      const { error: removeError } = await supabase.storage.from(bucket).remove(data.map(f => `${uid}/${f.name}`));
+      if (removeError) {
+        logger.warn(`[AuthContext] storage cleanup failed (${bucket}/${uid}):`, removeError.message);
+      }
+    }
+  } catch (err: any) {
+    logger.warn(`[AuthContext] storage cleanup threw (${bucket}/${uid}):`, err?.message ?? err);
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -82,6 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeMode, setActiveMode] = useState<'provider' | 'client'>('client');
   const [isSwitching, setIsSwitching] = useState(false);
   const [switchingTo, setSwitchingTo] = useState<'provider' | 'client'>('client');
+  const [pendingReactivation, setPendingReactivation] = useState<string | null>(null);
+  const [isReactivating, setIsReactivating] = useState(false);
   // Tracks user-initiated logouts so SIGNED_OUT doesn't show a spurious alert
   const intentionalLogoutRef = useRef(false);
 
@@ -154,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setIsLoggedIn(false);
         setSession(null);
+        setPendingReactivation(null);
         setIsLoading(false);
         return;
       }
@@ -226,6 +273,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (profile) {
         logger.log('[AuthContext] profile found — role:', profile.role);
+
+        // Account is mid-30-day grace period (see supabase/account_deletion_grace_period.sql)
+        // — hold at ReactivateAccountScreen instead of logging in normally.
+        // A real session exists (needed to call cancel_account_deletion/sign out),
+        // but isLoggedIn stays false so RootNavigation never shows the main app.
+        if (profile.deletion_requested_at) {
+          logger.log('[AuthContext] account pending deletion — holding for reactivation prompt');
+          setUser({
+            id: profile.id,
+            name: profile.name ?? '',
+            email: profile.email ?? session.user.email ?? '',
+            phone: profile.phone ?? '',
+            dob: profile.dob ?? '',
+            accountType: (profile.role as AccountType) ?? 'user',
+            loginMethod: profile.login_method ?? 'email',
+          });
+          setPendingReactivation(profile.deletion_requested_at);
+          setIsLoggedIn(false);
+          return;
+        }
+
         const role = (profile.role as AccountType) ?? 'user';
         const userData: UserData = {
           id: profile.id,
@@ -365,9 +433,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Saves beauty profile + preferences to DB, then switches activeMode to client.
   const addClientProfile = async (profileData: ClientProfileData) => {
     if (!user) throw new Error('No logged-in user');
-    const dob = `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`;
+    // Only build a DOB when all three parts are present — an empty part yields a
+    // malformed date string like "-00-00" that the DATE column rejects, which
+    // surfaced as a generic "something went wrong". When absent, omit it from the
+    // update (don't overwrite an existing value with null).
+    const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
+      ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
+      : null;
     const { error } = await supabase.from('users').update({
-      dob,
+      ...(dob ? { dob } : {}),
       hair_type: profileData.hairType || null,
       skin_type: profileData.skinType || null,
       skin_concerns: profileData.skinConcerns,
@@ -383,8 +457,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
       ...(profileData.has_kids != null ? { has_kids: profileData.has_kids } : {}),
     }).eq('id', user.id);
-    if (error) throw error;
-    setUser({ ...user, dob, hasClientProfile: true });
+    // Keep the user-facing copy friendly, but record the real Postgres reason
+    // (Metro/console only) so any future failure here is diagnosable at a glance.
+    if (error) { logger.error('addClientProfile failed:', error); throw error; }
+    setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
   };
@@ -432,8 +508,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
   };
 
+  // Called from ReactivateAccountScreen when someone mid-grace-period logs
+  // back in and confirms they want to keep their account. Nothing was ever
+  // deleted during the grace window, so clearing the flag is the entire
+  // operation — loadUserProfile then re-runs and logs them in normally.
+  const reactivateAccount = async () => {
+    if (!session) throw new Error('No session');
+    setIsReactivating(true);
+    try {
+      const { data, error } = await supabase.rpc('cancel_account_deletion');
+      if (error) throw error;
+      if (data && (data as any).ok === false) {
+        throw new Error((data as any).error || 'Could not reactivate your account.');
+      }
+      setPendingReactivation(null);
+      await loadUserProfile(session);
+    } finally {
+      setIsReactivating(false);
+    }
+  };
+
+  // "Not now" on the reactivation prompt — the account stays flagged and the
+  // scheduled cron job (process_scheduled_account_deletions) will still purge
+  // it once the 30 days are up. Just end this session the same way logout() would.
+  const declineReactivation = async () => {
+    intentionalLogoutRef.current = true;
+    setPendingReactivation(null);
+    setUser(null);
+    setSession(null);
+    setIsLoggedIn(false);
+    await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
+  };
+
+  // Deletes only the CLIENT side of the account via a SECURITY DEFINER RPC
+  // (RLS has no DELETE policy on bookings/notifications, and only that RPC
+  // knows whether this is the user's only hat). If there's no provider
+  // profile, this removes the whole account, auth.users included, since
+  // there'd be nothing left to keep it around for. See supabase/delete_account.sql.
+  const deleteClientProfile = async () => {
+    if (!user) throw new Error('No logged-in user');
+    const { data, error } = await supabase.rpc('delete_client_profile');
+    if (error) throw error;
+    if (data && (data as any).ok === false) throw accountDeletionError(data);
+
+    await clearStorageFolder('avatars', user.id);
+
+    if ((data as any).full_account_deleted) {
+      await logout();
+      return;
+    }
+    // Provider hat kept — drop out of client mode and resync role/profile
+    // state from the DB so nothing stale (e.g. hasClientProfile) lingers.
+    if (activeMode === 'client') await applyMode('provider');
+    if (session) await loadUserProfile(session);
+  };
+
+  // Deletes only the PROVIDER side of the account — mirror of
+  // deleteClientProfile above. If there's no client profile, this removes
+  // the whole account. See supabase/delete_account.sql.
+  const deleteProviderProfile = async () => {
+    if (!user) throw new Error('No logged-in user');
+    const { data, error } = await supabase.rpc('delete_provider_profile');
+    if (error) throw error;
+    if (data && (data as any).ok === false) throw accountDeletionError(data);
+
+    await Promise.all([
+      clearStorageFolder('provider-logos', user.id),
+      clearStorageFolder('service-images', user.id),
+      clearStorageFolder('provider-backgrounds', user.id),
+      clearStorageFolder('portfolio', user.id),
+    ]);
+
+    if ((data as any).full_account_deleted) {
+      await logout();
+      return;
+    }
+    // Client hat kept — drop out of provider mode and resync role/profile
+    // state from the DB (role is reset to 'user' server-side).
+    if (activeMode === 'provider') await applyMode('client');
+    if (session) await loadUserProfile(session);
+  };
+
   return (
-    <AuthContext.Provider value={{ isLoggedIn, isLoading, isSwitching, switchingTo, user, session, activeMode, switchMode, upgradeToProvider, addClientProfile, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ isLoggedIn, isLoading, isSwitching, switchingTo, user, session, activeMode, switchMode, upgradeToProvider, addClientProfile, login, logout, deleteClientProfile, deleteProviderProfile, updateUser, pendingReactivation, isReactivating, reactivateAccount, declineReactivation }}>
       {children}
     </AuthContext.Provider>
   );

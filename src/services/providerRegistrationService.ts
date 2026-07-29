@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from '../utils/logger';
+import { setMyProviderFullAddress } from './databaseService';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
 
@@ -191,7 +192,6 @@ export async function saveProviderToSupabase(
         website: data.website || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
-        full_address: data.fullAddress || null,
         address_release_policy: data.addressReleasePolicy || 'on_confirmation',
         is_active: true,
       })
@@ -229,7 +229,6 @@ export async function saveProviderToSupabase(
         website: data.website || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
-        full_address: data.fullAddress || null,
         address_release_policy: data.addressReleasePolicy || 'on_confirmation',
         is_active: true,
       })
@@ -239,79 +238,70 @@ export async function saveProviderToSupabase(
     providerId = newProvider.id;
   }
 
+  // The street address lives in the owner-only provider_private_details table,
+  // not on `providers` — that table is readable by every authenticated user and
+  // RLS can't hide a single column, so keeping the address there leaked it to
+  // clients on every browse. See restrict_provider_full_address.sql.
+  await setMyProviderFullAddress(providerId, data.fullAddress || null);
+
   // 3. Update user role to 'provider'
   await supabase.from('users').update({ role: 'provider' }).eq('id', userId);
 
-  // 4. Delete existing services (cascades to service_images + service_add_ons)
-  await supabase.from('services').delete().eq('provider_id', providerId);
-
-  // 5. Insert services, images, and add-ons
+  // 4-5. Replace services ATOMICALLY. Storage isn't transactional, so upload
+  // every image first (collecting resolved URLs), then hand the whole service
+  // set to replace_provider_services() — a SECURITY DEFINER RPC that does the
+  // delete + reinsert in one transaction. If any insert fails, it ALL rolls
+  // back and the provider's existing services are untouched (previously a
+  // mid-save failure wiped services — see supabase/replace_provider_services.sql).
+  const servicesPayload: Record<string, unknown>[] = [];
   for (const [categoryName, services] of Object.entries(data.categories)) {
+    const safeCat = categoryName.replace(/[^a-zA-Z0-9]/g, '_');
     for (let sortOrder = 0; sortOrder < services.length; sortOrder++) {
       const svc = services[sortOrder];
       if (!svc) continue;
 
-      const { data: svcRow, error: svcError } = await supabase
-        .from('services')
-        .insert({
-          provider_id: providerId,
-          category_name: categoryName,
-          name: svc.name,
-          description: svc.description || null,
-          price: svc.price,
-          duration_minutes: parseDurationToMinutes(svc.duration),
-          buffer_before_mins: svc.bufferBeforeMins ?? null,
-          buffer_after_mins: svc.bufferAfterMins ?? null,
-          is_active: true,
-          sort_order: sortOrder,
-          tags: svc.tags?.length ? svc.tags : null,
-          technique_tags: svc.techniqueTags?.length ? svc.techniqueTags : null,
-          outcome_tags: svc.outcomeTags?.length ? svc.outcomeTags : null,
-          occasion_tags: svc.occasionTags?.length ? svc.occasionTags : null,
-          trend_names: svc.trendNames?.length ? svc.trendNames : null,
-          is_pregnancy_safe: svc.isPregnancySafe ?? false,
-          patch_test_required: svc.patchTestRequired ?? false,
-          min_age: svc.minAge ?? null,
-          contraindications: svc.contraindications?.length ? svc.contraindications : null,
-          aftercare_notes: svc.aftercareNotes || null,
-          service_type: svc.serviceType || null,
-        })
-        .select('id')
-        .single();
-      if (svcError) throw new Error(`Service insert failed: ${svcError.message}`);
-
-      const serviceId = svcRow.id;
-
-      // Upload & insert service images
+      const images: { url: string; sort_order: number }[] = [];
       for (let i = 0; i < svc.images.length; i++) {
         const imgUri = svc.images[i];
         if (!imgUri) continue;
         let imgUrl = imgUri;
         if (isLocalUri(imgUri)) {
-          imgUrl = await uploadToStorage(
-            'service-images',
-            `${userId}/${serviceId}/${i}.jpg`,
-            imgUri
-          );
+          imgUrl = await uploadToStorage('service-images', `${userId}/${safeCat}-${sortOrder}-${i}.jpg`, imgUri);
         }
-        await supabase.from('service_images').insert({
-          service_id: serviceId,
-          url: imgUrl,
-          sort_order: i,
-        });
+        images.push({ url: imgUrl, sort_order: i });
       }
 
-      // Insert add-ons
-      for (const addOn of svc.addOns) {
-        await supabase.from('service_add_ons').insert({
-          service_id: serviceId,
-          name: addOn.name,
-          price: addOn.price,
-          is_active: true,
-        });
-      }
+      servicesPayload.push({
+        category_name: categoryName,
+        name: svc.name,
+        description: svc.description || null,
+        price: svc.price,
+        duration_minutes: parseDurationToMinutes(svc.duration),
+        buffer_before_mins: svc.bufferBeforeMins ?? null,
+        buffer_after_mins: svc.bufferAfterMins ?? null,
+        sort_order: sortOrder,
+        tags: svc.tags?.length ? svc.tags : null,
+        technique_tags: svc.techniqueTags?.length ? svc.techniqueTags : null,
+        outcome_tags: svc.outcomeTags?.length ? svc.outcomeTags : null,
+        occasion_tags: svc.occasionTags?.length ? svc.occasionTags : null,
+        trend_names: svc.trendNames?.length ? svc.trendNames : null,
+        is_pregnancy_safe: svc.isPregnancySafe ?? false,
+        patch_test_required: svc.patchTestRequired ?? false,
+        min_age: svc.minAge ?? null,
+        contraindications: svc.contraindications?.length ? svc.contraindications : null,
+        aftercare_notes: svc.aftercareNotes || null,
+        service_type: svc.serviceType || null,
+        images,
+        add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
+      });
     }
   }
+
+  const { error: svcError } = await supabase.rpc('replace_provider_services', {
+    p_provider_id: providerId,
+    p_services: servicesPayload,
+  });
+  if (svcError) throw new Error(`Saving services failed: ${svcError.message}`);
 
   // 6. Refresh AsyncStorage cache with resolved URLs
   const cached: ProviderRegistrationData = { ...data, logo: logoUrl };
@@ -336,6 +326,15 @@ export async function loadProviderFromSupabase(
     return getCachedProviderData(userId);
   }
   if (!provider) return getCachedProviderData(userId);
+
+  // Street address comes from the owner-only side table, not `providers`.
+  const { data: privateDetails } = await supabase
+    .from('provider_private_details')
+    .select('full_address')
+    .eq('provider_id', provider.id)
+    .maybeSingle();
+  const fullAddress =
+    (privateDetails as { full_address?: string | null } | null)?.full_address ?? '';
 
   const { data: services, error: svcError } = await supabase
     .from('services')
@@ -435,7 +434,7 @@ export async function loadProviderFromSupabase(
     website: provider.website || cached?.website || '',
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
-    fullAddress: provider.full_address || '',
+    fullAddress,
     addressReleasePolicy: (provider.address_release_policy as ProviderRegistrationData['addressReleasePolicy']) || 'on_confirmation',
   };
 }

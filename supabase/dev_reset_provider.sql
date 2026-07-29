@@ -24,6 +24,8 @@ DECLARE
   v_reviews      INT := 0;
   v_transactions INT := 0;
   v_notifs       INT := 0;
+  v_windows      INT := 0;
+  v_avail        INT := 0;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not authenticated');
@@ -54,17 +56,30 @@ BEGIN
   DELETE FROM public.notifications WHERE user_id = v_uid;
   GET DIAGNOSTICS v_notifs = ROW_COUNT;
 
-  -- Reset go-live so the onboarding / go-live flow can be re-tested.
+  -- Clear the schedule so the go-live checklist re-appears (ProviderHome gates
+  -- go-live on an open schedule) AND has_gone_live stays false: the
+  -- on_availability_window_change trigger only re-sets it TRUE on INSERT/UPDATE,
+  -- never on DELETE. Services are intentionally left intact.
+  DELETE FROM public.provider_availability_windows WHERE provider_id = v_provider_id;
+  GET DIAGNOSTICS v_windows = ROW_COUNT;
+
+  DELETE FROM public.provider_availability WHERE provider_id = v_provider_id;
+  GET DIAGNOSTICS v_avail = ROW_COUNT;
+
+  -- Reset go-live so the onboarding / go-live flow can be re-tested. Done last,
+  -- after the schedule is gone, so nothing flips it back to TRUE.
   UPDATE public.providers SET has_gone_live = false WHERE id = v_provider_id;
 
   RETURN jsonb_build_object(
     'ok', true,
     'provider_id', v_provider_id,
     'deleted', jsonb_build_object(
-      'bookings',      v_bookings,
-      'reviews',       v_reviews,
-      'transactions',  v_transactions,
-      'notifications', v_notifs
+      'bookings',           v_bookings,
+      'reviews',            v_reviews,
+      'transactions',       v_transactions,
+      'notifications',      v_notifs,
+      'schedule_windows',   v_windows,
+      'availability_days',  v_avail
     ),
     'has_gone_live', false
   );

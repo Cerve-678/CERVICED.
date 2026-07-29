@@ -27,11 +27,12 @@ import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordOTPScreen from '../screens/auth/ResetPasswordOTPScreen';
 import NewPasswordScreen from '../screens/auth/NewPasswordScreen';
+import ReactivateAccountScreen from '../screens/ReactivateAccountScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
 export default function RootNavigation() {
-  const { isLoggedIn, isLoading, activeMode, isSwitching, switchingTo } = useAuth();
+  const { isLoggedIn, isLoading, activeMode, isSwitching, switchingTo, pendingReactivation } = useAuth();
   const { theme: colors } = useTheme();
 
   const [fontsLoaded] = useFonts({
@@ -82,6 +83,12 @@ export default function RootNavigation() {
     );
   }
 
+  // Account is mid-30-day grace period — hold here instead of the normal
+  // logged-in/logged-out branches below until they reactivate or decline.
+  if (pendingReactivation) {
+    return <ReactivateAccountScreen />;
+  }
+
   return (
     <>
     <Modal visible={isSwitching} transparent animationType="fade" statusBarTranslucent>
@@ -105,14 +112,24 @@ export default function RootNavigation() {
         }}
       >
         {isLoggedIn ? (
-          // ── Authenticated screens only ──────────────────────────────────────
-          // No auth screens here — having Login in both branches means React
-          // Navigation keeps the user on LoginScreen after isLoggedIn flips true.
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabsComponent}
-            options={{ cardStyle: { backgroundColor: '#F5E6FA' } }}
-          />
+          // ── Authenticated screens ───────────────────────────────────────────
+          // SignUpStep1-5 are included here so logged-in users can navigate the
+          // in-place upgrade flows (client→provider, provider→client) and the
+          // "create a separate client account" path (ProviderAccountScreen's
+          // "Create new account" button lands on SignUpStep1, the role picker)
+          // without leaving the authenticated session.
+          <>
+            <Stack.Screen
+              name="MainTabs"
+              component={MainTabsComponent}
+              options={{ cardStyle: { backgroundColor: '#F5E6FA' } }}
+            />
+            <Stack.Screen name="SignUpStep1" component={SignUpStep1Screen} />
+            <Stack.Screen name="SignUpStep2" component={SignUpStep2Screen} />
+            <Stack.Screen name="SignUpStep3" component={SignUpStep3Screen} />
+            <Stack.Screen name="SignUpStep4" component={SignUpStep4Screen} />
+            <Stack.Screen name="SignUpStep5" component={SignUpStep5Screen} />
+          </>
         ) : (
           // ── Auth screens only ───────────────────────────────────────────────
           <>

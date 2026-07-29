@@ -19,7 +19,7 @@ import { HomeStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import {
-  getProviderAddressSettings,
+  getProviderAddressPolicy,
   getClientBookingsForAddressShare,
   setBookingClientAddress,
   insertProviderNotification,
@@ -28,7 +28,7 @@ import {
   getConversationMessages,
   sendProviderMessage,
   DbProviderMessage,
-  ProviderAddressSettings,
+  ProviderAddressPolicy,
   ClientBookingSummary,
 } from '../services/databaseService';
 
@@ -69,7 +69,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const flatListRef = useRef<FlatList>(null);
 
   // Address-sharing (mobile providers only — client sends the address they want visited)
-  const [addressSettings, setAddressSettings] = useState<ProviderAddressSettings | null>(null);
+  const [addressSettings, setAddressSettings] = useState<ProviderAddressPolicy | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [addressBookings, setAddressBookings] = useState<ClientBookingSummary[]>([]);
   const [loadingAddressBookings, setLoadingAddressBookings] = useState(false);
@@ -79,7 +79,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (!providerDbId) return;
-    getProviderAddressSettings(providerDbId).then(setAddressSettings).catch(() => {});
+    // Policy only — this is a CLIENT screen and only needs business_type to
+    // show the mobile address-share affordance.
+    getProviderAddressPolicy(providerDbId).then(setAddressSettings).catch(() => {});
   }, [providerDbId]);
 
   // Get current user

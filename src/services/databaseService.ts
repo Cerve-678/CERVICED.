@@ -26,6 +26,7 @@ import type {
   DbProviderAvailabilityOverride,
 } from '../types/database';
 import { logger } from '../utils/logger';
+import { ADDRESS_PENDING_PLACEHOLDER, PHONE_PENDING_PLACEHOLDER } from '../types/booking';
 
 /**
  * DATABASE SERVICE — SINGLE ACCESS POINT
@@ -1306,13 +1307,49 @@ export async function submitReview(review: {
 
 /** Check if current user has already reviewed a booking */
 export async function hasReviewedBooking(bookingId: string): Promise<boolean> {
+  // maybeSingle, not single: "no review yet" is the normal case and single()
+  // treats it as a PGRST116 error. This is called on every booking-detail mount.
   const { data } = await supabase
     .from('reviews')
     .select('id')
     .eq('booking_id', bookingId)
-    .single();
+    .maybeSingle();
 
   return !!data;
+}
+
+/** The tip recorded against a booking, or null when there's no review/tip yet. */
+export async function getBookingTip(bookingId: string): Promise<number | null> {
+  const { data } = await supabase
+    .from('reviews')
+    .select('tip_amount')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
+  const tip = (data as { tip_amount?: number | null } | null)?.tip_amount;
+  return tip == null ? null : Number(tip);
+}
+
+/**
+ * Record a tip against a booking's review.
+ *
+ * Tips live on the reviews row (reviews.tip_amount) — that table has
+ * UNIQUE(booking_id) and a NOT NULL rating, so a tip cannot exist without a
+ * review. Returns false when there is no review to attach to, so the caller can
+ * ask the client to rate first rather than dropping the tip silently (which is
+ * what the UI did before: it only ever set local state).
+ *
+ * NOTE: this records the AMOUNT only. No payment provider is wired up for tips,
+ * so no money moves — the copy shown to the client must not claim otherwise.
+ */
+export async function setBookingTip(bookingId: string, tipAmount: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('reviews')
+    .update({ tip_amount: tipAmount })
+    .eq('booking_id', bookingId)
+    .select('id');
+
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1432,6 +1469,35 @@ export async function getActiveRescheduleRequest(
     .maybeSingle();
   if (error) throw error;
   return data as DbBookingRescheduleRequest | null;
+}
+
+/**
+ * Active reschedule requests for many bookings at once, keyed by booking_id.
+ *
+ * loadBookings uses this to hydrate reschedule state, which otherwise exists
+ * only in AsyncStorage — so an in-flight reschedule was invisible on a second
+ * device or after clearing storage. One query rather than N.
+ */
+export async function getActiveRescheduleRequestsForBookings(
+  bookingIds: string[]
+): Promise<Record<string, DbBookingRescheduleRequest>> {
+  if (bookingIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('booking_reschedule_requests')
+    .select('*')
+    .in('booking_id', bookingIds)
+    .in('status', ['pending', 'provider_responded'])
+    .order('created_at', { ascending: false });
+
+  if (error || !data) return {};
+
+  const out: Record<string, DbBookingRescheduleRequest> = {};
+  for (const row of data as DbBookingRescheduleRequest[]) {
+    // Newest-first, so the first row seen for a booking is the current one.
+    if (!out[row.booking_id]) out[row.booking_id] = row;
+  }
+  return out;
 }
 
 /** Provider responds with their available slots */
@@ -2085,6 +2151,7 @@ export async function submitIntakeFormAnswers(
     .update(patch)
     .eq('id', formId);
   if (error) throw error;
+  // DB trigger handle_intake_form_completed() fires on this UPDATE and notifies the provider.
 }
 
 export async function getPendingIntakeFormsForMe(): Promise<IntakeForm[]> {
@@ -2122,6 +2189,7 @@ export async function getMyProviderIntakeForms(): Promise<IntakeForm[]> {
 export interface BookingInfoPack {
   id: string;
   bookingId: string;
+  infoPackId: string;
   providerId: string;
   title: string;
   service: string;
@@ -2132,14 +2200,15 @@ export interface BookingInfoPack {
 
 function mapBookingInfoPack(d: any): BookingInfoPack {
   return {
-    id:        d.id,
-    bookingId: d.booking_id,
+    id:         d.id,
+    bookingId:  d.booking_id,
+    infoPackId: d.info_pack_id,
     providerId: d.provider_id,
-    title:     d.title,
-    service:   d.service ?? 'GENERAL',
-    content:   d.content,
-    viewedAt:  d.viewed_at ?? null,
-    createdAt: d.created_at,
+    title:      d.title,
+    service:    d.service ?? 'GENERAL',
+    content:    d.content,
+    viewedAt:   d.viewed_at ?? null,
+    createdAt:  d.created_at,
   };
 }
 
@@ -2361,14 +2430,55 @@ export async function getProviderLocationsByDisplayNames(
   if (error || !data) return {};
 
   const result: Record<string, ProviderLocationData> = {};
+  // display_name is NOT unique. Letting the last row win would stamp a booking
+  // with the WRONG provider's address and coordinates — a silent, permanent
+  // error, since these get snapshotted onto the booking. So an ambiguous name
+  // resolves to nothing instead: the booking falls back to the "pending"
+  // sentinel, which is recoverable where a wrong address is not. Prefer
+  // getProviderLocationsByIds when the caller has provider ids.
+  const ambiguous = new Set<string>();
   for (const p of data) {
-    if (p.latitude != null && p.longitude != null) {
-      result[p.display_name] = {
-        address: p.location_text ?? 'Address will be confirmed by provider',
-        coordinates: { latitude: Number(p.latitude), longitude: Number(p.longitude) },
-        phone: p.phone ?? 'Phone will be confirmed by provider',
-      };
-    }
+    if (p.latitude == null || p.longitude == null) continue;
+    if (result[p.display_name]) { ambiguous.add(p.display_name); continue; }
+    result[p.display_name] = {
+      address: p.location_text ?? ADDRESS_PENDING_PLACEHOLDER,
+      coordinates: { latitude: Number(p.latitude), longitude: Number(p.longitude) },
+      phone: p.phone ?? PHONE_PENDING_PLACEHOLDER,
+    };
+  }
+  for (const name of ambiguous) {
+    logger.warn(
+      `[getProviderLocationsByDisplayNames] "${name}" matches multiple providers with coordinates — omitting rather than risk the wrong address`
+    );
+    delete result[name];
+  }
+  return result;
+}
+
+/**
+ * Location data keyed by provider id — the unambiguous form. Use this wherever
+ * provider ids are available; display names are not unique (see above).
+ */
+export async function getProviderLocationsByIds(
+  providerIds: string[]
+): Promise<Record<string, ProviderLocationData>> {
+  if (providerIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, location_text, latitude, longitude, phone')
+    .in('id', providerIds);
+
+  if (error || !data) return {};
+
+  const result: Record<string, ProviderLocationData> = {};
+  for (const p of data) {
+    if (p.latitude == null || p.longitude == null) continue;
+    result[p.id] = {
+      address: p.location_text ?? ADDRESS_PENDING_PLACEHOLDER,
+      coordinates: { latitude: Number(p.latitude), longitude: Number(p.longitude) },
+      phone: p.phone ?? PHONE_PENDING_PLACEHOLDER,
+    };
   }
   return result;
 }
@@ -2394,39 +2504,60 @@ export async function getMobileProviderDisplayNames(displayNames: string[]): Pro
 
 export interface ProviderAddressSettings {
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
-  full_address: string | null;
   address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
 }
 
 /**
- * Full address settings, INCLUDING full_address — provider-side only.
- * Never call this from a client screen: a client must not receive an address
- * the release policy hasn't unlocked. Clients use getProviderAddressPolicy*,
- * and the actual address arrives (gated) via the client_bookings view.
+ * Business type + release policy for a provider.
+ *
+ * No longer returns full_address: that column has moved out of `providers` into
+ * the owner-only provider_private_details table (see
+ * restrict_provider_full_address.sql), because `providers` is world-readable to
+ * any authenticated user and RLS cannot hide a single column. Use
+ * getMyProviderFullAddress() for the provider's own address.
  */
 export async function getProviderAddressSettings(providerId: string): Promise<ProviderAddressSettings | null> {
   const { data, error } = await supabase
     .from('providers')
-    .select('business_type, full_address, address_release_policy')
+    .select('business_type, address_release_policy')
     .eq('id', providerId)
     .single();
   if (error || !data) return null;
   return data as ProviderAddressSettings;
 }
 
-/** Provider-side only — see getProviderAddressSettings. */
-export async function getProviderAddressSettingsByDisplayName(displayName: string): Promise<ProviderAddressSettings | null> {
-  const { data, error } = await supabase
-    .from('providers')
-    .select('business_type, full_address, address_release_policy')
-    .eq('display_name', displayName)
-    .single();
-  if (error || !data) return null;
-  return data as ProviderAddressSettings;
+/**
+ * The calling provider's own private street address.
+ * RLS on provider_private_details scopes this to the owner — it cannot return
+ * anyone else's, regardless of what id is passed anywhere else in the app.
+ */
+export async function getMyProviderFullAddress(): Promise<string | null> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return null;
+  const { data } = await supabase
+    .from('provider_private_details')
+    .select('full_address')
+    .eq('provider_id', provider.id)
+    .maybeSingle();
+  return (data as { full_address?: string | null } | null)?.full_address ?? null;
 }
 
-/** Business type + release policy WITHOUT full_address — safe for client screens. */
-export type ProviderAddressPolicy = Pick<ProviderAddressSettings, 'business_type' | 'address_release_policy'>;
+/** Save the calling provider's own private street address. */
+export async function setMyProviderFullAddress(
+  providerId: string,
+  fullAddress: string | null
+): Promise<void> {
+  const { error } = await supabase
+    .from('provider_private_details')
+    .upsert(
+      { provider_id: providerId, full_address: fullAddress, updated_at: new Date().toISOString() },
+      { onConflict: 'provider_id' }
+    );
+  if (error) throw error;
+}
+
+/** Business type + release policy. Kept as an alias — see ProviderAddressSettings. */
+export type ProviderAddressPolicy = ProviderAddressSettings;
 
 /** Client-safe: release policy by provider id (stable), no address leaked. */
 export async function getProviderAddressPolicy(providerId: string): Promise<ProviderAddressPolicy | null> {
@@ -2478,13 +2609,47 @@ export async function setBookingClientAddress(bookingId: string, address: string
   if (error) throw error;
 }
 
-/** Manually release the full address for a specific booking to the client. */
+/**
+ * Manually release the full address for a specific booking to the client.
+ * Sends exactly ONE "Address Now Available" notification — this is the single
+ * source for the manual path. (Previously ProviderBookingDetailScreen ALSO
+ * sent its own "Address Released" notification right after calling this,
+ * so the client got two differently-worded notifications for one event.
+ * That caller no longer sends its own — see handleReleaseAddress.)
+ */
 export async function releaseBookingAddress(bookingId: string): Promise<void> {
   const { error } = await supabase
     .from('bookings')
     .update({ address_released_at: new Date().toISOString() })
     .eq('id', bookingId);
   if (error) throw error;
+  notifyClientAddressReleased(bookingId).catch(() => {});
+}
+
+async function notifyClientAddressReleased(bookingId: string): Promise<void> {
+  try {
+    const { data: b } = await supabase
+      .from('bookings')
+      .select('user_id, provider_id, service_name_snapshot, provider_name_snapshot, booking_date')
+      .eq('id', bookingId)
+      .single();
+    if (!b) return;
+    await supabase.from('notifications').insert({
+      user_id:        b.user_id,
+      type:           'address_released',
+      title:          'Address Now Available',
+      message:        `The location for your ${b.service_name_snapshot} with ${b.provider_name_snapshot} on ${new Date(b.booking_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} has been shared — tap to view.`,
+      is_read:        false,
+      priority:       'medium',
+      is_actionable:  true,
+      booking_id:     bookingId,
+      provider_id:    b.provider_id,
+      recipient_role: 'client',
+      metadata:       {},
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 /** Fetch the address_released_at timestamp for a booking. */
@@ -3013,6 +3178,8 @@ export async function upsertUserBeautyProfile(
     scalp_condition?: string | null;
     hair_goals?: string[];
     service_interests?: string[];
+    gender?: string | null;
+    has_kids?: boolean | null;
   }
 ): Promise<void> {
   const { error } = await supabase
@@ -3238,6 +3405,72 @@ export async function insertDirectBooking(data: {
 // SERVICES — additional queries
 // ─────────────────────────────────────────────────────────
 
+export interface RebookableService {
+  id: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+  categoryName: string;
+  /**
+   * Provider slug and display name. The cart needs BOTH: CartScreen's provider
+   * logo opens the profile via providerSlug, and shows an error alert when it is
+   * missing — so a rebooked cart item without a slug has an untappable logo.
+   */
+  providerSlug: string;
+  providerDisplayName: string;
+  /** Live add-ons for this service, at today's prices. */
+  addOns: Array<{ id: string; name: string; price: number }>;
+}
+
+/**
+ * Re-resolve a past booking's service against live data, for "Book Again".
+ *
+ * Rebooking used to copy the booking's snapshot straight into the cart with a
+ * synthetic id (`rebook_<timestamp>`) and the ORIGINAL price — so a client could
+ * re-book a deleted service, or at a price the provider had since changed, with
+ * no real service_id attached. This returns the current row so the caller can
+ * rebook at today's price or explain why it isn't possible.
+ *
+ * Returns null when the provider is no longer live/active or the service is gone.
+ */
+export async function getRebookableService(
+  providerId: string,
+  serviceName: string
+): Promise<RebookableService | null> {
+  // has_gone_live + is_active: never let a client re-book into a provider who
+  // has taken their profile down (see the client-facing query rule at the top).
+  const { data: provider } = await supabase
+    .from('providers')
+    .select('id, slug, display_name')
+    .eq('id', providerId)
+    .eq('is_active', true)
+    .eq('has_gone_live', true)
+    .maybeSingle();
+  if (!provider) return null;
+
+  const { data } = await supabase
+    .from('services')
+    .select('id, name, price, duration_minutes, category_name, service_add_ons ( id, name, price, is_active )')
+    .eq('provider_id', providerId)
+    .eq('name', serviceName)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    price: Number(data.price),
+    durationMinutes: Number(data.duration_minutes),
+    categoryName: data.category_name,
+    providerSlug: provider.slug,
+    providerDisplayName: provider.display_name,
+    addOns: ((data as any).service_add_ons ?? [])
+      .filter((a: any) => a.is_active)
+      .map((a: any) => ({ id: a.id, name: a.name, price: Number(a.price) })),
+  };
+}
+
 /** Fetch the price for a single service by ID */
 export async function getServicePrice(serviceId: string): Promise<number> {
   const { data } = await supabase
@@ -3318,6 +3551,18 @@ export async function createInfoPack(data: {
 /** Delete an info pack by id */
 export async function deleteInfoPack(id: string): Promise<void> {
   const { error } = await supabase.from('info_packs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Manually attach an info pack to a specific booking and notify the client. */
+export async function attachInfoPackToBooking(
+  bookingId: string,
+  infoPackId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('attach_info_pack_to_booking', {
+    p_booking_id:   bookingId,
+    p_info_pack_id: infoPackId,
+  });
   if (error) throw error;
 }
 

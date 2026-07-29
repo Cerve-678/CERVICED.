@@ -34,7 +34,8 @@ export type NotificationType =
   | 'announcement'          // provider broadcast to clients (client-facing)
   | 'intake_form_received'  // provider sent client a form to fill (client-facing)
   | 'intake_form_completed' // client sent a filled form back (provider-facing)
-  | 'info_pack_received';   // provider sent client prep/aftercare info (client-facing)
+  | 'info_pack_received'    // provider sent client prep/aftercare info (client-facing)
+  | 'address_released';     // booking address is now visible to the client
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -68,6 +69,7 @@ export interface DbUser {
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+  deletion_requested_at: string | null;
 }
 
 export interface DbProvider {
@@ -115,7 +117,12 @@ export interface DbProvider {
     noShowNote?: string;
   } | null;
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
-  full_address: string | null;
+  // full_address is deliberately NOT here. It moved to provider_private_details
+  // (owner-only RLS) because `providers` is readable by every authenticated user
+  // and RLS cannot hide a single column — so keeping it here leaked every
+  // provider's home address to clients via `.select('*')` on browse. See
+  // supabase/restrict_provider_full_address.sql. Read via
+  // getMyProviderFullAddress(), write via setMyProviderFullAddress().
   address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
   online_consultations_available: boolean;
   consultation_required_new_clients: boolean;

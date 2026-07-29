@@ -23,6 +23,7 @@ import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark, getActivePr
 import type { DbProvider } from '../types/database';
 import Icon from '../components/IconLibrary';
 import { useTheme } from '../contexts/ThemeContext';
+import type { AppTheme } from '../constants/theme';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { logger } from '../utils/logger';
 
@@ -335,7 +336,7 @@ interface BookmarkGridCardProps {
   index: number;
   hasOffer: boolean;
   appointmentCount: number;
-  P: typeof L;
+  P: AppTheme;
   onPress: () => void;
   onRemove: () => void;
 }

@@ -23,6 +23,9 @@ export default function ProviderTabNavigation() {
   return (
     <Tab.Navigator
       initialRouteName="ProviderHome"
+      // See TabNavigator: the default 'firstRoute' would send a bubbled back
+      // press to Becca (the first declared tab) instead of ProviderHome.
+      backBehavior="initialRoute"
       tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,

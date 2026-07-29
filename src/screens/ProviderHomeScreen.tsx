@@ -39,6 +39,7 @@ import { supabase } from '../lib/supabase';
 import {
   getProviderBookings,
   getMyProviderProfile,
+  getMyProviderFullAddress,
   getProviderAvailability,
   getProviderBlockedDates,
   getUnreadNotificationCount,
@@ -894,15 +895,18 @@ export default function ProviderHomeScreen({ navigation }: Props) {
         getProviderAvailability(profile.id),
         getProviderBlockedDates(profile.id),
         countProviderServices(profile.id),
-      ]).then(([avail, blocked, serviceCount]) => {
+        // full_address is no longer on `providers` — it lives in the owner-only
+        // provider_private_details table (restrict_provider_full_address.sql).
+        getMyProviderFullAddress().catch(() => null),
+      ]).then(([avail, blocked, serviceCount, fullAddress]) => {
         if (cancelled) return;
         setAvailability(avail);
         setBlockedDates(blocked);
-        const p = profile as unknown as { business_type?: string | null; full_address?: string | null; location_text?: string | null };
+        const p = profile as unknown as { business_type?: string | null; location_text?: string | null };
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
-          addressSet: p.business_type === 'mobile' ? true : !!(p.full_address || p.location_text),
+          addressSet: p.business_type === 'mobile' ? true : !!(fullAddress || p.location_text),
         });
       });
     }).catch(() => {});

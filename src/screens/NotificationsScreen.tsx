@@ -63,7 +63,7 @@ interface Notification {
       | 'promotion'          | 'intake_form_reminder' | 'provider_message'
       | 'balance_collected'  | 'balance_reminder'     | 'new_message'
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
-      | 'info_pack_received' | 'intake_form_completed';
+      | 'info_pack_received' | 'intake_form_completed' | 'address_released';
   title: string;
   message: string;
   timestamp: string;
@@ -313,6 +313,22 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setShowMessagePopup(false);
     setSelectedNotification(null);
 
+    // A provider must never be deep-linked into a client-only screen. Routes like
+    // ProviderProfile / Home / Bookings / ProviderChat don't exist in the provider
+    // stack, so navigating to them bubbles up and mounts the CLIENT navigator —
+    // leaving a provider staring at a client screen. For client-only notification
+    // types, stay on the (provider) notifications list instead of leaking across.
+    const CLIENT_ONLY_TYPES = new Set([
+      'waitlist_slot_available',
+      'new_provider',
+      'promotion',
+      'announcement',
+    ]);
+    if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
+      logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
+      return;
+    }
+
     // Navigate based on notification type
     if (notification.type === 'booking_pending' ||
         notification.type === 'booking_confirmed' ||
@@ -522,7 +538,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Bell color logic based on notification type
   const getBellColor = (type: string) => {
     if (['booking_cancelled', 'booking_declined', 'no_show'].includes(type)) return '#FF1744';
-    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'balance_collected', 'intake_form_completed'].includes(type)) return '#4CAF50';
+    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'balance_collected', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'booking_not_started', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'balance_reminder'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
     if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement'].includes(type)) return '#AF9197';
@@ -578,6 +594,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Collect Payment';
       case 'balance_collected':
         return 'View Booking';
+      case 'address_released':
+        return 'View Address';
       default:
         return 'View';
     }

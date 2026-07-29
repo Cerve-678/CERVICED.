@@ -48,13 +48,20 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       const load = async () => {
-        setIsLoading(true);
+        // Don't blank the screen on refocus — isLoading is only true on the very
+        // first mount (useState(true)). On later focuses we keep the current
+        // profile on screen and refresh in the background instead of flashing a
+        // spinner every time you tab back.
         try {
           let parsed: ProviderRegistrationData | null = null;
 
           if (user?.id) {
-            parsed = await loadProviderFromSupabase(user.id);
-            const providerId = await getProviderIdForUserId(user.id);
+            // Two independent lookups — run them together, not one after the other.
+            const [loaded, providerId] = await Promise.all([
+              loadProviderFromSupabase(user.id),
+              getProviderIdForUserId(user.id),
+            ]);
+            parsed = loaded;
             if (providerId) {
               setProviderDbId(providerId);
               getProviderPortfolio(providerId).then(setPortfolio).catch(() => {});
@@ -122,10 +129,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   );
   const cardBg = withAlpha(PP.card, PP.isDark ? 0.5 : 0.9);
   const accentColor = providerData?.accentColor || PP.accent;
-  // Some backdrops (Cream, Sky, Blush…) are pale — white hero text needs to
-  // flip to dark there, matching ProviderProfileScreen's contrast logic.
-  const heroIsDark = isDarkColor(providerData?.gradient[0] ?? PP.hero);
-  const heroText = heroIsDark ? '#fff' : '#26201E';
+  // Mirror ProviderProfileScreen's hero logic EXACTLY for visual parity:
+  //   hasCustomGradient = a saved gradient with ≥2 stops; else the theme hero.
+  const hasCustomGradient = !!(providerData?.gradient && providerData.gradient.length >= 2);
+  const heroBgColor = hasCustomGradient ? providerData?.gradient[0] : PP.hero;
+  const heroIsDark = heroBgColor ? isDarkColor(heroBgColor) : true;
+  const heroText = heroIsDark ? '#FFFFFF' : '#26201E';
   const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
   const heroShadow = heroIsDark
     ? { textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 8 }
@@ -171,9 +180,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { backgroundColor: PP.bg }]}>
-      {/* Hero backdrop — matches ProviderProfileScreen's hero-then-sheet split */}
+      {/* Hero backdrop — mirror ProviderProfileScreen: full custom gradient, or
+          the resolved theme's [hero → bg] for preset themes. */}
       <LinearGradient
-        colors={[providerData.gradient[0] ?? PP.hero, PP.bg]}
+        colors={hasCustomGradient ? providerData.gradient : [PP.hero, PP.bg]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.heroImage}
@@ -553,10 +563,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
   },
+  // Matches ProviderProfileScreen's providerNameLarge — this was rendering in
+  // a different font family (Prata) than what clients actually see (BakbakOne).
   providerNameLarge: {
-    fontFamily: 'Prata-Regular',
-    fontSize: 26,
-    marginBottom: 4,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 28,
+    marginBottom: 15,
     textAlign: 'center',
   },
   metaText: {
@@ -617,11 +629,18 @@ const styles = StyleSheet.create({
   },
 
   // Generic frosted card
+  // Matches ProviderProfileScreen's aboutCard radius/shadow — this screen's
+  // cards were noticeably flatter/smaller-radius than what clients see.
   card: {
-    borderRadius: 18,
+    borderRadius: 26,
     padding: 20,
     marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 3,
   },
   sectionTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -710,6 +729,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: 15,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   serviceItem: {
     flexDirection: 'row',

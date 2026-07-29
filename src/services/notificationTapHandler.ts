@@ -37,11 +37,27 @@ const BOOKING_TYPES = new Set([
   'balance_collected',
   'intake_form_received',
   'info_pack_received',
+  'address_released',
 ]);
 
-function navigate(name: string, params?: Record<string, unknown>) {
+/**
+ * Deep-link into a screen inside a tab's stack.
+ *
+ * Always routes through an explicit tab rather than dispatching a bare screen
+ * name. A bare `navigate('Bookings')` is handled by neither the root stack nor
+ * the tab navigator, so it falls through to whichever tab happens to be focused
+ * — landing the user in the Becca/Cart/Profile copy of the screen, or doing
+ * nothing at all on Explore, which has no Bookings screen.
+ *
+ * `initial: false` is what puts the tab's root screen UNDERNEATH the target.
+ * Without it, a nested navigate into a stack that hasn't mounted yet (bottom
+ * tabs are lazy) initialises that stack with the target as its ONLY route — so
+ * going back has nothing to pop, bubbles up to the tab navigator, and switches
+ * tabs instead of returning to the screen the user expects.
+ */
+function navigateNested(tab: string, screen: string, params?: Record<string, unknown>) {
   if (!navigationRef.isReady()) return;
-  (navigationRef as any).navigate(name, params);
+  (navigationRef as any).navigate(tab, { screen, params, initial: false });
 }
 
 export async function handleNotificationTap(data: NotificationTapData): Promise<void> {
@@ -49,16 +65,11 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
 
   const { type, booking_id } = data;
 
-  if (!type) {
-    navigate('Notifications');
-    return;
-  }
-
   const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
   // Route by who the notification is FOR (recipient_role from the push payload),
   // not by whichever hat the app happens to be in. Fall back to the saved mode
   // only when the notification didn't carry a role.
-  const role = typeof data.recipient_role === 'string' ? data.recipient_role : null;
+  const role = typeof data['recipient_role'] === 'string' ? data['recipient_role'] : null;
   const isProvider = role ? role === 'provider' : savedMode === 'provider';
 
   // If the notification is for the OTHER hat, switch into it first so the correct
@@ -71,30 +82,40 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     await new Promise((r) => setTimeout(r, 350));
   }
 
+  // The two hats are different navigators, so the tab hosting the shared
+  // screens (Notifications, booking detail) differs between them.
+  const homeTab = isProvider ? 'ProviderHome' : 'Home';
+  const openNotifications = () => navigateNested(homeTab, 'Notifications');
+
+  if (!type) {
+    openNotifications();
+    return;
+  }
+
   // ── Booking-related types ───────────────────────────────────────────────────
   if (BOOKING_TYPES.has(type)) {
     const openReschedule =
       type === 'reschedule_request' || type === 'reschedule_provider_response';
 
+    if (!booking_id) {
+      openNotifications();
+      return;
+    }
+
     if (isProvider) {
-      // Provider: navigate through the ProviderHome tab so the correct stack
-      // is selected regardless of which tab is currently focused.
-      if (booking_id) {
-        navigate('ProviderHome', {
-          screen: 'BookingDetail',
-          params: { bookingId: booking_id, openReschedule: openReschedule || undefined },
-        });
-      } else {
-        navigate('ProviderHome', { screen: 'Notifications' });
-      }
+      navigateNested('ProviderHome', 'BookingDetail', {
+        bookingId: booking_id,
+        openReschedule: openReschedule || undefined,
+      });
     } else {
-      // Client: open bookings list with the booking pre-opened
-      navigate(
-        'Bookings',
-        booking_id
-          ? { openBookingId: booking_id, openReschedule, highlightBookingId: booking_id }
-          : undefined,
-      );
+      // Client: open the bookings list with the booking pre-opened. Explicitly
+      // through the Home tab — the old bare navigate('Bookings') landed in
+      // whichever tab was focused, and did nothing at all on Explore.
+      navigateNested('Home', 'Bookings', {
+        openBookingId: booking_id,
+        openReschedule,
+        highlightBookingId: booking_id,
+      });
     }
     return;
   }
@@ -102,9 +123,9 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // ── Intake form types (provider-only) ────────────────────────────────────────
   if (type === 'intake_form_reminder' || type === 'intake_form_completed') {
     if (isProvider && booking_id) {
-      navigate('BookingDetail', { bookingId: booking_id });
+      navigateNested('ProviderHome', 'BookingDetail', { bookingId: booking_id });
     } else {
-      navigate('Notifications');
+      openNotifications();
     }
     return;
   }
@@ -112,11 +133,11 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // ── Message types ────────────────────────────────────────────────────────────
   if (type === 'provider_message' || type === 'new_message') {
     if (isProvider) {
-      navigate('ProviderInbox', { initialFilter: 'messages' });
+      navigateNested('ProviderHome', 'ProviderInbox', { initialFilter: 'messages' });
     } else {
       // Client chat requires a provider slug lookup — land on Notifications so
       // the in-app handler can do the async lookup when the user taps the item.
-      navigate('Notifications');
+      openNotifications();
     }
     return;
   }
@@ -124,5 +145,5 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // ── Everything else → Notifications screen ───────────────────────────────────
   // (new_provider, announcement, promotion, waitlist_slot_available, etc.)
   // These need provider_id for deep linking; the in-app handler covers them.
-  navigate('Notifications');
+  openNotifications();
 }

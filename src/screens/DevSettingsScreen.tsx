@@ -329,7 +329,7 @@ export default function DevSettingsScreen({ navigation }: any) {
   const fullProviderReset = async () => {
     Alert.alert(
       'Full Provider Reset',
-      "DELETE all of this provider's bookings (and the clients' linked copies), reviews, transactions, and your notifications, then reset has_gone_live. This cannot be undone. Continue?",
+      "DELETE all of this provider's bookings (and the clients' linked copies), reviews, transactions, and your notifications, and clear your schedule — then reset has_gone_live so you go back through the go-live flow. Your services are kept. This cannot be undone. Continue?",
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -357,7 +357,7 @@ export default function DevSettingsScreen({ navigation }: any) {
               await loadPushInfo();
               Alert.alert(
                 'Provider reset ✓',
-                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nTransactions: ${d.transactions ?? 0}\nNotifications: ${d.notifications ?? 0}\nhas_gone_live → false`
+                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nTransactions: ${d.transactions ?? 0}\nNotifications: ${d.notifications ?? 0}\nSchedule cleared: ${d.schedule_windows ?? 0} windows, ${d.availability_days ?? 0} days\nhas_gone_live → false (back through go-live)`
               );
             } catch (err) {
               Alert.alert('Error', String(err));
@@ -441,7 +441,7 @@ export default function DevSettingsScreen({ navigation }: any) {
               <View style={[styles.statCard, { backgroundColor: P.card, borderColor: P.border }]}>
                 <View style={styles.statRow}>
                   <Text style={[styles.statLabel, { color: P.text }]}>Permission</Text>
-                  <Text style={[styles.statValue, { color: pushPerm === 'granted' ? P.accent : P.danger }]}>
+                  <Text style={[styles.statValue, { color: pushPerm === 'granted' ? P.accent : danger }]}>
                     {pushPerm}
                   </Text>
                 </View>
@@ -459,14 +459,14 @@ export default function DevSettingsScreen({ navigation }: any) {
                 <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
                 <View style={styles.statRow}>
                   <Text style={[styles.statLabel, { color: P.text }]}>Device token</Text>
-                  <Text style={[styles.statValue, { color: deviceToken ? P.accent : P.danger }]}>
+                  <Text style={[styles.statValue, { color: deviceToken ? P.accent : danger }]}>
                     {deviceToken ? 'present' : 'none'}
                   </Text>
                 </View>
                 <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
                 <View style={styles.statRow}>
                   <Text style={[styles.statLabel, { color: P.text }]}>DB token</Text>
-                  <Text style={[styles.statValue, { color: dbToken ? P.accent : P.danger }]}>
+                  <Text style={[styles.statValue, { color: dbToken ? P.accent : danger }]}>
                     {dbToken ? 'present' : 'none'}
                   </Text>
                 </View>
@@ -474,8 +474,8 @@ export default function DevSettingsScreen({ navigation }: any) {
                   <>
                     <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
                     <View style={styles.statRow}>
-                      <Text style={[styles.statLabel, { color: P.danger }]}>⚠︎ Stale</Text>
-                      <Text style={[styles.statValue, { color: P.danger }]}>DB ≠ device</Text>
+                      <Text style={[styles.statLabel, { color: danger }]}>⚠︎ Stale</Text>
+                      <Text style={[styles.statValue, { color: danger }]}>DB ≠ device</Text>
                     </View>
                   </>
                 )}
@@ -515,10 +515,10 @@ export default function DevSettingsScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${P.danger}18`, borderColor: `${P.danger}40`, marginTop: 10 }]}
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40`, marginTop: 10 }]}
                 onPress={clearDbToken}
               >
-                <Text style={[styles.dangerButtonText, { color: P.danger }]}>Clear DB Token</Text>
+                <Text style={[styles.dangerButtonText, { color: danger }]}>Clear DB Token</Text>
               </TouchableOpacity>
             </View>
 
@@ -632,17 +632,17 @@ export default function DevSettingsScreen({ navigation }: any) {
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: P.sub }]}>PROVIDER</Text>
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${P.danger}18`, borderColor: `${P.danger}40` }]}
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40` }]}
                 onPress={clearProviderData}
               >
-                <Text style={[styles.dangerButtonText, { color: P.danger }]}>Clear Provider Data (local)</Text>
+                <Text style={[styles.dangerButtonText, { color: danger }]}>Clear Provider Data (local)</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${P.danger}18`, borderColor: `${P.danger}40`, opacity: pushBusy ? 0.5 : 1 }]}
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40`, opacity: pushBusy ? 0.5 : 1 }]}
                 disabled={pushBusy}
                 onPress={fullProviderReset}
               >
-                <Text style={[styles.dangerButtonText, { color: P.danger }]}>
+                <Text style={[styles.dangerButtonText, { color: danger }]}>
                   {pushBusy ? 'Working…' : 'Full Provider Reset (DB)'}
                 </Text>
               </TouchableOpacity>

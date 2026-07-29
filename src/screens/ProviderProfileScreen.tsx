@@ -137,6 +137,13 @@ interface ServiceData {
   image: any;
   images?: any[]; // Optional array for carousel
   addOns?: AddOnData[]; // Optional per-service add-ons
+  // Treatment safety — captured by the provider, shown to the client right
+  // under the description so they see it before booking.
+  isPregnancySafe?: boolean;
+  patchTestRequired?: boolean;
+  minAge?: number | null;
+  contraindications?: string[];
+  aftercareNotes?: string;
 }
 
 
@@ -190,6 +197,11 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
           price: Number(a.price),
           description: a.description ?? '',
         })),
+      isPregnancySafe: s.is_pregnancy_safe,
+      patchTestRequired: s.patch_test_required,
+      minAge: s.min_age,
+      contraindications: s.contraindications ?? [],
+      aftercareNotes: s.aftercare_notes ?? '',
     });
   });
 
@@ -1449,7 +1461,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
       prev && provider.categories[prev] ? prev : firstCat
     );
   }, [provider]);
-  const [isScrolled, setIsScrolled] = useState(false);
+  // Ref, not state — scrolling must NOT re-render this large screen (that full
+  // re-render on the first scroll hung the UI thread). The header reacts to it
+  // imperatively via setOptions in handleScroll.
+  const isScrolledRef = useRef(false);
   const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<'about' | 'policy'>('about');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -1866,7 +1881,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
-      headerTitle: isScrolled && provider ? provider.displayName : '',
+      headerTitle: isScrolledRef.current && provider ? provider.displayName : '',
       headerTitleStyle: {
         fontFamily: SERIF,
         fontSize: 17,
@@ -1910,7 +1925,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
         </View>
       ),
       headerBackground: () =>
-        isScrolled ? (
+        isScrolledRef.current ? (
           <View style={[styles.headerBackgroundContainer, { backgroundColor: OP.bg }]} />
         ) : null,
       headerStyle: {
@@ -1926,7 +1941,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
   }, [
     navigation,
     provider,
-    isScrolled,
     providerIsBookmarked,
     isBookmarkLoading,
     adaptiveAccentColor,
@@ -1934,9 +1948,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
     handleShare,
   ]);
   const handleScroll = useCallback((event: any) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    setIsScrolled(offsetY > 100);
-  }, []);
+    const scrolled = event.nativeEvent.contentOffset.y > 100;
+    if (scrolled === isScrolledRef.current) return;   // only act on threshold cross
+    isScrolledRef.current = scrolled;
+    // Update ONLY the header — no parent state, so scrolling never re-renders
+    // this large screen (the fix for the first-scroll freeze).
+    navigation.setOptions({
+      headerTitle: scrolled && provider ? provider.displayName : '',
+      headerBackground: () =>
+        scrolled ? (
+          <View style={[styles.headerBackgroundContainer, { backgroundColor: OP.bg }]} />
+        ) : null,
+    });
+  }, [navigation, provider, OP.bg]);
 
   // Show success message with animation
   const showSuccessMessageWithAnimation = useCallback(
@@ -1971,7 +1995,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
 
   // ===== UPDATED CART HANDLERS FOR COMPATIBILITY =====
   const handleQuickBook = useCallback(
-    (service: ServiceData) => {
+    (service: ServiceData, promo?: DbPromotion) => {
       logger.log('Quick Book - Redirecting to checkout:', service.name);
       if (!provider) return;
 
@@ -2629,10 +2653,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
               </View>
             </View>
 
-            {/* Sheet transition — soft rounded lip: the content sheet rises over the
-                hero photo with large top corners, like a floating card. */}
-            <View style={[styles.sheetLip, { backgroundColor: OP.bg }]} />
-
+            {/* The content sheet rises over the hero photo with its own large
+                top corners (see contentSheet.borderTopLeftRadius/Right) —
+                rises directly off the hero photo like a floating card. */}
             <View style={[styles.contentSheet, { backgroundColor: OP.bg }]}>
             {/* About / Policy tabbed card */}
             <BlurView intensity={cardBlurIntensity} tint={cardBlurTint} style={[styles.aboutCard, { backgroundColor: cardBg, borderColor: OP.border }]}>
@@ -2687,9 +2710,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                 /* Policy tab content */
                 (() => {
                   const bp = provider.bookingPolicies;
-                  const rows: { icon: string; label: string; value: string }[] = [];
+                  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }[] = [];
                   if (bp?.depositRequired && bp.depositAmount) {
-                    rows.push({ icon: '💳', label: 'Deposit', value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required` });
+                    rows.push({ icon: 'card-outline', label: 'Deposit', value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required` });
                   }
                   // Cancellation — the enforced window (Automations screen) wins over
                   // the descriptive registration text, so clients see exactly what
@@ -2698,27 +2721,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                     ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}`
                     : '';
                   if (provider.cancellationNoticeHours > 0) {
-                    rows.push({ icon: '⏱', label: 'Cancellation', value: `${provider.cancellationNoticeHours} hours' notice${cancelPenaltyText}` });
+                    rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${provider.cancellationNoticeHours} hours' notice${cancelPenaltyText}` });
                   } else if (bp?.cancelNotice && bp.cancelNotice !== 'none') {
-                    rows.push({ icon: '⏱', label: 'Cancellation', value: `${bp.cancelNotice} notice${cancelPenaltyText}` });
+                    rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${bp.cancelNotice} notice${cancelPenaltyText}` });
                   }
                   if (bp?.rescheduleNotice || bp?.maxReschedules) {
                     const parts = [];
                     if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
                     if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
-                    if (parts.length > 0) rows.push({ icon: '🔄', label: 'Reschedule', value: parts.join(' · ') });
+                    if (parts.length > 0) rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: parts.join(' · ') });
                   }
                   if (bp?.noShowAction && bp.noShowAction !== 'none') {
-                    rows.push({ icon: '🚫', label: 'No-show', value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge' });
+                    rows.push({ icon: 'close-circle-outline', label: 'No-show', value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge' });
                   }
                   if (bp?.cancelNote) {
-                    rows.push({ icon: 'ℹ️', label: 'Note', value: bp.cancelNote });
+                    rows.push({ icon: 'information-circle-outline', label: 'Note', value: bp.cancelNote });
                   }
                   return (
                     <View style={{ paddingTop: 8 }}>
                       {rows.map((row, i) => (
                         <View key={i} style={[styles.policyRow, i < rows.length - 1 && { borderBottomColor: OP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-                          <Text style={styles.policyIcon}>{row.icon}</Text>
+                          <View style={styles.policyIcon}>
+                            <Ionicons name={row.icon} size={18} color={OP.sub} />
+                          </View>
                           <View style={styles.policyRowText}>
                             <Text style={[styles.policyLabel, { color: OP.sub }]}>{row.label}</Text>
                             <Text style={[styles.policyValue, { color: OP.text }]}>{row.value}</Text>
@@ -2850,6 +2875,30 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({ navigatio
                                 {expandedServices.has(service.id) ? 'See less' : 'See more'}
                               </Text>
                             </TouchableOpacity>
+                          )}
+
+                          {/* Treatment Safety — plain text, no box/border — only shown
+                              when the provider actually filled this in (real
+                              treatments), directly under the description so clients
+                              see it before booking. */}
+                          {(service.patchTestRequired || !!service.minAge || (service.contraindications?.length ?? 0) > 0) && (
+                            <View style={styles.serviceSafetyInline}>
+                              <Text style={[styles.serviceSafetyTitle, { color: OP.text }]}>Treatment Safety</Text>
+                              {service.patchTestRequired && (
+                                <Text style={[styles.serviceSafetyLine, { color: OP.sub }]}>• Patch test required before this treatment</Text>
+                              )}
+                              {!service.isPregnancySafe && (
+                                <Text style={[styles.serviceSafetyLine, { color: OP.sub }]}>• Not recommended during pregnancy</Text>
+                              )}
+                              {!!service.minAge && (
+                                <Text style={[styles.serviceSafetyLine, { color: OP.sub }]}>• Minimum age {service.minAge}</Text>
+                              )}
+                              {(service.contraindications?.length ?? 0) > 0 && (
+                                <Text style={[styles.serviceSafetyLine, { color: OP.sub }]}>
+                                  • Not suitable if: {service.contraindications!.join(', ')}
+                                </Text>
+                              )}
+                            </View>
                           )}
                           <View style={styles.serviceDetails}>
                             <Text style={[styles.serviceDuration, { color: OP.sub }]}>{service.duration}</Text>
@@ -3166,12 +3215,6 @@ const styles = StyleSheet.create({
   heroInfoWrap: {
     paddingTop: 100, // clears the status bar / back button over the hero photo
   },
-  sheetLip: {
-    height: SHEET_LIP_RADIUS,
-    borderTopLeftRadius: SHEET_LIP_RADIUS,
-    borderTopRightRadius: SHEET_LIP_RADIUS,
-    marginBottom: -1, // avoids a hairline seam against the content sheet
-  },
   heroTextShadow: {
     textShadowColor: 'rgba(0,0,0,0.55)',
     textShadowOffset: { width: 0, height: 1 },
@@ -3182,6 +3225,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 130, // clears the bottom nav pill while keeping the pink backdrop continuous
+    // Rounded directly on the sheet itself (not just via the adjacent lip
+    // strip above) so the top corners are never square regardless of how
+    // the lip renders.
+    borderTopLeftRadius: SHEET_LIP_RADIUS,
+    borderTopRightRadius: SHEET_LIP_RADIUS,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
@@ -3487,7 +3535,10 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
+    // 'visible' (not 'hidden') — overflow:hidden on the same view as a
+    // shadow silently suppresses the shadow on iOS. Safe here: cardHighlight
+    // already matches this card's own top corner radius, so nothing spills.
+    overflow: 'visible',
     shadowColor: '#B87E92',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -3676,6 +3727,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     marginBottom: 6,
+  },
+  serviceSafetyInline: {
+    marginBottom: 6,
+    gap: 2,
+  },
+  serviceSafetyTitle: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 1,
+  },
+  serviceSafetyLine: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    lineHeight: 15,
   },
   imageModalOverlay: {
     flex: 1,
@@ -3883,9 +3951,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   policyIcon: {
-    fontSize: 20,
     width: 28,
-    textAlign: 'center',
+    alignItems: 'center',
   },
   policyRowText: {
     flex: 1,

@@ -6,8 +6,11 @@ import {
   BookingStatus,
   PaymentStatus,
   BookingCoordinates,
+  ADDRESS_PENDING_PLACEHOLDER,
+  PHONE_PENDING_PLACEHOLDER,
+  AvailableDate,
 } from '../types/booking';
-import type { BookingWithAddOns } from '../types/database';
+import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../types/database';
 import type { ProviderLocationData } from './databaseService';
 import {
   getMyBookings,
@@ -213,9 +216,9 @@ export class BookingService {
       const fullProviderName = item.providerDisplayName ?? item.providerName;
       const providerLocation = providerLocations[fullProviderName] ?? providerLocations[item.providerName];
 
-      const address = providerLocation?.address ?? 'Address will be confirmed by provider';
+      const address = providerLocation?.address ?? ADDRESS_PENDING_PLACEHOLDER;
       const coordinates = providerLocation?.coordinates ?? null;
-      const phone = providerLocation?.phone ?? 'Phone will be confirmed by provider';
+      const phone = providerLocation?.phone ?? PHONE_PENDING_PLACEHOLDER;
 
       const appointmentData: AppointmentData = {
         cartItemId: item.id,
@@ -409,9 +412,19 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     endTime,
     status: mapSt(db.status),
     address: db.provider_address_snapshot ?? '',
-    coordinates: db.provider_coordinates
-      ? (db.provider_coordinates as unknown as BookingCoordinates)
-      : (null as unknown as BookingCoordinates),
+    // provider_coordinates is stored as { lat, lng } (see createBooking), but the
+    // whole app reads coordinates.latitude/.longitude — normalize both shapes so
+    // the map marker + Directions work after a DB reload (and only once the
+    // address-release view returns non-null coordinates).
+    coordinates: (() => {
+      const c = db.provider_coordinates as any;
+      if (!c) return null as unknown as BookingCoordinates;
+      const latitude = c.latitude ?? c.lat;
+      const longitude = c.longitude ?? c.lng;
+      return latitude != null && longitude != null
+        ? ({ latitude: Number(latitude), longitude: Number(longitude) } as BookingCoordinates)
+        : (null as unknown as BookingCoordinates);
+    })(),
     phone: db.provider_phone_snapshot ?? '',
     customerName: db.customer_name ?? '',
     customerEmail: db.customer_email ?? '',
@@ -438,6 +451,62 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     updatedAt: db.updated_at ?? new Date().toISOString(),
   };
 };
+
+/**
+ * Overlay reschedule state from a booking_reschedule_requests row onto a booking.
+ *
+ * mapDbBookingToConfirmed cannot do this — the state lives in a different table —
+ * so it is applied separately during hydration. Without it, isPendingReschedule
+ * and rescheduleRequest exist only in AsyncStorage, making an in-flight
+ * reschedule invisible on another device.
+ *
+ * `row` of null/undefined means "no open request", which clears the pending flag.
+ */
+export function applyRescheduleRequestRow(
+  b: ConfirmedBooking,
+  row: DbBookingRescheduleRequest | null | undefined
+): ConfirmedBooking {
+  // lastRescheduledAt drives the 24h re-request cooldown and has NO DB column,
+  // so it is app-only state that must survive hydration in every branch.
+  const lastRescheduledAt = b.rescheduleRequest?.lastRescheduledAt;
+
+  if (!row) {
+    if (!b.isPendingReschedule && !b.rescheduleRequest) return b;
+    return {
+      ...b,
+      isPendingReschedule: false,
+      rescheduleRequest: {
+        ...(b.rescheduleRequest?.originalDate ? { originalDate: b.rescheduleRequest.originalDate } : {}),
+        ...(b.rescheduleRequest?.originalTime ? { originalTime: b.rescheduleRequest.originalTime } : {}),
+        ...(b.rescheduleRequest?.rescheduleCount != null
+          ? { rescheduleCount: b.rescheduleRequest.rescheduleCount }
+          : {}),
+        ...(lastRescheduledAt ? { lastRescheduledAt } : {}),
+      },
+    };
+  }
+
+  const responded = row.status === 'provider_responded' && !!row.provider_available_slots;
+
+  return {
+    ...b,
+    isPendingReschedule: true,
+    rescheduleRequest: {
+      originalDate: row.original_date,
+      originalTime: row.original_time,
+      ...(row.requested_dates ? { requestedDates: row.requested_dates } : {}),
+      requestedAt: row.created_at,
+      ...(responded
+        ? {
+            providerAvailableDates: row.provider_available_slots as AvailableDate[],
+            providerRespondedAt: row.updated_at,
+          }
+        : {}),
+      rescheduleCount: row.reschedule_count,
+      ...(lastRescheduledAt ? { lastRescheduledAt } : {}),
+    },
+  };
+}
 
 /**
  * Fetch all bookings for the current authenticated user from Supabase,

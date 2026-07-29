@@ -124,7 +124,7 @@ serve(async (req) => {
       });
     }
 
-    const { user_id, title, message, recipient_role } = payload.record;
+    const { user_id, title, message } = payload.record;
 
     // Use service role to read the user's push_token (bypasses RLS)
     const supabase = createClient(
@@ -147,29 +147,15 @@ serve(async (req) => {
 
     const pushToken = userRow.push_token;
 
-    // Deliver both roles' pushes, but label the provider-side ones with the
-    // business's own name so a user who holds both a client and provider account
-    // can tell at a glance which "hat" the alert is for. The recipient of a
-    // provider-role notification IS the provider, so their business name is the
-    // providers row keyed by this user_id. Client pushes stay clean.
-    let displayTitle = title;
-    if (recipient_role === 'provider') {
-      const { data: prov } = await supabase
-        .from('providers')
-        .select('display_name')
-        .eq('user_id', user_id)
-        .maybeSingle();
-      const businessName = (prov?.display_name as string | undefined)?.trim() || 'Provider';
-      displayTitle = `${businessName} · ${title}`;
-    }
-
-    // Send to Expo Push Service
+    // Send to Expo Push Service. The notification title is sent as-is — provider
+    // vs client is already clear from the title/message, and prefixing the
+    // business name clipped long titles like "You have a new booking".
     const expoPushRes = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: expoHeaders(),
       body: JSON.stringify({
         to: pushToken,
-        title: displayTitle,
+        title,
         body: message,
         sound: 'default',
         channelId: 'default', // matches the Android channel created in the app

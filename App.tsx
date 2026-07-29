@@ -24,6 +24,10 @@ import { StatusBar } from 'expo-status-bar';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { storage, STORAGE_KEYS } from './src/utils/storage';
 import { useBookmarkStore } from './src/stores/useBookmarkStore';
+import { initSentry } from './src/lib/sentry';
+
+// Initialise crash reporting as early as possible (no-ops without a DSN).
+initSentry();
 
 SplashScreen.preventAutoHideAsync();
 

@@ -198,9 +198,14 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               : `Your reschedule request has been sent to ${booking.providerName}. You'll be notified when they respond with available times.`}
           </Text>
           <TouchableOpacity style={[st.primaryBtn, { backgroundColor: C.accent, width: '100%' }]} onPress={() => {
-            // Navigate back to the bookings list
-            navigation.goBack();
-            navigation.goBack(); // also pop BookingDetail
+            // popTo targets the Bookings route directly. This used to be two
+            // blind goBack() calls, which assumed BookingDetail always sat
+            // between Reschedule and the list — but the notification deep link
+            // goes Bookings → Reschedule with no BookingDetail in between, so
+            // the second pop overshot the list (and, before backBehavior was
+            // set, bubbled to the tab navigator and landed on Becca).
+            // Bookings is registered in every stack that hosts Reschedule.
+            navigation.popTo('Bookings');
           }} activeOpacity={0.7}>
             <Text style={st.primaryBtnText}>Back to Bookings</Text>
           </TouchableOpacity>

@@ -16,6 +16,39 @@ export interface BookingCoordinates {
   longitude: number;
 }
 
+/**
+ * Sentinels written into a booking's address/phone snapshot when the provider
+ * had no location on file at checkout. They are NOT real values — they must
+ * never be rendered as a tappable address, opened in maps, or dialled.
+ */
+export const ADDRESS_PENDING_PLACEHOLDER = 'Address will be confirmed by provider';
+export const PHONE_PENDING_PLACEHOLDER = 'Phone will be confirmed by provider';
+
+/** True when an address is missing, blank, or the "not set yet" sentinel. */
+export function isAddressPending(address: string | null | undefined): boolean {
+  const trimmed = address?.trim();
+  return !trimmed || trimmed === ADDRESS_PENDING_PLACEHOLDER;
+}
+
+/**
+ * Whether a booking can actually be opened in a maps app.
+ *
+ * `ConfirmedBooking.coordinates` is TYPED non-null but is genuinely null at
+ * runtime whenever the client_bookings view masks it (address not yet released)
+ * or the provider never geocoded — mapDbBookingToConfirmed casts null through
+ * `as unknown as BookingCoordinates`. Callers must check, not trust the type.
+ */
+export function hasMapDestination(b: {
+  address?: string | null;
+  coordinates?: BookingCoordinates | null;
+}): boolean {
+  return (
+    !isAddressPending(b.address) &&
+    b.coordinates?.latitude != null &&
+    b.coordinates?.longitude != null
+  );
+}
+
 export enum PaymentStatus {
   PENDING = 'pending',
   DEPOSIT_PAID = 'deposit_paid',
@@ -109,6 +142,9 @@ export interface ConfirmedBooking {
     rescheduleCount?: number | undefined;
     lastRescheduledAt?: string | undefined;
   } | undefined;
+
+  // Real services.id from the services table (optional — absent on legacy bookings)
+  serviceId?: string | undefined;
 
   // Provider ID (for provider-facing screens)
   providerId?: string | undefined;

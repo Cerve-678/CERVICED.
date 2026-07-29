@@ -13,7 +13,7 @@
  * Wired to run automatically via .githooks/pre-commit when src/ or supabase/
  * changes. Zero dependencies (Node built-ins only).
  */
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, watch } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, watch } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,6 +56,51 @@ function walk(dir, exts, acc = []) {
     else if (exts.some((x) => e.name.endsWith(x)) && !/\.d\.ts$/.test(e.name) && !/\.test\./.test(e.name)) acc.push(full);
   }
   return acc.sort((a, b) => a.localeCompare(b));
+}
+
+// Map route names → screen component/file by parsing the navigators.
+// Handles `import X from '.../screens/File'` and `const Y = X as ...` aliases.
+function parseNavigators() {
+  const files = walk(join(ROOT, 'src', 'navigation'), ['.ts', '.tsx']);
+  const routeToFiles = new Map(); // route -> [files]  (route names are stack-scoped, so a name can map to several)
+  for (const nf of files) {
+    const txt = read(nf);
+    const imports = new Map(); // ident -> screen file basename
+    for (const m of txt.matchAll(/import\s+([A-Za-z0-9_]+)\s+from\s+['"][^'"]*\/screens\/([A-Za-z0-9_]+)['"]/g)) imports.set(m[1], m[2]);
+    const alias = new Map(); // alias ident -> source ident
+    for (const m of txt.matchAll(/const\s+([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s+as\b/g)) alias.set(m[1], m[2]);
+    const resolve = (comp, d = 0) => (d > 4 ? null : imports.get(comp) ?? (alias.has(comp) ? resolve(alias.get(comp), d + 1) : null));
+    // <Stack.Screen name="Route" component={Comp} …> — name precedes component in this app.
+    for (const m of txt.matchAll(/name=\s*["']([A-Za-z0-9_]+)["'][\s\S]{0,120}?component=\{\s*([A-Za-z0-9_]+)\s*\}/g)) {
+      const file = resolve(m[2]);
+      if (!file) continue;
+      if (!routeToFiles.has(m[1])) routeToFiles.set(m[1], []);
+      const arr = routeToFiles.get(m[1]);
+      if (!arr.includes(file)) arr.push(file);
+    }
+  }
+  const fileToRoutes = new Map();
+  for (const [route, fs] of routeToFiles) for (const file of fs) {
+    if (!fileToRoutes.has(file)) fileToRoutes.set(file, []);
+    if (!fileToRoutes.get(file).includes(route)) fileToRoutes.get(file).push(route);
+  }
+  for (const arr of fileToRoutes.values()) arr.sort((a, b) => a.localeCompare(b));
+  return { routeToFiles, fileToRoutes };
+}
+
+// Resolve a navigate() target route → screen component, preferring the same
+// provider/client family as the source screen when a route name is ambiguous.
+function resolveTarget(nav, route, fromName) {
+  const cands = nav.routeToFiles.get(route);
+  if (!cands || !cands.length) return null;
+  if (cands.length === 1) return cands[0];
+  const fromProvider = /^Provider/.test(fromName);
+  return cands.find((c) => /^Provider/.test(c) === fromProvider) ?? cands[0];
+}
+
+// Route names a screen file navigates to.
+function navTargetsOf(src) {
+  return [...new Set(allMatches(/\.(?:navigate|push|replace)\(\s*['"]([A-Za-z][A-Za-z0-9]*)['"]/, src))];
 }
 
 // Every named function / arrow-const / memoized handler in a file.
@@ -173,21 +218,21 @@ function genDatabase() {
   return SQL_KINDS.reduce((n, [k]) => n + index[k].size, 0);
 }
 
-function genNavigation() {
+function genNavigation(nav) {
   const dir = join(ROOT, 'src', 'screens');
   const files = lsFiles(dir, ['.tsx']);
-  // from (component/file, minus .tsx) -> Set(target route names)
   const graph = new Map();
   const edges = new Set();
   for (const f of files) {
     const from = f.replace(/\.tsx$/, '');
-    const targets = new Set(
-      allMatches(/\.(?:navigate|push|replace)\(\s*['"]([A-Za-z][A-Za-z0-9]*)['"]/, read(join(dir, f)))
-    );
-    targets.delete(from); // ignore self-navigation noise
-    if (targets.size) {
-      graph.set(from, [...targets].sort((a, b) => a.localeCompare(b)));
-      for (const t of targets) edges.add(`${from} --> ${t}`);
+    const tos = new Set();
+    for (const route of navTargetsOf(read(join(dir, f)))) {
+      const comp = resolveTarget(nav, route, from) ?? route; // resolve route → screen component
+      if (comp !== from) tos.add(comp);
+    }
+    if (tos.size) {
+      graph.set(from, [...tos].sort((a, b) => a.localeCompare(b)));
+      for (const t of tos) edges.add(`${from} --> ${t}`);
     }
   }
   const mermaid = edges.size
@@ -198,11 +243,61 @@ function genNavigation() {
     .map(([from, tos]) => `- \`${from}\` → ${tos.map((t) => `\`${t}\``).join(', ')}`)
     .join('\n');
   write('Navigation Graph (generated).md',
-    `# Navigation Graph (generated)\n\n${BANNER('Parsed from `navigation.navigate/push/replace(\'…\')` calls across `src/screens`.')}\n` +
-    `**${edges.size} edges** across **${graph.size} screens**. Curated overview: [[Screens & Navigation]].\n\n` +
+    `# Navigation Graph (generated)\n\n${BANNER('Nav calls across `src/screens`, resolved route → screen component.')}\n` +
+    `**${edges.size} edges** across **${graph.size} screens**. Node-graph version: [[Screen Flow (generated)]].\n\n` +
     `## Diagram\n> Dense is normal — pan/zoom, or read the list below.\n\n${mermaid}\n\n` +
     `## By screen\n${list || '_(none)_'}\n`);
   return edges.size;
+}
+
+// One note per screen, linked to the screens it navigates to → a real flow graph.
+function genScreenFlow(nav) {
+  const dir = join(ROOT, 'src', 'screens');
+  const files = lsFiles(dir, ['.tsx']);
+  const outDir = join(OUT, 'screens');
+  rmSync(outDir, { recursive: true, force: true }); // drop notes for deleted screens
+  mkdirSync(outDir, { recursive: true });
+
+  const incoming = new Set();
+  const linksByName = new Map();
+  for (const f of files) {
+    const from = f.replace(/\.tsx$/, '');
+    const links = [];
+    for (const route of navTargetsOf(read(join(dir, f)))) {
+      const comp = resolveTarget(nav, route, from);
+      if (comp && comp !== from) { links.push({ comp, route }); incoming.add(comp); }
+      else if (!comp) links.push({ comp: null, route });
+    }
+    linksByName.set(from, links);
+  }
+
+  for (const f of files) {
+    const name = f.replace(/\.tsx$/, '');
+    const role = /^Provider/.test(name) ? 'provider' : 'client';
+    const routes = nav.fileToRoutes.get(name) || [];
+    const links = linksByName.get(name) || [];
+    const seen = new Set();
+    const navList = links.length
+      ? links
+          .filter((l) => { const k = l.comp ?? l.route; if (seen.has(k)) return false; seen.add(k); return true; })
+          .map((l) => (l.comp ? `- [[${l.comp}\\|${l.route}]]` : `- \`${l.route}\` _(navigator / dynamic)_`))
+          .join('\n')
+      : '- _— none —_';
+    writeFileSync(join(outDir, `${name}.md`),
+      `---\ntags: [screen, ${role}]\n---\n# ${name}\n#screen · \`src/screens/${f}\`\n\n` +
+      `**Registered route(s):** ${routes.length ? routes.map((r) => `\`${r}\``).join(', ') : '_unregistered_'}\n\n` +
+      `## → Navigates to\n${navList}\n\n## Map\n[[Screens & Navigation]] · [[Screen Flow (generated)]]\n`);
+  }
+
+  const names = files.map((f) => f.replace(/\.tsx$/, ''));
+  const entry = names.filter((n) => !incoming.has(n)).sort((a, b) => a.localeCompare(b));
+  const group = (pred) => names.filter(pred).sort((a, b) => a.localeCompare(b)).map((n) => `[[${n}]]`).join(' · ') || '_none_';
+  write('Screen Flow (generated).md',
+    `# Screen Flow (generated)\n\n${BANNER('One note per screen, each linked to the screens it navigates to.')}\n` +
+    `**${names.length} screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].\n\n` +
+    `## Entry points\n_Screens nothing else navigates to (roots / tab mains / deep-link targets):_\n${entry.map((n) => `- [[${n}]]`).join('\n') || '_none_'}\n\n` +
+    `## All screens\n**Provider:** ${group((n) => /^Provider/.test(n))}\n\n**Client / shared:** ${group((n) => !/^Provider/.test(n))}\n`);
+  return names.length;
 }
 
 function genFunctionIndex() {
@@ -295,6 +390,7 @@ function genIndex(stats) {
     `| Services | ${stats.services} | [[Services (generated)]] | [[Services]] |\n` +
     `| Contexts | ${stats.contexts} | [[Contexts (generated)]] | [[Contexts]] |\n` +
     `| Routes | ${stats.routes} | [[Routes (generated)]] | [[Screens & Navigation]] |\n` +
+    `| Screen flow | ${stats.screenNotes} | [[Screen Flow (generated)]] | [[Screens & Navigation]] |\n` +
     `| Nav edges | ${stats.nav} | [[Navigation Graph (generated)]] | [[Screens & Navigation]] |\n` +
     `| DB objects | ${stats.db} | [[Database Objects (generated)]] | [[Data Layer — Supabase]] |\n` +
     `| Functions | ${stats.functions} | [[Function Index (generated)]] | — |\n` +
@@ -304,16 +400,18 @@ function genIndex(stats) {
 }
 
 function generateAll() {
+  const nav = parseNavigators();
   const stats = {
     screens: genScreens(),
     services: genServices(),
     contexts: genContexts(),
     routes: genRoutes(),
-    nav: genNavigation(),
+    nav: genNavigation(nav),
     db: genDatabase(),
     functions: genFunctionIndex(),
     features: genFeatureMap(),
     todos: genTodos(),
+    screenNotes: genScreenFlow(nav),
   };
   genIndex(stats);
   return stats;
@@ -321,7 +419,7 @@ function generateAll() {
 
 // ── run ───────────────────────────────────────────────────────────────────────
 const s = generateAll();
-console.log(`vault: generated — ${s.screens} screens, ${s.services} services, ${s.contexts} contexts, ${s.routes} routes, ${s.nav} nav edges, ${s.db} db objects, ${s.functions} functions, ${s.todos} TODOs`);
+console.log(`vault: generated — ${s.screens} screens (${s.screenNotes} flow notes), ${s.services} services, ${s.contexts} contexts, ${s.routes} routes, ${s.nav} nav edges, ${s.db} db objects, ${s.functions} functions, ${s.todos} TODOs`);
 
 if (process.argv.includes('--watch')) {
   console.log('vault: watching src/ and supabase/ … (Ctrl-C to stop)');

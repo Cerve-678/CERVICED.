@@ -8,4 +8,4 @@
 **1 items.**
 
 ## TODO (1)
-- `src/utils/logger.ts:20` — wire Sentry here when added — Sentry.captureException(error, { tags: { context } })
+- `src/screens/InfoRegScreen.tsx:343` — revisit with a proper pass on current per-treatment guidance — see the

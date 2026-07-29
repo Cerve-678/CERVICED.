@@ -2199,7 +2199,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     </Text>
                                     {currentBooking.status !== BookingStatus.COMPLETED && (
                                       <Text style={styles.appointmentAddress}>
-                                        {currentBooking.address}
+                                        {currentBooking.address || (addrCountdown ? `Address in ${addrCountdown}` : 'Address to be confirmed')}
                                       </Text>
                                     )}
                                   </View>
@@ -2255,12 +2255,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       </>
                                     ) : (
                                       <>
-                                        <TouchableOpacity
-                                          style={styles.directionsButton}
-                                          onPress={() => openInMaps(currentBooking)}
-                                        >
-                                          <Text style={styles.buttonText}>Directions</Text>
-                                        </TouchableOpacity>
+                                        {currentBooking.address && currentBooking.coordinates && (
+                                          <TouchableOpacity
+                                            style={styles.directionsButton}
+                                            onPress={() => openInMaps(currentBooking)}
+                                          >
+                                            <Text style={styles.buttonText}>Directions</Text>
+                                          </TouchableOpacity>
+                                        )}
                                         {isMessagingAvailable(currentBooking.bookingDate) && (
                                           <TouchableOpacity
                                             style={styles.messageButton}
@@ -2305,7 +2307,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         </Text>
                                         {booking.status !== BookingStatus.COMPLETED && (
                                           <Text style={styles.nextAppointmentAddress}>
-                                            {booking.address}
+                                            {booking.address || 'Address to be confirmed'}
                                           </Text>
                                         )}
                                       </View>
@@ -2359,12 +2361,14 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           </>
                                         ) : (
                                           <>
-                                            <TouchableOpacity
-                                              style={styles.directionsButton}
-                                              onPress={() => openInMaps(booking)}
-                                            >
-                                              <Text style={styles.buttonText}>Directions</Text>
-                                            </TouchableOpacity>
+                                            {booking.address && booking.coordinates && (
+                                              <TouchableOpacity
+                                                style={styles.directionsButton}
+                                                onPress={() => openInMaps(booking)}
+                                              >
+                                                <Text style={styles.buttonText}>Directions</Text>
+                                              </TouchableOpacity>
+                                            )}
                                             {isMessagingAvailable(booking.bookingDate) && (
                                               <TouchableOpacity
                                                 style={styles.messageButton}

@@ -42,6 +42,11 @@ export default function TabNavigation() {
   return (
     <Tab.Navigator
       initialRouteName="Home"
+      // Default is 'firstRoute', which sends any back press that bubbles out of
+      // a tab's stack to the FIRST declared tab (Becca) rather than Home — so a
+      // deep link that lands one screen deep drops the user on Becca when they
+      // go back. Send them to initialRouteName (Home) instead.
+      backBehavior="initialRoute"
       tabBar={(props) => <IslandPillTabBar {...props} />}
       screenOptions={{
         headerShown: false,

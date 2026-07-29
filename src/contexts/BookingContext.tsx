@@ -1,11 +1,11 @@
 // src/contexts/BookingContext.tsx
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByDisplayNames, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, isSlotTaken } from '../services/databaseService';
-import { mapDbBookingToConfirmed } from '../services/bookingService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByIds, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, getActiveRescheduleRequestsForBookings, isSlotTaken } from '../services/databaseService';
+import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 
 export class BookingError extends Error {
@@ -285,6 +285,13 @@ export const mapDbBookingStatus = (s: string): BookingStatus => {
 
 export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const [bookings, setBookings] = useState<ConfirmedBooking[]>([]);
+  // Mirror of the current booking ids, for the realtime handler below. Held in a
+  // ref rather than read from `bookings` directly so the subscription doesn't
+  // tear down and re-establish on every bookings change.
+  const bookingIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    bookingIdsRef.current = new Set(bookings.map(b => b.id));
+  }, [bookings]);
   const [isLoading, setIsLoading] = useState(true);
   // Paging state for history beyond getMyBookings()'s default recent window.
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
@@ -388,6 +395,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   // stuck on whatever (possibly null) value was cached then.
                   providerImage: fromDb.providerImage ?? b.providerImage,
                   addressReleasedAt: fromDb.addressReleasedAt ?? b.addressReleasedAt,
+                  // Address + coordinates are taken from the DB UNCONDITIONALLY
+                  // (no `?? b.…` fallback). getMyBookings() reads the
+                  // client_bookings view, which masks both until the provider's
+                  // release policy allows them — so the view is the authority in
+                  // BOTH directions. Falling back to the cached copy would (a)
+                  // keep showing the stale pre-release value forever, so the
+                  // address never appears once released, and (b) resurrect an
+                  // address the policy has not unlocked. The view says null →
+                  // we show nothing and let the release countdown render.
+                  address: fromDb.address,
+                  coordinates: fromDb.coordinates,
+                  // The client's own address for mobile bookings is never masked
+                  // by the view, so keep a local value that hasn't synced yet.
+                  clientAddress: fromDb.clientAddress ?? b.clientAddress,
                   remainingBalance: fromDb.remainingBalance,
                   paymentStatus: fromDb.paymentStatus,
                 };
@@ -401,6 +422,26 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           }
         } catch (_) {
           // Offline or fetch failed — local copy stands
+        }
+
+        // Hydrate reschedule state from booking_reschedule_requests. It is not
+        // part of the bookings row, so mapDbBookingToConfirmed cannot carry it —
+        // without this, isPendingReschedule/rescheduleRequest live only in
+        // AsyncStorage and an in-flight reschedule is invisible on another
+        // device. Separate try so a failure here doesn't discard the merge above.
+        //
+        // Order matters: this must run BEFORE the status pass below, which reads
+        // isPendingReschedule to decide whether a booking is exempt from
+        // date-based expiry.
+        try {
+          const rescheduleRows = await getActiveRescheduleRequestsForBookings(
+            mergedBookings.map((b: ConfirmedBooking) => b.id)
+          );
+          mergedBookings = mergedBookings.map((b: ConfirmedBooking) =>
+            applyRescheduleRequestRow(b, rescheduleRows[b.id])
+          );
+        } catch (_) {
+          // Offline — the catch-up sweep and realtime subscription still cover it
         }
 
         const updatedBookings = mergedBookings.map((booking: ConfirmedBooking) => {
@@ -769,6 +810,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       }
     })();
 
+    // booking_reschedule_requests has no user_id column, and postgres_changes
+    // filters only support single-column equality — so this subscription cannot
+    // be narrowed server-side and RLS on the table is the actual access gate.
+    // The membership check below is a local optimisation, not a security
+    // boundary: it stops a row for someone else's booking from triggering an
+    // AsyncStorage read/write cycle that would find nothing to update.
     const channel = supabase
       .channel('reschedule-responses')
       .on(
@@ -780,9 +827,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             status?: string;
             provider_available_slots?: AvailableDate[] | null;
           } | null;
-          if (row?.status === 'provider_responded' && row.booking_id) {
-            applyProviderResponse(row.booking_id, row.provider_available_slots);
-          }
+          if (row?.status !== 'provider_responded' || !row.booking_id) return;
+          if (!bookingIdsRef.current.has(row.booking_id)) return;
+          applyProviderResponse(row.booking_id, row.provider_available_slots);
         }
       )
       .subscribe();
@@ -810,6 +857,17 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       if (!booking.isPendingReschedule) {
         logger.log(`[${booking.providerName}] Skipping confirm - booking ${bookingId} is no longer pending reschedule`);
         return;
+      }
+
+      // Last-moment double-booking guard. The client picked this slot from the
+      // provider's offered dates, but another client may have taken it in the
+      // meantime — without this the reschedule silently collided and relied on
+      // the unique index to reject it, surfacing as an opaque failure.
+      const slotProviderId =
+        booking.providerId ?? (await getProviderIdByDisplayName(booking.providerName).catch(() => null));
+      const newTime24 = timeTo24(newTime);
+      if (slotProviderId && newTime24 && (await isSlotTaken(slotProviderId, newDate, newTime24))) {
+        throw new Error('That time has just been taken. Please pick another slot.');
       }
 
       // Prefer the stated duration; when it's missing/unparseable (common for
@@ -847,11 +905,24 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // ✅ FIX: Map over fresh bookings from storage, not stale state
       const updatedBookings = currentBookings.map(b => b.id === bookingId ? updatedBooking : b);
 
+      // Persist to Supabase BEFORE committing locally, and let a failure throw.
+      // This used to be fire-and-forget with a swallowed error, so a failed write
+      // left the client's cache saying "rescheduled" while the DB kept the old
+      // slot — the client and the provider then saw different appointment times
+      // with nothing surfaced. Writing first means a failure leaves the booking
+      // in its previous (still-pending) state and RescheduleScreen reports it.
+      await updateBookingDateTime(bookingId, newDate, newTime, newEndTime);
+
       await saveBookings(updatedBookings);
 
-      // Persist new date/time and close the reschedule request in Supabase
-      updateBookingDateTime(bookingId, newDate, newTime, newEndTime).catch(() => {});
-      closeRescheduleRequest(bookingId, 'confirmed').catch(() => {});
+      // The booking itself has already moved, so a failure to close the request
+      // row must NOT be reported as a failed reschedule — it only leaves a stale
+      // open request, which the catch-up sweep and provider UI tolerate. Log it.
+      try {
+        await closeRescheduleRequest(bookingId, 'confirmed');
+      } catch (err) {
+        logger.warn('Reschedule confirmed but closing the request row failed:', err);
+      }
 
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const confirmedProviderId = booking.providerId
@@ -1081,9 +1152,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // Fetch real provider locations from DB before building appointment records
-      const uniqueProviderNames = [...new Set(cartItems.map(i => i.providerDisplayName ?? i.providerName))];
-      const providerLocations: Record<string, import('../services/databaseService').ProviderLocationData> = await getProviderLocationsByDisplayNames(uniqueProviderNames).catch(() => ({}));
+      // Fetch real provider locations from DB before building appointment records.
+      // Keyed by provider id, NOT display name: display_name is not unique, so a
+      // name-keyed lookup could stamp a booking with a different provider's
+      // address and coordinates. Safe to do here because the providerIdCache
+      // check above throws unless every cart item resolved to an id.
+      const uniqueProviderIds = [
+        ...new Set(
+          cartItems
+            .map(i => providerIdCache[i.providerName])
+            .filter((id): id is string => !!id)
+        ),
+      ];
+      const providerLocations: Record<string, import('../services/databaseService').ProviderLocationData> =
+        await getProviderLocationsByIds(uniqueProviderIds).catch(() => ({}));
 
       // Real UUID so it can be persisted to bookings.group_booking_id (UUID
       // column) — the provider side can then group multi-service checkouts
@@ -1098,6 +1180,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const fullProviderName = item.providerDisplayName ?? item.providerName;
+        // providerLocations is keyed by provider id (display names aren't unique)
+        const itemProviderId = providerIdCache[item.providerName];
         const endTime = calculateEndTime(appointment.time, item.duration);
         const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
         const now = new Date();
@@ -1156,9 +1240,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           bookingTime: appointment.time,
           endTime,
           status: initialStatus,
-          address: providerLocations[fullProviderName]?.address ?? appointment.address,
-          coordinates: (providerLocations[fullProviderName]?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
-          phone: providerLocations[fullProviderName]?.phone ?? appointment.phone,
+          address: providerLocations[itemProviderId ?? '']?.address ?? appointment.address,
+          coordinates: (providerLocations[itemProviderId ?? '']?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
+          phone: providerLocations[itemProviderId ?? '']?.phone ?? appointment.phone,
           // Customer information
           customerName: appointment.customerName,
           customerEmail: appointment.customerEmail,
@@ -1257,10 +1341,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 service_name_snapshot: item.serviceName,
                 service_category_snapshot: item.providerService || null,
                 provider_logo_snapshot: logoUrl,
-                provider_address_snapshot: providerLocations[item.providerDisplayName ?? item.providerName]?.address ?? apt.address ?? null,
-                provider_phone_snapshot: providerLocations[item.providerDisplayName ?? item.providerName]?.phone ?? apt.phone ?? null,
+                // Keyed by provider id — a display-name key could pull a
+                // different provider's address when two share a name.
+                provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
+                provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
                 provider_coordinates: (() => {
-                  const c = (providerLocations as Record<string, { coordinates?: { latitude: number; longitude: number } }>)[item.providerDisplayName ?? item.providerName]?.coordinates;
+                  const c = providerLocations[providerId]?.coordinates;
                   return c ? { lat: c.latitude, lng: c.longitude } : null;
                 })(),
                 customer_name: apt.customerName,
@@ -1283,10 +1369,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               dbIdByCartItemId[item.id] = newDbBooking.id;
             }
 
-            // Auto-confirm if provider has auto_accept_bookings enabled
-            if (providerCapCache[item.providerName]?.auto_accept && newDbBooking?.id) {
-              await dbUpdateBookingStatus(newDbBooking.id, 'confirmed');
-            }
+            // Auto-confirm is owned by the DB trigger handle_new_booking, which
+            // flips the row to 'confirmed' on insert when the provider has
+            // auto-accept enabled. Confirming here too produced a SECOND
+            // "Booking Confirmed" notification — the app's status update fired the
+            // status-change trigger on top of the trigger's own confirm — so the
+            // app no longer confirms; the DB trigger is the single source.
+            // Requires the auto-accepting handle_new_booking to be deployed
+            // (fix_auto_accept_provider_notification.sql), else these stay 'pending'.
             // Confirmation email — fire and forget, never blocks booking
             if (apt.customerEmail) {
               const { subject, html } = bookingConfirmationEmail({
@@ -1354,30 +1444,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         }
       }
 
-      // Real notification per booking — client-facing, in the same Supabase
-      // table NotificationsScreen actually reads (previously this wrote to a
-      // local-only AsyncStorage store nothing in the app ever displayed, so
-      // clients never saw a "booking request sent" / "payment received"
-      // entry in their inbox at all). Sent for every booking that actually
-      // persisted, even if a sibling item in the same multi-service checkout
-      // failed — a client who successfully booked 2 of 3 services should
-      // still be told about those 2, not left with silence because item 3
-      // blew up. Auto-accept providers get their own booking_confirmed
-      // notification a moment later from the status-change trigger (see the
-      // auto-confirm step above); a still-pending booking has no such
-      // trigger to rely on, so it needs its own "request sent" notification.
+      // Client-facing notifications live in the same Supabase table
+      // NotificationsScreen reads. The booking-status notices ("Booking Request
+      // Sent" for manual, "Booking Confirmed" for auto-accept) are owned by the DB
+      // trigger handle_new_booking — inserting "Booking Request Sent" here as well
+      // double-notified the client on manual bookings, so it's been removed. The
+      // app keeps only the payment receipt below, which no trigger sends. Sent for
+      // every booking that persisted, even if a sibling item in a multi-service
+      // checkout failed.
       const succeededBookings = newBookings.filter(nb => !failedCartItemIds.has(nb.cartItemId));
-      for (const booking of succeededBookings) {
-        if (booking.status !== BookingStatus.PENDING) continue;
-        insertBookingUserNotification({
-          booking_id: booking.id,
-          type: 'booking_pending',
-          title: 'Booking Request Sent',
-          message: `Your request for ${booking.serviceName} with ${booking.providerName} on ${booking.bookingDate} at ${booking.bookingTime} has been sent — awaiting confirmation.`,
-          priority: 'medium',
-          is_actionable: true,
-        }).catch(() => {});
-      }
       if (succeededBookings.length > 0) {
         const totalPaid = succeededBookings.reduce((sum, b) => sum + b.amountPaid, 0);
         insertBookingUserNotification({

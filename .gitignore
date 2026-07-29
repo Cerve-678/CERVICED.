@@ -42,3 +42,6 @@ supabase/push_webhook_trigger.sql
 /ios
 /android
 .claude/
+
+# Supabase CLI local state
+supabase/.temp/

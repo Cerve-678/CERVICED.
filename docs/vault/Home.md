@@ -27,7 +27,8 @@ The map of the whole app. This is an Obsidian vault: every `[[link]]` is a jump 
 Refreshes itself on every commit that touches `src/` or `supabase/` — never edit these by hand.
 - [[Code Index]] — live counts + jump-off point
 - [[Screens (generated)]] · [[Services (generated)]] · [[Contexts (generated)]] · [[Routes (generated)]] · [[Database Objects (generated)]]
-- 🔀 [[Navigation Graph (generated)]] — real screen→screen wiring, with a live Mermaid diagram
+- 🌐 [[Screen Flow (generated)]] — **every screen as its own node, wired to what it opens** (open ⌘G graph view for the full flow)
+- 🔀 [[Navigation Graph (generated)]] — the same wiring as a live Mermaid diagram
 - 🧠 [[Function Index (generated)]] — **every** function in `src`, by file (bold = exported)
 - 🗂️ [[Feature Map (generated)]] — where each concern lives (the logic map)
 - ✅ [[TODO Backlog (generated)]] — every `// TODO`/`// FIXME` in the code

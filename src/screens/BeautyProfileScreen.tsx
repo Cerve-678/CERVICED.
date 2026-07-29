@@ -216,7 +216,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
         treatment_history:   draft.treatmentHistory,
         gender:              draft.gender              || null,
         has_kids:            draft.has_kids,
-      }, { onConflict: 'id' }).then(() => {});
+      }).then(() => {});
     }
 
     setSaving(false);

@@ -63,7 +63,16 @@ export default function LoginScreen({ navigation }: Props) {
   // Shared by every successful sign-in path (password, Apple) — offers to
   // remember this device via biometrics instead of typing credentials again.
   const maybePromptEnableBiometric = useCallback((refreshToken: string | undefined) => {
-    if (!biometricAvailable || biometricEnabled || !refreshToken) return;
+    if (!biometricAvailable || biometricEnabled || !refreshToken) {
+      // TEMPORARY DIAGNOSTIC — remove once we confirm why the prompt is/isn't
+      // firing. logger.log is a no-op in production, so this is the only way
+      // to see these values on a TestFlight build.
+      Alert.alert(
+        'Face ID debug',
+        `hardwareAvailable=${biometricAvailable}\nalreadyEnabled=${biometricEnabled}\nhasRefreshToken=${!!refreshToken}`
+      );
+      return;
+    }
     Alert.alert(
       `Enable ${biometricLabel}?`,
       `Sign in faster next time using ${biometricLabel} instead of your password.`,

@@ -14,10 +14,15 @@
 export const SHEET_BG = '#F5F1EC';
 
 // Content-area (sheet) choices. Stored as a `|#RRGGBB` suffix on the theme key
-// when not the default beige, e.g. 'blush|#F8ECF0'.
+// when not the default beige. Kept pale/neutral regardless of hue so the
+// content sheet's dark text always stays readable — pick whichever tone
+// best complements the chosen theme's palette (see SUGGESTED_SHEET_BY_THEME).
 export const SHEET_OPTIONS: Array<{ key: string; name: string; color: string }> = [
-  { key: 'beige', name: 'Beige', color: SHEET_BG },
-  { key: 'blush', name: 'Blush', color: '#F8ECF0' },
+  { key: 'beige',    name: 'Beige',     color: SHEET_BG },
+  { key: 'blush',    name: 'Blush',     color: '#F8ECF0' },
+  { key: 'ivory',    name: 'Ivory',     color: '#FBF6EC' },
+  { key: 'mist',     name: 'Mist',      color: '#EEF1F4' },
+  { key: 'sagemist', name: 'Sage Mist', color: '#EEF3EC' },
 ];
 
 export interface ProviderThemeTokens {
@@ -38,6 +43,10 @@ export interface ProviderThemePreset {
   name: string;
   description: string;
   tokens: ProviderThemeTokens;
+  /** Content-backdrop colour (a SHEET_OPTIONS key) that best complements this
+   *  palette — used to default the sheet picker when a provider selects this
+   *  theme, without overriding a sheet colour they already chose manually. */
+  suggestedSheet: string;
 }
 
 // ── Colour helpers ────────────────────────────────────────────────────────────
@@ -63,7 +72,7 @@ export function isDarkColor(hex: string): boolean {
 }
 
 /** Blend hex colour toward a target by t (0..1), returning a solid hex. */
-function blend(hex: string, target: string, t: number): string {
+export function blend(hex: string, target: string, t: number): string {
   const a = hexChannels(hex);
   const b = hexChannels(target);
   const mix = a.map((c, i) => Math.round(c + ((b[i] ?? 0) - c) * t));
@@ -89,26 +98,61 @@ export function buildThemeTokens(backdrop: string, card: string, accent: string,
   };
 }
 
-// ── Presets — accent + card + backdrop sets that complement each other ───────
+/** Derive a full monochromatic set from ONE main colour: the backdrop stays
+ *  the main colour itself, the card becomes a light tint of it (so e.g. a
+ *  green main colour gives green-tinted cards instead of plain white), and
+ *  the accent is a deeper shade of the same hue for contrast on the light
+ *  card. One input colour → a matched light/mid/dark ramp of the same hue. */
+export function buildMonochromeTheme(mainColor: string, sheet: string = SHEET_BG): ProviderThemeTokens {
+  const card = blend(mainColor, '#FFFFFF', 0.82);
+  const accent = blend(mainColor, '#000000', 0.22);
+  return buildThemeTokens(mainColor, card, accent, sheet);
+}
 
-const PRESET_DEFS: Array<{ key: string; name: string; description: string; backdrop: string; card: string; accent: string }> = [
-  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#C4A8AE', card: '#FFFFFF', accent: '#7A4F55' },
-  { key: 'blushbeige', name: 'Blush Beige', description: 'Blush cards with a rose backdrop',     backdrop: '#E3C7CF', card: '#F9E9EE', accent: '#D98BA6' },
-  { key: 'blush',      name: 'Blush',       description: 'Soft pink cards and backdrop',         backdrop: '#F2D4DE', card: '#FDF5F7', accent: '#E9799F' },
-  { key: 'cream',      name: 'Cream',       description: 'Warm ivory with caramel accents',      backdrop: '#E9D9BE', card: '#FCF8F0', accent: '#C1934F' },
-  { key: 'sage',       name: 'Sage',        description: 'Calm botanical green',                 backdrop: '#CBDCC2', card: '#F7FAF3', accent: '#6F9464' },
-  { key: 'lavender',   name: 'Lavender',    description: 'Soft lilac with violet accents',       backdrop: '#D9CBEC', card: '#F9F6FD', accent: '#8F6FC0' },
-  { key: 'sky',        name: 'Sky',         description: 'Airy blue-grey',                       backdrop: '#C2DAE8', card: '#F6FAFC', accent: '#5D93B4' },
-  { key: 'grey',       name: 'Grey',        description: 'Clean neutral grey',                   backdrop: '#D6D6DA', card: '#F7F7F8', accent: '#5F6068' },
-  { key: 'darkblue',   name: 'Dark Blue',   description: 'Deep navy with a moody feel',          backdrop: '#1B2740', card: '#26314A', accent: '#6C9BD1' },
+// ── Presets — accent + card + backdrop sets that complement each other ───────
+// (The old 'blushbeige' pink-on-pink preset was removed — 'blush' below
+// still covers pink for anyone who wants it.)
+
+const PRESET_DEFS: Array<{ key: string; name: string; description: string; backdrop: string; card: string; accent: string; suggestedSheet: string }> = [
+  { key: 'app',        name: 'App',         description: 'Matches the CERVICED app look',        backdrop: '#C4A8AE', card: '#FFFFFF', accent: '#7A4F55', suggestedSheet: 'beige' },
+  { key: 'blush',      name: 'Blush',       description: 'Soft pink cards and backdrop',         backdrop: '#F2D4DE', card: '#FDF5F7', accent: '#E9799F', suggestedSheet: 'blush' },
+  { key: 'cream',      name: 'Cream',       description: 'Warm ivory with caramel accents',      backdrop: '#E9D9BE', card: '#FCF8F0', accent: '#C1934F', suggestedSheet: 'ivory' },
+  { key: 'sage',       name: 'Sage',        description: 'Calm botanical green',                 backdrop: '#CBDCC2', card: '#F7FAF3', accent: '#6F9464', suggestedSheet: 'sagemist' },
+  { key: 'lavender',   name: 'Lavender',    description: 'Soft lilac with violet accents',       backdrop: '#D9CBEC', card: '#F9F6FD', accent: '#8F6FC0', suggestedSheet: 'mist' },
+  { key: 'sky',        name: 'Sky',         description: 'Airy blue-grey',                       backdrop: '#C2DAE8', card: '#F6FAFC', accent: '#5D93B4', suggestedSheet: 'mist' },
+  { key: 'grey',       name: 'Grey',        description: 'Clean neutral grey',                   backdrop: '#D6D6DA', card: '#F7F7F8', accent: '#5F6068', suggestedSheet: 'mist' },
+  { key: 'darkblue',   name: 'Dark Blue',   description: 'Deep navy with a moody feel',          backdrop: '#1B2740', card: '#3A4A6B', accent: '#6C9BD1', suggestedSheet: 'mist' },
 ];
 
-export const PROVIDER_THEMES: ProviderThemePreset[] = PRESET_DEFS.map(d => ({
-  key: d.key,
-  name: d.name,
-  description: d.description,
-  tokens: buildThemeTokens(d.backdrop, d.card, d.accent),
-}));
+// Monochrome sets — ONE main colour drives everything: the backdrop IS the
+// colour, the cards are a light tint of it, and the accent is a deeper shade
+// of the same hue. e.g. Emerald gives a green backdrop with green-tinted
+// cards and a deep green accent, instead of picking three unrelated colours.
+const MONOCHROME_DEFS: Array<{ key: string; name: string; description: string; main: string; suggestedSheet: string }> = [
+  { key: 'emerald', name: 'Emerald',    description: 'Rich green backdrop with green-tinted cards',  main: '#3E8E5D', suggestedSheet: 'sagemist' },
+  { key: 'ocean',   name: 'Ocean Blue', description: 'True blue backdrop with blue-tinted cards',     main: '#2E6F9E', suggestedSheet: 'mist' },
+  { key: 'coral',   name: 'Coral',      description: 'Warm terracotta backdrop with coral-tinted cards', main: '#E2704F', suggestedSheet: 'blush' },
+  { key: 'amber',   name: 'Amber Gold', description: 'Golden backdrop with warm gold-tinted cards',   main: '#C98A2B', suggestedSheet: 'ivory' },
+  { key: 'berry',   name: 'Berry',      description: 'Deep wine backdrop with berry-tinted cards',    main: '#8E3B6B', suggestedSheet: 'blush' },
+  { key: 'charcoal',name: 'Charcoal',   description: 'Near-black neutral, moody dark theme',          main: '#3A3A3E', suggestedSheet: 'mist' },
+];
+
+export const PROVIDER_THEMES: ProviderThemePreset[] = [
+  ...PRESET_DEFS.map(d => ({
+    key: d.key,
+    name: d.name,
+    description: d.description,
+    tokens: buildThemeTokens(d.backdrop, d.card, d.accent),
+    suggestedSheet: d.suggestedSheet,
+  })),
+  ...MONOCHROME_DEFS.map(d => ({
+    key: d.key,
+    name: d.name,
+    description: d.description,
+    tokens: buildMonochromeTheme(d.main),
+    suggestedSheet: d.suggestedSheet,
+  })),
+];
 
 export const DEFAULT_PROVIDER_THEME = 'app';
 

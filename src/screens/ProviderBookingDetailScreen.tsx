@@ -41,9 +41,12 @@ import {
   getBookingUserId,
   getProviderServiceCategoryByUserId,
   getOrCreateConversation,
+  getProviderInfoPacksByUserId,
+  attachInfoPackToBooking,
   ClientBeautyProfile,
   IntakeForm,
   BookingInfoPack,
+  ProviderInfoPackRow,
   ProviderAddressSettings,
 } from '../services/databaseService';
 import type { DbBooking, ServiceCategory } from '../types/database';
@@ -316,6 +319,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [clientHistoryLoading, setClientHistoryLoading] = useState(false);
   const [profileExpanded, setProfileExpanded] = useState(false);
 
+  const [providerInfoPacks, setProviderInfoPacks] = useState<ProviderInfoPackRow[]>([]);
+  const [showInfoPackPicker, setShowInfoPackPicker] = useState(false);
+  const [isAttachingInfoPack, setIsAttachingInfoPack] = useState(false);
+
   useEffect(() => {
     if (contextBooking || !bookingId) return;
     setFetching(true);
@@ -476,14 +483,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       .catch(() => {});
   }, [bookingId]);
 
-  // Fetch current provider's service category once for profile filtering
+  // Fetch current provider's service category + available info packs once on mount
   useEffect(() => {
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const category = await getProviderServiceCategoryByUserId(user.id);
+        const [category, packs] = await Promise.all([
+          getProviderServiceCategoryByUserId(user.id),
+          getProviderInfoPacksByUserId(user.id),
+        ]);
         if (category) setProviderServiceCategory(category as ServiceCategory);
+        setProviderInfoPacks(packs);
       } catch {}
     })();
   }, []);
@@ -671,18 +682,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!booking || releasingAddress) return;
     setReleasingAddress(true);
     try {
+      // releaseBookingAddress already sends the client's ONE "Address Now
+      // Available" notification — this used to ALSO send its own "Address
+      // Released" notification right after, so the client got two for the
+      // same event. Don't duplicate it here.
       await releaseBookingAddress(booking.id);
       const now = new Date().toISOString();
       setAddressReleasedAt(now);
-      await insertBookingUserNotification({
-        booking_id: booking.id,
-        type: 'booking_confirmed',
-        title: 'Address Released',
-        message: `${booking.providerName} has shared their address for your upcoming appointment.`,
-        priority: 'high',
-        is_actionable: false,
-        provider_id: booking.providerId ?? null,
-      });
     } catch {
       Alert.alert('Error', 'Could not release address. Please try again.');
     } finally {
@@ -1462,6 +1468,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     </Text>
                   </View>
                 ))}
+
+                {/* Send Info Pack button */}
+                <TouchableOpacity
+                  style={[styles.sendInfoPackBtn, { borderColor: P.border, backgroundColor: P.surface }]}
+                  onPress={() => setShowInfoPackPicker(true)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="document-text-outline" size={15} color={P.accent} style={{ marginRight: 6 }} />
+                  <Text style={[styles.sendInfoPackText, { color: P.accent }]}>Send Info Pack</Text>
+                </TouchableOpacity>
               </View>
 
               {/* ── Perforated divider ── */}
@@ -2113,6 +2129,86 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </View>
           </View>
         )}
+      </Modal>
+
+      {/* ── Info Pack Picker Modal ──────────────────────────────────────────── */}
+      <Modal
+        visible={showInfoPackPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowInfoPackPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.respondModal, { backgroundColor: P.card, maxHeight: '70%' }]}>
+            <Text style={[styles.respondModalTitle, { color: P.text }]}>Send Info Pack</Text>
+            <Text style={[styles.respondModalSub, { color: P.sub, marginBottom: 12 }]}>
+              Choose a pack to send to the client for this booking.
+            </Text>
+
+            {providerInfoPacks.length === 0 ? (
+              <Text style={[styles.respondModalSub, { color: P.sub, textAlign: 'center', marginVertical: 24 }]}>
+                No info packs yet — create them in your Info Packs settings.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {providerInfoPacks.map(pack => {
+                  const alreadySent = bookingInfoPacks.some(bp => bp.infoPackId === pack.id);
+                  return (
+                    <TouchableOpacity
+                      key={pack.id}
+                      disabled={alreadySent || isAttachingInfoPack}
+                      onPress={async () => {
+                        if (!bookingId) return;
+                        setIsAttachingInfoPack(true);
+                        try {
+                          await attachInfoPackToBooking(bookingId, pack.id);
+                          const updated = await getInfoPacksByBooking(bookingId);
+                          setBookingInfoPacks(updated);
+                          setShowInfoPackPicker(false);
+                        } catch (e: any) {
+                          Alert.alert('Error', e?.message ?? 'Failed to send info pack.');
+                        } finally {
+                          setIsAttachingInfoPack(false);
+                        }
+                      }}
+                      style={[
+                        styles.intakeFormCard,
+                        {
+                          marginBottom: 8,
+                          backgroundColor: alreadySent ? '#34C759' + '12' : P.surface,
+                          borderColor: alreadySent ? '#34C759' + '44' : P.border,
+                          opacity: alreadySent || isAttachingInfoPack ? 0.6 : 1,
+                        },
+                      ]}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.intakeFormCardInner}>
+                        <Text style={[styles.intakeFormTitle, { color: P.text }]}>📄 {pack.title}</Text>
+                        {alreadySent && (
+                          <View style={[styles.intakeFormStatus, { backgroundColor: '#34C759' + '22' }]}>
+                            <Text style={[styles.intakeFormStatusText, { color: '#34C759' }]}>✓ Sent</Text>
+                          </View>
+                        )}
+                      </View>
+                      {pack.service ? (
+                        <Text style={[styles.intakeFormSub, { color: P.sub }]}>{pack.service}</Text>
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={[styles.respondModalActions, { marginTop: 16 }]}>
+              <TouchableOpacity
+                style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]}
+                onPress={() => setShowInfoPackPicker(false)}
+              >
+                <Text style={[styles.respondModalBtnText, { color: P.text }]}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -3018,6 +3114,19 @@ const styles = StyleSheet.create({
   intakeFormEmpty: {
     fontSize: 13,
     fontStyle: 'italic',
+  },
+  sendInfoPackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sendInfoPackText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
 

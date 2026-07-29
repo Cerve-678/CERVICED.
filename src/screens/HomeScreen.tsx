@@ -110,6 +110,9 @@ interface Provider {
   name: string;
   service: string;
   logo: any;
+  rating: number;
+  priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
 }
 
 // Component prop types
@@ -304,15 +307,20 @@ export default function HomeScreen() {
         // Silent failure — keeps default service order
       });
 
+    const mapDbProvider = (p: DbProvider): Provider => ({
+      id: p.id,
+      slug: p.slug,
+      name: p.display_name,
+      service: p.service_category,
+      logo: p.logo_url ? { uri: p.logo_url } : null,
+      rating: (p as any).rating ?? 0,
+      priceTier: (p as any).price_tier ?? null,
+      businessType: (p as any).business_type ?? null,
+    });
+
     // Fetch live providers — shows empty state if DB has no data
     getProviders().then(data => {
-      setLiveProviders(data.map((p: DbProvider) => ({
-        id: p.id,     // UUID — matches bookmarkedIds from Supabase
-        slug: p.slug, // slug — used for navigation
-        name: p.display_name,
-        service: p.service_category,
-        logo: p.logo_url ? { uri: p.logo_url } : null,
-      })));
+      setLiveProviders(data.map(mapDbProvider));
       setProvidersLoading(false);
     }).catch(() => {
       setProvidersLoading(false);
@@ -323,15 +331,6 @@ export default function HomeScreen() {
       setRawPromotions(data);
     }).catch(() => {
       // Silent failure — keeps empty offers list
-    });
-
-    // Phase 5.4 — new providers + top rated
-    const mapDbProvider = (p: DbProvider): Provider => ({
-      id: p.id,
-      slug: p.slug,
-      name: p.display_name,
-      service: p.service_category,
-      logo: p.logo_url ? { uri: p.logo_url } : null,
     });
 
     getNewProviders(10).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
@@ -345,25 +344,17 @@ export default function HomeScreen() {
         // Get bookmarked providers from store — cross-reference against live providers
         const bookmarkedProviders = liveProviders.filter(p => bookmarkedIds.includes(p.id));
 
-        // Get personalized recommendations
+        // Score all live providers — no limit here, slicing happens at render time
         const personalizedRecommended = await userLearningService.getPersonalizedProviders(
-          liveProviders,
-          3
+          liveProviders
         );
 
-        // Ensure each section has different providers
+        // Exclude bookmarked providers from recommended (they already have their own section)
         const yourProviderIds = new Set(bookmarkedProviders.map(p => p.id));
         const recommendedFiltered = personalizedRecommended.filter(p => !yourProviderIds.has(p.id));
 
-        // Default recommended: first provider from each service type
-        const defaultRecommended = [
-          liveProviders.find(p => p.service === 'MUA'),
-          liveProviders.find(p => p.service === 'NAILS'),
-          liveProviders.find(p => p.service === 'LASHES'),
-          liveProviders.find(p => p.service === 'HAIR'),
-          liveProviders.find(p => p.service === 'AESTHETICS'),
-          liveProviders.find(p => p.service === 'BROWS'),
-        ].filter(p => p && !yourProviderIds.has(p!.id)) as Provider[];
+        // Fallback: all non-bookmarked providers in original DB order
+        const defaultRecommended = liveProviders.filter(p => !yourProviderIds.has(p.id));
 
         setProvidersData({
           yourProviders: bookmarkedProviders.length > 0 ? bookmarkedProviders : [],
@@ -382,9 +373,9 @@ export default function HomeScreen() {
 
         // Phase 5.4 — recently viewed from userLearningService interaction log
         const recentViewInteractions = userLearningService.getRecentInteractions('view', 10);
-        const recentIds = recentViewInteractions
+        const recentIds = [...new Set(recentViewInteractions
           .map((i: any) => i.providerId ?? i.provider_id)
-          .filter(Boolean);
+          .filter(Boolean))];
         const recentViewedProviders = recentIds
           .map((id: string) => liveProviders.find(p => p.id === id))
           .filter((p): p is Provider => Boolean(p))
@@ -498,12 +489,30 @@ export default function HomeScreen() {
     }
 
     // Apply active filters
-    const sortBy = activeFilters.sortBy as string;
-    if (sortBy === 'highest-rated' || sortBy === 'rating') {
-      providers = [...providers].sort((a, b) => ((b as any).rating ?? 0) - ((a as any).rating ?? 0));
+    const sortBy = activeFilters.sortBy;
+    if (sortBy === 'highest-rated') {
+      providers = [...providers].sort((a, b) => b.rating - a.rating);
     }
     if (activeFilters.rating && activeFilters.rating > 0) {
-      providers = providers.filter(p => ((p as any).rating ?? 0) >= activeFilters.rating!);
+      providers = providers.filter(p => p.rating >= activeFilters.rating!);
+    }
+    if (activeFilters.priceRange) {
+      const { min, max } = activeFilters.priceRange;
+      const tierMap: Record<string, number> = { budget: 15, mid: 45, premium: 80, luxury: 150 };
+      providers = providers.filter(p => {
+        if (!p.priceTier) return true;
+        const approx = tierMap[p.priceTier] ?? 0;
+        return approx >= min && approx <= max;
+      });
+    }
+    if (activeFilters.serviceType && activeFilters.serviceType !== 'all') {
+      const typeMap: Record<string, string[]> = {
+        'home-service': ['home_based'],
+        'store': ['salon', 'studio'],
+        'mobile': ['mobile'],
+      };
+      const allowed = typeMap[activeFilters.serviceType] ?? [];
+      providers = providers.filter(p => p.businessType && allowed.includes(p.businessType));
     }
 
     return {

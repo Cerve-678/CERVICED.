@@ -60,26 +60,46 @@ BEGIN
     FROM public.providers p
    WHERE p.id = NEW.provider_id;
 
-  -- Client: "your request was received"
-  INSERT INTO public.notifications
-    (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
-  VALUES (
-    NEW.user_id,
-    'booking_pending',
-    'Booking Request Sent',
-    'Your request with ' || NEW.provider_name_snapshot ||
-      ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
-      ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') ||
-      ' is awaiting confirmation.',
-    'high', TRUE, NEW.id, NEW.provider_id, 'client'
-  );
-
   IF v_auto_accept THEN
+    -- Instant booking: confirm immediately. on_booking_status_changed
+    -- (pending → confirmed) sends the client their "Booking Confirmed 🎉".
+    -- No client "awaiting confirmation" notice — it would be instantly
+    -- contradicted by the confirmation, so it's pure noise.
     UPDATE public.bookings
        SET status = 'confirmed', confirmed_at = NOW()
      WHERE id = NEW.id;
+
+    -- Provider: a booking just landed. Title "New Booking";
+    -- recipient_role 'provider' → push reads "<Business name> · New Booking".
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+    VALUES (
+      v_provider_user_id,
+      'booking_confirmed',
+      'New Booking - ' || NEW.provider_name_snapshot,
+      COALESCE(NEW.customer_name, 'A client') || ' booked ' ||
+        NEW.service_name_snapshot ||
+        ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') || '.',
+      'high', FALSE, NEW.id, NEW.provider_id, 'provider'
+    );
+
   ELSE
-    -- Provider: "new booking request"
+    -- Manual flow: tell the client their request is awaiting confirmation…
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+    VALUES (
+      NEW.user_id,
+      'booking_pending',
+      'Booking Request Sent',
+      'Your request with ' || NEW.provider_name_snapshot ||
+        ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(NEW.booking_time, 'HH12:MI AM') ||
+        ' is awaiting confirmation.',
+      'high', TRUE, NEW.id, NEW.provider_id, 'client'
+    );
+
+    -- …and tell the provider to confirm or decline.
     INSERT INTO public.notifications
       (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
     VALUES (
@@ -170,7 +190,12 @@ BEGIN
     INSERT INTO public.notifications
       (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
     SELECT
-      p.user_id, 'booking_cancelled', 'Booking Cancelled',
+      -- Title deliberately differs from the client copy's "Booking Cancelled":
+      -- a user who is BOTH a client and a provider receives both rows, and the
+      -- push layer sends the title verbatim (send-push-notification/index.ts no
+      -- longer prefixes the business name — it clipped long titles). Identical
+      -- titles left such a user unable to tell which hat the alert was for.
+      p.user_id, 'booking_cancelled', 'Client Cancelled',
       COALESCE(NEW.customer_name, 'A client') || ' cancelled their ' ||
         NEW.service_name_snapshot ||
         ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') || '.',
@@ -245,7 +270,10 @@ BEGIN
     INSERT INTO public.notifications
       (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
     VALUES (
-      r.provider_user_id, 'booking_reminder', 'Appointment Tomorrow',
+      -- "Client Appointment Tomorrow", not the client copy's plain "Appointment
+      -- Tomorrow" — see the booking_cancelled note above: a dual-hat user gets
+      -- both rows, and push sends titles verbatim.
+      r.provider_user_id, 'booking_reminder', 'Client Appointment Tomorrow',
       COALESCE(r.customer_name, 'A client') || ' has ' ||
         r.service_name_snapshot || ' booked tomorrow at ' ||
         TO_CHAR(r.booking_time, 'HH12:MI AM') || '.',

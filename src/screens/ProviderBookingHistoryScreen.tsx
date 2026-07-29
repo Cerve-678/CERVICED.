@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Animated,
-  Easing,
   FlatList,
   Modal,
   Platform,
@@ -11,6 +10,7 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -27,18 +27,17 @@ import {
 } from '../services/databaseService';
 import { mapDbBookingToConfirmed } from '../contexts/BookingContext';
 import type { BookingWithAddOns } from '../types/database';
-import { ThemedBackground } from '../components/ThemedBackground';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
 import { logger } from '../utils/logger';
 
-// ─── Design tokens (brand-aligned mauve, warm neutrals) ─────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
 const LIGHT = {
   bg:         '#F5F1EC',
   card:       '#FFFFFF',
+  tile:       '#EDE8E2',
   strip:      '#EFEAE4',
-  tile:       '#E7E0D9',
   accent:     '#AF9197',
   accentSoft: 'rgba(175,145,151,0.12)',
   text:       '#1C1A18',
@@ -50,8 +49,8 @@ const LIGHT = {
 const DARK = {
   bg:         '#1A1815',
   card:       '#252220',
-  strip:      '#201D1A',
   tile:       '#2E2B27',
+  strip:      '#201D1A',
   accent:     '#C7AAB0',
   accentSoft: 'rgba(199,170,176,0.16)',
   text:       '#F0ECE7',
@@ -62,7 +61,7 @@ const DARK = {
 
 type Palette = typeof LIGHT;
 
-// ─── Status pills ─────────────────────────────────────────────────────────────
+// ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS: Record<string, { bg: string; darkBg: string; color: string; label: string }> = {
   confirmed:   { bg: '#E8F5EE', darkBg: '#1B3D2A', color: '#2E7D52', label: 'Confirmed' },
@@ -77,7 +76,7 @@ function statusFor(s: string) {
   return STATUS[s] ?? { bg: '#EDEDF0', darkBg: '#2E2E32', color: '#6C6C72', label: s };
 }
 
-// ─── Date / time helpers ────────────────────────────────────────────────────────
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
 const toStr = (d: Date): string => {
   const y = d.getFullYear();
@@ -95,7 +94,6 @@ function fmtTime(s: string): string {
   return `${h12}:${String(m).padStart(2, '0')}${ap}`;
 }
 
-/** Friendly relative label for section headers — 'Today', 'Tomorrow', else 'Wed 15 Jul'. */
 function fmtDayLabel(dateStr: string): string {
   if (dateStr === TODAY_STR) return 'Today';
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
@@ -106,7 +104,6 @@ function fmtDayLabel(dateStr: string): string {
   return new Date(y!, mo! - 1, d!).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-/** Absolute date, shown as a secondary label when the primary is relative. */
 function fmtDayDate(dateStr: string): string {
   const [y, mo, d] = dateStr.split('-').map(Number);
   const date = new Date(y!, mo! - 1, d!);
@@ -119,7 +116,7 @@ function fmtMoney(n: number): string {
   return `£${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
 }
 
-// ─── Status tabs ─────────────────────────────────────────────────────────────
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: 'all',          label: 'All' },
@@ -134,7 +131,6 @@ const TABS = [
 type TabKey = typeof TABS[number]['key'];
 type BookingTab = Exclude<TabKey, 'waitlist'>;
 
-/** Upcoming-first agenda order: future ascending, then past most-recent first. */
 function agendaSort(items: BookingWithAddOns[]): BookingWithAddOns[] {
   const upcoming = items
     .filter(b => b.booking_date >= TODAY_STR)
@@ -154,7 +150,6 @@ function filterBookings(bookings: BookingWithAddOns[], tab: BookingTab): Booking
     case 'completed':   items = items.filter(b => b.status === 'completed'); break;
     case 'cancelled':   items = items.filter(b => b.status === 'cancelled' || b.status === 'no_show'); break;
   }
-  // History-style tabs read newest-first; active tabs read soonest-first.
   if (tab === 'completed' || tab === 'cancelled') {
     return items.sort((a, b) => b.booking_date.localeCompare(a.booking_date) || b.booking_time.localeCompare(a.booking_time));
   }
@@ -163,7 +158,6 @@ function filterBookings(bookings: BookingWithAddOns[], tab: BookingTab): Booking
 
 type Section = { key: string; date: string; total: number; data: BookingWithAddOns[] };
 
-/** Group an already-sorted list into date sections, preserving order. */
 function groupByDate(items: BookingWithAddOns[]): Section[] {
   const map = new Map<string, BookingWithAddOns[]>();
   for (const b of items) {
@@ -179,89 +173,105 @@ function groupByDate(items: BookingWithAddOns[]): Section[] {
   }));
 }
 
-// ─── Booking card ────────────────────────────────────────────────────────────
+// ─── Stat chip ────────────────────────────────────────────────────────────────
 
-function EventCard({ booking, dark, P, onPress }: {
+function StatChip({ icon, value, label, color, P, dark }: {
+  icon: string; value: string; label: string; color: string; P: Palette; dark: boolean;
+}) {
+  return (
+    <View style={[sc.wrap, { backgroundColor: P.card }, !dark && sc.shadow]}>
+      <View style={[sc.iconRing, { backgroundColor: color + (dark ? '28' : '18') }]}>
+        <Ionicons name={icon as any} size={13} color={color} />
+      </View>
+      <Text style={[sc.value, { color: P.text }]}>{value}</Text>
+      <Text style={[sc.label, { color: P.sub }]}>{label}</Text>
+    </View>
+  );
+}
+
+const sc = StyleSheet.create({
+  wrap:    { borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, alignItems: 'center', minWidth: 88 },
+  shadow:  { shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  iconRing:{ width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
+  value:   { fontSize: 22, fontWeight: '800', letterSpacing: -0.6 },
+  label:   { fontSize: 10, fontWeight: '600', marginTop: 3, letterSpacing: 0.2 },
+});
+
+// ─── Booking card ─────────────────────────────────────────────────────────────
+
+function BookingCard({ booking, dark, P, onPress }: {
   booking: BookingWithAddOns; dark: boolean; P: Palette; onPress: () => void;
 }) {
   const st    = statusFor(booking.status);
-  const done  = booking.status === 'cancelled' || booking.status === 'no_show';
   const total = (booking.base_price ?? 0) + (booking.add_ons_total ?? 0);
+  const done  = booking.status === 'cancelled' || booking.status === 'no_show';
+  const name  = booking.customer_name ?? 'Client';
+  const initials = name.trim().split(/\s+/).map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase();
   const isGroup = booking.is_group_booking && booking.group_booking_count > 1;
+  const timeStr = fmtTime(booking.booking_time) + (booking.end_time ? ` – ${fmtTime(booking.end_time)}` : '');
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.78}
-      onPress={onPress}
-      style={[ec.card, { backgroundColor: P.card }, !dark && ec.shadow]}
-    >
-      {/* Status accent rail */}
-      <View style={[ec.rail, { backgroundColor: st.color, opacity: done ? 0.5 : 1 }]} />
+    <TouchableOpacity activeOpacity={0.75} onPress={onPress} style={[bc.card, { backgroundColor: P.card }, !dark && bc.shadow]}>
 
-      {/* Time column */}
-      <View style={ec.timeCol}>
-        <Text style={[ec.timeStart, { color: done ? P.sub : P.text }]}>{fmtTime(booking.booking_time)}</Text>
-        {booking.end_time ? (
-          <Text style={[ec.timeEnd, { color: P.faint }]}>{fmtTime(booking.end_time)}</Text>
-        ) : null}
+      {/* Avatar */}
+      <View style={[bc.avatar, { backgroundColor: st.color + (dark ? '28' : '18') }]}>
+        <Text style={[bc.avatarText, { color: st.color, opacity: done ? 0.5 : 1 }]}>{initials}</Text>
       </View>
 
-      <View style={[ec.vsep, { backgroundColor: P.sep }]} />
-
-      {/* Main info */}
-      <View style={ec.main}>
-        <Text
-          style={[ec.title, { color: P.text, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }]}
-          numberOfLines={1}
-        >
+      {/* Body */}
+      <View style={bc.body}>
+        <View style={bc.nameRow}>
+          <Text style={[bc.name, { color: P.text, opacity: done ? 0.5 : 1 }]} numberOfLines={1}>
+            {name}
+          </Text>
+          {isGroup && (
+            <View style={[bc.groupTag, { backgroundColor: P.accentSoft }]}>
+              <Ionicons name="people" size={10} color={P.accent} />
+              <Text style={[bc.groupCount, { color: P.accent }]}>{booking.group_booking_count}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={[bc.service, { color: P.sub, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }]} numberOfLines={1}>
           {booking.service_name_snapshot}
         </Text>
-        <View style={ec.metaRow}>
-          <Ionicons name="person-circle-outline" size={13} color={P.faint} />
-          <Text style={[ec.metaText, { color: P.sub }]} numberOfLines={1}>
-            {booking.customer_name || 'Client'}
-          </Text>
-          {isGroup ? (
-            <View style={[ec.groupTag, { backgroundColor: P.accentSoft }]}>
-              <Ionicons name="people" size={9} color={P.accent} />
-              <Text style={[ec.groupTagText, { color: P.accent }]}>{booking.group_booking_count}</Text>
-            </View>
-          ) : null}
-        </View>
+        <Text style={[bc.time, { color: P.faint }]}>{timeStr}</Text>
       </View>
 
-      {/* Right: price + status */}
-      <View style={ec.right}>
-        {total > 0 ? <Text style={[ec.price, { color: P.text }]}>{fmtMoney(total)}</Text> : <View />}
-        <View style={[ec.pill, { backgroundColor: dark ? st.darkBg : st.bg }]}>
-          <Text style={[ec.pillText, { color: st.color }]}>{st.label}</Text>
+      {/* Right side */}
+      <View style={bc.right}>
+        <View style={[bc.pill, { backgroundColor: dark ? st.darkBg : st.bg }]}>
+          <Text style={[bc.pillText, { color: st.color }]}>{st.label}</Text>
         </View>
+        {total > 0 ? (
+          <Text style={[bc.price, { color: done ? P.faint : P.text }]}>{fmtMoney(total)}</Text>
+        ) : (
+          <View />
+        )}
       </View>
+
     </TouchableOpacity>
   );
 }
 
-const ec = StyleSheet.create({
-  card:      { flexDirection: 'row', alignItems: 'center', borderRadius: 18, paddingRight: 14, paddingVertical: 13, overflow: 'hidden' },
-  shadow:    { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  rail:      { width: 4, alignSelf: 'stretch', borderRadius: 4, marginRight: 14 },
-  timeCol:   { width: 58, alignItems: 'flex-start' },
-  timeStart: { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
-  timeEnd:   { fontSize: 11, fontWeight: '500', marginTop: 2 },
-  vsep:      { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginHorizontal: 12 },
-  main:      { flex: 1, gap: 5 },
-  title:     { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
-  metaRow:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText:  { fontSize: 12, flexShrink: 1 },
-  groupTag:  { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8, marginLeft: 2 },
-  groupTagText: { fontSize: 9, fontWeight: '800' },
-  right:     { alignItems: 'flex-end', justifyContent: 'space-between', minHeight: 40, marginLeft: 8, gap: 6 },
-  price:     { fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
-  pill:      { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 20 },
+const bc = StyleSheet.create({
+  card:      { flexDirection: 'row', alignItems: 'center', borderRadius: 18, padding: 14, gap: 13 },
+  shadow:    { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  avatar:    { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarText:{ fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
+  body:      { flex: 1, gap: 3 },
+  nameRow:   { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  name:      { fontSize: 15, fontWeight: '700', letterSpacing: -0.2, flex: 1 },
+  groupTag:  { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  groupCount:{ fontSize: 10, fontWeight: '800' },
+  service:   { fontSize: 13, fontWeight: '500' },
+  time:      { fontSize: 12, fontWeight: '500' },
+  right:     { alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, flexShrink: 0, minHeight: 46 },
+  pill:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   pillText:  { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  price:     { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
 });
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
 
 function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -278,15 +288,15 @@ function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
   const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.65] });
   return (
     <View style={{ padding: 16, gap: 12 }}>
-      <Animated.View style={{ backgroundColor: P.card, borderRadius: 10, height: 16, width: 120, opacity, marginBottom: 4 }} />
+      <Animated.View style={{ backgroundColor: P.card, borderRadius: 10, height: 14, width: 100, opacity, marginBottom: 2 }} />
       {[1, 2, 3, 4].map(k => (
-        <Animated.View key={k} style={[{ backgroundColor: P.card, borderRadius: 18, height: 74, opacity }, !dark && ec.shadow]} />
+        <Animated.View key={k} style={[{ backgroundColor: P.card, borderRadius: 18, height: 80, opacity }, !dark && bc.shadow]} />
       ))}
     </View>
   );
 }
 
-// ─── Main screen ─────────────────────────────────────────────────────────────
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderBookingHistoryScreen({ navigation }: any) {
   const { isDarkMode: dark } = useTheme();
@@ -296,6 +306,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
   const [activeTab, setActiveTab]       = useState<TabKey>('all');
+  const [searchQuery, setSearchQuery]   = useState('');
   const [waitlist, setWaitlist]         = useState<WaitlistEntry[]>([]);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
 
@@ -307,36 +318,11 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
   const [showInviteTimePicker, setShowInviteTimePicker] = useState(false);
   const [inviting, setInviting]         = useState(false);
 
+  const listRef = useRef<SectionList>(null);
+
   useEffect(() => {
     getMyProviderProfile().then(p => { if (p?.id) setProviderDbId(p.id); });
   }, []);
-
-  const listRef     = useRef<SectionList>(null);
-  const sliderLeft  = useRef(new Animated.Value(0)).current;
-  const sliderWidth = useRef(new Animated.Value(0)).current;
-  const tabLayouts  = useRef<Record<string, { x: number; width: number }>>({});
-  const sliderReady = useRef(false);
-
-  const handleTabLayout = useCallback((key: string, x: number, width: number) => {
-    tabLayouts.current[key] = { x, width };
-    if (!sliderReady.current && key === 'all') {
-      sliderLeft.setValue(x);
-      sliderWidth.setValue(width);
-      sliderReady.current = true;
-    }
-  }, [sliderLeft, sliderWidth]);
-
-  const handleTabPress = useCallback((key: TabKey) => {
-    setActiveTab(key);
-    listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: false });
-    const layout = tabLayouts.current[key];
-    if (layout) {
-      Animated.parallel([
-        Animated.timing(sliderLeft,  { toValue: layout.x,     duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: false }),
-        Animated.timing(sliderWidth, { toValue: layout.width, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: false }),
-      ]).start();
-    }
-  }, [sliderLeft, sliderWidth]);
 
   const fetchBookings = useCallback(async () => {
     try { setBookings(await getProviderBookings()); } catch {}
@@ -363,11 +349,13 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     setRefreshing(false);
   }, [fetchBookings, fetchWaitlist]);
 
-  // ── derived data ─────────────────────────────────────────────────────────
-  const sections = useMemo(
-    () => activeTab === 'waitlist' ? [] : groupByDate(filterBookings(bookings, activeTab as BookingTab)),
-    [bookings, activeTab]
-  );
+  const handleTabPress = useCallback((key: TabKey) => {
+    setActiveTab(key);
+    setSearchQuery('');
+    listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  // ── Derived data ─────────────────────────────────────────────────────────
 
   const counts = useMemo(() => ({
     all:         bookings.length,
@@ -379,6 +367,31 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     waitlist:    waitlist.filter(e => e.status === 'waiting').length,
   }), [bookings, waitlist]);
 
+  const todayCount = useMemo(
+    () => bookings.filter(b => b.booking_date === TODAY_STR).length,
+    [bookings]
+  );
+
+  const todayRevenue = useMemo(
+    () => bookings
+      .filter(b => b.booking_date === TODAY_STR && b.status !== 'cancelled' && b.status !== 'no_show')
+      .reduce((sum, b) => sum + (b.base_price ?? 0) + (b.add_ons_total ?? 0), 0),
+    [bookings]
+  );
+
+  const sections = useMemo(() => {
+    if (activeTab === 'waitlist') return [];
+    let items = filterBookings(bookings, activeTab as BookingTab);
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      items = items.filter(b =>
+        (b.customer_name ?? '').toLowerCase().includes(q) ||
+        (b.service_name_snapshot ?? '').toLowerCase().includes(q)
+      );
+    }
+    return groupByDate(items);
+  }, [bookings, activeTab, searchQuery]);
+
   const tabEmptyText: Record<TabKey, string> = {
     all:         'No bookings yet',
     pending:     'No pending bookings',
@@ -389,7 +402,8 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     waitlist:    'No one on the waitlist',
   };
 
-  // ── waitlist invite ───────────────────────────────────────────────────────
+  // ── Waitlist invite ───────────────────────────────────────────────────────
+
   const openInvitePicker = useCallback((which: 'date' | 'time') => {
     if (Platform.OS === 'android') {
       const { DateTimePickerAndroid } = require('@react-native-community/datetimepicker');
@@ -448,22 +462,23 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     setInviting(false);
   }, [inviteModal.entry, providerDbId, inviteDate, inviteTime]);
 
-  // ── render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <View style={[s.root, { backgroundColor: P.bg }]}>
       <SafeAreaView style={s.safe} edges={['top']}>
 
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────────────────── */}
         <View style={s.header}>
           <TouchableOpacity
+            style={[s.iconBtn, { backgroundColor: P.tile }]}
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={[s.iconBtn, { backgroundColor: P.tile }]}
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
 
-          <View style={s.headerTitleWrap}>
+          <View style={s.headerBody}>
             <Text style={[s.headerTitle, { color: P.text }]}>Bookings</Text>
             <Text style={[s.headerSub, { color: P.sub }]} numberOfLines={1}>
               {counts.upcoming > 0 ? `${counts.upcoming} upcoming` : 'Nothing upcoming'}
@@ -472,7 +487,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
           </View>
 
           <TouchableOpacity
-            style={[s.devBtn, { backgroundColor: '#FF3B30' }]}
+            style={s.devBtn}
             onPress={() => navigation.navigate('DevSettings')}
             activeOpacity={0.8}
           >
@@ -480,38 +495,67 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ── Status filter bar ───────────────────────────────────────────── */}
+        {/* ── Search bar ──────────────────────────────────────────────── */}
+        <View style={[s.searchWrap, { backgroundColor: P.tile }]}>
+          <Ionicons name="search-outline" size={15} color={P.faint} style={{ marginRight: 8 }} />
+          <TextInput
+            style={[s.searchInput, { color: P.text }]}
+            placeholder="Search by name or service…"
+            placeholderTextColor={P.faint}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && Platform.OS === 'android' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color={P.faint} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* ── Stats strip ─────────────────────────────────────────────── */}
+        {!loading && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.statsStrip}
+          >
+            <StatChip icon="calendar-outline"  value={String(todayCount)}          label="Today"    color={P.accent}  P={P} dark={dark} />
+            <StatChip icon="arrow-up-circle-outline" value={String(counts.upcoming)} label="Upcoming" color="#2E7D52" P={P} dark={dark} />
+            <StatChip icon="time-outline"       value={String(counts.pending)}      label="Pending"  color="#B8730A"  P={P} dark={dark} />
+            <StatChip icon="cash-outline"       value={todayRevenue > 0 ? fmtMoney(todayRevenue) : '—'} label="Today £" color="#3D6EA5" P={P} dark={dark} />
+          </ScrollView>
+        )}
+
+        {/* ── Filter chips ────────────────────────────────────────────── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.tabBarOuter}
+          contentContainerStyle={s.chipRow}
         >
-          <View style={s.tabBarInner}>
-            <Animated.View style={[s.tabSlider, { backgroundColor: P.accent, left: sliderLeft, width: sliderWidth }]} />
-            {TABS.map((tab, i) => {
-              const active = tab.key === activeTab;
-              const count  = counts[tab.key];
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[s.tab, { backgroundColor: active ? 'transparent' : P.strip }, i < TABS.length - 1 && s.tabGap]}
-                  onLayout={e => handleTabLayout(tab.key, e.nativeEvent.layout.x, e.nativeEvent.layout.width)}
-                  onPress={() => handleTabPress(tab.key)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[s.tabText, { color: active ? '#fff' : P.sub }]}>{tab.label}</Text>
-                  {count > 0 && (
-                    <View style={[s.tabBadge, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : P.tile }]}>
-                      <Text style={[s.tabBadgeText, { color: active ? '#fff' : P.text }]}>{count}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {TABS.map(tab => {
+            const active = tab.key === activeTab;
+            const count  = counts[tab.key];
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[s.chip, active ? { backgroundColor: P.accent } : { backgroundColor: P.tile }]}
+                onPress={() => handleTabPress(tab.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[s.chipText, { color: active ? '#fff' : P.sub }]}>{tab.label}</Text>
+                {count > 0 && (
+                  <View style={[s.chipBadge, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : P.strip }]}>
+                    <Text style={[s.chipBadgeText, { color: active ? '#fff' : P.text }]}>{count}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
-        {/* ── Content ─────────────────────────────────────────────────────── */}
+        {/* ── Content ─────────────────────────────────────────────────── */}
         {loading ? (
           <SkeletonList dark={dark} P={P} />
         ) : activeTab === 'waitlist' ? (
@@ -523,7 +567,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
             contentContainerStyle={[s.listContent, waitlist.length === 0 && s.listCentered]}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderItem={({ item: entry }) => (
-              <View style={[wl.card, { backgroundColor: P.card }, !dark && ec.shadow]}>
+              <View style={[wl.card, { backgroundColor: P.card }, !dark && bc.shadow]}>
                 <View style={wl.cardTop}>
                   <View style={[wl.avatar, { backgroundColor: P.tile }]}>
                     <Text style={[wl.avatarText, { color: P.text }]}>
@@ -589,21 +633,21 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderSectionHeader={({ section }) => {
               const sec = section as unknown as Section;
-              const dateLabel = fmtDayDate(sec.date);
+              const dateAlt = fmtDayDate(sec.date);
               return (
                 <View style={[s.sectionHeader, { backgroundColor: P.bg }]}>
-                  <Text style={[s.sectionTitle, { color: P.text }]}>{fmtDayLabel(sec.date)}</Text>
-                  {dateLabel ? <Text style={[s.sectionDate, { color: P.faint }]}>{dateLabel}</Text> : null}
-                  <View style={s.sectionSpacer} />
-                  {sec.total > 0 ? <Text style={[s.sectionTotal, { color: P.sub }]}>{fmtMoney(sec.total)}</Text> : null}
-                  <View style={[s.sectionCount, { backgroundColor: P.tile }]}>
-                    <Text style={[s.sectionCountText, { color: P.sub }]}>{sec.data.length}</Text>
+                  <Text style={[s.sectionLabel, { color: P.text }]}>{fmtDayLabel(sec.date)}</Text>
+                  {dateAlt ? <Text style={[s.sectionAlt, { color: P.faint }]}>{dateAlt}</Text> : null}
+                  <View style={{ flex: 1 }} />
+                  {sec.total > 0 ? <Text style={[s.sectionMoney, { color: P.sub }]}>{fmtMoney(sec.total)}</Text> : null}
+                  <View style={[s.sectionPill, { backgroundColor: P.tile }]}>
+                    <Text style={[s.sectionPillText, { color: P.sub }]}>{sec.data.length}</Text>
                   </View>
                 </View>
               );
             }}
             renderItem={({ item }) => (
-              <EventCard
+              <BookingCard
                 booking={item}
                 dark={dark}
                 P={P}
@@ -612,18 +656,20 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
             )}
             ListEmptyComponent={
               <View style={s.emptyWrap}>
-                <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
-                <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>{tabEmptyText[activeTab]}</Text>
+                <Ionicons name={searchQuery ? 'search-outline' : 'calendar-outline'} size={44} color={P.faint} style={{ marginBottom: 12 }} />
+                <Text style={[s.emptyTitle, { color: P.text }]}>{searchQuery ? 'No results' : 'Nothing here'}</Text>
+                <Text style={[s.emptySub, { color: P.sub }]}>
+                  {searchQuery ? `No bookings match "${searchQuery}"` : tabEmptyText[activeTab]}
+                </Text>
               </View>
             }
           />
         )}
 
-        {/* ── Schedule & Invite modal ──────────────────────────────────────── */}
+        {/* ── Waitlist invite modal ────────────────────────────────────── */}
         <Modal visible={inviteModal.visible} transparent animationType="fade"
           onRequestClose={() => setInviteModal({ visible: false, entry: null })}>
-          <View style={wl.popupBackdrop}>
+          <View style={wl.backdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setInviteModal({ visible: false, entry: null })} />
             <View style={[wl.popupCard, { backgroundColor: P.card }]}>
               <View style={wl.popupHeader}>
@@ -641,9 +687,9 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
                 </TouchableOpacity>
               </View>
               {inviteModal.entry?.preferred_dates && inviteModal.entry.preferred_dates.length > 0 && (
-                <View style={[wl.prefDatesRow, { backgroundColor: P.accentSoft, borderColor: P.accent + '30' }]}>
+                <View style={[wl.prefRow, { backgroundColor: P.accentSoft, borderColor: P.accent + '30' }]}>
                   <Ionicons name="information-circle-outline" size={14} color={P.accent} />
-                  <Text style={[wl.prefDatesText, { color: P.accent }]}>
+                  <Text style={[wl.prefText, { color: P.accent }]}>
                     Client prefers: {inviteModal.entry.preferred_dates.map(d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })).join(' – ')}
                   </Text>
                 </View>
@@ -684,16 +730,16 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
                 </View>
               )}
               <View style={wl.popupActions}>
-                <TouchableOpacity style={[wl.popupCancelBtn, { borderColor: P.sub + '40' }]} onPress={() => setInviteModal({ visible: false, entry: null })} activeOpacity={0.7}>
-                  <Text style={[wl.popupCancelText, { color: P.sub }]}>Cancel</Text>
+                <TouchableOpacity style={[wl.cancelBtn, { borderColor: P.sub + '40' }]} onPress={() => setInviteModal({ visible: false, entry: null })} activeOpacity={0.7}>
+                  <Text style={[wl.cancelText, { color: P.sub }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[wl.popupConfirmBtn, { backgroundColor: P.accent, opacity: (!inviteDate || !inviteTime || inviting) ? 0.5 : 1 }]}
+                  style={[wl.confirmBtn, { backgroundColor: P.accent, opacity: (!inviteDate || !inviteTime || inviting) ? 0.5 : 1 }]}
                   onPress={handleConfirmInvite}
                   disabled={!inviteDate || !inviteTime || inviting}
                   activeOpacity={0.8}
                 >
-                  <Text style={wl.popupConfirmText}>{inviting ? 'Sending...' : 'Confirm & Invite'}</Text>
+                  <Text style={wl.confirmText}>{inviting ? 'Sending…' : 'Confirm & Invite'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -711,40 +757,49 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1 },
 
-  header:          { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, gap: 12 },
-  iconBtn:         { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  headerTitleWrap: { flex: 1 },
-  headerTitle:     { fontSize: 24, fontWeight: '800', letterSpacing: -0.6 },
-  headerSub:       { fontSize: 12, marginTop: 1 },
-  devBtn:          { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 },
-  devBtnText:      { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  // Header
+  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 6, paddingBottom: 14, gap: 12 },
+  iconBtn:     { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  headerBody:  { flex: 1 },
+  headerTitle: { fontSize: 26, fontWeight: '800', letterSpacing: -0.7 },
+  headerSub:   { fontSize: 12, marginTop: 1 },
+  devBtn:      { backgroundColor: '#FF3B30', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 },
+  devBtnText:  { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
-  tabBarOuter: { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 8 },
-  tabBarInner: { flexDirection: 'row', alignItems: 'center', height: 36 },
-  tabSlider:   { position: 'absolute', top: 0, bottom: 0, borderRadius: 20 },
-  tabGap:      { marginRight: 6 },
-  tab:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  tabText:     { fontSize: 13, fontWeight: '600' },
-  tabBadge:    { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, minWidth: 20, alignItems: 'center' },
-  tabBadgeText:{ fontSize: 11, fontWeight: '700' },
+  // Search
+  searchWrap:  { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 14, borderRadius: 14, paddingHorizontal: 13, paddingVertical: 10 },
+  searchInput: { flex: 1, fontSize: 14, fontWeight: '500', padding: 0 },
 
-  listContent:  { paddingHorizontal: 14, paddingTop: 4, paddingBottom: 120 },
+  // Stats
+  statsStrip:  { paddingHorizontal: 16, gap: 10, paddingBottom: 14 },
+
+  // Filter chips
+  chipRow:     { paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
+  chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  chipText:    { fontSize: 13, fontWeight: '600' },
+  chipBadge:   { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, minWidth: 18, alignItems: 'center' },
+  chipBadgeText:{ fontSize: 10, fontWeight: '700' },
+
+  // List
+  listContent:  { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 120 },
   listCentered: { flexGrow: 1, justifyContent: 'center' },
 
-  sectionHeader:   { flexDirection: 'row', alignItems: 'center', paddingTop: 14, paddingBottom: 8, gap: 7 },
-  sectionTitle:    { fontSize: 13, fontWeight: '800', letterSpacing: 0.2, textTransform: 'uppercase' },
-  sectionDate:     { fontSize: 12, fontWeight: '500' },
-  sectionSpacer:   { flex: 1 },
-  sectionTotal:    { fontSize: 12, fontWeight: '600' },
-  sectionCount:    { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  sectionCountText:{ fontSize: 11, fontWeight: '700' },
+  // Section headers
+  sectionHeader:  { flexDirection: 'row', alignItems: 'center', paddingTop: 16, paddingBottom: 8, gap: 6 },
+  sectionLabel:   { fontSize: 13, fontWeight: '800', letterSpacing: 0.1, textTransform: 'uppercase' },
+  sectionAlt:     { fontSize: 12, fontWeight: '500' },
+  sectionMoney:   { fontSize: 12, fontWeight: '600' },
+  sectionPill:    { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  sectionPillText:{ fontSize: 11, fontWeight: '700' },
 
+  // Empty state
   emptyWrap:    { alignItems: 'center', paddingTop: 40 },
   emptyTitle:   { fontSize: 17, fontWeight: '700', marginBottom: 6 },
-  emptySub:     { fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
+  emptySub:     { fontSize: 14, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
 });
 
-// ─── Waitlist card + invite modal styles ────────────────────────────────────────
+// ─── Waitlist + invite modal styles ──────────────────────────────────────────
+
 const wl = StyleSheet.create({
   card:         { borderRadius: 18, padding: 14 },
   cardTop:      { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
@@ -755,30 +810,31 @@ const wl = StyleSheet.create({
   posBadge:     { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
   posBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
   notes:        { fontSize: 12, lineHeight: 17, marginBottom: 6 },
-  preferredDates: { fontSize: 11, marginBottom: 6 },
+  preferredDates:{ fontSize: 11, marginBottom: 6 },
   actions:      { flexDirection: 'row', gap: 8, marginTop: 6 },
   inviteBtn:    { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 20 },
   inviteBtnText:{ fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
   removeBtn:    { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 20, borderWidth: 1 },
   removeBtnText:{ fontSize: 12 },
-  popupBackdrop:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.52)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 22 },
-  popupCard:      { width: '100%', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 28, elevation: 12 },
-  popupHeader:    { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 12 },
-  popupIcon:      { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  popupTitle:     { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
-  popupSub:       { fontSize: 11, marginTop: 2 },
-  popupLabel:     { fontSize: 9, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 7, marginTop: 14 },
-  prefDatesRow:   { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8, marginBottom: 4 },
-  prefDatesText:  { fontSize: 11, fontWeight: '600', flex: 1 },
-  dateBlock:      { borderRadius: 13, borderWidth: 1, overflow: 'hidden', marginBottom: 4 },
-  dateRow:        { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 13, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  dateLabel:      { fontSize: 10, fontWeight: '700', width: 30, letterSpacing: 0.3 },
-  dateValue:      { flex: 1, fontSize: 12 },
-  pickerDone:     { alignItems: 'flex-end', paddingHorizontal: 14, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
-  pickerDoneText: { fontSize: 14, fontWeight: '700' },
-  popupActions:   { flexDirection: 'row', gap: 9, marginTop: 16 },
-  popupCancelBtn: { flex: 1, borderRadius: 13, borderWidth: 1, paddingVertical: 12, alignItems: 'center' },
-  popupCancelText:{ fontSize: 12, fontWeight: '600' },
-  popupConfirmBtn:{ flex: 1.6, borderRadius: 13, paddingVertical: 12, alignItems: 'center' },
-  popupConfirmText:{ fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
+
+  backdrop:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.52)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 22 },
+  popupCard:    { width: '100%', borderRadius: 22, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 28, elevation: 12 },
+  popupHeader:  { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 12 },
+  popupIcon:    { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  popupTitle:   { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  popupSub:     { fontSize: 11, marginTop: 2 },
+  popupLabel:   { fontSize: 9, fontWeight: '700', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 7, marginTop: 14 },
+  prefRow:      { flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8, marginBottom: 4 },
+  prefText:     { fontSize: 11, fontWeight: '600', flex: 1 },
+  dateBlock:    { borderRadius: 13, borderWidth: 1, overflow: 'hidden', marginBottom: 4 },
+  dateRow:      { flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 13, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  dateLabel:    { fontSize: 10, fontWeight: '700', width: 30, letterSpacing: 0.3 },
+  dateValue:    { flex: 1, fontSize: 12 },
+  pickerDone:   { alignItems: 'flex-end', paddingHorizontal: 14, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickerDoneText:{ fontSize: 14, fontWeight: '700' },
+  popupActions: { flexDirection: 'row', gap: 9, marginTop: 16 },
+  cancelBtn:    { flex: 1, borderRadius: 13, borderWidth: 1, paddingVertical: 12, alignItems: 'center' },
+  cancelText:   { fontSize: 12, fontWeight: '600' },
+  confirmBtn:   { flex: 1.6, borderRadius: 13, paddingVertical: 12, alignItems: 'center' },
+  confirmText:  { fontSize: 12, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
 });

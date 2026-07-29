@@ -27,8 +27,11 @@ import {
   getProviderBlockedDates,
   addProviderBlockedDate,
   removeProviderBlockedDate,
+  getProviderAvailabilityOverrides,
+  addProviderAvailabilityOverride,
+  removeProviderAvailabilityOverride,
 } from '../services/databaseService';
-import type { DbProviderAvailability, DbProviderBlockedDate } from '../types/database';
+import type { DbProviderAvailability, DbProviderBlockedDate, DbProviderAvailabilityOverride } from '../types/database';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { logger } from '../utils/logger';
 
@@ -149,6 +152,17 @@ export default function ProviderScheduleScreen() {
   const [blockReason, setBlockReason] = useState('');
   const [addingBlock, setAddingBlock] = useState(false);
 
+  // Custom hours (overrides) state
+  const [overrides, setOverrides] = useState<DbProviderAvailabilityOverride[]>([]);
+  const [overrideDate, setOverrideDate] = useState<Date>(new Date());
+  const [overrideDatePickerVisible, setOverrideDatePickerVisible] = useState(false);
+  const [overrideOpenTime, setOverrideOpenTime] = useState('09:00:00');
+  const [overrideCloseTime, setOverrideCloseTime] = useState('18:00:00');
+  const [overrideTimePickerVisible, setOverrideTimePickerVisible] = useState(false);
+  const [overrideTimeField, setOverrideTimeField] = useState<'open' | 'close'>('open');
+  const [overridePickerDate, setOverridePickerDate] = useState<Date>(new Date());
+  const [addingOverride, setAddingOverride] = useState(false);
+
   // ── Load data ──────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -157,10 +171,11 @@ export default function ProviderScheduleScreen() {
       if (!profile) return;
       setProviderId(profile.id);
 
-      const [avail, windows, blocked] = await Promise.all([
+      const [avail, windows, blocked, ovr] = await Promise.all([
         getProviderAvailability(profile.id),
         getProviderAvailabilityWindows(profile.id).catch(() => []),
         getProviderBlockedDates(profile.id),
+        getProviderAvailabilityOverrides(profile.id, dateToYMD(new Date())).catch(() => []),
       ]);
 
       if (windows.length > 0 || avail.length > 0) {
@@ -195,6 +210,7 @@ export default function ProviderScheduleScreen() {
         }));
       }
       setBlockedDates(blocked);
+      setOverrides(ovr);
     } catch (e) {
       logger.error('ProviderScheduleScreen loadData:', e);
     } finally {
@@ -328,6 +344,51 @@ export default function ProviderScheduleScreen() {
     }
   }
 
+  function openOverrideTimePicker(field: 'open' | 'close') {
+    setOverrideTimeField(field);
+    const t = field === 'open' ? overrideOpenTime : overrideCloseTime;
+    setOverridePickerDate(timeToDate(t));
+    setOverrideTimePickerVisible(true);
+  }
+
+  function handleOverrideTimeChange(_: DateTimePickerEvent, date?: Date) {
+    if (Platform.OS === 'android') setOverrideTimePickerVisible(false);
+    if (!date) return;
+    const t = hhmmss(date);
+    if (overrideTimeField === 'open') setOverrideOpenTime(t);
+    else setOverrideCloseTime(t);
+    setOverridePickerDate(date);
+  }
+
+  async function handleAddOverride() {
+    if (!providerId) return;
+    setAddingOverride(true);
+    try {
+      await addProviderAvailabilityOverride(providerId, {
+        availability_date: dateToYMD(overrideDate),
+        is_closed: false,
+        start_time: overrideOpenTime,
+        end_time: overrideCloseTime,
+      });
+      const updated = await getProviderAvailabilityOverrides(providerId, dateToYMD(new Date()));
+      setOverrides(updated);
+      showToast('Custom hours saved.', 'success');
+    } catch (e) {
+      showToast('Could not save custom hours.', 'error');
+    } finally {
+      setAddingOverride(false);
+    }
+  }
+
+  async function handleRemoveOverride(id: string) {
+    try {
+      await removeProviderAvailabilityOverride(id);
+      setOverrides(prev => prev.filter(o => o.id !== id));
+    } catch (e) {
+      showToast('Could not remove custom hours.', 'error');
+    }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -417,11 +478,10 @@ export default function ProviderScheduleScreen() {
                   </View>
                 </View>
               ))}
-            </ScrollView>
 
-            <View style={[s.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
+              {/* Save button inside scroll so it's always reachable */}
               <TouchableOpacity
-                style={[s.saveBtn, { backgroundColor: P.accent, borderColor: P.ice + '30' }, saving && s.saveBtnDim]}
+                style={[s.saveBtn, { backgroundColor: P.accent, borderColor: P.ice + '30', marginTop: 16, marginBottom: Math.max(16, insets.bottom) }, saving && s.saveBtnDim]}
                 onPress={handleSaveHours}
                 disabled={saving}
               >
@@ -430,7 +490,7 @@ export default function ProviderScheduleScreen() {
                   : <Text style={[s.saveTxt, { color: P.ice }]}>Save Hours</Text>
                 }
               </TouchableOpacity>
-            </View>
+            </ScrollView>
 
             {/* Native time picker (iOS inline / Android modal) */}
             {pickerVisible && (
@@ -572,6 +632,108 @@ export default function ProviderScheduleScreen() {
                 ))}
               </>
             )}
+
+            {/* ── Custom hours for a specific date ───────────────────────── */}
+            <View style={[s.blockAddCard, { backgroundColor: P.surface, marginTop: 24 }]}>
+              <Text style={[s.blockAddTitle, { color: P.text }]}>Custom Hours for a Date</Text>
+              <Text style={[s.blockedReason, { color: P.sub, marginBottom: 4 }]}>
+                Override your normal hours for a specific day — e.g. open later, close early.
+              </Text>
+
+              {/* Date picker */}
+              <TouchableOpacity style={[s.datePickBtn, { backgroundColor: P.card }]} onPress={() => setOverrideDatePickerVisible(true)}>
+                <Ionicons name="calendar-outline" size={16} color={P.accent} />
+                <Text style={[s.datePickTxt, { color: P.text }]}>{formatYMD(dateToYMD(overrideDate))}</Text>
+              </TouchableOpacity>
+
+              {/* Time pickers row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card, flex: 1, alignItems: 'center' }]} onPress={() => openOverrideTimePicker('open')}>
+                  <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(overrideOpenTime)}</Text>
+                </TouchableOpacity>
+                <Text style={[s.timeSep, { color: P.sub }]}>→</Text>
+                <TouchableOpacity style={[s.timeBtn, { backgroundColor: P.card, flex: 1, alignItems: 'center' }]} onPress={() => openOverrideTimePicker('close')}>
+                  <Text style={[s.timeTxt, { color: P.text }]}>{formatTime(overrideCloseTime)}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[s.addBlockBtn, { backgroundColor: P.accent, borderColor: P.ice + '30', marginTop: 4 }, addingOverride && s.saveBtnDim]}
+                onPress={handleAddOverride}
+                disabled={addingOverride}
+              >
+                {addingOverride
+                  ? <ActivityIndicator color={P.ice} size="small" />
+                  : <Text style={[s.saveTxt, { color: P.ice }]}>Save Custom Hours</Text>
+                }
+              </TouchableOpacity>
+            </View>
+
+            {/* Date picker for override date */}
+            {overrideDatePickerVisible && (
+              Platform.OS === 'ios' ? (
+                <Modal transparent animationType="slide" visible={overrideDatePickerVisible}>
+                  <View style={s.pickerModalWrap}>
+                    <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideDatePickerVisible(false)} />
+                    <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
+                      <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
+                        <Text style={[s.pickerLabel, { color: P.text }]}>Select Date</Text>
+                        <TouchableOpacity onPress={() => setOverrideDatePickerVisible(false)}>
+                          <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <DateTimePicker mode="date" value={overrideDate} onChange={(_, d) => { if (d) setOverrideDate(d); }} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} minimumDate={new Date()} style={{ width: '100%' }} />
+                      <View style={{ height: Math.max(24, insets.bottom), backgroundColor: P.surface }} />
+                    </View>
+                  </View>
+                </Modal>
+              ) : (
+                <DateTimePicker mode="date" value={overrideDate} onChange={(_, d) => { if (d) { setOverrideDate(d); setOverrideDatePickerVisible(false); } }} display="default" minimumDate={new Date()} />
+              )
+            )}
+
+            {/* Time picker for override open/close */}
+            {overrideTimePickerVisible && (
+              Platform.OS === 'ios' ? (
+                <Modal transparent animationType="slide" visible={overrideTimePickerVisible}>
+                  <View style={s.pickerModalWrap}>
+                    <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideTimePickerVisible(false)} />
+                    <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
+                      <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
+                        <Text style={[s.pickerLabel, { color: P.text }]}>{overrideTimeField === 'open' ? 'Open Time' : 'Close Time'}</Text>
+                        <TouchableOpacity onPress={() => setOverrideTimePickerVisible(false)}>
+                          <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <DateTimePicker mode="time" value={overridePickerDate} onChange={handleOverrideTimeChange} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} style={{ width: '100%' }} />
+                      <View style={{ height: Math.max(24, insets.bottom), backgroundColor: P.surface }} />
+                    </View>
+                  </View>
+                </Modal>
+              ) : (
+                <DateTimePicker mode="time" value={overridePickerDate} onChange={handleOverrideTimeChange} display="default" />
+              )
+            )}
+
+            {/* Existing overrides list */}
+            {overrides.length > 0 && (
+              <>
+                <Text style={[s.sectionLabel, { color: P.sub, marginTop: 24 }]}>Custom Hours</Text>
+                {overrides.map(o => (
+                  <View key={o.id} style={[s.blockedRow, { backgroundColor: P.surface }]}>
+                    <View style={s.blockedInfo}>
+                      <Text style={[s.blockedDate, { color: P.text }]}>{formatYMD(o.availability_date)}</Text>
+                      <Text style={[s.blockedReason, { color: P.sub }]}>
+                        {o.start_time && o.end_time ? `${formatTime(o.start_time)} → ${formatTime(o.end_time)}` : 'Closed'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={s.trashBtn} onPress={() => handleRemoveOverride(o.id)}>
+                      <Ionicons name="trash-outline" size={18} color="#FF6868" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </>
+            )}
           </ScrollView>
         )}
       </SafeAreaView>
@@ -615,7 +777,6 @@ const s = StyleSheet.create({
   breakTxt:     { fontSize: 11, fontWeight: '700' },
 
   // Footer save button
-  footer:      { paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 },
   saveBtn:     { borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1 },
   saveBtnDim:  { opacity: 0.6 },
   saveTxt:     { fontSize: 15, fontWeight: '700' },

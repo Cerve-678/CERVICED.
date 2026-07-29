@@ -178,6 +178,8 @@ export const AvailabilityService = {
    */
   async resolveProvider(providerIdOrName: string): Promise<string | null> {
     return resolveProviderId(providerIdOrName);
+  },
+
   async getBookedSlots(providerName: string, date: string): Promise<Array<{
     time: string;
     endTime: string;
