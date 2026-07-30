@@ -5,7 +5,7 @@
 
 #generated
 
-**55 screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].
+**54 screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].
 
 ## Entry points
 _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
@@ -22,10 +22,9 @@ _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[ProviderInfoPackScreen]]
 - [[ProviderMyProfileScreen]]
 - [[ReactivateAccountScreen]]
-- [[SearchScreen 2]]
 - [[UserProfileScreen]]
 
 ## All screens
 **Provider:** [[ProviderAccountInfoScreen]] · [[ProviderAccountScreen]] · [[ProviderAnalyticsScreen]] · [[ProviderAutomationsScreen]] · [[ProviderBookingDetailScreen]] · [[ProviderBookingHistoryScreen]] · [[ProviderBusinessEmailScreen]] · [[ProviderChatScreen]] · [[ProviderClienteleScreen]] · [[ProviderCommunicationsScreen]] · [[ProviderConversationScreen]] · [[ProviderHomeScreen]] · [[ProviderInboxScreen]] · [[ProviderInfoPackScreen]] · [[ProviderIntakeFormScreen]] · [[ProviderMyProfileScreen]] · [[ProviderProfileScreen]] · [[ProviderPromotionsScreen]] · [[ProviderScheduleScreen]]
 
-**Client / shared:** [[AboutScreen]] · [[AuthScreen]] · [[BeautyBillingScreen]] · [[BeautyProfileScreen]] · [[BeccaScreen]] · [[BookingDetailScreen]] · [[BookingsScreen]] · [[BookmarkedProvidersScreen]] · [[BrandingScreen]] · [[BusinessProfileScreen]] · [[CartScreen]] · [[ChangeCredentialsScreen]] · [[ChangePasswordScreen]] · [[ClientIntakeFormScreen]] · [[DevSettingsScreen]] · [[EventDetailScreen]] · [[ExploreScreen]] · [[HelpCentreScreen]] · [[HomeScreen]] · [[InfoRegScreen]] · [[InfoScreen]] · [[MessagesScreen]] · [[NotificationsScreen]] · [[NotificationsSettingsScreen]] · [[OffersScreen]] · [[PaymentMethodsScreen]] · [[PointsScreen]] · [[ProfileInfoScreen]] · [[ReactivateAccountScreen]] · [[ReportProblemScreen]] · [[RescheduleScreen]] · [[SearchScreen]] · [[SearchScreen 2]] · [[SubscriptionScreen]] · [[TermsScreen]] · [[UserProfileScreen]]
+**Client / shared:** [[AboutScreen]] · [[AuthScreen]] · [[BeautyBillingScreen]] · [[BeautyProfileScreen]] · [[BeccaScreen]] · [[BookingDetailScreen]] · [[BookingsScreen]] · [[BookmarkedProvidersScreen]] · [[BrandingScreen]] · [[BusinessProfileScreen]] · [[CartScreen]] · [[ChangeCredentialsScreen]] · [[ChangePasswordScreen]] · [[ClientIntakeFormScreen]] · [[DevSettingsScreen]] · [[EventDetailScreen]] · [[ExploreScreen]] · [[HelpCentreScreen]] · [[HomeScreen]] · [[InfoRegScreen]] · [[InfoScreen]] · [[MessagesScreen]] · [[NotificationsScreen]] · [[NotificationsSettingsScreen]] · [[OffersScreen]] · [[PaymentMethodsScreen]] · [[PointsScreen]] · [[ProfileInfoScreen]] · [[ReactivateAccountScreen]] · [[ReportProblemScreen]] · [[RescheduleScreen]] · [[SearchScreen]] · [[SubscriptionScreen]] · [[TermsScreen]] · [[UserProfileScreen]]

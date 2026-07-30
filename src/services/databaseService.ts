@@ -1011,7 +1011,29 @@ export async function createBooking(
     .eq('booking_date', booking.booking_date)
     .in('status', ['pending', 'confirmed', 'in_progress']);
 
-  if (conflicts) {
+  if (conflicts && conflicts.length > 0) {
+    // Batch-fetch every conflicting booking's service row in one query —
+    // this loop used to await a separate `services` lookup per conflict,
+    // which turns "a provider double-booked several times today" into that
+    // many extra sequential round trips during checkout.
+    const conflictServiceIds = [...new Set(
+      conflicts.map(c => c.service_id).filter((id): id is string => !!id)
+    )];
+    const conflictServicesById = new Map<string, {
+      duration_minutes: number | null;
+      buffer_before_mins: number | null;
+      buffer_after_mins: number | null;
+    }>();
+    if (conflictServiceIds.length > 0) {
+      const { data: conflictServices } = await supabase
+        .from('services')
+        .select('id, duration_minutes, buffer_before_mins, buffer_after_mins')
+        .in('id', conflictServiceIds);
+      for (const svc of conflictServices ?? []) {
+        conflictServicesById.set(svc.id, svc);
+      }
+    }
+
     for (const existing of conflicts) {
       const existParts = existing.booking_time.split(':');
       const existStart = Number(existParts[0] ?? 0) * 60 + Number(existParts[1] ?? 0);
@@ -1025,14 +1047,10 @@ export async function createBooking(
         existEnd = Number(endParts[0] ?? 0) * 60 + Number(endParts[1] ?? 0);
       }
       if (existing.service_id) {
-        const { data: svc } = await supabase
-          .from('services')
-          .select('duration_minutes, buffer_before_mins, buffer_after_mins')
-          .eq('id', existing.service_id)
-          .maybeSingle();
+        const svc = conflictServicesById.get(existing.service_id);
         if (!existing.end_time && svc?.duration_minutes) existEnd = existStart + svc.duration_minutes;
-        existBufferBefore = (svc as any)?.buffer_before_mins ?? 0;
-        existBufferAfter = (svc as any)?.buffer_after_mins ?? providerBufferMins;
+        existBufferBefore = svc?.buffer_before_mins ?? 0;
+        existBufferAfter = svc?.buffer_after_mins ?? providerBufferMins;
       }
 
       const existEffStart = existStart - existBufferBefore;
@@ -1075,6 +1093,23 @@ export async function updateBookingStatus(
     .update({ status })
     .eq('id', bookingId);
 
+  if (error) throw error;
+}
+
+/** Cancel a booking as its client owner. Routed through cancel_own_booking()
+ *  so the provider's cancellation_notice_hours is enforced server-side —
+ *  a plain .update({status:'cancelled'}) has no notice-window check at all
+ *  (see supabase/booking_rules_server_enforcement.sql). */
+export async function cancelOwnBooking(bookingId: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_own_booking', { p_booking_id: bookingId });
+  if (error) throw error;
+}
+
+/** Cancel a booking as its owning provider. Routed through
+ *  provider_cancel_own_booking() to verify ownership server-side (no notice
+ *  window — providers can cancel any time, same as before). */
+export async function providerCancelOwnBooking(bookingId: string): Promise<void> {
+  const { error } = await supabase.rpc('provider_cancel_own_booking', { p_booking_id: bookingId });
   if (error) throw error;
 }
 
@@ -1471,6 +1506,21 @@ export async function upsertRescheduleRequest(params: {
   if (error) throw error;
 }
 
+/** Client requests a reschedule. Routed through request_reschedule_own_booking()
+ *  so the 24h anti-spam cooldown, the provider's maxReschedules cap, and the
+ *  provider's reschedule notice window are all enforced server-side — upsert
+ *  above has none of that, it's a plain unconditional write. */
+export async function requestRescheduleOwnBooking(
+  bookingId: string,
+  preferredDates: string[],
+): Promise<void> {
+  const { error } = await supabase.rpc('request_reschedule_own_booking', {
+    p_booking_id: bookingId,
+    p_preferred_dates: preferredDates,
+  });
+  if (error) throw error;
+}
+
 /** Get the active (pending or provider_responded) reschedule request for a booking */
 export async function getActiveRescheduleRequest(
   bookingId: string
@@ -1563,12 +1613,24 @@ export async function updateBookingDateTime(
   if (error) throw error;
 }
 
-/** Mark the remaining balance on a deposit booking as collected */
-export async function markBalanceCollected(bookingId: string): Promise<void> {
-  const { error } = await supabase
-    .from('bookings')
-    .update({ remaining_balance: 0, payment_status: 'fully_paid' })
-    .eq('id', bookingId);
+/** Client confirms a provider-approved reschedule slot. Routed through
+ *  confirm_reschedule_own_booking() — requires an active provider_responded
+ *  request server-side (a client can't invent a reschedule out of nothing),
+ *  and increments the new reschedule_count / last_rescheduled_at columns
+ *  that request_reschedule_own_booking()'s cooldown/cap checks read from.
+ *  Supersedes a raw updateBookingDateTime() call for this path. */
+export async function confirmRescheduleOwnBooking(
+  bookingId: string,
+  newDate: string,
+  newTime: string,
+  newEndTime: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('confirm_reschedule_own_booking', {
+    p_booking_id: bookingId,
+    p_new_date: newDate,
+    p_new_time: newTime,
+    p_new_end_time: newEndTime,
+  });
   if (error) throw error;
 }
 

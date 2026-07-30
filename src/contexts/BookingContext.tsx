@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, upsertRescheduleRequest, closeRescheduleRequest, updateBookingDateTime, getProviderLocationsByIds, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, getActiveRescheduleRequestsForBookings, isSlotTaken } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, closeRescheduleRequest, getProviderLocationsByIds, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, getActiveRescheduleRequestsForBookings, isSlotTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 
@@ -658,12 +658,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // a failure here means the provider never receives the request, so the
       // caller must find out and show the user it didn't actually send
       // (see fix_reschedule_request_conflict.sql for the bug this caught).
-      await upsertRescheduleRequest({
-        booking_id: bookingId,
-        original_date: originalDate,
-        original_time: originalTime,
-        requested_dates: preferredDates,
-      });
+      //
+      // Routed through request_reschedule_own_booking() instead of a plain
+      // upsert — enforces the 24h cooldown, the provider's maxReschedules
+      // cap, and the provider's reschedule notice window server-side (see
+      // supabase/booking_rules_server_enforcement.sql). The checks above in
+      // this function are now just an optimistic pre-check for instant UI
+      // feedback; the RPC is the real gate and its rejection message wins
+      // if the two ever disagree (e.g. a stale local cache).
+      await requestRescheduleOwnBooking(bookingId, preferredDates);
 
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const rescheduleProviderId = booking.providerId
@@ -914,7 +917,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // slot — the client and the provider then saw different appointment times
       // with nothing surfaced. Writing first means a failure leaves the booking
       // in its previous (still-pending) state and RescheduleScreen reports it.
-      await updateBookingDateTime(bookingId, newDate, newTime, newEndTime);
+      //
+      // Routed through confirm_reschedule_own_booking() instead of a plain
+      // date/time update — requires a real provider-approved request to
+      // exist server-side (a tampered client can't invent a reschedule),
+      // and increments reschedule_count/last_rescheduled_at so the next
+      // request_reschedule_own_booking() call sees accurate cooldown/cap
+      // state even if this device's AsyncStorage is cleared or out of sync.
+      await confirmRescheduleOwnBooking(bookingId, newDate, newTime, newEndTime);
 
       await saveBookings(updatedBookings);
 
@@ -963,12 +973,25 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // error. (Legacy local-only ids never existed in the DB — skip.)
       // The status-change trigger handles the rest server-side: notifying
       // the right party and inviting the next waitlist entry.
+      //
+      // Routed through cancel_own_booking() / provider_cancel_own_booking()
+      // (SECURITY DEFINER RPCs) instead of a plain status update — enforces
+      // the provider's cancellation_notice_hours server-side, which a raw
+      // .update({status:'cancelled'}) has no way to check (RLS just checks
+      // ownership, not business rules). This one function serves both the
+      // client and provider cancel buttons, so it tries the client path
+      // first and falls back to the provider path on ownership mismatch;
+      // any other error (e.g. the notice-window message) is a real
+      // rejection and must reach the caller as-is, not be masked by a
+      // second attempt.
       if (isDbBookingId(bookingId)) {
         try {
-          await dbUpdateBookingStatus(bookingId, 'cancelled');
-        } catch (dbError) {
-          logger.error('❌ Cancellation did not reach Supabase:', dbError);
-          throw new Error('Could not cancel the booking. Please check your connection and try again.');
+          await cancelOwnBooking(bookingId);
+        } catch (clientError: any) {
+          if (!String(clientError?.message ?? '').includes('Booking not found')) {
+            throw clientError;
+          }
+          await providerCancelOwnBooking(bookingId);
         }
       }
 
@@ -1632,25 +1655,38 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     );
   }, [bookings, isLoading]);
 
-  const currentBooking = todayBookings.find(b => b.status === BookingStatus.IN_PROGRESS) ||
-    todayBookings[0] ||
-    null;
+  // Folded into one useMemo (rather than plain consts) so they don't become
+  // fresh references on every render — otherwise memoizing `value` below
+  // would be pointless, since these three would still force it to change
+  // every time regardless of what actually changed.
+  const { currentBooking, nextBookings, allTodayBookingsCompleted } = useMemo(() => {
+    const currentBooking = todayBookings.find(b => b.status === BookingStatus.IN_PROGRESS) ||
+      todayBookings[0] ||
+      null;
 
-  const nextBookings = todayBookings
-    .filter(b => b.id !== currentBooking?.id && b.status === BookingStatus.UPCOMING)
-    .slice(0, 3);
+    const nextBookings = todayBookings
+      .filter(b => b.id !== currentBooking?.id && b.status === BookingStatus.UPCOMING)
+      .slice(0, 3);
 
-  const allTodayBookingsCompleted = todayBookings.length > 0 &&
-    todayBookings.every(b =>
-      b.status === BookingStatus.COMPLETED
-    ) &&
-    todayBookings.every(b =>
-      b.status !== BookingStatus.PENDING &&
-      b.status !== BookingStatus.UPCOMING &&
-      b.status !== BookingStatus.IN_PROGRESS
-    );
+    const allTodayBookingsCompleted = todayBookings.length > 0 &&
+      todayBookings.every(b =>
+        b.status === BookingStatus.COMPLETED
+      ) &&
+      todayBookings.every(b =>
+        b.status !== BookingStatus.PENDING &&
+        b.status !== BookingStatus.UPCOMING &&
+        b.status !== BookingStatus.IN_PROGRESS
+      );
 
-  const value: BookingContextType = {
+    return { currentBooking, nextBookings, allTodayBookingsCompleted };
+  }, [todayBookings]);
+
+  // Memoized so consumers of useBooking() (HomeScreen, BookingsScreen, etc.)
+  // only re-render when something they actually read changes, instead of on
+  // every render of this provider — every function above is already
+  // useCallback-wrapped, so the only genuinely-changing inputs are the data
+  // and loading-flag values listed below.
+  const value: BookingContextType = useMemo(() => ({
     bookings,
     confirmedBookings: bookings,
     upcomingBookings,
@@ -1676,7 +1712,32 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,
-  };
+  }), [
+    bookings,
+    upcomingBookings,
+    pastBookings,
+    todayBookings,
+    currentBooking,
+    nextBookings,
+    allTodayBookingsCompleted,
+    createBookingsFromCart,
+    validateBookingsBeforeCheckout,
+    updateBookingStatus,
+    cancelBooking,
+    getBookingsByProvider,
+    getBookingsByDate,
+    getBookingById,
+    getBookingsByGroupId,
+    canReschedule,
+    refreshBookingStatuses,
+    reloadBookings,
+    requestReschedule,
+    providerRespondToReschedule,
+    confirmReschedule,
+    hasMoreHistory,
+    loadingMoreHistory,
+    loadOlderBookings,
+  ]);
 
   return (
     <BookingContext.Provider value={value}>

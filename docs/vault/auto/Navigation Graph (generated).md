@@ -5,7 +5,7 @@
 
 #generated
 
-**90 edges** across **27 screens**. Node-graph version: [[Screen Flow (generated)]].
+**90 edges** across **26 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -50,6 +50,7 @@ graph LR
   HomeScreen --> SearchScreen
   MessagesScreen --> ProviderChatScreen
   NotificationsScreen --> BookingsScreen
+  NotificationsScreen --> ProviderHome
   NotificationsScreen --> ProviderProfileScreen
   OffersScreen --> ProviderProfileScreen
   ProviderAccountScreen --> AboutScreen
@@ -72,7 +73,7 @@ graph LR
   ProviderBookingDetailScreen --> ProviderIntakeFormScreen
   ProviderBookingHistoryScreen --> DevSettingsScreen
   ProviderBookingHistoryScreen --> ProviderBookingDetailScreen
-  ProviderCommunicationsScreen --> BusinessEmail
+  ProviderCommunicationsScreen --> ProviderBusinessEmailScreen
   ProviderHomeScreen --> NotificationsScreen
   ProviderHomeScreen --> Profile
   ProviderHomeScreen --> ProviderBookingDetailScreen
@@ -86,7 +87,6 @@ graph LR
   ProviderProfileScreen --> ProviderChatScreen
   ProviderPromotionsScreen --> ProviderClienteleScreen
   SearchScreen --> ProviderProfileScreen
-  SearchScreen 2 --> ProviderProfileScreen
   UserProfileScreen --> AboutScreen
   UserProfileScreen --> BeautyProfileScreen
   UserProfileScreen --> BookingsScreen
@@ -117,18 +117,17 @@ graph LR
 - `ExploreScreen` → `BookmarkedProvidersScreen`, `EventDetailScreen`, `ProviderProfileScreen`
 - `HomeScreen` → `BookingsScreen`, `BookmarkedProvidersScreen`, `NotificationsScreen`, `OffersScreen`, `ProviderProfileScreen`, `SearchScreen`
 - `MessagesScreen` → `ProviderChatScreen`
-- `NotificationsScreen` → `BookingsScreen`, `ProviderProfileScreen`
+- `NotificationsScreen` → `BookingsScreen`, `ProviderHome`, `ProviderProfileScreen`
 - `OffersScreen` → `ProviderProfileScreen`
 - `ProviderAccountScreen` → `AboutScreen`, `BusinessProfileScreen`, `ChangePasswordScreen`, `HelpCentreScreen`, `NotificationsScreen`, `ProviderAccountInfoScreen`, `ProviderAnalyticsScreen`, `ProviderBookingHistoryScreen`, `ProviderClienteleScreen`, `ProviderPromotionsScreen`, `ReportProblemScreen`, `SignUpStep1`, `SignUpStep2`, `TermsScreen`
 - `ProviderAnalyticsScreen` → `ProviderBookingDetailScreen`, `ProviderBookingHistoryScreen`
 - `ProviderBookingDetailScreen` → `ProviderConversationScreen`, `ProviderIntakeFormScreen`
 - `ProviderBookingHistoryScreen` → `DevSettingsScreen`, `ProviderBookingDetailScreen`
-- `ProviderCommunicationsScreen` → `BusinessEmail`
+- `ProviderCommunicationsScreen` → `ProviderBusinessEmailScreen`
 - `ProviderHomeScreen` → `NotificationsScreen`, `Profile`, `ProviderBookingDetailScreen`, `ProviderConversationScreen`, `ProviderScheduleScreen`
 - `ProviderInboxScreen` → `ProviderBookingDetailScreen`, `ProviderConversationScreen`
 - `ProviderMyProfileScreen` → `InfoRegScreen`
 - `ProviderProfileScreen` → `Cart`, `CartScreen`, `ProviderChatScreen`
 - `ProviderPromotionsScreen` → `ProviderClienteleScreen`
 - `SearchScreen` → `ProviderProfileScreen`
-- `SearchScreen 2` → `ProviderProfileScreen`
 - `UserProfileScreen` → `AboutScreen`, `BeautyProfileScreen`, `BookingsScreen`, `BookmarkedProvidersScreen`, `ChangePasswordScreen`, `HelpCentreScreen`, `MessagesScreen`, `NotificationsSettingsScreen`, `PaymentMethodsScreen`, `PointsScreen`, `ProfileInfoScreen`, `ReportProblemScreen`, `SignUpStep3`, `SubscriptionScreen`, `TermsScreen`

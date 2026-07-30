@@ -7,6 +7,7 @@ tags: [screen, client]
 **Registered route(s):** `Notifications`
 
 ## → Navigates to
+- `ProviderHome` _(navigator / dynamic)_
 - [[BookingsScreen\|Bookings]]
 - [[ProviderProfileScreen\|ProviderProfile]]
 
