@@ -17,6 +17,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeStackParamList } from '../navigation/types';
 import { useTheme } from '../contexts/ThemeContext';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../components/IslandPillTabBar';
 import { supabase } from '../lib/supabase';
 import {
   getProviderAddressPolicy,
@@ -76,6 +77,22 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const [selectedBooking, setSelectedBooking] = useState<ClientBookingSummary | null>(null);
   const [addressText, setAddressText] = useState('');
   const [sendingAddress, setSendingAddress] = useState(false);
+  // The floating tab bar auto-hides while the keyboard is up (tabBarHideOnKeyboard),
+  // so the input row only needs extra bottom clearance to clear the pill while
+  // it's resting (keyboard down) — otherwise that clearance just becomes a dead
+  // gap above the keyboard.
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!providerDbId) return;
@@ -335,7 +352,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       )}
 
       {/* Input bar */}
-      <View style={[styles.inputRow, { backgroundColor: OP.bg, borderTopColor: OP.border }]}>
+      <View style={[styles.inputRow, { backgroundColor: OP.bg, borderTopColor: OP.border, paddingBottom: keyboardVisible ? 12 : FLOATING_TAB_BAR_CLEARANCE }]}>
         <TextInput
           style={[styles.input, { backgroundColor: OP.surface, color: OP.text, borderColor: OP.border }]}
           value={inputText}

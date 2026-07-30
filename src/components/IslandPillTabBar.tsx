@@ -18,6 +18,14 @@ const H = 50;
 const MARGIN = 32;
 const PILL_WIDTH = SCREEN_WIDTH - MARGIN * 2;
 const INSET = 5;
+const BOTTOM_OFFSET = Platform.OS === 'ios' ? 30 : 20;
+
+// This floats above every screen (it's the Tab.Navigator's `tabBar`, rendered
+// as an overlay for every nested stack screen, not just the tab roots) — so a
+// screen's own fixed-position footer (send button, submit button) needs at
+// least this much bottom clearance or the pill visually covers it and blocks
+// taps. Exported so those screens don't have to guess the pill's footprint.
+export const FLOATING_TAB_BAR_CLEARANCE = BOTTOM_OFFSET + H + 10;
 
 export default function IslandPillTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { isDarkMode } = useTheme();
@@ -171,7 +179,7 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 30 : 20,
+    bottom: BOTTOM_OFFSET,
     left: MARGIN,
     right: MARGIN,
   },
