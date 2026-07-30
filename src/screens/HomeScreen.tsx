@@ -17,6 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import * as Location from 'expo-location';
 
 // NAVIGATION IMPORTS - CORRECTED PATH
 import { useNavigation } from '@react-navigation/native';
@@ -36,6 +37,7 @@ import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewPr
 import type { DbProvider, DbPromotionWithProvider } from '../types/database';
 import { HOME_SECTIONS } from '../config/homeSections';
 import { logger } from '../utils/logger';
+import { getDistanceKm, formatDistance } from '../utils/distance';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -113,6 +115,9 @@ interface Provider {
   rating: number;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
   businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  latitude: number | null;
+  longitude: number | null;
+  distanceKm?: number; // populated by nearbyProviders when the user's location is known
 }
 
 // Component prop types
@@ -191,6 +196,12 @@ export default function HomeScreen() {
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
 
+  // Device location, for the "Near You" section — null until permission is
+  // granted and a fix is obtained. Left null (rather than retried/blocked on)
+  // if the user denies permission or location services are off; the section
+  // falls back to unsorted providers in that case rather than being empty.
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [showHairTypeSelector, setShowHairTypeSelector] = useState(false);
   const [selectedHairType, setSelectedHairType] = useState<any>(null);
@@ -223,7 +234,7 @@ export default function HomeScreen() {
     })),
   [rawPromotions]);
 
-  const currentOffers = useMemo(() => allOffers.slice(0, 3), [allOffers]);
+  const currentOffers = useMemo(() => allOffers.slice(0, 15), [allOffers]);
 
   // Get previously booked providers from bookings
   const previouslyBookedProviders = useMemo(() => {
@@ -316,6 +327,8 @@ export default function HomeScreen() {
       rating: (p as any).rating ?? 0,
       priceTier: (p as any).price_tier ?? null,
       businessType: (p as any).business_type ?? null,
+      latitude: p.latitude ?? null,
+      longitude: p.longitude ?? null,
     });
 
     // Fetch live providers — shows empty state if DB has no data
@@ -326,6 +339,24 @@ export default function HomeScreen() {
       setProvidersLoading(false);
     });
 
+    // Ask for location once on mount — same permission string already
+    // declared in app.json ("...show nearby beauty service providers").
+    // Denied/unavailable is a normal, silent outcome: userCoords just stays
+    // null and the Near You section falls back to unsorted providers.
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const position = await Location.getCurrentPositionAsync({});
+        setUserCoords({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      } catch {
+        // Silent failure — Near You falls back to unsorted providers
+      }
+    })();
+
     // Fetch active promotions
     getActivePromotions().then(data => {
       setRawPromotions(data);
@@ -333,8 +364,8 @@ export default function HomeScreen() {
       // Silent failure — keeps empty offers list
     });
 
-    getNewProviders(10).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
-    getTopRatedProviders(10).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
+    getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
+    getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
   }, []); // Only run once on mount
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
@@ -371,15 +402,17 @@ export default function HomeScreen() {
           kidsProviders: liveProviders.filter(p => p.service === 'KIDS'),
         });
 
-        // Phase 5.4 — recently viewed from userLearningService interaction log
-        const recentViewInteractions = userLearningService.getRecentInteractions('view', 10);
+        // Phase 5.4 — recently viewed from userLearningService interaction log.
+        // Raw window is wider than the 15 we display, since repeat views of
+        // the same provider (very common) eat into it before deduping by id.
+        const recentViewInteractions = userLearningService.getRecentInteractions('view', 50);
         const recentIds = [...new Set(recentViewInteractions
           .map((i: any) => i.providerId ?? i.provider_id)
           .filter(Boolean))];
         const recentViewedProviders = recentIds
           .map((id: string) => liveProviders.find(p => p.id === id))
           .filter((p): p is Provider => Boolean(p))
-          .slice(0, 5);
+          .slice(0, 15);
         setRecentlyViewed(recentViewedProviders);
       } catch (error) {
         logger.error('Failed to update provider data:', error);
@@ -389,6 +422,30 @@ export default function HomeScreen() {
 
     updateProviderData();
   }, [bookmarkedIds, liveProviders]); // React to both bookmark changes and live data updates
+
+  // "Near You" — nearest-first, not "every active provider" in arbitrary DB
+  // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
+  // too-small radius rather than showing a near-empty list): try a tight
+  // 50km cut first, but if too few providers fall inside it — a sparse
+  // market, or a big chunk of the DB missing lat/lng — fall back to the
+  // nearest 15 regardless of the cutoff instead of an almost-empty row.
+  // With no location fix at all, falls back to the plain (unsorted) list.
+  const NEARBY_RADIUS_KM = 50;
+  const MIN_NEARBY_RESULTS = 5;
+  const nearbyProviders = useMemo(() => {
+    if (!userCoords) return liveProviders;
+
+    const withDistance = liveProviders
+      .filter(p => p.latitude != null && p.longitude != null)
+      .map(p => ({
+        ...p,
+        distanceKm: getDistanceKm(userCoords.latitude, userCoords.longitude, p.latitude!, p.longitude!),
+      }))
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    const withinRadius = withDistance.filter(p => p.distanceKm <= NEARBY_RADIUS_KM);
+    return withinRadius.length >= MIN_NEARBY_RESULTS ? withinRadius : withDistance;
+  }, [liveProviders, userCoords]);
 
   const allCategorizedProviders = useMemo(() => {
     if (!viewAllProviders) return {};
@@ -431,27 +488,25 @@ export default function HomeScreen() {
         seen.add(p.id);
         return true;
       });
-      return deduped.slice(0, 10);
+      return deduped.slice(0, 15);
     } else {
-      // When collapsed, show 7 providers (providersData.recommended already
-      // excludes bookmarked providers upstream)
-      return providersData.recommended.slice(0, 7);
+      // When collapsed, show up to 15 providers (providersData.recommended
+      // already excludes bookmarked providers upstream)
+      return providersData.recommended.slice(0, 15);
     }
   }, [viewAllRecommended, providersData]);
 
-  // Memoize male providers display list to prevent unnecessary rerenders
+  // Memoize male providers display list to prevent unnecessary rerenders —
+  // every row across the home screen caps at 15, so collapsed vs "View All"
+  // is purely a layout difference (horizontal row vs grid) now, not a count one.
   const maleProvidersDisplay = useMemo(() => {
-    return viewAllMaleServices
-      ? providersData.maleProviders
-      : providersData.maleProviders.slice(0, 5);
-  }, [viewAllMaleServices, providersData.maleProviders]);
+    return providersData.maleProviders.slice(0, 15);
+  }, [providersData.maleProviders]);
 
   // Memoize kids providers display list to prevent unnecessary rerenders
   const kidsProvidersDisplay = useMemo(() => {
-    return viewAllKidsServices
-      ? providersData.kidsProviders
-      : providersData.kidsProviders.slice(0, 5);
-  }, [viewAllKidsServices, providersData.kidsProviders]);
+    return providersData.kidsProviders.slice(0, 15);
+  }, [providersData.kidsProviders]);
 
   // Phase 5.2 — profile-aware gating for MALE and KIDS sections
   // § config-driven — see src/config/homeSections.ts (id: 'male-services')
@@ -527,17 +582,13 @@ export default function HomeScreen() {
     }
 
     return {
-      left: providers.slice(0, 6),
-      right: providers.slice(6, 12),
+      left: providers.slice(0, 8),
+      right: providers.slice(8, 15),
     };
   }, [selectedService, providersData, activeFilters]);
 
   const handleServicePress = useCallback(async (service: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedService(service);
-
-    // Scroll to top when service is selected
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
 
     // Track service selection
     await userLearningService.trackInteraction({
@@ -545,7 +596,15 @@ export default function HomeScreen() {
       serviceCategory: service,
       timestamp: new Date().toISOString(),
     });
-  }, []);
+
+    // Deliberately does NOT call setSelectedService here — this now navigates
+    // straight to Search instead of switching Home into its in-place
+    // filtered view. Setting it first used to flash that filtered view (with
+    // its FILTERS row) for a frame before the nav transition took over, and —
+    // since selectedService then stayed set — coming back from Search landed
+    // on that filtered view too, instead of the normal Home screen.
+    navigation.navigate('Search', { category: service });
+  }, [navigation]);
 
   const handleBackPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -712,7 +771,7 @@ export default function HomeScreen() {
               style={styles.categoryScroll}
               nestedScrollEnabled={true}
             >
-              {providersData.yourProviders.slice(0, 10).map(provider => (
+              {providersData.yourProviders.slice(0, 15).map(provider => (
                 <ProviderCard
                   key={`your-${provider.id}`}
                   provider={provider}
@@ -1217,7 +1276,7 @@ export default function HomeScreen() {
             {/* Provider of the Week */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY CATEGORY</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY PROVIDER</Text>
                 <TouchableOpacity
                   onPress={toggleViewAllProviders}
                   style={styles.viewAllButton}
@@ -1245,7 +1304,7 @@ export default function HomeScreen() {
                           style={styles.categoryScroll}
                           nestedScrollEnabled={true}
                         >
-                          {providers.map((provider: Provider) => (
+                          {providers.slice(0, 15).map((provider: Provider) => (
                             <ProviderCard
                               key={`${category}-${provider.id}`}
                               provider={provider}
@@ -1270,7 +1329,7 @@ export default function HomeScreen() {
                         style={styles.categoryScroll}
                         nestedScrollEnabled={true}
                       >
-                        {providersData.hairProviders.slice(0, 10).map(provider => (
+                        {providersData.hairProviders.slice(0, 15).map(provider => (
                           <ProviderCard
                             key={`hair-${provider.id}`}
                             provider={provider}
@@ -1292,7 +1351,7 @@ export default function HomeScreen() {
                         style={styles.categoryScroll}
                         nestedScrollEnabled={true}
                       >
-                        {providersData.nailProviders.slice(0, 10).map(provider => (
+                        {providersData.nailProviders.slice(0, 15).map(provider => (
                           <ProviderCard
                             key={`nail-${provider.id}`}
                             provider={provider}
@@ -1449,10 +1508,14 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* Near Me Section - Location-based providers */}
+            {/* Near You Section — sorted by real distance once we have a
+                location fix; falls back to the plain provider list (and the
+                "ALL PROVIDERS" label) if location was denied/unavailable. */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>ALL PROVIDERS</Text>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>
+                  {userCoords ? 'NEAR YOU' : 'ALL PROVIDERS'}
+                </Text>
               </View>
 
               {providersLoading ? (
@@ -1464,7 +1527,7 @@ export default function HomeScreen() {
                   style={styles.categoryScroll}
                   nestedScrollEnabled={true}
                 >
-                  {liveProviders.slice(0, 10).map(provider => (
+                  {nearbyProviders.slice(0, 15).map(provider => (
                     <TouchableOpacity
                       key={`near-${provider.id}`}
                       style={styles.roundCard}
@@ -1483,6 +1546,11 @@ export default function HomeScreen() {
                       <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
                         {provider.name}
                       </Text>
+                      {provider.distanceKm != null && (
+                        <Text style={[styles.distanceBadge, { color: P.sub }]} numberOfLines={1}>
+                          {formatDistance(provider.distanceKm)}
+                        </Text>
+                      )}
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -1563,11 +1631,15 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      <View style={[styles.offerDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
-                        <Text style={[styles.offerDiscountText, { color: P.ice }]}>{offer.discount}</Text>
-                      </View>
                       {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
+                        {/* In normal flow (not floating over the title) so a
+                            long custom label — a provider can type anything
+                            into discount_text, not just "20% OFF" — pushes
+                            the title down instead of covering it. */}
+                        <View style={[styles.offerDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
+                          <Text style={[styles.offerDiscountText, { color: P.ice }]} numberOfLines={1}>{offer.discount}</Text>
+                        </View>
                         <Text style={[styles.offerTitle, { color: P.text }]} numberOfLines={2}>
                           {offer.title}
                         </Text>
@@ -1597,7 +1669,7 @@ export default function HomeScreen() {
                   style={styles.categoryScroll}
                   nestedScrollEnabled={true}
                 >
-                  {previouslyBookedProviders.slice(0, 10).map(provider => (
+                  {previouslyBookedProviders.slice(0, 15).map(provider => (
                     <TouchableOpacity
                       key={`booked-${provider.id}`}
                       style={styles.roundCard}
@@ -2037,13 +2109,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 14,
   },
+  // In normal flow, above the title — not absolutely positioned over it, so
+  // there's no max length past which a long custom label starts overlapping
+  // text underneath it.
   offerDiscountBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
+    marginBottom: 6,
   },
   offerDiscountText: {
     fontSize: 12,
@@ -2063,6 +2138,7 @@ const styles = StyleSheet.create({
   },
   offerDescription: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '300',
     fontSize: 10,
     opacity: 0.6,
     marginBottom: 6,
@@ -2081,7 +2157,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 8,
     opacity: 0.5,
-    fontWeight: '600',
+    fontWeight: '300',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
