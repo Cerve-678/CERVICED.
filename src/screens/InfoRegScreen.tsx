@@ -21,9 +21,8 @@ import {
   Switch,
   Animated,
   PanResponder,
-  LayoutAnimation,
-  UIManager,
 } from 'react-native';
+import ReAnimated, { LinearTransition } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -34,24 +33,6 @@ import * as Haptics from 'expo-haptics';
 // Icon imports
 import { BellIcon } from '../components/IconLibrary';
 import { Ionicons } from '@expo/vector-icons';
-
-// Category pills support drag-to-reorder via LayoutAnimation — must be
-// explicitly enabled on Android (iOS has it on by default).
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// LayoutAnimation is purely a smoothing hint and is known to throw or no-op
-// on React Native's New Architecture (Fabric, on by default since Expo SDK
-// 52+) — callers must never let a failure here block the state update it's
-// meant to be animating, or the update silently never happens.
-function safeConfigureLayoutAnimation() {
-  try {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  } catch {
-    // Reflow still happens, just without the slide animation.
-  }
-}
 
 // Theme imports
 import { useTheme } from '../contexts/ThemeContext';
@@ -163,6 +144,10 @@ interface ProviderPolicies {
   /** Optional instructions stamped onto every new booking (e.g. "please
    *  arrive 10 minutes early") — shown to clients in their booking details */
   bookingInstructions: string;
+  /** Optional photo of a fuller policy document (e.g. a house-rules sheet,
+   *  a scanned consent form) — shown to clients via a pop-up on their
+   *  profile view, on top of the structured fields above. */
+  policyImageUrl: string;
 }
 
 const DEFAULT_POLICIES: ProviderPolicies = {
@@ -179,6 +164,7 @@ const DEFAULT_POLICIES: ProviderPolicies = {
   noShowAction:     'none',
   noShowNote:       '',
   bookingInstructions: '',
+  policyImageUrl:   '',
 };
 
 // Add-on interface
@@ -2140,6 +2126,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'policies'>('profile');
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
+  const [policyImageUploading, setPolicyImageUploading] = useState(false);
 
   // True until the existing-provider fetch settles — without this the form
   // renders with empty defaults ('Provider Registration', blank fields, the
@@ -2306,7 +2293,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // the list) was disorienting.
   const categoryScrollRef = useRef<ScrollView>(null);
   // Live-reorder state for the category pill strip — categoryOrder mirrors
-  // categoryNames but can diverge mid-drag (LayoutAnimation-driven reflow)
+  // categoryNames but can diverge mid-drag (Reanimated `layout`-driven reflow)
   // before the final order is committed back into providerData.categories.
   // Pills are variable-width (sized to the category name), so reordering is
   // driven by each pill's measured x/width rather than a fixed step size.
@@ -2329,7 +2316,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Frozen snapshot of every pill's position, taken once when a drag starts.
   // The target-index math below reads ONLY this — not the live pillLayoutRef
   // — because live positions update asynchronously (via onLayout, after the
-  // LayoutAnimation-driven reflow settles) and lag behind fast finger
+  // Reanimated `layout`-driven reflow settles) and lag behind fast finger
   // movement, which was causing the drag to glitch/stall after one swap.
   // The relative order of every OTHER pill never changes during a single
   // drag (only the dragged pill's insertion point among them does), so the
@@ -2337,6 +2324,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragBaselineRef = useRef<Record<string, { x: number; y: number; width: number }>>({});
   const dragGrantXRef = useRef(0);
   const dragTargetRef = useRef(0);
+  // Tracks the dragged pill's effective position from the previous call, so
+  // applyDragPosition can tell which way it's currently travelling (see the
+  // hysteresis comment inside it).
+  const dragPrevEffectiveDxRef = useRef(0);
 
   // Auto-scroll while dragging near either edge of the category strip — without
   // this, a pill can never be dragged past whatever happens to already be
@@ -2351,9 +2342,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragLatestDxRef = useRef(0);
   const dragAutoScrollDeltaRef = useRef(0); // accumulated scroll since this gesture's grant
   const dragAutoScrollFrameRef = useRef<number | null>(null);
-  const AUTOSCROLL_EDGE = 56;
-  const AUTOSCROLL_MAX_SPEED = 14;
+  // Frames the finger has held continuously inside the edge zone — auto-scroll
+  // ramps up the longer it's held (see startCategoryAutoScroll), so a deliberate
+  // hold reaches the far end of a long strip in a reasonable time.
+  const dragAutoScrollHoldFramesRef = useRef(0);
+  const AUTOSCROLL_EDGE = 70;
+  const AUTOSCROLL_MAX_SPEED = 22;
+  const AUTOSCROLL_RAMP_FRAMES = 40; // ~0.66s at 60fps to reach full ramp
+  const AUTOSCROLL_MAX_RAMP = 2.2;
   const CATEGORY_STRIP_TRAILING_PADDING = 20; // matches categoryTabsContent's paddingRight
+  const CATEGORY_STRIP_GAP = 10; // matches categoryTabsContent's gap
 
   // Handle logo selection
   const handleSelectLogo = async () => {
@@ -2523,6 +2521,48 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setPolicies(prev => ({ ...prev, [key]: value }));
   }, []);
 
+  // Detailed policy image — a free-form photo (house rules sheet, consent
+  // form, etc.) clients can pop open from their view of this profile,
+  // alongside the structured fields above. Stored as a URL inside the same
+  // policies blob, so it saves/loads with everything else on this tab —
+  // uploaded to storage right away (so we have a public URL to hold onto),
+  // but only actually persisted to the provider row when Save is tapped,
+  // same as every other field here.
+  const handlePickPolicyImage = useCallback(async () => {
+    if (!user?.id) return;
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Permission Required', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      // No fixed `aspect` — a policy document photo is usually portrait, not
+      // square, so the crop handles start at the photo's own shape and the
+      // provider drags them to whatever they actually want to keep.
+      allowsEditing: true,
+      quality: 0.85,
+    });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return;
+
+    setPolicyImageUploading(true);
+    try {
+      const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const path = `${user.id}/policy-${Date.now()}.${ext}`;
+      const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
+      setPolicy('policyImageUrl', publicUrl);
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message ?? 'Could not upload the image.');
+    } finally {
+      setPolicyImageUploading(false);
+    }
+  }, [user?.id, setPolicy]);
+
+  const handleRemovePolicyImage = useCallback(() => {
+    setPolicy('policyImageUrl', '');
+  }, [setPolicy]);
+
   const handleSubmit = useCallback(async () => {
     if (!providerData.providerName.trim()) {
       Alert.alert('Missing Information', 'Please enter your business name.');
@@ -2608,26 +2648,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const applyDragPosition = useCallback((name: string, effectiveDx: number) => {
     dragX.setValue(effectiveDx);
     const draggedWidth = dragBaselineRef.current[name]?.width ?? 80;
-    const fingerCenter = dragGrantXRef.current + draggedWidth / 2 + effectiveDx;
+    const draggedLeft = dragGrantXRef.current + effectiveDx;
+    // Direction of travel since the last call — used below to pick which edge
+    // of the dragged pill has to cross a neighbor's midpoint.
+    const movingRight = effectiveDx >= dragPrevEffectiveDxRef.current;
+    dragPrevEffectiveDxRef.current = effectiveDx;
+    // Comparing against the dragged pill's CENTRE made a neighbor jump out of
+    // the way the instant the two pills were roughly side by side — reads as
+    // premature, since the dragged pill hadn't actually moved past it yet.
+    // Using the edge FURTHEST BEHIND in the direction of travel (left edge
+    // while moving right, right edge while moving left) requires the dragged
+    // pill to have substantially overlapped/passed a neighbor before it
+    // yields its slot.
+    const referenceX = movingRight ? draggedLeft : draggedLeft + draggedWidth;
     const others = categoryOrderRef.current.filter(n => n !== name);
     let target = others.length;
     for (let i = 0; i < others.length; i++) {
       const otherName = others[i];
       const L = otherName ? dragBaselineRef.current[otherName] : undefined;
       if (!L) continue;
-      if (fingerCenter < L.x + L.width / 2) { target = i; break; }
+      if (referenceX < L.x + L.width / 2) { target = i; break; }
     }
     if (target !== dragTargetRef.current) {
-      // Purely a smoothing hint for the reflow — must never be able to block
-      // the actual reorder below. LayoutAnimation is known to throw/no-op on
-      // React Native's New Architecture (Fabric, on by default since Expo
-      // SDK 52+), and this call used to sit BEFORE the state update with
-      // nothing catching it: if it threw, the whole rest of this block
-      // (including setCategoryOrder, the thing that actually moves the other
-      // pills) silently never ran, while dragX.setValue above kept the
-      // dragged pill tracking the finger fine — which is exactly why it
-      // looked like "the pill drags but nothing else ever moves."
-      safeConfigureLayoutAnimation();
       const next = [...others];
       next.splice(target, 0, name);
       categoryOrderRef.current = next;
@@ -2659,8 +2701,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       }
 
       if (speed !== 0) {
+        // Ramps up the longer the finger holds inside the edge zone, so a
+        // deliberate hold covers a long strip in a reasonable time instead of
+        // crawling at the same fixed speed the whole way.
+        dragAutoScrollHoldFramesRef.current += 1;
+        const ramp = 1 + (AUTOSCROLL_MAX_RAMP - 1) * Math.min(1, dragAutoScrollHoldFramesRef.current / AUTOSCROLL_RAMP_FRAMES);
         const maxScrollX = Math.max(0, categoryContentWidthRef.current - categoryViewportRef.current.width);
-        const nextX = Math.max(0, Math.min(maxScrollX, categoryScrollXRef.current + speed));
+        const nextX = Math.max(0, Math.min(maxScrollX, categoryScrollXRef.current + speed * ramp));
         const applied = nextX - categoryScrollXRef.current;
         if (applied !== 0) {
           categoryScrollXRef.current = nextX;
@@ -2668,6 +2715,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           categoryScrollRef.current?.scrollTo({ x: nextX, animated: false });
           applyDragPosition(name, dragLatestDxRef.current + dragAutoScrollDeltaRef.current);
         }
+      } else {
+        dragAutoScrollHoldFramesRef.current = 0;
       }
 
       dragAutoScrollFrameRef.current = requestAnimationFrame(tick);
@@ -2706,20 +2755,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         dragGrantXRef.current = dragBaselineRef.current[name]?.x ?? 0;
         dragTargetRef.current = categoryOrderRef.current.indexOf(name);
         dragAutoScrollDeltaRef.current = 0;
+        dragAutoScrollHoldFramesRef.current = 0;
+        dragPrevEffectiveDxRef.current = 0;
         dragLatestDxRef.current = 0;
         dragLatestPageXRef.current = evt.nativeEvent.pageX;
         dragX.setValue(0);
         setDraggingCategory(name);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        // Computed directly from every pill's own measured layout rather than
-        // trusted from onContentSizeChange — that callback firing (and firing
-        // with the right value) before the user's first drag isn't guaranteed,
-        // and when it hadn't, categoryContentWidthRef stayed at its 0 default,
-        // which clamped auto-scroll to zero distance and made a drag look like
-        // it couldn't reach the end of the row at all.
-        const rightmost = Object.values(dragBaselineRef.current)
-          .reduce((max, p) => Math.max(max, p.x + p.width), 0);
-        categoryContentWidthRef.current = rightmost + CATEGORY_STRIP_TRAILING_PADDING;
+        // onContentSizeChange (below, on the ScrollView) reports the real
+        // native content width and is the authoritative source whenever it's
+        // fired — but it isn't guaranteed to have fired yet before the user's
+        // very first drag, in which case categoryContentWidthRef is still its
+        // 0 default, which clamped auto-scroll to zero distance and made a
+        // drag look like it couldn't reach the end of the row at all. This
+        // hand-summed estimate from each pill's own measured layout is only a
+        // fallback for that gap — it must never overwrite an already-known
+        // real value, or every subsequent drag inherits this slightly-off
+        // estimate instead of the accurate one, permanently capping how far
+        // auto-scroll can go short of the true end.
+        if (categoryContentWidthRef.current === 0) {
+          const rightmost = Object.values(dragBaselineRef.current)
+            .reduce((max, p) => Math.max(max, p.x + p.width), 0);
+          categoryContentWidthRef.current = rightmost + CATEGORY_STRIP_TRAILING_PADDING;
+        }
         // measureInWindow exists on the underlying native view via the
         // NativeMethods mixin, but isn't in ScrollView's TS surface.
         (categoryScrollRef.current as unknown as { measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void } | null)
@@ -2742,14 +2800,38 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       },
       onPanResponderRelease: () => {
         stopCategoryAutoScroll();
-        safeConfigureLayoutAnimation();
-        setDraggingCategory(null);
-        Animated.timing(dragX, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-        handleSetCategoryOrder(categoryOrderRef.current);
+        const finalOrder = categoryOrderRef.current;
+        handleSetCategoryOrder(finalOrder);
+        // Animate the still-absolute pill the rest of the way to its new
+        // slot's position, THEN hand off to flex layout — releasing straight
+        // into flex (as this used to) reset `translateX` to a hardcoded 0
+        // the instant `isDragging` flipped false, while the Yoga frame had
+        // been frozen at the pill's grant-time origin the whole drag
+        // (transform was the only thing tracking the finger). So the pill
+        // would jump from wherever it was released straight back to where it
+        // started — landing on top of whatever pill now occupied that spot —
+        // before sliding to its real destination. Computing the actual target
+        // x (from each preceding pill's frozen width, since order is the only
+        // thing that changed) and animating there first means the handoff to
+        // flex happens with the pill already sitting exactly where flex will
+        // place it, so there's nothing left to jump — the Reanimated `layout`
+        // transition on the wrapper (below) sees no position change at that
+        // instant and stays silent.
+        const idx = Math.max(0, finalOrder.indexOf(name));
+        let targetX = 0;
+        for (let i = 0; i < idx; i++) {
+          const pillName = finalOrder[i];
+          const w = (pillName ? dragBaselineRef.current[pillName]?.width : undefined) ?? 0;
+          targetX += w + CATEGORY_STRIP_GAP;
+        }
+        const toValue = targetX - dragGrantXRef.current;
+        Animated.timing(dragX, { toValue, duration: 150, useNativeDriver: true }).start(() => {
+          setDraggingCategory(null);
+          dragX.setValue(0);
+        });
       },
       onPanResponderTerminate: () => {
         stopCategoryAutoScroll();
-        safeConfigureLayoutAnimation();
         setDraggingCategory(null);
         dragX.setValue(0);
       },
@@ -3333,20 +3415,33 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       // finger's actual screen position while the content moves
                       // underneath it). Because the pill no longer participates in
                       // flex layout while dragging, reordering the array (which
-                      // reflows the OTHER pills via LayoutAnimation) can't yank its
-                      // base position out from under it — that fight between "flex
-                      // position just jumped to the new slot" and "translateX still
-                      // assumes the old slot" was the source of the snap/bounce-back
-                      // glitch at every swap.
+                      // reflows the OTHER pills via the Reanimated `layout` transition
+                      // below) can't yank its base position out from under it — that
+                      // fight between "flex position just jumped to the new slot" and
+                      // "translateX still assumes the old slot" was the source of the
+                      // snap/bounce-back glitch at every swap.
                       const dragOrigin = isDragging ? dragBaselineRef.current[item] : undefined;
+                      // Dims every pill except the one actually being dragged, so it's
+                      // unambiguous which one is moving instead of it blending into a
+                      // row of equally-solid pills.
+                      const isOtherWhileDragging = !!draggingCategory && !isDragging;
                       return (
-                        <Animated.View
+                        // Outer wrapper owns the real flex position (measured by
+                        // onLayout below) and the escape-to-absolute-position-while-
+                        // dragging behavior. It also carries the Reanimated `layout`
+                        // transition, which animates THIS pill's position whenever
+                        // categoryOrder changes and shifts it to a new index — that's
+                        // what makes a drop read as "concrete": the other pills visibly
+                        // slide open/closed to make room instead of instantly snapping,
+                        // which is what RN's own LayoutAnimation was supposed to do but
+                        // is known to silently no-op under the New Architecture.
+                        <ReAnimated.View
                           key={item}
+                          layout={LinearTransition.duration(220)}
                           onLayout={(e) => {
                             pillLayoutRef.current[item] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, width: e.nativeEvent.layout.width };
                           }}
                           style={[
-                            { transform: [{ translateX: isDragging ? dragX : 0 }] },
                             // `top` uses the pill's own measured y rather than a
                             // hardcoded 0 — assuming every pill sits flush at the
                             // row's top edge doesn't hold once padding/alignment on
@@ -3361,6 +3456,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                             },
                           ]}
                         >
+                          {/* Inner view owns the raw finger-tracking transform (an RN
+                              Animated.Value driven imperatively from the gesture
+                              handlers) — kept separate from the outer Reanimated
+                              wrapper since the two animation systems don't share values. */}
+                          <Animated.View
+                            style={[
+                              { transform: [{ translateX: isDragging ? dragX : 0 }] },
+                              isOtherWhileDragging && styles.categoryTabDimmed,
+                            ]}
+                          >
                           <TouchableOpacity
                             style={[
                               styles.categoryTab,
@@ -3383,7 +3488,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                             }}
                           >
                             <BlurView
-                              intensity={isDragging ? 40 : isSel ? 20 : 12}
+                              intensity={isDragging ? 40 : isSel ? 16 : 10}
                               tint="light"
                               style={[
                                 styles.categoryTabBlur,
@@ -3416,7 +3521,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               </View>
                             </BlurView>
                           </TouchableOpacity>
-                        </Animated.View>
+                          </Animated.View>
+                        </ReAnimated.View>
                       );
                     })}
                   </ScrollView>
@@ -3714,6 +3820,72 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   multiline
                 />
 
+                <View style={styles.policySep} />
+
+                {/* Detailed policy image — a photo clients can pop open from
+                    their view of this profile, for anything too specific
+                    for the pill options above (a full house-rules sheet, a
+                    consent form, etc). */}
+                <Text style={styles.policySectionTitle}>Detailed Policy Image</Text>
+                <Text style={styles.policyLabel}>
+                  OPTIONAL — SHOWN AS A POP-UP ON YOUR PROFILE
+                </Text>
+                <View style={styles.portfolioGrid}>
+                  {policies.policyImageUrl ? (
+                    <View style={styles.portfolioThumbWrap}>
+                      <TouchableOpacity
+                        onPress={handlePickPolicyImage}
+                        disabled={policyImageUploading}
+                        activeOpacity={0.7}
+                      >
+                        <Image
+                          source={{ uri: policies.policyImageUrl }}
+                          style={styles.portfolioThumb}
+                        />
+                        {policyImageUploading && (
+                          <View style={styles.portfolioThumbUploading}>
+                            <ActivityIndicator size="small" color="#fff" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.portfolioRemoveBtn}
+                        onPress={handleRemovePolicyImage}
+                        disabled={policyImageUploading}
+                      >
+                        <Text style={styles.portfolioRemoveText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                  {!policies.policyImageUrl && (
+                    <TouchableOpacity
+                      style={styles.portfolioAddTile}
+                      onPress={handlePickPolicyImage}
+                      disabled={policyImageUploading}
+                    >
+                      {policyImageUploading ? (
+                        <ActivityIndicator size="small" />
+                      ) : (
+                        <>
+                          <Text style={styles.portfolioAddPlus}>+</Text>
+                          <Text style={styles.portfolioAddText}>Add Image</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {policies.policyImageUrl ? (
+                  <TouchableOpacity
+                    onPress={handlePickPolicyImage}
+                    disabled={policyImageUploading}
+                    style={{ marginTop: 8 }}
+                  >
+                    <Text style={[styles.policyLabel, { color: adaptiveAccentColor }]}>
+                      {policyImageUploading ? 'UPLOADING…' : 'REPLACE PHOTO'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
                 {/* ── Business Setup ── */}
                 <View style={styles.policySep} />
                 <Text style={styles.policySectionTitle}>Business Setup</Text>
@@ -3984,6 +4156,13 @@ const styles = StyleSheet.create({
     height: 84,
     borderRadius: 14,
   },
+  portfolioThumbUploading: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   portfolioRemoveBtn: {
     position: 'absolute',
     top: -6,
@@ -4220,12 +4399,12 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 20,
     overflow: 'hidden',
   },
   selectedCategoryTabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
   draggingCategoryTabBlur: {
     backgroundColor: 'rgba(255,255,255,0.9)',
@@ -4241,6 +4420,11 @@ const styles = StyleSheet.create({
   categoryDragHandle: {
     marginLeft: 6,
     paddingHorizontal: 2,
+  },
+  // Applied to every pill except the one actively being dragged, so it's
+  // unambiguous which pill is moving instead of a row of equally-solid pills.
+  categoryTabDimmed: {
+    opacity: 0.45,
   },
 
   // Required-field asterisk
