@@ -537,10 +537,6 @@ interface ServiceCardProps {
   providerName: string;
   allCartItems: CartItem[]; // ADD THIS LINE
   depositPolicy?: ProviderDepositPolicy;
-  appliedPromo?: DbPromotion;
-  promoDiscount: number;
-  onApplyPromo: (itemId: string, code: string) => Promise<string | null>;
-  onRemovePromo: (itemId: string) => void;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
@@ -553,33 +549,11 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     providerName,
     allCartItems,
     depositPolicy,
-    appliedPromo,
-    promoDiscount,
-    onApplyPromo,
-    onRemovePromo,
   }) => {
     const { theme, isDarkMode, palette: P } = useTheme();
     const { showAlert, showConfirm, DialogHost } = useAppDialog();
     const [showCalendar, setShowCalendar] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-
-    // Promo code — one per booking, entered right on this card
-    const [promoInput, setPromoInput] = useState('');
-    const [promoApplying, setPromoApplying] = useState(false);
-    const [promoError, setPromoError] = useState<string | null>(null);
-
-    const handleApplyPromoPress = useCallback(async () => {
-      if (!promoInput.trim() || promoApplying) return;
-      setPromoApplying(true);
-      setPromoError(null);
-      const error = await onApplyPromo(item.id, promoInput);
-      setPromoApplying(false);
-      if (error) {
-        setPromoError(error);
-      } else {
-        setPromoInput('');
-      }
-    }, [promoInput, promoApplying, onApplyPromo, item.id]);
 
     // Scheduling constraints fetched once per provider
     const [constraints, setConstraints] = useState<{
@@ -841,71 +815,25 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             </View>
 
             {serviceBooking.isDepositOnly && (
-              <View style={styles.depositInfo}>
-                <Text style={styles.depositInfoText}>
+              <View
+                style={[
+                  styles.depositInfo,
+                  { backgroundColor: isDarkMode ? 'rgba(76,175,80,0.16)' : 'rgba(76,175,80,0.1)' },
+                ]}
+              >
+                <Text style={[styles.depositInfoText, { color: isDarkMode ? '#7BD989' : '#2E7D32' }]}>
                   Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
-                <Text style={styles.depositRemainingText}>
+                <Text
+                  style={[
+                    styles.depositRemainingText,
+                    { color: isDarkMode ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)' },
+                  ]}
+                >
                   Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} (pay
                   at appointment)
                 </Text>
               </View>
-            )}
-          </View>
-
-          {/* Promo code — specific to this booking */}
-          <View style={{ marginTop: 10 }}>
-            {appliedPromo ? (
-              <View style={{
-                flexDirection: 'row', alignItems: 'center', gap: 8,
-                borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
-                backgroundColor: P.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-              }}>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: P.accent }}>
-                  {appliedPromo.promo_code?.toUpperCase()}
-                </Text>
-                <Text style={{ flex: 1, fontSize: 11, color: P.sub }} numberOfLines={1}>
-                  {appliedPromo.title}
-                </Text>
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
-                  −£{promoDiscount.toFixed(2)}
-                </Text>
-                <TouchableOpacity onPress={() => onRemovePromo(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#FF6868' }}>Remove</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TextInput
-                  style={{
-                    flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
-                    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
-                    fontSize: 13, color: P.text, backgroundColor: P.surface,
-                  }}
-                  placeholder="Promo code for this booking"
-                  placeholderTextColor={P.sub}
-                  value={promoInput}
-                  onChangeText={t => { setPromoInput(t); setPromoError(null); }}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  style={{
-                    borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center',
-                    backgroundColor: promoInput.trim() ? P.accent : P.surface,
-                  }}
-                  onPress={handleApplyPromoPress}
-                  disabled={!promoInput.trim() || promoApplying}
-                  activeOpacity={0.8}
-                >
-                  {promoApplying
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={{ fontSize: 12, fontWeight: '700', color: promoInput.trim() ? '#fff' : P.sub }}>Apply</Text>}
-                </TouchableOpacity>
-              </View>
-            )}
-            {promoError && (
-              <Text style={{ fontSize: 11, color: '#FF6868', marginTop: 6 }}>{promoError}</Text>
             )}
           </View>
 
@@ -950,6 +878,96 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
         </View>
         <DialogHost />
       </ErrorBoundary>
+    );
+  }
+);
+
+// ── Provider-level promo code entry ──────────────────────────────────────────
+// One code per provider, applying across every service from that provider —
+// entered once here rather than separately on each service card.
+interface ProviderPromoRowProps {
+  providerKey: string;
+  appliedPromo?: DbPromotion;
+  discount: number;
+  onApply: (providerKey: string, code: string) => Promise<string | null>;
+  onRemove: (providerKey: string) => void;
+}
+
+const ProviderPromoRow: React.FC<ProviderPromoRowProps> = memo(
+  ({ providerKey, appliedPromo, discount, onApply, onRemove }) => {
+    const { palette: P } = useTheme();
+    const [promoInput, setPromoInput] = useState('');
+    const [promoApplying, setPromoApplying] = useState(false);
+    const [promoError, setPromoError] = useState<string | null>(null);
+
+    const handleApplyPromoPress = useCallback(async () => {
+      if (!promoInput.trim() || promoApplying) return;
+      setPromoApplying(true);
+      setPromoError(null);
+      const error = await onApply(providerKey, promoInput);
+      setPromoApplying(false);
+      if (error) {
+        setPromoError(error);
+      } else {
+        setPromoInput('');
+      }
+    }, [promoInput, promoApplying, onApply, providerKey]);
+
+    return (
+      <View style={{ marginTop: 4, marginBottom: 12, paddingHorizontal: 14 }}>
+        {appliedPromo ? (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 8,
+            borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
+            backgroundColor: P.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+          }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: P.accent }}>
+              {appliedPromo.promo_code?.toUpperCase()}
+            </Text>
+            <Text style={{ flex: 1, fontSize: 11, color: P.sub }} numberOfLines={1}>
+              {appliedPromo.title}
+            </Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
+              −£{discount.toFixed(2)}
+            </Text>
+            <TouchableOpacity onPress={() => onRemove(providerKey)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: '600', color: '#FF6868' }}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TextInput
+              style={{
+                flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
+                borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+                fontSize: 13, color: P.text, backgroundColor: P.surface,
+              }}
+              placeholder="Promo code for this provider"
+              placeholderTextColor={P.sub}
+              value={promoInput}
+              onChangeText={t => { setPromoInput(t); setPromoError(null); }}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={{
+                borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center',
+                backgroundColor: promoInput.trim() ? P.accent : P.surface,
+              }}
+              onPress={handleApplyPromoPress}
+              disabled={!promoInput.trim() || promoApplying}
+              activeOpacity={0.8}
+            >
+              {promoApplying
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={{ fontSize: 12, fontWeight: '700', color: promoInput.trim() ? '#fff' : P.sub }}>Apply</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
+        {promoError && (
+          <Text style={{ fontSize: 11, color: '#FF6868', marginTop: 6 }}>{promoError}</Text>
+        )}
+      </View>
     );
   }
 );
@@ -1046,51 +1064,45 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [items]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
-  // Each booking (cart item) can carry its own code — a client with three
-  // services from the same provider might have three different promos, one
-  // per service. Entry happens on the individual ServiceCard, not globally.
-  // Keyed by cart item id.
+  // One code per provider, applying across every service from that provider
+  // in the cart — not one per service line. Entry happens once on the
+  // provider section, not on each individual card. Keyed by the same
+  // provider grouping key itemsByProvider uses (item.providerName), so it
+  // stays aligned with how the cart is already sectioned.
   const [appliedPromos, setAppliedPromos] = useState<Record<string, DbPromotion>>({});
 
-  const handleApplyPromoToItem = useCallback(async (itemId: string, code: string): Promise<string | null> => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return 'Could not find that service in your cart.';
+  const handleApplyPromoToProvider = useCallback(async (providerKey: string, code: string): Promise<string | null> => {
+    const providerItems = itemsByProvider[providerKey];
+    if (!providerItems || providerItems.length === 0) return 'Could not find that provider in your cart.';
     const trimmed = code.trim();
     if (!trimmed) return 'Enter a code first.';
     try {
-      const providerName = item.providerDisplayName ?? item.providerName;
-      const promo = await validatePromoCode(providerName, trimmed);
+      const providerDisplayName = providerItems[0]?.providerDisplayName ?? providerKey;
+      const promo = await validatePromoCode(providerDisplayName, trimmed);
       if (!promo) return 'This code isn’t valid for this provider.';
-      if (promo.service_ids && promo.service_ids.length > 0 && !promo.service_ids.includes(item.serviceId)) {
-        return 'This code doesn’t apply to this service.';
-      }
-      if (promo.service_category &&
-          promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) {
-        return 'This code doesn’t apply to this service.';
-      }
-      setAppliedPromos(prev => ({ ...prev, [itemId]: promo }));
+      setAppliedPromos(prev => ({ ...prev, [providerKey]: promo }));
       return null;
     } catch {
       return 'Could not check that code — please try again.';
     }
-  }, [items]);
+  }, [itemsByProvider]);
 
-  const handleRemovePromoFromItem = useCallback((itemId: string) => {
+  const handleRemovePromoFromProvider = useCallback((providerKey: string) => {
     setAppliedPromos(prev => {
       const next = { ...prev };
-      delete next[itemId];
+      delete next[providerKey];
       return next;
     });
   }, []);
 
-  // Drop applied promos for items no longer in the cart
+  // Drop applied promos for providers no longer represented in the cart
   useEffect(() => {
-    const idsInCart = new Set(items.map(i => i.id));
+    const providersInCart = new Set(items.map(i => i.providerName));
     setAppliedPromos(prev => {
-      const stale = Object.keys(prev).filter(id => !idsInCart.has(id));
+      const stale = Object.keys(prev).filter(p => !providersInCart.has(p));
       if (stale.length === 0) return prev;
       const next = { ...prev };
-      for (const id of stale) delete next[id];
+      for (const p of stale) delete next[p];
       return next;
     });
   }, [items]);
@@ -1098,24 +1110,30 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Auto-apply the offer code an item was added with (e.g. via a promotion's
   // "Book Now" button), so tapping that button actually gets the discount
   // instead of silently landing at full price. Re-validates through the same
-  // path as manual entry — one attempt per item, and it backs off if the
+  // path as manual entry — one attempt per provider, and it backs off if the
   // client removes it, rather than reapplying every render.
-  const autoAppliedPromoIds = useRef(new Set<string>());
+  const autoAppliedPromoProviders = useRef(new Set<string>());
   useEffect(() => {
     for (const item of items) {
       if (!item.initialPromoCode) continue;
-      if (autoAppliedPromoIds.current.has(item.id)) continue;
-      autoAppliedPromoIds.current.add(item.id);
-      handleApplyPromoToItem(item.id, item.initialPromoCode).catch(() => {});
+      if (autoAppliedPromoProviders.current.has(item.providerName)) continue;
+      autoAppliedPromoProviders.current.add(item.providerName);
+      handleApplyPromoToProvider(item.providerName, item.initialPromoCode).catch(() => {});
     }
-  }, [items, handleApplyPromoToItem]);
+  }, [items, handleApplyPromoToProvider]);
 
-  // Absolute £ discount per cart item (off base+add-ons, capped at the base price).
+  // Absolute £ discount per cart item (off base+add-ons, capped at the base
+  // price). A provider-wide code can still be restricted to specific
+  // services or a category — items outside that scope get no discount even
+  // though the code is "applied" for the rest of that provider's items.
   const itemPromoDiscounts = useMemo((): Record<string, number> => {
     const discounts: Record<string, number> = {};
-    for (const [itemId, promo] of Object.entries(appliedPromos)) {
-      const item = items.find(i => i.id === itemId);
-      if (!item) continue;
+    for (const item of items) {
+      const promo = appliedPromos[item.providerName];
+      if (!promo) continue;
+      if (promo.service_ids && promo.service_ids.length > 0 && !promo.service_ids.includes(item.serviceId)) continue;
+      if (promo.service_category &&
+          promo.service_category.toUpperCase() !== (item.providerService ?? '').toUpperCase()) continue;
       const itemTotal = (Number(item.price) || 0) +
         (item.addOns ?? []).reduce((s, a) => s + (Number(a.price) || 0), 0);
       let off = 0;
@@ -1125,7 +1143,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         off = promo.discount_amount;
       }
       // discount_text-only promos carry no redeemable value at checkout
-      discounts[itemId] = Math.min(off, Number(item.price) || 0);
+      discounts[item.id] = Math.min(off, Number(item.price) || 0);
     }
     return discounts;
   }, [appliedPromos, items]);
@@ -1301,6 +1319,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       .catch(() => setHasMobileProvider(false));
   }, [items]);
 
+  // Auto-expand the provider a service was just added under, so the cart
+  // opens on it already dropped down instead of making the client tap the
+  // header to see what they just added. New items are appended to the end
+  // of the array (see CartContext ADD_ITEM), so a growing items array means
+  // the last entry is the newest one.
+  const prevItemsLengthRef = useRef(0);
+  useEffect(() => {
+    if (items.length > prevItemsLengthRef.current) {
+      const lastItem = items[items.length - 1];
+      if (lastItem) setExpandedProvider(lastItem.providerName);
+    }
+    prevItemsLengthRef.current = items.length;
+  }, [items]);
+
   // Navigation handlers - BACK TO HOME
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -1379,7 +1411,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const snapshotItems = items.map(item => {
       const discount = itemPromoDiscounts[item.id] ?? 0;
       if (discount <= 0) return item;
-      const promo = appliedPromos[item.id];
+      const promo = appliedPromos[item.providerName];
       const existing = snapshotBookings[item.id];
       const promoNote = `Promo ${promo?.promo_code ?? ''} applied (−£${discount.toFixed(2)})`.trim();
       snapshotBookings[item.id] = {
@@ -1579,7 +1611,39 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
     }
     
   } catch (error) {
-    logger.error('onPaymentSuccess error:', error);
+    // ── Consolidated booking-failure diagnostics (always-on) ─────────────
+    // logger.error survives release builds (see utils/logger), so this shows
+    // in a connected terminal / crash reporter even in production. Search the
+    // logs for "BOOKING FAILED" to find every failed checkout and its reason.
+    const isBookingErr = error instanceof BookingError;
+    const succeededIds = isBookingErr ? (error as BookingError).succeededCartItemIds : [];
+    const pgCode = (error as any)?.code;
+    logger.error('╔══════════════ BOOKING FAILED ══════════════');
+    logger.error('║ reason    :', error instanceof Error ? error.message : String(error));
+    logger.error('║ errorType :', isBookingErr ? 'BookingError' : ((error as any)?.name ?? typeof error));
+    if (pgCode) logger.error('║ pgCode    :', pgCode); // e.g. 23505 = slot taken, 42501 = RLS
+    logger.error('║ userId    :', user?.id ?? '(none)');
+    logger.error('║ paidTotal :', `£${effectiveFinalTotal?.toFixed?.(2) ?? '?'} via ${paymentMethod}`);
+    logger.error(
+      '║ items     :',
+      checkoutSnapshot.items.map(i => {
+        const apt = checkoutSnapshot.bookings[i.id];
+        return {
+          service: i.serviceName,
+          provider: i.providerDisplayName ?? i.providerName,
+          providerId: i.providerId ?? '(unresolved)',
+          date: apt?.selectedDate || '(none)',
+          time: apt?.selectedTime || '(none)',
+          booked: succeededIds.includes(i.id),
+        };
+      }),
+    );
+    if (isBookingErr) {
+      logger.error('║ partial   :', `${succeededIds.length}/${checkoutSnapshot.items.length} services booked`);
+    }
+    logger.error('║ stack     :', error instanceof Error ? error.stack : '(none)');
+    logger.error('╚═════════════════════════════════════════════');
+
     // A multi-service checkout can partially succeed — clear only the
     // services that actually booked, so the ones that failed stay in the
     // cart for the client to retry without re-booking (and re-paying for)
@@ -1587,9 +1651,9 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
     if (error instanceof BookingError) {
       error.succeededCartItemIds.forEach(id => removeFromCart(id));
     }
-    // Not logged/alerted here — the caller (PaymentModal.handlePayment) owns
-    // showing the single "Booking Failed" alert and closing the payment
-    // sheet, so this only needs to propagate the error up to it.
+    // The caller (PaymentModal.handlePayment) owns showing the single
+    // "Booking Failed" alert and closing the payment sheet — this only needs
+    // to propagate the error up to it (after the diagnostics above).
     throw error;
   }
 }, [checkoutSnapshot, createBookingsFromCart, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart]);
@@ -2154,10 +2218,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                                 {...(providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] !== undefined
                                   ? { depositPolicy: providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] }
                                   : {})}
-                                {...(appliedPromos[item.id] !== undefined ? { appliedPromo: appliedPromos[item.id] } : {})}
-                                promoDiscount={itemPromoDiscounts[item.id] ?? 0}
-                                onApplyPromo={handleApplyPromoToItem}
-                                onRemovePromo={handleRemovePromoFromItem}
                               />
                               {/* Visual Separator */}
                               {index < providerItems.length - 1 && (
@@ -2165,29 +2225,38 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                               )}
                             </View>
                           ))}
+                          <ProviderPromoRow
+                            providerKey={providerName}
+                            {...(appliedPromos[providerName] !== undefined ? { appliedPromo: appliedPromos[providerName] } : {})}
+                            discount={providerItems.reduce((s, it) => s + (itemPromoDiscounts[it.id] ?? 0), 0)}
+                            onApply={handleApplyPromoToProvider}
+                            onRemove={handleRemovePromoFromProvider}
+                          />
                         </View>
                       )}
                     </View>
                   );
                 })}
 
-                {/* Applied promo codes recap — codes are entered per-service on each
-                    card above; this just rolls up what's active. */}
+                {/* Applied promo codes recap — one code per provider, entered
+                    once on that provider's section above; this rolls up
+                    what's active across all of them. */}
                 {Object.keys(appliedPromos).length > 0 && (
                   <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
-                    {Object.entries(appliedPromos).map(([itemId, promo]) => {
-                      const item = items.find(i => i.id === itemId);
-                      if (!item) return null;
+                    {Object.entries(appliedPromos).map(([providerKey, promo]) => {
+                      const providerItems = itemsByProvider[providerKey];
+                      if (!providerItems?.length) return null;
+                      const providerDiscount = providerItems.reduce((s, it) => s + (itemPromoDiscounts[it.id] ?? 0), 0);
                       return (
-                        <View key={itemId} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
+                        <View key={providerKey} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
                           <Text style={{ fontSize: 13, fontWeight: '700', color: P.accent }}>
                             {promo.promo_code?.toUpperCase()}
                           </Text>
                           <Text style={{ flex: 1, fontSize: 12, color: P.sub }} numberOfLines={1}>
-                            {item.serviceName}
+                            {providerItems[0]?.providerDisplayName ?? providerKey}
                           </Text>
                           <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
-                            −£{(itemPromoDiscounts[itemId] ?? 0).toFixed(2)}
+                            −£{providerDiscount.toFixed(2)}
                           </Text>
                         </View>
                       );
@@ -2231,6 +2300,27 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                     </Text>
                   )}
                 </TouchableOpacity>
+
+                {/* Multi-booking guide — every service line schedules its own
+                    date/time independently, including across different
+                    providers, which isn't obvious from the cart alone. */}
+                <View style={styles.multiBookingGuide}>
+                  <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>
+                    Booking more than one service?
+                  </Text>
+                  <View style={styles.multiBookingGuideList}>
+                    {[
+                      'Each service above gets its own appointment time',
+                      'Mix services from different providers in one cart',
+                      'Set a date and time for every service, then check out once',
+                    ].map((tip) => (
+                      <View key={tip} style={styles.multiBookingGuideRow}>
+                        <Text style={[styles.multiBookingGuideTick, { color: P.accent }]}>✓</Text>
+                        <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
               </>
             ) : (
               <View style={styles.emptyCart}>
@@ -2877,6 +2967,38 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     color: '#fff',
     textAlign: 'center',
+  },
+
+  // Multi-booking guide — plain inline block, not a card
+  multiBookingGuide: {
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xxl,
+  },
+  multiBookingGuideTitle: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'BakbakOne-Regular',
+    fontWeight: '900',
+    letterSpacing: 0.2,
+    marginBottom: 10,
+  },
+  multiBookingGuideList: {
+    gap: 8,
+  },
+  multiBookingGuideRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  multiBookingGuideTick: {
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  multiBookingGuideBody: {
+    flex: 1,
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    lineHeight: 16,
   },
 
   // Empty Cart
