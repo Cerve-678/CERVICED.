@@ -8,18 +8,19 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  Modal,
   StatusBar,
   Animated,
   ListRenderItem,
   Platform,
   RefreshControl,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
-import { ThemedBackground } from '../components/ThemedBackground';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
+import TabIcon from '../components/TabIcon';
+import CategoryTabPill from '../components/CategoryTabPill';
 import { HomeStackParamList } from '../navigation/types';
 import { getActivePromotions } from '../services/databaseService';
 import type { DbPromotionWithProvider } from '../types/database';
@@ -30,8 +31,12 @@ interface Offer {
   title: string;
   description: string;
   discount: string;
+  discountPercent: number | null;
+  discountAmount: number | null;
   validUntil: string;
+  createdAt: string;
   providerName: string;
+  providerSlug: string | null;
   logo: any;
   service?: string;
 }
@@ -42,8 +47,12 @@ function mapPromotion(p: DbPromotionWithProvider): Offer {
     title: p.title,
     description: p.description ?? '',
     discount: p.discount_text ?? (p.discount_percent ? `${p.discount_percent}% OFF` : p.discount_amount ? `£${p.discount_amount} OFF` : 'OFFER'),
+    discountPercent: p.discount_percent ?? null,
+    discountAmount: p.discount_amount ?? null,
     validUntil: p.valid_until,
+    createdAt: p.created_at,
     providerName: p.providers?.display_name ?? 'Provider',
+    providerSlug: p.providers?.slug ?? null,
     logo: p.providers?.logo_url ? { uri: p.providers.logo_url } : null,
     ...(p.service_category ? { service: p.service_category.toUpperCase() } : {}),
   };
@@ -51,10 +60,19 @@ function mapPromotion(p: DbPromotionWithProvider): Offer {
 
 const TABS = ['ALL', 'HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS'];
 
-// ── Offer Card ────────────────────────────────────────────────────────────────
-interface OfferCardProps { offer: Offer; index: number; P: AppTheme }
+type SortKey = 'newest' | 'expiring' | 'discount';
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'expiring', label: 'Expiring Soon' },
+  { value: 'discount', label: 'Biggest Discount' },
+];
 
-const OfferCard = React.memo<OfferCardProps>(({ offer, index, P }) => {
+// ── Offer Card — back to the original horizontal list row (logo left, info
+// right, discount badge overlaid top-right) now wired up to actually do
+// something on tap: navigates to the offer's provider profile. ─────────────
+interface OfferCardProps { offer: Offer; index: number; P: AppTheme; onPress: () => void }
+
+const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -76,12 +94,9 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P }) => {
       <TouchableOpacity
         style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}
         activeOpacity={0.82}
+        onPress={onPress}
+        disabled={!offer.providerSlug}
       >
-        {/* Discount badge */}
-        <View style={[styles.discountBadge, { backgroundColor: P.accent }]}>
-          <Text style={[styles.discountText, { color: P.ice }]}>{offer.discount}</Text>
-        </View>
-
         {/* Provider logo */}
         {offer.logo ? (
           <Image source={offer.logo} style={styles.logo} resizeMode="cover" />
@@ -95,6 +110,12 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P }) => {
 
         {/* Info */}
         <View style={styles.info}>
+          {/* In normal flow (not floating over the text below it) so a long
+              custom label — discount_text is free text, not just "20% OFF"
+              — pushes the rest of the card down instead of covering it. */}
+          <View style={[styles.discountBadge, { backgroundColor: P.accent }]}>
+            <Text style={[styles.discountText, { color: P.ice }]} numberOfLines={1}>{offer.discount}</Text>
+          </View>
           <Text style={[styles.providerName, { color: P.sub }]} numberOfLines={1}>
             {offer.providerName}
           </Text>
@@ -128,16 +149,12 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Offers'>;
 
 export default function OffersScreen({ navigation }: Props) {
   const { isDarkMode, palette: P } = useTheme();
-  const insets = useSafeAreaInsets();
-
 
   const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
   const [selectedTab, setSelectedTab]     = useState('ALL');
   const [refreshing, setRefreshing]       = useState(false);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerShown: false });
-  }, [navigation]);
+  const [sortBy, setSortBy]               = useState<SortKey>('newest');
+  const [sortModalVisible, setSortModalVisible] = useState(false);
 
   const load = useCallback(() => {
     return getActivePromotions()
@@ -155,33 +172,71 @@ export default function OffersScreen({ navigation }: Props) {
   const allOffers = useMemo(() => rawPromotions.map(mapPromotion), [rawPromotions]);
 
   const filteredOffers = useMemo(() => {
-    if (selectedTab === 'ALL') return allOffers;
-    return allOffers.filter(o => o.service === selectedTab);
-  }, [allOffers, selectedTab]);
+    const byTab = selectedTab === 'ALL' ? allOffers : allOffers.filter(o => o.service === selectedTab);
+    const sorted = [...byTab];
+    if (sortBy === 'expiring') {
+      sorted.sort((a, b) => new Date(a.validUntil).getTime() - new Date(b.validUntil).getTime());
+    } else if (sortBy === 'discount') {
+      // Percent and flat-£ discounts aren't really comparable on one scale —
+      // this is a rough ordering (percent value, else amount value), not a
+      // claim that "30% off" beats "£20 off" for any given service price.
+      sorted.sort((a, b) => (b.discountPercent ?? b.discountAmount ?? 0) - (a.discountPercent ?? a.discountAmount ?? 0));
+    } else {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return sorted;
+  }, [allOffers, selectedTab, sortBy]);
+
+  const goToProvider = useCallback((offer: Offer) => {
+    if (!offer.providerSlug) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('ProviderProfile', { providerId: offer.providerSlug, source: 'offers' });
+  }, [navigation]);
 
   const renderCard: ListRenderItem<Offer> = useCallback(({ item, index }) => (
-    <OfferCard offer={item} index={index} P={P} />
-  ), [P]);
+    <OfferCard offer={item} index={index} P={P} onPress={() => goToProvider(item)} />
+  ), [P, goToProvider]);
 
+  const sortActive = sortBy !== 'newest';
+
+  // ── Real native header — matches SearchScreen's pattern (the actual
+  // React Navigation header, not a custom View standing in for one) plus a
+  // single filters button on the right, badge-lit when a non-default sort
+  // is active. No search bar here — Offers has nothing to type a query into.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,
+      headerBackVisible: true,
+      headerTitle: 'OFFERS',
+      headerTitleAlign: 'center',
+      headerTitleStyle: { fontFamily: 'BakbakOne-Regular', fontSize: 19, color: P.text },
+      headerStyle: { backgroundColor: P.bg },
+      headerShadowVisible: false,
+      headerTintColor: P.accent,
+      headerBackButtonDisplayMode: 'minimal',
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => {
+            if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setSortModalVisible(true);
+          }}
+          activeOpacity={0.6}
+        >
+          <TabIcon name="sliders" size={17} color={sortActive ? P.accent : P.sub} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, P, sortActive]);
 
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: P.sep }]}>
-        <TouchableOpacity
-          style={[styles.backBtn, { backgroundColor: P.surface, borderColor: P.border }]}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.backArrow, { color: P.text }]}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: P.text }]}>OFFERS</Text>
-        <View style={styles.backBtn} />
-      </View>
-
-      {/* Category tabs */}
+      {/* Category tabs — same frosted-glass pill used on a provider's own
+          profile for their service categories, so this reads as the same
+          control rather than a different design. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -191,37 +246,39 @@ export default function OffersScreen({ navigation }: Props) {
         {TABS.map(tab => {
           const active = selectedTab === tab;
           return (
-            <TouchableOpacity
+            <CategoryTabPill
               key={tab}
+              category={tab}
+              isSelected={active}
               onPress={() => {
                 if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setSelectedTab(tab);
               }}
-              style={[styles.tab, { backgroundColor: active ? P.accent : P.surface, borderColor: active ? P.accent : P.border }]}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.tabText, { color: active ? P.ice : P.sub, fontWeight: active ? '700' : '500' }]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
+              cardBg={active ? P.accent : P.surface}
+              blurIntensity={20}
+              blurTint={isDarkMode ? 'dark' : 'light'}
+              borderColor={active ? 'transparent' : P.border}
+              textColor={active ? P.ice : P.text}
+            />
           );
         })}
       </ScrollView>
 
-      {/* Count row */}
-      <View style={[styles.countRow, { borderBottomColor: P.sep }]}>
-        <Text style={[styles.countText, { color: P.sub }]}>
-          {filteredOffers.length} {filteredOffers.length === 1 ? 'offer' : 'offers'}
-        </Text>
-      </View>
-
-      {/* Offers list */}
+      {/* Offers list — single column */}
       <FlatList
         data={filteredOffers}
         renderItem={renderCard}
         keyExtractor={item => item.id}
+        ListHeaderComponent={
+          <View style={styles.listHeaderBar}>
+            <Text style={[styles.countText, { color: P.sub }]}>
+              {filteredOffers.length} {filteredOffers.length === 1 ? 'offer' : 'offers'}
+            </Text>
+          </View>
+        }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        bounces
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={P.accent} colors={[P.accent]} />
         }
@@ -232,6 +289,41 @@ export default function OffersScreen({ navigation }: Props) {
           </View>
         }
       />
+
+      {/* Sort picker — a single filters button in the header opens this,
+          rather than an anchored popover (a native headerRight button's
+          on-screen position isn't something React Navigation exposes to
+          measure against, so a centered sheet is the robust option here). */}
+      <Modal visible={sortModalVisible} transparent animationType="fade" onRequestClose={() => setSortModalVisible(false)}>
+        <TouchableOpacity
+          style={styles.sortBackdrop}
+          activeOpacity={1}
+          onPress={() => setSortModalVisible(false)}
+        >
+          <View style={[styles.sortSheet, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.sortSheetTitle, { color: P.text }]}>Sort Offers</Text>
+            {SORT_OPTIONS.map(opt => {
+              const active = sortBy === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={styles.sortRow}
+                  onPress={() => {
+                    setSortBy(opt.value);
+                    setSortModalVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sortRowText, { color: P.text, fontWeight: active ? '700' : '400' }]}>
+                    {opt.label}
+                  </Text>
+                  {active && <Text style={[styles.sortCheck, { color: P.accent }]}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -239,28 +331,15 @@ export default function OffersScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
+  // Header filters button — bare icon, no circular background (the sliders
+  // icon already has its own round toggle-knobs; wrapping it in a circle
+  // too just doubled up on circles). Active state is the icon's own color.
+  filterBtn: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backArrow: { fontSize: 18, fontWeight: '500', marginTop: -1 },
-  headerTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    letterSpacing: 1.5,
+    marginRight: 4,
   },
 
   // Tabs
@@ -274,23 +353,10 @@ const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'center',
   },
-  tab: {
-    borderRadius: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  tabText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
 
-  // Count row
-  countRow: {
-    paddingHorizontal: 16,
+  // List header (result count)
+  listHeaderBar: {
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   countText: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -301,7 +367,8 @@ const styles = StyleSheet.create({
   // List
   listContent: { paddingTop: 8, paddingBottom: 110, paddingHorizontal: 16 },
 
-  // Card
+  // Offer card — horizontal row: logo left, info right, discount badge
+  // overlaid top-right (original list layout)
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -317,14 +384,15 @@ const styles = StyleSheet.create({
     elevation: 2,
     overflow: 'hidden',
   },
+  // In normal flow, above the provider name — not absolutely positioned
+  // over the card, so there's no max length past which a long custom label
+  // starts overlapping text underneath it.
   discountBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 100,
-    zIndex: 1,
   },
   discountText: {
     fontFamily: 'BakbakOne-Regular',
@@ -348,7 +416,6 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
     gap: 4,
-    paddingRight: 56,
   },
   providerName: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -392,6 +459,42 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     opacity: 0.7,
+  },
+
+  // Sort sheet
+  sortBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortSheet: {
+    width: 260,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  sortSheetTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  sortRowText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+  },
+  sortCheck: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   // Empty
