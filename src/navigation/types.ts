@@ -14,6 +14,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList>;
   Welcome: undefined;
   Login: undefined;
+  ClaimProvider: undefined;
   SignUpStep1: undefined;
   SignUpStep2: undefined;
   SignUpStep3: undefined;

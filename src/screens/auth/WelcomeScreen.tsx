@@ -59,6 +59,15 @@ export default function WelcomeScreen({ navigation }: Props) {
             <Text style={[styles.secondaryBtnText, { color: t.text }]}>LOG IN</Text>
           </TouchableOpacity>
 
+          {/* Claim an existing listing */}
+          <TouchableOpacity
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClaimProvider'); }}
+            activeOpacity={0.7}
+            style={styles.claimLink}
+          >
+            <Text style={[styles.claimLinkText, { color: t.accent }]}>Is your business already listed?</Text>
+          </TouchableOpacity>
+
           {/* Divider */}
           <View style={styles.divider}>
             <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
@@ -145,6 +154,16 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     letterSpacing: 1,
+  },
+  claimLink: {
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  claimLinkText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   divider: {
     flexDirection: 'row',

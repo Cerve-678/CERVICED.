@@ -64,6 +64,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies, loadProviderPolicies, uploadToStorage } from '../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../services/providerRegistrationService';
 import { transferFromAcuity } from '../services/acuityTransferService';
+import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../services/providerClaimService';
 import { supabase } from '../lib/supabase';
 import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId } from '../services/databaseService';
 import type { DbPortfolioItem } from '../types/database';
@@ -2150,17 +2151,33 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Load existing provider data and policies from Supabase/AsyncStorage on mount
   useEffect(() => {
     if (!user?.id) { setIsLoadingProvider(false); return; }
-    loadProviderFromSupabase(user.id)
-      .then(data => {
-        if (data) {
-          setProviderData(data);
-          setIsEditMode(true);
-          const firstCat = Object.keys(data.categories)[0];
-          if (firstCat) setSelectedCategory(firstCat);
-        }
+    // If this account just came through the "claim your business" flow
+    // (ClaimProviderScreen), attach it to the unclaimed row *before* loading
+    // provider data below — once claimed, that same loadProviderFromSupabase
+    // call picks up every scraped field (services included) for free, no
+    // separate prefill path needed. Best-effort: an expired/already-used
+    // code just means the provider sets up their profile from scratch.
+    getPendingClaim()
+      .then(pending => {
+        if (!pending) return;
+        return claimProviderProfile(pending.code)
+          .catch(err => { logger.warn('claimProviderProfile failed:', err?.message ?? err); })
+          .finally(() => clearPendingClaim());
       })
       .catch(() => {})
-      .finally(() => setIsLoadingProvider(false));
+      .finally(() => {
+        loadProviderFromSupabase(user.id)
+          .then(data => {
+            if (data) {
+              setProviderData(data);
+              setIsEditMode(true);
+              const firstCat = Object.keys(data.categories)[0];
+              if (firstCat) setSelectedCategory(firstCat);
+            }
+          })
+          .catch(() => {})
+          .finally(() => setIsLoadingProvider(false));
+      });
     // Load saved policies from Supabase (source of truth), falling back to
     // the local cache inside loadProviderPolicies. Merge over defaults so
     // fields added later (e.g. bookingInstructions) are never undefined.
