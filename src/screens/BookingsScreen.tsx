@@ -32,9 +32,10 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useFont } from '../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../contexts/BookingContext';
+import { hasMapDestination } from '../types/booking';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderAddressPolicy, getProviderAddressPolicyByDisplayName, ProviderAddressPolicy, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy } from '../services/databaseService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderAddressPolicy, getProviderAddressPolicyByDisplayName, ProviderAddressPolicy, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy, getRebookableService, RebookableService, setBookingTip } from '../services/databaseService';
 import * as WaitlistService from '../services/WaitlistService';
 import type { WaitlistEntry } from '../services/WaitlistService';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -707,7 +708,7 @@ const BookingCard = React.memo<BookingCardProps>(
                 </View>
               )}
               {/* Status dot (e.g. orange = awaiting confirmation) — top-left so it
-                  never collides with the "recently added" / "!" dots on the right */}
+                  never collides with the "recently added" dot on the right */}
               {showStatusBadge && (
                 <View
                   style={[styles.statusDot, { backgroundColor: badgeColor }]}
@@ -719,19 +720,8 @@ const BookingCard = React.memo<BookingCardProps>(
               {isRecentlyAdded && booking.status === BookingStatus.UPCOMING && (
                 <View style={styles.recentlyAddedDot} />
               )}
-              {/* "!" — forms or info packs waiting for the client */}
-              {actionCount > 0 && booking.status !== BookingStatus.CANCELLED && (
-                <View style={{
-                  position: 'absolute', bottom: -4, right: -4, minWidth: 20, height: 20,
-                  borderRadius: 10, backgroundColor: '#FF3B30', alignItems: 'center',
-                  justifyContent: 'center', paddingHorizontal: 4, zIndex: 2,
-                  borderWidth: 1.5, borderColor: '#fff',
-                }}>
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', lineHeight: 14 }}>!</Text>
-                </View>
-              )}
             </View>
-            <View style={styles.providerInfo}>
+            <View style={rowHasTag ? styles.providerInfoTall : styles.providerInfo}>
               <Text style={styles.providerName} numberOfLines={1}>
                 {booking.providerName}
               </Text>
@@ -764,6 +754,19 @@ const BookingCard = React.memo<BookingCardProps>(
                 <View style={styles.rescheduleBadgeSpacer} />
               ) : null}
             </View>
+            {/* "!" — forms or info packs waiting for the client. Anchored to the
+                whole card's corner (not just the image) so it reads as an
+                action badge on the tile, not a decoration on the photo. */}
+            {actionCount > 0 && booking.status !== BookingStatus.CANCELLED && (
+              <View style={{
+                position: 'absolute', bottom: 6, right: 6, minWidth: 20, height: 20,
+                borderRadius: 10, backgroundColor: '#FF3B30', alignItems: 'center',
+                justifyContent: 'center', paddingHorizontal: 4, zIndex: 2,
+                borderWidth: 1.5, borderColor: '#fff',
+              }}>
+                <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800', lineHeight: 14 }}>!</Text>
+              </View>
+            )}
           </Animated.View>
         </Pressable>
       </View>
@@ -890,6 +893,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [hasRated, setHasRated] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
   const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
+  // Resolved once in handleRebook, consumed by confirmRebook — carries the
+  // provider's slug (so the cart's provider logo can open the profile) and
+  // today's live price/duration/add-ons instead of rebooking a stale snapshot.
+  const [rebookContext, setRebookContext] = useState<{ providerDbId: string; live: RebookableService } | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
@@ -1020,6 +1027,24 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, []);
 
+  const openProviderChat = useCallback(async (booking: ConfirmedBooking) => {
+    let providerDbId = booking.providerId;
+    if (!providerDbId) {
+      providerDbId = (await getProviderIdByDisplayName(booking.providerName).catch(() => null)) ?? undefined;
+    }
+    if (!providerDbId) {
+      Alert.alert(
+        'Chat Unavailable',
+        `We couldn't find ${booking.providerName}'s account to open a chat. Please try another contact method.`,
+      );
+      return;
+    }
+    navigation.navigate('ProviderChat', {
+      providerId: providerDbId,
+      providerDbId,
+      providerName: booking.providerName,
+    });
+  }, [navigation]);
 
   // In-app messaging is always available — the old ±72-hour window around the
   // appointment is gone. (Signature kept so the call sites stay unchanged.)
@@ -1036,7 +1061,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // - pending status checks
 
   // ✅ FIXED: Book Again - checks cart, shows proper modals
-  const handleRebook = useCallback((booking: ConfirmedBooking) => {
+  const handleRebook = useCallback(async (booking: ConfirmedBooking) => {
     // Check if already in cart — prefer matching by the real service/provider
     // IDs (name text can collide, e.g. two providers both offering
     // "Haircut"); fall back to name matching only for legacy bookings that
@@ -1076,6 +1101,30 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
     }, 100);
 
+    // Re-resolve against the provider's current live service — this is what
+    // carries providerSlug into the cart (without it, the cart's provider
+    // logo can't open the profile and shows an error instead), and it also
+    // picks up today's price/duration/add-ons rather than rebooking whatever
+    // was true when the original booking was made.
+    const providerDbId = booking.providerId
+      ?? (await getProviderIdByDisplayName(booking.providerName).catch(() => null)) ?? undefined;
+
+    if (!providerDbId) {
+      setSuccessMessage(`We couldn't find ${booking.providerName}'s current profile. Please book from their profile directly.`);
+      setSuccessIcon('⚠️');
+      setShowSuccessModal(true);
+      return;
+    }
+
+    const live = await getRebookableService(providerDbId, booking.serviceName).catch(() => null);
+    if (!live) {
+      setSuccessMessage(`${booking.providerName} no longer offers ${booking.serviceName}. Check their profile for their current services.`);
+      setSuccessIcon('⚠️');
+      setShowSuccessModal(true);
+      return;
+    }
+    setRebookContext({ providerDbId, live });
+
     if (booking.addOns && booking.addOns.length > 0) {
       // Small delay to allow main modal to close first
       setTimeout(() => {
@@ -1085,16 +1134,18 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       // No add-ons, add directly to cart
       const cartItem = {
         providerName: booking.providerName,
-        providerId: booking.providerId,
-        providerImage: booking.providerImage,
+        providerDisplayName: live.providerDisplayName,
+        providerSlug: live.providerSlug,
+        providerId: providerDbId,
+        // booking.providerImage can be a plain string or an {uri} object
+        // depending on where the booking snapshot came from — Image requires
+        // {uri}, so a raw string here silently renders nothing in the cart.
+        providerImage: typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage,
         providerService: booking.providerService,
         service: {
-          // Real services.id when we have it, so the new booking keeps its
-          // service link (buffers, waitlist matching); only synthesize an
-          // id for the rare case the original service was deleted.
-          id: booking.serviceId ?? `rebook_${Date.now()}`,
-          name: booking.serviceName,
-          price: booking.price,
+          id: live.id,
+          name: live.name,
+          price: live.price,
           duration: booking.duration,
           description: booking.providerService,
           addOns: [],
@@ -1145,31 +1196,44 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
     }, 100);
 
+    // Re-resolve the booking's add-ons against the live list by name, so a
+    // rebook carries today's add-on prices and real add-on ids — any add-on
+    // the provider has since removed or deactivated is silently dropped
+    // rather than re-booked from a stale snapshot.
+    const live = rebookContext?.live;
+    const previousAddOnNames = new Set((selectedBooking.addOns ?? []).map(a => a.name));
+    const liveAddOns = finalSelection === 'with' && live
+      ? live.addOns.filter(a => previousAddOnNames.has(a.name))
+      : [];
+
     const cartItem = {
       providerName: selectedBooking.providerName,
-      providerId: selectedBooking.providerId,
-      providerImage: selectedBooking.providerImage,
+      providerDisplayName: live?.providerDisplayName,
+      providerSlug: live?.providerSlug,
+      providerId: rebookContext?.providerDbId ?? selectedBooking.providerId,
+      providerImage: typeof selectedBooking.providerImage === 'string' ? { uri: selectedBooking.providerImage } : selectedBooking.providerImage,
       providerService: selectedBooking.providerService,
       service: {
-        id: selectedBooking.serviceId ?? `rebook_${Date.now()}`,
-        name: selectedBooking.serviceName,
-        price: selectedBooking.price,
+        id: live?.id ?? selectedBooking.serviceId ?? `rebook_${Date.now()}`,
+        name: live?.name ?? selectedBooking.serviceName,
+        price: live?.price ?? selectedBooking.price,
         duration: selectedBooking.duration,
         description: selectedBooking.providerService,
-        addOns: finalSelection === 'with' ? (selectedBooking.addOns || []) : [],
+        addOns: liveAddOns,
       },
       quantity: 1,
     };
 
     addToCart(cartItem);
     setRebookSelection(null);
+    setRebookContext(null);
     setModalVisible(false);
     setSuccessMessage(`${selectedBooking.serviceName} has been added to your cart.`);
     setSuccessIcon('✓');
     setShowSuccessModal(true);
     // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility
     setShouldNavigateToCart(true);
-  }, [selectedBooking, rebookSelection, addToCart, cartItems]);
+  }, [selectedBooking, rebookSelection, rebookContext, addToCart, cartItems]);
 
   // ==================== ACTION HANDLERS ====================
 
@@ -1461,29 +1525,39 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }, 100);
   }, [messageText, selectedBooking]);
 
-  // ✅ FIXED: Tip locks after submission with success modal
-  const handleTipSubmit = useCallback(() => {
+  // Tips are stored on the booking's review row (reviews.tip_amount), which
+  // requires a review to exist first — setBookingTip returns false rather
+  // than silently dropping the tip when there's nothing to attach it to.
+  // This previously only set local component state (tippedBookings), so the
+  // tip was discarded on unmount and the provider never saw it.
+  const handleTipSubmit = useCallback(async () => {
     if (!selectedBooking || tipAmount <= 0) {
       Alert.alert('Invalid Tip', 'Please enter a valid tip amount.');
       return;
     }
 
-    logger.log('Processing tip:', tipAmount);
+    setIsLoading(true);
+    try {
+      const attached = await setBookingTip(selectedBooking.id, tipAmount);
+      if (!attached) {
+        setIsLoading(false);
+        Alert.alert('Rate First', 'Tips are added to your review, so please rate this appointment before leaving a tip.');
+        return;
+      }
 
-    // ✅ Mark as tipped
-    setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
-    setHasTipped(true);
-    
-    // Close tip modal and show success
-    setShowTipModal(false);
-    setSuccessMessage(`Thank you for tipping £${tipAmount.toFixed(2)}!`);
-    setSuccessIcon('✓');
-    setShowSuccessModal(true);
-    
-    // Reset tip amount after showing success
-    setTimeout(() => {
-      setTipAmount(0);
-    }, 2000);
+      setTippedBookings(prev => new Set(prev).add(selectedBooking.id));
+      setHasTipped(true);
+      setShowTipModal(false);
+      setSuccessMessage(`Your £${tipAmount.toFixed(2)} tip has been added to your review for ${selectedBooking.providerName}.`);
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+      setTimeout(() => setTipAmount(0), 2000);
+    } catch (error) {
+      logger.error('Failed to save tip:', error);
+      Alert.alert('Error', 'Failed to save your tip. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   }, [selectedBooking, tipAmount]);
 
   // Countdown ticker for address release
@@ -2036,7 +2110,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   >
                     {todayBookings.length > 0 && !allTodayBookingsCompleted ? (
                       <>
-                        {todayBookings.filter(b => b.coordinates).map(booking => (
+                        {todayBookings.filter(hasMapDestination).map(booking => (
                           <Marker
                             key={booking.id}
                             coordinate={booking.coordinates}
@@ -2119,6 +2193,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     <Text style={styles.appointmentProvider}>
                                       {booking.providerName} - {booking.status.replace('_', ' ')}
                                     </Text>
+                                    <Text style={styles.appointmentAddress}>
+                                      {booking.address || 'Address to be confirmed'}
+                                    </Text>
                                   </View>
                                   <View style={styles.actionButtons}>
                                     <TouchableOpacity
@@ -2197,11 +2274,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                     <Text style={styles.appointmentProvider}>
                                       {currentBooking.providerName} - {currentBooking.status.replace('_', ' ')}
                                     </Text>
-                                    {currentBooking.status !== BookingStatus.COMPLETED && (
-                                      <Text style={styles.appointmentAddress}>
-                                        {currentBooking.address || (addrCountdown ? `Address in ${addrCountdown}` : 'Address to be confirmed')}
-                                      </Text>
-                                    )}
+                                    <Text style={styles.appointmentAddress}>
+                                      {currentBooking.address || (addrCountdown ? `Address in ${addrCountdown}` : 'Address to be confirmed')}
+                                    </Text>
                                   </View>
                                   <View style={styles.actionButtons}>
                                     {currentBooking.status === BookingStatus.COMPLETED ? (
@@ -2255,7 +2330,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       </>
                                     ) : (
                                       <>
-                                        {currentBooking.address && currentBooking.coordinates && (
+                                        {hasMapDestination(currentBooking) && (
                                           <TouchableOpacity
                                             style={styles.directionsButton}
                                             onPress={() => openInMaps(currentBooking)}
@@ -2305,11 +2380,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         <Text style={styles.nextAppointmentProvider}>
                                           {booking.providerName} - {booking.duration}
                                         </Text>
-                                        {booking.status !== BookingStatus.COMPLETED && (
-                                          <Text style={styles.nextAppointmentAddress}>
-                                            {booking.address || 'Address to be confirmed'}
-                                          </Text>
-                                        )}
+                                        <Text style={styles.nextAppointmentAddress}>
+                                          {booking.address || 'Address to be confirmed'}
+                                        </Text>
                                       </View>
                                       <View style={styles.actionButtons}>
                                         {booking.status === BookingStatus.COMPLETED ? (
@@ -2361,7 +2434,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           </>
                                         ) : (
                                           <>
-                                            {booking.address && booking.coordinates && (
+                                            {hasMapDestination(booking) && (
                                               <TouchableOpacity
                                                 style={styles.directionsButton}
                                                 onPress={() => openInMaps(booking)}
@@ -2504,8 +2577,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                             windowSize={5}
                             initialNumToRender={3}
                             getItemLayout={(_data, index) => ({
-                              length: 144,
-                              offset: 144 * index,
+                              length: 160,
+                              offset: 160 * index,
                               index,
                             })}
                           />
@@ -2601,6 +2674,242 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           )}
           </View>
         </ScrollView>
+
+        {/* ─── Contact Sheet ─── */}
+        <Modal visible={contactSheetVisible} animationType="slide" transparent onRequestClose={() => setContactSheetVisible(false)}>
+          <Pressable style={csSt.overlay} onPress={() => setContactSheetVisible(false)}>
+            <Pressable style={csSt.sheet} onPress={e => e.stopPropagation()}>
+              <View style={csSt.handle} />
+              <Text style={csSt.title}>Contact {contactSheetBooking?.providerName}</Text>
+              <Text style={csSt.subtitle}>Choose how you'd like to get in touch</Text>
+              {contactSheetLoading ? <ActivityIndicator color="#AF9197" style={{ marginVertical: 24 }} /> : (
+                <View style={csSt.options}>
+                  <TouchableOpacity
+                    style={csSt.option}
+                    activeOpacity={0.7}
+                    onPress={() => { setContactSheetVisible(false); if (contactSheetBooking) openProviderChat(contactSheetBooking); }}
+                  >
+                    <View style={[csSt.optionIcon, { backgroundColor: '#5B1E32' }]}><Text style={csSt.optionEmoji}>💬</Text></View>
+                    <View style={csSt.optionText}>
+                      <Text style={csSt.optionLabel}>In-app message</Text>
+                      <Text style={csSt.optionDesc}>Chat directly inside Cerviced</Text>
+                    </View>
+                    <Text style={csSt.optionChevron}>›</Text>
+                  </TouchableOpacity>
+                  {contactSheetInfo?.preferred_contact_methods?.includes('email') && contactSheetInfo.email && (
+                    <TouchableOpacity
+                      style={csSt.option}
+                      activeOpacity={0.7}
+                      onPress={() => { setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}
+                    >
+                      <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}><Text style={csSt.optionEmoji}>✉️</Text></View>
+                      <View style={csSt.optionText}>
+                        <Text style={csSt.optionLabel}>Email</Text>
+                        <Text style={csSt.optionDesc} numberOfLines={1}>{contactSheetInfo.email}</Text>
+                      </View>
+                      <Text style={csSt.optionChevron}>›</Text>
+                    </TouchableOpacity>
+                  )}
+                  {contactSheetInfo?.preferred_contact_methods?.includes('whatsapp') && contactSheetInfo.whatsapp_number && (
+                    <TouchableOpacity
+                      style={csSt.option}
+                      activeOpacity={0.7}
+                      onPress={() => { setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}
+                    >
+                      <View style={[csSt.optionIcon, { backgroundColor: '#1A3D2B' }]}><Text style={csSt.optionEmoji}>💚</Text></View>
+                      <View style={csSt.optionText}>
+                        <Text style={csSt.optionLabel}>WhatsApp</Text>
+                        <Text style={csSt.optionDesc}>{contactSheetInfo.whatsapp_number}</Text>
+                      </View>
+                      <Text style={csSt.optionChevron}>›</Text>
+                    </TouchableOpacity>
+                  )}
+                  {contactSheetInfo?.preferred_contact_methods?.includes('phone') && contactSheetInfo.phone && (
+                    <TouchableOpacity
+                      style={csSt.option}
+                      activeOpacity={0.7}
+                      onPress={() => { setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}
+                    >
+                      <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}><Text style={csSt.optionEmoji}>📞</Text></View>
+                      <View style={csSt.optionText}>
+                        <Text style={csSt.optionLabel}>Phone call</Text>
+                        <Text style={csSt.optionDesc}>{contactSheetInfo.phone}</Text>
+                      </View>
+                      <Text style={csSt.optionChevron}>›</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              <View style={{ height: 10 }} />
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* ─── Rebook add-ons confirm — the original booking had add-ons, so
+            ask whether to carry them into the new one. This modal was
+            previously missing entirely: handleRebook flipped
+            showRebookAddOnsModal to true but nothing rendered it, so "Book
+            Again" on any booking with add-ons was a silent dead end.
+            Centered popup card (not a slide-up sheet) to match the rest of
+            the booking-detail confirmation dialogs, no emoji icons. ─── */}
+        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
+          <View style={popSt.overlay}>
+            <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+              <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Include Add-Ons?</Text>
+              <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>
+                Would you like to include the same add-ons from your previous booking?
+              </Text>
+              {selectedBooking?.addOns?.map((a, i) => (
+                <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+                  <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>• {a.name}</Text>
+                  <Text style={{ color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }}>+£{a.price.toFixed(2)}</Text>
+                </View>
+              ))}
+              <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => confirmRebook('without')} activeOpacity={0.7}>
+                  <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Without Add-Ons</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
+                  <Text style={{ color: '#FFF', fontWeight: '600' }}>With Add-Ons</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Success / Notice Modal — drives every setShowSuccessModal(true)
+            call in this screen (Book Again confirmations, tip sent, rating
+            thanks, etc). This state existed and was set all over the file but
+            nothing ever rendered it, so those confirmations were silently
+            invisible. ─── */}
+        <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent
+          onRequestClose={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }}>
+          <View style={popSt.overlay}>
+            <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>{successIcon}</Text>
+              <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
+              <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>{successMessage}</Text>
+              <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]}
+                  onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }} activeOpacity={0.7}>
+                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Cooldown Modal — "can't reschedule yet" messaging from
+            handleRescheduleRequest, same dead-state issue as above. ─── */}
+        <Modal visible={showCooldownModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCooldownModal(false)}>
+          <View style={popSt.overlay}>
+            <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+              <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cannot Reschedule</Text>
+              <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>{cooldownMessage}</Text>
+              <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
+                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Rating Modal — the "Rate" button on the Today map view set
+            showRatingModal/rating/reviewText but nothing rendered a modal, so
+            tapping Rate did nothing visible. handleRatingSubmit already wired
+            up a real submitReview() call; only the UI was missing. ─── */}
+        <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={popSt.overlay}>
+              <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+                {!hasRated ? (
+                  <>
+                    <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Rate Your Experience</Text>
+                    <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>
+                      How was your appointment with {selectedBooking?.providerName}?
+                    </Text>
+                    <View style={styles.starContainer}>
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <TouchableOpacity key={s} style={styles.starButton} onPress={() => setRating(s)}>
+                          <Text style={[styles.starText, s <= rating && styles.starTextActive]}>★</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.reviewInputContainer}>
+                      <TextInput
+                        style={styles.reviewInput}
+                        multiline numberOfLines={3} placeholder="Share your experience (optional)"
+                        placeholderTextColor={isDarkMode ? 'rgba(255,255,255,0.4)' : '#999'}
+                        value={reviewText} onChangeText={setReviewText} maxLength={500}
+                      />
+                      <Text style={styles.characterCount}>{reviewText.length}/500</Text>
+                    </View>
+                    <View style={popSt.sheetBtns}>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                        <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Skip</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : '#AF9197' }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Submit</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>✓</Text>
+                    <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Thanks!</Text>
+                    <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>Your feedback helps improve our services.</Text>
+                  </>
+                )}
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </Modal>
+
+        {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
+            now actually persists via setBookingTip() instead of only flipping
+            local state. ─── */}
+        <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={popSt.overlay}>
+              <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+                <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Leave a Tip</Text>
+                <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>
+                  Show your appreciation for {selectedBooking?.providerName}
+                </Text>
+                <View style={styles.tipContainer}>
+                  <View style={styles.tipQuickButtons}>
+                    {[5, 10, 15, 20].map(amt => (
+                      <TouchableOpacity key={amt} style={[styles.tipQuickButton, tipAmount === amt && styles.tipQuickButtonActive]} onPress={() => setTipAmount(amt)} activeOpacity={0.7}>
+                        <Text style={[styles.tipQuickButtonText, tipAmount === amt && styles.tipQuickButtonTextActive]}>£{amt}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={styles.tipCustomContainer}>
+                    <Text style={styles.tipCustomLabel}>Custom amount</Text>
+                    <View style={styles.tipInputWrapper}>
+                      <Text style={styles.tipCurrencySymbol}>£</Text>
+                      <TextInput
+                        style={styles.tipInput} keyboardType="decimal-pad" placeholder="0.00"
+                        placeholderTextColor={isDarkMode ? 'rgba(255,255,255,0.4)' : '#999'}
+                        value={tipAmount > 0 ? tipAmount.toString() : ''}
+                        onChangeText={t => setTipAmount(isNaN(parseFloat(t)) ? 0 : parseFloat(t))}
+                      />
+                    </View>
+                  </View>
+                </View>
+                <View style={popSt.sheetBtns}>
+                  <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
+                    <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: tipAmount <= 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : '#AF9197' }]} disabled={tipAmount <= 0 || isLoading} onPress={handleTipSubmit} activeOpacity={0.7}>
+                    {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Send Tip</Text>}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </Modal>
 
       </SafeAreaView>
     </ThemedBackground>
@@ -3007,7 +3316,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     gap: 8,
   },
   providerCard: {
-    width: 142,
+    width: 156,
     backgroundColor: isDarkMode ? '#2C2C2E' : '#FFF',
     borderRadius: 15,
     overflow: 'hidden',
@@ -3021,13 +3330,21 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderTopRightRadius: 14,
     backgroundColor: isDarkMode ? '#3A3A3C' : '#F5F5F5',
   },
-  // Fixed height (not auto) so every card in the row is the same height
-  // regardless of which optional bits (add-on pill) render. Status is now a
-  // dot on the image instead of a text pill, so this no longer reserves
-  // space for a badge row.
+  // Fixed height (not auto) so every card in a row is the same height
+  // regardless of which optional bits (add-on pill) render. The extra room
+  // for the reschedule badge is applied per-row via providerInfoTall below —
+  // only rows that actually have a reschedule tag pay for that space.
   providerInfo: {
     padding: 9,
     height: 96,
+  },
+  // Applied instead of providerInfo's height when the row has a reschedule
+  // tag (on the card that shows it, and as the spacer on siblings that
+  // don't). Just enough for the badge/spacer on top of the normal content —
+  // it was 130 and left visible dead space under the badge.
+  providerInfoTall: {
+    padding: 9,
+    height: 118,
   },
   providerName: {
     fontSize: 12,
@@ -4650,6 +4967,17 @@ const csSt = StyleSheet.create({
   optionLabel: { fontSize: 15, fontWeight: '600', color: '#F2EBF0' },
   optionDesc:  { fontSize: 12, color: 'rgba(183,225,218,0.55)', marginTop: 2 },
   optionChevron: { fontSize: 22, color: 'rgba(255,255,255,0.3)', fontWeight: '300' },
+});
+
+// Centered popup-card modals (confirmations, rate, tip) — as opposed to csSt's
+// bottom sheet, which is reserved for the multi-option Contact Sheet.
+const popSt = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
+  sheetTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  sheetSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  sheetBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
 });
 
 export default BookingsScreen;

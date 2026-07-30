@@ -5,12 +5,13 @@
 
 #generated
 
-**1239 functions** across **163 files**.
+**1269 functions** across **166 files**.
 
-### `src/components/` (25)
+### `src/components/` (26)
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
 - `CartTabBadge.tsx` — **useCartBadge**
+- `CategoryTabPill.tsx` — animatedStyle · handlePressIn · handlePressOut
 - `ChatComponents.tsx` — **ChatBubble** · **ChatInput** · **ProviderRecommendations** · **Suggestions**
 - `CreateEventModal.tsx` — **CreateEventModal** · formatDate · formatDisplayDate · getQuickDates · handleClose · handleCreate
 - `EventTimelineCard.tsx` — **EventTimelineCard** · formatDisplayDate
@@ -70,18 +71,18 @@
 - `ProviderHomeNavigator.tsx` — ProviderHomeNavigator
 - `ProviderServicesNavigator.tsx` — ProviderServicesNavigator
 
-### `src/screens/` (54)
+### `src/screens/` (55)
 - `AboutScreen.tsx` — AboutScreen · ExpandableSection
 - `AuthScreen.tsx` — AuthScreen · glassStyle · handleSocialLogin · handleSubmit · inputGlass · markTouched · renderError · validate · validateEmail
 - `BeautyBillingScreen.tsx` — BeautyBillingScreen
 - `BeautyProfileScreen.tsx` — allergyChip · BeautyProfileScreen · CatDivider · chip · cText · glassStyle · handleCancel · handleSave · loadProfile · scrollTo · SectionHead · setSingle · toggleAllergen · toggleMulti
 - `BeccaScreen.tsx` — animate · BeccaScreen · buildWelcomeMessage · dotStyle · handleDeleteChat · handleImagePick · handleLoadChat · handleNewChat · handleProviderPress · handleSend · handleSuggestionPress · refreshSessions · TypingDots
-- `BookingDetailScreen.tsx` — addRebookToCart · booking · BookingDetailScreen · calculatePaymentBreakdown · confirmRebook · formatDisplayDate · getStatusColor · handleCancelBooking · handleRatingSubmit · handleRebook · handleReschedulePress · handleTipSubmit · openContactSheet · openInMaps · openProviderChat · shareReceipt · tick
-- `BookingsScreen.tsx` — addDate · badgeColor · badgeText · BookingsScreen · buildClientReceiptHTML · calculatePaymentBreakdown · computeCountdown · confirmRebook · const · createStyles · filteredPastBookings · filteredUpcomingBookings · fmt · focusMapOnLocation · formatDisplayDate · formattedDate · getNextDay · getStatusColor · getUserLocation · handleBookingPress · handleCancelBooking · handlePress · handleRatingSubmit · handleRebook · handleRescheduleConfirm · handleRescheduleRequest · handleSendMessage · handleShareReceipt · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · listItems · nextDay · onRefresh · openContactSheet · openInMaps · overallStatus · platformFee · refreshBookingActionItems · resolveDateLabel · resolveServiceCategory · retryLoadBookings · routeCoordinates · styles · toggleFilter · toggleGroup · totalBasePrice
+- `BookingDetailScreen.tsx` — addRebookToCart · booking · BookingDetailScreen · calculatePaymentBreakdown · confirmRebook · formatDisplayDate · getStatusColor · handleCancelBooking · handleRatingSubmit · handleRebook · handleReschedulePress · handleTipSubmit · isLongInfoPack · openContactSheet · openInMaps · openProviderChat · shareReceipt · tick
+- `BookingsScreen.tsx` — addDate · badgeColor · badgeText · BookingsScreen · buildClientReceiptHTML · calculatePaymentBreakdown · computeCountdown · confirmRebook · const · createStyles · filteredPastBookings · filteredUpcomingBookings · fmt · focusMapOnLocation · formatDisplayDate · formattedDate · getNextDay · getStatusColor · getUserLocation · handleBookingPress · handleCancelBooking · handlePress · handleRatingSubmit · handleRebook · handleRescheduleConfirm · handleRescheduleRequest · handleSendMessage · handleShareReceipt · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · listItems · nextDay · onRefresh · openContactSheet · openInMaps · openProviderChat · overallStatus · platformFee · refreshBookingActionItems · resolveDateLabel · resolveServiceCategory · retryLoadBookings · routeCoordinates · styles · toggleFilter · toggleGroup · totalBasePrice
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · handleRemoveBookmark · handleServicePress · handleTabLayout · handleViewProfile · load · mapDbProvider · SkeletonProviderCard
 - `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
-- `CartScreen.tsx` — bookingSummary · CartScreen · depositLabel · depositPolicyArg · dynamicStyles · effectiveCartItems · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · FallbackCalendar · formatCardNumber · formatExpiry · getProviderScheduledCount · getServiceBooking · handleApplyPromoPress · handleApplyPromoToItem · handleCheckout · handleClearCart · handleConfirm · handleContinueShopping · handleDateSelect · handleDepositToggle · handlePayment · handlePaymentSuccess · handleRemove · handleRemovePromoFromItem · handleReviewConfirm · handleSave · handleSaveNotes · handleShowNotes · handleTimeSelect · itemPromoDiscounts · itemsByProvider · navigateToProvider · onRefresh · promoSavingsShown · timestamp · totalPrice · totalPromoDiscount · updateServiceBooking
+- `CartScreen.tsx` — bookingSummary · CartScreen · depositLabel · depositPolicyArg · dynamicStyles · effectiveCartItems · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · FallbackCalendar · formatCardNumber · formatExpiry · getProviderScheduledCount · getServiceBooking · handleApplyPromoPress · handleApplyPromoToProvider · handleCheckout · handleClearCart · handleConfirm · handleContinueShopping · handleDateSelect · handleDepositToggle · handlePayment · handlePaymentSuccess · handleRemove · handleRemovePromoFromProvider · handleReviewConfirm · handleSave · handleSaveNotes · handleShowNotes · handleTimeSelect · itemPromoDiscounts · itemsByProvider · navigateToProvider · onRefresh · promoSavingsShown · timestamp · totalPrice · totalPromoDiscount · updateServiceBooking
 - `ChangeCredentialsScreen.tsx` — ChangeCredentialsScreen · Field · handlePasswordUpdate
 - `ChangePasswordScreen.tsx` — ChangePasswordScreen · handleSave
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
@@ -89,13 +90,13 @@
 - `EventDetailScreen.tsx` — EventDetailScreen · formatEventDate · getDaysUntil · handleAddChecklist · handleAddSuggestion · handleBookNow · handleDeleteEvent · handleRemoveTask · handleSetDate · sortedTasks · suggestions
 - `ExploreScreen.tsx` — columnWidth · filters · getDaysUntil · getItemHeight · handleBookNow · handleCloseDetail · handleEventCreated · handleEventPress · handleImagePress · handlePlanThis · handleViewProfile · load · mapDbPortfolioItem · renderPortfolioCard · SkeletonMasonryGrid
 - `HelpCentreScreen.tsx` — FAQItem · handleContactSupport · HelpCentreScreen · showMoreOptions
-- `HomeScreen.tsx` — allCategorizedProviders · currentOffers · handleBackPress · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · loadUnreadCount · maleProvidersDisplay · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · previouslyBookedProviders · recommendedProvidersList · resetFilters · serviceProviders · showKidsSection · showMaleSection · SkeletonSection · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData
-- `InfoRegScreen.tsx` — AccentColorPickerModal · adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · ChipSelect · DurationPicker · EditCategoryModal · getCategoryDragResponder · GradientPickerModal · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteCategory · handleDeleteService · handleInputFocus · handleRemoveAddOn · handleRemoveImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleSave · handleSaveService · handleScroll · handleSelectLogo · handleSetCategoryOrder · handleSubmit · handleTransferData · handleTransferPress · InfoRegScreen · isAestheticsService · isDuplicate · PreviewModal · RequiredLabel · safeConfigureLayoutAnimation · ServiceImageCarousel · ServiceModal · ServiceTemplatePicker · setPolicy · startCategoryAutoScroll · stopCategoryAutoScroll · tick · toggleTag · TransferDataModal
+- `HomeScreen.tsx` — allCategorizedProviders · currentOffers · handleBackPress · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · loadUnreadCount · maleProvidersDisplay · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · previouslyBookedProviders · recommendedProvidersList · resetFilters · serviceProviders · showKidsSection · showMaleSection · SkeletonSection · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData
+- `InfoRegScreen.tsx` — AccentColorPickerModal · adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · ChipSelect · DurationPicker · EditCategoryModal · getCategoryDragResponder · GradientPickerModal · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteCategory · handleDeleteService · handleInputFocus · handlePickPolicyImage · handleRemoveAddOn · handleRemoveImage · handleRemovePolicyImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleSave · handleSaveService · handleScroll · handleSelectLogo · handleSetCategoryOrder · handleSubmit · handleTransferData · handleTransferPress · InfoRegScreen · isAestheticsService · isDuplicate · PreviewModal · RequiredLabel · ServiceImageCarousel · ServiceModal · ServiceTemplatePicker · setPolicy · startCategoryAutoScroll · stopCategoryAutoScroll · tick · toggleTag · TransferDataModal
 - `InfoScreen.tsx` — ScreenNameHere
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
 - `NotificationsScreen.tsx` — closeMessagePopup · deleteNotification · filteredNotifications · formatTimestamp · getActionButtonText · getBellColor · handleNotificationAction · loadNotifications · markAllAsRead · markAsRead · NotificationsScreen · onRefresh · renderNotification · renderRightActions · showFullMessage · SkeletonNotifRow
 - `NotificationsSettingsScreen.tsx` — NotificationsSettingsScreen · toggle · ToggleRow
-- `OffersScreen.tsx` — allOffers · expDate · filteredOffers · handleRefresh · load · mapPromotion · OffersScreen
+- `OffersScreen.tsx` — allOffers · expDate · filteredOffers · goToProvider · handleRefresh · load · mapPromotion · OffersScreen
 - `PaymentMethodsScreen.tsx` — PaymentMethodsScreen
 - `PointsScreen.tsx` — PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · ProfileInfoScreen
@@ -115,13 +116,14 @@
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleEmail · handleSave · handleSMS · PackCard · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · detectTemplate · getRelevantTemplates · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
 - `ProviderMyProfileScreen.tsx` — categoryNames · currentServices · handleEditProfile · load · PP · ProviderMyProfileScreen · serviceType · totalServices
-- `ProviderProfileScreen.tsx` — adaptiveAccentColor · animatedStyle · availableAddOns · averageRating · closeOffersPanel · closeWaitlistModal · formatDate · formatDuration · glowStyle · handleAddToCart · handleAddToCartWithAddOns · handleBook · handleBookmarkToggle · handleBookOffer · handleConfirmLeave · handleCopyCode · handleGetInTouch · handleJoinWaitlist · handleLeaveWaitlist · handleNotificationToggle · handleOpenDatePicker · handlePressIn · handlePressOut · handleQuickBook · handleScroll · handleShare · handleSkipAddOns · handleViewCart · hasPolicyInfo · HeartIcon · hideSuccessMessage · mapDbProviderToProviderData · notificationColors · notificationMessage · openOffersPanel · portfolioColumns · portfolioImages · ProviderProfileScreen · ProviderProfileSkeleton · scaleStyle · showRightNotification · showSuccessMessageWithAnimation · slideStyle · StarIcon · toggleAddOn · totalAddOnsPrice
+- `ProviderProfileScreen.tsx` — adaptiveAccentColor · availableAddOns · averageRating · closeImageViewer · closeOffersPanel · closeWaitlistModal · formatDate · formatDuration · glowStyle · handleAddToCart · handleAddToCartWithAddOns · handleBook · handleBookmarkToggle · handleBookOffer · handleConfirmLeave · handleCopyCode · handleGetInTouch · handleJoinWaitlist · handleLeaveWaitlist · handleNotificationToggle · handleOpenDatePicker · handlePressIn · handlePressOut · handleQuickBook · handleScroll · handleShare · handleSkipAddOns · handleViewCart · hasPolicyInfo · HeartIcon · hideSuccessMessage · mapDbProviderToProviderData · notificationColors · notificationMessage · openImageViewer · openOffersPanel · portfolioColumns · portfolioImages · ProviderProfileScreen · ProviderProfileSkeleton · renderImageViewerOverlay · renderServiceCategoryBlock · scaleStyle · showRightNotification · showSuccessMessageWithAnimation · slideStyle · StarIcon · toggleAddOn · totalAddOnsPrice
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
 - `ReactivateAccountScreen.tsx` — formatDeletionDate · handleDecline · handleReactivate · ReactivateAccountScreen
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `RescheduleScreen.tsx` — booking · formatDisplayDate · generateDynamicRescheduleDates · handleDateSelect · handleSubmit · handleTimeSelect · RescheduleScreen
-- `SearchScreen.tsx` — availColor · filteredProviders · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · mapDbToCardData · renderHeader · SearchScreen · specialtiesFor
+- `SearchScreen 2.tsx` — availColor · filteredProviders · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · mapDbToCardData · renderHeader · SearchScreen · specialtiesFor
+- `SearchScreen.tsx` — availColor · filteredProviders · focusActiveChip · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · mapDbToCardData · openPopoverLeft · providersWithDistance · renderHeader · resetFilters · SearchScreen · specialtiesFor · togglePopover · updateFilter
 - `SubscriptionScreen.tsx` — SubscriptionScreen
 - `TermsScreen.tsx` — TermsScreen
 - `UserProfileScreen.tsx` — handleBiometricToggle · handleLogout · UserProfileScreen
@@ -163,9 +165,10 @@
 ### `src/types/` (1)
 - `booking.ts` — **hasMapDestination** · **isAddressPending**
 
-### `src/utils/` (6)
+### `src/utils/` (7)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `cartUtils.ts` — **getCartSummary**
+- `distance.ts` — **formatDistance** · **getDistanceKm** · toRadians
 - `FontManager.ts` — **createTextStyles** · getFontFamily · to
 - `logger.ts` — noop · **reportError** · **setErrorReporter**
 - `performance.ts` — for

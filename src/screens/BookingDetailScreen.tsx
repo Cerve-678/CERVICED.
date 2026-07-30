@@ -5,7 +5,12 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView,
+  LayoutAnimation, UIManager,
 } from 'react-native';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -105,6 +110,14 @@ async function shareReceipt(booking: ConfirmedBooking) {
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
 }
 
+// Short info packs (a quick heads-up) read better as a small popup than a
+// full-screen takeover; longer ones (policies, prep instructions) still need
+// the dedicated reading screen.
+const INFO_PACK_POPUP_MAX_CHARS = 240;
+function isLongInfoPack(pack: BookingInfoPack): boolean {
+  return (pack.title?.length ?? 0) + (pack.content?.length ?? 0) > INFO_PACK_POPUP_MAX_CHARS;
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
@@ -168,7 +181,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     Promise.allSettled([
       getIntakeFormByBooking(bookingId).then(setBookingIntakeForm),
       getInfoPacksByBooking(bookingId).then(setBookingInfoPacks),
-    ]).finally(() => setTodoLoaded(true));
+    ]).finally(() => {
+      // The section still has to wait on this network round-trip, but at
+      // least it eases into place instead of snapping in and shoving the
+      // rest of the screen down a beat after everything else has settled.
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setTodoLoaded(true);
+    });
   }, [bookingId]);
 
   // Re-fetch on refocus — without this, returning from ClientIntakeFormScreen
@@ -177,6 +196,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!bookingId) return;
     const unsubscribe = navigation.addListener('focus', () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       getIntakeFormByBooking(bookingId).then(setBookingIntakeForm).catch(() => {});
       getInfoPacksByBooking(bookingId).then(setBookingInfoPacks).catch(() => {});
     });
@@ -413,7 +433,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         // and shows a "couldn't open that provider's profile" alert instead.
         providerSlug: live.providerSlug,
         providerId: providerDbId,
-        providerImage: b.providerImage,
+        // b.providerImage can be a plain string or an {uri} object depending
+        // on where the snapshot came from — Image requires {uri}, so a raw
+        // string here silently renders nothing in the cart.
+        providerImage: typeof b.providerImage === 'string' ? { uri: b.providerImage } : b.providerImage,
         providerService: b.providerService,
         service: {
           id: live.id,
@@ -583,7 +606,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground>
-      <SafeAreaView style={{ flex: 1 }} edges={['bottom', 'left', 'right']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left', 'right']}>
         {/* Back button row */}
         <View style={[st.topBar, { borderBottomColor: C.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn} activeOpacity={0.7}>
@@ -662,19 +685,27 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           )}
 
           {/* To-do: intake form + info packs — only after both loads settle, so
-              the section appears once instead of popping in twice. */}
-          {todoLoaded && ((bookingIntakeForm && bookingIntakeForm.status === 'pending') || bookingInfoPacks.length > 0) && (
+              the section appears once instead of popping in twice. The intake
+              form row stays visible after completion (dimmed, "Completed"
+              badge) instead of disappearing — it used to only render while
+              status === 'pending', so once submitted there was no way back
+              into ClientIntakeFormScreen to see the answers you'd just filled in. */}
+          {todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
-              {bookingIntakeForm && bookingIntakeForm.status === 'pending' && (
-                <TouchableOpacity style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.8}
+              {bookingIntakeForm && (
+                <TouchableOpacity style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: bookingIntakeForm.status === 'completed' ? 0.72 : 1 }]} activeOpacity={0.8}
                   onPress={() => navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName })}>
                   <Text style={{ fontSize: 20 }}>📋</Text>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{bookingIntakeForm.title}</Text>
-                    <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>Your provider needs this before your appointment</Text>
+                    <Text style={[{ fontSize: 12, color: C.sub, marginTop: 2 }]}>
+                      {bookingIntakeForm.status === 'completed' ? 'Submitted — tap to review your answers' : 'Your provider needs this before your appointment'}
+                    </Text>
                   </View>
-                  <View style={[st.todoBadge, { backgroundColor: C.accent }]}><Text style={st.todoBadgeText}>Required</Text></View>
+                  <View style={[st.todoBadge, { backgroundColor: bookingIntakeForm.status === 'completed' ? '#34C759' : C.accent }]}>
+                    <Text style={st.todoBadgeText}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
+                  </View>
                 </TouchableOpacity>
               )}
               {bookingInfoPacks.map(pack => (
@@ -716,7 +747,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
-              <TouchableOpacity onPress={() => setShowReceipt(v => !v)} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowReceipt(v => !v); }} activeOpacity={0.7}>
                 <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
@@ -727,63 +758,90 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
-              <View style={[st.receipt, { backgroundColor: C.card, borderColor: C.border }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={[{ fontSize: 12, fontWeight: '700', letterSpacing: 1, color: C.text }]}>PAYMENT RECEIPT</Text>
-                  <TouchableOpacity onPress={async () => { try { await shareReceipt(booking); } catch { Alert.alert('Error', 'Could not generate receipt.'); } }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="share-outline" size={18} color={C.text} />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Booking */}
-                {[['Service', booking.serviceName], ['Date', booking.bookingDate], ['Time', booking.bookingTime]].map(([l, v]) => (
-                  <View key={l} style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>{l}</Text>
-                    <Text style={{ color: C.text, fontSize: 13, flexShrink: 1, textAlign: 'right', marginLeft: 12 }} numberOfLines={2}>{v}</Text>
+              <View style={[st.receiptContainer, { backgroundColor: isDarkMode ? '#3A3A3C' : '#F5F5F5' }]}>
+                <View style={[st.receiptPaper, { backgroundColor: C.card, borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, position: 'relative' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>PAYMENT RECEIPT</Text>
+                    <TouchableOpacity
+                      onPress={async () => { try { await shareReceipt(booking); } catch { Alert.alert('Error', 'Could not generate receipt.'); } }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ position: 'absolute', right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Ionicons name="share-outline" size={16} color={C.text} />
+                    </TouchableOpacity>
                   </View>
-                ))}
 
-                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
-                {/* Itemised breakdown */}
-                <View style={st.rcptRow}>
-                  <Text style={{ color: C.sub, fontSize: 13 }}>Base Price</Text>
-                  <Text style={{ color: C.text, fontSize: 13 }}>£{payment.servicePrice.toFixed(2)}</Text>
-                </View>
-                {(booking.addOns ?? []).map((a, i) => (
-                  <View key={`ao-${i}`} style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13, flexShrink: 1, marginRight: 12 }} numberOfLines={1}>• {a.name}</Text>
-                    <Text style={{ color: C.text, fontSize: 13 }}>+£{a.price.toFixed(2)}</Text>
-                  </View>
-                ))}
-                {payment.addOnsTotal > 0 && (
+                  {/* Booking */}
+                  {[['Service', booking.serviceName], ['Date', booking.bookingDate], ['Time', booking.bookingTime]].map(([l, v]) => (
+                    <View key={l} style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>{l}</Text>
+                      <Text style={{ color: C.text, fontSize: 13, flexShrink: 1, textAlign: 'right', marginLeft: 12 }} numberOfLines={2}>{v}</Text>
+                    </View>
+                  ))}
+
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
+
+                  {/* Itemised breakdown */}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Subtotal</Text>
-                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.subtotal.toFixed(2)}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Base Price</Text>
+                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.servicePrice.toFixed(2)}</Text>
                   </View>
-                )}
-                <View style={st.rcptRow}>
-                  <Text style={{ color: C.sub, fontSize: 13 }}>Service Charge</Text>
-                  <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
-                </View>
+                  {(booking.addOns ?? []).map((a, i) => (
+                    <View key={`ao-${i}`} style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13, flexShrink: 1, marginRight: 12 }} numberOfLines={1}>• {a.name}</Text>
+                      <Text style={{ color: C.text, fontSize: 13 }}>+£{a.price.toFixed(2)}</Text>
+                    </View>
+                  ))}
+                  {payment.addOnsTotal > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>Subtotal</Text>
+                      <Text style={{ color: C.text, fontSize: 13 }}>£{payment.subtotal.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Service Charge</Text>
+                    <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
+                  </View>
 
-                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
-                {/* Totals */}
-                <View style={st.rcptRow}>
-                  <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>Total</Text>
-                  <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>£{payment.total.toFixed(2)}</Text>
-                </View>
-                <View style={st.rcptRow}>
-                  <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paymentType === 'deposit' ? 'Deposit Paid' : 'Total Paid'}</Text>
-                  <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>£{(payment.paymentType === 'deposit' ? payment.totalPaidAtCheckout : payment.amountPaidAtCheckout).toFixed(2)}</Text>
-                </View>
-                <View style={st.rcptRow}>
-                  <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
-                  <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
-                </View>
+                  {/* Totals */}
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>Total</Text>
+                    <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>£{payment.total.toFixed(2)}</Text>
+                  </View>
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paymentType === 'deposit' ? 'Deposit Paid' : 'Total Paid'}</Text>
+                    <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>£{(payment.paymentType === 'deposit' ? payment.totalPaidAtCheckout : payment.amountPaidAtCheckout).toFixed(2)}</Text>
+                  </View>
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
+                    <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
+                  </View>
+                  <View style={st.rcptRow}>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
+                      {(booking.paymentMethod && METHOD_LABELS[booking.paymentMethod]) || 'Card'}
+                    </Text>
+                  </View>
 
-                <Text style={{ color: C.sub, fontSize: 11, marginTop: 10 }}>REF: {booking.id?.slice(0, 8).toUpperCase()}</Text>
+                  {payment.paymentType === 'full' && (
+                    <View style={st.receiptFullyPaidBadge}>
+                      <Text style={st.receiptFullyPaidText}>Paid in Full</Text>
+                    </View>
+                  )}
+
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
+
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>REF: {booking.id?.slice(0, 8).toUpperCase()}</Text>
+                    <Text style={{ color: C.sub, fontSize: 10 }}>
+                      {new Date(booking.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
               </View>
             )}
           </View>
@@ -930,10 +988,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>{successIcon}</Text>
               <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{successMessage}</Text>
-              <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent, alignSelf: 'stretch', marginTop: 16 }]}
-                onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
-                <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
-              </TouchableOpacity>
+              {/* sheetBtn is `flex:1`, meant to share a sheetBtns row with a
+                  sibling — used alone (even with alignSelf:'stretch') it has
+                  no row to fill and Yoga collapses it, so the button barely
+                  rendered / wasn't reliably tappable. Wrapping it in the row
+                  gives flex:1 something to fill again. */}
+              <View style={[st.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]}
+                  onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
+                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -945,9 +1010,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
               <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cannot Reschedule</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{cooldownMessage}</Text>
-              <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent, alignSelf: 'stretch', marginTop: 16 }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
-                <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
-              </TouchableOpacity>
+              <View style={[st.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
+                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -1098,8 +1165,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             ProviderChat thread (provider_messages + realtime) via
             openProviderChat, which resolves the provider id or reports failure. */}
 
-        {/* ─── Info Pack Full-Screen Reader ─── */}
-        <Modal visible={!!viewingPack} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
+        {/* ─── Info Pack Full-Screen Reader — long packs only. Short ones get
+            the compact popup below instead of taking over the whole screen. */}
+        <Modal visible={!!viewingPack && isLongInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
           <View style={{ flex: 1, backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }}>
             <SafeAreaView style={{ flex: 1 }}>
               {/* Header */}
@@ -1154,6 +1222,40 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             </SafeAreaView>
           </View>
         </Modal>
+
+        {/* ─── Info Pack Popup — short packs, as a small sheet instead of a
+            takeover screen ─── */}
+        <Modal visible={!!viewingPack && !isLongInfoPack(viewingPack)} animationType="fade" transparent onRequestClose={() => setViewingPack(null)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 28 }} onPress={() => setViewingPack(null)}>
+            <Pressable style={{ width: '100%', maxWidth: 420, borderRadius: 20, padding: 22, backgroundColor: isDarkMode ? '#252220' : '#FFF' }} onPress={e => e.stopPropagation()}>
+              {viewingPack && (
+                <>
+                  <View style={{
+                    alignSelf: 'flex-start', backgroundColor: C.accent + '22',
+                    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 12,
+                  }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1, color: C.accent }}>
+                      {viewingPack.service?.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 19, fontWeight: '800', letterSpacing: -0.3, color: C.text, marginBottom: 10 }}>
+                    {viewingPack.title}
+                  </Text>
+                  <Text style={{ fontSize: 15, lineHeight: 22, color: C.sub }}>
+                    {viewingPack.content}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setViewingPack(null)}
+                    activeOpacity={0.8}
+                    style={{ marginTop: 18, alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: C.accent }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Got it</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </Pressable>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </ThemedBackground>
   );
@@ -1182,7 +1284,10 @@ const st = StyleSheet.create({
   todoCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 14, marginBottom: 8 },
   todoBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   todoBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '700' },
-  receipt: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 16 },
+  receiptContainer: { borderRadius: 8, padding: 12 },
+  receiptPaper: { padding: 16, borderRadius: 6, borderWidth: 1, borderStyle: 'dashed' },
+  receiptFullyPaidBadge: { backgroundColor: 'rgba(52,199,89,0.15)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12, marginTop: 10, alignSelf: 'center' },
+  receiptFullyPaidText: { color: '#34C759', fontSize: 12, fontWeight: '700' },
   rcptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   actions: { marginTop: 8, marginBottom: 8, gap: 12 },
   cancelBtn: { borderWidth: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },

@@ -115,6 +115,9 @@ export interface DbProvider {
     depositNote?: string;
     noShowAction?: string;
     noShowNote?: string;
+    /** Optional photo of a fuller policy document, shown to clients via a
+     *  pop-up on their profile view (see ProviderProfileScreen). */
+    policyImageUrl?: string;
   } | null;
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   // full_address is deliberately NOT here. It moved to provider_private_details
@@ -403,6 +406,7 @@ export interface DbPromotionWithProvider extends DbPromotion {
   providers?: {
     display_name: string | null;
     logo_url: string | null;
+    slug: string | null;
   } | null;
 }
 

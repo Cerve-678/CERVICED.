@@ -5,7 +5,7 @@
 
 #generated
 
-**54 screens.** Curated overview: [[Screens & Navigation]].
+**55 screens.** Curated overview: [[Screens & Navigation]].
 
 ## Provider (19)
 - `src/screens/ProviderAccountInfoScreen.tsx`
@@ -28,7 +28,7 @@
 - `src/screens/ProviderPromotionsScreen.tsx`
 - `src/screens/ProviderScheduleScreen.tsx`
 
-## Client / shared (35)
+## Client / shared (36)
 - `src/screens/AboutScreen.tsx`
 - `src/screens/AuthScreen.tsx`
 - `src/screens/BeautyBillingScreen.tsx`
@@ -60,6 +60,7 @@
 - `src/screens/ReactivateAccountScreen.tsx`
 - `src/screens/ReportProblemScreen.tsx`
 - `src/screens/RescheduleScreen.tsx`
+- `src/screens/SearchScreen 2.tsx`
 - `src/screens/SearchScreen.tsx`
 - `src/screens/SubscriptionScreen.tsx`
 - `src/screens/TermsScreen.tsx`

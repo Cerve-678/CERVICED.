@@ -1,10 +1,10 @@
 ---
 tags: [screen, client]
 ---
-# OffersScreen
-#screen · `src/screens/OffersScreen.tsx`
+# SearchScreen 2
+#screen · `src/screens/SearchScreen 2.tsx`
 
-**Registered route(s):** `Offers`
+**Registered route(s):** _unregistered_
 
 ## → Navigates to
 - [[ProviderProfileScreen\|ProviderProfile]]

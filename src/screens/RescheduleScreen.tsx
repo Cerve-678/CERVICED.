@@ -11,7 +11,7 @@ import * as Haptics from 'expo-haptics';
 import { useFont } from '../contexts/FontContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { useBooking, ConfirmedBooking } from '../contexts/BookingContext';
+import { useBooking, ConfirmedBooking, AvailableDate } from '../contexts/BookingContext';
 import {
   getProviderReschedulePolicyByDisplayName,
   ProviderReschedulePolicy,
@@ -45,26 +45,14 @@ function formatDisplayDate(dateStr: string): string {
 function generateDynamicRescheduleDates(
   currentDate: string,
   currentTime: string,
-  providerAvailableDates?: string[],
+  providerAvailableDates?: AvailableDate[],
 ): DateOption[] {
   if (providerAvailableDates && providerAvailableDates.length > 0) {
-    return providerAvailableDates.map(entry => {
-      // entry can be "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm"
-      const [datePart, timePart] = entry.includes('T') ? entry.split('T') : entry.split(' ');
-      const displayDate = formatDisplayDate(datePart ?? entry);
-      const time = timePart ?? '';
-      return { date: datePart ?? entry, displayDate, times: time ? [time] : [] };
-    }).reduce<DateOption[]>((acc, cur) => {
-      const existing = acc.find(d => d.date === cur.date);
-      if (existing) {
-        if (cur.times.length && !existing.times.includes(cur.times[0]!)) {
-          existing.times.push(cur.times[0]!);
-        }
-      } else {
-        acc.push(cur);
-      }
-      return acc;
-    }, []);
+    return providerAvailableDates.map(entry => ({
+      date: entry.date,
+      displayDate: formatDisplayDate(entry.date),
+      times: entry.times ?? [],
+    }));
   }
 
   // Fallback: generate 5 dynamic dates from tomorrow, excluding the current booking date
@@ -124,7 +112,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       .then(setReschedulePolicy).catch(() => {});
 
     // If provider has already responded with available dates, use those
-    const providerDates = (booking as any).rescheduleRequest?.providerAvailableDates as string[] | undefined;
+    const providerDates = booking.rescheduleRequest?.providerAvailableDates;
     const options = generateDynamicRescheduleDates(booking.bookingDate, booking.bookingTime, providerDates);
     setDateOptions(options);
   }, [booking?.id]);
@@ -151,7 +139,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   const handleSubmit = useCallback(async () => {
     if (!booking || !selectedDate || !selectedTime) return;
 
-    const isConfirmPhase = !!(booking as any).rescheduleRequest?.providerAvailableDates;
+    const isConfirmPhase = !!booking.rescheduleRequest?.providerAvailableDates;
 
     setIsSubmitting(true);
     try {
@@ -181,7 +169,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     );
   }
 
-  const hasProviderResponse = !!(booking as any).rescheduleRequest?.providerAvailableDates;
+  const hasProviderResponse = !!booking.rescheduleRequest?.providerAvailableDates;
   const selectedDateOption = dateOptions.find(d => d.date === selectedDate);
 
   if (phase === 'done') {
@@ -216,7 +204,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground>
-      <SafeAreaView style={{ flex: 1 }} edges={['bottom', 'left', 'right']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left', 'right']}>
         {/* Top bar */}
         <View style={[st.topBar, { borderBottomColor: C.border }]}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn} activeOpacity={0.7}>
@@ -272,7 +260,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   <View style={[st.row, { borderBottomColor: C.border }]}>
                     <Text style={[st.rowLabel, { color: C.sub }]}>Reschedules allowed</Text>
                     <Text style={[st.rowValue, { color: C.text }]}>
-                      {(booking as any).rescheduleRequest?.rescheduleCount ?? 0} / {reschedulePolicy.maxReschedules} used
+                      {booking.rescheduleRequest?.rescheduleCount ?? 0} / {reschedulePolicy.maxReschedules} used
                     </Text>
                   </View>
                 )}

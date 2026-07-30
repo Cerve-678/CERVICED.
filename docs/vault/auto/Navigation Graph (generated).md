@@ -5,7 +5,7 @@
 
 #generated
 
-**86 edges** across **25 screens**. Node-graph version: [[Screen Flow (generated)]].
+**90 edges** across **27 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -24,7 +24,9 @@ graph LR
   BookingDetailScreen --> ProviderChatScreen
   BookingDetailScreen --> RescheduleScreen
   BookingsScreen --> BookingDetailScreen
+  BookingsScreen --> Cart
   BookingsScreen --> DevSettingsScreen
+  BookingsScreen --> ProviderChatScreen
   BookingsScreen --> ProviderProfileScreen
   BookingsScreen --> RescheduleScreen
   BookmarkedProvidersScreen --> ProviderProfileScreen
@@ -49,6 +51,7 @@ graph LR
   MessagesScreen --> ProviderChatScreen
   NotificationsScreen --> BookingsScreen
   NotificationsScreen --> ProviderProfileScreen
+  OffersScreen --> ProviderProfileScreen
   ProviderAccountScreen --> AboutScreen
   ProviderAccountScreen --> BusinessProfileScreen
   ProviderAccountScreen --> ChangePasswordScreen
@@ -83,6 +86,7 @@ graph LR
   ProviderProfileScreen --> ProviderChatScreen
   ProviderPromotionsScreen --> ProviderClienteleScreen
   SearchScreen --> ProviderProfileScreen
+  SearchScreen 2 --> ProviderProfileScreen
   UserProfileScreen --> AboutScreen
   UserProfileScreen --> BeautyProfileScreen
   UserProfileScreen --> BookingsScreen
@@ -105,7 +109,7 @@ graph LR
 - `BeautyBillingScreen` → `BeautyProfileScreen`, `PaymentMethodsScreen`, `SubscriptionScreen`
 - `BeccaScreen` → `BookingsScreen`, `Explore`, `ProviderProfileScreen`
 - `BookingDetailScreen` → `Cart`, `ClientIntakeFormScreen`, `ProviderChatScreen`, `RescheduleScreen`
-- `BookingsScreen` → `BookingDetailScreen`, `DevSettingsScreen`, `ProviderProfileScreen`, `RescheduleScreen`
+- `BookingsScreen` → `BookingDetailScreen`, `Cart`, `DevSettingsScreen`, `ProviderChatScreen`, `ProviderProfileScreen`, `RescheduleScreen`
 - `BookmarkedProvidersScreen` → `ProviderProfileScreen`
 - `BusinessProfileScreen` → `BrandingScreen`, `InfoRegScreen`, `ProviderAutomationsScreen`, `ProviderBusinessEmailScreen`, `ProviderCommunicationsScreen`
 - `CartScreen` → `BookingsScreen`, `Home`, `ProviderProfileScreen`
@@ -114,6 +118,7 @@ graph LR
 - `HomeScreen` → `BookingsScreen`, `BookmarkedProvidersScreen`, `NotificationsScreen`, `OffersScreen`, `ProviderProfileScreen`, `SearchScreen`
 - `MessagesScreen` → `ProviderChatScreen`
 - `NotificationsScreen` → `BookingsScreen`, `ProviderProfileScreen`
+- `OffersScreen` → `ProviderProfileScreen`
 - `ProviderAccountScreen` → `AboutScreen`, `BusinessProfileScreen`, `ChangePasswordScreen`, `HelpCentreScreen`, `NotificationsScreen`, `ProviderAccountInfoScreen`, `ProviderAnalyticsScreen`, `ProviderBookingHistoryScreen`, `ProviderClienteleScreen`, `ProviderPromotionsScreen`, `ReportProblemScreen`, `SignUpStep1`, `SignUpStep2`, `TermsScreen`
 - `ProviderAnalyticsScreen` → `ProviderBookingDetailScreen`, `ProviderBookingHistoryScreen`
 - `ProviderBookingDetailScreen` → `ProviderConversationScreen`, `ProviderIntakeFormScreen`
@@ -125,4 +130,5 @@ graph LR
 - `ProviderProfileScreen` → `Cart`, `CartScreen`, `ProviderChatScreen`
 - `ProviderPromotionsScreen` → `ProviderClienteleScreen`
 - `SearchScreen` → `ProviderProfileScreen`
+- `SearchScreen 2` → `ProviderProfileScreen`
 - `UserProfileScreen` → `AboutScreen`, `BeautyProfileScreen`, `BookingsScreen`, `BookmarkedProvidersScreen`, `ChangePasswordScreen`, `HelpCentreScreen`, `MessagesScreen`, `NotificationsSettingsScreen`, `PaymentMethodsScreen`, `PointsScreen`, `ProfileInfoScreen`, `ReportProblemScreen`, `SignUpStep3`, `SubscriptionScreen`, `TermsScreen`

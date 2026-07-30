@@ -654,13 +654,16 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
-      // Persist to Supabase so provider can see the request
-      upsertRescheduleRequest({
+      // Persist to Supabase so provider can see the request. Not swallowed —
+      // a failure here means the provider never receives the request, so the
+      // caller must find out and show the user it didn't actually send
+      // (see fix_reschedule_request_conflict.sql for the bug this caught).
+      await upsertRescheduleRequest({
         booking_id: bookingId,
         original_date: originalDate,
         original_time: originalTime,
         requested_dates: preferredDates,
-      }).catch(() => {});
+      });
 
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const rescheduleProviderId = booking.providerId
