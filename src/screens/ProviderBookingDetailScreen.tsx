@@ -1617,6 +1617,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {apptStartPassed && booking.status !== BookingStatus.IN_PROGRESS && (
                 <ActionButton color="#FF9500" label="No Show" onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
               )}
+              {booking.status === BookingStatus.UPCOMING && !isApptToday && !apptStartPassed && !hasRescheduleRequest && (
+                <ActionButton color="#FF9500" label="Reschedule" onPress={() => setShowInitRescheduleModal(true)} ghost />
+              )}
               <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
             </View>
           </View>
@@ -1646,12 +1649,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
                   The client has been notified of your available dates.
                 </Text>
-                <TouchableOpacity
-                  style={[styles.respondModalBtn, { backgroundColor: '#FF9500', marginTop: 20, alignSelf: 'stretch' }]}
-                  onPress={closeRespondModal}
-                >
-                  <Text style={styles.respondModalBtnText}>Done</Text>
-                </TouchableOpacity>
+                {/* respondModalBtn is `flex:1`, meant to share a row with a
+                    sibling button — used alone it had no row to fill and
+                    Yoga collapsed it, so "Done" barely rendered / wasn't
+                    reliably tappable. The row wrapper gives it one. */}
+                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
+                    onPress={closeRespondModal}
+                  >
+                    <Text style={styles.respondModalBtnText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1914,12 +1923,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
                   {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed times.
                 </Text>
-                <TouchableOpacity
-                  style={[styles.respondModalBtn, { backgroundColor: '#FF9500', marginTop: 20, alignSelf: 'stretch' }]}
-                  onPress={closeInitRescheduleModal}
-                >
-                  <Text style={styles.respondModalBtnText}>Done</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
+                    onPress={closeInitRescheduleModal}
+                  >
+                    <Text style={styles.respondModalBtnText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
