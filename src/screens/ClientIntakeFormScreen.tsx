@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { getIntakeFormById, submitIntakeFormAnswers, IntakeForm, IntakeFormQuestion } from '../services/databaseService';
 import { HomeScreenProps } from '../navigation/types';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../components/IslandPillTabBar';
 
 type Props = HomeScreenProps<'ClientIntakeForm'>;
 
@@ -35,7 +36,15 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   const [signature, setSignature] = useState('');
   const [loading, setLoading]   = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // True once this form has ever been completed — loaded from the DB on
+  // mount if it already was, or set the moment a fresh submit succeeds.
+  // Drives the read-only "completed" view (answers still visible).
   const [submitted, setSubmitted]   = useState(false);
+  // True only for the submit that *just* happened in this session — shows
+  // the one-time "All done!" congratulations screen. Reopening an
+  // already-completed form later hits `submitted` without this, so it goes
+  // straight to the read-only answers view instead of the congrats screen.
+  const [justSubmitted, setJustSubmitted] = useState(false);
 
   useEffect(() => {
     getIntakeFormById(formId).then(f => {
@@ -71,6 +80,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
       await submitIntakeFormAnswers(formId, answers, signature.trim() || undefined);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setSubmitted(true);
+      setJustSubmitted(true);
     } catch {
       Alert.alert('Error', 'Could not submit your form. Please try again.');
     } finally {
@@ -110,8 +120,8 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
         </View>
       </SafeAreaView>
 
-      {submitted ? (
-        /* ── Submitted success state ── */
+      {justSubmitted ? (
+        /* ── Just-submitted success state — shown once, right after the client taps Submit ── */
         <View style={styles.successState}>
           <Text style={styles.successIcon}>✓</Text>
           <Text style={[styles.successTitle, { color: P.text }]}>All done!</Text>
@@ -134,6 +144,15 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Reopening an already-completed form — show it marked done with
+                the answers the client picked, instead of asking them again. */}
+            {submitted && (
+              <View style={[styles.completedBanner, { backgroundColor: '#34C75920', borderColor: '#34C75955' }]}>
+                <Ionicons name="checkmark-circle" size={18} color="#34C759" />
+                <Text style={styles.completedBannerText}>Completed — your provider has these answers</Text>
+              </View>
+            )}
+
             {/* Form intro — leads with WHICH service this form is for */}
             <View style={[styles.introCard, { backgroundColor: ACCENT + '14', borderColor: ACCENT + '35' }]}>
               {!!serviceName && (
@@ -156,6 +175,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                 value={answers[q.id] ?? ''}
                 onChange={v => setAnswer(q.id, v)}
                 P={P}
+                readOnly={submitted}
               />
             ))}
 
@@ -177,6 +197,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                   style={[styles.textAnswer, { color: P.text, backgroundColor: P.bg, borderColor: signature.trim() ? ACCENT : P.border, minHeight: 48 }]}
                   value={signature}
                   onChangeText={setSignature}
+                  editable={!submitted}
                   placeholder="Type your full name…"
                   placeholderTextColor={P.sub}
                   autoCapitalize="words"
@@ -185,20 +206,22 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             )}
           </ScrollView>
 
-          {/* Submit button */}
-          <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border }]}>
-            <TouchableOpacity
-              style={[styles.submitBtn, { backgroundColor: ACCENT }]}
-              onPress={handleSubmit}
-              disabled={submitting}
-              activeOpacity={0.8}
-            >
-              {submitting
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={styles.submitBtnText}>Submit Form</Text>
-              }
-            </TouchableOpacity>
-          </View>
+          {/* Submit button — hidden once completed, since there's nothing left to submit */}
+          {!submitted && (
+            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border }]}>
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: ACCENT }]}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.8}
+              >
+                {submitting
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.submitBtnText}>Submit Form</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
         </KeyboardAvoidingView>
       )}
     </View>
@@ -208,13 +231,14 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
 // ── Question input component ─────────────────────────────────────────────────
 
 function QuestionInput({
-  question, index, value, onChange, P,
+  question, index, value, onChange, P, readOnly = false,
 }: {
   question: IntakeFormQuestion;
   index:    number;
   value:    string;
   onChange: (v: string) => void;
   P:        typeof DARK;
+  readOnly?: boolean;
 }) {
   return (
     <View style={[styles.qCard, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -231,6 +255,7 @@ function QuestionInput({
           style={[styles.textAnswer, { color: P.text, backgroundColor: P.bg, borderColor: P.border }]}
           value={value}
           onChangeText={onChange}
+          editable={!readOnly}
           placeholder="Your answer…"
           placeholderTextColor={P.sub}
           multiline
@@ -256,6 +281,7 @@ function QuestionInput({
               ]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(opt); }}
               activeOpacity={0.7}
+              disabled={readOnly}
             >
               <Text style={[
                 styles.yesnoText,
@@ -282,6 +308,7 @@ function QuestionInput({
               ]}
               onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(opt); }}
               activeOpacity={0.7}
+              disabled={readOnly}
             >
               <View style={[
                 styles.choiceRadio,
@@ -311,6 +338,13 @@ const styles = StyleSheet.create({
   iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', letterSpacing: -0.3 },
   content: { paddingHorizontal: 16, paddingTop: 16 },
+
+  completedBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    marginBottom: 14,
+  },
+  completedBannerText: { color: '#34C759', fontSize: 13, fontWeight: '600', flex: 1 },
 
   introCard: { borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 20 },
   introTitle: { fontSize: 17, fontWeight: '700', marginBottom: 6 },
@@ -360,7 +394,11 @@ const styles = StyleSheet.create({
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 16, paddingBottom: 36, paddingTop: 12,
+    // Bottom padding clears the floating pill tab bar that overlays this
+    // screen (it's nested in a tab's stack) — it used to be a flat 36, which
+    // is roughly home-indicator clearance only, so the pill sat right on top
+    // of the Submit button.
+    paddingHorizontal: 16, paddingBottom: FLOATING_TAB_BAR_CLEARANCE, paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   submitBtn:     { borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
