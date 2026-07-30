@@ -92,15 +92,24 @@ export async function getTrendingProviderIds(limit = 10): Promise<string[]> {
 // PROVIDERS
 // ─────────────────────────────────────────────────────────
 
+// Generous safety-net cap — current provider counts are nowhere near this,
+// so it changes nothing today, but keeps these queries from scanning/
+// returning the entire table unbounded as the provider base grows.
+const DEFAULT_PROVIDER_QUERY_LIMIT = 200;
+
 /** Fetch all active providers, optionally filtered by service category */
-export async function getProviders(category?: string): Promise<DbProvider[]> {
+export async function getProviders(
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT
+): Promise<DbProvider[]> {
   let query = supabase
     .from('providers')
     .select('*')
     .eq('is_active', true)
     .eq('has_gone_live', true)
     .order('is_featured', { ascending: false })
-    .order('rating', { ascending: false });
+    .order('rating', { ascending: false })
+    .limit(limit);
 
   if (category && category !== 'ALL') {
     query = query.eq('service_category', category);
@@ -119,24 +128,30 @@ export async function getProviders(category?: string): Promise<DbProvider[]> {
  */
 export async function searchProviders(
   query: string,
-  category?: string
+  category?: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT
 ): Promise<DbProvider[]> {
   const q = query.trim();
-  if (!q) return getProviders(category);
+  if (!q) return getProviders(category, limit);
 
-  // 1. Find provider IDs where a service name or description matches
-  const { data: serviceMatches } = await supabase
-    .from('services')
-    .select('provider_id')
-    .eq('is_active', true)
-    .or(`name.ilike.%${q}%,description.ilike.%${q}%`);
-
-  // 2. Find provider IDs where display_name or about_text matches
-  const { data: nameMatches } = await supabase
-    .from('providers')
-    .select('id')
-    .eq('is_active', true)
-    .or(`display_name.ilike.%${q}%,about_text.ilike.%${q}%`);
+  // Neither lookup depends on the other's result, so run them together
+  // instead of waiting on one before starting the next.
+  const [{ data: serviceMatches }, { data: nameMatches }] = await Promise.all([
+    // 1. Provider IDs where a service name or description matches
+    supabase
+      .from('services')
+      .select('provider_id')
+      .eq('is_active', true)
+      .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+      .limit(limit),
+    // 2. Provider IDs where display_name or about_text matches
+    supabase
+      .from('providers')
+      .select('id')
+      .eq('is_active', true)
+      .or(`display_name.ilike.%${q}%,about_text.ilike.%${q}%`)
+      .limit(limit),
+  ]);
 
   const serviceIds = (serviceMatches ?? []).map((r: any) => r.provider_id as string);
   const nameIds    = (nameMatches ?? []).map((r: any) => r.id as string);
@@ -152,7 +167,8 @@ export async function searchProviders(
     .eq('is_active', true)
     .eq('has_gone_live', true)
     .order('is_featured', { ascending: false })
-    .order('rating', { ascending: false });
+    .order('rating', { ascending: false })
+    .limit(limit);
 
   if (category && category !== 'ALL') {
     providerQuery = providerQuery.eq('service_category', category);
@@ -333,7 +349,7 @@ export async function searchPortfolio(query: string): Promise<PortfolioItemWithP
 export async function getActivePromotions(category?: string): Promise<DbPromotionWithProvider[]> {
   let query = supabase
     .from('promotions')
-    .select('*, providers!inner(display_name, logo_url)')
+    .select('*, providers!inner(display_name, logo_url, slug)')
     .eq('providers.is_active', true)
     .eq('providers.has_gone_live', true)
     .eq('is_active', true)
@@ -3495,12 +3511,12 @@ export async function countProviderServices(providerId: string): Promise<number>
 // NOTIFICATIONS — delete
 // ─────────────────────────────────────────────────────────
 
-/** Permanently delete a notification row (swipe-to-delete in NotificationsScreen) */
+/** Permanently delete a notification row (swipe-to-delete in NotificationsScreen).
+ *  Routed through delete_own_notification() — notifications has no client-side
+ *  DELETE policy, so a plain .delete() silently matches zero rows. */
 export async function deleteNotification(notificationId: string): Promise<void> {
   const { error } = await supabase
-    .from('notifications')
-    .delete()
-    .eq('id', notificationId);
+    .rpc('delete_own_notification', { p_notification_id: notificationId });
   if (error) throw error;
 }
 

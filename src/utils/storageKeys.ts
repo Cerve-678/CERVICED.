@@ -16,6 +16,8 @@ export const STORAGE_KEYS = {
   REGISTRATION_DRAFT: '@cerviced_reg_draft',
   /** User learning / personalisation data */
   USER_LEARNING:      '@cerviced_learning',
+  /** Cart items — survives app close/kill so an in-progress checkout isn't lost */
+  CART_ITEMS:          '@cerviced_cart',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

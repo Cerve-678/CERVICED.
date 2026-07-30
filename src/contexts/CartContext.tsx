@@ -1,6 +1,8 @@
 // src/contexts/CartContext.tsx - COMPLETE UPDATED VERSION
-import React, { createContext, useContext, useReducer, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { logger } from '../utils/logger';
+import { storage } from '../utils/storage';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 // CartItem interface
 export interface CartItem {
@@ -111,16 +113,18 @@ enum CartActionType {
   UPDATE_QUANTITY = 'UPDATE_QUANTITY',
   CLEAR_CART = 'CLEAR_CART',
   CLEAR_PROVIDER_ITEMS = 'CLEAR_PROVIDER_ITEMS',
-  ADD_SERVICE_INSTANCE = 'ADD_SERVICE_INSTANCE'
+  ADD_SERVICE_INSTANCE = 'ADD_SERVICE_INSTANCE',
+  HYDRATE = 'HYDRATE'
 }
 
-type CartAction = 
+type CartAction =
   | { type: CartActionType.ADD_ITEM; payload: AddToCartParams }
   | { type: CartActionType.REMOVE_ITEM; payload: { itemId: string } }
   | { type: CartActionType.UPDATE_QUANTITY; payload: { itemId: string; quantity: number } }
   | { type: CartActionType.CLEAR_CART }
   | { type: CartActionType.CLEAR_PROVIDER_ITEMS; payload: { providerName: string } }
-  | { type: CartActionType.ADD_SERVICE_INSTANCE; payload: { baseItem: CartItem } };
+  | { type: CartActionType.ADD_SERVICE_INSTANCE; payload: { baseItem: CartItem } }
+  | { type: CartActionType.HYDRATE; payload: { items: CartItem[] } };
 
 const initialState: CartState = {
   items: [],
@@ -323,6 +327,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       case CartActionType.CLEAR_CART:
         return initialState;
 
+      case CartActionType.HYDRATE: {
+        const totals = calculateTotals(action.payload.items);
+        return { ...state, items: action.payload.items, ...totals };
+      }
+
       default:
         return state;
     }
@@ -340,6 +349,32 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const memoizedTotals = useMemo(() => calculateTotals(state.items), [state.items]);
+
+  // Restore any cart left over from before the app was closed/killed. Writes
+  // are held off (via hydratedRef) until this finishes, so a fast app launch
+  // can't overwrite the stored cart with the empty initialState first.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await storage.getItem<CartItem[]>(STORAGE_KEYS.CART_ITEMS);
+        if (stored && stored.length > 0) {
+          dispatch({ type: CartActionType.HYDRATE, payload: { items: stored } });
+        }
+      } catch (error) {
+        logger.error('Failed to restore cart:', error);
+      } finally {
+        hydratedRef.current = true;
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    storage.setItem(STORAGE_KEYS.CART_ITEMS, state.items).catch(error => {
+      logger.error('Failed to persist cart:', error);
+    });
+  }, [state.items]);
   
   const itemsByProvider = useMemo(() => {
     const grouped: Record<string, CartItem[]> = {};
