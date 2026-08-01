@@ -18,6 +18,7 @@ import { handleNotificationTap } from '../services/notificationTapHandler';
 // Auth screens
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
+import ClaimProviderScreen from '../screens/auth/ClaimProviderScreen';
 import SignUpStep1Screen from '../screens/auth/SignUpStep1Screen';
 import SignUpStep2Screen from '../screens/auth/SignUpStep2Screen';
 import SignUpStep3Screen from '../screens/auth/SignUpStep3Screen';
@@ -135,6 +136,7 @@ export default function RootNavigation() {
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="ClaimProvider" component={ClaimProviderScreen} />
             <Stack.Screen name="SignUpStep1" component={SignUpStep1Screen} />
             <Stack.Screen name="SignUpStep2" component={SignUpStep2Screen} />
             <Stack.Screen name="SignUpStep3" component={SignUpStep3Screen} />

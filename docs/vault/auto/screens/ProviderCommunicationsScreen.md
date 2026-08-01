@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `Communications`
 
 ## → Navigates to
-- [[ProviderBusinessEmailScreen\|BusinessDetails]]
+- `BusinessEmail` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
