@@ -49,7 +49,7 @@ serve(async (req) => {
 
     const { data: provider, error: fetchError } = await supabase
       .from('providers')
-      .select('id, email, is_claimed')
+      .select('id, email, is_claimed, claim_token_last_sent_at')
       .eq('id', providerId)
       .maybeSingle();
 
@@ -72,15 +72,35 @@ serve(async (req) => {
       );
     }
 
+    // Cooldown — without this, anyone can trigger a real email send to a
+    // scraped business's inbox repeatedly with no limit. One send per
+    // listing per 60 seconds, checked before any code is generated/sent.
+    if (provider.claim_token_last_sent_at) {
+      const elapsedMs = Date.now() - new Date(provider.claim_token_last_sent_at).getTime();
+      if (elapsedMs < 60 * 1000) {
+        return new Response(
+          JSON.stringify({ error: 'Please wait a moment before requesting another code.' }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+    }
+
     // Single-use, 15-minute code stored on the row's existing claim_token
     // column. Retry once on the (very unlikely) UNIQUE collision with
-    // another pending code.
+    // another pending code. claim_attempts resets to 0 here so a fresh
+    // code always gets its own full set of 5 guesses (see claim_attempts
+    // lockout in claim_provider_profile()).
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     const { error: updateError } = await supabase
       .from('providers')
-      .update({ claim_token: code, claim_token_expires_at: expiresAt })
+      .update({
+        claim_token: code,
+        claim_token_expires_at: expiresAt,
+        claim_attempts: 0,
+        claim_token_last_sent_at: new Date().toISOString(),
+      })
       .eq('id', providerId)
       .eq('is_claimed', false);
 

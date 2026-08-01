@@ -3653,3 +3653,68 @@ export async function sendProviderMessage(params: {
   if (error) throw error;
   return data as DbProviderMessage;
 }
+
+// ─────────────────────────────────────────────────────────
+// CLAIMABLE PROVIDER PROFILES
+//   Search/preview for the pre-signup "claim your business" flow — see
+//   providerClaimService.ts and src/screens/auth/ClaimProviderScreen.tsx.
+//   Everything else about the claim flow (OTP send, claim_provider_profile
+//   RPC) goes through Edge Functions / .rpc(), not this file.
+// ─────────────────────────────────────────────────────────
+
+export interface UnclaimedProviderSearchRow {
+  id: string;
+  display_name: string;
+  service_category: string;
+  location_text: string | null;
+  logo_url: string | null;
+  scraped_fields: string[];
+}
+
+/**
+ * Search unclaimed (is_claimed = false), scraped provider listings by
+ * business name or location text.
+ *
+ * Unclaimed rows (is_claimed = false) are always has_gone_live = false by
+ * construction — they've never been onboarded. This intentionally skips
+ * the has_gone_live filter used elsewhere, scoped narrowly to pre-signup
+ * claim discovery, not general client browse. The real safety gate here is
+ * `is_claimed = false`, not RLS — has_gone_live has no RLS backing
+ * anywhere in this schema.
+ */
+export async function searchUnclaimedProviders(query: string): Promise<UnclaimedProviderSearchRow[]> {
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, display_name, service_category, location_text, logo_url, scraped_fields')
+    .eq('is_claimed', false)
+    .or(`display_name.ilike.%${query}%,location_text.ilike.%${query}%`)
+    .limit(20);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface UnclaimedProviderDetailRow extends UnclaimedProviderSearchRow {
+  about_text: string | null;
+  phone: string | null;
+  email: string | null;
+  instagram: string | null;
+  website: string | null;
+}
+
+/**
+ * Fuller row for the claim preview step, once one search result has been
+ * picked. Same is_claimed = false gate as searchUnclaimedProviders above —
+ * see that function's comment for why has_gone_live isn't checked here.
+ */
+export async function getUnclaimedProviderDetail(id: string): Promise<UnclaimedProviderDetailRow | null> {
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, display_name, service_category, location_text, logo_url, scraped_fields, about_text, phone, email, instagram, website')
+    .eq('id', id)
+    .eq('is_claimed', false)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}

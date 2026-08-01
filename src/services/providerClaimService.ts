@@ -3,6 +3,10 @@
 // verifying ownership, and attaching a newly-signed-up account to one.
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  searchUnclaimedProviders as dbSearchUnclaimedProviders,
+  getUnclaimedProviderDetail as dbGetUnclaimedProviderDetail,
+} from './databaseService';
 
 const PENDING_CLAIM_KEY = '@pending_provider_claim';
 
@@ -20,20 +24,14 @@ export interface PendingClaim {
   code: string;
 }
 
-/** Unclaimed listings are still covered by providers_public_read (is_active = TRUE
- *  by default), so this is a plain client-side select — no RPC needed to read. */
+/** Searches unclaimed listings for the pre-signup claim-discovery step — see
+ *  databaseService.searchUnclaimedProviders for why has_gone_live isn't
+ *  checked here (it's is_claimed = false doing the gating, not RLS). */
 export async function searchUnclaimedProviders(query: string): Promise<UnclaimedProviderSummary[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  const { data, error } = await supabase
-    .from('providers')
-    .select('id, display_name, service_category, location_text, logo_url, scraped_fields')
-    .eq('is_claimed', false)
-    .or(`display_name.ilike.%${trimmed}%,location_text.ilike.%${trimmed}%`)
-    .limit(20);
-
-  if (error) throw new Error(`Search failed: ${error.message}`);
+  const data = await dbSearchUnclaimedProviders(trimmed);
 
   return (data || []).map((p) => ({
     id: p.id,
@@ -56,14 +54,7 @@ export interface UnclaimedProviderDetail extends UnclaimedProviderSummary {
 /** Fuller row for the preview step, once one search result has been picked —
  *  used to prefill the signup wizard (RegistrationContext) after claiming. */
 export async function getUnclaimedProviderDetail(id: string): Promise<UnclaimedProviderDetail | null> {
-  const { data, error } = await supabase
-    .from('providers')
-    .select('id, display_name, service_category, location_text, logo_url, scraped_fields, about_text, phone, email, instagram, website')
-    .eq('id', id)
-    .eq('is_claimed', false)
-    .maybeSingle();
-
-  if (error) throw new Error(`Could not load that listing: ${error.message}`);
+  const data = await dbGetUnclaimedProviderDetail(id);
   if (!data) return null;
 
   return {
@@ -113,11 +104,18 @@ export async function clearPendingClaim(): Promise<void> {
   await AsyncStorage.removeItem(PENDING_CLAIM_KEY).catch(() => {});
 }
 
-/** Attaches the signed-in caller's account to the unclaimed row identified by
- *  `code` (validated server-side by claim_provider_profile — expiry, single
- *  use, and "one provider per account" are all enforced there, not here). */
-export async function claimProviderProfile(code: string): Promise<string> {
-  const { data, error } = await supabase.rpc('claim_provider_profile', { p_claim_token: code });
+/** Attaches the signed-in caller's account to the unclaimed row `providerId`,
+ *  verified by `code` (validated server-side by claim_provider_profile —
+ *  expiry, single use, and "one provider per account" are all enforced
+ *  there, not here). providerId is passed explicitly (rather than looked up
+ *  by token alone) so the RPC can track failed attempts per listing and
+ *  lock a specific row out after 5 wrong guesses — see claim_attempts in
+ *  supabase/claimable_provider_profiles.sql. */
+export async function claimProviderProfile(providerId: string, code: string): Promise<string> {
+  const { data, error } = await supabase.rpc('claim_provider_profile', {
+    p_provider_id: providerId,
+    p_claim_token: code,
+  });
   if (error) throw new Error(error.message || 'Could not verify that code.');
   return data as string;
 }

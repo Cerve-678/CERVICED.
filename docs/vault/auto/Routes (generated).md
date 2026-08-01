@@ -10,6 +10,7 @@ Curated overview: [[Screens & Navigation]].
 - `MainTabs`
 - `Welcome`
 - `Login`
+- `ClaimProvider`
 - `SignUpStep1`
 - `SignUpStep2`
 - `SignUpStep3`

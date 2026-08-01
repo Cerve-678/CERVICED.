@@ -48,6 +48,14 @@ ALTER TABLE public.providers
   ADD COLUMN IF NOT EXISTS claimed_at            TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS claim_token           TEXT UNIQUE,
   ADD COLUMN IF NOT EXISTS claim_token_expires_at TIMESTAMPTZ,
+  -- Failed claim_provider_profile() attempts against THIS row's current
+  -- claim_token, since it was last (re)issued. Locked out at 5 — see the
+  -- RPC below. Reset to 0 whenever a fresh code is generated/sent.
+  ADD COLUMN IF NOT EXISTS claim_attempts        INT NOT NULL DEFAULT 0,
+  -- Last time a verification code was sent for this listing — used to
+  -- rate-limit request-claim-verification so it can't be used to spam a
+  -- scraped business's real inbox.
+  ADD COLUMN IF NOT EXISTS claim_token_last_sent_at TIMESTAMPTZ,
   -- Which columns came from scraping and haven't been confirmed by the
   -- owner yet — the claim UI uses this to flag fields as "please verify"
   -- instead of presenting scraped data as already-trustworthy.
@@ -124,18 +132,36 @@ CREATE TABLE IF NOT EXISTS public.provider_outreach_suppressions (
 ALTER TABLE public.provider_outreach_suppressions ENABLE ROW LEVEL SECURITY;
 
 -- ───────────────────────────────────────────────────────────
--- STEP 4: claim_provider_profile(p_claim_token)
+-- STEP 4: claim_provider_profile(p_provider_id, p_claim_token)
 --   Lets the currently authenticated user attach their account to an
 --   unclaimed provider row. SECURITY DEFINER because it must update a
 --   providers row the caller does not yet own (providers_owner_all only
 --   allows user_id = auth.uid(), which is by definition not yet true).
+--
+--   Takes the listing's id explicitly (the caller already knows it from
+--   the earlier search/preview step) rather than looking the row up by
+--   token alone — a wrong-code guess can't be matched to a row via
+--   `WHERE claim_token = ...` (it doesn't match anything), so there'd be
+--   nowhere to record a failed attempt. Keying off p_provider_id lets us
+--   count failed attempts *against that specific listing* and lock it out
+--   after 5, which is the realistic brute-force shape here: an attacker
+--   who found a listing via search, guessing its 6-digit code.
+--
+--   claim_attempts resets to 0 whenever request-claim-verification issues
+--   a fresh code, so a real owner who mistypes isn't punished across
+--   separate attempts at getting the email.
 -- ───────────────────────────────────────────────────────────
 
-CREATE OR REPLACE FUNCTION public.claim_provider_profile(p_claim_token TEXT)
+DROP FUNCTION IF EXISTS public.claim_provider_profile(TEXT);
+
+CREATE OR REPLACE FUNCTION public.claim_provider_profile(p_provider_id UUID, p_claim_token TEXT)
 RETURNS UUID AS $$
 DECLARE
-  v_provider_id UUID;
   v_caller_id   UUID := auth.uid();
+  v_claim_token TEXT;
+  v_expires_at  TIMESTAMPTZ;
+  v_attempts    INT;
+  v_is_claimed  BOOLEAN;
 BEGIN
   IF v_caller_id IS NULL THEN
     RAISE EXCEPTION 'Must be signed in to claim a profile.';
@@ -145,14 +171,37 @@ BEGIN
     RAISE EXCEPTION 'This account already has a provider profile.';
   END IF;
 
-  SELECT id INTO v_provider_id
+  -- Lock this specific listing for the duration of the check — serializes
+  -- concurrent claim attempts against it (both the attempt-counter bumps
+  -- and the eventual successful claim).
+  SELECT claim_token, claim_token_expires_at, claim_attempts, is_claimed
+    INTO v_claim_token, v_expires_at, v_attempts, v_is_claimed
   FROM public.providers
-  WHERE claim_token = p_claim_token
-    AND is_claimed = FALSE
-    AND claim_token_expires_at > NOW()
+  WHERE id = p_provider_id
   FOR UPDATE;
 
-  IF v_provider_id IS NULL THEN
+  IF NOT FOUND OR v_is_claimed THEN
+    RAISE EXCEPTION 'This claim link is invalid or has expired.';
+  END IF;
+
+  -- Already burned through 5 wrong guesses on this listing's current code —
+  -- null out the token so it can't be tried again, and give the same
+  -- generic error a genuinely-expired code would give (no signal to an
+  -- attacker about *why* it failed).
+  IF v_attempts >= 5 THEN
+    UPDATE public.providers
+       SET claim_token = NULL, claim_token_expires_at = NULL
+     WHERE id = p_provider_id;
+    RAISE EXCEPTION 'This claim link is invalid or has expired.';
+  END IF;
+
+  IF v_claim_token IS NULL
+     OR v_claim_token != p_claim_token
+     OR v_expires_at IS NULL
+     OR v_expires_at <= NOW() THEN
+    UPDATE public.providers
+       SET claim_attempts = claim_attempts + 1
+     WHERE id = p_provider_id;
     RAISE EXCEPTION 'This claim link is invalid or has expired.';
   END IF;
 
@@ -161,12 +210,13 @@ BEGIN
          is_claimed              = TRUE,
          claimed_at               = NOW(),
          claim_token              = NULL,
-         claim_token_expires_at   = NULL
-   WHERE id = v_provider_id;
+         claim_token_expires_at   = NULL,
+         claim_attempts           = 0
+   WHERE id = p_provider_id;
 
   UPDATE public.users SET role = 'provider' WHERE id = v_caller_id;
 
-  RETURN v_provider_id;
+  RETURN p_provider_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 

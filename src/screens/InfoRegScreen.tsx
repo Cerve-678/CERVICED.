@@ -2148,6 +2148,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // as a glitch. Gated in the render below, same as the other profile screens.
   const [isLoadingProvider, setIsLoadingProvider] = useState(true);
 
+  // Set when a pending "claim your business" code (from ClaimProviderScreen)
+  // fails to confirm here — expired, already used, or wrong by the time the
+  // signup wizard finished. Surfaced as a banner below so the provider isn't
+  // left with a silently-blank, unclaimed profile and no explanation.
+  const [claimError, setClaimError] = useState<string | null>(null);
+
   // Load existing provider data and policies from Supabase/AsyncStorage on mount
   useEffect(() => {
     if (!user?.id) { setIsLoadingProvider(false); return; }
@@ -2160,8 +2166,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     getPendingClaim()
       .then(pending => {
         if (!pending) return;
-        return claimProviderProfile(pending.code)
-          .catch(err => { logger.warn('claimProviderProfile failed:', err?.message ?? err); })
+        return claimProviderProfile(pending.providerId, pending.code)
+          .catch(err => {
+            logger.warn('claimProviderProfile failed:', err?.message ?? err);
+            setClaimError(
+              "We couldn't confirm your business claim — the code may have expired or been entered wrong. " +
+              'You can retry from Settings, or just continue setting up your profile below.'
+            );
+          })
           .finally(() => clearPendingClaim());
       })
       .catch(() => {})
@@ -2891,6 +2903,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           </View>
+
+          {claimError && (
+            <View style={styles.claimErrorBanner}>
+              <Text style={styles.claimErrorText}>{claimError}</Text>
+              <TouchableOpacity onPress={() => setClaimError(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color="#7A4B00" />
+              </TouchableOpacity>
+            </View>
+          )}
 
             <ScrollView
               ref={mainScrollViewRef}
@@ -3884,6 +3905,27 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: '#000',
+  },
+  claimErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 193, 7, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 193, 7, 0.4)',
+  },
+  claimErrorText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#7A4B00',
+    marginRight: 8,
   },
   content: {
     flex: 1,
