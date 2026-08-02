@@ -266,6 +266,74 @@ supabase functions deploy send-push-notification
 
 ---
 
+## STEP 4 — Cancellation trigger regression (found 2026-07-30, via cerviced-booking-domain audit)
+
+Running `RUN_ALL_NOTIFICATION_FIXES.sql` per Step 3 above fixes the auto-accept
+trigger, but its STEP 1 (`notification_recipient_role.sql`) redefines
+`handle_booking_status_change` from a baseline that predates
+`booking_flow_fixes.sql` (2026-07-18) — so it silently reverts two things that
+file added:
+
+- **Actor-aware cancellation wording.** A client withdrawing their own pending
+  request currently gets told "Booking Declined" (implying the provider
+  declined it) instead of the provider being told "Booking Request Withdrawn."
+- **Waitlist invites on cancellation.** `invite_next_waitlist_entry()` is no
+  longer called from either cancellation branch — the next waitlisted client
+  never gets notified when a slot frees up.
+
+Confirmed live via `pg_get_functiondef('public.handle_booking_status_change'::regproc)`
+on 2026-07-30: has `recipient_role` (correct, keep it), missing both of the above.
+
+**Fix:** run `supabase/booking_cancellation_actor_aware_fix.sql` (whole file).
+It takes the current live function as its base — `recipient_role` and the
+`autoReviewRequest` review-request guard are preserved — and restores only the
+actor-aware wording and waitlist-invite call. Idempotent, safe to re-run.
+`handle_new_booking` needs no change; the live version already matches the
+later `fix_auto_accept_provider_notification.sql` and is correct.
+
+### Verify after running
+
+```sql
+select pg_get_functiondef('public.handle_booking_status_change'::regproc);
+```
+
+Should now contain `v_actor` and two `PERFORM public.invite_next_waitlist_entry(...)` calls.
+
+Then test in the app: have a client withdraw a pending request and confirm the
+*provider* (not the client) gets "Booking Request Withdrawn," and that a
+waitlisted client for that slot gets notified.
+
+**Status (2026-08-01): confirmed applied.** Checked live via `pg_get_functiondef`
+before Step 5 below — both fixes are present and correct.
+
+---
+
+## STEP 5 — Wire up the waitlist automation toggles (done 2026-08-01)
+
+`waitlistEnabled` / `autoAcceptWaitlist` (Provider Automations → "Enable
+waitlist" / "Auto-invite from waitlist") were stored in
+`providers.automation_settings` but never read anywhere server-side —
+`invite_next_waitlist_entry()` always notify-only invited the top waiter,
+regardless of either toggle.
+
+**Applied** via `supabase/waitlist_automation_settings.sql` (ran live through
+the Supabase MCP connection, not manually — that connector is now authorised,
+unlike Steps 1-4 above). `invite_next_waitlist_entry()` is now a 9-arg
+function (old 2-arg version dropped, confirmed it had exactly one caller):
+skips entirely if `waitlistEnabled` is off, and when `autoAcceptWaitlist` is
+on, inserts a real `pending` booking into the freed slot instead of just
+notifying — wrapped in its own exception block so a slot that no longer
+clears the provider's booking rules can't roll back the cancellation that
+triggered it. See `booking-notifications-architecture` memory for the full
+design writeup.
+
+Nothing left to run for this — verify in-app instead: turn on both toggles
+for a test provider, have a client join the waitlist, cancel a confirmed
+booking in that same slot, and confirm the waitlisted client gets a new
+pending booking (not just a notification).
+
+---
+
 ## Still open in code (not done)
 
 - `getProviderLocationsByDisplayNames` now has **zero callers** — dead code, kept

@@ -97,6 +97,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         service_interests:     meta['service_interests']     ?? [],
         business_name:         meta['business_name']         ?? null,
         business_email:        meta['business_email']        ?? null,
+        business_type:         meta['business_type']         ?? null,
         business_phone:        meta['business_phone']        ?? null,
         instagram:             meta['instagram']             ?? null,
         tiktok:                meta['tiktok']                ?? null,

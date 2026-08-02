@@ -165,6 +165,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       try {
         await upgradeToProvider(data.businessName.trim(), data.businessEmail.trim(), {
           businessPhone: data.businessPhone, instagram: data.instagram, tiktok: data.tiktok, website: data.website,
+          businessType: data.businessType,
         });
         if (user?.email) {
           const { subject, html } = providerWelcomeEmail({ name: data.name || user.name, businessName: data.businessName.trim() });
@@ -194,6 +195,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           data: {
             name: data.name, phone: data.phone, role: data.accountType, dob,
             business_name: data.businessName || null, business_email: data.businessEmail || null,
+            business_type: data.businessType || null,
             business_phone: data.businessPhone || null, instagram: data.instagram || null,
             tiktok: data.tiktok || null, website: data.website || null,
             hair_type: data.hairType || null, skin_type: data.skinType || null,

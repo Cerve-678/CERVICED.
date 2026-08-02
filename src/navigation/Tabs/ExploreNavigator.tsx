@@ -7,7 +7,6 @@ import SearchScreen from '../../screens/SearchScreen';
 import BookmarkedProvidersScreen from '../../screens/BookmarkedProvidersScreen';
 import CartScreen from '../../screens/CartScreen';
 import DevSettingsScreen from '../../screens/DevSettingsScreen';
-import EventDetailScreen from '../../screens/EventDetailScreen';
 import { ExploreStackParamList } from '../types';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -48,24 +47,6 @@ export default function ExploreNavigator() {
         }}
       />
 
-      {/* PUSH NAVIGATION for Event Detail */}
-      <ExploreStack.Screen
-        name="EventDetail"
-        component={EventDetailScreen}
-        options={{
-          title: 'My Plan',
-          presentation: 'card',
-          headerBackTitle: 'Plans',
-          headerStyle: {
-            backgroundColor: theme.background,
-          },
-          headerTintColor: theme.text,
-          headerTitleStyle: {
-            color: theme.text,
-          },
-        }}
-      />
-
       {/* PUSH NAVIGATION for Cart — CartScreen renders its own header, so the
           native stack header must stay hidden (matches CartNavigator's CartMain). */}
       <ExploreStack.Screen
@@ -91,6 +72,15 @@ export default function ExploreNavigator() {
           component={SearchScreen}
           options={{
             title: 'Search Cervices',
+            // Overrides the group's fullScreenModal slide-up-from-bottom —
+            // Search plays its own internal "float up and merge" entrance
+            // (see SearchScreen's isMorphEntry), so the screen itself must
+            // enter with no transition of its own, same as HomeNavigator's
+            // Search screen. The per-navigate `{ animation: 'none' }' 3rd
+            // argument some callers pass to navigation.navigate() doesn't
+            // actually override a navigator-level presentation animation —
+            // this static option is what actually takes effect.
+            animation: 'none',
           }}
         />
         <ExploreStack.Screen

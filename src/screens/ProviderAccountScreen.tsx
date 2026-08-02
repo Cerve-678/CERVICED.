@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Alert,
   View,
@@ -27,6 +27,7 @@ import {
   enableBiometric,
   disableBiometric,
   authenticateWithBiometrics,
+  getBiometricDebugInfo,
 } from '../services/biometricService';
 import { getUnreadNotificationCount } from '../services/databaseService';
 import { ThemedBackground } from '../components/ThemedBackground';
@@ -98,6 +99,14 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
   const [providerDisplayName, setProviderDisplayName] = useState<string | null>(null);
+  // TEMPORARY DIAGNOSTIC — remove once Face ID availability is confirmed
+  // working. The toggle Switch below is `disabled` when unavailable, so it
+  // never fires onPress — this button is always tappable regardless.
+  const [faceIdDebugInfo, setFaceIdDebugInfo] = useState<string | null>(null);
+  const checkFaceIdStatus = useCallback(async () => {
+    const info = await getBiometricDebugInfo();
+    setFaceIdDebugInfo(info);
+  }, []);
   // Unread notifications waiting in the *other* (client) hat, surfaced on the
   // switch control so a dual-role user never misses them while in provider mode.
   const [clientUnread, setClientUnread] = useState(0);
@@ -107,16 +116,24 @@ export default function ProviderAccountScreen({ navigation }: any) {
     getUnreadNotificationCount('client').then(setClientUnread).catch(() => {});
   }, [user?.hasClientProfile]));
 
-  useEffect(() => {
+  // useFocusEffect (not a mount-only useEffect) — this is a persistent tab
+  // screen that never unmounts, so a one-time check could get permanently
+  // stuck reporting "unavailable" if it happened to run before Face ID was
+  // enrolled/ready. Re-checking on every focus makes it self-heal.
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
     (async () => {
       const available = await isBiometricAvailable();
+      if (cancelled) return;
+      setBiometricAvailable(available);
       if (!available) return;
       const [enabled, label] = await Promise.all([isBiometricEnabled(), getBiometricLabel()]);
-      setBiometricAvailable(true);
+      if (cancelled) return;
       setBiometricEnabled(enabled);
       setBiometricLabel(label);
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, []));
 
   // Re-fetch the live public-profile name every time Settings is focused, so
   // edits made in Edit Profile (which write providers.display_name, not
@@ -334,6 +351,20 @@ export default function ProviderAccountScreen({ navigation }: any) {
                 thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
               />
             </View>
+            {/* TEMPORARY DIAGNOSTIC — remove once Face ID availability is confirmed working */}
+            <TouchableOpacity
+              onPress={checkFaceIdStatus}
+              style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
+            >
+              <Text style={{ color: P.accent, fontWeight: '600' }}>Check Face ID Status (debug)</Text>
+            </TouchableOpacity>
+            {faceIdDebugInfo && (
+              <View style={{ padding: 12, backgroundColor: P.surface, borderRadius: 8, marginTop: 4 }}>
+                <Text selectable style={{ color: P.text, fontSize: 12, fontFamily: 'Courier' }}>
+                  {faceIdDebugInfo}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Accessibility & Support */}

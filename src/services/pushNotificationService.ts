@@ -105,17 +105,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
 export function startExpoGoNotificationBridge(userId: string): () => void {
   if (!isExpoGo) return () => {};
 
-  // Look up this user's business name once so provider-role notifications can be
-  // labelled with it (mirrors the production push edge function). Falls back to
-  // "Provider" until it resolves / if the user has no provider profile.
-  let businessName = 'Provider';
-  supabase
-    .from('providers')
-    .select('display_name')
-    .eq('user_id', userId)
-    .maybeSingle()
-    .then(({ data }) => { if (data?.display_name) businessName = data.display_name; });
-
   const channel = supabase
     .channel(`expo-go-notification-bridge-${userId}`)
     .on(
@@ -130,13 +119,12 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
           booking_id: string | null;
           recipient_role: 'provider' | 'client';
         };
-        // Match the production push label: provider-role notifications are
-        // prefixed with the business name so a dual-role user knows which hat
-        // they're for.
-        const displayTitle = row.recipient_role === 'provider' ? `${businessName} · ${row.title}` : row.title;
+        // Title is sent as-is, matching the production push Edge Function —
+        // no business-name prefix (it clipped long titles like "You have a
+        // new booking", and provider vs client is already clear from content).
         Notifications.scheduleNotificationAsync({
           content: {
-            title: displayTitle,
+            title: row.title,
             body: row.message,
             sound: 'default',
             data: { booking_id: row.booking_id, notification_id: row.id, type: row.type, recipient_role: row.recipient_role },

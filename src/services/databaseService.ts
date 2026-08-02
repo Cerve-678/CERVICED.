@@ -12,6 +12,7 @@ import type {
   BookingWithAddOns,
   ProviderWithServices,
   PortfolioItemWithProvider,
+  DiscoverServiceWithProvider,
   NotificationWithContext,
   NotificationType,
   ReviewWithUser,
@@ -27,6 +28,15 @@ import type {
 } from '../types/database';
 import { logger } from '../utils/logger';
 import { ADDRESS_PENDING_PLACEHOLDER, PHONE_PENDING_PLACEHOLDER } from '../types/booking';
+import { parseSearchQuery } from '../utils/searchQuery';
+
+// Terms end up interpolated into a PostgREST `.or()` filter string — strip
+// the characters that are structurally meaningful to that syntax (comma
+// separates conditions, parens group them) so a term containing one can't
+// break out of its intended ilike condition.
+function sanitizeIlikeTerm(term: string): string {
+  return term.replace(/[(),]/g, ' ').trim();
+}
 
 /**
  * DATABASE SERVICE — SINGLE ACCESS POINT
@@ -121,10 +131,15 @@ export async function getProviders(
 }
 
 /**
- * Search providers by keyword against service names and descriptions.
- * Only returns providers who actually offer a matching service.
- * Also matches against provider display name and about text.
- * Optionally filtered by service category chip.
+ * Search providers from a plain-English query — e.g. "hairstylist in south
+ * london" or "almond nails, nail art in east manchester". Parses out a
+ * trailing "in/near/around <place>" as a location filter and the remainder
+ * as one or more service terms (split on commas/"and"), matched against
+ * service names/descriptions and provider display name/about text/location.
+ * A detected category keyword (e.g. "hairstylist" → HAIR) additionally
+ * broadens the result to the whole category, since generic words like that
+ * rarely appear verbatim in a service name. Optionally further filtered by
+ * an explicit service category chip.
  */
 export async function searchProviders(
   query: string,
@@ -134,32 +149,52 @@ export async function searchProviders(
   const q = query.trim();
   if (!q) return getProviders(category, limit);
 
-  // Neither lookup depends on the other's result, so run them together
-  // instead of waiting on one before starting the next.
-  const [{ data: serviceMatches }, { data: nameMatches }] = await Promise.all([
+  const parsed = parseSearchQuery(q);
+  // Falls back to the whole query when no location preposition was found,
+  // so a bare "south london" (no "in") still gets tried as free text below.
+  const textTerms = (parsed.serviceTerms.length ? parsed.serviceTerms : [q]).map(sanitizeIlikeTerm);
+  const locationTerms = parsed.locationTerms.map(sanitizeIlikeTerm);
+
+  const serviceOr = textTerms.map(t => `name.ilike.%${t}%,description.ilike.%${t}%`).join(',');
+  // location_text is included here too (not just in the dedicated filter
+  // below) so a query with no "in/near" preposition still matches on it.
+  const nameOr = textTerms.map(t => `display_name.ilike.%${t}%,about_text.ilike.%${t}%,location_text.ilike.%${t}%`).join(',');
+
+  // A detected category hint only broadens recall when the caller hasn't
+  // already pinned a category via the chip filter — that's already narrower.
+  const categoryHint = parsed.categoryHint && (!category || category === 'ALL') ? parsed.categoryHint : null;
+
+  // None of these three lookups depend on each other's result, so run them
+  // together instead of waiting on one before starting the next.
+  const [{ data: serviceMatches }, { data: nameMatches }, { data: categoryMatches }] = await Promise.all([
     // 1. Provider IDs where a service name or description matches
     supabase
       .from('services')
       .select('provider_id')
       .eq('is_active', true)
-      .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+      .or(serviceOr)
       .limit(limit),
-    // 2. Provider IDs where display_name or about_text matches
+    // 2. Provider IDs where display_name, about_text, or location matches
     supabase
       .from('providers')
       .select('id')
       .eq('is_active', true)
-      .or(`display_name.ilike.%${q}%,about_text.ilike.%${q}%`)
+      .or(nameOr)
       .limit(limit),
+    // 3. Provider IDs in the detected category, if any
+    categoryHint
+      ? supabase.from('providers').select('id').eq('is_active', true).eq('service_category', categoryHint).limit(limit)
+      : Promise.resolve({ data: [] as { id: string }[], error: null }),
   ]);
 
-  const serviceIds = (serviceMatches ?? []).map((r: any) => r.provider_id as string);
-  const nameIds    = (nameMatches ?? []).map((r: any) => r.id as string);
-  const allIds     = [...new Set([...serviceIds, ...nameIds])];
+  const serviceIds  = (serviceMatches ?? []).map((r: { provider_id: string }) => r.provider_id);
+  const nameIds     = (nameMatches ?? []).map((r: { id: string }) => r.id);
+  const categoryIds = (categoryMatches ?? []).map((r: { id: string }) => r.id);
+  const allIds      = [...new Set([...serviceIds, ...nameIds, ...categoryIds])];
 
   if (allIds.length === 0) return [];
 
-  // 3. Fetch those providers, applying optional category filter
+  // 4. Fetch those providers, applying the explicit location + category filters
   let providerQuery = supabase
     .from('providers')
     .select('*')
@@ -172,6 +207,10 @@ export async function searchProviders(
 
   if (category && category !== 'ALL') {
     providerQuery = providerQuery.eq('service_category', category);
+  }
+
+  if (locationTerms.length) {
+    providerQuery = providerQuery.or(locationTerms.map(t => `location_text.ilike.%${t}%`).join(','));
   }
 
   const { data, error } = await providerQuery;
@@ -318,7 +357,7 @@ export async function getPortfolioItems(category?: string): Promise<PortfolioIte
     query = query.eq('category', category.toUpperCase());
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query.limit(DEFAULT_PROVIDER_QUERY_LIMIT);
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
 }
@@ -329,7 +368,7 @@ export async function searchPortfolio(query: string): Promise<PortfolioItemWithP
     .from('portfolio_items')
     .select(`
       *,
-      provider: providers!inner ( id, slug, display_name, service_category, logo_url )
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
     `)
     .eq('provider.is_active', true)
     .eq('provider.has_gone_live', true)
@@ -339,6 +378,125 @@ export async function searchPortfolio(query: string): Promise<PortfolioItemWithP
 
   if (error) throw error;
   return (data ?? []) as PortfolioItemWithProvider[];
+}
+
+/**
+ * Fetch providers that have a cover photo, for the mixed Explore discovery
+ * feed — mirrors getProviders' has_gone_live/is_active gating but requires
+ * an image, since this powers a visual grid rather than a list.
+ */
+export async function getDiscoverProviders(
+  category?: string,
+  limit = 40
+): Promise<DbProvider[]> {
+  let query = supabase
+    .from('providers')
+    .select('*')
+    .eq('is_active', true)
+    .eq('has_gone_live', true)
+    .not('background_image_url', 'is', null)
+    .order('is_featured', { ascending: false })
+    .order('rating', { ascending: false })
+    .limit(limit);
+
+  if (category && category !== 'All') {
+    query = query.eq('service_category', category.toUpperCase());
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Fetch services that have at least one photo, with provider info, for the
+ * mixed Explore discovery feed. The !inner join on service_images excludes
+ * services with no photo.
+ */
+export async function getDiscoverServices(
+  category?: string,
+  limit = 40
+): Promise<DiscoverServiceWithProvider[]> {
+  let query = supabase
+    .from('services')
+    .select(`
+      id, provider_id, name, price,
+      service_images!inner ( url, sort_order ),
+      provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+    `)
+    .eq('is_active', true)
+    .eq('provider.is_active', true)
+    .eq('provider.has_gone_live', true)
+    .limit(limit);
+
+  if (category && category !== 'All') {
+    query = query.eq('provider.service_category', category.toUpperCase());
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as unknown as DiscoverServiceWithProvider[];
+}
+
+/**
+ * Resolve the user's saved/"hearted" IDs (from `useBookmarkStore.savedPortfolioIds`,
+ * a mix of raw portfolio_item ids and `provider-<id>`/`service-<id>` prefixed ids
+ * from the mixed discovery feed) into full rows, batched by kind — no N+1.
+ * Powers the Explore screen's Favourites tab.
+ */
+export async function getSavedPortfolioDetails(ids: string[]): Promise<{
+  portfolioItems: PortfolioItemWithProvider[];
+  providers: DbProvider[];
+  services: DiscoverServiceWithProvider[];
+}> {
+  const providerIds = ids.filter(id => id.startsWith('provider-')).map(id => id.slice('provider-'.length));
+  const serviceIds = ids.filter(id => id.startsWith('service-')).map(id => id.slice('service-'.length));
+  const portfolioIds = ids.filter(id => !id.startsWith('provider-') && !id.startsWith('service-'));
+
+  const [portfolioResult, providerResult, serviceResult] = await Promise.all([
+    portfolioIds.length > 0
+      ? supabase
+          .from('portfolio_items')
+          .select(`
+            *,
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+          `)
+          .in('id', portfolioIds)
+          .eq('provider.is_active', true)
+          .eq('provider.has_gone_live', true)
+      : Promise.resolve({ data: [], error: null }),
+    providerIds.length > 0
+      ? supabase
+          .from('providers')
+          .select('*')
+          .in('id', providerIds)
+          .eq('is_active', true)
+          .eq('has_gone_live', true)
+      : Promise.resolve({ data: [], error: null }),
+    serviceIds.length > 0
+      ? supabase
+          .from('services')
+          .select(`
+            id, provider_id, name, price,
+            service_images ( url, sort_order ),
+            provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
+          `)
+          .in('id', serviceIds)
+          .eq('is_active', true)
+          .eq('provider.is_active', true)
+          .eq('provider.has_gone_live', true)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (portfolioResult.error) throw portfolioResult.error;
+  if (providerResult.error) throw providerResult.error;
+  if (serviceResult.error) throw serviceResult.error;
+
+  return {
+    portfolioItems: (portfolioResult.data ?? []) as PortfolioItemWithProvider[],
+    providers: (providerResult.data ?? []) as DbProvider[],
+    services: (serviceResult.data ?? []) as unknown as DiscoverServiceWithProvider[],
+  };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -575,6 +733,7 @@ export async function getClientBookingHistory(clientUserId: string): Promise<imp
     .select('*')
     .eq('provider_id', provider.id)
     .eq('user_id', clientUserId)
+    .neq('status', 'on_hold')
     .order('booking_date', { ascending: false });
 
   if (error) throw error;
@@ -825,6 +984,29 @@ export async function isProviderBookmarked(providerId: string): Promise<boolean>
 // BOOKINGS — Consumer side
 // ─────────────────────────────────────────────────────────
 
+/** Direct by-id fetch, bypassing client_bookings — that view deliberately
+ *  excludes 'on_hold' rows from the normal bookings list (see
+ *  waitlist_holds.sql) so a not-yet-claimed waitlist hold never shows up as
+ *  a phantom appointment. This is the one legitimate reason to fetch one
+ *  anyway: the client tapped a waitlist_slot_available notification and
+ *  needs to see the specific held slot to confirm or decline it. RLS
+ *  (bookings_user_select) already scopes this to the caller's own rows. */
+// BookingWithAddOns' status field is typed as the client-side BookingStatus
+// enum (only meaningful after mapDbBookingToConfirmed), which has no
+// 'on_hold' member and doesn't even include 'confirmed' — this fetch
+// bypasses that mapping entirely, so the field really is the raw DB string.
+export type RawBooking = Omit<BookingWithAddOns, 'status'> & { status: string };
+
+export async function getBookingById(bookingId: string): Promise<RawBooking | null> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('id', bookingId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as RawBooking | null;
+}
+
 /**
  * Fetch the current user's bookings within a bounded recent window (default
  * 90 days back) plus everything upcoming — an unbounded `select('*')` over a
@@ -1009,7 +1191,7 @@ export async function createBooking(
     .select('booking_time, end_time, service_id')
     .eq('provider_id', booking.provider_id)
     .eq('booking_date', booking.booking_date)
-    .in('status', ['pending', 'confirmed', 'in_progress']);
+    .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']);
 
   if (conflicts && conflicts.length > 0) {
     // Batch-fetch every conflicting booking's service row in one query —
@@ -1083,16 +1265,33 @@ export async function createBooking(
   return data;
 }
 
-/** Update booking status */
+/** Update booking status (provider-side confirm/start/complete/no-show — cancel
+ *  goes through cancelOwnBooking/providerCancelOwnBooking instead). Routed
+ *  through a SECURITY DEFINER RPC that can only touch the status column — see
+ *  fix_bookings_provider_update_bypass.sql. */
 export async function updateBookingStatus(
   bookingId: string,
   status: DbBooking['status']
 ): Promise<void> {
   const { error } = await supabase
-    .from('bookings')
-    .update({ status })
-    .eq('id', bookingId);
+    .rpc('provider_update_booking_status', { p_booking_id: bookingId, p_status: status });
 
+  if (error) throw error;
+}
+
+/** Patch group-booking metadata on already-created bookings — used to
+ *  reconcile is_group_booking/group_booking_id/group_booking_count after a
+ *  multi-service checkout partially fails, since those fields are stamped
+ *  from the original cart size before any item's outcome is known. */
+export async function updateBookingGroupInfo(
+  bookingIds: string[],
+  groupInfo: { is_group_booking: boolean; group_booking_id: string | null; group_booking_count: number }
+): Promise<void> {
+  if (bookingIds.length === 0) return;
+  const { error } = await supabase
+    .from('bookings')
+    .update(groupInfo)
+    .in('id', bookingIds);
   if (error) throw error;
 }
 
@@ -1129,6 +1328,9 @@ export async function getProviderBookings(): Promise<BookingWithAddOns[]> {
       add_ons: booking_add_ons ( * )
     `)
     .eq('provider_id', provider.id)
+    // A not-yet-claimed waitlist hold isn't a real appointment yet — it
+    // surfaces in the Waitlist tab instead (see getProviderWaitlist).
+    .neq('status', 'on_hold')
     .order('booking_date', { ascending: true })
     .order('booking_time', { ascending: true });
 
@@ -1157,15 +1359,27 @@ export async function getProviderConversations(): Promise<ProviderConversationWi
 
   const { data, error } = await supabase
     .from('provider_conversations')
-    .select(`
-      *,
-      client: users ( id, name, avatar_url )
-    `)
+    .select('*')
     .eq('provider_id', provider.id)
     .order('updated_at', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as unknown as ProviderConversationWithClient[];
+  const conversations = (data ?? []) as Omit<ProviderConversationWithClient, 'client'>[];
+  if (conversations.length === 0) return [];
+
+  // Client name/avatar via the same batched RPC as getProviderReviews — see
+  // fix_users_table_pii_leak.sql for why this isn't an embedded users join.
+  const userIds = [...new Set(conversations.map(c => c.user_id))];
+  const { data: profiles } = await supabase
+    .rpc('get_user_public_profiles', { p_user_ids: userIds });
+  const profileById = new Map<string, { id: string; name: string; avatar_url: string | null }>(
+    (profiles ?? []).map((p: any) => [p.id, { id: p.id, name: p.name, avatar_url: p.avatar_url }])
+  );
+
+  return conversations.map((c): ProviderConversationWithClient => ({
+    ...c,
+    client: profileById.get(c.user_id) ?? null,
+  }));
 }
 
 /** A provider_conversations row joined with the provider's public info */
@@ -1213,11 +1427,149 @@ export async function getProviderBookingsByDate(
     `)
     .eq('provider_id', providerId)
     .eq('booking_date', date)
-    .neq('status', 'cancelled')
+    .not('status', 'in', '("cancelled","on_hold")')
     .order('booking_time', { ascending: true });
 
   if (error) throw error;
   return (data ?? []) as BookingWithAddOns[];
+}
+
+// ─────────────────────────────────────────────────────────
+// WAITLIST
+// ─────────────────────────────────────────────────────────
+
+export interface WaitlistEntry {
+  id: string;
+  provider_id: string;
+  user_id: string;
+  service_id: string | null;
+  service_name_snapshot: string;
+  provider_name_snapshot: string;
+  user_name_snapshot: string | null;
+  // [0] = range start, [1] = range end (absent = open-ended). NULL = any date.
+  preferred_dates: string[] | null;
+  notes: string | null;
+  status: 'waiting' | 'notified' | 'booked' | 'expired' | 'cancelled';
+  position: number;
+  created_at: string;
+  notified_at: string | null;
+  expires_at: string;
+}
+
+export interface JoinWaitlistParams {
+  providerId: string;
+  userId: string;
+  serviceId: string | null;
+  serviceNameSnapshot: string;
+  providerNameSnapshot: string;
+  userNameSnapshot?: string;
+  preferredDates?: string[];
+  notes?: string;
+}
+
+/** Join a provider's waitlist. Removes any stale row for the same
+ *  provider+service first so re-joining always works. */
+export async function joinWaitlist(params: JoinWaitlistParams): Promise<WaitlistEntry> {
+  const staleQuery = supabase
+    .from('provider_waitlist')
+    .delete()
+    .eq('provider_id', params.providerId)
+    .eq('user_id', params.userId);
+  if (params.serviceId) {
+    await staleQuery.eq('service_id', params.serviceId);
+  } else {
+    await staleQuery.is('service_id', null);
+  }
+
+  const { data, error } = await supabase
+    .from('provider_waitlist')
+    .insert({
+      provider_id: params.providerId,
+      user_id: params.userId,
+      service_id: params.serviceId,
+      service_name_snapshot: params.serviceNameSnapshot,
+      provider_name_snapshot: params.providerNameSnapshot,
+      user_name_snapshot: params.userNameSnapshot ?? null,
+      preferred_dates: params.preferredDates ?? null,
+      notes: params.notes ?? null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as WaitlistEntry;
+}
+
+export async function leaveWaitlist(entryId: string): Promise<void> {
+  const { error } = await supabase
+    .from('provider_waitlist')
+    .delete()
+    .eq('id', entryId);
+  if (error) throw error;
+}
+
+export async function getUserWaitlistEntries(userId: string): Promise<WaitlistEntry[]> {
+  const { data, error } = await supabase
+    .from('provider_waitlist')
+    .select('*')
+    .eq('user_id', userId)
+    .not('status', 'in', '("cancelled","booked")')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as WaitlistEntry[];
+}
+
+export async function getProviderWaitlist(providerId: string): Promise<WaitlistEntry[]> {
+  const { data, error } = await supabase
+    .from('provider_waitlist')
+    .select('*')
+    .eq('provider_id', providerId)
+    .not('status', 'in', '("cancelled","booked","expired")')
+    .order('service_id', { ascending: true })
+    .order('position', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as WaitlistEntry[];
+}
+
+/** Provider's manual "Schedule & Invite" — the caller already inserted a
+ *  real booking for this entry (see ProviderBookingHistoryScreen's
+ *  handleConfirmInvite), so this just reflects that in the waitlist row and
+ *  tells the client. Distinct from the automatic waitlist_holds.sql flow
+ *  (invite_next_waitlist_entry/claim_waitlist_hold), which reserves a slot
+ *  rather than booking it outright — a provider hand-picking someone here
+ *  isn't racing the general public the way an automatic cancellation-
+ *  triggered invite is, so there's nothing to hold. */
+export async function inviteFromWaitlist(entry: WaitlistEntry): Promise<void> {
+  const { error } = await supabase
+    .from('provider_waitlist')
+    .update({ status: 'booked', notified_at: new Date().toISOString() })
+    .eq('id', entry.id);
+  if (error) throw error;
+
+  await supabase.from('notifications').insert({
+    user_id: entry.user_id,
+    type: 'waitlist_slot_available',
+    title: 'A slot opened up!',
+    message: `${entry.service_name_snapshot} with ${entry.provider_name_snapshot} — booked for you, check your bookings.`,
+    priority: 'high',
+    is_actionable: true,
+    provider_id: entry.provider_id,
+    recipient_role: 'client',
+  });
+}
+
+/** Confirm a time-boxed waitlist hold (see waitlist_holds.sql) — turns the
+ *  'on_hold' booking into a real pending/confirmed one. Throws if the hold
+ *  already expired or isn't this user's. */
+export async function claimWaitlistHold(bookingId: string): Promise<void> {
+  const { error } = await supabase.rpc('claim_waitlist_hold', { p_booking_id: bookingId });
+  if (error) throw error;
+}
+
+/** Explicitly give up a waitlist hold — cascades to the next matching
+ *  candidate immediately rather than making them wait out the full window. */
+export async function declineWaitlistHold(bookingId: string): Promise<void> {
+  const { error } = await supabase.rpc('decline_waitlist_hold', { p_booking_id: bookingId });
+  if (error) throw error;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1237,27 +1589,18 @@ export async function getMyNotifications(role: 'provider' | 'client'): Promise<D
   return data ?? [];
 }
 
-/** Mark a notification as read */
+/** Mark a notification as read. Routed through a SECURITY DEFINER RPC that can
+ *  only touch is_read — see fix_notifications_update_bypass.sql. */
 export async function markNotificationRead(notificationId: string): Promise<void> {
   const { error } = await supabase
-    .from('notifications')
-    .update({ is_read: true })
-    .eq('id', notificationId);
+    .rpc('mark_notification_read', { p_notification_id: notificationId });
 
   if (error) throw error;
 }
 
 /** Mark all notifications as read */
 export async function markAllNotificationsRead(): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { error } = await supabase
-    .from('notifications')
-    .update({ is_read: true })
-    .eq('user_id', user.id)
-    .eq('is_read', false);
-
+  const { error } = await supabase.rpc('mark_all_notifications_read');
   if (error) throw error;
 }
 
@@ -1318,15 +1661,27 @@ export async function getUnreadNotificationCount(role: 'provider' | 'client'): P
 export async function getProviderReviews(providerId: string): Promise<ReviewWithUser[]> {
   const { data, error } = await supabase
     .from('reviews')
-    .select(`
-      *,
-      user: users ( name, avatar_url )
-    `)
+    .select('*')
     .eq('provider_id', providerId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as ReviewWithUser[];
+  const reviews = (data ?? []) as DbReview[];
+  if (reviews.length === 0) return [];
+
+  // Reviewer name/avatar comes from a SECURITY DEFINER RPC, not an embedded
+  // join on the users table — that join relied on a blanket read policy on
+  // users that also exposed health data to anyone (see
+  // fix_users_table_pii_leak.sql). Batched into one call, not per-row.
+  const userIds = [...new Set(reviews.map(r => r.user_id))];
+  const { data: profiles } = await supabase
+    .rpc('get_user_public_profiles', { p_user_ids: userIds });
+  const profileById = new Map((profiles ?? []).map((p: any) => [p.id, { name: p.name, avatar_url: p.avatar_url }]));
+
+  return reviews.map(r => ({
+    ...r,
+    user: profileById.get(r.user_id) ?? { name: null, avatar_url: null },
+  })) as ReviewWithUser[];
 }
 
 /** Fetch reviews for the currently authenticated provider */
@@ -1783,6 +2138,7 @@ export async function updateProviderScheduleSettings(
     booking_window_days: number;
     slot_interval_mins: number;
     buffer_mins: number;
+    min_booking_notice_hrs: number;
   },
 ): Promise<void> {
   const { error } = await supabase
@@ -1915,7 +2271,7 @@ export interface ClientBeautyProfile {
   photographyConsent: boolean;
 }
 
-export async function getClientBeautyProfile(userId: string): Promise<ClientBeautyProfile | null> {
+export async function getClientBeautyProfile(userId: string): Promise<ClientBeautyProfile> {
   const EMPTY_PROFILE: ClientBeautyProfile = {
     hairType: null, scalpCondition: null, hairGoals: [], treatmentHistory: [],
     skinType: null, skinTone: null, skinConcerns: [], sensitiveAreas: [],
@@ -1925,53 +2281,51 @@ export async function getClientBeautyProfile(userId: string): Promise<ClientBeau
     styleVibe: null, allergies: [], medicalNotes: null, photographyConsent: true,
   };
 
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select(`
-        hair_type, scalp_condition, hair_goals, treatment_history,
-        skin_type, skin_tone, skin_concerns, sensitive_areas,
-        nail_length, nail_shape,
-        lash_style, lash_status, brow_style, brow_condition,
-        makeup_coverage, makeup_finish, makeup_eyes, makeup_lips,
-        style_vibe, allergies, medical_notes, photography_consent
-      `)
-      .eq('id', userId)
-      .single();
+  // Goes through a SECURITY DEFINER RPC (not a direct table select) — it
+  // only returns a row when the caller is the provider on an actual
+  // booking with this client. See fix_users_table_pii_leak.sql: the users
+  // table used to have a blanket USING(true) read policy that let anyone
+  // pull any user's health data straight off the table.
+  const { data, error } = await supabase
+    .rpc('get_client_beauty_profile_for_provider', { p_client_user_id: userId })
+    .maybeSingle();
 
-    if (error || !data) {
-      const { data: exists } = await supabase.from('users').select('id').eq('id', userId).single();
-      return exists ? EMPTY_PROFILE : null;
-    }
-
-    const d = data as any;
-    return {
-      hairType:           d.hair_type           ?? null,
-      scalpCondition:     d.scalp_condition      ?? null,
-      hairGoals:          d.hair_goals           ?? [],
-      treatmentHistory:   d.treatment_history    ?? [],
-      skinType:           d.skin_type            ?? null,
-      skinTone:           d.skin_tone            ?? null,
-      skinConcerns:       d.skin_concerns        ?? [],
-      sensitiveAreas:     d.sensitive_areas      ?? [],
-      nailLength:         d.nail_length          ?? null,
-      nailShape:          d.nail_shape           ?? null,
-      lashStyle:          d.lash_style           ?? null,
-      lashStatus:         d.lash_status          ?? null,
-      browStyle:          d.brow_style           ?? null,
-      browCondition:      d.brow_condition       ?? null,
-      makeupCoverage:     d.makeup_coverage      ?? null,
-      makeupFinish:       d.makeup_finish        ?? null,
-      makeupEyes:         d.makeup_eyes          ?? null,
-      makeupLips:         d.makeup_lips          ?? null,
-      styleVibe:          d.style_vibe           ?? null,
-      allergies:          d.allergies            ?? [],
-      medicalNotes:       d.medical_notes        ?? null,
-      photographyConsent: d.photography_consent  ?? true,
-    };
-  } catch {
-    return null;
+  // A genuine RPC failure must not be indistinguishable from "no allergies on
+  // file" — this is health/safety data, so a transient error has to surface
+  // as an error, not silently read as a confirmed-clear profile. The caller
+  // decides how to degrade (see CLAUDE.md).
+  if (error) throw error;
+  // No row = legitimately no booking relationship with this client (the RPC
+  // is booking-gated) — EMPTY_PROFILE is the correct, non-error result here.
+  if (!data) {
+    return EMPTY_PROFILE;
   }
+
+  const d = data as any;
+  return {
+    hairType:           d.hair_type           ?? null,
+    scalpCondition:     d.scalp_condition      ?? null,
+    hairGoals:          d.hair_goals           ?? [],
+    treatmentHistory:   d.treatment_history    ?? [],
+    skinType:           d.skin_type            ?? null,
+    skinTone:           d.skin_tone            ?? null,
+    skinConcerns:       d.skin_concerns        ?? [],
+    sensitiveAreas:     d.sensitive_areas      ?? [],
+    nailLength:         d.nail_length          ?? null,
+    nailShape:          d.nail_shape           ?? null,
+    lashStyle:          d.lash_style           ?? null,
+    lashStatus:         d.lash_status          ?? null,
+    browStyle:          d.brow_style           ?? null,
+    browCondition:      d.brow_condition       ?? null,
+    makeupCoverage:     d.makeup_coverage      ?? null,
+    makeupFinish:       d.makeup_finish        ?? null,
+    makeupEyes:         d.makeup_eyes          ?? null,
+    makeupLips:         d.makeup_lips          ?? null,
+    styleVibe:          d.style_vibe           ?? null,
+    allergies:          d.allergies            ?? [],
+    medicalNotes:       d.medical_notes        ?? null,
+    photographyConsent: d.photography_consent  ?? true,
+  };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2576,32 +2930,94 @@ export async function getMobileProviderDisplayNames(displayNames: string[]): Pro
   );
 }
 
+/** Of the given provider ids, which ones require a consultation before a new client's first booking. */
+export async function getConsultationRequiredProviderIds(providerIds: string[]): Promise<Set<string>> {
+  if (providerIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, consultation_required_new_clients')
+    .in('id', providerIds);
+  if (error || !data) return new Set();
+  return new Set(
+    (data as Array<{ id: string; consultation_required_new_clients: boolean | null }>)
+      .filter(p => p.consultation_required_new_clients)
+      .map(p => p.id)
+  );
+}
+
+/** Of the given provider ids, which ones the current client already has a real (non-cancelled) booking with. */
+export async function getProviderIdsWithBookingHistory(providerIds: string[]): Promise<Set<string>> {
+  if (providerIds.length === 0) return new Set();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new Set();
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('provider_id')
+    .eq('user_id', user.id)
+    .in('provider_id', providerIds)
+    .neq('status', 'cancelled');
+  if (error || !data) return new Set();
+  return new Set((data as Array<{ provider_id: string }>).map(b => b.provider_id));
+}
+
+/** Of the given service ids, which ones are consultation-type services. */
+export async function getConsultationServiceIds(serviceIds: string[]): Promise<Set<string>> {
+  if (serviceIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from('services')
+    .select('id, service_type')
+    .in('id', serviceIds);
+  if (error || !data) return new Set();
+  return new Set(
+    (data as Array<{ id: string; service_type: string | null }>)
+      .filter(s => s.service_type === 'consultation')
+      .map(s => s.id)
+  );
+}
+
+export interface ProviderConsultationService {
+  id: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+  description: string;
+  categoryName: string;
+  imageUrl: string | null;
+}
+
+/** The provider's bookable consultation service, if they have one — used to
+ *  auto-add a required consultation to a client's cart rather than just
+ *  blocking checkout with nowhere to go. */
+export async function getProviderConsultationService(providerId: string): Promise<ProviderConsultationService | null> {
+  const { data, error } = await supabase
+    .from('services')
+    .select('id, name, price, duration_minutes, description, category_name, service_images ( url, sort_order )')
+    .eq('provider_id', providerId)
+    .eq('service_type', 'consultation')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const images = ((data as any).service_images ?? []) as { url: string; sort_order: number }[];
+  const firstImage = images.sort((a, b) => a.sort_order - b.sort_order)[0];
+  return {
+    id: data.id,
+    name: data.name,
+    price: Number(data.price),
+    durationMinutes: data.duration_minutes,
+    description: data.description ?? '',
+    categoryName: data.category_name,
+    imageUrl: firstImage?.url ?? null,
+  };
+}
+
 // ─────────────────────────────────────────────────────────
 // ADDRESS RELEASE POLICY
 // ─────────────────────────────────────────────────────────
 
-export interface ProviderAddressSettings {
+export interface ProviderAddressPolicy {
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
-}
-
-/**
- * Business type + release policy for a provider.
- *
- * No longer returns full_address: that column has moved out of `providers` into
- * the owner-only provider_private_details table (see
- * restrict_provider_full_address.sql), because `providers` is world-readable to
- * any authenticated user and RLS cannot hide a single column. Use
- * getMyProviderFullAddress() for the provider's own address.
- */
-export async function getProviderAddressSettings(providerId: string): Promise<ProviderAddressSettings | null> {
-  const { data, error } = await supabase
-    .from('providers')
-    .select('business_type, address_release_policy')
-    .eq('id', providerId)
-    .single();
-  if (error || !data) return null;
-  return data as ProviderAddressSettings;
 }
 
 /**
@@ -2620,22 +3036,28 @@ export async function getMyProviderFullAddress(): Promise<string | null> {
   return (data as { full_address?: string | null } | null)?.full_address ?? null;
 }
 
-/** Save the calling provider's own private street address. */
+/**
+ * Save the calling provider's own private street address, plus the real
+ * coordinates it geocoded to (see providerRegistrationService.ts's
+ * geocodeAndValidateUkAddress) — used by stamp_booking_address_snapshot() to
+ * stamp a released booking's map pin with the real location instead of the
+ * approximate location_text geocode. Pass null coordinates only for an
+ * address being cleared, never for one that's being set.
+ */
 export async function setMyProviderFullAddress(
   providerId: string,
-  fullAddress: string | null
+  fullAddress: string | null,
+  latitude: number | null = null,
+  longitude: number | null = null
 ): Promise<void> {
   const { error } = await supabase
     .from('provider_private_details')
     .upsert(
-      { provider_id: providerId, full_address: fullAddress, updated_at: new Date().toISOString() },
+      { provider_id: providerId, full_address: fullAddress, latitude, longitude, updated_at: new Date().toISOString() },
       { onConflict: 'provider_id' }
     );
   if (error) throw error;
 }
-
-/** Business type + release policy. Kept as an alias — see ProviderAddressSettings. */
-export type ProviderAddressPolicy = ProviderAddressSettings;
 
 /** Client-safe: release policy by provider id (stable), no address leaked. */
 export async function getProviderAddressPolicy(providerId: string): Promise<ProviderAddressPolicy | null> {
@@ -2678,56 +3100,30 @@ export async function getClientBookingsForAddressShare(providerId: string): Prom
   return (data ?? []) as ClientBookingSummary[];
 }
 
-/** Save the address a client sends their mobile provider, for a specific booking. */
+/** Save the address a client sends their mobile provider, for a specific booking.
+ *  Routed through a SECURITY DEFINER RPC — see fix_bookings_client_update_bypass.sql.
+ *  The general "clients can update their own booking row" policy was dropped, so a
+ *  raw .update() here would now fail RLS. */
 export async function setBookingClientAddress(bookingId: string, address: string): Promise<void> {
   const { error } = await supabase
-    .from('bookings')
-    .update({ client_address: address })
-    .eq('id', bookingId);
+    .rpc('set_booking_client_address', { p_booking_id: bookingId, p_address: address });
   if (error) throw error;
 }
 
 /**
  * Manually release the full address for a specific booking to the client.
- * Sends exactly ONE "Address Now Available" notification — this is the single
- * source for the manual path. (Previously ProviderBookingDetailScreen ALSO
- * sent its own "Address Released" notification right after calling this,
- * so the client got two differently-worded notifications for one event.
- * That caller no longer sends its own — see handleReleaseAddress.)
+ * Sends exactly ONE "Address Now Available" notification — the RPC sends it
+ * server-side via notify_address_released(), so every release path
+ * (on_confirmation trigger, time-based cron, manual) shares one notification
+ * implementation — see consolidate_address_release_notification*.sql.
  */
 export async function releaseBookingAddress(bookingId: string): Promise<void> {
+  // Routed through a SECURITY DEFINER RPC that can only touch
+  // address_released_at — see fix_bookings_provider_update_bypass.sql and
+  // consolidate_address_release_notification_manual.sql.
   const { error } = await supabase
-    .from('bookings')
-    .update({ address_released_at: new Date().toISOString() })
-    .eq('id', bookingId);
+    .rpc('provider_release_booking_address', { p_booking_id: bookingId });
   if (error) throw error;
-  notifyClientAddressReleased(bookingId).catch(() => {});
-}
-
-async function notifyClientAddressReleased(bookingId: string): Promise<void> {
-  try {
-    const { data: b } = await supabase
-      .from('bookings')
-      .select('user_id, provider_id, service_name_snapshot, provider_name_snapshot, booking_date')
-      .eq('id', bookingId)
-      .single();
-    if (!b) return;
-    await supabase.from('notifications').insert({
-      user_id:        b.user_id,
-      type:           'address_released',
-      title:          'Address Now Available',
-      message:        `The location for your ${b.service_name_snapshot} with ${b.provider_name_snapshot} on ${new Date(b.booking_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} has been shared — tap to view.`,
-      is_read:        false,
-      priority:       'medium',
-      is_actionable:  true,
-      booking_id:     bookingId,
-      provider_id:    b.provider_id,
-      recipient_role: 'client',
-      metadata:       {},
-    });
-  } catch {
-    // best-effort
-  }
 }
 
 /** Fetch the address_released_at timestamp for a booking. */
@@ -2737,7 +3133,7 @@ export async function getBookingAddressReleasedAt(bookingId: string): Promise<st
     .select('address_released_at')
     .eq('id', bookingId)
     .single();
-  return (data as any)?.address_released_at ?? null;
+  return (data as { address_released_at: string | null } | null)?.address_released_at ?? null;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2993,6 +3389,9 @@ export interface ProviderDepositPolicy {
   depositType: 'percentage' | 'fixed';
   depositAmount: number;
   depositAvailable: boolean;
+  /** Provider requires the deposit — client has no "pay in full" choice.
+   *  Only meaningful when depositAvailable is true. */
+  depositOnly: boolean;
 }
 
 /** Fetch deposit policies for multiple providers by display name (batch). Falls back to 20% default if no policy set. */
@@ -3008,12 +3407,18 @@ export async function getProviderDepositPoliciesByDisplayNames(
 
   if (error || !data) return {};
 
-  const defaultPolicy: ProviderDepositPolicy = { depositType: 'percentage', depositAmount: 20, depositAvailable: true };
+  const defaultPolicy: ProviderDepositPolicy = {
+    depositType: 'percentage',
+    depositAmount: 20,
+    depositAvailable: true,
+    depositOnly: false,
+  };
   const result: Record<string, ProviderDepositPolicy> = {};
 
   for (const p of data) {
     const policies = p.booking_policies as {
       depositRequired?: boolean;
+      depositOnly?: boolean;
       depositType?: string;
       depositAmount?: string;
       depositNote?: string;
@@ -3023,7 +3428,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
     // deposit option in the cart. (Previously this switch was ignored and
     // any leftover amount kept the deposit option alive.)
     if (policies && policies.depositRequired === false) {
-      result[p.display_name] = { depositType: 'percentage', depositAmount: 0, depositAvailable: false };
+      result[p.display_name] = { depositType: 'percentage', depositAmount: 0, depositAvailable: false, depositOnly: false };
     } else if (policies && policies.depositAmount) {
       const depositType: 'percentage' | 'fixed' = policies.depositType === 'fixed' ? 'fixed' : 'percentage';
       const depositAmount = Number(policies.depositAmount);
@@ -3031,6 +3436,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
         depositType,
         depositAmount: depositAmount > 0 ? depositAmount : 20,
         depositAvailable: true,
+        depositOnly: !!policies.depositOnly,
       };
     } else {
       result[p.display_name] = { ...defaultPolicy };
@@ -3049,17 +3455,19 @@ export async function getProviderDepositPoliciesByDisplayNames(
  */
 export async function getProviderSchedulingConstraints(providerIdOrDisplayName: string): Promise<{
   bookingWindowDays: number;
+  minBookingNoticeHrs: number;
 }> {
   // Prefer the real UUID when the caller has one — exact display_name
   // matching is fragile (case, punctuation, a provider renaming their
   // business) and silently returns nothing, which looks identical to a
   // provider with no constraints set instead of a failed lookup.
-  const query = supabase.from('providers').select('booking_window_days');
+  const query = supabase.from('providers').select('booking_window_days, min_booking_notice_hrs');
   const { data } = UUID_RE.test(providerIdOrDisplayName)
     ? await query.eq('id', providerIdOrDisplayName).maybeSingle()
     : await query.eq('display_name', providerIdOrDisplayName).maybeSingle();
   return {
     bookingWindowDays: (data as any)?.booking_window_days ?? 60,
+    minBookingNoticeHrs: (data as any)?.min_booking_notice_hrs ?? 0,
   };
 }
 
@@ -3107,6 +3515,46 @@ export async function getUserBusinessInfo(
   return data as { business_name: string | null; business_email: string | null };
 }
 
+/**
+ * Fetch the signup-time contact fields that a first-time provider profile
+ * save should prefill instead of asking for again (InfoRegScreen.tsx) — name,
+ * business name/email/phone, instagram, website. These were already
+ * collected and saved to `users` during the 5-step signup flow
+ * (EmailVerificationScreen.tsx), but the providers row doesn't exist until
+ * InfoRegScreen's first save, so without this the form starts blank and the
+ * provider ends up retyping data they already gave.
+ */
+export async function getUserSignupPrefillInfo(userId: string): Promise<{
+  name: string | null;
+  phone: string | null;
+  business_name: string | null;
+  business_email: string | null;
+  business_phone: string | null;
+  business_type: string | null;
+  instagram: string | null;
+  website: string | null;
+} | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('name, phone, business_name, business_email, business_phone, business_type, instagram, website')
+    .eq('id', userId)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  return data as {
+    name: string | null;
+    phone: string | null;
+    business_name: string | null;
+    business_email: string | null;
+    business_phone: string | null;
+    business_type: string | null;
+    instagram: string | null;
+    website: string | null;
+  };
+}
+
 /** Fetch allergies and medical_notes — attached to bookings at checkout so the provider is briefed */
 export async function getUserHealthProfile(
   userId: string
@@ -3139,7 +3587,7 @@ export async function upgradeUserToProvider(
   userId: string,
   businessName: string,
   businessEmail: string,
-  extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string }
+  extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }
 ): Promise<void> {
   const { error } = await supabase
     .from('users')
@@ -3151,6 +3599,7 @@ export async function upgradeUserToProvider(
       ...(extras?.instagram     ? { instagram: extras.instagram }           : {}),
       ...(extras?.tiktok        ? { tiktok: extras.tiktok }                 : {}),
       ...(extras?.website       ? { website: extras.website }               : {}),
+      ...(extras?.businessType  ? { business_type: extras.businessType }    : {}),
     })
     .eq('id', userId);
   if (error) throw error;
@@ -3417,6 +3866,7 @@ export async function updateProviderContactDetails(
     preferred_contact_methods?: string[] | null;
     online_consultations_available?: boolean;
     consultation_required_new_clients?: boolean;
+    external_booking_url?: string | null;
   }
 ): Promise<void> {
   const { error } = await supabase

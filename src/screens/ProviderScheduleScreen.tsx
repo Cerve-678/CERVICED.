@@ -30,8 +30,9 @@ import {
   getProviderAvailabilityOverrides,
   addProviderAvailabilityOverride,
   removeProviderAvailabilityOverride,
+  updateProviderAutomationSettings,
 } from '../services/databaseService';
-import type { DbProviderAvailability, DbProviderBlockedDate, DbProviderAvailabilityOverride } from '../types/database';
+import type { DbProviderAvailability, DbProviderBlockedDate, DbProviderAvailabilityOverride, DbProvider } from '../types/database';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { logger } from '../utils/logger';
 
@@ -140,6 +141,18 @@ export default function ProviderScheduleScreen() {
   const [days, setDays] = useState<DayRow[]>(makeDefault());
   const [extraPeriods, setExtraPeriods] = useState<Record<number, ExtraPeriod[]>>({});
 
+  // Fully-booked alert — kept separate from `days`/`extraPeriods` (those save
+  // to provider_availability_windows via handleSaveHours; this one field
+  // saves onto automation_settings, same jsonb column ProviderAutomationsScreen
+  // manages) so we need the raw settings object to spread the rest of that
+  // column back unchanged rather than clobbering waitlistEnabled etc.
+  const [automationSettings, setAutomationSettings] = useState<
+    NonNullable<DbProvider['automation_settings']>
+  >({});
+  const [fullyBookedAlertEnabled, setFullyBookedAlertEnabled] = useState(false);
+  const [fullyBookedAlertDays, setFullyBookedAlertDays] = useState('7');
+  const [savingFullyBookedAlert, setSavingFullyBookedAlert] = useState(false);
+
   // Time picker state
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerTarget, setPickerTarget] = useState<{ dow: number; field: 'open' | 'close'; periodIndex?: number | undefined } | null>(null);
@@ -170,6 +183,10 @@ export default function ProviderScheduleScreen() {
       const profile = await getMyProviderProfile();
       if (!profile) return;
       setProviderId(profile.id);
+      const a = profile.automation_settings ?? {};
+      setAutomationSettings(a);
+      setFullyBookedAlertEnabled(a.fullyBookedAlertEnabled ?? false);
+      setFullyBookedAlertDays(String(a.fullyBookedAlertDays ?? 7));
 
       const [avail, windows, blocked, ovr] = await Promise.all([
         getProviderAvailability(profile.id),
@@ -314,6 +331,34 @@ export default function ProviderScheduleScreen() {
     }
   }
 
+  // ── Fully-booked alert handler ─────────────────────────────────────────────
+  async function handleSaveFullyBookedAlert(nextEnabled: boolean, nextDaysStr: string) {
+    if (!providerId) return;
+    const days = parseInt(nextDaysStr, 10);
+    if (nextEnabled && (!Number.isFinite(days) || days < 1 || days > 90)) {
+      showToast('Enter a number of days between 1 and 90.', 'error');
+      return;
+    }
+    setSavingFullyBookedAlert(true);
+    try {
+      const next = {
+        ...automationSettings,
+        fullyBookedAlertEnabled: nextEnabled,
+        fullyBookedAlertDays: Number.isFinite(days) ? days : 7,
+      };
+      await updateProviderAutomationSettings(providerId, next);
+      setAutomationSettings(next);
+      showToast(
+        nextEnabled ? "You'll be notified when your calendar is fully booked." : 'Fully-booked alerts turned off.',
+        'success',
+      );
+    } catch (e) {
+      showToast('Could not save this setting. Please try again.', 'error');
+    } finally {
+      setSavingFullyBookedAlert(false);
+    }
+  }
+
   // ── Blocked dates handlers ─────────────────────────────────────────────────
   async function handleAddBlock() {
     if (!providerId) return;
@@ -431,6 +476,49 @@ export default function ProviderScheduleScreen() {
         {tab === 'hours' && (
           <>
             <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+              {/* Fully-booked alert — a provider-defined "week/month/however
+                  they choose" window; separate from the waitlist notification,
+                  this fires once when NOTHING in that window is bookable
+                  anywhere on the calendar (see process_provider_fully_booked_
+                  alerts() in provider_fully_booked_alert.sql). */}
+              <View style={[s.dayRow, s.dayRowBorder, { borderBottomColor: P.border, alignItems: 'flex-start' }]}>
+                <View style={[s.dayLeft, { flex: 1 }]}>
+                  <Text style={[s.dayLabel, { color: P.text }]}>Fully-Booked Alert</Text>
+                  <Text style={[s.closedTag, { color: P.sub, marginTop: 2 }]}>
+                    Get notified when nothing's bookable for the next N days
+                  </Text>
+                  {fullyBookedAlertEnabled && (
+                    <View style={[s.timeRow, { marginTop: 10 }]}>
+                      <TextInput
+                        style={[s.timeBtn, { backgroundColor: P.card, color: P.text, minWidth: 60, textAlign: 'center' }]}
+                        value={fullyBookedAlertDays}
+                        onChangeText={setFullyBookedAlertDays}
+                        onBlur={() => handleSaveFullyBookedAlert(fullyBookedAlertEnabled, fullyBookedAlertDays)}
+                        keyboardType="number-pad"
+                        maxLength={2}
+                        editable={!savingFullyBookedAlert}
+                      />
+                      <Text style={[s.timeSep, { color: P.sub, fontSize: 13 }]}>days ahead (7 = a week, 30 = a month)</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={s.dayRight}>
+                  {savingFullyBookedAlert ? (
+                    <ActivityIndicator color={P.accent} size="small" />
+                  ) : (
+                    <Switch
+                      value={fullyBookedAlertEnabled}
+                      onValueChange={(v) => {
+                        setFullyBookedAlertEnabled(v);
+                        handleSaveFullyBookedAlert(v, fullyBookedAlertDays);
+                      }}
+                      trackColor={{ false: P.surface, true: P.accent }}
+                      thumbColor={fullyBookedAlertEnabled ? P.ice : P.sub}
+                    />
+                  )}
+                </View>
+              </View>
+
               {days.map((day, idx) => (
                 <View key={day.dow} style={[s.dayRow, idx < days.length - 1 && [s.dayRowBorder, { borderBottomColor: P.border }]]}>
                   <View style={s.dayLeft}>
@@ -495,7 +583,7 @@ export default function ProviderScheduleScreen() {
             {/* Native time picker (iOS inline / Android modal) */}
             {pickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="slide" visible={pickerVisible}>
+                <Modal transparent animationType="fade" visible={pickerVisible}>
                   <View style={s.pickerModalWrap}>
                     {/* Tap-to-dismiss overlay — sibling of sheet, never its parent */}
                     <TouchableOpacity
@@ -571,7 +659,7 @@ export default function ProviderScheduleScreen() {
             {/* Date picker for block */}
             {blockPickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="slide" visible={blockPickerVisible}>
+                <Modal transparent animationType="fade" visible={blockPickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity
                       style={s.pickerDismiss}
@@ -672,7 +760,7 @@ export default function ProviderScheduleScreen() {
             {/* Date picker for override date */}
             {overrideDatePickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="slide" visible={overrideDatePickerVisible}>
+                <Modal transparent animationType="fade" visible={overrideDatePickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideDatePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
@@ -695,7 +783,7 @@ export default function ProviderScheduleScreen() {
             {/* Time picker for override open/close */}
             {overrideTimePickerVisible && (
               Platform.OS === 'ios' ? (
-                <Modal transparent animationType="slide" visible={overrideTimePickerVisible}>
+                <Modal transparent animationType="fade" visible={overrideTimePickerVisible}>
                   <View style={s.pickerModalWrap}>
                     <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setOverrideTimePickerVisible(false)} />
                     <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>

@@ -136,6 +136,10 @@ export interface ConfirmedBooking {
     originalDate?: string | undefined;
     originalTime?: string | undefined;
     requestedDates?: string[] | undefined;
+    // Index-aligned with requestedDates (element i is the time requested
+    // alongside requestedDates[i]) — requestedDates alone can't carry a
+    // time-of-day. See applyRescheduleRequestRow() in bookingService.ts.
+    requestedTimes?: string[] | undefined;
     requestedAt?: string | undefined;
     providerAvailableDates?: AvailableDate[] | undefined;
     providerRespondedAt?: string | undefined;
@@ -200,4 +204,7 @@ export interface AppointmentData {
   remainingBalance: number;
   serviceCharge: number;
   paymentMethod?: string;
+  /** Real Stripe PaymentIntent id — one PaymentIntent covers the whole
+   *  checkout total, shared across every booking created from it. */
+  paymentIntentId?: string;
 }

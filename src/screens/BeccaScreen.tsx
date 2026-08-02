@@ -604,7 +604,7 @@ export default function BeccaScreen({
       {/* ==================== CHAT HISTORY MODAL ==================== */}
       <Modal
         visible={showHistory}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setShowHistory(false)}
       >

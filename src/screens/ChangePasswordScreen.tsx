@@ -146,7 +146,6 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     paddingVertical: 15,
     alignItems: 'center',
-    borderWidth: 1.5,
     marginTop: 8,
   },
   saveBtnText: { fontSize: 15, fontWeight: '700', letterSpacing: 1, color: '#fff' },

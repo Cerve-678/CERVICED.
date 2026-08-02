@@ -16,6 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../contexts/ThemeContext';
@@ -28,13 +29,12 @@ import {
   respondToRescheduleRequest,
   insertBookingUserNotification,
   getAvailableSlots,
-  markBalanceCollected,
   upsertProviderRescheduleRequest,
   getClientBeautyProfile,
   getClientBookingHistory,
   getIntakeFormByBooking,
   getInfoPacksByBooking,
-  getProviderAddressSettings,
+  getProviderAddressPolicy,
   releaseBookingAddress,
   getBookingAddressReleasedAt,
   getBookingWithAddOnsById,
@@ -47,7 +47,7 @@ import {
   IntakeForm,
   BookingInfoPack,
   ProviderInfoPackRow,
-  ProviderAddressSettings,
+  ProviderAddressPolicy,
 } from '../services/databaseService';
 import type { DbBooking, ServiceCategory } from '../types/database';
 import type { DbBookingRescheduleRequest } from '../types/database';
@@ -125,21 +125,14 @@ function formatDisplayDate(dateStr: string): string {
   return dateStr;
 }
 
-function formatDateInput(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 8);
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+function dateToIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function parseDDMMYYYY(text: string): string | null {
-  const parts = text.split('/');
-  if (parts.length !== 3) return null;
-  const [dd, mm, yyyy] = parts;
-  if (!dd || !mm || !yyyy || yyyy.length !== 4) return null;
-  const d = parseInt(dd, 10), m = parseInt(mm, 10), y = parseInt(yyyy, 10);
-  if (isNaN(d) || isNaN(m) || isNaN(y) || d < 1 || d > 31 || m < 1 || m > 12) return null;
-  return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+function isoToDate(iso: string): Date {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return new Date();
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
 function buildInvoiceHTML(booking: any, totalPrice: number): string {
@@ -276,7 +269,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: string } | null>(null);
   const [showRespondModal, setShowRespondModal] = useState(false);
   const [outboundSlots, setOutboundSlots] = useState<{ date: string; times: string[] }[]>([]);
-  const [slotDate, setSlotDate] = useState('');
+  const [slotDate, setSlotDate] = useState(''); // ISO YYYY-MM-DD, set only via the date picker
+  const [slotDatePickerVisible, setSlotDatePickerVisible] = useState(false);
   const [slotTimes, setSlotTimes] = useState('');
   const [suggestedTimes, setSuggestedTimes] = useState<string[]>([]);
   const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
@@ -296,11 +290,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     onConfirm: () => void;
   } | null>(null);
 
-  const [balanceCollected, setBalanceCollected] = useState(false);
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [showInitRescheduleModal, setShowInitRescheduleModal] = useState(false);
   const [initRescheduleSlots, setInitRescheduleSlots] = useState<{ date: string; times: string[] }[]>([]);
-  const [initSlotDate, setInitSlotDate] = useState('');
+  const [initSlotDate, setInitSlotDate] = useState(''); // ISO YYYY-MM-DD, set only via the date picker
+  const [initSlotDatePickerVisible, setInitSlotDatePickerVisible] = useState(false);
   const [initSlotTimes, setInitSlotTimes] = useState('');
   const [initSuggestedTimes, setInitSuggestedTimes] = useState<string[]>([]);
   const [initSelectedTimes, setInitSelectedTimes] = useState<string[]>([]);
@@ -309,7 +303,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [initSent, setInitSent] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
 
-  const [addressSettings, setAddressSettings] = useState<ProviderAddressSettings | null>(null);
+  const [addressSettings, setAddressSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addressReleasedAt, setAddressReleasedAt] = useState<string | null>(null);
   const [releasingAddress, setReleasingAddress] = useState(false);
 
@@ -440,7 +434,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   useEffect(() => {
     const providerId = contextBooking?.providerId ?? fetchedBooking?.providerId;
     if (!providerId) return;
-    getProviderAddressSettings(providerId)
+    getProviderAddressPolicy(providerId)
       .then(s => setAddressSettings(s))
       .catch(() => {});
   }, [contextBooking?.providerId, fetchedBooking?.providerId]);
@@ -508,10 +502,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status as BookingStatus }),
   } as ConfirmedBooking : baseBooking;
 
-  // Fetch real available slots when provider enters a complete DD/MM/YYYY date
+  // Fetch real available slots once the provider picks a date
   useEffect(() => {
-    const isoDate = parseDDMMYYYY(slotDate);
-    if (!isoDate || !booking?.providerId) {
+    if (!slotDate || !booking?.providerId) {
       setSuggestedTimes([]);
       setSelectedTimes([]);
       return;
@@ -519,7 +512,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     let cancelled = false;
     setLoadingTimes(true);
     setInputError('');
-    getAvailableSlots(booking.providerId, isoDate)
+    getAvailableSlots(booking.providerId, slotDate)
       .then(slots => {
         if (!cancelled) { setSuggestedTimes(slots); setSelectedTimes([]); }
       })
@@ -535,11 +528,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, []);
 
   const handleAddSlot = useCallback(() => {
-    const isoDate = parseDDMMYYYY(slotDate.trim());
     const manualTimes = slotTimes.trim().split(',').map(t => t.trim()).filter(Boolean);
     const allTimes = [...new Set([...selectedTimes, ...manualTimes])];
-    if (!isoDate) {
-      setInputError('Enter a complete date in DD/MM/YYYY format.');
+    if (!slotDate) {
+      setInputError('Pick a date first.');
       return;
     }
     if (allTimes.length === 0) {
@@ -548,14 +540,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     }
     setInputError('');
     setOutboundSlots(prev => {
-      const existing = prev.find(s => s.date === isoDate);
+      const existing = prev.find(s => s.date === slotDate);
       if (existing) {
-        return prev.map(s => s.date === isoDate
+        return prev.map(s => s.date === slotDate
           ? { ...s, times: [...new Set([...s.times, ...allTimes])] }
           : s
         );
       }
-      return [...prev, { date: isoDate, times: allTimes }];
+      return [...prev, { date: slotDate, times: allTimes }];
     });
     setSlotDate('');
     setSlotTimes('');
@@ -605,13 +597,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setSendApology(false);
   }, []);
 
-  // Fetch available slots when provider enters a date in the initiate reschedule modal
+  // Fetch available slots once the provider picks a date in the initiate reschedule modal
   useEffect(() => {
-    const isoDate = parseDDMMYYYY(initSlotDate);
-    if (!isoDate || !booking?.providerId) { setInitSuggestedTimes([]); setInitSelectedTimes([]); return; }
+    if (!initSlotDate || !booking?.providerId) { setInitSuggestedTimes([]); setInitSelectedTimes([]); return; }
     let cancelled = false;
     setInitLoadingTimes(true);
-    getAvailableSlots(booking.providerId, isoDate)
+    getAvailableSlots(booking.providerId, initSlotDate)
       .then(slots => { if (!cancelled) { setInitSuggestedTimes(slots); setInitSelectedTimes([]); } })
       .catch(() => { if (!cancelled) setInitSuggestedTimes([]); })
       .finally(() => { if (!cancelled) setInitLoadingTimes(false); });
@@ -623,16 +614,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, []);
 
   const handleAddInitSlot = useCallback(() => {
-    const isoDate = parseDDMMYYYY(initSlotDate.trim());
-    if (!isoDate) { setInitInputError('Enter a valid date (DD/MM/YYYY).'); return; }
+    if (!initSlotDate) { setInitInputError('Pick a date first.'); return; }
     const manual = initSlotTimes.trim().split(',').map(t => t.trim()).filter(Boolean);
     const allTimes = [...new Set([...initSelectedTimes, ...manual])];
     if (allTimes.length === 0) { setInitInputError('Select or enter at least one time.'); return; }
     setInitInputError('');
     setInitRescheduleSlots(prev => {
-      const existing = prev.find(s => s.date === isoDate);
-      if (existing) return prev.map(s => s.date === isoDate ? { ...s, times: [...new Set([...s.times, ...allTimes])] } : s);
-      return [...prev, { date: isoDate, times: allTimes }];
+      const existing = prev.find(s => s.date === initSlotDate);
+      if (existing) return prev.map(s => s.date === initSlotDate ? { ...s, times: [...new Set([...s.times, ...allTimes])] } : s);
+      return [...prev, { date: initSlotDate, times: allTimes }];
     });
     setInitSlotDate(''); setInitSlotTimes(''); setInitSuggestedTimes([]); setInitSelectedTimes([]);
   }, [initSlotDate, initSlotTimes, initSelectedTimes]);
@@ -784,28 +774,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       },
     });
   }, [booking, cancelBooking, navigation]);
-
-  const handleCollectBalance = useCallback(() => {
-    if (!booking || balanceCollected) return;
-    setPendingConfirm({
-      title: 'Collect Balance',
-      message: `Confirm £${booking.remainingBalance.toFixed(2)} has been received from the client.`,
-      confirmLabel: 'Mark as Collected',
-      onConfirm: async () => {
-        await markBalanceCollected(booking.id);
-        insertBookingUserNotification({
-          booking_id: booking.id,
-          type: 'balance_collected',
-          title: 'Balance Received',
-          message: `Your remaining balance of £${booking.remainingBalance.toFixed(2)} for ${booking.serviceName} has been marked as received.`,
-          priority: 'medium',
-          provider_id: booking.providerId,
-        }).catch(() => {});
-        setBalanceCollected(true);
-      },
-    });
-  }, [booking, balanceCollected]);
-
 
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
@@ -1494,33 +1462,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   valueColor="#34C759"
                   bold
                 />
-                {booking.remainingBalance > 0 && !balanceCollected && (
-                  <>
-                    <Row
-                      label="Balance due"
-                      value={`£${booking.remainingBalance.toFixed(2)}`}
-                      textColor={P.text}
-                      divColor={rowDiv}
-                      valueColor="#FF9500"
-                      bold
-                    />
-                    {(booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS) && (
-                      <TouchableOpacity
-                        style={[styles.collectBalanceRow, { borderColor: isDarkMode ? 'rgba(255,149,0,0.25)' : 'rgba(255,149,0,0.3)', backgroundColor: isDarkMode ? 'rgba(255,149,0,0.08)' : 'rgba(255,149,0,0.06)' }]}
-                        onPress={handleCollectBalance}
-                        activeOpacity={0.75}
-                      >
-                        <Ionicons name="checkmark-circle-outline" size={15} color="#FF9500" style={{ marginRight: 6 }} />
-                        <Text style={[styles.collectBalanceText, { color: '#FF9500' }]}>Mark balance collected</Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
-                )}
-                {balanceCollected && (
-                  <View style={[styles.collectBalanceRow, { borderColor: '#34C75940', backgroundColor: '#34C75910' }]}>
-                    <Ionicons name="checkmark-circle" size={15} color="#34C759" style={{ marginRight: 6 }} />
-                    <Text style={[styles.collectBalanceText, { color: '#34C759' }]}>Balance collected</Text>
-                  </View>
+                {/* Informational only — collecting and confirming any
+                    remaining balance is between the provider and client
+                    directly; the app doesn't track or verify it. */}
+                {booking.remainingBalance > 0 && (
+                  <Row
+                    label="Balance due at appointment"
+                    value={`£${booking.remainingBalance.toFixed(2)}`}
+                    textColor={P.text}
+                    divColor={rowDiv}
+                    valueColor="#FF9500"
+                    bold
+                  />
                 )}
 
                 {/* Grand total block */}
@@ -1542,17 +1495,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       Requested {formatDisplayDate(dbReschedule.created_at.split('T')[0] ?? dbReschedule.created_at)}
                     </Text>
                     {(dbReschedule.requested_dates ?? []).map((date: string, i: number) => (
-                      <View key={i} style={[styles.slotChip, { backgroundColor: '#FF9500' + '18', borderColor: '#FF9500' + '44' }]}>
-                        <Text style={[styles.slotChipText, { color: P.text }]}>📅  {formatDisplayDate(date)}</Text>
+                      <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#FF9500' + '18', borderColor: '#FF9500' + '44' }]}>
+                        <Ionicons name="calendar-outline" size={14} color="#FF9500" />
+                        <Text style={[styles.slotChipText, { color: P.text }]}>{formatDisplayDate(date)}</Text>
                       </View>
                     ))}
                     {dbReschedule.status === 'provider_responded' && (dbReschedule.provider_available_slots ?? []).length > 0 && (
                       <View style={{ marginTop: 8 }}>
                         <Text style={[styles.rescheduleNote, { color: P.text + '77', marginBottom: 6 }]}>Your offered slots:</Text>
                         {(dbReschedule.provider_available_slots ?? []).map((slot, i) => (
-                          <View key={i} style={[styles.slotChip, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
+                          <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
+                            <Ionicons name="checkmark-circle" size={14} color="#34C759" />
                             <Text style={[styles.slotChipText, { color: P.text }]}>
-                              ✅  {formatDisplayDate(slot.date)}  ·  {(slot.times ?? []).join(', ')}
+                              {formatDisplayDate(slot.date)}  ·  {(slot.times ?? []).join(', ')}
                             </Text>
                           </View>
                         ))}
@@ -1632,7 +1587,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       <Modal
         visible={showRespondModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={closeRespondModal}
       >
         <KeyboardAvoidingView
@@ -1711,16 +1666,53 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
                 <View style={[styles.divider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', marginVertical: 16 }]} />
 
-                {/* Date input — auto-formats DD/MM/YYYY, triggers slot fetch when complete */}
+                {/* Date picker — triggers slot fetch once a date is chosen */}
                 <Text style={[styles.inputLabel, { color: P.text + '88' }]}>DATE</Text>
-                <TextInput
-                  style={[styles.respondInput, { color: P.text, borderColor: inputError ? '#FF3B30' : (isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'), backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor={P.text + '44'}
-                  value={slotDate}
-                  onChangeText={v => { setInputError(''); setSlotDate(formatDateInput(v)); }}
-                  keyboardType="number-pad"
-                />
+                <TouchableOpacity
+                  style={[styles.datePickBtn, { borderColor: inputError ? '#FF3B30' : (isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'), backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
+                  onPress={() => { setInputError(''); setSlotDatePickerVisible(true); }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#FF9500" />
+                  <Text style={[styles.datePickBtnText, { color: slotDate ? P.text : P.text + '66' }]}>
+                    {slotDate ? formatDisplayDate(slotDate) : 'Choose a date'}
+                  </Text>
+                </TouchableOpacity>
+                {slotDatePickerVisible && (
+                  Platform.OS === 'ios' ? (
+                    <Modal transparent animationType="fade" visible={slotDatePickerVisible} onRequestClose={() => setSlotDatePickerVisible(false)}>
+                      <View style={styles.pickerModalWrap}>
+                        <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setSlotDatePickerVisible(false)} />
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                          <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
+                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Date</Text>
+                            <TouchableOpacity onPress={() => setSlotDatePickerVisible(false)}>
+                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            mode="date"
+                            value={slotDate ? isoToDate(slotDate) : new Date()}
+                            onChange={(_, d) => { if (d) setSlotDate(dateToIso(d)); }}
+                            display="spinner"
+                            themeVariant={isDarkMode ? 'dark' : 'light'}
+                            textColor={P.text}
+                            minimumDate={new Date()}
+                            style={{ width: '100%' }}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  ) : (
+                    <DateTimePicker
+                      mode="date"
+                      value={slotDate ? isoToDate(slotDate) : new Date()}
+                      onChange={(_, d) => { setSlotDatePickerVisible(false); if (d) setSlotDate(dateToIso(d)); }}
+                      display="default"
+                      minimumDate={new Date()}
+                    />
+                  )
+                )}
 
                 {/* Auto-loaded time chips */}
                 {loadingTimes && (
@@ -1754,7 +1746,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     </View>
                   </View>
                 )}
-                {!loadingTimes && !!parseDDMMYYYY(slotDate) && suggestedTimes.length === 0 && (
+                {!loadingTimes && !!slotDate && suggestedTimes.length === 0 && (
                   <Text style={[styles.noSlotsText, { color: P.sub }]}>No availability set for this date.</Text>
                 )}
 
@@ -1831,7 +1823,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       <Modal
         visible={clientHistoryVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setClientHistoryVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -1911,7 +1903,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       <Modal
         visible={showInitRescheduleModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={closeInitRescheduleModal}
       >
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1939,16 +1931,53 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   Add the dates and times you're available. The client will pick one to confirm.
                 </Text>
 
-                {/* Date input */}
-                <Text style={[styles.inputLabel, { color: P.text + '77' }]}>DATE (DD/MM/YYYY)</Text>
-                <TextInput
-                  style={[styles.respondInput, { color: P.text, borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
-                  value={initSlotDate}
-                  onChangeText={v => setInitSlotDate(formatDateInput(v))}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor={P.text + '44'}
-                  keyboardType="numeric"
-                />
+                {/* Date picker */}
+                <Text style={[styles.inputLabel, { color: P.text + '77' }]}>DATE</Text>
+                <TouchableOpacity
+                  style={[styles.datePickBtn, { borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
+                  onPress={() => setInitSlotDatePickerVisible(true)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#FF9500" />
+                  <Text style={[styles.datePickBtnText, { color: initSlotDate ? P.text : P.text + '66' }]}>
+                    {initSlotDate ? formatDisplayDate(initSlotDate) : 'Choose a date'}
+                  </Text>
+                </TouchableOpacity>
+                {initSlotDatePickerVisible && (
+                  Platform.OS === 'ios' ? (
+                    <Modal transparent animationType="fade" visible={initSlotDatePickerVisible} onRequestClose={() => setInitSlotDatePickerVisible(false)}>
+                      <View style={styles.pickerModalWrap}>
+                        <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitSlotDatePickerVisible(false)} />
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                          <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
+                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Date</Text>
+                            <TouchableOpacity onPress={() => setInitSlotDatePickerVisible(false)}>
+                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            mode="date"
+                            value={initSlotDate ? isoToDate(initSlotDate) : new Date()}
+                            onChange={(_, d) => { if (d) setInitSlotDate(dateToIso(d)); }}
+                            display="spinner"
+                            themeVariant={isDarkMode ? 'dark' : 'light'}
+                            textColor={P.text}
+                            minimumDate={new Date()}
+                            style={{ width: '100%' }}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  ) : (
+                    <DateTimePicker
+                      mode="date"
+                      value={initSlotDate ? isoToDate(initSlotDate) : new Date()}
+                      onChange={(_, d) => { setInitSlotDatePickerVisible(false); if (d) setInitSlotDate(dateToIso(d)); }}
+                      display="default"
+                      minimumDate={new Date()}
+                    />
+                  )
+                )}
 
                 {/* Suggested chips */}
                 {initLoadingTimes && <ActivityIndicator size="small" color={P.accent} style={{ marginBottom: 8 }} />}
@@ -2057,7 +2086,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       <Modal
         visible={showMoreSheet}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowMoreSheet(false)}
       >
         <TouchableOpacity style={styles.moreSheetOverlay} activeOpacity={1} onPress={() => setShowMoreSheet(false)} />
@@ -2146,7 +2175,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       <Modal
         visible={showInfoPackPicker}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowInfoPackPicker(false)}
       >
         <View style={styles.modalOverlay}>
@@ -2692,6 +2721,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 6,
   },
+  slotChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   slotChipText: {
     fontSize: 14,
     fontWeight: '500',
@@ -2792,6 +2826,51 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 10,
   },
+  datePickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  datePickBtnText: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  pickerModalWrap: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+  },
+  pickerDismiss: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  pickerSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    paddingBottom: 20,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerHeaderLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pickerDoneLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
   chipsLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2857,6 +2936,7 @@ const styles = StyleSheet.create({
   },
   respondModalActions: {
     flexDirection: 'row',
+    width: '100%',
     gap: 10,
   },
   respondModalBtn: {
@@ -2923,21 +3003,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 8,
     marginTop: -4,
-  },
-
-  // Balance collection
-  collectBalanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginTop: 8,
-  },
-  collectBalanceText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
 
   // More options sheet

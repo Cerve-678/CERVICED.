@@ -377,7 +377,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <Modal visible={showAddressModal} transparent animationType="slide" onRequestClose={closeAddressModal}>
+      <Modal visible={showAddressModal} transparent animationType="fade" onRequestClose={closeAddressModal}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: OP.card }]}>
             <Text style={[styles.modalTitle, { color: OP.text }]}>Send your address</Text>

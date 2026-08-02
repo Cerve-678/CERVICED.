@@ -18,6 +18,15 @@ export interface PortfolioItem {
   providerSlug?: string;
   providerRating?: number;
   providerReviewCount?: number;
+  // Card source in the mixed Explore feed — absent/'portfolio' for a client-work
+  // photo, 'provider' for a provider cover-photo card, 'service' for a service
+  // photo card. Same shape either way so PortfolioCard/ImageDetailModal don't
+  // need to branch on it.
+  kind?: 'portfolio' | 'provider' | 'service';
+  // Real services.id UUID — only present when kind === 'service'. Lets
+  // "Book Now" jump straight to that exact service's booking modal instead
+  // of just the provider's profile.
+  serviceId?: string;
 }
 
 export interface Service {

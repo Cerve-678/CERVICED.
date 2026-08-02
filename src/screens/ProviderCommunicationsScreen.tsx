@@ -270,7 +270,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             </View>
 
             {/* Quick link to Business Email */}
-            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessEmail')} activeOpacity={0.7}>
+            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessDetails')} activeOpacity={0.7}>
               <Ionicons name="mail-outline" size={16} color={C.accent} />
               <Text style={[s.linkText, { color: C.text }]}>Manage email addresses</Text>
               <Ionicons name="chevron-forward" size={14} color={C.sub} />

@@ -7,10 +7,8 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  SectionList,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,11 +22,13 @@ import {
   getMyProviderProfile,
   getServicePrice,
   insertDirectBooking,
+  getProviderWaitlist,
+  inviteFromWaitlist,
+  leaveWaitlist,
+  type WaitlistEntry,
 } from '../services/databaseService';
 import { mapDbBookingToConfirmed } from '../contexts/BookingContext';
 import type { BookingWithAddOns } from '../types/database';
-import * as WaitlistService from '../services/WaitlistService';
-import type { WaitlistEntry } from '../services/WaitlistService';
 import { logger } from '../utils/logger';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -37,7 +37,6 @@ const LIGHT = {
   bg:         '#F5F1EC',
   card:       '#FFFFFF',
   tile:       '#EDE8E2',
-  strip:      '#EFEAE4',
   accent:     '#AF9197',
   accentSoft: 'rgba(175,145,151,0.12)',
   text:       '#1C1A18',
@@ -50,7 +49,6 @@ const DARK = {
   bg:         '#1A1815',
   card:       '#252220',
   tile:       '#2E2B27',
-  strip:      '#201D1A',
   accent:     '#C7AAB0',
   accentSoft: 'rgba(199,170,176,0.16)',
   text:       '#F0ECE7',
@@ -104,14 +102,6 @@ function fmtDayLabel(dateStr: string): string {
   return new Date(y!, mo! - 1, d!).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-function fmtDayDate(dateStr: string): string {
-  const [y, mo, d] = dateStr.split('-').map(Number);
-  const date = new Date(y!, mo! - 1, d!);
-  const label = fmtDayLabel(dateStr);
-  const isRelative = label === 'Today' || label === 'Tomorrow' || label === 'Yesterday';
-  return isRelative ? date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
-}
-
 function fmtMoney(n: number): string {
   return `£${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
 }
@@ -156,47 +146,6 @@ function filterBookings(bookings: BookingWithAddOns[], tab: BookingTab): Booking
   return agendaSort(items);
 }
 
-type Section = { key: string; date: string; total: number; data: BookingWithAddOns[] };
-
-function groupByDate(items: BookingWithAddOns[]): Section[] {
-  const map = new Map<string, BookingWithAddOns[]>();
-  for (const b of items) {
-    const arr = map.get(b.booking_date);
-    if (arr) arr.push(b);
-    else map.set(b.booking_date, [b]);
-  }
-  return Array.from(map.entries()).map(([date, data]) => ({
-    key: date,
-    date,
-    data,
-    total: data.reduce((s, b) => s + (b.base_price ?? 0) + (b.add_ons_total ?? 0), 0),
-  }));
-}
-
-// ─── Stat chip ────────────────────────────────────────────────────────────────
-
-function StatChip({ icon, value, label, color, P, dark }: {
-  icon: string; value: string; label: string; color: string; P: Palette; dark: boolean;
-}) {
-  return (
-    <View style={[sc.wrap, { backgroundColor: P.card }, !dark && sc.shadow]}>
-      <View style={[sc.iconRing, { backgroundColor: color + (dark ? '28' : '18') }]}>
-        <Ionicons name={icon as any} size={13} color={color} />
-      </View>
-      <Text style={[sc.value, { color: P.text }]}>{value}</Text>
-      <Text style={[sc.label, { color: P.sub }]}>{label}</Text>
-    </View>
-  );
-}
-
-const sc = StyleSheet.create({
-  wrap:    { borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, alignItems: 'center', minWidth: 88 },
-  shadow:  { shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-  iconRing:{ width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
-  value:   { fontSize: 22, fontWeight: '800', letterSpacing: -0.6 },
-  label:   { fontSize: 10, fontWeight: '600', marginTop: 3, letterSpacing: 0.2 },
-});
-
 // ─── Booking card ─────────────────────────────────────────────────────────────
 
 function BookingCard({ booking, dark, P, onPress }: {
@@ -234,7 +183,7 @@ function BookingCard({ booking, dark, P, onPress }: {
         <Text style={[bc.service, { color: P.sub, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }]} numberOfLines={1}>
           {booking.service_name_snapshot}
         </Text>
-        <Text style={[bc.time, { color: P.faint }]}>{timeStr}</Text>
+        <Text style={[bc.time, { color: P.faint }]}>{fmtDayLabel(booking.booking_date)} · {timeStr}</Text>
       </View>
 
       {/* Right side */}
@@ -296,6 +245,108 @@ function SkeletonList({ dark, P }: { dark: boolean; P: Palette }) {
   );
 }
 
+// ─── Sliding tab bar ──────────────────────────────────────────────────────────
+
+function SlidingTabs({ tabs, activeKey, counts, onPress, P }: {
+  tabs: readonly { key: TabKey; label: string }[];
+  activeKey: TabKey;
+  counts: Record<TabKey, number>;
+  onPress: (key: TabKey) => void;
+  P: Palette;
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+  const layouts = useRef<Record<string, { x: number; width: number }>>({});
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const indicatorW = useRef(new Animated.Value(0)).current;
+  const [indicatorReady, setIndicatorReady] = useState(false);
+
+  const slideTo = useCallback((key: string, animated: boolean) => {
+    const l = layouts.current[key];
+    if (!l) return;
+    if (animated) {
+      Animated.parallel([
+        Animated.spring(indicatorX, { toValue: l.x, useNativeDriver: false, speed: 18, bounciness: 6 }),
+        Animated.spring(indicatorW, { toValue: l.width, useNativeDriver: false, speed: 18, bounciness: 6 }),
+      ]).start();
+    } else {
+      indicatorX.setValue(l.x);
+      indicatorW.setValue(l.width);
+    }
+    scrollRef.current?.scrollTo({ x: Math.max(0, l.x - 32), animated });
+  }, [indicatorX, indicatorW]);
+
+  const handleLayout = useCallback((key: string, x: number, width: number) => {
+    layouts.current[key] = { x, width };
+    if (key === activeKey && !indicatorReady) {
+      slideTo(key, false);
+      setIndicatorReady(true);
+    }
+  }, [activeKey, indicatorReady, slideTo]);
+
+  useEffect(() => {
+    if (indicatorReady) slideTo(activeKey, true);
+  }, [activeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <View style={t.wrap}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={t.row}
+      >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            t.indicator,
+            {
+              backgroundColor: P.accent,
+              opacity: indicatorReady ? 1 : 0,
+              width: indicatorW,
+              transform: [{ translateX: indicatorX }],
+            },
+          ]}
+        />
+        {tabs.map(tab => {
+          const active = tab.key === activeKey;
+          const count = counts[tab.key];
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              onLayout={e => handleLayout(tab.key, e.nativeEvent.layout.x, e.nativeEvent.layout.width)}
+              style={t.tab}
+              onPress={() => onPress(tab.key)}
+              activeOpacity={0.75}
+            >
+              <Text
+                style={[t.tabText, { color: active ? '#fff' : P.sub, fontWeight: active ? '700' : '600' }]}
+                numberOfLines={1}
+              >
+                {tab.label}{count > 0 ? `  ${count}` : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+// Every tab, and the sliding indicator behind them, is pinned to this exact
+// height — without it, each TouchableOpacity's cross-axis size (and the
+// ScrollView content row wrapping them) auto-sizes off whatever that tab's
+// own text needed, so the row's height (and the indicator, which stretches
+// via top/bottom) visibly changed tab to tab instead of staying constant.
+const TAB_HEIGHT = 36;
+
+const t = StyleSheet.create({
+  wrap:      { paddingBottom: 16 },
+  row:       { paddingHorizontal: 16, height: TAB_HEIGHT },
+  indicator: { position: 'absolute', top: 0, height: TAB_HEIGHT, borderRadius: 18 },
+  tab:       { height: TAB_HEIGHT, paddingHorizontal: 16, marginRight: 6, alignItems: 'center', justifyContent: 'center' },
+  tabText:   { fontSize: 13.5, letterSpacing: -0.1 },
+});
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ProviderBookingHistoryScreen({ navigation }: any) {
@@ -306,7 +357,6 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
   const [loading, setLoading]           = useState(true);
   const [refreshing, setRefreshing]     = useState(false);
   const [activeTab, setActiveTab]       = useState<TabKey>('all');
-  const [searchQuery, setSearchQuery]   = useState('');
   const [waitlist, setWaitlist]         = useState<WaitlistEntry[]>([]);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
 
@@ -318,7 +368,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
   const [showInviteTimePicker, setShowInviteTimePicker] = useState(false);
   const [inviting, setInviting]         = useState(false);
 
-  const listRef = useRef<SectionList>(null);
+  const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
     getMyProviderProfile().then(p => { if (p?.id) setProviderDbId(p.id); });
@@ -330,7 +380,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
 
   const fetchWaitlist = useCallback(async () => {
     if (!providerDbId) return;
-    try { setWaitlist(await WaitlistService.getProviderWaitlist(providerDbId)); } catch {}
+    try { setWaitlist(await getProviderWaitlist(providerDbId)); } catch {}
   }, [providerDbId]);
 
   useEffect(() => {
@@ -351,8 +401,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
 
   const handleTabPress = useCallback((key: TabKey) => {
     setActiveTab(key);
-    setSearchQuery('');
-    listRef.current?.getScrollResponder()?.scrollTo({ y: 0, animated: false });
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, []);
 
   // ── Derived data ─────────────────────────────────────────────────────────
@@ -367,30 +416,10 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
     waitlist:    waitlist.filter(e => e.status === 'waiting').length,
   }), [bookings, waitlist]);
 
-  const todayCount = useMemo(
-    () => bookings.filter(b => b.booking_date === TODAY_STR).length,
-    [bookings]
-  );
-
-  const todayRevenue = useMemo(
-    () => bookings
-      .filter(b => b.booking_date === TODAY_STR && b.status !== 'cancelled' && b.status !== 'no_show')
-      .reduce((sum, b) => sum + (b.base_price ?? 0) + (b.add_ons_total ?? 0), 0),
-    [bookings]
-  );
-
-  const sections = useMemo(() => {
+  const items = useMemo(() => {
     if (activeTab === 'waitlist') return [];
-    let items = filterBookings(bookings, activeTab as BookingTab);
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      items = items.filter(b =>
-        (b.customer_name ?? '').toLowerCase().includes(q) ||
-        (b.service_name_snapshot ?? '').toLowerCase().includes(q)
-      );
-    }
-    return groupByDate(items);
-  }, [bookings, activeTab, searchQuery]);
+    return filterBookings(bookings, activeTab as BookingTab);
+  }, [bookings, activeTab]);
 
   const tabEmptyText: Record<TabKey, string> = {
     all:         'No bookings yet',
@@ -450,8 +479,8 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
         provider_name_snapshot: entry.provider_name_snapshot,
         service_name_snapshot: entry.service_name_snapshot,
       });
-      await WaitlistService.inviteFromWaitlist(entry);
-      setWaitlist(prev => prev.map(e => e.id === entry.id ? { ...e, status: 'notified' as const } : e));
+      await inviteFromWaitlist(entry);
+      setWaitlist(prev => prev.map(e => e.id === entry.id ? { ...e, status: 'booked' as const } : e));
       setInviteModal({ visible: false, entry: null });
       setInviteDate(null);
       setInviteTime(null);
@@ -495,65 +524,8 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ── Search bar ──────────────────────────────────────────────── */}
-        <View style={[s.searchWrap, { backgroundColor: P.tile }]}>
-          <Ionicons name="search-outline" size={15} color={P.faint} style={{ marginRight: 8 }} />
-          <TextInput
-            style={[s.searchInput, { color: P.text }]}
-            placeholder="Search by name or service…"
-            placeholderTextColor={P.faint}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 && Platform.OS === 'android' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={16} color={P.faint} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* ── Stats strip ─────────────────────────────────────────────── */}
-        {!loading && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.statsStrip}
-          >
-            <StatChip icon="calendar-outline"  value={String(todayCount)}          label="Today"    color={P.accent}  P={P} dark={dark} />
-            <StatChip icon="arrow-up-circle-outline" value={String(counts.upcoming)} label="Upcoming" color="#2E7D52" P={P} dark={dark} />
-            <StatChip icon="time-outline"       value={String(counts.pending)}      label="Pending"  color="#B8730A"  P={P} dark={dark} />
-            <StatChip icon="cash-outline"       value={todayRevenue > 0 ? fmtMoney(todayRevenue) : '—'} label="Today £" color="#3D6EA5" P={P} dark={dark} />
-          </ScrollView>
-        )}
-
-        {/* ── Filter chips ────────────────────────────────────────────── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.chipRow}
-        >
-          {TABS.map(tab => {
-            const active = tab.key === activeTab;
-            const count  = counts[tab.key];
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[s.chip, active ? { backgroundColor: P.accent } : { backgroundColor: P.tile }]}
-                onPress={() => handleTabPress(tab.key)}
-                activeOpacity={0.75}
-              >
-                <Text style={[s.chipText, { color: active ? '#fff' : P.sub }]}>{tab.label}</Text>
-                {count > 0 && (
-                  <View style={[s.chipBadge, { backgroundColor: active ? 'rgba(255,255,255,0.25)' : P.strip }]}>
-                    <Text style={[s.chipBadgeText, { color: active ? '#fff' : P.text }]}>{count}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* ── Tabs ─────────────────────────────────────────────────────── */}
+        <SlidingTabs tabs={TABS} activeKey={activeTab} counts={counts} onPress={handleTabPress} P={P} />
 
         {/* ── Content ─────────────────────────────────────────────────── */}
         {loading ? (
@@ -584,14 +556,25 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
                   </View>
                   <View style={[wl.posBadge, { backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)' }]}>
                     <Text style={[wl.posBadgeText, { color: entry.status === 'notified' ? '#34C759' : '#FF9500' }]}>
-                      {entry.status === 'notified' ? 'Invited' : 'Waiting'}
+                      {entry.status === 'notified' ? 'Holding Slot' : `Waiting · #${entry.position}`}
                     </Text>
                   </View>
                 </View>
+                {/* A hold (waitlist_holds.sql) reserves the slot for 3 hours from
+                    notified_at — shown as an estimate rather than fetched from
+                    the linked bookings row, since this list is optimised for
+                    provider skimming, not authoritative countdown precision. */}
+                {entry.status === 'notified' && entry.notified_at ? (
+                  <Text style={[wl.preferredDates, { color: '#34C759' }]}>
+                    Expires around {new Date(new Date(entry.notified_at).getTime() + 3 * 60 * 60 * 1000).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' })} if not confirmed
+                  </Text>
+                ) : null}
                 {entry.notes ? <Text style={[wl.notes, { color: P.sub }]} numberOfLines={2}>{entry.notes}</Text> : null}
                 {entry.preferred_dates && entry.preferred_dates.length > 0 ? (
                   <Text style={[wl.preferredDates, { color: P.sub }]}>
-                    Preferred: {entry.preferred_dates.map(d => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })).join(', ')}
+                    Preferred: {entry.preferred_dates.length > 1
+                      ? `${new Date(entry.preferred_dates[0]!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(entry.preferred_dates[1]!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+                      : `${new Date(entry.preferred_dates[0]!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} onward`}
                   </Text>
                 ) : null}
                 <View style={wl.actions}>
@@ -603,7 +586,7 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
                   )}
                   <TouchableOpacity style={[wl.removeBtn, { borderColor: P.sep }]} activeOpacity={0.8}
                     onPress={() => {
-                      WaitlistService.leaveWaitlist(entry.id)
+                      leaveWaitlist(entry.id)
                         .then(() => setWaitlist(prev => prev.filter(e => e.id !== entry.id)))
                         .catch(() => {});
                     }}>
@@ -621,31 +604,14 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
             }
           />
         ) : (
-          <SectionList
+          <FlatList
             ref={listRef}
-            sections={sections}
+            data={items}
             keyExtractor={b => b.id}
-            stickySectionHeadersEnabled
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={[s.listContent, sections.length === 0 && s.listCentered]}
-            SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
+            contentContainerStyle={[s.listContent, items.length === 0 && s.listCentered]}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            renderSectionHeader={({ section }) => {
-              const sec = section as unknown as Section;
-              const dateAlt = fmtDayDate(sec.date);
-              return (
-                <View style={[s.sectionHeader, { backgroundColor: P.bg }]}>
-                  <Text style={[s.sectionLabel, { color: P.text }]}>{fmtDayLabel(sec.date)}</Text>
-                  {dateAlt ? <Text style={[s.sectionAlt, { color: P.faint }]}>{dateAlt}</Text> : null}
-                  <View style={{ flex: 1 }} />
-                  {sec.total > 0 ? <Text style={[s.sectionMoney, { color: P.sub }]}>{fmtMoney(sec.total)}</Text> : null}
-                  <View style={[s.sectionPill, { backgroundColor: P.tile }]}>
-                    <Text style={[s.sectionPillText, { color: P.sub }]}>{sec.data.length}</Text>
-                  </View>
-                </View>
-              );
-            }}
             renderItem={({ item }) => (
               <BookingCard
                 booking={item}
@@ -656,11 +622,9 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
             )}
             ListEmptyComponent={
               <View style={s.emptyWrap}>
-                <Ionicons name={searchQuery ? 'search-outline' : 'calendar-outline'} size={44} color={P.faint} style={{ marginBottom: 12 }} />
-                <Text style={[s.emptyTitle, { color: P.text }]}>{searchQuery ? 'No results' : 'Nothing here'}</Text>
-                <Text style={[s.emptySub, { color: P.sub }]}>
-                  {searchQuery ? `No bookings match "${searchQuery}"` : tabEmptyText[activeTab]}
-                </Text>
+                <Ionicons name="calendar-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
+                <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
+                <Text style={[s.emptySub, { color: P.sub }]}>{tabEmptyText[activeTab]}</Text>
               </View>
             }
           />
@@ -766,31 +730,9 @@ const s = StyleSheet.create({
   devBtn:      { backgroundColor: '#FF3B30', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8 },
   devBtnText:  { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
-  // Search
-  searchWrap:  { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 14, borderRadius: 14, paddingHorizontal: 13, paddingVertical: 10 },
-  searchInput: { flex: 1, fontSize: 14, fontWeight: '500', padding: 0 },
-
-  // Stats
-  statsStrip:  { paddingHorizontal: 16, gap: 10, paddingBottom: 14 },
-
-  // Filter chips
-  chipRow:     { paddingHorizontal: 16, gap: 8, paddingBottom: 10 },
-  chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  chipText:    { fontSize: 13, fontWeight: '600' },
-  chipBadge:   { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, minWidth: 18, alignItems: 'center' },
-  chipBadgeText:{ fontSize: 10, fontWeight: '700' },
-
   // List
-  listContent:  { paddingHorizontal: 14, paddingTop: 2, paddingBottom: 120 },
+  listContent:  { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },
   listCentered: { flexGrow: 1, justifyContent: 'center' },
-
-  // Section headers
-  sectionHeader:  { flexDirection: 'row', alignItems: 'center', paddingTop: 16, paddingBottom: 8, gap: 6 },
-  sectionLabel:   { fontSize: 13, fontWeight: '800', letterSpacing: 0.1, textTransform: 'uppercase' },
-  sectionAlt:     { fontSize: 12, fontWeight: '500' },
-  sectionMoney:   { fontSize: 12, fontWeight: '600' },
-  sectionPill:    { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
-  sectionPillText:{ fontSize: 11, fontWeight: '700' },
 
   // Empty state
   emptyWrap:    { alignItems: 'center', paddingTop: 40 },

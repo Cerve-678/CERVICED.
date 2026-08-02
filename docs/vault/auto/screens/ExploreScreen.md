@@ -7,8 +7,8 @@ tags: [screen, client]
 **Registered route(s):** `ExploreMain`
 
 ## → Navigates to
+- [[SearchScreen\|Search]]
 - [[ProviderProfileScreen\|ProviderProfile]]
-- [[EventDetailScreen\|EventDetail]]
 - [[BookmarkedProvidersScreen\|BookmarkedProviders]]
 
 ## Map

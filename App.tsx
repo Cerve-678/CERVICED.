@@ -19,6 +19,7 @@ import { AuthProvider } from "./src/contexts/AuthContext";
 import { RegistrationProvider } from "./src/contexts/RegistrationContext";
 import { ThemeProvider } from "./src/contexts/ThemeContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import { BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
 import ErrorBoundary from "./src/components/ErrorBoundary";
@@ -140,14 +141,16 @@ export default Sentry.wrap(function App() {
           <AuthProvider>
             <RegistrationProvider>
               <FontProvider customFontsLoaded={fontsLoaded && !fontError}>
-                <CartProvider>
-                  <BookingProvider>
-                    <View style={styles.container} onLayout={onLayoutRootView}>
-                      <StatusBarBlur />
-                      <AppContent />
-                    </View>
-                  </BookingProvider>
-                </CartProvider>
+                <StripeProvider publishableKey={process.env['EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY'] ?? ""} merchantIdentifier="merchant.com.cerviced">
+                  <CartProvider>
+                    <BookingProvider>
+                      <View style={styles.container} onLayout={onLayoutRootView}>
+                        <StatusBarBlur />
+                        <AppContent />
+                      </View>
+                    </BookingProvider>
+                  </CartProvider>
+                </StripeProvider>
               </FontProvider>
             </RegistrationProvider>
           </AuthProvider>

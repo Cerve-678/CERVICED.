@@ -35,9 +35,7 @@ import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } fr
 import { hasMapDestination } from '../types/booking';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderAddressPolicy, getProviderAddressPolicyByDisplayName, ProviderAddressPolicy, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy, getRebookableService, RebookableService, setBookingTip } from '../services/databaseService';
-import * as WaitlistService from '../services/WaitlistService';
-import type { WaitlistEntry } from '../services/WaitlistService';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking } from '../services/databaseService';
 import { ThemedBackground } from '../components/ThemedBackground';
 import { useTheme, Theme } from '../contexts/ThemeContext';
 import { HomeScreenProps } from '../navigation/types';
@@ -543,7 +541,10 @@ const GroupBookingCard = React.memo<GroupBookingCardProps>(
       <View style={[styles.groupBookingCard, { backgroundColor: cardBg, borderColor }]}>
         <TouchableOpacity
           style={styles.groupBookingHeader}
-          onPress={onToggle}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            onToggle();
+          }}
           activeOpacity={0.7}
         >
           <View style={styles.groupBookingHeaderLeft}>
@@ -574,7 +575,10 @@ const GroupBookingCard = React.memo<GroupBookingCardProps>(
                     isLast && { borderBottomWidth: 0 },
                     isHighlighted && { backgroundColor: isDarkMode ? 'rgba(200,80,200,0.12)' : 'rgba(200,80,200,0.07)' },
                   ]}
-                  onPress={() => onBookingPress(booking)}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    onBookingPress(booking);
+                  }}
                   activeOpacity={0.7}
                 >
                   {booking.providerImage ? (
@@ -825,13 +829,46 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [activeFilters, setActiveFilters] = useState<Set<'all' | 'past'>>(new Set());
   const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
 
+  // A time-boxed waitlist hold (waitlist_holds.sql) — deliberately excluded
+  // from todayBookings/upcomingBookings/pastBookings (see client_bookings
+  // view) so it never shows as a phantom confirmed appointment. Fetched
+  // directly by id only when a waitlist_slot_available notification points
+  // at one; see the route-params effect below.
+  const [waitlistHold, setWaitlistHold] = useState<RawBooking | null>(null);
+  const [waitlistHoldBusy, setWaitlistHoldBusy] = useState(false);
+
   // Load waitlist entries for this user
   useEffect(() => {
     if (!user?.id) return;
-    WaitlistService.getUserWaitlistEntries(user.id)
+    getUserWaitlistEntries(user.id)
       .then(setWaitlistEntries)
       .catch(() => {});
   }, [user?.id]);
+
+  const handleConfirmWaitlistHold = useCallback(async () => {
+    if (!waitlistHold) return;
+    setWaitlistHoldBusy(true);
+    try {
+      await claimWaitlistHold(waitlistHold.id);
+      setWaitlistHold(null);
+      await reloadBookings();
+    } catch (err: any) {
+      Alert.alert('Could not confirm', err?.message || 'This hold may have expired. Please check the provider for other openings.');
+      setWaitlistHold(null);
+    } finally {
+      setWaitlistHoldBusy(false);
+    }
+  }, [waitlistHold, reloadBookings]);
+
+  const handleDeclineWaitlistHold = useCallback(async () => {
+    if (!waitlistHold) return;
+    setWaitlistHoldBusy(true);
+    try {
+      await declineWaitlistHold(waitlistHold.id);
+    } catch {}
+    setWaitlistHold(null);
+    setWaitlistHoldBusy(false);
+  }, [waitlistHold]);
 
   // Pending intake forms + unread info packs per booking — drives the "!" badge
   const refreshBookingActionItems = useCallback(() => {
@@ -852,6 +889,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, [navigation, refreshBookingActionItems]);
 
   const toggleFilter = useCallback((filter: 'all' | 'past') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setActiveFilters(prev => {
       if (prev.has(filter)) {
         return new Set();
@@ -913,8 +951,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [bookingActionItems, setBookingActionItems] = useState<Record<string, number>>({});
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
-  const [selectedBookingAddrSettings, setSelectedBookingAddrSettings] = useState<ProviderAddressPolicy | null>(null);
-  const [addrCountdown, setAddrCountdown] = useState('');
   const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -973,6 +1009,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const focusMapOnLocation = useCallback((coordinates: { latitude: number; longitude: number }) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (mapRef.current && coordinates) {
       mapRef.current.animateToRegion(
         {
@@ -987,6 +1024,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const openInMaps = useCallback(async (booking: ConfirmedBooking) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const { coordinates, address } = booking;
       const label = encodeURIComponent(address);
@@ -1010,6 +1048,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const openContactSheet = useCallback(async (booking: ConfirmedBooking) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setContactSheetBooking(booking);
     setContactSheetInfo(null);
     setContactSheetVisible(true);
@@ -1028,6 +1067,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   }, []);
 
   const openProviderChat = useCallback(async (booking: ConfirmedBooking) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     let providerDbId = booking.providerId;
     if (!providerDbId) {
       providerDbId = (await getProviderIdByDisplayName(booking.providerName).catch(() => null)) ?? undefined;
@@ -1062,6 +1102,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ✅ FIXED: Book Again - checks cart, shows proper modals
   const handleRebook = useCallback(async (booking: ConfirmedBooking) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Check if already in cart — prefer matching by the real service/provider
     // IDs (name text can collide, e.g. two providers both offering
     // "Haircut"); fall back to name matching only for legacy bookings that
@@ -1165,6 +1206,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ✅ Confirm rebook with/without add-ons
   const confirmRebook = useCallback((selection?: 'with' | 'without') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const finalSelection = selection || rebookSelection;
     if (!selectedBooking || !finalSelection) return;
 
@@ -1445,6 +1487,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // ✅ FIXED: Rating locks after first submission + re-enable scrolling
   const handleRatingSubmit = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || rating === 0) {
       Alert.alert('Rating Required', 'Please select a rating before submitting.');
       return;
@@ -1531,6 +1574,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // This previously only set local component state (tippedBookings), so the
   // tip was discarded on unmount and the provider never saw it.
   const handleTipSubmit = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!selectedBooking || tipAmount <= 0) {
       Alert.alert('Invalid Tip', 'Please enter a valid tip amount.');
       return;
@@ -1560,46 +1604,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [selectedBooking, tipAmount]);
 
-  // Countdown ticker for address release
-  useEffect(() => {
-    if (!selectedBooking || selectedBooking.clientAddress) return;
-    const policy = selectedBookingAddrSettings?.address_release_policy ?? null;
-    if (!policy || policy === 'always' || policy === 'manual') return;
-
-    const offsetDays: Record<string, number> = {
-      on_confirmation: 0,
-      day_before: 1,
-      two_days_before: 2,
-      three_days_before: 3,
-      five_days_before: 5,
-      week_before: 7,
-    };
-    const days = offsetDays[policy];
-    if (days === undefined) return;
-
-    const computeCountdown = () => {
-      const appt = new Date(`${selectedBooking.bookingDate}T12:00:00`);
-      const releaseAt = new Date(appt);
-      releaseAt.setDate(releaseAt.getDate() - days);
-      const diff = releaseAt.getTime() - Date.now();
-      if (diff <= 0) { setAddrCountdown(''); return; }
-      const totalHours = Math.floor(diff / 3600000);
-      const mins = Math.floor((diff % 3600000) / 60000);
-      if (totalHours >= 48) {
-        setAddrCountdown(`${Math.ceil(diff / 86400000)} days`);
-      } else if (totalHours >= 1) {
-        setAddrCountdown(`${totalHours}h ${mins}m`);
-      } else {
-        setAddrCountdown(`${mins}m`);
-      }
-    };
-
-    computeCountdown();
-    const id = setInterval(computeCountdown, 60000);
-    return () => clearInterval(id);
-  }, [selectedBooking, selectedBookingAddrSettings]);
-
   const retryLoadBookings = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRetrying(true);
     try {
       await reloadBookings();
@@ -1860,6 +1866,23 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           notifBookingGiveUpRef.current = null;
         }
       } else {
+        // Not in the normal lists — could be a waitlist hold (deliberately
+        // excluded from them, see client_bookings view) rather than actually
+        // missing. Check directly before falling back to the retry/give-up
+        // path below.
+        getBookingById(bookingId!)
+          .then(direct => {
+            if (direct?.status === 'on_hold') {
+              setWaitlistHold(direct);
+              navigation.setParams({ openBookingId: undefined, openReschedule: undefined, highlightBookingId: undefined, initialTab: undefined } as any);
+              if (notifBookingGiveUpRef.current) {
+                clearTimeout(notifBookingGiveUpRef.current.timer);
+                notifBookingGiveUpRef.current = null;
+              }
+            }
+          })
+          .catch(() => {});
+
         logger.warn('⚠️ Booking not found:', bookingId);
         // Bookings may still be loading — allow a few seconds of retries as
         // the list refreshes, but give up and clear the params once that
@@ -2204,6 +2227,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         hasBookingBeenRated(booking.id) && styles.buttonDisabled
                                       ]}
                                       onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                         if (hasBookingBeenRated(booking.id)) {
                                           Alert.alert('Already Rated', 'You have already rated this appointment.');
                                           return;
@@ -2223,6 +2247,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                         hasBookingBeenTipped(booking.id) && styles.buttonDisabled
                                       ]}
                                       onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                         if (hasBookingBeenTipped(booking.id)) {
                                           Alert.alert('Already Tipped', 'You have already tipped for this appointment.');
                                           return;
@@ -2275,7 +2300,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {currentBooking.providerName} - {currentBooking.status.replace('_', ' ')}
                                     </Text>
                                     <Text style={styles.appointmentAddress}>
-                                      {currentBooking.address || (addrCountdown ? `Address in ${addrCountdown}` : 'Address to be confirmed')}
+                                      {currentBooking.address || 'Address to be confirmed'}
                                     </Text>
                                   </View>
                                   <View style={styles.actionButtons}>
@@ -2288,6 +2313,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             hasBookingBeenRated(currentBooking.id) && styles.buttonDisabled
                                           ]}
                                           onPress={() => {
+                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                             if (hasBookingBeenRated(currentBooking.id)) {
                                               Alert.alert('Already Rated', 'You have already rated this appointment.');
                                               return;
@@ -2308,6 +2334,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                             hasBookingBeenTipped(currentBooking.id) && styles.buttonDisabled
                                           ]}
                                           onPress={() => {
+                                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                             if (hasBookingBeenTipped(currentBooking.id)) {
                                               Alert.alert('Already Tipped', 'You have already tipped for this appointment.');
                                               return;
@@ -2393,6 +2420,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                                 hasBookingBeenRated(booking.id) && styles.buttonDisabled
                                               ]}
                                               onPress={() => {
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                                 if (hasBookingBeenRated(booking.id)) {
                                                   Alert.alert('Already Rated', 'You have already rated this appointment.');
                                                   return;
@@ -2412,6 +2440,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                                 hasBookingBeenTipped(booking.id) && styles.buttonDisabled
                                               ]}
                                               onPress={() => {
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                                                 if (hasBookingBeenTipped(booking.id)) {
                                                   Alert.alert('Already Tipped', 'You have already tipped for this appointment.');
                                                   return;
@@ -2483,7 +2512,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             {isFilterView && (
               <View style={styles.bookingsContainer}>
                 <TouchableOpacity
-                  onPress={() => setActiveFilters(new Set())}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setActiveFilters(new Set());
+                  }}
                   style={styles.backToTrackingButton}
                 >
                   <Text style={styles.backToTrackingText}>← Back to Tracking</Text>
@@ -2648,7 +2680,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           paddingVertical: 8,
                           marginLeft: 12,
                         }}
-                        onPress={() => navigation.navigate('ProviderProfile', { providerId: entry.provider_id })}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          navigation.navigate('ProviderProfile', { providerId: entry.provider_id });
+                        }}
                         activeOpacity={0.8}
                       >
                         <Text style={{ fontFamily: 'BakbakOne', fontSize: 11, color: '#fff' }}>Book Now</Text>
@@ -2658,7 +2693,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <TouchableOpacity
                     style={{ marginTop: 10, alignSelf: 'flex-start' }}
                     onPress={() => {
-                      WaitlistService.leaveWaitlist(entry.id).then(() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      leaveWaitlist(entry.id).then(() => {
                         setWaitlistEntries(prev => prev.filter(e => e.id !== entry.id));
                       }).catch(() => {});
                     }}
@@ -2676,8 +2712,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         </ScrollView>
 
         {/* ─── Contact Sheet ─── */}
-        <Modal visible={contactSheetVisible} animationType="slide" transparent onRequestClose={() => setContactSheetVisible(false)}>
-          <Pressable style={csSt.overlay} onPress={() => setContactSheetVisible(false)}>
+        <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
+          <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
             <Pressable style={csSt.sheet} onPress={e => e.stopPropagation()}>
               <View style={csSt.handle} />
               <Text style={csSt.title}>Contact {contactSheetBooking?.providerName}</Text>
@@ -2700,7 +2736,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     <TouchableOpacity
                       style={csSt.option}
                       activeOpacity={0.7}
-                      onPress={() => { setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}><Text style={csSt.optionEmoji}>✉️</Text></View>
                       <View style={csSt.optionText}>
@@ -2714,7 +2750,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     <TouchableOpacity
                       style={csSt.option}
                       activeOpacity={0.7}
-                      onPress={() => { setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#1A3D2B' }]}><Text style={csSt.optionEmoji}>💚</Text></View>
                       <View style={csSt.optionText}>
@@ -2728,7 +2764,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     <TouchableOpacity
                       style={csSt.option}
                       activeOpacity={0.7}
-                      onPress={() => { setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}><Text style={csSt.optionEmoji}>📞</Text></View>
                       <View style={csSt.optionText}>
@@ -2791,7 +2827,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>{successMessage}</Text>
               <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]}
-                  onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }} activeOpacity={0.7}>
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }} activeOpacity={0.7}>
                   <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
@@ -2807,8 +2843,57 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cannot Reschedule</Text>
               <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>{cooldownMessage}</Text>
               <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowCooldownModal(false); }} activeOpacity={0.7}>
                   <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Waitlist Hold Modal — a time-boxed slot reserved via
+            invite_next_waitlist_entry() (waitlist_holds.sql). Fetched
+            directly by id (see the route-params effect above) since it's
+            deliberately excluded from the normal bookings lists. ─── */}
+        <Modal visible={!!waitlistHold} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setWaitlistHold(null)}>
+          <View style={popSt.overlay}>
+            <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⏳</Text>
+              <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>A Slot Opened Up!</Text>
+              {waitlistHold && (
+                <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>
+                  {waitlistHold.service_name_snapshot} with {waitlistHold.provider_name_snapshot}{'\n'}
+                  {new Date(waitlistHold.booking_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {' at '}
+                  {(() => {
+                    const [h, m] = waitlistHold.booking_time.split(':').map(Number);
+                    const period = h! < 12 ? 'AM' : 'PM';
+                    const displayH = h === 0 ? 12 : h! > 12 ? h! - 12 : h;
+                    return `${displayH}:${String(m).padStart(2, '0')} ${period}`;
+                  })()}
+                  {'\n\n'}This is held just for you — it'll be released to the next person if you don't respond in time.
+                </Text>
+              )}
+              <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
+                <TouchableOpacity
+                  style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
+                  onPress={handleDeclineWaitlistHold}
+                  disabled={waitlistHoldBusy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111', fontWeight: '600', textAlign: 'center' }}>Not This Time</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]}
+                  onPress={handleConfirmWaitlistHold}
+                  disabled={waitlistHoldBusy}
+                  activeOpacity={0.7}
+                >
+                  {waitlistHoldBusy ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Confirm This Slot</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -2831,7 +2916,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     </Text>
                     <View style={styles.starContainer}>
                       {[1, 2, 3, 4, 5].map(s => (
-                        <TouchableOpacity key={s} style={styles.starButton} onPress={() => setRating(s)}>
+                        <TouchableOpacity key={s} style={styles.starButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRating(s); }}>
                           <Text style={[styles.starText, s <= rating && styles.starTextActive]}>★</Text>
                         </TouchableOpacity>
                       ))}
@@ -2846,7 +2931,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       <Text style={styles.characterCount}>{reviewText.length}/500</Text>
                     </View>
                     <View style={popSt.sheetBtns}>
-                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
                         <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : '#AF9197' }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
@@ -2880,7 +2965,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 <View style={styles.tipContainer}>
                   <View style={styles.tipQuickButtons}>
                     {[5, 10, 15, 20].map(amt => (
-                      <TouchableOpacity key={amt} style={[styles.tipQuickButton, tipAmount === amt && styles.tipQuickButtonActive]} onPress={() => setTipAmount(amt)} activeOpacity={0.7}>
+                      <TouchableOpacity key={amt} style={[styles.tipQuickButton, tipAmount === amt && styles.tipQuickButtonActive]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setTipAmount(amt); }} activeOpacity={0.7}>
                         <Text style={[styles.tipQuickButtonText, tipAmount === amt && styles.tipQuickButtonTextActive]}>£{amt}</Text>
                       </TouchableOpacity>
                     ))}
@@ -2899,7 +2984,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 </View>
                 <View style={popSt.sheetBtns}>
-                  <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
+                  <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
                     <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Skip</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: tipAmount <= 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : '#AF9197' }]} disabled={tipAmount <= 0 || isLoading} onPress={handleTipSubmit} activeOpacity={0.7}>
@@ -4976,7 +5061,11 @@ const popSt = StyleSheet.create({
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
   sheetTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
   sheetSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  sheetBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  // width: '100%' matters here — a lone flex:1 button (Success/Cooldown
+  // modals only ever have one) has no sibling to size against in an
+  // unconstrained row, and Yoga can collapse it to zero width so it never
+  // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
+  sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
   sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
 });
 

@@ -4,16 +4,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, closeRescheduleRequest, getProviderLocationsByIds, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, getActiveRescheduleRequestsForBookings, isSlotTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, closeRescheduleRequest, getProviderLocationsByIds, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, getActiveRescheduleRequestsForBookings, isSlotTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, updateBookingGroupInfo } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 
 export class BookingError extends Error {
   succeededCartItemIds: string[];
-  constructor(message: string, succeededCartItemIds: string[] = []) {
+  // Total already paid for the bookings that DID persist, even though this
+  // error represents an overall checkout failure. The payment layer needs
+  // this to capture only that amount (and release the rest of the
+  // authorisation) instead of treating any persistence failure as "capture
+  // nothing" — which would leave a real, provider-visible booking marked
+  // paid while the card was never actually charged for it.
+  succeededAmountPaid: number;
+  constructor(message: string, succeededCartItemIds: string[] = [], succeededAmountPaid = 0) {
     super(message);
     this.name = 'BookingError';
     this.succeededCartItemIds = succeededCartItemIds;
+    this.succeededAmountPaid = succeededAmountPaid;
   }
 }
 
@@ -629,10 +637,40 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       logger.log('Step 1: User requesting reschedule for:', bookingId);
 
+      // Persist to Supabase BEFORE committing locally, and let a failure
+      // throw before any local state changes. This used to save the
+      // optimistic "pending" state to AsyncStorage/React state first and
+      // call the RPC after — so a failed RPC call (e.g. the requested_dates
+      // date[]/text[] type-mismatch fixed by
+      // fix_reschedule_requested_dates_type_mismatch.sql) left the local
+      // cache saying "pending" with no matching row server-side. The very
+      // next attempt then hit the isPendingReschedule guard above and threw
+      // "Waiting for provider to respond" — a false positive from stale
+      // local state, not a real conflict — while the UI had just reported
+      // "Reschedule Failed" for the same request. Writing first (same order
+      // confirmReschedule() below already uses, see its comment) means a
+      // failure leaves the booking's local state untouched and retryable.
+      //
+      // Routed through request_reschedule_own_booking() instead of a plain
+      // upsert — enforces the 24h cooldown, the provider's maxReschedules
+      // cap, and the provider's reschedule notice window server-side (see
+      // supabase/booking_rules_server_enforcement.sql). The checks above in
+      // this function are just an optimistic pre-check for instant UI
+      // feedback; the RPC is the real gate and its rejection message wins
+      // if the two ever disagree (e.g. a stale local cache).
+      await requestRescheduleOwnBooking(bookingId, preferredDates);
+
       // ✅ Preserve original date/time from FIRST reschedule request
       const originalDate = booking.rescheduleRequest?.originalDate || booking.bookingDate;
       const originalTime = booking.rescheduleRequest?.originalTime || booking.bookingTime;
       const rescheduleCount = (booking.rescheduleRequest?.rescheduleCount || 0);
+
+      // preferredDates elements are "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" (see
+      // RescheduleScreen.tsx handleSubmit) — split so the UI can show the
+      // requested date and time separately, mirroring how the RPC now splits
+      // them into requested_dates/requested_times server-side.
+      const requestedDatesOnly = preferredDates.map(d => d.split(' ')[0] ?? d);
+      const requestedTimesOnly = preferredDates.map(d => d.split(' ')[1] ?? '');
 
       // ✅ Update only the specific booking
       const updatedBooking = {
@@ -641,7 +679,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         rescheduleRequest: {
           originalDate,
           originalTime,
-          requestedDates: preferredDates,
+          requestedDates: requestedDatesOnly,
+          requestedTimes: requestedTimesOnly,
           requestedAt: new Date().toISOString(),
           rescheduleCount, // Don't increment yet, only on confirm
           ...(booking.rescheduleRequest?.lastRescheduledAt && { lastRescheduledAt: booking.rescheduleRequest.lastRescheduledAt }),
@@ -653,20 +692,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const updatedBookings = currentBookings.map(b => b.id === bookingId ? updatedBooking : b);
 
       await saveBookings(updatedBookings);
-
-      // Persist to Supabase so provider can see the request. Not swallowed —
-      // a failure here means the provider never receives the request, so the
-      // caller must find out and show the user it didn't actually send
-      // (see fix_reschedule_request_conflict.sql for the bug this caught).
-      //
-      // Routed through request_reschedule_own_booking() instead of a plain
-      // upsert — enforces the 24h cooldown, the provider's maxReschedules
-      // cap, and the provider's reschedule notice window server-side (see
-      // supabase/booking_rules_server_enforcement.sql). The checks above in
-      // this function are now just an optimistic pre-check for instant UI
-      // feedback; the RPC is the real gate and its rejection message wins
-      // if the two ever disagree (e.g. a stale local cache).
-      await requestRescheduleOwnBooking(bookingId, preferredDates);
 
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const rescheduleProviderId = booking.providerId
@@ -1359,7 +1384,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 remaining_balance: apt.remainingBalance,
                 payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
                 payment_method: apt.paymentMethod ?? null,
-                payment_intent_id: null,
+                payment_intent_id: apt.paymentIntentId ?? null,
                 is_group_booking: cartItems.length > 1,
                 group_booking_id: cartItems.length > 1 ? groupBookingId : null,
                 group_booking_count: cartItems.length,
@@ -1369,6 +1394,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 provider_logo_snapshot: logoUrl,
                 // Keyed by provider id — a display-name key could pull a
                 // different provider's address when two share a name.
+                // This is only ever the public, approximate location (the client
+                // can't read a different provider's real address — RLS on
+                // provider_private_details blocks it) or the pending placeholder.
+                // trg_stamp_booking_address_snapshot overwrites it server-side with
+                // the real full_address when the provider has one on file — see
+                // fix_booking_address_snapshot_uses_real_address.sql.
                 provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
                 provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
                 provider_coordinates: (() => {
@@ -1419,8 +1450,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             } catch (itemError: any) {
               const name = item.providerDisplayName ?? item.providerName;
               let message: string;
-              if (itemError?.code === '23505') {
-                // Lost the race for this slot — another booking landed first
+              if (itemError?.code === '23505' || itemError?.code === '23P01') {
+                // 23505 = exact same (provider, date, time) triple lost the
+                // race; 23P01 = the buffer/overlap exclusion constraint
+                // caught a different-start-time overlap the app-side
+                // pre-check missed under concurrent requests. Same
+                // user-facing story either way: someone else got there first.
                 message = `That time slot with ${name} was just taken by another client. Please choose a different time.`;
               } else if (itemError instanceof Error && !itemError.message.includes('Network') && !('code' in itemError)) {
                 // createBooking validation: closed day, blocked date, overlap…
@@ -1479,15 +1514,44 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // every booking that persisted, even if a sibling item in a multi-service
       // checkout failed.
       const succeededBookings = newBookings.filter(nb => !failedCartItemIds.has(nb.cartItemId));
+      const succeededAmountPaid = succeededBookings.reduce((sum, b) => sum + b.amountPaid, 0);
+
+      // A partial failure leaves the surviving bookings' group_booking_count
+      // stamped with the ORIGINAL cart size (set before any item's outcome
+      // was known) — e.g. 1 of 3 services books, but that row still claims
+      // "3" and carries a group_booking_id shared with two bookings that
+      // don't exist. Patch it to reality once the real outcome is known.
+      if (persistFailures.length > 0 && succeededBookings.length > 0) {
+        const succeededDbIds = succeededBookings.map(b => b.id);
+        try {
+          if (succeededBookings.length > 1) {
+            await updateBookingGroupInfo(succeededDbIds, {
+              is_group_booking: true,
+              group_booking_id: groupBookingId,
+              group_booking_count: succeededDbIds.length,
+            });
+          } else {
+            await updateBookingGroupInfo(succeededDbIds, {
+              is_group_booking: false,
+              group_booking_id: null,
+              group_booking_count: 1,
+            });
+          }
+        } catch (groupInfoError) {
+          // Cosmetic (a "3" badge on a single surviving booking) — never let
+          // this block the checkout outcome itself.
+          logger.error('[BookingContext] Failed to reconcile group_booking_count after partial checkout failure:', groupInfoError);
+        }
+      }
+
       if (succeededBookings.length > 0) {
-        const totalPaid = succeededBookings.reduce((sum, b) => sum + b.amountPaid, 0);
         insertBookingUserNotification({
           booking_id: succeededBookings[0]!.id,
           type: 'payment_success',
           title: 'Payment Received',
           message: succeededBookings.length > 1
-            ? `We received your payment of £${totalPaid.toFixed(2)} for ${succeededBookings.length} services.`
-            : `We received your payment of £${totalPaid.toFixed(2)} for ${succeededBookings[0]!.serviceName}.`,
+            ? `We received your payment of £${succeededAmountPaid.toFixed(2)} for ${succeededBookings.length} services.`
+            : `We received your payment of £${succeededAmountPaid.toFixed(2)} for ${succeededBookings[0]!.serviceName}.`,
           priority: 'medium',
           is_actionable: false,
         }).catch(() => {});
@@ -1495,13 +1559,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       // Fail the checkout with the real reason(s) — but make clear when it
       // was only PART of a multi-service checkout, and carry the cart item
-      // ids that DID book so the caller can clear just those from the cart.
+      // ids (and amount) that DID book so the caller can clear just those
+      // from the cart and capture only what was actually booked.
       if (persistFailures.length > 0) {
         const reasons = [...new Set(persistFailures.map(f => f.message))].join('\n');
         const message = succeededBookings.length > 0
           ? `${succeededBookings.length} of ${newBookings.length} services were booked successfully. The rest couldn't be placed:\n${reasons}`
           : reasons;
-        throw new BookingError(message, succeededBookings.map(b => b.cartItemId));
+        throw new BookingError(message, succeededBookings.map(b => b.cartItemId), succeededAmountPaid);
       }
 
       logger.log('All bookings created successfully');

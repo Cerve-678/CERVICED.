@@ -61,9 +61,11 @@ interface Notification {
       | 'reschedule_request' | 'reschedule_response' | 'reschedule_provider_response'
       | 'reschedule_confirmed'| 'review_request'     | 'review_received'
       | 'promotion'          | 'intake_form_reminder' | 'provider_message'
-      | 'balance_collected'  | 'balance_reminder'     | 'new_message'
+      | 'balance_reminder'   | 'new_message'
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
-      | 'info_pack_received' | 'intake_form_completed' | 'address_released';
+      | 'info_pack_received' | 'intake_form_completed' | 'address_released'
+      | 'birthday_greeting'  | 'post_appt_check_in'   | 'rebooking_nudge' | 'daily_recap'
+      | 'schedule_fully_booked';
   title: string;
   message: string;
   timestamp: string;
@@ -240,7 +242,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           ['booking_pending', 'booking_confirmed', 'booking_reminder',
            'booking_cancelled', 'booking_in_progress', 'no_show',
            'reschedule_request', 'reschedule_provider_response',
-           'reschedule_confirmed'].includes(n.type)
+           'reschedule_confirmed', 'rebooking_nudge', 'daily_recap'].includes(n.type)
         );
       case 'reviews':
         return modeFiltered.filter(n =>
@@ -303,6 +305,23 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     setSelectedNotification(null);
   }, []);
 
+  // Notifications, BookingDetail, ProviderIntakeForm, and ProviderInbox are all
+  // registered independently in BOTH the ProviderHome (Calendar) stack and the
+  // ProviderAccount (Profile Settings) stack. A bare goBack()+navigate() lands
+  // wherever Notifications happened to be opened FROM — so opening Notifications
+  // from Profile Settings and tapping a booking/reschedule notification pushed
+  // BookingDetail onto the Profile Settings stack instead of Calendar, stranding
+  // the provider there with no way back to the Profile Settings root screen.
+  // Explicitly targeting the ProviderHome tab (like the background push-tap
+  // handler already does) guarantees the destination stack regardless of where
+  // Notifications was opened from.
+  const navigateProviderHome = useCallback((screen: string, params?: Record<string, unknown>) => {
+    navigation.dispatch(CommonActions.goBack() as any);
+    setTimeout(() => {
+      (navigation as any).getParent()?.navigate('ProviderHome', { screen, params, initial: false });
+    }, 500);
+  }, [navigation]);
+
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
     logger.log('[NotificationsScreen] handleNotificationAction called');
@@ -323,6 +342,9 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'new_provider',
       'promotion',
       'announcement',
+      'birthday_greeting',
+      'post_appt_check_in',
+      'rebooking_nudge',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -345,27 +367,22 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'reschedule_confirmed' ||
         notification.type === 'booking_not_started' ||
         notification.type === 'balance_reminder' ||
-        notification.type === 'balance_collected' ||
         notification.type === 'intake_form_received' ||
-        notification.type === 'info_pack_received') {
+        notification.type === 'info_pack_received' ||
+        notification.type === 'rebooking_nudge' ||
+        notification.type === 'daily_recap') {
 
       const openReschedule = notification.type === 'reschedule_request' ||
                             notification.type === 'reschedule_provider_response';
 
       setTimeout(() => {
         if (isProviderRef.current) {
-          // Provider: dismiss the modal first, then navigate to BookingDetail
+          // Provider: always land in the Calendar (ProviderHome) stack, not
+          // wherever Notifications happened to be opened from.
           if (notification.bookingId) {
             const bookingId = notification.bookingId;
-            // Dismiss Notifications modal
-            navigation.dispatch(CommonActions.goBack() as any);
-            // After modal dismiss animation, push BookingDetail in same stack
-            setTimeout(() => {
-              navigation.dispatch(
-                CommonActions.navigate({ name: 'BookingDetail', params: { bookingId } }) as any
-              );
-              logger.log('Provider — navigating to BookingDetail:', bookingId);
-            }, 500);
+            navigateProviderHome('BookingDetail', { bookingId, openReschedule: openReschedule || undefined });
+            logger.log('Provider — navigating to BookingDetail:', bookingId);
           }
         } else {
           // Client: dismiss the modal first, then navigate to Bookings.
@@ -381,17 +398,28 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         }
       }, 300);
     } else if (notification.type === 'waitlist_slot_available') {
-      // A slot opened up — take the client straight to the provider to book
-      if (!notification.providerId) return;
-      const providerId = notification.providerId;
-      setTimeout(() => {
-        navigation.dispatch(CommonActions.goBack() as any);
+      // A held slot (waitlist_holds.sql) carries a real booking_id — send the
+      // client straight to it so they can confirm/decline (BookingDetailScreen's
+      // on_hold branch), same pattern as the other booking-linked types above.
+      // Older-style waitlist notifications (or the provider's manual "Schedule
+      // & Invite", which books outright rather than holding) have no booking_id
+      // — fall back to the provider profile so there's still somewhere to go.
+      if (notification.bookingId) {
+        const bookingId = notification.bookingId;
         setTimeout(() => {
-          navigation.dispatch(
-            CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
-          );
-        }, 500);
-      }, 300);
+          navigation.dispatch(StackActions.replace('Bookings', { openBookingId: bookingId, highlightBookingId: bookingId }));
+        }, 300);
+      } else if (notification.providerId) {
+        const providerId = notification.providerId;
+        setTimeout(() => {
+          navigation.dispatch(CommonActions.goBack() as any);
+          setTimeout(() => {
+            navigation.dispatch(
+              CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
+            );
+          }, 500);
+        }, 300);
+      }
     } else if (notification.type === 'new_provider') {
       logger.log('Navigating to ProviderProfile');
       logger.log('Provider ID:', notification.providerId);
@@ -412,8 +440,11 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         navigation.goBack();
         logger.log('Navigation to Home executed');
       }, 300);
-    } else if (notification.type === 'announcement') {
-      // Provider broadcast — open that provider's profile if we know them
+    } else if (notification.type === 'announcement' ||
+               notification.type === 'birthday_greeting' ||
+               notification.type === 'post_appt_check_in') {
+      // Provider broadcast (or an automated birthday/check-in message from
+      // them) — open that provider's profile if we know them
       if (notification.providerId) {
         const providerId = notification.providerId;
         setTimeout(() => {
@@ -435,43 +466,25 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       setTimeout(async () => {
         const booking = await getBookingWithAddOnsById(bookingId);
         if (!booking) return;
-        navigation.dispatch(CommonActions.goBack() as any);
-        setTimeout(() => {
-          navigation.dispatch(
-            CommonActions.navigate({
-              name: 'ProviderIntakeForm',
-              params: {
-                bookingId,
-                clientUserId: booking.user_id,
-                serviceName: booking.service_name_snapshot,
-                ...(viewResponses ? { formId: 'view' } : {}),
-              },
-            }) as any
-          );
-          logger.log('Provider — navigating to ProviderIntakeForm:', bookingId);
-        }, 500);
+        navigateProviderHome('ProviderIntakeForm', {
+          bookingId,
+          clientUserId: booking.user_id,
+          serviceName: booking.service_name_snapshot,
+          ...(viewResponses ? { formId: 'view' } : {}),
+        });
+        logger.log('Provider — navigating to ProviderIntakeForm:', bookingId);
       }, 300);
     } else if (notification.type === 'provider_message') {
       logger.log('Navigating to ProviderInbox (Messages)');
       setTimeout(() => {
-        navigation.dispatch(CommonActions.goBack() as any);
-        setTimeout(() => {
-          navigation.dispatch(
-            CommonActions.navigate({ name: 'ProviderInbox', params: { initialFilter: 'messages' } }) as any
-          );
-        }, 500);
+        navigateProviderHome('ProviderInbox', { initialFilter: 'messages' });
       }, 300);
     } else if (notification.type === 'new_message') {
       // Chat message — providers land in the inbox Messages tab; clients open
       // the chat with that provider (slug + name looked up from provider_id)
       if (isProviderRef.current) {
         setTimeout(() => {
-          navigation.dispatch(CommonActions.goBack() as any);
-          setTimeout(() => {
-            navigation.dispatch(
-              CommonActions.navigate({ name: 'ProviderInbox', params: { initialFilter: 'messages' } }) as any
-            );
-          }, 500);
+          navigateProviderHome('ProviderInbox', { initialFilter: 'messages' });
         }, 300);
       } else {
         if (!notification.providerId) return;
@@ -490,8 +503,15 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
           }, 500);
         }, 300);
       }
+    } else if (notification.type === 'schedule_fully_booked') {
+      // Provider-only — carries no booking_id (it's about the whole
+      // calendar, not one appointment), so go straight to the Schedule
+      // screen rather than through BookingDetail like the booking types.
+      setTimeout(() => {
+        navigateProviderHome('ProviderSchedule');
+      }, 300);
     }
-  }, [navigation]);
+  }, [navigation, navigateProviderHome]);
 
   // ✅ Format timestamp (relative time)
   const formatTimestamp = (timestamp: string) => {
@@ -538,10 +558,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // ✅ Bell color logic based on notification type
   const getBellColor = (type: string) => {
     if (['booking_cancelled', 'booking_declined', 'no_show'].includes(type)) return '#FF1744';
-    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'balance_collected', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
+    if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'booking_not_started', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'balance_reminder'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
-    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement'].includes(type)) return '#AF9197';
+    if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in'].includes(type)) return '#AF9197';
     return '#FF9800';
   };
 
@@ -553,6 +573,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'booking_confirmed':
       case 'booking_reminder':
       case 'booking_in_progress':
+      case 'rebooking_nudge':
+      case 'daily_recap':
         return 'View Booking';
       case 'booking_declined':
       case 'booking_cancelled':
@@ -585,6 +607,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'info_pack_received':
         return 'Read Info';
       case 'announcement':
+      case 'birthday_greeting':
+      case 'post_appt_check_in':
         return 'View Provider';
       case 'provider_message':
         return 'Open Inbox';
@@ -592,10 +616,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'Open Chat';
       case 'balance_reminder':
         return 'Collect Payment';
-      case 'balance_collected':
-        return 'View Booking';
       case 'address_released':
         return 'View Address';
+      case 'schedule_fully_booked':
+        return 'View Schedule';
       default:
         return 'View';
     }

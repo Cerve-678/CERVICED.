@@ -34,7 +34,6 @@ Curated overview: [[Screens & Navigation]].
 - `DevSettings`
 - `Offers`
 - `ExploreMain`
-- `EventDetail`
 - `BeccaMain`
 - `ProfileMain`
 - `ProfileInfo`

@@ -10,6 +10,7 @@ import {
   Switch,
   Platform,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,16 +27,26 @@ import {
   registerForPushNotifications,
   unregisterPushToken,
 } from '../services/pushNotificationService';
-import { logger } from '../utils/logger';
+import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } from '../utils/logger';
 
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
   const [storageSize, setStorageSize] = useState<string>('0 KB');
   const { reloadBookings } = useBooking();
   const { isDarkMode, themePreference, setDarkMode, setThemePreference, palette: P } = useTheme();
-  const { user, activeMode } = useAuth();
+  const { user, activeMode, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const danger = isDarkMode ? '#E05050' : '#C0392B';
+  const warnColor = isDarkMode ? '#E0A030' : '#B8860B';
+
+  // --- Debug log viewer state ---
+  const [showLogs, setShowLogs] = useState(false);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>(getLogBuffer());
+
+  useEffect(() => {
+    const unsubscribe = subscribeToLogBuffer(() => setLogEntries(getLogBuffer()));
+    return unsubscribe;
+  }, []);
 
   // fullScreenModal presentation makes SafeAreaView under-report the top inset,
   // so the header rides up under the status bar. Pad manually with a fallback.
@@ -85,6 +96,7 @@ export default function DevSettingsScreen({ navigation }: any) {
         Alert.alert('No Bookings', 'No booking data found in storage');
       }
     } catch (error) {
+      logger.error('[DevSettings] viewBookings failed:', error);
       Alert.alert('Error', 'Failed to read bookings');
     }
   };
@@ -106,6 +118,7 @@ export default function DevSettingsScreen({ navigation }: any) {
               setStorageSize('0 KB');
               Alert.alert('Success', 'All bookings cleared');
             } catch (error) {
+              logger.error('[DevSettings] clearBookings failed:', error);
               Alert.alert('Error', 'Failed to clear bookings');
             }
           },
@@ -114,23 +127,31 @@ export default function DevSettingsScreen({ navigation }: any) {
     );
   };
 
-  const clearAllAppData = async () => {
+  // Signs out (proper Supabase signOut + biometric/secure-store cleanup, via
+  // AuthContext.logout — a plain AsyncStorage.clear() alone leaves the
+  // in-memory session alive until the app is killed and relaunched) and then
+  // wipes every remaining local key, so the very next screen the app shows
+  // is the real first-launch experience — no manual "restart the app" step.
+  const resetToFirstLogin = async () => {
     Alert.alert(
-      'Clear All Data',
-      'This will reset the ENTIRE app. Continue?',
+      'Reset App (First-Login Simulation)',
+      "Signs you out and wipes ALL local data (bookings cache, drafts, biometric login, theme prefs, everything) so the app behaves exactly like a brand-new install on next launch. This does NOT touch anything in the database — only this device. Continue?",
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear Everything',
+          text: 'Reset App',
           style: 'destructive',
           onPress: async () => {
             try {
+              await logout();
               await AsyncStorage.clear();
               setBookingCount(0);
               setStorageSize('0 KB');
-              Alert.alert('Success', 'All app data cleared. Restart app.');
+              // logout() already flips isLoggedIn → false, so RootNavigation
+              // has already swapped to the auth/welcome stack by this point.
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear data');
+              logger.error('[DevSettings] resetToFirstLogin failed:', error);
+              Alert.alert('Error', 'Failed to fully reset app data — check Debug Logs for details.');
             }
           },
         },
@@ -144,6 +165,7 @@ export default function DevSettingsScreen({ navigation }: any) {
       logger.log('Storage Keys:', keys);
       Alert.alert('Storage Keys', `Found ${keys.length} keys:\n${keys.join('\n')}\n\nCheck console for details.`);
     } catch (error) {
+      logger.error('[DevSettings] viewAllStorageKeys failed:', error);
       Alert.alert('Error', 'Failed to read storage keys');
     }
   };
@@ -158,6 +180,7 @@ export default function DevSettingsScreen({ navigation }: any) {
         Alert.alert('No Data', 'No bookings to export');
       }
     } catch (error) {
+      logger.error('[DevSettings] exportBookings failed:', error);
       Alert.alert('Error', 'Failed to export bookings');
     }
   };
@@ -213,6 +236,9 @@ export default function DevSettingsScreen({ navigation }: any) {
           ? `Fresh token saved to DB:\n${t.slice(0, 42)}…`
           : 'No token — permission denied or running on a simulator.'
       );
+    } catch (error) {
+      logger.error('[DevSettings] reRegister failed:', error);
+      Alert.alert('Error', String(error));
     } finally {
       setPushBusy(false);
     }
@@ -273,6 +299,7 @@ export default function DevSettingsScreen({ navigation }: any) {
         );
       }
     } catch (err) {
+      logger.error('[DevSettings] sendTestPush failed:', err);
       Alert.alert('Error', String(err));
     } finally {
       setPushBusy(false);
@@ -316,6 +343,7 @@ export default function DevSettingsScreen({ navigation }: any) {
               }
               Alert.alert('Cleared', `Removed ${providerKeys.length} provider key(s) from local storage.`);
             } catch (error) {
+              logger.error('[DevSettings] clearProviderData failed:', error);
               Alert.alert('Error', 'Failed to clear provider data');
             }
           },
@@ -340,10 +368,13 @@ export default function DevSettingsScreen({ navigation }: any) {
             try {
               const { data, error } = await supabase.rpc('dev_reset_provider');
               if (error) {
+                logger.error('[DevSettings] dev_reset_provider RPC error:', error);
                 Alert.alert(
                   'Reset failed',
                   /dev_reset_provider|function|does not exist|schema cache/i.test(error.message)
                     ? 'RPC not found. Run supabase/dev_reset_provider.sql in the Supabase SQL editor first.'
+                    : /notifications_type_check/i.test(error.message)
+                    ? 'A notification row has a type the DB check constraint rejects (see supabase/fix_notifications_type_check.sql — run it once in the SQL editor, then retry).'
                     : error.message
                 );
                 return;
@@ -360,6 +391,7 @@ export default function DevSettingsScreen({ navigation }: any) {
                 `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nTransactions: ${d.transactions ?? 0}\nNotifications: ${d.notifications ?? 0}\nSchedule cleared: ${d.schedule_windows ?? 0} windows, ${d.availability_days ?? 0} days\nhas_gone_live → false (back through go-live)`
               );
             } catch (err) {
+              logger.error('[DevSettings] fullProviderReset failed:', err);
               Alert.alert('Error', String(err));
             } finally {
               setPushBusy(false);
@@ -622,10 +654,15 @@ export default function DevSettingsScreen({ navigation }: any) {
 
               <TouchableOpacity
                 style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40` }]}
-                onPress={clearAllAppData}
+                onPress={resetToFirstLogin}
               >
-                <Text style={[styles.dangerButtonText, { color: danger }]}>Clear All App Data</Text>
+                <Text style={[styles.dangerButtonText, { color: danger }]}>Reset App (Simulate First Login)</Text>
               </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Signs out + wipes every local key (bookings cache, drafts,
+                biometric login, theme). Device only — no DB changes. Drops you
+                straight back to the auth/welcome screen, no restart needed.
+              </Text>
             </View>
 
             {/* Provider (dev) */}
@@ -648,7 +685,39 @@ export default function DevSettingsScreen({ navigation }: any) {
               </TouchableOpacity>
               <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
                 DB reset wipes this provider's bookings, reviews, transactions + your
-                notifications and resets go-live. Requires supabase/dev_reset_provider.sql.
+                notifications and resets go-live. Requires supabase/dev_reset_provider.sql
+                — and supabase/fix_notifications_type_check.sql if it fails mentioning
+                "notifications_type_check".
+              </Text>
+            </View>
+
+            {/* Debug Logs */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>DEBUG LOGS</Text>
+              <View style={[styles.statCard, { backgroundColor: P.card, borderColor: P.border }]}>
+                <View style={styles.statRow}>
+                  <Text style={[styles.statLabel, { color: P.text }]}>Buffered entries</Text>
+                  <Text style={[styles.statValue, { color: P.accent }]}>{logEntries.length}</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: P.sep }]} />
+                <View style={styles.statRow}>
+                  <Text style={[styles.statLabel, { color: P.text }]}>Errors / Warnings</Text>
+                  <Text style={[styles.statValue, { color: logEntries.some(e => e.level !== 'log') ? danger : P.accent }]}>
+                    {logEntries.filter(e => e.level === 'error').length} / {logEntries.filter(e => e.level === 'warn').length}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: P.iconBg, borderColor: P.border }]}
+                onPress={() => setShowLogs(true)}
+              >
+                <Text style={[styles.primaryButtonText, { color: P.text }]}>View Debug Logs</Text>
+              </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Every logger.warn/error (and, in dev builds, logger.log) call
+                anywhere in the app is captured here — including the real error
+                behind any "Something went wrong" alert — so it's visible on-device
+                without a tethered Metro console.
               </Text>
             </View>
 
@@ -661,7 +730,8 @@ export default function DevSettingsScreen({ navigation }: any) {
                 • Push: send a test push + read the APNs receipt on-device{'\n'}
                 • Push: compare the live device token vs the token in the DB{'\n'}
                 • Inspect session, build + storage{'\n'}
-                • Clear test data{'\n\n'}
+                • Clear test data{'\n'}
+                • View buffered app logs, including swallowed error details{'\n\n'}
                 Access: Tap top-right corner 5 times rapidly
               </Text>
             </View>
@@ -676,6 +746,69 @@ export default function DevSettingsScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* Debug Log Viewer */}
+      <Modal
+        visible={showLogs}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowLogs(false)}
+      >
+        <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={{ flex: 1, backgroundColor: P.bg }}>
+          <View style={[styles.header, { borderBottomColor: P.sep, paddingTop: 12 }]}>
+            <Text style={[styles.title, { color: P.text, fontFamily: 'BakbakOne-Regular' }]}>
+              Debug Logs ({logEntries.length})
+            </Text>
+            <TouchableOpacity
+              style={[styles.closeButton, { backgroundColor: P.surface, borderColor: P.border }]}
+              onPress={() => setShowLogs(false)}
+            >
+              <Text style={[styles.closeButtonText, { color: P.text }]}>×</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+            {logEntries.length === 0 ? (
+              <Text style={[styles.infoText, { color: P.sub }]}>
+                Nothing logged yet this session. logger.warn/error calls (and
+                logger.log in dev builds) will appear here as they happen —
+                leave this open while you reproduce the issue.
+              </Text>
+            ) : (
+              [...logEntries].reverse().map((entry, idx) => {
+                const color = entry.level === 'error' ? danger : entry.level === 'warn' ? warnColor : P.sub;
+                return (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.logEntry,
+                      { backgroundColor: P.surface, borderColor: P.border, borderLeftColor: color },
+                    ]}
+                  >
+                    <View style={styles.logEntryHeader}>
+                      <Text style={[styles.logLevel, { color }]}>{entry.level.toUpperCase()}</Text>
+                      <Text style={[styles.logTime, { color: P.sub }]}>
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </Text>
+                    </View>
+                    <Text selectable style={[styles.logMessage, { color: P.text }]}>
+                      {entry.message}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40`, margin: 16 }]}
+            onPress={clearLogBuffer}
+            disabled={logEntries.length === 0}
+          >
+            <Text style={[styles.dangerButtonText, { color: danger }]}>Clear Logs</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </Modal>
     </ThemedBackground>
   );
 }
@@ -798,6 +931,32 @@ const styles = StyleSheet.create({
   tokenText: {
     fontSize: 11,
     lineHeight: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  logEntry: {
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: 3,
+    padding: 12,
+    marginBottom: 10,
+  },
+  logEntryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  logLevel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  logTime: {
+    fontSize: 11,
+  },
+  logMessage: {
+    fontSize: 12,
+    lineHeight: 17,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });

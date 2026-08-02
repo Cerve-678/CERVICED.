@@ -9,6 +9,7 @@ import {
   Pressable,
   FlatList,
   Image,
+  Modal,
   StatusBar,
   RefreshControl,
   Animated,
@@ -16,7 +17,6 @@ import {
   ListRenderItem,
   TextInput,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
@@ -27,7 +27,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
 import { ThemedBackground } from '../components/ThemedBackground';
 import TabIcon from '../components/TabIcon';
-import CategoryTabPill from '../components/CategoryTabPill';
+import SlidingCategoryTabs from '../components/SlidingCategoryTabs';
 import * as Location from 'expo-location';
 import { getProviders, searchProviders, logSearchEvent } from '../services/databaseService';
 import type { DbProvider } from '../types/database';
@@ -85,7 +85,7 @@ const CATEGORY_CODE_MAP: Record<string, string> = {
 };
 
 // Fixed (not theme-tinted) — matches the active-tab treatment on OffersScreen.
-const ACTIVE_TAB_COLOR = '#1C1C1E';
+const ACTIVE_TAB_COLOR = '#000000';
 
 // Single source of truth for price_tier → both the price range shown on a
 // card AND the approximate £ value the Price filter compares against.
@@ -100,7 +100,6 @@ const PRICE_TIER_INFO: Record<'budget' | 'mid' | 'premium' | 'luxury', { label: 
   luxury:  { label: '£100+',    approx: 140 },
 };
 const KM_TO_MILES = 0.621371;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
@@ -211,7 +210,6 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
           </View>
 
           <View style={[styles.availBadge, { backgroundColor: `${color}22` }]}>
-            <View style={[styles.availBadgeDot, { backgroundColor: color }]} />
             <Text style={[styles.availBadgeText, { color }]} numberOfLines={1}>{provider.availability}</Text>
           </View>
         </View>
@@ -253,75 +251,30 @@ export default function SearchScreen({ navigation, route }: Props) {
     return Object.keys(CATEGORY_CODE_MAP).find(k => CATEGORY_CODE_MAP[k] === code) ?? 'All';
   });
   const [providerData, setProviderData]   = useState<ProviderCardData[]>([]);
-  // Which quick-filter pill's popover is open, if any — only one at a time.
-  const [openFilterKey, setOpenFilterKey] = useState<FilterKey | null>(null);
+  // The header filters button opens this single sheet — no more per-pill
+  // popovers anchored under an always-visible row.
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [activeFilters, setActiveFilters] = useState<FilterOptions>({
     sortBy: 'recommended',
     serviceType: 'all',
   });
 
-  // Each pill's on-screen x/width, measured on layout, so its popover can
-  // open anchored directly beneath it rather than as one panel covering
-  // every filter — clamped so it never runs off the right edge of the screen.
-  const filterPillLayouts = useRef<Partial<Record<FilterKey, { x: number; width: number }>>>({});
-  const POPOVER_WIDTH = 220;
-  const openPopoverLeft = useMemo(() => {
-    if (!openFilterKey) return 16;
-    const layout = filterPillLayouts.current[openFilterKey];
-    if (!layout) return 16;
-    return Math.max(16, Math.min(layout.x, SCREEN_WIDTH - POPOVER_WIDTH - 16));
-  }, [openFilterKey]);
-  // Bottom edge of the pill row, relative to the screen root — measured via
-  // onLayout rather than hard-coded, so the popover anchors correctly under
-  // the row no matter what sits above it (native header height varies).
-  const [pillsRowBottom, setPillsRowBottom] = useState(0);
-
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Keep the active category chip visible ───────────────────────────────
-  // The chip row scrolls horizontally and doesn't collapse, so a category
-  // selected from off-screen (tapped on the Home screen, or simply further
-  // right than the row's current scroll position) could land active with no
-  // visible sign of it — the highlighted chip itself was scrolled out of
-  // view. Centers the active chip in the row whenever the selection changes,
-  // including the very first render when arriving pre-filtered from Home.
-  const chipsScrollRef = useRef<ScrollView>(null);
-  const chipLayouts = useRef<Record<string, { x: number; width: number }>>({});
-  const chipsViewportWidth = useRef(0);
-  const lastFocusedFilter = useRef<string | null>(null);
-
-  const focusActiveChip = useCallback((label: string) => {
-    const layout = chipLayouts.current[label];
-    if (!layout) return;
-    lastFocusedFilter.current = label;
-
-    const scroller = chipsScrollRef.current;
-    if (!scroller) return;
-    const viewport = chipsViewportWidth.current;
-    const targetX = viewport
-      ? layout.x - viewport / 2 + layout.width / 2
-      : layout.x - 20;
-    scroller.scrollTo({ x: Math.max(0, targetX), animated: true });
-  }, []);
-
-  React.useEffect(() => {
-    focusActiveChip(selectedFilter);
-  }, [selectedFilter, focusActiveChip]);
-
-  // ── "Float up and merge" entrance — only when arriving from a Home screen
-  // service pill tap (route carries a `category`); the header icon path has
-  // no origin element to morph from, so it renders at rest immediately.
+  // ── "Float up and merge" entrance — plays when arriving from an element
+  // that visually looks like this screen's search bar/pills: a Home screen
+  // service pill tap (route carries a `category`) or Explore's search-bar
+  // mockup (route carries `morph`). HomeScreen's header search icon has no
+  // origin element to morph from, so that path renders at rest immediately.
   // The screen content below the (native) header rises into place as a
   // cascade — search bar first, then the category row, then the results
   // grid — rather than just popping in all at once. ─────────────────────────
-  const isMorphEntry = useRef(!!route?.params?.category).current;
+  const isMorphEntry = useRef(!!route?.params?.category || !!route?.params?.morph).current;
   const barOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const barTranslateY = useSharedValue(isMorphEntry ? 26 : 0);
   const barScale = useSharedValue(isMorphEntry ? 0.94 : 1);
   const chipsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const chipsTranslateY = useSharedValue(isMorphEntry ? 20 : 0);
-  const filterPillsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
-  const filterPillsTranslateY = useSharedValue(isMorphEntry ? 16 : 0);
   const resultsOpacity = useSharedValue(isMorphEntry ? 0 : 1);
   const resultsTranslateY = useSharedValue(isMorphEntry ? 18 : 0);
 
@@ -332,10 +285,8 @@ export default function SearchScreen({ navigation, route }: Props) {
     barScale.value = withTiming(1, { duration: 340 });
     chipsOpacity.value = withDelay(80, withTiming(1, { duration: 280 }));
     chipsTranslateY.value = withDelay(80, withTiming(0, { duration: 320 }));
-    filterPillsOpacity.value = withDelay(130, withTiming(1, { duration: 260 }));
-    filterPillsTranslateY.value = withDelay(130, withTiming(0, { duration: 300 }));
-    resultsOpacity.value = withDelay(190, withTiming(1, { duration: 280 }));
-    resultsTranslateY.value = withDelay(190, withTiming(0, { duration: 320 }));
+    resultsOpacity.value = withDelay(160, withTiming(1, { duration: 280 }));
+    resultsTranslateY.value = withDelay(160, withTiming(0, { duration: 320 }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -347,11 +298,6 @@ export default function SearchScreen({ navigation, route }: Props) {
   const chipsAnimatedStyle = useAnimatedStyle(() => ({
     opacity: chipsOpacity.value,
     transform: [{ translateY: chipsTranslateY.value }],
-  }));
-
-  const filterPillsAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: filterPillsOpacity.value,
-    transform: [{ translateY: filterPillsTranslateY.value }],
   }));
 
   const resultsAnimatedStyle = useAnimatedStyle(() => ({
@@ -525,18 +471,11 @@ export default function SearchScreen({ navigation, route }: Props) {
   const updateFilter = useCallback(<K extends keyof FilterOptions>(key: K, value: FilterOptions[K]) => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveFilters(prev => ({ ...prev, [key]: value }));
-    setOpenFilterKey(null);
   }, []);
 
   const resetFilters = useCallback(() => {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setActiveFilters({ sortBy: 'recommended', serviceType: 'all' });
-    setOpenFilterKey(null);
-  }, []);
-
-  const togglePopover = useCallback((key: FilterKey) => {
-    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setOpenFilterKey(prev => (prev === key ? null : key));
   }, []);
 
   // ── Search input handler ─────────────────────────────────────────────────────
@@ -597,14 +536,24 @@ export default function SearchScreen({ navigation, route }: Props) {
   // control (correct swipe-back gesture affordance, platform-correct
   // chevron) rather than an imitation. headerBackButtonDisplayMode:
   // 'minimal' drops the adjacent back title text, leaving just the arrow.
-  // No headerRight — filters are now an always-visible quick-filter pill
-  // row below the category chips, not a panel toggled from the header. ────
+  // headerRight is a single filters icon (matches OffersScreen) that opens
+  // the filter sheet below, rather than an always-visible pill row.
   // Search is registered in two different navigator stacks (HomeNavigator
   // and ExploreNavigator) with divergent static header config — Home's
   // entry sets headerTransparent + a native headerSearchBarOptions field,
   // Explore's is a fullScreenModal with a "Close" back title. Every option
   // below is set explicitly (not left to inherit) so this screen looks and
   // behaves the same regardless of which stack it was opened from.
+  // ExploreNavigator opens this screen as a fullScreenModal (a modal
+  // presentation doesn't automatically get the native back chevron a pushed
+  // screen does), so it needs the explicit headerLeft below. HomeNavigator
+  // pushes it as a normal screen, which already gets a working native back
+  // button on its own — adding the same custom one there doubled it up.
+  // routeNames belongs to whichever stack actually owns this screen
+  // instance, so this reliably tells the two entry paths apart without a
+  // route param.
+  const isExploreEntry = navigation.getState()?.routeNames?.includes('ExploreMain') ?? false;
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
@@ -624,8 +573,32 @@ export default function SearchScreen({ navigation, route }: Props) {
       headerShadowVisible: false,
       headerTintColor: P.accent,
       headerBackButtonDisplayMode: 'minimal',
+      ...(isExploreEntry ? {
+        headerLeft: () => (
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.6}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.backBtnText, { color: P.accent }]}>‹</Text>
+          </TouchableOpacity>
+        ),
+      } : {}),
+      headerRight: () => (
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => {
+            if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFilterModalVisible(true);
+          }}
+          activeOpacity={0.6}
+        >
+          <TabIcon name="sliders" size={17} color={hasActiveFilters ? P.accent : P.sub} />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, P]);
+  }, [navigation, P, hasActiveFilters, isExploreEntry]);
 
   // ── List header: just result count ─────────────────────────────────────────
   const renderHeader = useCallback(() => (
@@ -636,33 +609,23 @@ export default function SearchScreen({ navigation, route }: Props) {
     </View>
   ), [filteredProviders.length, P]);
 
-  const FILTER_PILL_ACTIVE: Record<FilterKey, boolean> = {
-    sort: activeFilters.sortBy !== 'recommended',
-    price: !!activeFilters.priceRange,
-    rating: !!activeFilters.rating,
-    distance: !!activeFilters.distance && activeFilters.distance < 999,
-    type: !!activeFilters.serviceType && activeFilters.serviceType !== 'all',
-  };
-
   return (
     <View style={[styles.root, { backgroundColor: P.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {/* ── Search bar ── */}
+      {/* ── Search bar — filled card style, matching ExploreScreen's search bar. ── */}
       <View style={[styles.searchWrap, { backgroundColor: P.bg }]}>
-        <ReAnimated.View style={[styles.searchBar, { backgroundColor: P.card, borderColor: P.border, transformOrigin: 'center' }, barAnimatedStyle]}>
-          <View style={[styles.searchIconWrap, { backgroundColor: P.accent }]}>
-            <TabIcon name="magnifying-glass" size={15} color={P.ice} />
-          </View>
+        <ReAnimated.View style={[styles.searchBar, { backgroundColor: P.card, transformOrigin: 'center' }, barAnimatedStyle]}>
+          <TabIcon name="magnifying-glass" size={16} color={P.sub} />
           <TextInput
             style={[styles.searchInput, { color: P.text, fontFamily: 'Jura-VariableFont_wght' }]}
-            placeholder="Search providers or services…"
+            placeholder="Try 'nail art in east manchester'"
             placeholderTextColor={P.sub}
             value={searchQuery}
             onChangeText={handleSearchChange}
             autoCorrect={false}
             autoCapitalize="none"
-            returnKeyType="search"
+            returnKeyType="done"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity
@@ -677,152 +640,102 @@ export default function SearchScreen({ navigation, route }: Props) {
       </View>
 
       {/* ── Category pills — always visible below the search bar, never
-          collapse away, so picking one never disturbs the row itself. ── */}
+          collapse away, so picking one never disturbs the row itself. A
+          black capsule slides behind the selected pill on every tap. ── */}
       <ReAnimated.View style={[styles.categoryPillsSection, { backgroundColor: P.bg, borderBottomColor: P.sep }, chipsAnimatedStyle]}>
-        <ScrollView
-          ref={chipsScrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
+        <SlidingCategoryTabs
+          categories={['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics']}
+          selected={selectedFilter}
+          onSelect={handleFilterPress}
+          surfaceColor={P.surface}
+          borderColor={P.border}
+          textColor={P.text}
+          isDarkMode={isDarkMode}
+          activeColor={ACTIVE_TAB_COLOR}
           contentContainerStyle={styles.chipsContent}
-          style={styles.chipsScroll}
-          onLayout={(e) => { chipsViewportWidth.current = e.nativeEvent.layout.width; }}
-        >
-          <View style={styles.chipsRow}>
-            {/* Same frosted-glass pill used on a provider's own profile for
-                their service categories, so this reads as the same control
-                rather than a different design. */}
-            {['All', 'Hair', 'Nails', 'Makeup', 'Lashes', 'Brows', 'Aesthetics'].map(f => {
-              const active = selectedFilter === f;
-              return (
-                <View
-                  key={f}
-                  onLayout={(e) => {
-                    const { x, width } = e.nativeEvent.layout;
-                    chipLayouts.current[f] = { x, width };
-                    if (f === selectedFilter && lastFocusedFilter.current !== f) {
-                      focusActiveChip(f);
-                    }
-                  }}
-                >
-                  <CategoryTabPill
-                    category={f}
-                    isSelected={active}
-                    onPress={() => handleFilterPress(f)}
-                    cardBg={active ? P.accent : P.surface}
-                    blurIntensity={20}
-                    blurTint={isDarkMode ? 'dark' : 'light'}
-                    borderColor={active ? 'transparent' : P.border}
-                    textColor={active ? P.ice : P.text}
-                  />
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
+        />
       </ReAnimated.View>
 
-      {/* ── Quick-filter pill bar — each filter is its own small dropdown
-          pill (Airbnb/Skyscanner style) rather than one big panel covering
-          every filter at once. Tapping a pill opens just that filter's
-          popover, anchored beneath it. ── */}
-      <ReAnimated.View
-        style={[styles.filterPillsSection, { backgroundColor: P.bg, borderBottomColor: P.sep }, filterPillsAnimatedStyle]}
-        onLayout={(e) => setPillsRowBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}
+      {/* ── Filter sheet — opened from the header filters icon. All five
+          groups in one scrollable sheet rather than a panel per pill. ── */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterModalVisible(false)}
       >
-        <View style={styles.filterPillsRow}>
-          {(['sort', 'price', 'rating', 'distance', 'type'] as FilterKey[]).map(key => {
-            const active = FILTER_PILL_ACTIVE[key];
-            const isOpen = openFilterKey === key;
-            return (
-              <TouchableOpacity
-                key={key}
-                onPress={() => togglePopover(key)}
-                onLayout={(e) => {
-                  filterPillLayouts.current[key] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
-                }}
-                style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: active || isOpen ? ACTIVE_TAB_COLOR : P.surface,
-                    borderColor: active || isOpen ? ACTIVE_TAB_COLOR : P.border,
-                  },
-                ]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterPillText, { color: active || isOpen ? P.ice : P.text }]}>
-                  {FILTER_PILL_LABEL[key]} {isOpen ? '▴' : '▾'}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-          {hasActiveFilters && (
-            <TouchableOpacity onPress={resetFilters} style={styles.clearPill} activeOpacity={0.7}>
-              <Text style={[styles.clearPillText, { color: P.accent }]}>Clear</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </ReAnimated.View>
+        <Pressable style={styles.filterModalBackdrop} onPress={() => setFilterModalVisible(false)}>
+          <Pressable style={[styles.filterModalSheet, { backgroundColor: P.card, borderColor: P.border }]} onPress={() => {}}>
+            <View style={styles.filterModalHeader}>
+              <Text style={[styles.filterModalTitle, { color: P.text }]}>FILTERS</Text>
+              {hasActiveFilters && (
+                <TouchableOpacity onPress={resetFilters}>
+                  <Text style={[styles.filterModalReset, { color: P.accent }]}>Reset</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.sort}</Text>
+              {SORT_OPTIONS.map(opt => {
+                const isActive = activeFilters.sortBy === opt.value;
+                return (
+                  <TouchableOpacity key={opt.value} style={styles.filterOptionRow} onPress={() => updateFilter('sortBy', opt.value)} activeOpacity={0.7}>
+                    <Text style={[styles.filterOptionText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
+                    {isActive && <Text style={[styles.filterOptionCheck, { color: '#000000' }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
 
-      {/* ── Popover — a small card anchored under the tapped pill, not a
-          panel covering the whole row. The backdrop is a transparent sibling
-          (not nested — nesting caused the ScrollView/Pressable gesture
-          conflict the old panel had) that only exists to catch a
-          tap-outside-to-dismiss; it never dims the results underneath. ── */}
-      {openFilterKey && (
-        <>
-          <Pressable
-            style={[StyleSheet.absoluteFillObject, styles.filterBackdrop]}
-            onPress={() => setOpenFilterKey(null)}
-          />
-          <View style={[styles.filterPopover, { top: pillsRowBottom + 4, left: openPopoverLeft, width: POPOVER_WIDTH, backgroundColor: P.surface, borderColor: P.border }]}>
-            {openFilterKey === 'sort' && SORT_OPTIONS.map(opt => {
-              const isActive = activeFilters.sortBy === opt.value;
-              return (
-                <TouchableOpacity key={opt.value} style={styles.popoverRow} onPress={() => updateFilter('sortBy', opt.value)} activeOpacity={0.7}>
-                  <Text style={[styles.popoverRowText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
-                  {isActive && <Text style={[styles.popoverCheck, { color: P.accent }]}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-            {openFilterKey === 'price' && PRICE_OPTIONS.map(opt => {
-              const isActive = activeFilters.priceRange?.min === opt.value.min && activeFilters.priceRange?.max === opt.value.max;
-              return (
-                <TouchableOpacity key={opt.label} style={styles.popoverRow} onPress={() => updateFilter('priceRange', opt.value)} activeOpacity={0.7}>
-                  <Text style={[styles.popoverRowText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
-                  {isActive && <Text style={[styles.popoverCheck, { color: P.accent }]}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-            {openFilterKey === 'rating' && RATING_OPTIONS.map(opt => {
-              const isActive = (activeFilters.rating ?? 0) === opt.value;
-              return (
-                <TouchableOpacity key={opt.label} style={styles.popoverRow} onPress={() => updateFilter('rating', opt.value)} activeOpacity={0.7}>
-                  <Text style={[styles.popoverRowText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
-                  {isActive && <Text style={[styles.popoverCheck, { color: P.accent }]}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-            {openFilterKey === 'distance' && DISTANCE_OPTIONS.map(opt => {
-              const isActive = (activeFilters.distance ?? 999) === opt.value;
-              return (
-                <TouchableOpacity key={opt.label} style={styles.popoverRow} onPress={() => updateFilter('distance', opt.value)} activeOpacity={0.7}>
-                  <Text style={[styles.popoverRowText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
-                  {isActive && <Text style={[styles.popoverCheck, { color: P.accent }]}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-            {openFilterKey === 'type' && SERVICE_TYPE_OPTIONS.map(opt => {
-              const isActive = activeFilters.serviceType === opt.value;
-              return (
-                <TouchableOpacity key={opt.value} style={styles.popoverRow} onPress={() => updateFilter('serviceType', opt.value)} activeOpacity={0.7}>
-                  <Text style={[styles.popoverRowText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
-                  {isActive && <Text style={[styles.popoverCheck, { color: P.accent }]}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </>
-      )}
+              <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.price}</Text>
+              {PRICE_OPTIONS.map(opt => {
+                const isActive = activeFilters.priceRange?.min === opt.value.min && activeFilters.priceRange?.max === opt.value.max;
+                return (
+                  <TouchableOpacity key={opt.label} style={styles.filterOptionRow} onPress={() => updateFilter('priceRange', opt.value)} activeOpacity={0.7}>
+                    <Text style={[styles.filterOptionText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
+                    {isActive && <Text style={[styles.filterOptionCheck, { color: '#000000' }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+
+              <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.rating}</Text>
+              {RATING_OPTIONS.map(opt => {
+                const isActive = (activeFilters.rating ?? 0) === opt.value;
+                return (
+                  <TouchableOpacity key={opt.label} style={styles.filterOptionRow} onPress={() => updateFilter('rating', opt.value)} activeOpacity={0.7}>
+                    <Text style={[styles.filterOptionText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
+                    {isActive && <Text style={[styles.filterOptionCheck, { color: '#000000' }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+
+              <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.distance}</Text>
+              {DISTANCE_OPTIONS.map(opt => {
+                const isActive = (activeFilters.distance ?? 999) === opt.value;
+                return (
+                  <TouchableOpacity key={opt.label} style={styles.filterOptionRow} onPress={() => updateFilter('distance', opt.value)} activeOpacity={0.7}>
+                    <Text style={[styles.filterOptionText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
+                    {isActive && <Text style={[styles.filterOptionCheck, { color: '#000000' }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+
+              <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.type}</Text>
+              {SERVICE_TYPE_OPTIONS.map(opt => {
+                const isActive = activeFilters.serviceType === opt.value;
+                return (
+                  <TouchableOpacity key={opt.value} style={styles.filterOptionRow} onPress={() => updateFilter('serviceType', opt.value)} activeOpacity={0.7}>
+                    <Text style={[styles.filterOptionText, { color: P.text, fontWeight: isActive ? '700' : '400' }]}>{opt.label}</Text>
+                    {isActive && <Text style={[styles.filterOptionCheck, { color: '#000000' }]}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.filterModalDone} onPress={() => setFilterModalVisible(false)} activeOpacity={0.85}>
+              <Text style={styles.filterModalDoneText}>Show results</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── Results area — wraps the FlatList. ── */}
       <ReAnimated.View style={[{ flex: 1 }, resultsAnimatedStyle]}>
@@ -868,79 +781,98 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 
-  // Quick-filter pill row — sits below the category pills, always visible
-  // (not gated behind a header toggle). Each pill opens its own popover.
-  filterPillsSection: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  filterPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  filterPill: {
-    borderRadius: 14,
-    height: 32,
-    paddingHorizontal: 14,
+  // Header filters button — bare icon, matches OffersScreen's headerRight.
+  filterBtn: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
+    marginRight: 4,
   },
-  filterPillText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  clearPill: {
-    height: 32,
-    paddingHorizontal: 6,
+  // Header back button — explicit rather than relying on the native default,
+  // see the headerLeft comment above.
+  backBtn: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 4,
   },
-  clearPillText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '700',
+  backBtnText: {
+    fontSize: 30,
+    fontWeight: '300',
+    lineHeight: 32,
   },
 
-  // Invisible — its only job is to catch the tap-outside-to-dismiss gesture,
-  // not to dim the results behind the popover.
-  filterBackdrop: {
-    backgroundColor: 'transparent',
-    zIndex: 10,
-    elevation: 10,
+  // Filter sheet — a single bottom sheet holding every filter group,
+  // opened from the header icon.
+  filterModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
-  // Small card anchored under the tapped pill (top/left set inline from
-  // measured layout) rather than one panel spanning the full width.
-  filterPopover: {
-    position: 'absolute',
-    zIndex: 11,
-    elevation: 11,
-    borderRadius: 14,
+  filterModalSheet: {
+    maxHeight: '75%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    borderBottomWidth: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
-  popoverRow: {
+  filterModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingVertical: 12,
   },
-  popoverRowText: {
+  filterModalTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 0.5,
+  },
+  filterModalReset: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-  },
-  popoverCheck: {
-    fontSize: 13,
     fontWeight: '700',
+  },
+  filterSectionTitle: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  filterOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+  },
+  filterOptionText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 14,
+  },
+  filterOptionCheck: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  filterModalDone: {
+    marginTop: 14,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+  },
+  filterModalDoneText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    letterSpacing: 0.5,
+    color: '#FFFFFF',
   },
 
   // List header
@@ -963,27 +895,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 18,
-    borderWidth: 1.5,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  searchIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
   },
   clearBtnWrap: {
     width: 22,
@@ -1000,15 +918,9 @@ const styles = StyleSheet.create({
   },
 
   // Filter chips row
-  chipsScroll: { paddingBottom: 2 },
   chipsContent: {
     paddingHorizontal: 16,
     paddingVertical: 4,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
 
   // Sort row
@@ -1114,11 +1026,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     gap: 4,
-  },
-  availBadgeDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
   },
   availBadgeText: {
     fontFamily: 'BakbakOne-Regular',

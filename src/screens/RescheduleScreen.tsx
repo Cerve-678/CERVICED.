@@ -150,7 +150,44 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       }
       setPhase('done');
     } catch (err: any) {
-      Alert.alert('Reschedule Failed', err?.message || 'Something went wrong. Please try again.');
+      // confirm_reschedule_own_booking / request_reschedule_own_booking (see
+      // supabase/booking_rules_server_enforcement.sql) raise "Booking not
+      // found" when the server-side row no longer matches what this device's
+      // local cache thinks is true — e.g. the booking was cancelled or
+      // already resolved elsewhere since this screen loaded. The local state
+      // is stale in that case, so bounce back to Bookings (which re-syncs
+      // from Supabase) instead of leaving the user stuck on a dead screen.
+      if (err?.message === 'Booking not found') {
+        Alert.alert(
+          'Booking No Longer Available',
+          "This booking couldn't be found — it may have changed since you opened this screen. Pull to refresh your bookings list.",
+          [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
+        );
+      } else if (err?.code === '23505' || err?.code === '23P01') {
+        // 23505 = exact same slot taken since this screen loaded; 23P01 =
+        // the buffer/overlap exclusion constraint (prevent_overlapping_bookings.sql)
+        // caught a different-start-time overlap. Either way this is a raw
+        // Postgres error with no friendly .message — don't show it as-is.
+        Alert.alert('Time No Longer Available', 'That time was just taken by another booking. Please choose a different time.');
+      } else if (
+        err?.message === 'Waiting for provider to respond with available dates' ||
+        err?.message === 'A reschedule request is already in progress for this booking'
+      ) {
+        // Not a failure — a request from this device or another one is
+        // already on file server-side (e.g. a near-simultaneous duplicate
+        // tap, or the isWaitingForProvider guard above didn't have this
+        // screen's local state refreshed yet). Reflect it as the normal
+        // "already requested" state instead of a scary error toast, and pop
+        // back so the parent list re-syncs and this screen would show the
+        // pending view above if reopened.
+        Alert.alert(
+          'Reschedule Already Requested',
+          `You already have a reschedule request in for this booking. Waiting for ${booking.providerName} to respond.`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+      } else {
+        Alert.alert('Reschedule Failed', err?.message || 'Something went wrong. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -171,6 +208,14 @@ export default function RescheduleScreen({ navigation, route }: Props) {
 
   const hasProviderResponse = !!booking.rescheduleRequest?.providerAvailableDates;
   const selectedDateOption = dateOptions.find(d => d.date === selectedDate);
+  // A request is already on file and the provider hasn't responded yet.
+  // Previously this state wasn't checked here at all — the picker/submit UI
+  // stayed up, so tapping submit again hit BookingContext's own guard and
+  // surfaced "Waiting for provider to respond with available dates" as an
+  // opaque "Reschedule Failed" alert (see handleSubmit's catch below), even
+  // though nothing had actually failed — a request was already correctly in
+  // flight. Show what was requested instead of a dead-end error.
+  const isWaitingForProvider = booking.isPendingReschedule && !hasProviderResponse;
 
   if (phase === 'done') {
     return (
@@ -197,6 +242,70 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           }} activeOpacity={0.7}>
             <Text style={st.primaryBtnText}>Back to Bookings</Text>
           </TouchableOpacity>
+        </SafeAreaView>
+      </ThemedBackground>
+    );
+  }
+
+  if (isWaitingForProvider) {
+    const requestedDates = booking.rescheduleRequest?.requestedDates ?? [];
+    const requestedTimes = booking.rescheduleRequest?.requestedTimes ?? [];
+    return (
+      <ThemedBackground>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left', 'right']}>
+          <View style={[st.topBar, { borderBottomColor: C.border }]}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn} activeOpacity={0.7}>
+              <Text style={[st.backArrow, { color: C.accent }]}>‹</Text>
+              <Text style={[st.backLabel, { color: C.sub }]}>Back</Text>
+            </TouchableOpacity>
+            <Text style={[st.topTitle, { color: C.text }]}>Reschedule</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+            <View style={st.headerInfo}>
+              <Text style={[st.providerName, { color: C.text }]}>{booking.providerName}</Text>
+              <Text style={[st.serviceName, { color: C.sub }]}>{booking.serviceName}</Text>
+              <View style={[st.currentDateBadge, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Ionicons name="calendar-outline" size={14} color={C.sub} />
+                <Text style={[st.currentDateText, { color: C.sub }]}>
+                  Currently: {formatDisplayDate(booking.bookingDate)} at {booking.bookingTime}
+                </Text>
+              </View>
+            </View>
+
+            <View style={st.section}>
+              <View style={{ backgroundColor: 'rgba(175,145,151,0.10)', borderColor: 'rgba(175,145,151,0.30)', borderWidth: 1, borderRadius: 12, padding: 14 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: C.accent, marginBottom: 4 }}>
+                  Reschedule Requested
+                </Text>
+                <Text style={{ fontSize: 12, color: C.sub, lineHeight: 18 }}>
+                  You've already asked {booking.providerName} to reschedule this booking. You'll be notified as soon as they respond with available times — no need to request again.
+                </Text>
+              </View>
+            </View>
+
+            {requestedDates.length > 0 && (
+              <View style={st.section}>
+                <Text style={[st.sectionTitle, { color: C.sub }]}>YOU REQUESTED</Text>
+                <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+                  {requestedDates.map((d, i) => (
+                    <View
+                      key={`${d}-${i}`}
+                      style={[st.row, { borderBottomColor: C.border, borderBottomWidth: i === requestedDates.length - 1 ? 0 : StyleSheet.hairlineWidth }]}
+                    >
+                      <Text style={[st.rowLabel, { color: C.sub, flex: 1 }]}>{formatDisplayDate(d)}</Text>
+                      {!!requestedTimes[i] && (
+                        <Text style={[st.rowValue, { color: C.text, fontWeight: '700', flex: 0 }]}>{requestedTimes[i]}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
         </SafeAreaView>
       </ThemedBackground>
     );

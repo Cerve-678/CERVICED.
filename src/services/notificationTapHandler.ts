@@ -34,10 +34,14 @@ const BOOKING_TYPES = new Set([
   'reschedule_confirmed',
   'booking_not_started',
   'balance_reminder',
-  'balance_collected',
   'intake_form_received',
   'info_pack_received',
   'address_released',
+  // Carries a real booking_id when it's a time-boxed hold (waitlist_holds.sql)
+  // — same booking-detail deep link as everything else here. Falls through to
+  // openNotifications() below via the !booking_id guard for the older
+  // booking_id-less notifications this same type can also cover.
+  'waitlist_slot_available',
 ]);
 
 /**

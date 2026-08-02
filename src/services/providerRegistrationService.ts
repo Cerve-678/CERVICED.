@@ -3,6 +3,7 @@
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Location from 'expo-location';
 import { logger } from '../utils/logger';
 import { setMyProviderFullAddress } from './databaseService';
 
@@ -46,20 +47,67 @@ export interface ProviderRegistrationData {
   aboutText: string;
   slotsText: string;
   gradient: [string, string, ...string[]];
+  // True only when `providers.gradient` was genuinely non-null in the DB —
+  // computed BEFORE the `gradient` field above gets its hardcoded fallback
+  // applied, so it still distinguishes "no gradient saved yet" (fall back to
+  // the resolved theme's own hero colour) from "gradient saved" the same way
+  // ProviderProfileScreen's raw-DB read does. Checking `gradient.length >= 2`
+  // downstream doesn't work for that, since `gradient` above is never empty
+  // by the time callers see it.
+  hasCustomGradient: boolean;
   accentColor: string;
   profileTheme: string; // encoded colour-theme key (see src/constants/providerThemes.ts)
   logo: string | null;
   categories: Record<string, ServiceData[]>;
+  // Shown to clients under the category tab once selected — keyed the same
+  // as `categories`, but optional per key since older/imported categories
+  // may not have one yet.
+  categoryDescriptions: Record<string, string>;
   // Contact info displayed to clients
   phone: string;
   email: string;
   instagram: string;
   website: string;
+  // Set via the separate Communications settings screen, not this form —
+  // but the client-facing Contact card gates which rows show by these, so a
+  // faithful preview of that card needs them too.
+  whatsapp: string;
+  preferredContactMethods: string[];
+  // When set, clients booking this provider are sent to this URL (Fresha,
+  // Treatwell, Acuity, etc.) instead of Cerviced's in-app booking flow.
+  externalBookingUrl: string;
   yearsExperience: string;
   // Address privacy
   businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
   fullAddress: string;
   addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
+  // Cover photo set via Branding & Style (providers.background_image_url) —
+  // not editable from this form, but the client-facing hero uses it as the
+  // backdrop instead of the gradient when set, so any faithful preview of
+  // that hero needs it too.
+  backgroundImage: string | null;
+  isVerified: boolean;
+  // Denormalised average (providers.rating) — same value clients see.
+  rating: number;
+  // Descriptive policy text set via this form's own Policies tab
+  // (providers.booking_policies, JSONB) — read-only mirror here.
+  bookingPolicies: {
+    cancelNotice?: string;
+    cancelPenalty?: string;
+    cancelNote?: string;
+    rescheduleNotice?: string;
+    maxReschedules?: string;
+    depositRequired?: boolean;
+    depositOnly?: boolean;
+    depositType?: string;
+    depositAmount?: string;
+    noShowAction?: string;
+    policyImageUrl?: string;
+  } | null;
+  // Enforced cancellation window (providers.cancellation_notice_hours) — set
+  // via the separate Automations screen, not this form, but the client-facing
+  // Policy tab prefers it over bookingPolicies.cancelNotice when both exist.
+  cancellationNoticeHours: number;
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -138,6 +186,60 @@ function generateSlug(name: string): string {
   );
 }
 
+// Coarse UK bounding box — enough to catch a wildly wrong geocode (a real
+// production row's public location_text is literally "New York"; nothing
+// today stops the same mistake for the real address either).
+const UK_BOUNDS = { minLat: 49.8, maxLat: 60.9, minLng: -8.2, maxLng: 1.8 };
+
+// Loose UK postcode shape, checked as a substring of a freeform address line
+// (not an anchored full-string match) — a cheap pre-check to reject obvious
+// garbage before spending a geocode call.
+const UK_POSTCODE_PATTERN = /[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}/;
+
+/**
+ * Validates a provider's real business address is a genuine, geocodable UK
+ * location before it's ever saved. No third-party address-lookup API — just
+ * a format pre-check plus the same on-device geocoding already used for the
+ * public location text (Location.geocodeAsync), plus a coarse UK bounds
+ * check on the result. Required for every business_type now, including
+ * 'mobile' (a private base address, never shown to clients — see
+ * require_provider_address.sql).
+ *
+ * Throws a specific, user-facing message on any failure. Callers should let
+ * it propagate rather than catch-and-swallow.
+ */
+export async function geocodeAndValidateUkAddress(
+  address: string
+): Promise<{ latitude: number; longitude: number }> {
+  const trimmed = address.trim();
+  if (!trimmed) {
+    throw new Error('Please enter your business address.');
+  }
+  if (!UK_POSTCODE_PATTERN.test(trimmed)) {
+    throw new Error('Please include a valid UK postcode in your address.');
+  }
+
+  let match: Location.LocationGeocodedLocation | undefined;
+  try {
+    [match] = await Location.geocodeAsync(trimmed);
+  } catch {
+    match = undefined;
+  }
+  if (!match) {
+    throw new Error("We couldn't find that address — please check it and try again.");
+  }
+
+  const { latitude, longitude } = match;
+  if (
+    latitude < UK_BOUNDS.minLat || latitude > UK_BOUNDS.maxLat ||
+    longitude < UK_BOUNDS.minLng || longitude > UK_BOUNDS.maxLng
+  ) {
+    throw new Error("That address doesn't look like it's in the UK — please check it and try again.");
+  }
+
+  return { latitude, longitude };
+}
+
 // ── saveProviderToSupabase ───────────────────────────────────────────────────
 // Upserts the provider row, uploads images, replaces services/images/add-ons.
 // Also updates the user's role to 'provider' and refreshes the AsyncStorage cache.
@@ -146,6 +248,12 @@ export async function saveProviderToSupabase(
   userId: string,
   data: ProviderRegistrationData
 ): Promise<void> {
+  // 0. Validate the real business address before anything else happens —
+  // required for every business_type now, including 'mobile' (a private base
+  // address, never shown to clients). Fails fast, before any upload or DB
+  // write, so a bad address never leaves partial state behind.
+  const addressCoords = await geocodeAndValidateUkAddress(data.fullAddress || '');
+
   // 1. Upload logo if it's a local file
   let logoUrl: string | null = data.logo;
   if (data.logo && isLocalUri(data.logo)) {
@@ -154,6 +262,31 @@ export async function saveProviderToSupabase(
       `${userId}/logo.jpg`,
       data.logo
     );
+  }
+
+  // 1b. Best-effort geocode of the public location text into lat/lng, so
+  // "Near You" has real coordinates to rank on — this column was previously
+  // never written at all. Deliberately geocodes `data.location` (the public,
+  // provider-chosen text — a salon might type a full address there; a
+  // home-based provider might only type "North West London") rather than
+  // the private, release-gated full address in provider_private_details
+  // (restrict_provider_full_address.sql) — that one stays untouched by this,
+  // since piping it into a publicly-readable column would leak the exact
+  // address before the provider's chosen release policy allows it. A vague
+  // public location just geocodes to a vague (safe) coordinate, which is the
+  // correct behaviour, not a bug. Never blocks the save on failure.
+  let latitude: number | undefined;
+  let longitude: number | undefined;
+  if (data.location?.trim()) {
+    try {
+      const [match] = await Location.geocodeAsync(data.location.trim());
+      if (match) {
+        latitude = match.latitude;
+        longitude = match.longitude;
+      }
+    } catch {
+      // Silent failure — providers row keeps whatever lat/lng it already had
+    }
   }
 
   // 2. Upsert provider row
@@ -180,6 +313,8 @@ export async function saveProviderToSupabase(
         service_category: data.providerService,
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
+        latitude,
+        longitude,
         about_text: data.aboutText,
         slots_text: data.slotsText,
         logo_url: logoUrl,
@@ -190,6 +325,7 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
         address_release_policy: data.addressReleasePolicy || 'on_confirmation',
@@ -217,6 +353,8 @@ export async function saveProviderToSupabase(
         service_category: data.providerService,
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
+        latitude,
+        longitude,
         about_text: data.aboutText,
         slots_text: data.slotsText,
         logo_url: logoUrl,
@@ -227,6 +365,7 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
         address_release_policy: data.addressReleasePolicy || 'on_confirmation',
@@ -241,8 +380,15 @@ export async function saveProviderToSupabase(
   // The street address lives in the owner-only provider_private_details table,
   // not on `providers` — that table is readable by every authenticated user and
   // RLS can't hide a single column, so keeping the address there leaked it to
-  // clients on every browse. See restrict_provider_full_address.sql.
-  await setMyProviderFullAddress(providerId, data.fullAddress || null);
+  // clients on every browse. See restrict_provider_full_address.sql. Real
+  // coordinates come from the validation at the top of this function (step 0)
+  // — see require_provider_address.sql for how they're used.
+  await setMyProviderFullAddress(
+    providerId,
+    data.fullAddress || null,
+    addressCoords.latitude,
+    addressCoords.longitude
+  );
 
   // 3. Update user role to 'provider'
   await supabase.from('users').update({ role: 'provider' }).eq('id', userId);
@@ -273,6 +419,7 @@ export async function saveProviderToSupabase(
 
       servicesPayload.push({
         category_name: categoryName,
+        category_description: data.categoryDescriptions?.[categoryName] || null,
         name: svc.name,
         description: svc.description || null,
         price: svc.price,
@@ -327,57 +474,68 @@ export async function loadProviderFromSupabase(
   }
   if (!provider) return getCachedProviderData(userId);
 
-  // Street address comes from the owner-only side table, not `providers`.
-  const { data: privateDetails } = await supabase
-    .from('provider_private_details')
-    .select('full_address')
-    .eq('provider_id', provider.id)
-    .maybeSingle();
+  // Street address, the services list, and the AsyncStorage fallback each
+  // only depend on `provider.id` / `userId` — none on each other's result —
+  // so fetch them together instead of one after another.
+  const [{ data: privateDetails }, servicesResult, cached] = await Promise.all([
+    // Street address comes from the owner-only side table, not `providers`.
+    supabase
+      .from('provider_private_details')
+      .select('full_address')
+      .eq('provider_id', provider.id)
+      .maybeSingle(),
+    supabase
+      .from('services')
+      .select(`
+        id,
+        category_name,
+        category_description,
+        name,
+        description,
+        price,
+        duration_minutes,
+        buffer_before_mins,
+        buffer_after_mins,
+        sort_order,
+        tags,
+        technique_tags,
+        outcome_tags,
+        occasion_tags,
+        trend_names,
+        is_pregnancy_safe,
+        patch_test_required,
+        min_age,
+        contraindications,
+        aftercare_notes,
+        service_type,
+        service_images ( url, sort_order ),
+        service_add_ons ( name, price )
+      `)
+      .eq('provider_id', provider.id)
+      .eq('is_active', true)
+      .order('sort_order'),
+    getCachedProviderData(userId).catch(() => null),
+  ]);
   const fullAddress =
     (privateDetails as { full_address?: string | null } | null)?.full_address ?? '';
-
-  const { data: services, error: svcError } = await supabase
-    .from('services')
-    .select(`
-      id,
-      category_name,
-      name,
-      description,
-      price,
-      duration_minutes,
-      buffer_before_mins,
-      buffer_after_mins,
-      sort_order,
-      tags,
-      technique_tags,
-      outcome_tags,
-      occasion_tags,
-      trend_names,
-      is_pregnancy_safe,
-      patch_test_required,
-      min_age,
-      contraindications,
-      aftercare_notes,
-      service_type,
-      service_images ( url, sort_order ),
-      service_add_ons ( name, price )
-    `)
-    .eq('provider_id', provider.id)
-    .eq('is_active', true)
-    .order('sort_order');
+  const { data: services, error: svcError } = servicesResult;
 
   if (svcError) {
     logger.warn('loadProviderFromSupabase services error:', svcError.message);
-    return getCachedProviderData(userId);
+    return cached;
   }
 
   // Reconstruct categories
   const categories: Record<string, ServiceData[]> = {};
+  const categoryDescriptions: Record<string, string> = {};
   let localId = 1;
 
   for (const svc of (services || [])) {
     if (!categories[svc.category_name]) {
       categories[svc.category_name] = [];
+    }
+    if (svc.category_description && !categoryDescriptions[svc.category_name]) {
+      categoryDescriptions[svc.category_name] = svc.category_description;
     }
 
     const images = [...(svc.service_images || [])]
@@ -414,8 +572,6 @@ export async function loadProviderFromSupabase(
     });
   }
 
-  const cached = await getCachedProviderData(userId).catch(() => null);
-
   return {
     providerName: provider.display_name,
     providerService: provider.service_category,
@@ -424,18 +580,28 @@ export async function loadProviderFromSupabase(
     aboutText: provider.about_text || '',
     slotsText: provider.slots_text || '',
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
+    hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
     accentColor: provider.accent_color || '#7B1FA2',
     profileTheme: provider.profile_theme || 'app',
     logo: provider.logo_url || null,
     categories,
+    categoryDescriptions,
     phone: provider.phone || '',
     email: provider.email || '',
     instagram: provider.instagram || cached?.instagram || '',
     website: provider.website || cached?.website || '',
+    externalBookingUrl: provider.external_booking_url || '',
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
     fullAddress,
     addressReleasePolicy: (provider.address_release_policy as ProviderRegistrationData['addressReleasePolicy']) || 'on_confirmation',
+    backgroundImage: provider.background_image_url ?? null,
+    isVerified: provider.is_verified ?? false,
+    rating: Number(provider.rating) || 0,
+    whatsapp: provider.whatsapp_number ?? '',
+    preferredContactMethods: provider.preferred_contact_methods ?? ['in_app'],
+    bookingPolicies: (provider.booking_policies as ProviderRegistrationData['bookingPolicies']) ?? null,
+    cancellationNoticeHours: provider.cancellation_notice_hours ?? 0,
   };
 }
 

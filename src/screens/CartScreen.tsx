@@ -15,15 +15,23 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useStripe } from '@stripe/stripe-react-native';
 import { useCart, CartItem } from '../contexts/CartContext';
 import { useBooking, AppointmentData } from '../contexts/BookingContext';
 import { BookingService, DepositPolicy } from '../services/bookingService';
+import { AvailabilityService } from '../services/AvailabilityService';
+import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../services/stripeService';
 import {
   getProviderDepositPoliciesByDisplayNames,
   ProviderDepositPolicy,
   validatePromoCode,
   getUserHealthProfile,
+  getConsultationRequiredProviderIds,
+  getProviderIdsWithBookingHistory,
+  getConsultationServiceIds,
+  getProviderConsultationService,
 } from '../services/databaseService';
 import type { DbPromotion } from '../types/database';
 import type { CartScreenProps } from '../navigation/types';
@@ -33,25 +41,33 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 import { ThemedBackground } from '../components/ThemedBackground';
-import { getMobileProviderDisplayNames, getProviderSchedulingConstraints } from '../services/databaseService';
+import { getMobileProviderDisplayNames } from '../services/databaseService';
 import { BookingError } from '../contexts/BookingContext';
 import { useAppDialog } from '../components/AppDialog';
+import { BookingSheet, type BookingSheetResult } from '../components/BookingSheet';
 
-// Static/demo services carry numeric ids — only a real UUID resolves to a services row
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Flip to true to switch checkout from the mock PaymentModal (fake, instant,
+// no real Stripe call) to StripePaymentModal (real test-mode Stripe Payment
+// Sheet — card, Apple Pay, Google Pay). Both share the same props interface,
+// so this is the only line that needs to change either direction.
+const USE_STRIPE_PAYMENTS = false;
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 
 // (Removed duplicate CartScreen definition. The correct CartScreen is defined below.)
 
-// Service booking interface
+// Read-model shape for a cart item's booking details — derived from the
+// CartItem itself (see bookingsByItemId in CartScreen), and the shape the
+// payment/review internals (BookingService.createAppointmentData, the order
+// review modal) already expect.
 interface ServiceBooking {
   selectedDate: string;
   selectedTime: string;
   notes: string;
-  isDepositOnly?: boolean; // ADD THIS
-  depositPolicy?: DepositPolicy;
+  isDepositOnly?: boolean;
 }
 
 // Effective Item for Payment Modal
@@ -61,80 +77,16 @@ interface EffectiveCartItem {
   isDeposit: boolean;
 }
 
-// Fallback Calendar Component if ModernBeautyCalendar doesn't exist
-interface CalendarProps {
-  selectedDate: string;
-  onDateSelect: (date: string) => void;
-  onTimeSelect: (time: string) => void;
-  selectedTime: string;
-  providerName: string;
-  serviceDuration?: string;
-  serviceId?: string | undefined;
-  maxDate?: Date;
-}
-
-const FallbackCalendar: React.FC<CalendarProps> = ({
-  selectedDate,
-  onDateSelect,
-  onTimeSelect,
-  selectedTime,
-  providerName,
-  serviceDuration: _serviceDuration,
-}) => {
-  const { theme } = useTheme();
-  const [tempDate, setTempDate] = useState(selectedDate);
-  const [tempTime, setTempTime] = useState(selectedTime);
-
-  const handleConfirm = useCallback(() => {
-    if (tempDate) onDateSelect(tempDate);
-    if (tempTime) onTimeSelect(tempTime);
-  }, [tempDate, tempTime, onDateSelect, onTimeSelect]);
-
-  return (
-    <View style={styles.fallbackCalendar}>
-      <Text style={[styles.fallbackTitle, { color: theme.text }]}>Schedule with {providerName}</Text>
-
-      <Text style={[styles.fallbackLabel, { color: theme.text }]}>Date (YYYY-MM-DD):</Text>
-      <TextInput
-        style={[styles.fallbackInput, { color: theme.text, borderColor: theme.secondaryText }]}
-        value={tempDate}
-        onChangeText={setTempDate}
-        placeholder="2024-12-25"
-        placeholderTextColor={theme.secondaryText}
-      />
-
-      <Text style={[styles.fallbackLabel, { color: theme.text }]}>Time:</Text>
-      <TextInput
-        style={[styles.fallbackInput, { color: theme.text, borderColor: theme.secondaryText }]}
-        value={tempTime}
-        onChangeText={setTempTime}
-        placeholder="14:30"
-        placeholderTextColor={theme.secondaryText}
-      />
-
-      <TouchableOpacity style={styles.fallbackButton} onPress={handleConfirm}>
-        <Text style={styles.fallbackButtonText}>Confirm</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-// Try to import ModernBeautyCalendar safely
-let ModernBeautyCalendar: React.FC<CalendarProps>;
-try {
-  ModernBeautyCalendar = require('../components/ModernBeautyCalendar').ModernBeautyCalendar;
-} catch (error) {
-  logger.warn('ModernBeautyCalendar not found, using fallback');
-  ModernBeautyCalendar = FallbackCalendar;
-}
-
 // Payment Modal Component
 interface PaymentModalProps {
   isVisible: boolean;
   onClose: () => void;
   effectiveCartItems: EffectiveCartItem[];
   totalAmount: number;
-  onPaymentSuccess: (paymentMethod: string) => Promise<void>;
+  // paymentIntentId is only ever passed by StripePaymentModal — the mock
+  // PaymentModal never sets it, so it stays undefined and payment_intent_id
+  // on the booking stays null, same as before either modal existed.
+  onPaymentSuccess: (paymentMethod: string, paymentIntentId?: string) => Promise<void>;
   onPaymentComplete: () => void;
   // Rendered via the parent CartScreen's own DialogHost, not this modal's —
   // the alert would otherwise be nested inside this component's own <Modal>,
@@ -284,7 +236,7 @@ const handlePayment = useCallback(async () => {
     };
 
     return (
-      <Modal visible={isVisible} animationType="slide" transparent={true}>
+      <Modal visible={isVisible} animationType="fade" transparent={true}>
         <View style={styles.paymentOverlay}>
           <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
             <SafeAreaView style={styles.paymentModalContent}>
@@ -431,91 +383,220 @@ const handlePayment = useCallback(async () => {
   }
 );
 
-// Notes Modal Component
-interface NotesModalProps {
-  isVisible: boolean;
-  onClose: () => void;
-  onSave: (notes: string) => void;
-  serviceName: string;
-  providerName: string;
-  instanceNumber: number;
-  currentNotes: string;
-}
+// Real Stripe payment flow — card, Apple Pay, and Google Pay via Stripe's
+// own Payment Sheet (PayPal shows up automatically too, once PayPal is
+// turned on for the Stripe account under Settings > Payment methods —
+// nothing here needs to change for that, it rides on
+// automatic_payment_methods). Not wired into the active checkout yet; see
+// USE_STRIPE_PAYMENTS below CartScreen's imports. Swap PaymentModal for this
+// at the render site when ready to go live with real payment.
+//
+// capture_method: 'manual' on the PaymentIntent (create-payment-intent Edge
+// Function) means presentPaymentSheet() only authorises the card — the
+// booking is created first, and only a successful booking triggers the
+// actual capture (finalize-payment-intent). A failed booking cancels the
+// authorisation instead, so a client is never left charged with nothing
+// booked. See the CartScreen conversation history / commit messages for the
+// full reasoning — this preserves that behaviour exactly.
+const StripePaymentModal: React.FC<PaymentModalProps> = memo(
+  ({
+    isVisible,
+    onClose,
+    effectiveCartItems,
+    totalAmount,
+    onPaymentSuccess,
+    onPaymentComplete,
+    onBookingFailed,
+  }) => {
+    const { theme, isDarkMode, palette: P } = useTheme();
+    const { initPaymentSheet, presentPaymentSheet } = useStripe();
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const processingRef = useRef(false);
 
-const NotesModal: React.FC<NotesModalProps> = memo(
-  ({ isVisible, onClose, onSave, serviceName, providerName, instanceNumber, currentNotes }) => {
-    const { isDarkMode, palette: P } = useTheme();
-    const { showAlert, DialogHost } = useAppDialog();
-    const [notes, setNotes] = useState(currentNotes);
-    const [isLoading, setIsLoading] = useState(false);
+    const handlePayment = useCallback(async () => {
+      const timestamp = () => new Date().toISOString().split('T')[1];
 
-    useEffect(() => {
-      setNotes(currentNotes);
-    }, [currentNotes]);
-
-    const handleSave = useCallback(async () => {
-      try {
-        setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 100));
-        onSave(notes.trim());
-        onClose();
-      } catch (error) {
-        logger.error('Error saving notes:', error);
-        showAlert('Couldn\'t save your note', 'Please try again.');
-      } finally {
-        setIsLoading(false);
+      if (processingRef.current) {
+        if (__DEV__) logger.log(`[${timestamp()}] Payment already processing - ignoring duplicate call`);
+        return;
       }
-    }, [notes, onSave, onClose, showAlert]);
+      processingRef.current = true;
+      setIsProcessing(true);
+
+      try {
+        if (__DEV__) logger.log(`[${timestamp()}] Creating PaymentIntent for £${totalAmount.toFixed(2)}...`);
+        const { clientSecret, paymentIntentId } = await createPaymentIntent(totalAmount);
+
+        // Theme the sheet to match the app's own palette (bound to the
+        // app's own isDarkMode, not the OS setting Stripe would otherwise
+        // auto-detect) instead of Stripe's generic default.
+        const stripeColors = {
+          primary: P.accent,
+          background: P.bg,
+          componentBackground: P.surface,
+          componentBorder: isDarkMode ? '#2E7E6667' : '#247E6667', // P.border, as #AARRGGBB
+          componentDivider: isDarkMode ? '#2E7E6667' : '#247E6667',
+          primaryText: theme.text,
+          secondaryText: P.sub,
+          componentText: theme.text,
+          placeholderText: P.sub,
+          icon: P.sub,
+          error: '#FF3B30',
+        };
+
+        const { error: initError } = await initPaymentSheet({
+          merchantDisplayName: 'Cerviced',
+          paymentIntentClientSecret: clientSecret,
+          appearance: {
+            colors: stripeColors,
+            shapes: { borderRadius: 20, borderWidth: 1 },
+            primaryButton: {
+              colors: { background: P.accent, text: '#FFFFFF', border: P.accent },
+              shapes: { borderRadius: 20 },
+            },
+          },
+          // Requires a real Apple merchant ID registered in your Apple
+          // Developer account and linked in the Stripe Dashboard — the
+          // placeholder in app.json's plugin config ("merchant.com.cerviced")
+          // unblocks the build but Apple Pay won't actually appear/function
+          // until that registration is real.
+          applePay: { merchantCountryCode: 'GB' },
+          // Works out of the box in Stripe test mode. app.json's plugin
+          // config also needs enableGooglePay: true (currently false) for
+          // this to take effect on Android.
+          googlePay: { merchantCountryCode: 'GB', testEnv: __DEV__ },
+        });
+        if (initError) {
+          throw new Error(initError.message || 'Could not start payment.');
+        }
+
+        const { error: presentError } = await presentPaymentSheet();
+        if (presentError) {
+          if (presentError.code === 'Canceled') {
+            if (__DEV__) logger.log(`[${timestamp()}] Payment sheet cancelled by user`);
+            return;
+          }
+          throw new Error(presentError.message || 'Payment failed. Please try again.');
+        }
+
+        if (__DEV__) logger.log(`[${timestamp()}] Payment authorised (${paymentIntentId}). Calling onPaymentSuccess...`);
+        try {
+          await onPaymentSuccess('card', paymentIntentId);
+          // Booking exists now — actually take the payment. If this specific
+          // call fails, the booking still stands (don't fail the whole flow
+          // retroactively for something the client already got); it just
+          // means the authorised card needs a manual capture from the
+          // Stripe dashboard before the ~7-day hold expires.
+          try {
+            await capturePaymentIntent(paymentIntentId);
+          } catch (captureError) {
+            logger.error(`💰 [${timestamp()}] ⚠️ Booking succeeded but capture FAILED — needs manual Stripe capture:`, paymentIntentId, captureError);
+          }
+        } catch (bookingError) {
+          logger.error(`💰 [${timestamp()}] ❌ onPaymentSuccess FAILED:`, bookingError);
+          // A multi-service cart can partially succeed — some bookings
+          // persisted before a sibling item failed. Cancelling the WHOLE
+          // authorisation in that case would leave those succeeded bookings
+          // marked paid in the DB while the card was never actually
+          // charged for them. Capture only what was actually earned instead;
+          // only cancel outright when nothing booked at all.
+          const succeededAmount = bookingError instanceof BookingError ? bookingError.succeededAmountPaid : 0;
+          if (succeededAmount > 0) {
+            try {
+              await capturePaymentIntent(paymentIntentId, succeededAmount);
+            } catch (captureError) {
+              logger.error(`💰 [${timestamp()}] ⚠️ Partial booking succeeded but partial capture FAILED — needs manual Stripe capture of £${succeededAmount.toFixed(2)}:`, paymentIntentId, captureError);
+            }
+          } else {
+            // Nothing booked — release the card hold so the client is never
+            // left charged with nothing to show for it. Best-effort: if this
+            // also fails, the hold still auto-expires (~7 days).
+            try {
+              await cancelPaymentIntent(paymentIntentId);
+            } catch (cancelError) {
+              logger.error(`💰 [${timestamp()}] ⚠️ Failed to release payment hold after booking failure:`, paymentIntentId, cancelError);
+            }
+          }
+          throw bookingError;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+        onPaymentComplete();
+        setShowSuccessModal(true);
+      } catch (error) {
+        logger.error(`❌ [${timestamp()}] PAYMENT ERROR:`, error);
+        onClose();
+        const partiallySucceeded = error instanceof BookingError && error.succeededAmountPaid > 0;
+        onBookingFailed(
+          (error instanceof BookingError
+            ? error.message
+            : "We couldn't complete this booking. Please try again.")
+          + (partiallySucceeded
+              ? " You were only charged for the services that were booked."
+              : " You have not been charged.")
+        );
+      } finally {
+        setIsProcessing(false);
+        processingRef.current = false;
+      }
+    }, [totalAmount, initPaymentSheet, presentPaymentSheet, onPaymentSuccess, onPaymentComplete, onClose, onBookingFailed, P, theme, isDarkMode]);
 
     return (
-      <Modal visible={isVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.notesModal, { backgroundColor: isDarkMode ? 'rgba(37,34,32,0.97)' : 'rgba(255,255,255,0.95)', borderColor: P.border }]}>
-            <View style={styles.notesHeader}>
-              <Text style={[styles.notesTitle, { color: P.text }]}>Add Notes</Text>
-              <Text style={[styles.notesSubtitle, { color: P.sub }]}>
-                {serviceName} #{instanceNumber} • {providerName}
-              </Text>
-            </View>
+      <Modal visible={isVisible} animationType="fade" transparent={true}>
+        <View style={styles.paymentOverlay}>
+          <View style={[styles.paymentModal, { backgroundColor: P.bg }]}>
+            <SafeAreaView style={styles.paymentModalContent}>
+              <View style={[styles.paymentHeader, { borderBottomColor: P.border }]}>
+                <Text style={[styles.paymentTitle, { color: theme.text }]}>Complete Payment</Text>
+                <TouchableOpacity style={styles.paymentCloseButton} onPress={onClose}>
+                  <Text style={[styles.paymentCloseText, { color: theme.text }]}>×</Text>
+                </TouchableOpacity>
+              </View>
 
-            <TextInput
-              style={[styles.notesInput, { backgroundColor: isDarkMode ? 'rgba(42,38,36,0.6)' : 'rgba(255,255,255,0.5)', borderColor: P.border, color: P.text }]}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Add special requests, allergies, or preferences..."
-              placeholderTextColor={P.sub}
-              multiline
-              numberOfLines={6}
-              maxLength={500}
-              editable={!isLoading}
-            />
+              <ScrollView style={styles.paymentContent} showsVerticalScrollIndicator={false}>
+                <View style={[styles.orderSummary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                  <Text style={[styles.orderSummaryTitle, { color: theme.text }]}>Order Summary</Text>
+                  {effectiveCartItems.map(({ item, effectivePrice, isDeposit }) => (
+                    <View key={item.id} style={styles.orderItem}>
+                      <Text style={[styles.orderItemName, { color: theme.text }]}>
+                        {item.serviceName} #{item.serviceInstanceIndex || 1}
+                        {isDeposit && ' (Deposit)'}
+                      </Text>
+                      <Text style={[styles.orderItemPrice, { color: theme.text }]}>£{effectivePrice.toFixed(2)}</Text>
+                    </View>
+                  ))}
+                  <View style={styles.orderTotal}>
+                    <Text style={[styles.orderTotalLabel, { color: theme.text }]}>Total</Text>
+                    <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
+                  </View>
+                </View>
 
-            <Text style={[styles.characterCount, { color: P.sub }]}>{notes.length}/500 characters</Text>
+                {/* Card entry, Apple Pay, and Google Pay all happen inside
+                    Stripe's own Payment Sheet (opened by the button below) —
+                    never in this component's state. */}
+                <View style={styles.paymentMethods}>
+                  <Text style={[styles.paymentMethodsTitle, { color: theme.text }]}>Payment</Text>
+                  <Text style={[styles.paymentMethodName, { color: P.sub }]}>
+                    Card, Apple Pay, or Google Pay — you'll enter your details securely on the next screen.
+                  </Text>
+                </View>
+              </ScrollView>
 
-            <View style={styles.notesFooter}>
               <TouchableOpacity
-                style={[styles.cancelButton, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }, isLoading && styles.disabledButton]}
-                onPress={onClose}
-                disabled={isLoading}
+                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: 'rgba(175,145,151,0.5)' }]}
+                onPress={handlePayment}
+                disabled={isProcessing}
               >
-                <Text style={[styles.cancelText, { color: P.text }]}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: P.accent }, isLoading && styles.disabledButton]}
-                onPress={handleSave}
-                disabled={isLoading}
-              >
-                {isLoading ? (
+                {isProcessing ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.saveText}>Save</Text>
+                  <Text style={styles.payButtonText}>Pay £{totalAmount.toFixed(2)}</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </SafeAreaView>
           </View>
         </View>
-        <DialogHost />
       </Modal>
     );
   }
@@ -524,63 +605,25 @@ const NotesModal: React.FC<NotesModalProps> = memo(
 // Service Card Component
 interface ServiceCardProps {
   item: CartItem;
-  serviceBooking: ServiceBooking;
-  onUpdateBooking: (itemId: string, updates: ServiceBooking) => void;
+  bookingInfo: ServiceBooking;
   onRemove: (itemId: string) => void;
-  onShowNotes: (
-    itemId: string,
-    serviceName: string,
-    providerName: string,
-    instanceNumber: number,
-    currentNotes: string
-  ) => void;
-  providerName: string;
-  allCartItems: CartItem[]; // ADD THIS LINE
+  onEdit: (item: CartItem) => void;
+  allCartItems: CartItem[];
   depositPolicy?: ProviderDepositPolicy;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
   ({
     item,
-    serviceBooking,
-    onUpdateBooking,
+    bookingInfo,
     onRemove,
-    onShowNotes,
-    providerName,
+    onEdit,
     allCartItems,
     depositPolicy,
   }) => {
-    const { theme, isDarkMode, palette: P } = useTheme();
-    const { showAlert, showConfirm, DialogHost } = useAppDialog();
-    const [showCalendar, setShowCalendar] = useState(false);
+    const { theme, palette: P } = useTheme();
+    const { showConfirm, DialogHost } = useAppDialog();
     const [isLoading, setIsLoading] = useState(false);
-
-    // Scheduling constraints fetched once per provider
-    const [constraints, setConstraints] = useState<{
-      bookingWindowDays: number;
-    }>({ bookingWindowDays: 60 });
-    const constraintsFetched = useRef(false);
-
-    // Fetch constraints the first time the calendar is opened. Prefer the
-    // real provider UUID (set on the cart item when it was added) over the
-    // display name — an exact-match name lookup silently returns nothing on
-    // any case/punctuation drift, which is indistinguishable from "provider
-    // has no constraints" and was masking real lookup failures.
-    useEffect(() => {
-      if (!showCalendar || constraintsFetched.current) return;
-      constraintsFetched.current = true;
-      getProviderSchedulingConstraints(item.providerId ?? item.providerDisplayName ?? providerName).then(setConstraints).catch(() => {
-        // keep defaults on error
-      });
-    }, [showCalendar, providerName, item.providerId, item.providerDisplayName]);
-
-    // Compute maxDate from booking window (0 = no limit)
-    const maxDate = useMemo<Date | undefined>(() => {
-      if (!constraints.bookingWindowDays) return undefined;
-      const d = new Date();
-      d.setDate(d.getDate() + constraints.bookingWindowDays);
-      return d;
-    }, [constraints.bookingWindowDays]);
 
     // Calculate total price safely with null checks
     const totalPrice = useMemo(() => {
@@ -602,69 +645,11 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     }, [depositPolicy]);
 
     const effectivePrice = useMemo(() => {
-      if (serviceBooking.isDepositOnly) {
+      if (bookingInfo.isDepositOnly) {
         return BookingService.calculateDeposit(totalPrice, depositPolicyArg);
       }
       return totalPrice;
-    }, [totalPrice, serviceBooking.isDepositOnly, depositPolicyArg]);
-
-    const depositLabel = useMemo(() => {
-      if (!depositPolicy) return 'Pay Deposit (20%)';
-      if (depositPolicy.depositType === 'fixed') {
-        return `Pay Deposit (£${depositPolicy.depositAmount} flat)`;
-      }
-      return `Pay Deposit (${depositPolicy.depositAmount}%)`;
-    }, [depositPolicy]);
-
-    const handleDateSelect = useCallback(
-      (date: string) => {
-        try {
-          onUpdateBooking(item.id, {
-            ...serviceBooking,
-            selectedDate: date,
-          });
-        } catch (error) {
-          logger.error('Error updating date:', error);
-          showAlert('Couldn\'t update date', 'Please try selecting it again.');
-        }
-      },
-      [item.id, serviceBooking, onUpdateBooking, showAlert]
-    );
-
-    const handleTimeSelect = useCallback(
-      (time: string) => {
-        try {
-          if (__DEV__) {
-            logger.log('TIME SELECTED:', time); // ADD THIS
-          }
-          onUpdateBooking(item.id, {
-            ...serviceBooking,
-            selectedTime: time,
-          });
-        } catch (error) {
-          logger.error('Error updating time:', error);
-          showAlert('Couldn\'t update time', 'Please try selecting it again.');
-        }
-      },
-      [item.id, serviceBooking, onUpdateBooking, showAlert]
-    );
-
-    const handleDepositToggle = useCallback(
-      (isDeposit: boolean) => {
-        try {
-          onUpdateBooking(item.id, {
-            ...serviceBooking,
-            isDepositOnly: isDeposit,
-            ...(isDeposit && depositPolicy
-              ? { depositPolicy: { type: depositPolicy.depositType, amount: depositPolicy.depositAmount } }
-              : {}),
-          });
-        } catch (error) {
-          logger.error('Error updating deposit toggle:', error);
-        }
-      },
-      [item.id, serviceBooking, onUpdateBooking, depositPolicy]
-    );
+    }, [totalPrice, bookingInfo.isDepositOnly, depositPolicyArg]);
 
     const handleRemove = useCallback(async () => {
       try {
@@ -684,12 +669,11 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
       }
     }, [item.id, item.serviceName, onRemove, showConfirm]);
 
-    const isScheduled = Boolean(serviceBooking?.selectedDate && serviceBooking?.selectedTime);
+    const isScheduled = Boolean(bookingInfo?.selectedDate && bookingInfo?.selectedTime);
 
-    // CORRECT - only show # if there are duplicates
     const serviceName = item?.serviceName || 'Unknown Service';
     const serviceInstanceIndex = item?.serviceInstanceIndex || 1;
-    const duration = item?.duration || 'Unknown duration'; // ADD THIS LINE
+    const duration = item?.duration || 'Unknown duration';
     const showInstanceNumber =
       allCartItems.filter((i: CartItem) => i.serviceName === item.serviceName).length > 1;
 
@@ -711,30 +695,8 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               <Text style={[styles.serviceName, { color: theme.text }]}>
                 {serviceName}
                 {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
-                {serviceBooking.isDepositOnly && ' (Deposit)'}
+                {bookingInfo.isDepositOnly && ' (Deposit)'}
               </Text>
-              <Text style={[styles.servicePrice, { color: P.accent }]}>£{effectivePrice.toFixed(2)}</Text>
-              <Text style={[styles.serviceDuration, { color: theme.secondaryText }]}>{duration}</Text>
-
-              {/* Enhanced add-ons display with proper pricing */}
-              {item?.addOns && item.addOns.length > 0 && (
-                <View style={styles.addOnsContainer}>
-                  <Text style={[styles.addOnsTitle, { color: theme.text }]}>Add-ons:</Text>
-                  <Text style={[styles.baseServicePrice, { color: theme.secondaryText }]}>
-                    Base Service: £{Number(item?.price || 0).toFixed(2)}
-                  </Text>
-                  {item.addOns.map((addOn: any, index: number) => (
-                    <Text key={addOn?.id || index} style={[styles.addOnItem, { color: theme.secondaryText }]}>
-                      • {addOn?.name || 'Unknown'} (+£{Number(addOn?.price || 0).toFixed(2)})
-                    </Text>
-                  ))}
-                  <View style={styles.addOnsTotalContainer}>
-                    <Text style={[styles.addOnsTotal, { color: P.accent }]}>
-                      Total with Add-ons: £{totalPrice.toFixed(2)}
-                    </Text>
-                  </View>
-                </View>
-              )}
             </View>
 
             <TouchableOpacity
@@ -750,224 +712,93 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             </TouchableOpacity>
           </View>
 
-          {/* Scheduling with Enhanced Shadow */}
-          <TouchableOpacity
-            style={[
-              styles.scheduleButton,
-              styles.scheduleButtonShadow,
-              isScheduled && styles.scheduleButtonScheduled,
-            ]}
-            onPress={() => setShowCalendar(!showCalendar)}
-          >
-            <Text
-              style={[styles.scheduleButtonText, isScheduled && styles.scheduleButtonTextScheduled]}
-            >
-              {isScheduled
-                ? `${new Date(serviceBooking.selectedDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} at ${serviceBooking.selectedTime}`
-                : 'Tap to Schedule'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Deposit Toggle - ADD THIS */}
-          <View style={styles.depositToggle}>
-            <Text style={[styles.depositToggleLabel, { color: P.sub }]}>Payment Option</Text>
-            <View style={styles.depositButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.depositOptionButton,
-                  { backgroundColor: isDarkMode ? P.surface : 'rgba(175,145,151,0.06)' },
-                  !serviceBooking.isDepositOnly && { backgroundColor: 'rgba(175,145,151,0.14)', borderColor: P.accent },
-                ]}
-                onPress={() => handleDepositToggle(false)}
-              >
-                <Text
-                  style={[
-                    styles.depositOptionText,
-                    { color: P.sub },
-                    !serviceBooking.isDepositOnly && { color: P.accent, fontWeight: '700' },
-                  ]}
-                >
-                  Pay Full Amount
+          {/* Booking breakdown — base price, add-ons, duration, and how the
+              payment splits, all itemised in one place instead of scattered
+              across separate lines. */}
+          <View style={[styles.breakdownContainer, { backgroundColor: P.bg, borderColor: P.border }]}>
+            <View style={styles.breakdownRow}>
+              <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Base Price</Text>
+              <Text style={[styles.breakdownValue, { color: theme.text }]}>£{Number(item?.price || 0).toFixed(2)}</Text>
+            </View>
+            {(item?.addOns || []).map((addOn: any, index: number) => (
+              <View key={addOn?.id || index} style={styles.breakdownRow}>
+                <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]} numberOfLines={1}>
+                  • {addOn?.name || 'Unknown'}
                 </Text>
-              </TouchableOpacity>
-
-              {/* Hidden when the provider turned deposits off in their policies */}
-              {depositPolicy?.depositAvailable !== false && (
-                <TouchableOpacity
-                  style={[
-                    styles.depositOptionButton,
-                    { backgroundColor: isDarkMode ? P.surface : 'rgba(175,145,151,0.06)' },
-                    serviceBooking.isDepositOnly && { backgroundColor: 'rgba(175,145,151,0.14)', borderColor: P.accent },
-                  ]}
-                  onPress={() => handleDepositToggle(true)}
-                >
-                  <Text
-                    style={[
-                      styles.depositOptionText,
-                      { color: P.sub },
-                      serviceBooking.isDepositOnly && { color: P.accent, fontWeight: '700' },
-                    ]}
-                  >
-                    {depositLabel}
-                  </Text>
-                </TouchableOpacity>
-              )}
+                <Text style={[styles.breakdownValue, { color: theme.text }]}>+£{Number(addOn?.price || 0).toFixed(2)}</Text>
+              </View>
+            ))}
+            {item?.addOns && item.addOns.length > 0 && (
+              <View style={styles.breakdownRow}>
+                <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Subtotal</Text>
+                <Text style={[styles.breakdownValue, { color: theme.text }]}>£{totalPrice.toFixed(2)}</Text>
+              </View>
+            )}
+            <View style={styles.breakdownRow}>
+              <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Duration</Text>
+              <Text style={[styles.breakdownValue, { color: theme.text }]}>{duration}</Text>
             </View>
 
-            {serviceBooking.isDepositOnly && (
-              <View
-                style={[
-                  styles.depositInfo,
-                  { backgroundColor: isDarkMode ? 'rgba(76,175,80,0.16)' : 'rgba(76,175,80,0.1)' },
-                ]}
-              >
-                <Text style={[styles.depositInfoText, { color: isDarkMode ? '#7BD989' : '#2E7D32' }]}>
-                  Deposit: £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
-                </Text>
-                <Text
-                  style={[
-                    styles.depositRemainingText,
-                    { color: isDarkMode ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)' },
-                  ]}
-                >
-                  Remaining: £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} (pay
-                  at appointment)
-                </Text>
+            <View style={[styles.breakdownDivider, { backgroundColor: P.border }]} />
+
+            {bookingInfo.isDepositOnly ? (
+              <>
+                <View style={styles.breakdownRow}>
+                  <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Deposit Due Now</Text>
+                  <Text style={[styles.breakdownValue, { color: P.accent }]}>
+                    £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Due at Appointment</Text>
+                  <Text style={[styles.breakdownValue, { color: theme.text }]}>
+                    £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.breakdownRow}>
+                <Text style={[styles.breakdownTotalLabel, { color: theme.text }]}>Total</Text>
+                <Text style={[styles.breakdownTotalValue, { color: P.accent }]}>£{effectivePrice.toFixed(2)}</Text>
               </View>
             )}
           </View>
 
-          {/* Calendar */}
-          {showCalendar && (
-            <View style={styles.calendarContainer}>
-              <ModernBeautyCalendar
-                selectedDate={serviceBooking.selectedDate}
-                onDateSelect={handleDateSelect}
-                onTimeSelect={handleTimeSelect}
-                selectedTime={serviceBooking.selectedTime}
-                providerName={item.providerId ?? item.providerDisplayName ?? providerName}
-                serviceDuration={duration}
-                {...(item.serviceId && UUID_RE.test(item.serviceId) ? { serviceId: item.serviceId } : {})}
-                {...(maxDate !== undefined ? { maxDate } : {})}
-              />
-            </View>
+          {!!bookingInfo.notes && (
+            <Text style={[styles.notesPreview, { color: P.sub }]} numberOfLines={2}>
+              Notes: {bookingInfo.notes}
+            </Text>
           )}
 
-          {/* Notes Button - Same design as schedule button */}
+          {/* Schedule + Edit — the date/time indicator is now the edit
+              trigger itself, replacing the separate Edit button below it. */}
           <TouchableOpacity
-            style={[
-              styles.notesButton,
-              { backgroundColor: 'rgba(175,145,151,0.1)', borderColor: 'rgba(175,145,151,0.3)' },
-            ]}
-            onPress={() =>
-              onShowNotes(
-                item.id,
-                serviceName,
-                providerName,
-                serviceInstanceIndex,
-                serviceBooking?.notes || ''
-              )
-            }
+            style={[styles.bookingSummaryRow, !isScheduled && styles.bookingSummaryRowWarning]}
+            onPress={() => onEdit(item)}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.notesButtonText, { color: P.accent }]}>
-              {serviceBooking?.notes
-                ? `Notes: ${serviceBooking.notes.substring(0, 30)}${serviceBooking.notes.length > 30 ? '...' : ''}`
-                : 'Add Notes'}
+            <Text
+              style={[styles.bookingSummaryText, !isScheduled && styles.bookingSummaryTextWarning]}
+              numberOfLines={1}
+            >
+              {isScheduled
+                ? `${new Date(bookingInfo.selectedDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} at ${bookingInfo.selectedTime}`
+                : 'Unscheduled'}
             </Text>
+            <View style={styles.bookingSummaryEdit}>
+              <Ionicons
+                name="pencil-outline"
+                size={13}
+                color={isScheduled ? '#2E7D32' : '#D32F2F'}
+              />
+              <Text style={[styles.bookingSummaryEditText, !isScheduled && styles.bookingSummaryTextWarning]}>
+                Edit
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
         <DialogHost />
       </ErrorBoundary>
-    );
-  }
-);
-
-// ── Provider-level promo code entry ──────────────────────────────────────────
-// One code per provider, applying across every service from that provider —
-// entered once here rather than separately on each service card.
-interface ProviderPromoRowProps {
-  providerKey: string;
-  appliedPromo?: DbPromotion;
-  discount: number;
-  onApply: (providerKey: string, code: string) => Promise<string | null>;
-  onRemove: (providerKey: string) => void;
-}
-
-const ProviderPromoRow: React.FC<ProviderPromoRowProps> = memo(
-  ({ providerKey, appliedPromo, discount, onApply, onRemove }) => {
-    const { palette: P } = useTheme();
-    const [promoInput, setPromoInput] = useState('');
-    const [promoApplying, setPromoApplying] = useState(false);
-    const [promoError, setPromoError] = useState<string | null>(null);
-
-    const handleApplyPromoPress = useCallback(async () => {
-      if (!promoInput.trim() || promoApplying) return;
-      setPromoApplying(true);
-      setPromoError(null);
-      const error = await onApply(providerKey, promoInput);
-      setPromoApplying(false);
-      if (error) {
-        setPromoError(error);
-      } else {
-        setPromoInput('');
-      }
-    }, [promoInput, promoApplying, onApply, providerKey]);
-
-    return (
-      <View style={{ marginTop: 4, marginBottom: 12, paddingHorizontal: 14 }}>
-        {appliedPromo ? (
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', gap: 8,
-            borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
-            backgroundColor: P.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-          }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: P.accent }}>
-              {appliedPromo.promo_code?.toUpperCase()}
-            </Text>
-            <Text style={{ flex: 1, fontSize: 11, color: P.sub }} numberOfLines={1}>
-              {appliedPromo.title}
-            </Text>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
-              −£{discount.toFixed(2)}
-            </Text>
-            <TouchableOpacity onPress={() => onRemove(providerKey)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#FF6868' }}>Remove</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TextInput
-              style={{
-                flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: P.border,
-                borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
-                fontSize: 13, color: P.text, backgroundColor: P.surface,
-              }}
-              placeholder="Promo code for this provider"
-              placeholderTextColor={P.sub}
-              value={promoInput}
-              onChangeText={t => { setPromoInput(t); setPromoError(null); }}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              style={{
-                borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center',
-                backgroundColor: promoInput.trim() ? P.accent : P.surface,
-              }}
-              onPress={handleApplyPromoPress}
-              disabled={!promoInput.trim() || promoApplying}
-              activeOpacity={0.8}
-            >
-              {promoApplying
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={{ fontSize: 12, fontWeight: '700', color: promoInput.trim() ? '#fff' : P.sub }}>Apply</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-        {promoError && (
-          <Text style={{ fontSize: 11, color: '#FF6868', marginTop: 6 }}>{promoError}</Text>
-        )}
-      </View>
     );
   }
 );
@@ -982,28 +813,28 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     totalItems,
     totalPrice,
     removeFromCart,
+    updateCartItem,
     clearCart,
     getServiceFee,
     getFinalTotal,
     getItemsByProvider,
     getBookingSummary,
+    addToCart,
   } = useCart();
 
   const { createBookingsFromCart } = useBooking();
   const { user, updateUser } = useAuth();
 
   // State management
-  const [serviceBookings, setServiceBookings] = useState<Record<string, ServiceBooking>>({});
   const [providerDepositPolicies, setProviderDepositPolicies] = useState<Record<string, ProviderDepositPolicy>>({});
-  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
-  const [showNotesModal, setShowNotesModal] = useState(false);
-  const [currentNotesItem, setCurrentNotesItem] = useState<{
-    itemId: string;
-    serviceName: string;
-    providerName: string;
-    instanceNumber: number;
-    currentNotes: string;
-  } | null>(null);
+  // BookingSheet in edit mode — opened per cart item via ServiceCard's Edit button
+  const [showBookingSheet, setShowBookingSheet] = useState(false);
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  // Set right after auto-adding a required consultation to the cart (see
+  // handleCheckout) — the effect below opens its date/time picker as soon
+  // as the new item actually shows up in `items`, since addToCart() is a
+  // dispatch and the item isn't available synchronously.
+  const [pendingConsultationSchedule, setPendingConsultationSchedule] = useState<{ providerId: string; serviceId: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -1029,6 +860,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showBookingSummaryModal, setShowBookingSummaryModal] = useState(false);
   const [hasMobileProvider, setHasMobileProvider] = useState(false);
   const [clientAddress, setClientAddress] = useState('');
+  // Providers in the cart that require a consultation before a new client's
+  // first booking, which of those the client already has history with, and
+  // which cart items are themselves consultation bookings — used to block
+  // checkout on a non-consultation service with a first-time provider that
+  // requires one. App-level check, same as every other createBooking()
+  // checkout validation (date-in-past, availability, blocked dates).
+  const [consultationRequiredProviderIds, setConsultationRequiredProviderIds] = useState<Set<string>>(new Set());
+  const [providersWithHistory, setProvidersWithHistory] = useState<Set<string>>(new Set());
+  const [consultationServiceIds, setConsultationServiceIds] = useState<Set<string>>(new Set());
 
   // Memoize expensive calculations properly
   const itemsByProvider = useMemo(() => {
@@ -1064,9 +904,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   }, [items]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
-  // One code per provider, applying across every service from that provider
-  // in the cart — not one per service line. Entry happens once on the
-  // provider section, not on each individual card. Keyed by the same
+  // No manual entry in the cart — a code only lands here carried over via
+  // CartItem.initialPromoCode (set on the provider profile's "Book Now" for
+  // a promotion) and auto-applied below. One code per provider, applying
+  // across every service from that provider in the cart. Keyed by the same
   // provider grouping key itemsByProvider uses (item.providerName), so it
   // stays aligned with how the cart is already sectioned.
   const [appliedPromos, setAppliedPromos] = useState<Record<string, DbPromotion>>({});
@@ -1086,14 +927,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       return 'Could not check that code — please try again.';
     }
   }, [itemsByProvider]);
-
-  const handleRemovePromoFromProvider = useCallback((providerKey: string) => {
-    setAppliedPromos(prev => {
-      const next = { ...prev };
-      delete next[providerKey];
-      return next;
-    });
-  }, []);
 
   // Drop applied promos for providers no longer represented in the cart
   useEffect(() => {
@@ -1153,10 +986,33 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     [itemPromoDiscounts]
   );
 
+  // Read-model derived straight from each CartItem — scheduling, notes, and
+  // payment choice all live on the item now (set on the provider profile, or
+  // changed later via BookingSheet's edit mode + updateCartItem), so this
+  // screen has nothing writable of its own to keep in sync.
+  const bookingsByItemId = useMemo((): Record<string, ServiceBooking> => {
+    const map: Record<string, ServiceBooking> = {};
+    items.forEach(item => {
+      map[item.id] = {
+        selectedDate: item.selectedDate ?? '',
+        selectedTime: item.selectedTime ?? '',
+        notes: item.notes ?? '',
+        isDepositOnly: item.isDepositOnly ?? false,
+      };
+    });
+    return map;
+  }, [items]);
+
+  const getServiceBooking = useCallback(
+    (itemId: string): ServiceBooking =>
+      bookingsByItemId[itemId] ?? { selectedDate: '', selectedTime: '', notes: '', isDepositOnly: false },
+    [bookingsByItemId]
+  );
+
   // Compute effective total considering per-service deposits - FIXED NESTED HOOK
   const effectiveTotal = useMemo(() => {
     return items.reduce((sum, item) => {
-      const booking = serviceBookings[item.id] || { isDepositOnly: false };
+      const booking = getServiceBooking(item.id);
       // Inline calculation without nested useMemo
       const basePrice = Number(item?.price) || 0;
       const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => {
@@ -1177,7 +1033,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
       return sum + effectiveItemPrice;
     }, 0);
-  }, [items, serviceBookings, providerDepositPolicies, itemPromoDiscounts]);
+  }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
 
   const effectiveFinalTotal = useMemo(
     () => effectiveTotal + getServiceFee(),
@@ -1189,7 +1045,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // (where a promo only reduces the deposit proportionally).
   const effectiveTotalNoPromo = useMemo(() => {
     return items.reduce((sum, item) => {
-      const booking = serviceBookings[item.id] || { isDepositOnly: false };
+      const booking = getServiceBooking(item.id);
       const basePrice = Number(item?.price) || 0;
       const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => s + (Number(addOn?.price) || 0), 0);
       const itemTotalPrice = basePrice + addOnsTotal;
@@ -1203,7 +1059,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
       return sum + itemTotalPrice;
     }, 0);
-  }, [items, serviceBookings, providerDepositPolicies]);
+  }, [items, getServiceBooking, providerDepositPolicies]);
 
   const promoSavingsShown = useMemo(
     () => Math.max(0, effectiveTotalNoPromo - effectiveTotal),
@@ -1213,7 +1069,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Compute effective cart items for payment modal
   const effectiveCartItems = useMemo(() => {
     return items.map(item => {
-      const booking = serviceBookings[item.id] || { isDepositOnly: false };
+      const booking = getServiceBooking(item.id);
       const basePrice = Number(item?.price) || 0;
       const addOnsTotal = (item?.addOns || []).reduce((s: number, addOn: any) => {
         return s + (Number(addOn?.price) || 0);
@@ -1232,83 +1088,98 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       }
       return { item, effectivePrice, isDeposit: !!booking.isDepositOnly };
     });
-  }, [items, serviceBookings, providerDepositPolicies, itemPromoDiscounts]);
+  }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
 
-  // Booking state management
-  const updateServiceBooking = useCallback((itemId: string, updates: ServiceBooking) => {
-    try {
-      setServiceBookings(prev => ({
-        ...prev,
-        [itemId]: { ...prev[itemId], ...updates },
-      }));
-    } catch (error) {
-      logger.error('Error updating booking:', error);
-      setError('Failed to update booking');
-    }
+  const handleEditItem = useCallback((item: CartItem) => {
+    setEditingItem(item);
+    setShowBookingSheet(true);
   }, []);
 
-  const getServiceBooking = useCallback(
-    (itemId: string): ServiceBooking => {
-      return (
-        serviceBookings[itemId] || {
-          selectedDate: '',
-          selectedTime: '',
-          notes: '',
-          isDepositOnly: false, // ADD THIS
-        }
-      );
-    },
-    [serviceBookings]
-  );
+  // Opens the date/time picker for an auto-added required consultation as
+  // soon as it actually appears in the cart.
+  useEffect(() => {
+    if (!pendingConsultationSchedule) return;
+    const newItem = items.find(
+      i => i.providerId === pendingConsultationSchedule.providerId && i.serviceId === pendingConsultationSchedule.serviceId
+    );
+    if (newItem) {
+      handleEditItem(newItem);
+      setPendingConsultationSchedule(null);
+    }
+  }, [items, pendingConsultationSchedule, handleEditItem]);
 
-  // ADD THIS NEW FUNCTION RIGHT HERE (after getServiceBooking)
-  const getProviderScheduledCount = useCallback(
-    (providerItems: CartItem[]) => {
-      const scheduled = providerItems.filter(item => {
-        const booking = getServiceBooking(item.id);
-        return booking.selectedDate && booking.selectedTime;
-      }).length;
-
-      return {
-        scheduled,
-        total: providerItems.length,
-        isComplete: scheduled === providerItems.length,
-      };
-    },
-    [getServiceBooking]
-  );
-
-  const handleShowNotes = useCallback(
-    (
-      itemId: string,
-      serviceName: string,
-      providerName: string,
-      instanceNumber: number,
-      currentNotes: string
-    ) => {
-      setCurrentNotesItem({ itemId, serviceName, providerName, instanceNumber, currentNotes });
-      setShowNotesModal(true);
-    },
-    []
-  );
-
-  const handleSaveNotes = useCallback(
-    (notes: string) => {
-      if (currentNotesItem) {
-        try {
-          const currentBooking = getServiceBooking(currentNotesItem.itemId);
-          updateServiceBooking(currentNotesItem.itemId, {
-            ...currentBooking,
-            notes: notes.trim(),
-          });
-        } catch (error) {
-          logger.error('Error saving notes:', error);
-          showAlert('Couldn\'t save your note', 'Please try again.');
-        }
+  const handleBookingSheetEditSubmit = useCallback(
+    (result: BookingSheetResult) => {
+      if (!editingItem) return;
+      try {
+        updateCartItem(editingItem.id, {
+          addOns: result.selectedAddOns,
+          selectedDate: result.date,
+          selectedTime: result.time,
+          notes: result.notes,
+          isDepositOnly: result.isDepositOnly,
+        });
+      } catch (error) {
+        logger.error('Error saving booking edit:', error);
+        showAlert("Couldn't save your changes", 'Please try again.');
       }
     },
-    [currentNotesItem, getServiceBooking, updateServiceBooking, showAlert]
+    [editingItem, updateCartItem, showAlert]
   );
+
+  // "Schedule together" — find one day where every service in this
+  // provider's cart section fits back-to-back, instead of the client
+  // picking a time for each service individually and hoping they don't
+  // clash (or worse, discovering the clash only after paying). Order
+  // follows how the services already appear in the cart.
+  const [isSchedulingTogether, setIsSchedulingTogether] = useState(false);
+  const handleScheduleTogether = useCallback(async (providerItems: CartItem[]) => {
+    if (providerItems.length < 2) return;
+    setIsSchedulingTogether(true);
+    try {
+      const providerKey = providerItems[0]!.providerId ?? providerItems[0]!.providerName;
+      const result = await AvailabilityService.findNextBackToBackDay(
+        providerKey,
+        providerItems.map(item => ({ serviceId: item.serviceId, duration: item.duration }))
+      );
+      if (!result) {
+        showAlert(
+          'No Availability Found',
+          "We couldn't find a day in the next couple of weeks with room for all these services back-to-back. Try scheduling them individually instead."
+        );
+        return;
+      }
+      const displayDate = new Date(result.date + 'T12:00:00').toLocaleDateString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long',
+      });
+      const summary = providerItems
+        .map((item, i) => `${item.serviceName}: ${result.schedule[i]!.time}`)
+        .join('\n');
+      showConfirm(
+        `Schedule for ${displayDate}?`,
+        summary,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Schedule All',
+            onPress: () => {
+              providerItems.forEach((item, i) => {
+                updateCartItem(item.id, {
+                  selectedDate: result.date,
+                  selectedTime: result.schedule[i]!.time,
+                });
+              });
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      logger.error('Error scheduling services together:', error);
+      showAlert("Couldn't find a shared time", 'Please try again or schedule these individually.');
+    } finally {
+      setIsSchedulingTogether(false);
+    }
+  }, [showAlert, showConfirm, updateCartItem]);
 
   // Detect if any provider in the cart is mobile (travels to client)
   useEffect(() => {
@@ -1319,18 +1190,31 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       .catch(() => setHasMobileProvider(false));
   }, [items]);
 
-  // Auto-expand the provider a service was just added under, so the cart
-  // opens on it already dropped down instead of making the client tap the
-  // header to see what they just added. New items are appended to the end
-  // of the array (see CartContext ADD_ITEM), so a growing items array means
-  // the last entry is the newest one.
-  const prevItemsLengthRef = useRef(0);
+  // Detect providers that require a consultation before a new client's first
+  // booking, which of those the client already has booking history with, and
+  // which cart items are themselves consultation services.
   useEffect(() => {
-    if (items.length > prevItemsLengthRef.current) {
-      const lastItem = items[items.length - 1];
-      if (lastItem) setExpandedProvider(lastItem.providerName);
+    if (items.length === 0) {
+      setConsultationRequiredProviderIds(new Set());
+      setProvidersWithHistory(new Set());
+      setConsultationServiceIds(new Set());
+      return;
     }
-    prevItemsLengthRef.current = items.length;
+    const providerIds = [...new Set(items.map(i => i.providerId).filter((id): id is string => !!id))];
+    const serviceIds = [...new Set(items.map(i => i.serviceId).filter((id): id is string => !!id && UUID_RE.test(id)))];
+
+    getConsultationRequiredProviderIds(providerIds)
+      .then(async requiredSet => {
+        setConsultationRequiredProviderIds(requiredSet);
+        if (requiredSet.size === 0) { setProvidersWithHistory(new Set()); return; }
+        const historySet = await getProviderIdsWithBookingHistory([...requiredSet]);
+        setProvidersWithHistory(historySet);
+      })
+      .catch(() => { setConsultationRequiredProviderIds(new Set()); setProvidersWithHistory(new Set()); });
+
+    getConsultationServiceIds(serviceIds)
+      .then(setConsultationServiceIds)
+      .catch(() => setConsultationServiceIds(new Set()));
   }, [items]);
 
   // Navigation handlers - BACK TO HOME
@@ -1352,7 +1236,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         onPress: () => {
           try {
             clearCart();
-            setServiceBookings({});
             setError(null);
           } catch (error) {
             logger.error('Error clearing cart:', error);
@@ -1373,6 +1256,64 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       logger.log('CHECKOUT - Starting...');
       logger.log('Items in cart:', items.length);
       logger.log('Items:', items.map(i => i.serviceName));
+    }
+
+    // Providers who require a consultation before a new client's first
+    // booking: auto-add their consultation service to the cart and open its
+    // date/time picker immediately (via pendingConsultationSchedule, handled
+    // in the effect above) rather than blocking with nowhere to go, or
+    // silently adding it and hoping the client finds it themselves.
+    if (consultationRequiredProviderIds.size > 0) {
+      const needsConsultation = items.filter(item => {
+        if (!item.providerId || !consultationRequiredProviderIds.has(item.providerId)) return false;
+        if (item.serviceId && consultationServiceIds.has(item.serviceId)) return false; // this item IS the consultation
+        if (providersWithHistory.has(item.providerId)) return false; // already a returning client
+        const bookingConsultationInCart = items.some(
+          other => other.providerId === item.providerId && other.serviceId && consultationServiceIds.has(other.serviceId)
+        );
+        return !bookingConsultationInCart;
+      });
+      // One at a time — if a client somehow needs consultations with two
+      // different providers in the same cart, they'll get prompted for the
+      // second on their next checkout attempt after finishing the first.
+      const triggeringItem = needsConsultation[0];
+      if (triggeringItem?.providerId) {
+        const providerLabel = triggeringItem.providerDisplayName ?? triggeringItem.providerName;
+        const consultService = await getProviderConsultationService(triggeringItem.providerId);
+        setIsLoading(false);
+        if (!consultService) {
+          showAlert(
+            'Consultation Required',
+            `${providerLabel} requires a consultation before a new client's first booking but hasn't set one up yet — please message them directly.`
+          );
+          return;
+        }
+        const mins = consultService.durationMinutes;
+        const durationLabel = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h${mins % 60 ? ` ${mins % 60}min` : ''}`;
+        addToCart({
+          providerName: triggeringItem.providerName,
+          providerDisplayName: triggeringItem.providerDisplayName,
+          providerSlug: triggeringItem.providerSlug,
+          providerId: triggeringItem.providerId,
+          providerImage: triggeringItem.providerImage,
+          providerService: consultService.categoryName,
+          service: {
+            id: consultService.id,
+            name: consultService.name,
+            price: consultService.price,
+            duration: durationLabel,
+            description: consultService.description,
+          },
+          quantity: 1,
+        });
+        // No alert here — BookingSheet opens right after (via the effect
+        // above once the new item lands in `items`) and its own header
+        // shows the consultation's name and price, which is enough to tell
+        // the client what's happening without stacking two modals at once
+        // (unreliable on Android, per BookingSheet's own opening comment).
+        setPendingConsultationSchedule({ providerId: triggeringItem.providerId, serviceId: consultService.id });
+        return;
+      }
     }
 
     // Validate all items have schedules
@@ -1400,6 +1341,31 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       return;
     }
 
+    // Catch scheduling conflicts — two cart items for the same provider that
+    // overlap each other, or a slot that's since been taken by someone else's
+    // booking in Supabase — BEFORE the payment sheet opens. Without this,
+    // the first conflict either of those produces is only discovered by
+    // createBooking()'s own insert-time check, mid-checkout, after the card
+    // has already been authorised.
+    const conflictCheck = await AvailabilityService.validateCartBookings(
+      items.map(item => {
+        const booking = getServiceBooking(item.id);
+        return {
+          providerName: item.providerId ?? item.providerName,
+          date: booking.selectedDate,
+          time: booking.selectedTime,
+          duration: item.duration,
+          cartItemId: item.id,
+          serviceId: item.serviceId,
+        };
+      })
+    );
+    if (!conflictCheck.isValid) {
+      const messages = [...new Set(conflictCheck.conflicts.map(c => c.message))].join('\n');
+      showAlert('Scheduling Conflict', messages);
+      return;
+    }
+
     // ✅ CAPTURE SNAPSHOT OF ITEMS AND BOOKINGS
     if (__DEV__) {
       logger.log('Capturing checkout snapshot...');
@@ -1407,7 +1373,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // Bake promo discounts into the snapshot so the discounted price flows
     // through validation, payment, and the saved booking. A note on the
     // booking tells the provider which code was redeemed.
-    const snapshotBookings: typeof serviceBookings = { ...serviceBookings };
+    const snapshotBookings: Record<string, ServiceBooking> = { ...bookingsByItemId };
     const snapshotItems = items.map(item => {
       const discount = itemPromoDiscounts[item.id] ?? 0;
       if (discount <= 0) return item;
@@ -1417,7 +1383,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       snapshotBookings[item.id] = {
         ...(existing ?? { selectedDate: '', selectedTime: '', isDepositOnly: false }),
         notes: [existing?.notes, promoNote].filter(Boolean).join('\n'),
-      } as typeof serviceBookings[string];
+      } as ServiceBooking;
       return { ...item, price: Math.max(0, (Number(item.price) || 0) - discount) };
     });
     const snapshot = {
@@ -1444,7 +1410,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, serviceBookings, user, appliedPromos, itemPromoDiscounts, showAlert]);
+}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, consultationRequiredProviderIds, consultationServiceIds, providersWithHistory, addToCart]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -1467,16 +1433,19 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const customerInfo = { name: reviewName, email: reviewEmail, phone: reviewPhone };
     setConfirmedCustomerInfo(customerInfo);
 
-    // If "Set as Default" is checked, update AuthContext
+    // If "Set as Default" is checked, update AuthContext. Email is excluded —
+    // account email isn't editable, and updateUser() only persists name/phone
+    // to the DB, so including it here silently desyncs local user.email from
+    // the real auth email without ever actually changing it server-side.
     if (saveAsDefault) {
-      await updateUser({ name: reviewName, email: reviewEmail, phone: reviewPhone });
+      await updateUser({ name: reviewName, phone: reviewPhone });
     }
 
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
   }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showAlert, hasMobileProvider, clientAddress]);
 
-const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
+const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIntentId?: string) => {
   if (__DEV__) {
     logger.log('═══════════════════════════════════════');
     logger.log('PAYMENT SUCCESS - FUNCTION CALLED');
@@ -1555,8 +1524,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
       logger.log('---');
     }
 
-    // Stamp payment method on every appointment entry
-    appointmentData = appointmentData.map(a => ({ ...a, paymentMethod }));
+    // Stamp payment method + the real Stripe PaymentIntent id (when using
+    // StripePaymentModal — undefined/omitted for the mock PaymentModal) on
+    // every appointment entry. One PaymentIntent covers the whole checkout
+    // total, shared across every booking created from it (group checkout).
+    appointmentData = appointmentData.map(a => ({
+      ...a,
+      paymentMethod,
+      ...(paymentIntentId ? { paymentIntentId } : {}),
+    }));
 
     // Fetch client health data so the provider sees it immediately on the booking.
     // Allergies and medical notes are critical for the provider before accepting.
@@ -1679,7 +1655,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
     title: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
     providerName: { fontSize: 12, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 2 },
     providerStats: { fontSize: 9, fontFamily: 'Jura-VariableFont_wght bold', fontWeight: '500', color: theme.secondaryText, marginTop: 3 },
-    expandIcon: { fontSize: 10, color: theme.text },
     serviceName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
     serviceDuration: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 6 },
     addOnsTitle: { fontSize: 9, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 5 },
@@ -1713,6 +1688,17 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
     liquidGlassSuccessTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18, color: theme.text, marginBottom: 6, textAlign: 'center' },
     liquidGlassSuccessButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: theme.text, fontWeight: '600' },
   }), [theme]);
+
+  // Most items now arrive pre-scheduled from the provider profile — only
+  // show the multi-booking scheduling guide when there's still something
+  // in the cart that actually needs a date/time picked.
+  const hasUnscheduledItems = useMemo(
+    () => items.some(item => {
+      const booking = getServiceBooking(item.id);
+      return !booking.selectedDate || !booking.selectedTime;
+    }),
+    [items, getServiceBooking]
+  );
 
   return (
     <ErrorBoundary>
@@ -1766,7 +1752,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
           )}
 
           {/* Confirm Your Details Modal */}
-          <Modal visible={showReviewModal} animationType="slide" transparent={true}>
+          <Modal visible={showReviewModal} animationType="fade" transparent={true}>
             <View style={styles.modalOverlayNoBlur}>
               <View style={[styles.reviewModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
                 <View style={styles.reviewModalContent}>
@@ -1923,7 +1909,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
           </Modal>
 
           {/* Booking Summary Modal */}
-          <Modal visible={showBookingSummaryModal} animationType="slide" transparent={true}>
+          <Modal visible={showBookingSummaryModal} animationType="fade" transparent={true}>
             <View style={styles.modalOverlayNoBlur}>
               <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
                 <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
@@ -2033,20 +2019,24 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
           </Modal>
 
           {/* Payment Modal - PASS EFFECTIVE ITEMS & TOTAL */}
-          <PaymentModal
-            isVisible={showPaymentModal}
-            onClose={() => setShowPaymentModal(false)}
-            effectiveCartItems={effectiveCartItems}
-            totalAmount={effectiveFinalTotal}
-            onPaymentSuccess={(method) => handlePaymentSuccess(method)}
-            onPaymentComplete={() => {
-              clearCart(); // Clear cart immediately after payment simulation
-              setServiceBookings({}); // Clear bookings state
-              setShowPaymentModal(false);
-              setShowPaymentSuccessModal(true);
-            }}
-            onBookingFailed={(message) => showAlert('Booking Failed', message)}
-          />
+          {(() => {
+            const ActivePaymentModal = USE_STRIPE_PAYMENTS ? StripePaymentModal : PaymentModal;
+            return (
+              <ActivePaymentModal
+                isVisible={showPaymentModal}
+                onClose={() => setShowPaymentModal(false)}
+                effectiveCartItems={effectiveCartItems}
+                totalAmount={effectiveFinalTotal}
+                onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
+                onPaymentComplete={() => {
+                  clearCart(); // Clear cart immediately after payment simulation
+                  setShowPaymentModal(false);
+                  setShowPaymentSuccessModal(true);
+                }}
+                onBookingFailed={(message) => showAlert('Booking Failed', message)}
+              />
+            );
+          })()}
 
           {/* Liquid Glass Payment Success Modal - ADDED CONTINUE SHOPPING BUTTON */}
           {showPaymentSuccessModal && (
@@ -2096,16 +2086,35 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
             </Modal>
           )}
 
-          {/* Notes Modal */}
-          {currentNotesItem && (
-            <NotesModal
-              isVisible={showNotesModal}
-              onClose={() => setShowNotesModal(false)}
-              onSave={handleSaveNotes}
-              serviceName={currentNotesItem.serviceName}
-              providerName={currentNotesItem.providerName}
-              instanceNumber={currentNotesItem.instanceNumber}
-              currentNotes={currentNotesItem.currentNotes}
+          {/* Edit a cart item's booking — same sheet used to add it from the
+              provider profile, pre-filled with what's already set. */}
+          {editingItem && (
+            <BookingSheet
+              isVisible={showBookingSheet}
+              onClose={() => setShowBookingSheet(false)}
+              mode="edit"
+              service={{
+                id: editingItem.serviceId,
+                dbId: editingItem.serviceId,
+                name: editingItem.serviceName,
+                price: editingItem.price,
+                duration: editingItem.duration,
+                description: editingItem.serviceDescription,
+              }}
+              onSubmit={handleBookingSheetEditSubmit}
+              adaptiveAccentColor={P.accent}
+              backgroundColor={P.card}
+              providerIdentifier={editingItem.providerId ?? editingItem.providerDisplayName ?? editingItem.providerName}
+              providerDisplayName={editingItem.providerDisplayName ?? editingItem.providerName}
+              providerKey={editingItem.providerName}
+              providerServiceCategory={editingItem.providerService}
+              initial={{
+                selectedAddOns: editingItem.addOns ?? [],
+                selectedDate: editingItem.selectedDate,
+                selectedTime: editingItem.selectedTime,
+                notes: editingItem.notes,
+                isDepositOnly: editingItem.isDepositOnly,
+              }}
             />
           )}
 
@@ -2127,9 +2136,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
           >
             {items.length > 0 ? (
               <>
-                {/* Provider Sections */}
+                {/* Provider Sections — always shown, no expand/collapse */}
                 {Object.entries(itemsByProvider).map(([providerName, providerItems]) => {
-                  const isExpanded = expandedProvider === providerName;
                   const providerData = bookingSummary.providers?.[providerName];
 
                   if (!providerData || !providerItems?.length) return null;
@@ -2137,34 +2145,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                   return (
                     <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                       {/* Provider Header */}
-                      <TouchableOpacity
-                        style={styles.providerHeader}
-                        onPress={() => setExpandedProvider(isExpanded ? null : providerName)}
-                      >
-                        {(() => {
-                          const scheduleStatus = getProviderScheduledCount(providerItems);
-                          return (
-                            <View
-                              style={[
-                                styles.scheduledTag,
-                                scheduleStatus.isComplete
-                                  ? styles.scheduledTagComplete
-                                  : styles.scheduledTagIncomplete,
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.scheduledTagText,
-                                  scheduleStatus.isComplete
-                                    ? styles.scheduledTagTextComplete
-                                    : styles.scheduledTagTextIncomplete,
-                                ]}
-                              >
-                                SCHEDULED {scheduleStatus.scheduled}/{scheduleStatus.total}
-                              </Text>
-                            </View>
-                          );
-                        })()}
+                      <View style={styles.providerHeader}>
+                        <TouchableOpacity
+                          style={[styles.headerEditButton, { borderColor: P.accent }]}
+                          onPress={() => providerItems[0] && handleEditItem(providerItems[0])}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="pencil-outline" size={12} color={P.accent} />
+                          <Text style={[styles.headerEditButtonText, { color: P.accent }]}>Edit</Text>
+                        </TouchableOpacity>
 
                         <TouchableOpacity onPress={() => navigateToProvider(providerItems)}>
                           <View style={styles.providerLogoContainer}>
@@ -2196,44 +2185,52 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                             {providerData.total.toFixed(2)}
                           </Text>
                         </View>
+                      </View>
 
-                        <Text style={[dynamicStyles.expandIcon, isExpanded && styles.expandIconRotated]}>
-                          ▼
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* Services List */}
-                      {isExpanded && (
-                        <View style={styles.servicesList}>
-                          {providerItems.map((item, index) => (
-                            <View key={item.id} style={styles.serviceItemWrapper}>
-                              <ServiceCard
-                                item={item}
-                                serviceBooking={getServiceBooking(item.id)}
-                                onUpdateBooking={updateServiceBooking}
-                                onRemove={removeFromCart}
-                                onShowNotes={handleShowNotes}
-                                providerName={providerName}
-                                allCartItems={items}
-                                {...(providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] !== undefined
-                                  ? { depositPolicy: providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] }
-                                  : {})}
-                              />
-                              {/* Visual Separator */}
-                              {index < providerItems.length - 1 && (
-                                <View style={styles.serviceSeparator} />
-                              )}
-                            </View>
-                          ))}
-                          <ProviderPromoRow
-                            providerKey={providerName}
-                            {...(appliedPromos[providerName] !== undefined ? { appliedPromo: appliedPromos[providerName] } : {})}
-                            discount={providerItems.reduce((s, it) => s + (itemPromoDiscounts[it.id] ?? 0), 0)}
-                            onApply={handleApplyPromoToProvider}
-                            onRemove={handleRemovePromoFromProvider}
-                          />
-                        </View>
+                      {/* Multiple services with this one provider — offer to find one
+                          day where they all fit back-to-back, instead of the client
+                          scheduling each one individually and hoping they don't clash. */}
+                      {providerItems.length > 1 && (
+                        <TouchableOpacity
+                          style={[styles.scheduleTogetherButton, { borderColor: P.accent }]}
+                          onPress={() => handleScheduleTogether(providerItems)}
+                          disabled={isSchedulingTogether}
+                          activeOpacity={0.8}
+                        >
+                          {isSchedulingTogether ? (
+                            <ActivityIndicator size="small" color={P.accent} />
+                          ) : (
+                            <>
+                              <Ionicons name="calendar-outline" size={14} color={P.accent} />
+                              <Text style={[styles.scheduleTogetherText, { color: P.accent }]}>
+                                Schedule all {providerItems.length} together
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
                       )}
+
+                      {/* Services List — always visible, breakdown included on each card */}
+                      <View style={styles.servicesList}>
+                        {providerItems.map((item, index) => (
+                          <View key={item.id} style={styles.serviceItemWrapper}>
+                            <ServiceCard
+                              item={item}
+                              bookingInfo={getServiceBooking(item.id)}
+                              onRemove={removeFromCart}
+                              onEdit={handleEditItem}
+                              allCartItems={items}
+                              {...(providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] !== undefined
+                                ? { depositPolicy: providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] }
+                                : {})}
+                            />
+                            {/* Visual Separator */}
+                            {index < providerItems.length - 1 && (
+                              <View style={styles.serviceSeparator} />
+                            )}
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   );
                 })}
@@ -2301,26 +2298,29 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string) => {
                   )}
                 </TouchableOpacity>
 
-                {/* Multi-booking guide — every service line schedules its own
-                    date/time independently, including across different
-                    providers, which isn't obvious from the cart alone. */}
-                <View style={styles.multiBookingGuide}>
-                  <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>
-                    Booking more than one service?
-                  </Text>
-                  <View style={styles.multiBookingGuideList}>
-                    {[
-                      'Each service above gets its own appointment time',
-                      'Mix services from different providers in one cart',
-                      'Set a date and time for every service, then check out once',
-                    ].map((tip) => (
-                      <View key={tip} style={styles.multiBookingGuideRow}>
-                        <Text style={[styles.multiBookingGuideTick, { color: P.accent }]}>✓</Text>
-                        <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
-                      </View>
-                    ))}
+                {/* Multi-booking guide — only relevant once there's still an
+                    unscheduled item; items added from the provider profile
+                    already arrive with their own date/time, so this stays
+                    hidden for the now-common fully-scheduled cart. */}
+                {hasUnscheduledItems && (
+                  <View style={styles.multiBookingGuide}>
+                    <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>
+                      Booking more than one service?
+                    </Text>
+                    <View style={styles.multiBookingGuideList}>
+                      {[
+                        'Each service above gets its own appointment time',
+                        'Mix services from different providers in one cart',
+                        'Set a date and time for every service, then check out once',
+                      ].map((tip) => (
+                        <View key={tip} style={styles.multiBookingGuideRow}>
+                          <Text style={[styles.multiBookingGuideTick, { color: P.accent }]}>✓</Text>
+                          <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                </View>
+                )}
               </>
             ) : (
               <View style={styles.emptyCart}>
@@ -2465,6 +2465,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
   },
+  scheduleTogetherButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    borderStyle: 'dashed',
+  },
+  scheduleTogetherText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   providerLogo: {
     width: dimensions.providerLogo.size + 10,
     height: dimensions.providerLogo.size + 10,
@@ -2492,35 +2508,25 @@ const styles = StyleSheet.create({
     color: '#AF9197',
     fontWeight: 'bold',
   },
-  // ADD ALL THESE STYLES RIGHT HERE:
-  scheduledTag: {
+  // Header Edit button — replaces the old "SCHEDULED X/Y" pill; opens
+  // BookingSheet for this provider's (first) cart item.
+  headerEditButton: {
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1,
+    borderWidth: 1.5,
     zIndex: 10,
   },
-  scheduledTagIncomplete: {
-    backgroundColor: 'rgba(158,158,158,0.15)',
-    borderColor: 'rgba(158,158,158,0.3)',
-  },
-  scheduledTagComplete: {
-    backgroundColor: 'rgba(76,175,80,0.15)',
-    borderColor: 'rgba(76,175,80,0.3)',
-  },
-  scheduledTagText: {
+  headerEditButtonText: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'BakbakOne-Regular',
     fontWeight: 'bold',
-  },
-  scheduledTagTextIncomplete: {
-    color: '#757575',
-  },
-  scheduledTagTextComplete: {
-    color: '#2E7D32',
   },
   providerInfo: {
     flex: 1,
@@ -2537,13 +2543,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'rgba(0,0,0,0.6)',
     marginTop: spacing.sm,
-  },
-  expandIcon: {
-    fontSize: fonts.serviceTag,
-    color: '#000',
-  },
-  expandIconRotated: {
-    transform: [{ rotate: '180deg' }],
   },
 
   // Services List
@@ -2591,56 +2590,42 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: spacing.xs,
   },
-  servicePrice: {
-    fontSize: fonts.title.small,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#AF9197',
-    marginBottom: spacing.xs,
-  },
-  serviceDuration: {
-    fontSize: fonts.locationText,
-    fontFamily: 'Jura-VariableFont_wght',
-    color: 'rgba(0,0,0,0.6)',
-    marginBottom: spacing.md,
-  },
-  addOnsContainer: {
-    backgroundColor: 'rgba(175,145,151,0.1)',
+  // Booking breakdown — itemised base price, add-ons, duration, and payment
+  // split. Replaces the old scattered price/duration/add-ons text.
+  breakdownContainer: {
     padding: spacing.md,
     borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1,
-    borderColor: 'rgba(175,145,151,0.25)',
-    marginTop: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.md,
   },
-  addOnsTitle: {
-    fontSize: fonts.body.small,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-    marginBottom: spacing.sm,
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
   },
-  baseServicePrice: {
+  breakdownLabel: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    flexShrink: 1,
+    marginRight: spacing.sm,
+  },
+  breakdownValue: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght bold',
-    color: 'rgba(0,0,0,0.8)',
-    marginBottom: spacing.xs,
-    fontWeight: '300',
   },
-  addOnItem: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght bold',
-    color: 'rgba(0,0,0,0.7)',
-    marginBottom: spacing.xs,
-    paddingLeft: spacing.xs,
+  breakdownDivider: {
+    height: 1,
+    marginVertical: spacing.xs,
   },
-  addOnsTotalContainer: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(175,145,151,0.25)',
-    paddingTop: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  addOnsTotal: {
+  breakdownTotalLabel: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
-    color: '#AF9197',
+    fontWeight: '700',
+  },
+  breakdownTotalValue: {
+    fontSize: fonts.body.small,
+    fontFamily: 'BakbakOne-Regular',
     fontWeight: '700',
   },
   removeButton: {
@@ -2659,246 +2644,48 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // Schedule Button - slightly smaller
-  scheduleButton: {
-    backgroundColor: 'rgba(244,67,54,0.1)',
+  // Schedule row — date/time on the left, doubles as the item's Edit
+  // trigger (tap anywhere on it) instead of a separate Edit button below.
+  bookingSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76,175,80,0.1)',
     borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.sm,
-    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.3)',
+  },
+  bookingSummaryRowWarning: {
+    backgroundColor: 'rgba(244,67,54,0.1)',
     borderColor: 'rgba(244,67,54,0.3)',
   },
-  scheduleButtonShadow: {
-    shadowColor: '#F44336',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  scheduleButtonScheduled: {
-    backgroundColor: 'rgba(76,175,80,0.1)',
-    borderColor: 'rgba(76,175,80,0.3)',
-    shadowColor: '#4CAF50',
-  },
-  scheduleButtonText: {
+  bookingSummaryText: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
+    color: '#2E7D32',
+    fontWeight: 'bold',
+    flexShrink: 1,
+    marginRight: spacing.sm,
+  },
+  bookingSummaryTextWarning: {
     color: '#D32F2F',
-    textAlign: 'center',
-    fontWeight: 'bold',
   },
-  scheduleButtonTextScheduled: {
-    color: '#2E7D32',
-  },
-
-  // Deposit Toggle Styles - slightly smaller
-  depositToggle: {
-    marginBottom: spacing.xs,
-  },
-  depositToggleLabel: {
-    fontSize: fonts.body.small,
-    fontFamily: 'Jura-VariableFont_wght bold',
-    fontWeight: '300',
-    color: '#333',
-    marginBottom: spacing.md,
-  },
-  depositButtons: {
+  bookingSummaryEdit: {
     flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  depositOptionButton: {
-    flex: 1,
-    padding: spacing.xs,
-    borderRadius: dimensions.card.smallBorderRadius,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderWidth: 1,
-    borderColor: 'transparent',
     alignItems: 'center',
+    gap: 4,
   },
-  depositOptionButtonActive: {
-    backgroundColor: 'rgba(175,145,151,0.14)',
-    borderColor: '#AF9197',
-  },
-  depositOptionText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'BakbakOne-Regular',
-    color: 'rgba(0,0,0,0.6)',
-  },
-  depositOptionTextActive: {
-    color: '#AF9197',
-    fontWeight: '700',
-  },
-  depositInfo: {
-    marginTop: spacing.lg,
-    padding: spacing.sm,
-    backgroundColor: 'rgba(76,175,80,0.1)',
-    borderRadius: dimensions.card.smallBorderRadius,
-  },
-  depositInfoText: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'Jura-VariableFont_wght bold',
-    fontWeight: '700',
-    color: '#2E7D32',
-    marginBottom: spacing.xs,
-  },
-  depositRemainingText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght bold',
-    color: 'rgba(0,0,0,0.7)',
-  },
-
-  // Calendar Container
-  calendarContainer: {
-    marginBottom: spacing.sm,
-  },
-
-  // Fallback Calendar
-  fallbackCalendar: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  fallbackTitle: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-  },
-  fallbackLabel: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'Jura-VariableFont_wght',
-    color: '#333',
-    marginBottom: spacing.xs,
-    marginTop: spacing.md,
-  },
-  fallbackInput: {
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.2)',
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.md,
-    fontSize: fonts.body.medium,
-    backgroundColor: '#fff',
-  },
-  fallbackButton: {
-    backgroundColor: '#AF9197',
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  fallbackButtonText: {
-    color: '#fff',
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: fonts.buttonText.small,
-  },
-
-  // Notes Button - slightly smaller
-  notesButton: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.sm,
-    marginTop: spacing.xs,
-    borderWidth: 1,
-  },
-  notesButtonEmpty: {
-    backgroundColor: 'rgba(175,145,151,0.1)',
-    borderColor: 'rgba(175,145,151,0.3)',
-  },
-  notesButtonWithContent: {
-    backgroundColor: 'rgba(175,145,151,0.1)',
-    borderColor: 'rgba(175,145,151,0.3)',
-  },
-  notesButtonText: {
+  bookingSummaryEditText: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
-    textAlign: 'center',
     fontWeight: 'bold',
+    color: '#2E7D32',
   },
-  notesButtonTextEmpty: {
-    color: '#AF9197',
-  },
-  notesButtonTextWithContent: {
-    color: '#AF9197',
-  },
-
-  // Notes Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notesModal: {
-    width: '90%',
-    backgroundColor: 'rgba(255, 255, 255, 0.78)',
-    borderRadius: dimensions.card.borderRadius,
-    padding: spacing.xl,
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 25,
-    elevation: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-  },
-  notesHeader: {
-    marginBottom: spacing.lg,
-  },
-  notesTitle: {
-    fontSize: fonts.title.small,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-    marginBottom: spacing.xs,
-  },
-  notesSubtitle: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'Jura-VariableFont_wght',
-    color: 'rgba(0,0,0,0.6)',
-  },
-  notesInput: {
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.2)',
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.md,
-    height: 120,
-    textAlignVertical: 'top',
-    marginBottom: spacing.sm,
-    fontSize: fonts.body.medium,
-  },
-  characterCount: {
+  notesPreview: {
     fontSize: fonts.body.xsmall,
-    color: 'rgba(0,0,0,0.5)',
-    textAlign: 'right',
-    marginBottom: spacing.lg,
-  },
-  notesFooter: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontSize: fonts.body.large,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: '#AF9197',
-    borderRadius: dimensions.card.smallBorderRadius,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  saveText: {
-    fontSize: fonts.body.large,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#fff',
+    marginBottom: spacing.sm,
   },
 
   // Disabled Button State

@@ -7,7 +7,9 @@
     "userInterfaceStyle": "light",
     "scheme": "cerviced",
     "icon": "./assets/icon.png",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cerviced.app",
@@ -41,7 +43,10 @@
         }
       }
     },
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "plugins": [
       "expo-video",
       "expo-font",
@@ -67,6 +72,13 @@
           "url": "https://sentry.io/",
           "project": "react-native",
           "organization": "cerviced"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.cerviced",
+          "enableGooglePay": true
         }
       ]
     ],

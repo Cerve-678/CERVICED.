@@ -1,5 +1,5 @@
 // src/screens/auth/LoginScreen.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { validateEmail } from '../../utils/validation';
 import { supabase } from '../../lib/supabase';
@@ -49,16 +50,24 @@ export default function LoginScreen({ navigation }: Props) {
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
 
-  useEffect(() => {
+  // useFocusEffect (not a mount-only useEffect) — a failed login attempt
+  // doesn't unmount this screen, and a stale one-time check could otherwise
+  // get stuck reporting "unavailable" for the rest of that session even
+  // after Face ID becomes available. Re-checking on every focus self-heals.
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
     (async () => {
       const available = await isBiometricAvailable();
+      if (cancelled) return;
+      setBiometricAvailable(available);
       if (!available) return;
       const [enabled, label] = await Promise.all([isBiometricEnabled(), getBiometricLabel()]);
-      setBiometricAvailable(true);
+      if (cancelled) return;
       setBiometricEnabled(enabled);
       setBiometricLabel(label);
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, []));
 
   // Shared by every successful sign-in path (password, Apple) — offers to
   // remember this device via biometrics instead of typing credentials again.

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { usePlannerStore } from '../stores/usePlannerStore';
 import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
-import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
+import { fonts, spacing } from '../constants/PlatformDimensions';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -26,8 +25,7 @@ interface ImageDetailModalProps {
   item: PortfolioItem | null;
   onClose: () => void;
   onViewProfile: (providerId: string, providerName: string, providerService: string, providerLogo: any) => void;
-  onBookNow: (providerId: string, providerName: string, providerService: string, providerLogo: any) => void;
-  onPlanThis: (item: PortfolioItem) => void;
+  onBookNow: (providerId: string, providerName: string, providerService: string, providerLogo: any, serviceId?: string) => void;
 }
 
 export const ImageDetailModal = ({
@@ -36,18 +34,16 @@ export const ImageDetailModal = ({
   onClose,
   onViewProfile,
   onBookNow,
-  onPlanThis,
 }: ImageDetailModalProps) => {
   const { theme, isDarkMode } = useTheme();
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } = useBookmarkStore();
-  const { activeEventId, getActiveEvent } = usePlannerStore();
 
   if (!item) return null;
 
   const hasProvider = !!item.providerName;
   const isSaved = isPortfolioSaved(item.id);
-  const activeEvent = getActiveEvent();
-  const imageHeight = Math.min(SCREEN_HEIGHT * 0.45, SCREEN_WIDTH * item.aspectRatio);
+  // aspectRatio is stored as width/height, so height = width / ratio.
+  const imageHeight = Math.min(SCREEN_HEIGHT * 0.45, SCREEN_WIDTH / item.aspectRatio);
 
   const handleBookmark = () => {
     if (isSaved) {
@@ -69,28 +65,27 @@ export const ImageDetailModal = ({
     if (hasProvider) {
       onClose();
       const logoSource = item.providerLogoUri ? { uri: item.providerLogoUri } : null;
-      onBookNow(item.providerSlug ?? item.providerId, item.providerName ?? '', item.category, logoSource);
+      onBookNow(item.providerSlug ?? item.providerId, item.providerName ?? '', item.category, logoSource, item.serviceId);
     }
-  };
-
-  const handlePlanThis = () => {
-    onPlanThis(item);
   };
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
         <TouchableOpacity style={styles.backdropTouch} onPress={onClose} activeOpacity={1} />
 
         <View style={[styles.container, { backgroundColor: theme.background }]}>
+          {/* Drag handle */}
+          <View style={styles.dragHandle} />
+
           {/* Close button */}
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.closeBlur}>
+            <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.iconBlur}>
               <Text style={[styles.closeText, { color: theme.text }]}>✕</Text>
             </BlurView>
           </TouchableOpacity>
@@ -101,11 +96,23 @@ export const ImageDetailModal = ({
             contentContainerStyle={styles.scrollContent}
           >
             {/* Image */}
-            <Image
-              source={item.image}
-              style={[styles.image, { height: imageHeight }]}
-              resizeMode="cover"
-            />
+            <View style={styles.imageWrapper}>
+              <Image
+                source={item.image}
+                style={[styles.image, { height: imageHeight }]}
+                resizeMode="cover"
+                fadeDuration={0}
+              />
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleBookmark}
+                activeOpacity={0.8}
+              >
+                <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.iconBlur}>
+                  <TabIcon name="heart" size={16} color={isSaved ? '#a342c3ff' : '#FFFFFF'} />
+                </BlurView>
+              </TouchableOpacity>
+            </View>
 
             {/* Info card */}
             <View style={[styles.infoCard, { backgroundColor: theme.cardBackground }]}>
@@ -117,6 +124,7 @@ export const ImageDetailModal = ({
                       source={{ uri: item.providerLogoUri }}
                       style={styles.providerLogo}
                       resizeMode="cover"
+                      fadeDuration={0}
                     />
                   ) : (
                     <View style={[styles.providerLogo, { backgroundColor: isDarkMode ? '#333' : '#F0F0F0' }]} />
@@ -166,80 +174,40 @@ export const ImageDetailModal = ({
                 </View>
               )}
 
-              {/* Divider */}
-              <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-              {/* Plan This button */}
-              <TouchableOpacity
-                style={styles.planThisButton}
-                onPress={handlePlanThis}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={['#e8a0f0', '#c76be0']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.planThisGradient}
-                >
-                  <TabIcon name="bookmark" size={16} color="#FFFFFF" />
-                  <Text style={styles.planThisText}>
-                    {activeEvent ? `Plan This → ${activeEvent.name}` : 'Plan This'}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
               {/* Action buttons row */}
               {hasProvider && (
-                <View style={styles.actionsRow}>
-                  {/* View Profile */}
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.outlineButton, { borderColor: '#a342c3ff' }]}
-                    onPress={handleViewProfile}
-                    activeOpacity={0.8}
-                  >
-                    <TabIcon name="user" size={14} color="#a342c3ff" />
-                    <Text style={styles.outlineButtonText}>View Profile</Text>
-                  </TouchableOpacity>
-
-                  {/* Book Now */}
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={handleBookNow}
-                    activeOpacity={0.8}
-                  >
-                    <LinearGradient
-                      colors={['#a342c3ff', '#8a2fb8']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.bookNowGradient}
+                <>
+                  <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                  <View style={styles.actionsRow}>
+                    {/* View Profile */}
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.outlineButton, { backgroundColor: isDarkMode ? 'rgba(163,66,195,0.15)' : '#F5E6FA' }]}
+                      onPress={handleViewProfile}
+                      activeOpacity={0.8}
                     >
-                      <TabIcon name="basket-shopping" size={14} color="#FFFFFF" />
-                      <Text style={styles.bookNowText}>Book Now</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              )}
+                      <TabIcon name="user" size={14} color="#a342c3ff" />
+                      <Text style={styles.outlineButtonText}>View Profile</Text>
+                    </TouchableOpacity>
 
-              {/* Save button */}
-              <TouchableOpacity
-                style={[styles.saveButton, { borderColor: theme.border }]}
-                onPress={handleBookmark}
-                activeOpacity={0.7}
-              >
-                <TabIcon
-                  name="heart"
-                  size={16}
-                  color={isSaved ? '#a342c3ff' : theme.secondaryText}
-                />
-                <Text
-                  style={[
-                    styles.saveText,
-                    { color: isSaved ? '#a342c3ff' : theme.secondaryText },
-                  ]}
-                >
-                  {isSaved ? 'Saved' : 'Save to Collection'}
-                </Text>
-              </TouchableOpacity>
+                    {/* Book Now */}
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={handleBookNow}
+                      activeOpacity={0.8}
+                    >
+                      <LinearGradient
+                        colors={['#a342c3ff', '#8a2fb8']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.bookNowGradient}
+                      >
+                        <TabIcon name="basket-shopping" size={14} color="#FFFFFF" />
+                        <Text style={styles.bookNowText}>Book Now</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </ScrollView>
         </View>
@@ -269,14 +237,6 @@ const styles = StyleSheet.create({
     right: 12,
     zIndex: 10,
   },
-  closeBlur: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
   closeText: {
     fontSize: 16,
     fontWeight: '600',
@@ -284,9 +244,34 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
+  dragHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: 'rgba(128,128,128,0.4)',
+  },
+  imageWrapper: {
+    position: 'relative',
+  },
   image: {
     width: '100%',
     backgroundColor: '#F0F0F0',
+  },
+  iconBlur: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  saveButton: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
   },
   infoCard: {
     padding: spacing.lg,
@@ -373,36 +358,16 @@ const styles = StyleSheet.create({
     height: 1,
     marginVertical: spacing.md,
   },
-  planThisButton: {
-    marginBottom: spacing.md,
-    borderRadius: dimensions.card.smallBorderRadius,
-    overflow: 'hidden',
-  },
-  planThisGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-  },
-  planThisText: {
-    fontSize: fonts.buttonText.medium,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    fontFamily: 'BakbakOne-Regular',
-  },
   actionsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.md,
   },
   actionButton: {
     flex: 1,
-    borderRadius: dimensions.card.smallBorderRadius,
+    borderRadius: 100,
     overflow: 'hidden',
   },
   outlineButton: {
-    borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -427,19 +392,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: 'BakbakOne-Regular',
-  },
-  saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    paddingTop: spacing.md,
-  },
-  saveText: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'Jura-VariableFont_wght',
   },
 });

@@ -19,6 +19,10 @@ export interface RegistrationData {
   instagram: string;
   tiktok: string;
   website: string;
+  // 'salon' | 'studio' | 'home_based' | 'mobile' — asked once here instead of
+  // only in the post-login provider profile screen, since it also decides
+  // whether a private address needs to be collected there.
+  businessType: string;
   // Beauty profile — shown to providers
   hairType: string;
   skinType: string;
@@ -66,6 +70,7 @@ const initialData: RegistrationData = {
   instagram: '',
   tiktok: '',
   website: '',
+  businessType: '',
   // Beauty profile
   hairType: '',
   skinType: '',

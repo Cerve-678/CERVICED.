@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   FlatList,
   Image,
@@ -20,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import type { AppTheme } from '../constants/theme';
 import TabIcon from '../components/TabIcon';
-import CategoryTabPill from '../components/CategoryTabPill';
+import SlidingCategoryTabs from '../components/SlidingCategoryTabs';
 import { HomeStackParamList } from '../navigation/types';
 import { getActivePromotions } from '../services/databaseService';
 import type { DbPromotionWithProvider } from '../types/database';
@@ -59,6 +58,10 @@ function mapPromotion(p: DbPromotionWithProvider): Offer {
 }
 
 const TABS = ['ALL', 'HAIR', 'NAILS', 'LASHES', 'MUA', 'BROWS', 'AESTHETICS'];
+
+// Fixed (not theme-tinted) — matches SearchScreen's active-tab treatment so
+// the two screens' category pills read as the same control.
+const ACTIVE_TAB_COLOR = '#000000';
 
 type SortKey = 'newest' | 'expiring' | 'discount';
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -236,33 +239,24 @@ export default function OffersScreen({ navigation }: Props) {
 
       {/* Category tabs — same frosted-glass pill used on a provider's own
           profile for their service categories, so this reads as the same
-          control rather than a different design. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={[styles.tabsScroll, { borderBottomColor: P.sep }]}
-        contentContainerStyle={styles.tabsContent}
-      >
-        {TABS.map(tab => {
-          const active = selectedTab === tab;
-          return (
-            <CategoryTabPill
-              key={tab}
-              category={tab}
-              isSelected={active}
-              onPress={() => {
-                if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelectedTab(tab);
-              }}
-              cardBg={active ? P.accent : P.surface}
-              blurIntensity={20}
-              blurTint={isDarkMode ? 'dark' : 'light'}
-              borderColor={active ? 'transparent' : P.border}
-              textColor={active ? P.ice : P.text}
-            />
-          );
-        })}
-      </ScrollView>
+          control rather than a different design. A black capsule slides
+          behind the selected pill on every tap. */}
+      <View style={[styles.tabsScroll, { borderBottomColor: P.sep }]}>
+        <SlidingCategoryTabs
+          categories={TABS}
+          selected={selectedTab}
+          onSelect={(tab) => {
+            if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setSelectedTab(tab);
+          }}
+          surfaceColor={P.surface}
+          borderColor={P.border}
+          textColor={P.text}
+          isDarkMode={isDarkMode}
+          activeColor={ACTIVE_TAB_COLOR}
+          contentContainerStyle={styles.tabsContent}
+        />
+      </View>
 
       {/* Offers list — single column */}
       <FlatList

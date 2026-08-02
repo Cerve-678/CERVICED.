@@ -254,6 +254,140 @@ Provider-level `inclusive_flags` column now exists. Populate and surface:
 
 ---
 
+## EXPLORE SCREEN — Pinterest-style redesign (done 2026-08-01)
+
+### Status: Implemented (My Plans tab mentioned below was later removed same day — see the "MY PLANS" entry further down)
+
+`ExploreScreen.tsx`'s Discover tab is a 2-column masonry grid (`MasonryGrid` +
+`PortfolioCard`). Shipped on 2026-08-01:
+
+- **Fixed a real sizing bug**, not just a style tweak: `aspect_ratio` is
+  stored as width/height (see `InfoRegScreen.handleAddPortfolioImages`), but
+  `PortfolioCard`/`ImageDetailModal` were multiplying by it instead of
+  dividing — portrait photos rendered short/landscape-looking instead of
+  tall. Now `imageHeight = columnWidth / item.aspectRatio` in both places.
+- Cards are picture-forward: caption/price text below the card is gone;
+  price now shows as a small overlay badge (top-left) alongside the
+  existing category chip + provider name (bottom) and bookmark (top-right).
+  `getItemHeight` dropped its `+40` fudge factor since there's no more
+  variable-height text below the image.
+- Removed the header row (title + bookmark icon) above `SubTabBar`; the
+  bookmark button moved inline into the search bar row instead. At the time
+  `SubTabBar` (Discover/My Plans) was kept as-is — the My Plans/event-planner
+  feature was explicitly out of scope for this pass. (It was removed later
+  the same day; see below.)
+- **Mixed feed**: the Discover grid now interleaves portfolio photos with
+  provider cover-photo cards and service-photo cards (4 portfolio : 1
+  service : 1 provider), via two new `databaseService` queries,
+  `getDiscoverProviders` (providers with a `background_image_url`) and
+  `getDiscoverServices` (`services` inner-joined to `service_images`, so
+  only services with a real photo show up). All three share the same
+  `PortfolioItem` shape (`kind: 'portfolio' | 'provider' | 'service'`) so
+  existing card/modal/click-through code didn't need to branch on it.
+  Scoped to the no-search-text browse case; typed search still searches
+  portfolio photos only (`searchPortfolio`), not services/providers.
+
+**Known gaps, not done in this pass:**
+- Still 2 columns fixed regardless of screen width; still an unvirtualized
+  `ScrollView` in `MasonryGrid` (fine at current volumes, revisit if the
+  feed grows past a couple hundred on-screen items).
+- Provider/service cards use a hardcoded `0.8` aspect ratio (no real
+  dimensions available for a cover/service photo) — may look slightly off
+  next to true portfolio photos with varied ratios.
+- "Book Now" from a service card still passes the item's category as
+  `providerService`, not the real service name/price, matching prior
+  (pre-existing) checkout behaviour — not something this pass touched.
+
+---
+
+## IMAGE DETAIL MODAL — "More like this" row (removed 2026-08-01, revisit later)
+
+### Status: Pulled out entirely — visibly glitchy, not worth patching in place
+
+Built alongside the Explore redesign above: tapping a card opened
+`ImageDetailModal` with a same-category "More like this" row underneath the
+tags, and tapping one of those swapped the modal to that item in place.
+Removed the same day after the user hit a visible glitch.
+
+**Likely cause (not confirmed, didn't dig further since it was pulled):** the
+modal's main `ScrollView` had `key={item.id}` so it would remount and reset
+scroll position each time the open item changed. That's fine when the modal
+first opens, but swapping items via "More like this" reused the *same* modal
+instance — so the `key` change forced a full remount of everything inside
+(hero image, provider row, tags, buttons), not just the parts that actually
+needed refreshing. That's the kind of thing that reads as a flash/flicker
+rather than a smooth in-place swap.
+
+**If this comes back:** don't reset scroll via a `key` on content that's
+supposed to update in place — reset scroll explicitly instead (a `ScrollView`
+ref + `scrollTo({ y: 0 })` on item change), so only the bits that changed
+(image source, text) re-render rather than the whole subtree remounting.
+
+**What was reverted:** `similarItems`/`onSelectSimilar` props and the
+"More like this" `View`/`ScrollView` block in `ImageDetailModal.tsx`, the
+`key={item.id}` on the main `ScrollView`, the `similarItems` useMemo +
+`handleSelectSimilar` callback in `ExploreScreen.tsx`, and the associated
+`similar*` styles. The mixed-feed grid itself (portfolio/provider/service
+cards) is untouched and still live.
+
+---
+
+## MY PLANS (event planner) — removed 2026-08-01, revisit later
+
+### Status: Removed; the second Explore tab now holds Favourites instead (see below)
+
+**Update, same day:** the second Explore tab is back, but as "Favourites"
+(anything hearted — via `PortfolioCard`'s bookmark button or the new heart
+icon in `ImageDetailModal` — powered by the existing `useBookmarkStore`/
+`savedPortfolioIds`), not a revival of My Plans. The notes below describe
+what My Plans specifically was and how to bring *that* back, if ever wanted
+— it's a different feature from Favourites.
+
+The Explore screen used to have two tabs: Discover and My Plans. My Plans let
+a client create an "event" (e.g. a wedding), attach portfolio looks to it as
+tasks via "Plan This" in `ImageDetailModal`, and track a checklist —
+entirely local-device state (`AsyncStorage`/`usePlannerStore`, key
+`planner_events`), never synced to Supabase. Removed at the user's request
+("remove for now") — no bug, just wasn't wanted right now — alongside the
+`ImageDetailModal` "slick" pass below, since the "Plan This" button that
+opened it was the biggest single piece of clutter in that modal.
+
+**Files deleted entirely** (last touched in commit `7a69339`, so
+`git show 7a69339~1:src/stores/usePlannerStore.ts` or similar gets the old
+content, or just `git checkout 7a69339~1 -- <path>` to restore a single file):
+- `src/stores/usePlannerStore.ts` — the zustand store (events, tasks, checklist, all local)
+- `src/screens/EventDetailScreen.tsx` — the plan detail screen
+- `src/components/EventTimelineCard.tsx` — used only by EventDetailScreen
+- `src/components/CreateEventModal.tsx` — "create a new plan" modal
+
+**Touchpoints trimmed, not deleted** (these files still exist, just smaller):
+- `ExploreScreen.tsx` — removed the `SubTabBar` (Discover/My Plans toggle,
+  now just one implicit view), `EventCard` + `getDaysUntil`, the whole
+  My Plans tab JSX block, and the `handlePlanThis`/`handleEventCreated`/
+  `handleEventPress` handlers + related state (`activeTab`,
+  `isCreateEventVisible`, `pendingPlanItem`).
+- `ImageDetailModal.tsx` — removed the `onPlanThis` prop and the "Plan This"
+  gradient button.
+- `src/navigation/Tabs/ExploreNavigator.tsx` + `src/navigation/types.ts` —
+  removed the `EventDetail` route/param.
+- `src/utils/storage.ts` — removed the now-unused `PLANNER_EVENTS` key.
+
+**Deliberately left alone:** `getMyEventPlans`/`getEventPlanDetails` in
+`databaseService.ts` and the `DbEventPlan`/`DbEventTask`/`DbEventChecklistItem`
+types — these were *already* dead/unused before this change (a separate,
+Supabase-backed event-plan design that the local-only `usePlannerStore`
+apparently superseded and never called) so removing My Plans doesn't change
+their status. Not touched here since they're a pre-existing, unrelated loose
+end, not something this pass orphaned.
+
+**If this comes back:** restore the four deleted files from git history,
+re-add the `EventDetail` route + `PLANNER_EVENTS` storage key, and re-wire
+`ExploreScreen`/`ImageDetailModal`. Worth reconsidering the local-only
+storage design at that point too — it means a plan never survives a
+reinstall or shows up on a second device.
+
+---
+
 ## WHAT IS DONE (as of June 2026)
 
 | Item | Status |

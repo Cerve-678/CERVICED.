@@ -947,7 +947,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             Quick Access rather than from a specific booking). ── */}
       <Modal
         visible={!!pickingBookingFor}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setPickingBookingFor(null)}
       >

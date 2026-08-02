@@ -28,13 +28,13 @@ export type RootStackParamList = {
 // Home Stack
 export type HomeStackParamList = {
   HomeMain: undefined;
-  ProviderProfile: { providerId: string; source?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
     providerName: string;
   };
-  Search: { initialQuery?: string; category?: string };
+  Search: { initialQuery?: string; category?: string; morph?: boolean };
   Bookings:
     | {
         openBookingId?: string;
@@ -56,23 +56,22 @@ export type HomeStackParamList = {
 // Explore Stack
 export type ExploreStackParamList = {
   ExploreMain: { category?: string };
-  ProviderProfile: { providerId: string; source?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
     providerName: string;
   };
-  Search: { initialQuery?: string; category?: string };
+  Search: { initialQuery?: string; category?: string; morph?: boolean };
   BookmarkedProviders: undefined;
   CartMain: undefined;
   DevSettings: undefined;
-  EventDetail: { eventId: string };
 };
 
 // Becca Stack
 export type BeccaStackParamList = {
   BeccaMain: { conversationId?: string };
-  ProviderProfile: { providerId: string; source?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -108,7 +107,7 @@ export type ProviderBeccaStackParamList = {
 // Cart Stack
 export type CartStackParamList = {
   CartMain: undefined;
-  ProviderProfile: { providerId: string; source?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -143,7 +142,7 @@ export type ProfileStackParamList = {
   Terms: undefined;
   ReportProblem: undefined;
   Points: undefined;
-  ProviderProfile: { providerId: string; source?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
   ProviderChat: {
     providerId: string;
     providerDbId: string;

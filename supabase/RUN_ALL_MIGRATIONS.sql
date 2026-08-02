@@ -380,6 +380,698 @@ CREATE TRIGGER trg_auto_release_address
   FOR EACH ROW EXECUTE FUNCTION public.auto_release_address();
 
 -- ════════════════════════════════════════════════════
+-- fix_address_release_on_confirm.sql
+-- ════════════════════════════════════════════════════
+-- Fix: address auto-release on confirmation never fired
+-- The auto_release_address() trigger above guarded on NEW.status = 'upcoming',
+-- but the bookings table only ever stores 'confirmed' (the app's 'upcoming'
+-- is a display-only alias that maps to 'confirmed' on write). This redefines
+-- the trigger to fire on the real 'confirmed' transition, and backfills
+-- bookings that were already confirmed while the trigger was broken.
+
+CREATE OR REPLACE FUNCTION public.auto_release_address()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.status = 'confirmed' AND OLD.status IS DISTINCT FROM 'confirmed' THEN
+    UPDATE public.bookings
+    SET address_released_at = NOW()
+    WHERE id = NEW.id
+      AND address_released_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM public.providers p
+        WHERE p.id = NEW.provider_id
+          AND p.address_release_policy = 'on_confirmation'
+      );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_auto_release_address ON public.bookings;
+CREATE TRIGGER trg_auto_release_address
+  AFTER UPDATE OF status ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.auto_release_address();
+
+UPDATE public.bookings b
+SET address_released_at = COALESCE(b.confirmed_at, b.updated_at, NOW())
+FROM public.providers p
+WHERE b.provider_id = p.id
+  AND p.address_release_policy = 'on_confirmation'
+  AND b.address_released_at IS NULL
+  AND b.status IN ('confirmed', 'in_progress', 'completed');
+
+-- ════════════════════════════════════════════════════
+-- restrict_provider_full_address.sql
+-- ════════════════════════════════════════════════════
+-- providers has a public "is_active" SELECT policy and several
+-- .select('*') call sites, so RLS cannot hide a single column there. Move
+-- full_address into its own owner-only table instead.
+
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS public.provider_private_details (
+  provider_id  UUID PRIMARY KEY REFERENCES public.providers(id) ON DELETE CASCADE,
+  full_address TEXT,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.provider_private_details ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "provider_private_details_owner_all"
+  ON public.provider_private_details;
+CREATE POLICY "provider_private_details_owner_all"
+  ON public.provider_private_details
+  FOR ALL
+  USING (
+    provider_id IN (SELECT id FROM public.providers WHERE user_id = auth.uid())
+  )
+  WITH CHECK (
+    provider_id IN (SELECT id FROM public.providers WHERE user_id = auth.uid())
+  );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name   = 'providers'
+       AND column_name  = 'full_address'
+  ) THEN
+    INSERT INTO public.provider_private_details (provider_id, full_address)
+    SELECT id, full_address
+      FROM public.providers
+     WHERE full_address IS NOT NULL
+    ON CONFLICT (provider_id) DO UPDATE
+      SET full_address = EXCLUDED.full_address,
+          updated_at   = NOW();
+
+    IF (SELECT COUNT(*) FROM public.providers WHERE full_address IS NOT NULL)
+       <> (SELECT COUNT(*) FROM public.provider_private_details WHERE full_address IS NOT NULL)
+    THEN
+      RAISE EXCEPTION 'Address copy incomplete — aborting before dropping the column';
+    END IF;
+
+    ALTER TABLE public.providers DROP COLUMN full_address;
+  END IF;
+END $$;
+
+COMMIT;
+
+-- ════════════════════════════════════════════════════
+-- require_provider_address.sql (columns only — see note below)
+-- ════════════════════════════════════════════════════
+-- Real coordinates, stored next to the real address (same owner-only RLS,
+-- same sensitivity as full_address). Used by stamp_booking_address_snapshot()
+-- below to stamp a released booking's map pin with the real location.
+--
+-- NOTE: this file's go-live-gating changes (extending check_and_set_provider_live
+-- to also require a geocoded address, plus the on_provider_address_change
+-- trigger) are deliberately NOT included here. That function and its sibling
+-- triggers (provider_schedule_gating.sql, require_services_for_go_live.sql)
+-- were never added to this bundle in the first place — adding only my piece
+-- would leave a fresh environment with a check_and_set_provider_live that
+-- requires an address, but no schedule/service triggers ever calling it, and
+-- has_gone_live never gated on schedule+services either. That's a
+-- pre-existing gap in this bundle bigger than this change — flagging it
+-- rather than papering over it with a partially-correct fix.
+ALTER TABLE public.provider_private_details
+  ADD COLUMN IF NOT EXISTS latitude  NUMERIC(10,7),
+  ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,7);
+
+-- ════════════════════════════════════════════════════
+-- address_release_enforcement.sql
+-- ════════════════════════════════════════════════════
+-- Address release — enforced at the data layer. is_address_released()
+-- expresses the policy once; client_bookings is what the CLIENT reads, with
+-- the address/coordinates masked to NULL until released. Providers reading
+-- their own bookings go straight to the base table, unaffected.
+
+CREATE OR REPLACE FUNCTION public.is_address_released(
+  p_status       TEXT,
+  p_policy       TEXT,
+  p_released_at  TIMESTAMPTZ,
+  p_booking_date DATE,
+  p_booking_time TIME
+) RETURNS BOOLEAN
+LANGUAGE sql STABLE AS $$
+  SELECT CASE
+    WHEN p_released_at IS NOT NULL THEN TRUE
+    WHEN p_policy = 'always' THEN TRUE
+    WHEN p_policy = 'on_confirmation'
+      THEN p_status IN ('confirmed', 'in_progress', 'completed')
+    WHEN p_policy IN ('day_before','two_days_before','three_days_before','five_days_before','week_before')
+      THEN now() >= ((p_booking_date + p_booking_time) AT TIME ZONE 'UTC') - (
+        CASE p_policy
+          WHEN 'day_before'        THEN INTERVAL '24 hours'
+          WHEN 'two_days_before'   THEN INTERVAL '48 hours'
+          WHEN 'three_days_before' THEN INTERVAL '72 hours'
+          WHEN 'five_days_before'  THEN INTERVAL '120 hours'
+          WHEN 'week_before'       THEN INTERVAL '168 hours'
+        END
+      )
+    ELSE FALSE
+  END;
+$$;
+
+CREATE OR REPLACE VIEW public.client_bookings
+WITH (security_invoker = true) AS
+SELECT
+  b.id, b.user_id, b.provider_id, b.service_id, b.status,
+  b.booking_date, b.booking_time, b.end_time, b.notes, b.booking_instructions,
+  b.payment_type, b.base_price, b.add_ons_total, b.service_charge, b.deposit_amount,
+  b.amount_paid, b.remaining_balance, b.payment_status, b.payment_method, b.payment_intent_id,
+  b.is_group_booking, b.group_booking_id, b.group_booking_count,
+  b.provider_name_snapshot, b.service_name_snapshot, b.service_category_snapshot, b.provider_logo_snapshot,
+  CASE WHEN public.is_address_released(b.status, p.address_release_policy, b.address_released_at, b.booking_date, b.booking_time)
+       THEN b.provider_address_snapshot ELSE NULL END AS provider_address_snapshot,
+  b.provider_phone_snapshot,
+  CASE WHEN public.is_address_released(b.status, p.address_release_policy, b.address_released_at, b.booking_date, b.booking_time)
+       THEN b.provider_coordinates ELSE NULL END AS provider_coordinates,
+  b.customer_name, b.customer_email, b.customer_phone,
+  b.confirmed_at, b.address_released_at, b.client_address,
+  b.occasion_type, b.style_request, b.reference_image_url,
+  b.created_at, b.updated_at,
+  (SELECT COALESCE(jsonb_agg(to_jsonb(a) ORDER BY a.id), '[]'::jsonb)
+     FROM public.booking_add_ons a WHERE a.booking_id = b.id) AS add_ons,
+  jsonb_build_object('logo_url', p.logo_url) AS provider
+FROM public.bookings b
+LEFT JOIN public.providers p ON p.id = b.provider_id;
+
+GRANT SELECT ON public.client_bookings TO authenticated;
+
+-- ════════════════════════════════════════════════════
+-- address_release_notification.sql
+-- ════════════════════════════════════════════════════
+-- Sends the client ONE "Address Now Available" notification when their
+-- booking address becomes available, covering all three release paths.
+
+ALTER TABLE public.notifications
+  DROP CONSTRAINT IF EXISTS notifications_type_check;
+
+ALTER TABLE public.notifications
+  ADD CONSTRAINT notifications_type_check CHECK (type IN (
+    'booking_pending',
+    'booking_confirmed',
+    'booking_declined',
+    'booking_cancelled',
+    'booking_reminder',
+    'booking_in_progress',
+    'booking_not_started',
+    'no_show',
+    'payment_success',
+    'new_provider',
+    'reschedule_request',
+    'reschedule_provider_response',
+    'reschedule_confirmed',
+    'review_request',
+    'review_received',
+    'promotion',
+    'intake_form_reminder',
+    'intake_form_received',
+    'intake_form_completed',
+    'info_pack_received',
+    'provider_message',
+    'announcement',
+    'balance_collected',
+    'balance_reminder',
+    'waitlist_slot_available',
+    'new_message',
+    'address_released'
+  )) NOT VALID;
+
+CREATE OR REPLACE FUNCTION public.auto_release_address()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_released BOOLEAN := FALSE;
+BEGIN
+  IF NEW.status = 'confirmed' AND OLD.status IS DISTINCT FROM 'confirmed' THEN
+    UPDATE public.bookings
+       SET address_released_at = NOW()
+     WHERE id = NEW.id
+       AND address_released_at IS NULL
+       AND EXISTS (
+         SELECT 1 FROM public.providers p
+          WHERE p.id = NEW.provider_id
+            AND p.address_release_policy = 'on_confirmation'
+       );
+
+    GET DIAGNOSTICS v_released = ROW_COUNT;
+
+    IF v_released THEN
+      INSERT INTO public.notifications
+        (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+      VALUES (
+        NEW.user_id,
+        'address_released',
+        'Address Now Available',
+        'The location for your ' || NEW.service_name_snapshot ||
+          ' with ' || NEW.provider_name_snapshot ||
+          ' on ' || TO_CHAR(NEW.booking_date, 'DD Mon YYYY') ||
+          ' has been shared — tap to view.',
+        'medium', TRUE, NEW.id, NEW.provider_id, 'client'
+      );
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.process_address_release_notifications()
+RETURNS VOID AS $$
+DECLARE
+  r        RECORD;
+  v_hours  INT;
+BEGIN
+  FOR r IN
+    SELECT
+      b.id                    AS booking_id,
+      b.user_id,
+      b.booking_date,
+      b.booking_time,
+      b.provider_id,
+      b.service_name_snapshot,
+      b.provider_name_snapshot,
+      p.address_release_policy
+    FROM public.bookings b
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE b.status IN ('confirmed', 'in_progress')
+      AND b.address_released_at IS NULL
+      AND p.address_release_policy IN (
+        'day_before', 'two_days_before', 'three_days_before',
+        'five_days_before', 'week_before'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.notifications n
+         WHERE n.booking_id = b.id
+           AND n.user_id    = b.user_id
+           AND n.type       = 'address_released'
+      )
+  LOOP
+    v_hours := CASE r.address_release_policy
+      WHEN 'day_before'        THEN 24
+      WHEN 'two_days_before'   THEN 48
+      WHEN 'three_days_before' THEN 72
+      WHEN 'five_days_before'  THEN 120
+      WHEN 'week_before'       THEN 168
+      ELSE NULL
+    END;
+
+    CONTINUE WHEN v_hours IS NULL;
+
+    CONTINUE WHEN now() < (
+      (r.booking_date::TIMESTAMP + r.booking_time) AT TIME ZONE 'UTC'
+      - (v_hours || ' hours')::INTERVAL
+    );
+
+    UPDATE public.bookings
+       SET address_released_at = NOW()
+     WHERE id = r.booking_id AND address_released_at IS NULL;
+
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+    VALUES (
+      r.user_id,
+      'address_released',
+      'Address Now Available',
+      'The location for your ' || r.service_name_snapshot ||
+        ' with ' || r.provider_name_snapshot ||
+        ' on ' || TO_CHAR(r.booking_date, 'DD Mon YYYY') ||
+        ' has been shared — tap to view.',
+      'medium', TRUE, r.booking_id, r.provider_id, 'client'
+    );
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- CREATE EXTENSION here (not present in the standalone file — production
+-- already had pg_cron enabled via a later migration by the time this was
+-- first applied there). A truly fresh environment running this bundle
+-- top-to-bottom needs it now, before automation_jobs.sql's own copy of this
+-- line runs later in this file.
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+GRANT USAGE ON SCHEMA cron TO postgres;
+
+SELECT cron.schedule(
+  'address-release-notifications',
+  '0 * * * *',
+  $$ SELECT public.process_address_release_notifications(); $$
+);
+
+-- ════════════════════════════════════════════════════
+-- fix_booking_address_snapshot_uses_real_address.sql
+-- ════════════════════════════════════════════════════
+-- BookingContext.tsx stamps provider_address_snapshot from the public,
+-- approximate location_text, never the private, release-gated
+-- full_address (RLS correctly prevents a client from reading a different
+-- provider's real address directly). Stamp the real address onto the
+-- booking from inside the database, where RLS doesn't apply, at INSERT time.
+
+CREATE OR REPLACE FUNCTION public.stamp_booking_address_snapshot()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_full_address TEXT;
+BEGIN
+  SELECT d.full_address INTO v_full_address
+  FROM public.provider_private_details d
+  WHERE d.provider_id = NEW.provider_id;
+
+  IF v_full_address IS NOT NULL AND btrim(v_full_address) <> '' THEN
+    NEW.provider_address_snapshot := v_full_address;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_stamp_booking_address_snapshot ON public.bookings;
+CREATE TRIGGER trg_stamp_booking_address_snapshot
+  BEFORE INSERT ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.stamp_booking_address_snapshot();
+
+UPDATE public.bookings b
+SET provider_address_snapshot = d.full_address
+FROM public.provider_private_details d
+WHERE d.provider_id = b.provider_id
+  AND d.full_address IS NOT NULL
+  AND btrim(d.full_address) <> ''
+  AND b.provider_address_snapshot IS DISTINCT FROM d.full_address
+  AND b.status NOT IN ('completed', 'cancelled');
+
+-- ════════════════════════════════════════════════════
+-- fix_bookings_provider_update_bypass.sql
+-- ════════════════════════════════════════════════════
+-- Provider-side bookings UPDATE had no WITH CHECK. Move confirm/start/
+-- complete/no-show and address-release behind narrow RPCs that can only
+-- touch their one respective column, then drop the general provider update
+-- policy — the provider role has no remaining legitimate need for it.
+
+CREATE OR REPLACE FUNCTION public.provider_update_booking_status(p_booking_id uuid, p_status text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.bookings b
+  SET status = p_status
+  WHERE b.id = p_booking_id
+    AND b.provider_id IN (SELECT p.id FROM public.providers p WHERE p.user_id = auth.uid());
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found or not owned by caller';
+  END IF;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.provider_update_booking_status(uuid, text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.provider_release_booking_address(p_booking_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.bookings b
+  SET address_released_at = NOW()
+  WHERE b.id = p_booking_id
+    AND b.provider_id IN (SELECT p.id FROM public.providers p WHERE p.user_id = auth.uid());
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found or not owned by caller';
+  END IF;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.provider_release_booking_address(uuid) TO authenticated;
+
+DROP POLICY IF EXISTS "bookings_provider_update" ON public.bookings;
+
+-- ════════════════════════════════════════════════════
+-- consolidate_address_release_notification.sql
+-- ════════════════════════════════════════════════════
+-- Collapses the three copies of the "Address Now Available" notification
+-- (this trigger, the cron below, and formerly an app-side insert for manual
+-- release) into one shared, idempotent function.
+
+CREATE OR REPLACE FUNCTION public.notify_address_released(p_booking_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  b RECORD;
+BEGIN
+  SELECT id, user_id, provider_id, service_name_snapshot, provider_name_snapshot, booking_date
+    INTO b
+  FROM public.bookings
+  WHERE id = p_booking_id;
+
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO public.notifications
+    (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+  VALUES (
+    b.user_id,
+    'address_released',
+    'Address Now Available',
+    'The location for your ' || b.service_name_snapshot ||
+      ' with ' || b.provider_name_snapshot ||
+      ' on ' || TO_CHAR(b.booking_date, 'DD Mon YYYY') ||
+      ' has been shared — tap to view.',
+    'medium', TRUE, b.id, b.provider_id, 'client'
+  )
+  ON CONFLICT (booking_id, user_id) WHERE (type = 'address_released') DO NOTHING;
+END;
+$$;
+
+-- Internal-only helper, no ownership check. PostgREST exposes every
+-- public-schema function as an RPC, and this project grants EXECUTE on new
+-- functions to anon/authenticated via schema-level default privileges (a
+-- named-role grant separate from the PUBLIC pseudo-role) — both REVOKEs are
+-- needed, or an anonymous OR signed-in caller could force-send this
+-- notification for an arbitrary booking id.
+REVOKE ALL ON FUNCTION public.notify_address_released(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_address_released(uuid) FROM anon, authenticated;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_notifications_address_released
+  ON public.notifications (booking_id, user_id)
+  WHERE (type = 'address_released');
+
+CREATE OR REPLACE FUNCTION public.auto_release_address()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_released BOOLEAN := FALSE;
+BEGIN
+  IF NEW.status = 'confirmed' AND OLD.status IS DISTINCT FROM 'confirmed' THEN
+    UPDATE public.bookings
+       SET address_released_at = NOW()
+     WHERE id = NEW.id
+       AND address_released_at IS NULL
+       AND EXISTS (
+         SELECT 1 FROM public.providers p
+          WHERE p.id = NEW.provider_id
+            AND p.address_release_policy = 'on_confirmation'
+       );
+
+    GET DIAGNOSTICS v_released = ROW_COUNT;
+
+    IF v_released THEN
+      PERFORM public.notify_address_released(NEW.id);
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_auto_release_address ON public.bookings;
+CREATE TRIGGER trg_auto_release_address
+  AFTER UPDATE OF status ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.auto_release_address();
+
+CREATE OR REPLACE FUNCTION public.process_address_release_notifications()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  r        RECORD;
+  v_hours  INT;
+BEGIN
+  FOR r IN
+    SELECT
+      b.id                    AS booking_id,
+      b.booking_date,
+      b.booking_time,
+      p.address_release_policy
+    FROM public.bookings b
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE b.status IN ('confirmed', 'in_progress')
+      AND b.address_released_at IS NULL
+      AND p.address_release_policy IN (
+        'day_before', 'two_days_before', 'three_days_before',
+        'five_days_before', 'week_before'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.notifications n
+         WHERE n.booking_id = b.id
+           AND n.type       = 'address_released'
+      )
+  LOOP
+    v_hours := CASE r.address_release_policy
+      WHEN 'day_before'        THEN 24
+      WHEN 'two_days_before'   THEN 48
+      WHEN 'three_days_before' THEN 72
+      WHEN 'five_days_before'  THEN 120
+      WHEN 'week_before'       THEN 168
+      ELSE NULL
+    END;
+
+    CONTINUE WHEN v_hours IS NULL;
+
+    CONTINUE WHEN now() < (
+      (r.booking_date::TIMESTAMP + r.booking_time) AT TIME ZONE 'UTC'
+      - (v_hours || ' hours')::INTERVAL
+    );
+
+    UPDATE public.bookings
+       SET address_released_at = NOW()
+     WHERE id = r.booking_id AND address_released_at IS NULL;
+
+    PERFORM public.notify_address_released(r.booking_id);
+  END LOOP;
+END;
+$$;
+
+-- ════════════════════════════════════════════════════
+-- consolidate_address_release_notification_manual.sql
+-- ════════════════════════════════════════════════════
+-- Wires manual release into the same shared helper, and closes a small gap
+-- where repeat calls re-stamped address_released_at every time.
+
+CREATE OR REPLACE FUNCTION public.provider_release_booking_address(p_booking_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_updated BOOLEAN := FALSE;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.bookings b
+     WHERE b.id = p_booking_id
+       AND b.provider_id IN (SELECT p.id FROM public.providers p WHERE p.user_id = auth.uid())
+  ) THEN
+    RAISE EXCEPTION 'Booking not found or not owned by caller';
+  END IF;
+
+  UPDATE public.bookings b
+     SET address_released_at = NOW()
+   WHERE b.id = p_booking_id
+     AND b.address_released_at IS NULL;
+
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+
+  IF v_updated THEN
+    PERFORM public.notify_address_released(p_booking_id);
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.provider_release_booking_address(uuid) TO authenticated;
+
+-- ════════════════════════════════════════════════════
+-- stamp_booking_address_snapshot_fallback_location_text.sql
+-- ════════════════════════════════════════════════════
+-- Have the stamping trigger fall back to the provider's public location_text
+-- itself, instead of relying on the app to precompute and send that same
+-- fallback value. provider_coordinates is untouched (separate, undone work —
+-- see fix_booking_address_snapshot_uses_real_address.sql above).
+
+CREATE OR REPLACE FUNCTION public.stamp_booking_address_snapshot()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_full_address   TEXT;
+  v_location_text  TEXT;
+BEGIN
+  SELECT d.full_address INTO v_full_address
+  FROM public.provider_private_details d
+  WHERE d.provider_id = NEW.provider_id;
+
+  SELECT p.location_text INTO v_location_text
+  FROM public.providers p
+  WHERE p.id = NEW.provider_id;
+
+  NEW.provider_address_snapshot := COALESCE(
+    NULLIF(btrim(v_full_address), ''),
+    NULLIF(btrim(v_location_text), ''),
+    NEW.provider_address_snapshot
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+-- ════════════════════════════════════════════════════
+-- require_provider_address.sql (coordinate stamping)
+-- ════════════════════════════════════════════════════
+-- Also prefer the real geocoded coordinates for provider_coordinates, not
+-- just provider_address_snapshot — same fallback order, now applied to
+-- coordinates too, so a released booking's map pin reflects the real address
+-- once the provider has one on file (see the go-live-gating note above for
+-- what's deliberately NOT included in this bundle).
+
+CREATE OR REPLACE FUNCTION public.stamp_booking_address_snapshot()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_full_address   TEXT;
+  v_latitude       NUMERIC(10,7);
+  v_longitude      NUMERIC(10,7);
+  v_location_text  TEXT;
+BEGIN
+  SELECT d.full_address, d.latitude, d.longitude
+    INTO v_full_address, v_latitude, v_longitude
+  FROM public.provider_private_details d
+  WHERE d.provider_id = NEW.provider_id;
+
+  SELECT p.location_text INTO v_location_text
+  FROM public.providers p
+  WHERE p.id = NEW.provider_id;
+
+  NEW.provider_address_snapshot := COALESCE(
+    NULLIF(btrim(v_full_address), ''),
+    NULLIF(btrim(v_location_text), ''),
+    NEW.provider_address_snapshot
+  );
+
+  IF v_latitude IS NOT NULL AND v_longitude IS NOT NULL THEN
+    NEW.provider_coordinates := jsonb_build_object('lat', v_latitude, 'lng', v_longitude);
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+-- ════════════════════════════════════════════════════
 -- client_profile_columns_migration.sql
 -- ════════════════════════════════════════════════════
 -- ============================================================
@@ -3194,6 +3886,169 @@ SELECT cron.schedule(
   $$ SELECT public.process_provider_daily_recap(); $$
 );
 
+-- ════════════════════════════════════════════════════
+-- fix_notifications_type_check.sql
+-- ════════════════════════════════════════════════════
+-- Deliberately last in this file. info_pack_received's section above (STEP 3
+-- of that migration) redefines notifications_type_check WITHOUT
+-- 'address_released' — this file's own documented "last definition wins"
+-- convention means a full top-to-bottom run would otherwise end with a
+-- constraint that rejects the very type the address-release notification
+-- helper inserts. This is the actual fix already applied in production
+-- (found via a dev_reset_provider.sql failure — see the file's own header
+-- for the full story), reproduced verbatim so a fresh environment matches.
+
+ALTER TABLE public.notifications
+  DROP CONSTRAINT IF EXISTS notifications_type_check;
+
+ALTER TABLE public.notifications
+  ADD CONSTRAINT notifications_type_check CHECK (type IN (
+    'booking_pending', 'booking_confirmed', 'booking_declined', 'booking_cancelled',
+    'booking_reminder', 'booking_in_progress', 'booking_not_started', 'no_show',
+    'payment_success', 'new_provider', 'reschedule_request', 'reschedule_provider_response',
+    'reschedule_confirmed', 'review_request', 'review_received', 'promotion',
+    'intake_form_reminder', 'intake_form_received', 'intake_form_completed',
+    'info_pack_received', 'provider_message', 'announcement', 'balance_collected',
+    'balance_reminder', 'waitlist_slot_available', 'new_message',
+    'address_released', 'birthday_greeting', 'post_appt_check_in',
+    'rebooking_nudge', 'daily_recap'
+  ));
+
 -- ============================================================
--- DONE — Info packs attach to bookings; daily recap scheduled
+-- DONE — Info packs attach to bookings; daily recap scheduled;
+-- notifications_type_check confirmed to include every type in final use
+-- ============================================================
+
+
+-- ════════════════════════════════════════════════════
+-- prevent_overlapping_bookings.sql
+-- ════════════════════════════════════════════════════
+-- ============================================================
+-- CERVICED — Close the buffer/duration overlap booking race
+-- Run this in the Supabase SQL editor. Safe to re-run (Steps 0-3, 5).
+--
+-- Root cause: bookings_no_double_book_idx (prevent_double_booking.sql) is a
+-- UNIQUE index on (provider_id, booking_date, booking_time) — it stops two
+-- bookings landing on the EXACT same start time, but createBooking()'s
+-- buffer/duration overlap check (src/services/databaseService.ts) is a
+-- plain SELECT-then-INSERT with no lock. Two concurrent requests for
+-- DIFFERENT start times that still overlap once duration + buffer is
+-- applied (e.g. a 90-minute booking at 2:00pm and a fresh request for
+-- 2:30pm) can both pass the app-side check and both insert successfully —
+-- a genuine double-booking the unique index doesn't catch.
+--
+-- Fix: snapshot each booking's buffer-padded [effective_start, effective_end)
+-- span onto the row itself (via trigger, since buffer lives on services/
+-- providers, not on bookings), then enforce non-overlap with a GiST EXCLUDE
+-- constraint — atomic at the database level, immune to app-side race
+-- conditions regardless of which code path writes the row (fresh booking,
+-- client reschedule confirm, provider-initiated reschedule all go through
+-- an INSERT or UPDATE on this table, so all three are covered by one fix
+-- instead of needing the overlap check duplicated in each).
+-- ============================================================
+
+-- Step 0: needed for the EXCLUDE constraint's equality operator class on a
+-- UUID column (provider_id) alongside the timestamp range's overlap
+-- operator — GiST can't mix "=" and "&&" across different column types
+-- without it.
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- Step 1: columns to hold the computed, buffer-padded span.
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS effective_start TIMESTAMP;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS effective_end   TIMESTAMP;
+
+-- Step 2: trigger to (re)compute the span whenever scheduling-relevant
+-- columns change, looking up each service's own buffer override (falling
+-- back to the provider's buffer_mins) — the same rule createBooking() and
+-- AvailabilityService already apply in the app (NULL on the service means
+-- "no override": buffer_before -> 0, buffer_after -> provider's buffer_mins).
+CREATE OR REPLACE FUNCTION public.compute_booking_effective_range()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_provider_buffer INT;
+  v_buffer_before INT := 0;
+  v_buffer_after INT;
+  v_end_time TIME;
+BEGIN
+  SELECT COALESCE(buffer_mins, 0) INTO v_provider_buffer
+  FROM public.providers WHERE id = NEW.provider_id;
+  v_provider_buffer := COALESCE(v_provider_buffer, 0);
+  v_buffer_after := v_provider_buffer;
+
+  IF NEW.service_id IS NOT NULL THEN
+    SELECT buffer_before_mins, buffer_after_mins
+    INTO v_buffer_before, v_buffer_after
+    FROM public.services WHERE id = NEW.service_id;
+    v_buffer_before := COALESCE(v_buffer_before, 0);
+    v_buffer_after := COALESCE(v_buffer_after, v_provider_buffer);
+  END IF;
+
+  v_end_time := COALESCE(NEW.end_time, NEW.booking_time + INTERVAL '60 minutes');
+
+  NEW.effective_start := (NEW.booking_date + NEW.booking_time) - (v_buffer_before || ' minutes')::interval;
+  NEW.effective_end   := (NEW.booking_date + v_end_time) + (v_buffer_after || ' minutes')::interval;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+-- SECURITY DEFINER: providers_public_read/services_public_read only expose
+-- is_active rows. Without this, a provider/service that goes inactive at
+-- exactly the wrong moment makes the SELECT ... INTO above match nothing,
+-- and the COALESCE(..., 0) fallbacks would silently treat that as "no
+-- buffer" — quietly narrowing the exact protection this migration adds,
+-- instead of failing loudly. Running as the function owner means the
+-- lookup always sees the real row regardless of the calling role's RLS.
+
+DROP TRIGGER IF EXISTS trg_compute_booking_effective_range ON public.bookings;
+CREATE TRIGGER trg_compute_booking_effective_range
+  BEFORE INSERT OR UPDATE OF booking_date, booking_time, end_time, service_id, provider_id
+  ON public.bookings
+  FOR EACH ROW EXECUTE FUNCTION public.compute_booking_effective_range();
+
+-- Step 3: backfill existing rows — the trigger above only fires on future
+-- INSERT/UPDATE. This no-op assignment (booking_date unchanged) still
+-- fires "UPDATE OF booking_date", populating effective_start/effective_end
+-- for every row already in the table. Confirmed safe: every notification
+-- trigger on this table is scoped to `AFTER UPDATE OF status`, so this
+-- does not touch status and will not fire any client/provider notification.
+UPDATE public.bookings SET booking_date = booking_date;
+
+-- Step 4: diagnostic — list any ACTIVE bookings that already overlap once
+-- buffer is applied (possible if the race this migration closes has
+-- already been hit in production). If this returns any rows, resolve them
+-- manually (contact the client/provider, cancel or reschedule one side)
+-- before running Step 5 — do NOT auto-cancel one side the way
+-- prevent_double_booking.sql does for exact-duplicate slots. These are
+-- genuinely different, real appointments; picking which one "loses" is a
+-- business call, not something to script.
+SELECT a.id AS booking_a, b.id AS booking_b, a.provider_id,
+       a.booking_date AS date_a, a.booking_time AS time_a, a.end_time AS end_a,
+       b.booking_date AS date_b, b.booking_time AS time_b, b.end_time AS end_b
+FROM public.bookings a
+JOIN public.bookings b
+  ON a.provider_id = b.provider_id
+ AND a.id < b.id
+ AND a.status NOT IN ('cancelled', 'no_show')
+ AND b.status NOT IN ('cancelled', 'no_show')
+ AND tsrange(a.effective_start, a.effective_end) && tsrange(b.effective_start, b.effective_end);
+
+-- Step 5: the actual guard. Run this only once Step 4 returns zero rows —
+-- otherwise it will fail with "conflicting key value violates exclusion
+-- constraint", which is the correct, safe outcome (see Step 4's note).
+ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap;
+ALTER TABLE public.bookings
+  ADD CONSTRAINT bookings_no_overlap
+  EXCLUDE USING gist (
+    provider_id WITH =,
+    tsrange(effective_start, effective_end) WITH &&
+  ) WHERE (status NOT IN ('cancelled', 'no_show'));
+
+-- Violations surface to the app as Postgres error code 23P01
+-- (exclusion_violation) — handled in BookingContext.tsx's createBookingsFromCart
+-- itemError catch alongside the existing 23505 (exact-slot) case, and
+-- should be handled the same way anywhere else a booking's date/time/
+-- service/provider can be written (reschedule confirm, provider reschedule).
+
+-- ============================================================
+-- DONE — buffer/duration overlap race closed at the database level
 -- ============================================================

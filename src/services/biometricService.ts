@@ -27,6 +27,28 @@ export async function isBiometricAvailable(): Promise<boolean> {
   }
 }
 
+// TEMPORARY DIAGNOSTIC — returns every raw check as its own line, each
+// independently try/caught, so a single failing call doesn't hide the rest.
+// Meant to be wired to a button the user taps on demand (the actual Face ID
+// toggle Switch is `disabled` when unavailable, so it never fires onPress —
+// this needs its own always-tappable entry point). Remove once resolved.
+export async function getBiometricDebugInfo(): Promise<string> {
+  const lines: string[] = [];
+  try {
+    lines.push(`hasHardware: ${await LocalAuthentication.hasHardwareAsync()}`);
+  } catch (e: any) { lines.push(`hasHardware ERROR: ${e?.message ?? String(e)}`); }
+  try {
+    lines.push(`isEnrolled: ${await LocalAuthentication.isEnrolledAsync()}`);
+  } catch (e: any) { lines.push(`isEnrolled ERROR: ${e?.message ?? String(e)}`); }
+  try {
+    lines.push(`supportedTypes: ${JSON.stringify(await LocalAuthentication.supportedAuthenticationTypesAsync())}`);
+  } catch (e: any) { lines.push(`supportedTypes ERROR: ${e?.message ?? String(e)}`); }
+  try {
+    lines.push(`enrolledLevel: ${await LocalAuthentication.getEnrolledLevelAsync()}`);
+  } catch (e: any) { lines.push(`enrolledLevel ERROR: ${e?.message ?? String(e)}`); }
+  return lines.join('\n');
+}
+
 export async function getBiometricLabel(): Promise<string> {
   const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
   if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return 'Face ID';

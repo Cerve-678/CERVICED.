@@ -404,7 +404,7 @@ function TemplatePickerSheet({ visible, onSelect, onClose }: {
   const { isDarkMode } = useTheme();
   const C = isDarkMode ? CP_DARK : CP_LIGHT;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={tpSt.container}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
         <View style={[tpSt.sheet, { backgroundColor: C.surface }]}>
@@ -506,7 +506,7 @@ function NotifyModal({ visible, promo, clients, onClose, onSend }: {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={nmSt.container}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
         <View style={[nmSt.sheet, { backgroundColor: C.surface }]}>

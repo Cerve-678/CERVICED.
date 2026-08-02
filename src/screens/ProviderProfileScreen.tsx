@@ -24,6 +24,7 @@ import {
   TextInput,
   Platform,
   findNodeHandle,
+  UIManager,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -62,12 +63,19 @@ import {
   getProviderActivePromotions,
   getProviderPortfolio,
   getUserDisplayName,
+  getProviderDepositPoliciesByDisplayNames,
+  getUserWaitlistEntries,
+  joinWaitlist,
+  leaveWaitlist,
+  type WaitlistEntry,
+  getProviderConsultationService,
+  getProviderIdsWithBookingHistory,
+  type ProviderConsultationService,
 } from "../services/databaseService";
 import userLearningService from "../services/userLearningService";
 import { supabase } from "../lib/supabase";
-import * as WaitlistService from "../services/WaitlistService";
-import type { WaitlistEntry } from "../services/WaitlistService";
 import { AvailabilityService } from "../services/AvailabilityService";
+import { BookingSheet, type BookingSheetResult } from "../components/BookingSheet";
 import type {
   ProviderWithServices,
   DbPromotion,
@@ -85,6 +93,10 @@ type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
   "ProviderProfile"
 >;
+
+// Static/demo services carry numeric ids — only a real UUID resolves to a
+// services row and is safe to pass on for per-service buffer/duration lookups.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SIDE_PANEL_W = screenWidth * 0.85;
@@ -114,6 +126,9 @@ interface ProviderData {
   slotsText: string;
   aboutText: string;
   categories: Record<string, ServiceData[]>;
+  /** Shown under the category tab once selected — keyed the same as
+   *  `categories`, missing/empty for categories without one. */
+  categoryDescriptions: Record<string, string>;
   gradient: [string, string, ...string[]];
   hasCustomGradient: boolean;
   accentColor: string | null;
@@ -123,12 +138,17 @@ interface ProviderData {
   email: string;
   instagram: string;
   website: string;
+  /** When set, "Book" sends the client here instead of Cerviced's in-app
+   *  booking flow (Fresha, Treatwell, Acuity, etc.). */
+  externalBookingUrl: string | null;
   yearsExperience: string;
   specialties: string[];
   customServiceType: string;
   whatsapp: string;
   isVerified: boolean;
   preferredContactMethods: string[];
+  onlineConsultationsAvailable: boolean;
+  consultationRequiredNewClients: boolean;
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
@@ -136,6 +156,8 @@ interface ProviderData {
     rescheduleNotice?: string;
     maxReschedules?: string;
     depositRequired?: boolean;
+    /** Client must pay the deposit — no "pay in full" choice at booking. */
+    depositOnly?: boolean;
     depositType?: string;
     depositAmount?: string;
     noShowAction?: string;
@@ -174,6 +196,7 @@ interface ServiceData {
   minAge?: number | null;
   contraindications?: string[];
   aftercareNotes?: string;
+  serviceType?: string | null;
 }
 
 // ─── Duration formatter ────────────────────────────────────────────────────
@@ -202,9 +225,13 @@ function hasPolicyInfo(provider: ProviderData): boolean {
 // ─── Map Supabase ProviderWithServices → local ProviderData ─────────────────
 function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
   const categories: Record<string, ServiceData[]> = {};
+  const categoryDescriptions: Record<string, string> = {};
   p.services.forEach((s, idx) => {
     const key = s.category_name;
     if (!categories[key]) categories[key] = [];
+    if (s.category_description && !categoryDescriptions[key]) {
+      categoryDescriptions[key] = s.category_description;
+    }
     categories[key].push({
       id: idx,
       dbId: s.id,
@@ -229,6 +256,7 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
       minAge: s.min_age,
       contraindications: s.contraindications ?? [],
       aftercareNotes: s.aftercare_notes ?? "",
+      serviceType: s.service_type ?? null,
     });
   });
 
@@ -250,16 +278,20 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     backgroundImage: p.background_image_url ?? null,
     profileTheme: p.profile_theme ?? "app",
     categories,
+    categoryDescriptions,
     phone: p.phone ?? "",
     email: p.email ?? "",
     instagram: p.instagram ?? "",
     website: p.website ?? "",
+    externalBookingUrl: p.external_booking_url ?? null,
     yearsExperience: p.years_experience ? String(p.years_experience) : "",
     specialties: p.specialties?.map((s) => s.specialty) ?? [],
     customServiceType: p.custom_service_type ?? "",
     whatsapp: p.whatsapp_number ?? "",
     isVerified: p.is_verified ?? false,
     preferredContactMethods: p.preferred_contact_methods ?? [],
+    onlineConsultationsAvailable: p.online_consultations_available ?? false,
+    consultationRequiredNewClients: p.consultation_required_new_clients ?? false,
     bookingPolicies: p.booking_policies ?? null,
     cancellationNoticeHours: p.cancellation_notice_hours ?? 0,
     // Absent setting = waitlist stays available (pre-toggle behaviour)
@@ -708,208 +740,6 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
     );
   },
 );
-
-// Add-Ons Modal Component
-interface AddOnsModalProps {
-  isVisible: boolean;
-  onClose: () => void;
-  service: ServiceData | null;
-  onAddToCart: (
-    service: ServiceData,
-    selectedAddOns: Array<{ id: string | number; name: string; price: number }>,
-  ) => void;
-  adaptiveAccentColor: string;
-}
-
-const AddOnsModal: React.FC<AddOnsModalProps> = React.memo(
-  ({ isVisible, onClose, service, onAddToCart, adaptiveAccentColor }) => {
-    const [selectedAddOns, setSelectedAddOns] = useState<
-      Array<{ id: string | number; name: string; price: number }>
-    >([]);
-
-    // Use service-specific add-ons only (no default fallback to generic ones)
-    const availableAddOns = useMemo(() => service?.addOns ?? [], [service]);
-
-    const toggleAddOn = useCallback(
-      (addOn: { id: string | number; name: string; price: number }) => {
-        setSelectedAddOns((prev) => {
-          const exists = prev.find((item) => item.id === addOn.id);
-          if (exists) {
-            return prev.filter((item) => item.id !== addOn.id);
-          } else {
-            return [...prev, addOn];
-          }
-        });
-      },
-      [],
-    );
-
-    const totalAddOnsPrice = useMemo(() => {
-      return selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0);
-    }, [selectedAddOns]);
-
-    const handleAddToCart = useCallback(() => {
-      if (service) {
-        onAddToCart(service, selectedAddOns);
-        setSelectedAddOns([]); // Reset selections
-        onClose();
-      }
-    }, [service, selectedAddOns, onAddToCart, onClose]);
-
-    const handleSkipAddOns = useCallback(() => {
-      if (service) {
-        onAddToCart(service, []);
-        setSelectedAddOns([]);
-        onClose();
-      }
-    }, [service, onAddToCart, onClose]);
-
-    if (!service) return null;
-
-    return (
-      <Modal
-        visible={isVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={onClose}
-      >
-        <View style={styles.modalOverlay}>
-          <BlurView
-            intensity={30}
-            tint="light"
-            style={styles.addOnsModalContainer}
-          >
-            <SafeAreaView style={styles.modalSafeArea}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <View style={styles.modalHeaderContent}>
-                  <View>
-                    <Text style={styles.modalTitle}>Add Extra Services</Text>
-                    <Text style={styles.modalSubtitle}>
-                      {service.name} • £{service.price}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.modalCloseButton,
-                      { backgroundColor: adaptiveAccentColor },
-                    ]}
-                    onPress={onClose}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.modalCloseText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Add-Ons List */}
-              <ScrollView
-                style={styles.modalContent}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.modalScrollContent}
-              >
-                {availableAddOns.map((addOn) => {
-                  const isSelected = selectedAddOns.find(
-                    (item) => item.id === addOn.id,
-                  );
-                  return (
-                    <TouchableOpacity
-                      key={addOn.id}
-                      style={[
-                        styles.addOnCard,
-                        isSelected && {
-                          borderColor: adaptiveAccentColor,
-                          borderWidth: 2,
-                        },
-                      ]}
-                      onPress={() => toggleAddOn(addOn)}
-                      activeOpacity={0.8}
-                    >
-                      <BlurView
-                        intensity={20}
-                        tint="light"
-                        style={styles.addOnCardBlur}
-                      >
-                        <View style={styles.addOnContent}>
-                          <View style={styles.addOnInfo}>
-                            <Text style={styles.addOnName}>{addOn.name}</Text>
-                            <Text style={styles.addOnDescription}>
-                              {addOn.description}
-                            </Text>
-                          </View>
-                          <View style={styles.addOnPriceContainer}>
-                            <Text
-                              style={[
-                                styles.addOnPrice,
-                                { color: adaptiveAccentColor },
-                              ]}
-                            >
-                              +£{addOn.price}
-                            </Text>
-                            <View
-                              style={[
-                                styles.addOnCheckbox,
-                                isSelected && {
-                                  backgroundColor: adaptiveAccentColor,
-                                },
-                              ]}
-                            >
-                              {isSelected && (
-                                <Text style={styles.addOnCheckmark}>✓</Text>
-                              )}
-                            </View>
-                          </View>
-                        </View>
-                      </BlurView>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Bottom Actions */}
-              <View style={styles.addOnsFooter}>
-                <View style={styles.totalContainer}>
-                  <Text style={styles.totalLabel}>Total:</Text>
-                  <Text
-                    style={[styles.totalPrice, { color: adaptiveAccentColor }]}
-                  >
-                    £{service.price + totalAddOnsPrice}
-                  </Text>
-                </View>
-
-                <View style={styles.addOnsButtons}>
-                  <TouchableOpacity
-                    style={styles.skipButton}
-                    onPress={handleSkipAddOns}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.skipButtonText}>Skip Add-ons</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.addToCartButton,
-                      { backgroundColor: adaptiveAccentColor },
-                    ]}
-                    onPress={handleAddToCart}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.addToCartButtonText}>
-                      Add to Cart{" "}
-                      {selectedAddOns.length > 0 &&
-                        `(${selectedAddOns.length})`}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </SafeAreaView>
-          </BlurView>
-        </View>
-      </Modal>
-    );
-  },
-);
-
 // Reviews Modal Component
 interface ReviewsModalProps {
   isVisible: boolean;
@@ -1687,6 +1517,14 @@ function ProviderProfileSkeleton() {
   );
 }
 
+// ⚠️ TEMP TESTING FLAG — forces every service into the "fully booked" state
+// (disabled "Fully Booked" button + Waitlist button/chip) so both can be
+// eyeballed without seeding real booking data. Re-requested by user for
+// visual QA on 2026-08-02 — set back to false (or delete this block and its
+// three call sites below) when they say testing is done. Search
+// DEBUG_FORCE_FULLY_BOOKED to find every use.
+const DEBUG_FORCE_FULLY_BOOKED = false;
+
 // Main Component
 const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   navigation,
@@ -1698,6 +1536,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Provider state — seeded with local hardcoded data, overridden by Supabase if available
   const [provider, setProvider] = useState<ProviderData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Only populated when this provider requires a consultation for new
+  // clients and the current client has no booking history with them —
+  // passed into BookingSheet so it can schedule the consultation alongside
+  // whatever real service the client is booking, in the same sheet.
+  const [requiredConsultationService, setRequiredConsultationService] = useState<ProviderConsultationService | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
@@ -1821,6 +1664,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // to book soon — absent from this map means "still checking", not "full".
   const [serviceNearTermAvailability, setServiceNearTermAvailability] =
     useState<Record<string, boolean>>({});
+  // service.dbId -> "has a bookable slot anywhere in the provider's whole
+  // booking window" (not just the next 14 days). This is the only check
+  // strict enough to disable Book itself — a service with nothing in the
+  // next 14 days can still have real openings further out, which the 14-day
+  // map above deliberately doesn't distinguish (it only gates the Waitlist
+  // affordance, where "nothing soon" is the right question to ask).
+  const [serviceFullyBooked, setServiceFullyBooked] =
+    useState<Record<string, boolean>>({});
   const [waitlistModal, setWaitlistModal] = useState<{
     visible: boolean;
     service: ServiceData | null;
@@ -1837,11 +1688,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistDateTo, setWaitlistDateTo] = useState<Date | null>(null);
   const [showDatePickerFrom, setShowDatePickerFrom] = useState(false);
   const [showDatePickerTo, setShowDatePickerTo] = useState(false);
-  const [isBookmarked, setIsBookmarked] = useState(false);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
-  const [showAddOnsModal, setShowAddOnsModal] = useState(false);
+  const [showBookingSheet, setShowBookingSheet] = useState(false);
   const [showOffersModal, setShowOffersModal] = useState(false);
   const [promotions, setPromotions] = useState<DbPromotion[]>([]);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
@@ -1971,7 +1821,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   useEffect(() => {
     if (!currentUserId || !providerDbId) return;
-    WaitlistService.getUserWaitlistEntries(currentUserId)
+    getUserWaitlistEntries(currentUserId)
       .then((entries) => {
         const map: Record<string, WaitlistEntry> = {};
         entries
@@ -1984,11 +1834,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       .catch(() => {});
   }, [currentUserId, providerDbId]);
 
-  // Check near-term availability per service so the Waitlist button only
-  // shows once a service is confirmed to have nothing bookable soon —
-  // otherwise it decorated every service unconditionally.
+  // Check near-term availability per service so the Waitlist button (or,
+  // when waitlists are off, the plain "no openings" note) only shows once a
+  // service is confirmed to have nothing bookable soon — otherwise it
+  // decorated every service unconditionally. Runs regardless of the
+  // waitlist toggle since the fully-booked note doesn't depend on it.
+  //
+  // Fired alongside a second, much wider check (the provider's whole
+  // booking window, clamped internally by hasNearTermAvailabilityForServices
+  // to whatever booking_window_days actually is) — that's the only one
+  // strict enough to disable Book itself, since "nothing in 14 days" is not
+  // the same claim as "nothing ever."
   useEffect(() => {
-    if (!provider || !providerDbId || !provider.waitlistEnabled) return;
+    if (!provider || !providerDbId) return;
     const allServices = Object.values(provider.categories).flat();
     if (allServices.length === 0) return;
     let cancelled = false;
@@ -1996,12 +1854,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       .filter((service) => !!service.dbId)
       .map((service) => ({ serviceId: service.dbId as string, duration: service.duration }));
     if (serviceRequests.length === 0) return;
-    AvailabilityService.hasNearTermAvailabilityForServices(providerDbId, serviceRequests)
-      .then((availabilityById) => {
+
+    const FULL_BOOKING_HORIZON_DAYS = 180;
+    Promise.all([
+      AvailabilityService.hasNearTermAvailabilityForServices(providerDbId, serviceRequests),
+      AvailabilityService.hasNearTermAvailabilityForServices(providerDbId, serviceRequests, FULL_BOOKING_HORIZON_DAYS),
+    ])
+      .then(([nearTermById, fullWindowById]) => {
         if (cancelled) return;
         setServiceNearTermAvailability((prev) => ({
           ...prev,
-          ...Object.fromEntries(availabilityById),
+          ...Object.fromEntries(nearTermById),
+        }));
+        setServiceFullyBooked((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            Array.from(fullWindowById.entries()).map(([id, hasAvailability]) => [id, !hasAvailability])
+          ),
         }));
       })
       .catch(() => {});
@@ -2009,6 +1878,31 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       cancelled = true;
     };
   }, [provider, providerDbId]);
+
+  // If this provider requires a consultation before a new client's first
+  // booking, and this client has no booking history with them, fetch the
+  // consultation service so handleBook can pass it into BookingSheet.
+  useEffect(() => {
+    if (!provider?.consultationRequiredNewClients || !providerDbId) {
+      setRequiredConsultationService(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      getProviderConsultationService(providerDbId),
+      getProviderIdsWithBookingHistory([providerDbId]),
+    ])
+      .then(([service, historyIds]) => {
+        if (cancelled) return;
+        setRequiredConsultationService(historyIds.has(providerDbId) ? null : service);
+      })
+      .catch(() => {
+        if (!cancelled) setRequiredConsultationService(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [provider?.consultationRequiredNewClients, providerDbId]);
 
   const openOffersPanel = useCallback(() => {
     setShowOffersModal(true);
@@ -2065,7 +1959,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   }, [isNotificationsEnabled, showRightNotification]);
 
   // Bookmark toggle handler
-  // Bookmark toggle handler - FIXED VERSION
   const {
     isBookmarked: isBookmarkedFn,
     addBookmark,
@@ -2176,6 +2069,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     providerIsBookmarked,
     isBookmarkLoading,
     providerId,
+    providerDbId,
     addBookmark,
     removeBookmark,
     slideRightAnimation,
@@ -2270,7 +2164,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           ? [fromStr, waitlistDateTo.toISOString().split("T")[0]!]
           : [fromStr];
       }
-      const entry = await WaitlistService.joinWaitlist({
+      const entry = await joinWaitlist({
         providerId: providerDbId,
         userId: currentUserId,
         serviceId: waitlistModal.service.dbId,
@@ -2304,7 +2198,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   const handleLeaveWaitlist = useCallback(async (entry: WaitlistEntry) => {
     try {
-      await WaitlistService.leaveWaitlist(entry.id);
+      await leaveWaitlist(entry.id);
       setUserWaitlistMap((prev) => {
         const next = { ...prev };
         delete next[entry.service_id ?? "__any__"];
@@ -2473,11 +2367,47 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // ===== UPDATED CART HANDLERS FOR COMPATIBILITY =====
   const handleQuickBook = useCallback(
-    (service: ServiceData, promo?: DbPromotion) => {
+    async (service: ServiceData, promo?: DbPromotion) => {
       logger.log("Quick Book - Redirecting to checkout:", service.name);
       if (!provider) return;
 
+      // Providers with an external booking link are fully bypassed from
+      // Cerviced's in-app booking — hand off to their own booking page
+      // instead of adding to cart. See tryOpenExternalBooking below, which
+      // handleBook uses for the same check on the non-Quick-Book path.
+      if (provider.externalBookingUrl) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Linking.openURL(provider.externalBookingUrl).catch(() => {
+          Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
+        });
+        return;
+      }
+
       try {
+        // Actually resolve "next available" to a real date+time instead of
+        // just claiming one in the toast — the cart item now carries it, so
+        // this service arrives already scheduled. Never blocks Quick Book on
+        // failure: falls back to the old unscheduled-add behavior below.
+        // Runs alongside the deposit-policy check (independent lookups).
+        const uuidServiceId =
+          service.dbId && UUID_RE.test(service.dbId) ? service.dbId : undefined;
+        const providerDisplayName = provider.displayName ?? provider.providerName;
+        const [slot, depositPolicies] = await Promise.all([
+          AvailabilityService.resolveNextAvailableSlot(
+            providerDbId ?? providerDisplayName,
+            service.duration,
+            uuidServiceId,
+          ).catch(() => null),
+          getProviderDepositPoliciesByDisplayNames([providerDisplayName]).catch(
+            () => ({}) as Record<string, import("../services/databaseService").ProviderDepositPolicy>
+          ),
+        ]);
+        // Quick Book skips the payment-choice step entirely, so if the
+        // provider requires a deposit (no "pay in full" option) that has to
+        // be forced here too — otherwise this fast path would silently let
+        // a client pay in full against the provider's own policy.
+        const requiresDepositOnly = !!depositPolicies[providerDisplayName]?.depositOnly;
+
         // Create cart item for immediate checkout
         const cartItem = {
           providerName: provider.providerName,
@@ -2503,15 +2433,22 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           quantity: 1,
           selectedOptions: {},
           forceNewInstance: true,
+          ...(slot ? { selectedDate: slot.date, selectedTime: slot.time } : {}),
+          ...(requiresDepositOnly ? { isDepositOnly: true } : {}),
         };
 
         // Add to cart
         addToCart(cartItem);
 
         // Show redirecting message and navigate to cart for immediate checkout
+        const slotLabel = slot
+          ? `${new Date(slot.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at ${slot.time}`
+          : null;
         showSuccessMessageWithAnimation(
           "Redirecting to Checkout...",
-          `${service.name} added to cart. Taking you to checkout with next available date.`,
+          slotLabel
+            ? `${service.name} booked for ${slotLabel}. Taking you to checkout.`
+            : `${service.name} added to cart. Taking you to checkout to pick a time.`,
           "checkout",
         );
 
@@ -2539,99 +2476,142 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     ],
   );
 
-  // Offers "Book Now" — when the offer targets exactly one service, skip
-  // straight to checkout via the same flow as Quick Book. Otherwise (offer
-  // spans multiple/all services) there's nothing safe to auto-pick, so fall
-  // back to jumping the client to Services with that category pre-selected.
+  // Providers with an external booking link (Fresha, Treatwell, Acuity, etc.)
+  // are fully bypassed from Cerviced's in-app booking flow — every "Book"
+  // entry point checks this first and hands off to their own booking page
+  // instead of opening the cart/BookingSheet. Returns true if it handled the
+  // tap (caller should stop), false if the caller should proceed in-app.
+  const tryOpenExternalBooking = useCallback((): boolean => {
+    const url = provider?.externalBookingUrl;
+    if (!url) return false;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Couldn't open booking link", 'Please try again in a moment.');
+    });
+    return true;
+  }, [provider]);
+
+  // Offers "Book Now" — when the offer's eligibility narrows to exactly one
+  // service, skip straight to checkout via the same flow as Quick Book.
+  // promo.service_ids is the actual scoping field (null/empty means "every
+  // service", same convention BookingSheet/CartScreen use for promo
+  // eligibility) — promo.service_category is only the provider's own macro
+  // category (HAIR/NAILS/...), the same value for every promo this provider
+  // creates, not a key into provider.categories (which is that provider's
+  // own custom per-service category_name groupings, a different vocabulary
+  // entirely) — so it must NOT be used to index provider.categories.
   const handleBookOffer = useCallback(
     (promo: DbPromotion) => {
       closeOffersPanel();
       if (!provider) return;
 
       const allServices = Object.values(provider.categories).flat();
-      let target: ServiceData | undefined;
-      if (promo.service_ids && promo.service_ids.length === 1) {
-        target = allServices.find((s) => s.dbId === promo.service_ids![0]);
-      } else if (
-        promo.service_category &&
-        provider.categories[promo.service_category]?.length === 1
-      ) {
-        target = provider.categories[promo.service_category]![0];
-      }
+      const eligibleServices =
+        promo.service_ids && promo.service_ids.length > 0
+          ? allServices.filter((s) => promo.service_ids!.includes(s.dbId))
+          : allServices; // no service_ids restriction → applies to every service
 
-      if (target) {
-        setTimeout(() => handleQuickBook(target!, promo), 350); // let the panel slide out first
+      if (eligibleServices.length === 1) {
+        const target = eligibleServices[0]!;
+        setTimeout(() => handleQuickBook(target, promo), 350); // let the panel slide out first
         return;
       }
 
-      if (
-        promo.service_category &&
-        provider.categories[promo.service_category]
-      ) {
-        setSelectedCategory(promo.service_category);
+      // Multiple eligible services and no in-app service list to send them
+      // to anyway — go straight to the provider's own booking page, same as
+      // every other "Book" entry point.
+      if (tryOpenExternalBooking()) return;
+
+      // Nothing safe to auto-pick — land the client on Services instead.
+      // Pre-select the category only if the eligible set happens to live
+      // entirely inside one of the provider's own categories.
+      const matchedCategories = new Set(
+        Object.entries(provider.categories)
+          .filter(([, services]) => services.some((s) => eligibleServices.includes(s)))
+          .map(([name]) => name),
+      );
+      if (matchedCategories.size === 1) {
+        setSelectedCategory([...matchedCategories][0]!);
       }
       setTimeout(() => {
         const scrollNode = scrollRef.current;
         const section = servicesSectionRef.current;
         if (!scrollNode || !section) return;
-        // measureLayout needs the ScrollView's underlying native node handle,
-        // not the component instance itself — passing the instance directly
-        // triggers "ref.measureLayout must be called with a ref to a native
-        // component" at runtime even though scrollTo still happens to work.
+        // Calling `section.measureLayout(...)` as an instance method still
+        // logged "ref.measureLayout must be called with a ref to a native
+        // component" at runtime (scrollTo happened to still work despite the
+        // warning, which is how it went unnoticed). The static
+        // `UIManager.measureLayout(target, relativeTo, onFail, onSuccess)`
+        // form below takes plain node handles for both sides — via
+        // findNodeHandle on each — instead of invoking measureLayout as a
+        // method on the ref itself, which sidesteps that native-component
+        // check entirely.
         const scrollHandle = findNodeHandle(scrollNode);
-        if (!scrollHandle) return;
-        section.measureLayout(
+        const sectionHandle = findNodeHandle(section);
+        if (!scrollHandle || !sectionHandle) return;
+        UIManager.measureLayout(
+          sectionHandle,
           scrollHandle,
+          () => {},
           (_x: number, y: number) =>
             scrollNode.scrollTo({ y: Math.max(y - 90, 0), animated: true }),
-          () => {},
         );
       }, 350);
     },
-    [closeOffersPanel, provider, handleQuickBook],
+    [closeOffersPanel, provider, handleQuickBook, tryOpenExternalBooking],
   );
 
   const handleBook = useCallback((service: ServiceData) => {
+    if (tryOpenExternalBooking()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      // Regular Book opens add-ons modal first
       setSelectedService(service);
-      setShowAddOnsModal(true);
+      setShowBookingSheet(true);
     } catch (error) {
-      logger.error("Error opening add-ons modal:", error);
+      logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, []);
+  }, [tryOpenExternalBooking]);
 
-  const handleAddToCartWithAddOns = useCallback(
-    (
-      service: ServiceData,
-      selectedAddOns: Array<{
-        id: string | number;
-        name: string;
-        price: number;
-      }>,
-    ) => {
-      logger.log(
-        "Book with Add-ons - Adding to cart:",
-        service.name,
-        selectedAddOns,
-      );
+  // Arriving with route.params.openServiceId (e.g. tapping "Book Now" on a
+  // specific service card in Explore) — open that exact service's booking
+  // modal automatically once the provider's services have loaded, instead
+  // of leaving the client to find it themselves in the list below.
+  const openServiceIdHandled = useRef(false);
+  useEffect(() => {
+    if (openServiceIdHandled.current) return;
+    const targetId = route.params?.openServiceId;
+    // Never auto-fire for external-booking providers — handleBook would
+    // silently launch Linking.openURL the moment this screen mounts, before
+    // the client has even seen the profile. Let them tap Book themselves.
+    if (!targetId || !provider || provider.externalBookingUrl) return;
+    const match = Object.values(provider.categories)
+      .flat()
+      .find((s) => s.dbId === targetId);
+    if (match) {
+      openServiceIdHandled.current = true;
+      handleBook(match);
+    }
+  }, [route.params?.openServiceId, provider, handleBook]);
+
+  const handleBookingSheetSubmit = useCallback(
+    (service: ServiceData, result: BookingSheetResult) => {
+      logger.log("BookingSheet submit - Adding to cart:", service.name, result);
       if (!provider) return;
 
       try {
-        const addOnsTotal = selectedAddOns.reduce(
+        const addOnsTotal = result.selectedAddOns.reduce(
           (sum, addOn) => sum + addOn.price,
           0,
         );
         const totalPrice = service.price + addOnsTotal;
 
-        // FIXED: Create cart item with proper structure
         const cartItem = {
           providerName: provider.providerName,
           providerDisplayName: provider.displayName,
           providerSlug: provider.id,
           providerId: providerDbId ?? undefined,
+          initialPromoCode: result.promoCode,
           providerImage: provider.providerLogo,
           providerService: provider.providerService,
           service: {
@@ -2643,36 +2623,72 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             duration: service.duration,
             description: service.description,
             // CRITICAL: Add-ons must be in service object for CartContext
-            addOns: selectedAddOns,
+            addOns: result.selectedAddOns,
           },
           quantity: 1,
           selectedOptions: {},
           forceNewInstance: true, // Always create new instance
+          selectedDate: result.date,
+          selectedTime: result.time,
+          notes: result.notes || undefined,
+          isDepositOnly: result.isDepositOnly,
         };
 
         // Add to cart context
         addToCart(cartItem);
 
+        // A required consultation was scheduled alongside this service in
+        // the same sheet (see requiredConsultationService) — add it as its
+        // own cart item too, with its own date/time.
+        if (result.consultationBooking && requiredConsultationService) {
+          addToCart({
+            providerName: provider.providerName,
+            providerDisplayName: provider.displayName,
+            providerSlug: provider.id,
+            providerId: providerDbId ?? undefined,
+            providerImage: provider.providerLogo,
+            providerService: requiredConsultationService.categoryName,
+            service: {
+              id: requiredConsultationService.id,
+              name: requiredConsultationService.name,
+              price: requiredConsultationService.price,
+              duration: `${requiredConsultationService.durationMinutes} min`,
+              description: requiredConsultationService.description,
+            },
+            quantity: 1,
+            selectedOptions: {},
+            forceNewInstance: true,
+            selectedDate: result.consultationBooking.date,
+            selectedTime: result.consultationBooking.time,
+          });
+        }
+
         // Show success message
         const addOnsText =
-          selectedAddOns.length > 0
-            ? ` with ${selectedAddOns.length} add-on${selectedAddOns.length > 1 ? "s" : ""}`
+          result.selectedAddOns.length > 0
+            ? ` with ${result.selectedAddOns.length} add-on${result.selectedAddOns.length > 1 ? "s" : ""}`
             : "";
+        const scheduledText = result.date
+          ? ` booked for ${new Date(result.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at ${result.time}`
+          : "";
+        const consultationText = result.consultationBooking
+          ? ` Your required consultation is booked for ${new Date(result.consultationBooking.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at ${result.consultationBooking.time}.`
+          : "";
 
         showSuccessMessageWithAnimation(
           "Added to Cart!",
-          `${service.name}${addOnsText} has been added to your cart. Total: £${totalPrice.toFixed(2)}`,
+          `${service.name}${addOnsText}${scheduledText}. Total: £${totalPrice.toFixed(2)}.${consultationText}`,
           "cart",
         );
       } catch (error) {
-        logger.error("Error adding service with add-ons:", error);
+        logger.error("Error adding service to cart:", error);
         Alert.alert(
           "Error",
           "Failed to add service to cart. Please try again.",
         );
       }
     },
-    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation],
+    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation, requiredConsultationService],
   );
 
   const handleViewCart = useCallback(() => {
@@ -2779,7 +2795,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const renderServiceCategoryBlock = (
     services: ServiceData[],
     onShowAll: (() => void) | null,
-    // Book / Waitlist open their own <Modal> (AddOnsModal, the waitlist
+    // Book / Waitlist open their own <Modal> (BookingSheet, the waitlist
     // modals). React Native doesn't reliably support one Modal opening on
     // top of another — on Android especially, the new one can render behind
     // or eat no touches at all. When this block is rendered inside the "All
@@ -2816,6 +2832,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         contentContainerStyle={styles.categoryTabsContent}
         nestedScrollEnabled={true}
       />
+
+      {/* Selected category's description — what it includes, benefits, etc. */}
+      {provider.categoryDescriptions[selectedCategory] ? (
+        <Text style={[styles.categoryDescriptionText, { color: OP.sub }]}>
+          {provider.categoryDescriptions[selectedCategory]}
+        </Text>
+      ) : null}
 
       {/* Services List */}
       <View style={styles.categoryServicesContainer}>
@@ -2908,6 +2931,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   <Text style={[styles.serviceName, { color: OP.text }]}>
                     {service.name}
                   </Text>
+                  {service.serviceType === "consultation" &&
+                    provider.onlineConsultationsAvailable && (
+                      <Text
+                        style={[
+                          styles.serviceVirtualBadge,
+                          { color: adaptiveAccentColor },
+                        ]}
+                      >
+                        Available virtually
+                      </Text>
+                    )}
                   <Text
                     style={[styles.serviceDescription, { color: OP.sub }]}
                     numberOfLines={
@@ -2993,21 +3027,38 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                 {/* Book + Waitlist stacked column */}
                 <View style={styles.serviceActionColumn}>
-                  <TouchableOpacity
-                    style={[
-                      styles.bookButton,
-                      { backgroundColor: adaptiveAccentColor },
-                    ]}
-                    onPress={() => {
-                      onBeforeAction();
-                      handleBook(service);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.bookButtonText, { color: "#fff" }]}>
-                      Book
-                    </Text>
-                  </TouchableOpacity>
+                  {(() => {
+                    const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || serviceFullyBooked[service.dbId] === true;
+                    return (
+                      <TouchableOpacity
+                        disabled={fullyBooked}
+                        style={[
+                          styles.bookButton,
+                          {
+                            backgroundColor: fullyBooked
+                              ? withAlpha(OP.sub, 0.18)
+                              : adaptiveAccentColor,
+                          },
+                        ]}
+                        onPress={() => {
+                          onBeforeAction();
+                          handleBook(service);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.bookButtonText,
+                            fullyBooked
+                              ? { color: OP.sub, fontSize: 10 }
+                              : { color: "#fff" },
+                          ]}
+                        >
+                          {fullyBooked ? "Fully Booked" : "Book"}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
 
                   {(() => {
                     const wEntry = userWaitlistMap[service.dbId];
@@ -3040,8 +3091,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             ]}
                           >
                             {wEntry.status === "notified"
-                              ? "Waitlisted"
-                              : "Waiting"}
+                              ? "Slot Held — Confirm!"
+                              : `Waiting · #${wEntry.position}`}
                           </Text>
                           <TouchableOpacity
                             onPress={() => {
@@ -3073,15 +3124,29 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         </View>
                       );
                     }
-                    // Provider turned waitlists off in Automations —
-                    // existing entries above still show so they can leave
-                    if (!provider.waitlistEnabled) return null;
-                    // Only offer the waitlist once we've confirmed there's
-                    // nothing bookable in the next 14 days — undefined
-                    // means "still checking" and true means "still has
-                    // openings", so both hide the button.
-                    if (serviceNearTermAvailability[service.dbId] !== false)
+                    // undefined means "still checking" and true means
+                    // "still has openings" — both stay quiet here.
+                    if (!DEBUG_FORCE_FULLY_BOOKED && serviceNearTermAvailability[service.dbId] !== false)
                       return null;
+                    // Provider turned waitlists off in Automations — still
+                    // surface the scarcity so the client isn't only told
+                    // "nothing this fortnight" after tapping Book and paging
+                    // through empty weeks in the calendar. Skipped when
+                    // the Book button above already reads "Fully Booked" —
+                    // this note would just repeat the same claim.
+                    if (!DEBUG_FORCE_FULLY_BOOKED && !provider.waitlistEnabled) {
+                      if (serviceFullyBooked[service.dbId] === true) return null;
+                      return (
+                        <Text
+                          style={[
+                            styles.fullyBookedNote,
+                            { color: OP.sub },
+                          ]}
+                        >
+                          No openings next 2 wks
+                        </Text>
+                      );
+                    }
                     return (
                       <TouchableOpacity
                         style={[
@@ -3197,12 +3262,31 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         )}
 
         {/* Add-Ons Modal */}
-        <AddOnsModal
-          isVisible={showAddOnsModal}
-          onClose={() => setShowAddOnsModal(false)}
+        <BookingSheet
+          isVisible={showBookingSheet}
+          onClose={() => setShowBookingSheet(false)}
+          mode="add"
           service={selectedService}
-          onAddToCart={handleAddToCartWithAddOns}
+          onSubmit={(result) => selectedService && handleBookingSheetSubmit(selectedService, result)}
           adaptiveAccentColor={adaptiveAccentColor}
+          backgroundColor={OP.card}
+          providerIdentifier={
+            providerDbId ?? provider?.displayName ?? provider?.providerName ?? ""
+          }
+          providerDisplayName={provider?.displayName ?? provider?.providerName ?? ""}
+          providerKey={provider?.providerName ?? ""}
+          providerServiceCategory={provider?.providerService}
+          consultationRequired={
+            selectedService?.serviceType !== "consultation" && requiredConsultationService
+              ? {
+                  id: requiredConsultationService.id,
+                  name: requiredConsultationService.name,
+                  price: requiredConsultationService.price,
+                  duration: `${requiredConsultationService.durationMinutes} min`,
+                  description: requiredConsultationService.description,
+                }
+              : null
+          }
         />
 
         {/* Reviews Modal */}
@@ -3255,20 +3339,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               carousels, all of it) would stay permanently double-mounted:
               once here and once in the inline capped list below. */}
           {showAllServicesModal && (
-            <View style={styles.modalBackground}>
-              <LinearGradient
-                colors={provider.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={[styles.modalGradient, { opacity: 0.85 }]}
-              />
-
+            <View style={[styles.modalBackground, { backgroundColor: OP.card }]}>
               <SafeAreaView style={styles.modalSafeArea}>
-                <View style={styles.modalHeader}>
+                <View style={[styles.modalHeader, { borderBottomColor: OP.border }]}>
                   <View style={styles.modalHeaderContent}>
                     <View>
-                      <Text style={styles.modalTitle}>All Services</Text>
-                      <Text style={styles.modalSubtitle}>
+                      <Text style={[styles.modalTitle, { color: OP.text }]}>All Services</Text>
+                      <Text style={[styles.modalSubtitle, { color: OP.sub }]}>
                         {selectedCategory} • {selectedCategoryServices.length}{" "}
                         service
                         {selectedCategoryServices.length === 1 ? "" : "s"}
@@ -4029,6 +4106,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         icon: keyof typeof Ionicons.glyphMap;
                         label: string;
                         value: string;
+                        /** Short badge shown next to the label — e.g. "ONLY"
+                         *  when the provider requires the deposit and won't
+                         *  accept payment in full. */
+                        tag?: string;
                       }[] = [];
                       if (bp?.depositRequired && bp.depositAmount) {
                         rows.push({
@@ -4038,6 +4119,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             bp.depositType === "percent"
                               ? `${bp.depositAmount}% required`
                               : `£${bp.depositAmount} required`,
+                          ...(bp.depositOnly ? { tag: "ONLY" } : {}),
                         });
                       }
                       // Cancellation — the enforced window (Automations screen) wins over
@@ -4119,11 +4201,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                                 />
                               </View>
                               <View style={styles.policyRowText}>
-                                <Text
-                                  style={[styles.policyLabel, { color: OP.sub }]}
-                                >
-                                  {row.label}
-                                </Text>
+                                <View style={styles.policyLabelRow}>
+                                  <Text
+                                    style={[styles.policyLabel, { color: OP.sub }]}
+                                  >
+                                    {row.label}
+                                  </Text>
+                                  {!!row.tag && (
+                                    <View
+                                      style={[
+                                        styles.policyTag,
+                                        { backgroundColor: adaptiveAccentColor },
+                                      ]}
+                                    >
+                                      <Text style={styles.policyTagText}>
+                                        {row.tag}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
                                 <Text
                                   style={[styles.policyValue, { color: OP.text }]}
                                 >
@@ -4310,7 +4406,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </View>
                 ) : null}
 
-                {provider.phone ? (
+                {provider.phone && provider.preferredContactMethods.includes("phone") ? (
                   <TouchableOpacity
                     style={[styles.contactRow, { borderBottomColor: OP.sep }]}
                     onPress={() =>
@@ -4329,7 +4425,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </TouchableOpacity>
                 ) : null}
 
-                {provider.whatsapp ? (
+                {provider.whatsapp && provider.preferredContactMethods.includes("whatsapp") ? (
                   <TouchableOpacity
                     style={[styles.contactRow, { borderBottomColor: OP.sep }]}
                     onPress={() =>
@@ -4348,7 +4444,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </TouchableOpacity>
                 ) : null}
 
-                {provider.email ? (
+                {provider.email && provider.preferredContactMethods.includes("email") ? (
                   <TouchableOpacity
                     style={[styles.contactRow, { borderBottomColor: OP.sep }]}
                     onPress={() => Linking.openURL(`mailto:${provider.email}`)}
@@ -4960,6 +5056,14 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 8, // Add vertical padding to prevent cutoff
   },
+  categoryDescriptionText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    lineHeight: 18,
+    paddingHorizontal: 20,
+    marginTop: -12, // categoryTabs already carries a 20px marginBottom
+    marginBottom: 14,
+  },
 
   categoryServicesContainer: {
     gap: 15,
@@ -5032,6 +5136,12 @@ const styles = StyleSheet.create({
   serviceName: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 14,
+    marginBottom: 5,
+  },
+  serviceVirtualBadge: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontWeight: "700",
+    fontSize: 10,
     marginBottom: 5,
   },
   serviceDescription: {
@@ -5275,12 +5385,29 @@ const styles = StyleSheet.create({
   policyRowText: {
     flex: 1,
   },
+  policyLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   policyLabel: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 10,
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: 2,
+  },
+  policyTag: {
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginBottom: 2,
+  },
+  policyTagText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 9,
+    letterSpacing: 0.5,
+    color: "#fff",
   },
   policyValue: {
     fontFamily: "Jura-VariableFont_wght",
@@ -5368,12 +5495,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  // Reviews Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)", // Semi-transparent dark overlay
-    justifyContent: "flex-end",
-  },
   modalContainer: {
     flex: 1,
     marginTop: 100, // Start modal below status bar
@@ -5498,135 +5619,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  // Add-Ons Modal Styles
-  addOnsModalContainer: {
-    flex: 1,
-    marginTop: 120, // Start modal below navigation
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    overflow: "hidden",
-  },
-  addOnCard: {
-    borderRadius: 18,
-    marginBottom: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  addOnCardBlur: {
-    padding: 16,
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  addOnContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  addOnInfo: {
-    flex: 1,
-    marginRight: 15,
-  },
-  addOnName: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: "#000",
-    marginBottom: 4,
-  },
-  addOnDescription: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
-    fontSize: 12,
-    color: "rgba(0,0,0,0.85)",
-    lineHeight: 16,
-  },
-  addOnPriceContainer: {
-    alignItems: "center",
-    gap: 8,
-  },
-  addOnPrice: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  addOnCheckbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "rgba(0,0,0,0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "transparent",
-  },
-  addOnCheckmark: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  addOnsFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.1)",
-    backgroundColor: "rgba(255,255,255,0.1)",
-  },
-  totalContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  totalLabel: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 18,
-    color: "#000",
-  },
-  totalPrice: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-  addOnsButtons: {
-    flexDirection: "row",
-    gap: 15,
-  },
-  skipButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "rgba(0,0,0,0.3)",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.2)",
-  },
-  skipButtonText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: "#000",
-    fontWeight: "bold",
-  },
-  addToCartButton: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  addToCartButtonText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: "#fff",
-    fontWeight: "bold",
-  },
 
   // Success Message Styles
   successOverlay: {
@@ -5811,6 +5803,12 @@ const styles = StyleSheet.create({
     fontFamily: "BakbakOne-Regular",
     fontSize: 12,
     fontWeight: "bold",
+  },
+  fullyBookedNote: {
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "right",
+    maxWidth: 90,
   },
   waitlistChip: {
     flexDirection: "row",

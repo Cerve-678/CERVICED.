@@ -457,7 +457,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           truncated snippet before; this is where you actually read it. */}
       <Modal
         visible={!!previewing}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setPreviewing(null)}
       >

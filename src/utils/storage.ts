@@ -49,9 +49,8 @@ export const STORAGE_KEYS = {
 USER_DATA: '@user_data',
 SETTINGS: '@app_settings',
 AUTH_TOKEN: '@auth_token',
-ONBOARDING_COMPLETED: '@onboarding_completed',
 LIKED_VIDEOS: 'liked_videos',
 BOOKMARKED_VIDEOS: 'bookmarked_videos',
 SAVED_PORTFOLIO: 'saved_portfolio_items',
-PLANNER_EVENTS: 'planner_events',
+MANUAL_LOCATION: '@manual_location',
 } as const;

@@ -11,9 +11,9 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
-  LayoutChangeEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -53,6 +53,18 @@ const TREATMENT_HISTORY = [
   'Hair extensions', 'Lash extensions', 'Microblading', 'Fillers / Botox', 'Chemical peels',
 ];
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
+
+type CategoryKey =
+  | 'health' | 'skin' | 'hair' | 'nails' | 'lashesBrows'
+  | 'makeup' | 'general' | 'personalisation' | 'consent';
+
+// Collapsed-category summary line: first few filled values, or a nudge to fill it in.
+function summarize(items: string[], emptyText: string): string {
+  const parts = items.filter(Boolean);
+  if (parts.length === 0) return emptyText;
+  if (parts.length <= 3) return parts.join(' · ');
+  return `${parts.slice(0, 3).join(' · ')} +${parts.length - 3} more`;
+}
 
 // ── Data shape ──────────────────────────────────────────────────────────────
 
@@ -117,11 +129,17 @@ export default function BeautyProfileScreen({ navigation }: any) {
   const [saved,     setSaved]     = useState<BeautyData>(EMPTY);
   const [draft,     setDraft]     = useState<BeautyData>(EMPTY);
 
-  // single ref holding all section Y positions — avoids unused-var hints
-  const sectionY = useRef({ skin: 0, allergy: 0, concerns: 0, vibe: 0, services: 0, history: 0, medical: 0, photo: 0, nails: 0, lashes: 0, makeup: 0 });
-
-  const scrollTo = (key: keyof typeof sectionY.current) =>
-    scrollRef.current?.scrollTo({ y: Math.max(0, sectionY.current[key] - 24), animated: true });
+  // Categories start collapsed — expanding one shows its fields, collapsing
+  // shows just a one-line summary instead of every chip for every field.
+  const [expanded, setExpanded] = useState<Set<CategoryKey>>(new Set());
+  const toggleCategory = (key: CategoryKey) => {
+    Haptics.selectionAsync().catch(() => {});
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
 
   // ── Load ─────────────────────────────────────────────────────────────────
 
@@ -305,6 +323,56 @@ export default function BeautyProfileScreen({ navigation }: any) {
     draft.medicalNotes || draft.serviceInterests.length || draft.nailLength ||
     draft.lashStyle || draft.browStyle || draft.makeupCoverage;
 
+  const genderLabel: Record<string, string> = { female: 'Female', male: 'Male', 'non-binary': 'Non-binary', 'prefer-not-to-say': 'Prefer not to say' };
+
+  const catInfo: Record<CategoryKey, { label: string; summary: string; filled: boolean }> = {
+    health: {
+      label: 'HEALTH & SAFETY',
+      summary: summarize([...draft.allergies, draft.medicalNotes ? 'Medical notes added' : ''], 'Not set — allergies & medical notes'),
+      filled: draft.allergies.length > 0 || !!draft.medicalNotes,
+    },
+    skin: {
+      label: 'SKIN',
+      summary: summarize([draft.skinType, draft.skinTone, ...draft.skinConcerns, ...draft.sensitiveAreas], 'Not set'),
+      filled: !!draft.skinType || !!draft.skinTone || draft.skinConcerns.length > 0 || draft.sensitiveAreas.length > 0,
+    },
+    hair: {
+      label: 'HAIR',
+      summary: summarize([draft.hairType, draft.scalpCondition, ...draft.treatmentHistory, ...draft.hairGoals], 'Not set'),
+      filled: !!draft.hairType || !!draft.scalpCondition || draft.treatmentHistory.length > 0 || draft.hairGoals.length > 0,
+    },
+    nails: {
+      label: 'NAILS',
+      summary: summarize([draft.nailLength, draft.nailShape], 'Not set'),
+      filled: !!draft.nailLength || !!draft.nailShape,
+    },
+    lashesBrows: {
+      label: 'LASHES & BROWS',
+      summary: summarize([draft.lashStyle, draft.lashStatus, draft.browStyle, draft.browCondition], 'Not set'),
+      filled: !!draft.lashStyle || !!draft.lashStatus || !!draft.browStyle || !!draft.browCondition,
+    },
+    makeup: {
+      label: 'MAKEUP',
+      summary: summarize([draft.makeupCoverage, draft.makeupFinish, draft.makeupEyes, draft.makeupLips], 'Not set'),
+      filled: !!draft.makeupCoverage || !!draft.makeupFinish || !!draft.makeupEyes || !!draft.makeupLips,
+    },
+    general: {
+      label: 'GENERAL',
+      summary: summarize([draft.styleVibe, ...draft.serviceInterests], 'Not set'),
+      filled: !!draft.styleVibe || draft.serviceInterests.length > 0,
+    },
+    personalisation: {
+      label: 'PERSONALISATION',
+      summary: summarize([draft.gender ? (genderLabel[draft.gender] ?? '') : '', draft.has_kids ? 'Kids services' : ''], 'Not set'),
+      filled: !!draft.gender || draft.has_kids,
+    },
+    consent: {
+      label: 'CONSENT',
+      summary: draft.photographyConsent ? 'Photos allowed' : 'Photos not allowed',
+      filled: true,
+    },
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -337,10 +405,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
         </Text>
 
         {/* ══ HEALTH & SAFETY (always fill) ══════════════════════════════ */}
-        <CatDivider label="HEALTH & SAFETY" theme={theme} />
-
-        {/* Allergies */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.allergy = e.nativeEvent.layout.y; }}>
+        <CategorySection {...catInfo.health} expanded={expanded.has('health')} onToggle={() => toggleCategory('health')} theme={theme} isDarkMode={isDarkMode}>
           <SectionHead label="ALLERGIES" sub="Known allergies or sensitivities — always shared with providers" filled={draft.allergies.length > 0} editing={editing} theme={theme} warning />
           <View style={styles.chips}>
             {ALLERGENS.map(item => (
@@ -349,10 +414,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Medical notes */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.medical = e.nativeEvent.layout.y; }}>
           <SectionHead label="MEDICAL NOTES" sub="Pregnancy, medications, health conditions that affect treatments" filled={!!draft.medicalNotes} editing={editing} theme={theme} warning />
           <TextInput
             style={[styles.medicalInput, { color: theme.text, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', opacity: editing ? 1 : 0.7 }]}
@@ -362,13 +424,10 @@ export default function BeautyProfileScreen({ navigation }: any) {
             placeholderTextColor={theme.secondaryText}
             multiline numberOfLines={3} textAlignVertical="top" editable={editing}
           />
-        </View>
+        </CategorySection>
 
         {/* ══ SKIN ══════════════════════════════════════════════════════════ */}
-        <CatDivider label="SKIN" theme={theme} />
-
-        {/* Skin type */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.skin = e.nativeEvent.layout.y; }}>
+        <CategorySection {...catInfo.skin} expanded={expanded.has('skin')} onToggle={() => toggleCategory('skin')} theme={theme} isDarkMode={isDarkMode}>
           <SectionHead label="SKIN TYPE" sub="Your skin type" filled={!!draft.skinType} editing={editing} theme={theme} />
           <View style={styles.chips}>
             {SKIN_TYPES.map(t => (
@@ -377,20 +436,16 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Skin tone */}
-        <SectionHead label="SKIN TONE" sub="Your complexion" filled={!!draft.skinTone} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {SKIN_TONES.map(t => (
-            <TouchableOpacity key={t} style={chip(draft.skinTone === t)} onPress={() => setSingle('skinTone', t)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.skinTone === t)}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="SKIN TONE" sub="Your complexion" filled={!!draft.skinTone} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {SKIN_TONES.map(t => (
+              <TouchableOpacity key={t} style={chip(draft.skinTone === t)} onPress={() => setSingle('skinTone', t)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.skinTone === t)}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Skin concerns */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.concerns = e.nativeEvent.layout.y; }}>
           <SectionHead label="SKIN CONCERNS" sub="Select all that apply" filled={draft.skinConcerns.length > 0} editing={editing} theme={theme} optional />
           <View style={styles.chips}>
             {SKIN_CONCERNS.map(c => (
@@ -399,43 +454,37 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Sensitive areas */}
-        <SectionHead label="SENSITIVE AREAS" sub="Areas of sensitivity for treatments like waxing or facial work" filled={draft.sensitiveAreas.length > 0} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {SENSITIVE_AREAS.map(a => (
-            <TouchableOpacity key={a} style={chip(draft.sensitiveAreas.includes(a))} onPress={() => toggleMulti('sensitiveAreas', a)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.sensitiveAreas.includes(a))}>{a}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="SENSITIVE AREAS" sub="Areas of sensitivity for treatments like waxing or facial work" filled={draft.sensitiveAreas.length > 0} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {SENSITIVE_AREAS.map(a => (
+              <TouchableOpacity key={a} style={chip(draft.sensitiveAreas.includes(a))} onPress={() => toggleMulti('sensitiveAreas', a)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.sensitiveAreas.includes(a))}>{a}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </CategorySection>
 
         {/* ══ HAIR ══════════════════════════════════════════════════════════ */}
-        <CatDivider label="HAIR" theme={theme} />
+        <CategorySection {...catInfo.hair} expanded={expanded.has('hair')} onToggle={() => toggleCategory('hair')} theme={theme} isDarkMode={isDarkMode}>
+          <SectionHead label="HAIR TYPE" sub="Your hair texture" filled={!!draft.hairType} editing={editing} theme={theme} />
+          <View style={styles.chips}>
+            {HAIR_TYPES.map(t => (
+              <TouchableOpacity key={t} style={chip(draft.hairType === t)} onPress={() => setSingle('hairType', t)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.hairType === t)}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Hair type */}
-        <SectionHead label="HAIR TYPE" sub="Your hair texture" filled={!!draft.hairType} editing={editing} theme={theme} />
-        <View style={styles.chips}>
-          {HAIR_TYPES.map(t => (
-            <TouchableOpacity key={t} style={chip(draft.hairType === t)} onPress={() => setSingle('hairType', t)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.hairType === t)}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="SCALP CONDITION" sub="Your scalp health" filled={!!draft.scalpCondition} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {SCALP_CONDITIONS.map(c => (
+              <TouchableOpacity key={c} style={chip(draft.scalpCondition === c)} onPress={() => setSingle('scalpCondition', c)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.scalpCondition === c)}>{c}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Scalp condition */}
-        <SectionHead label="SCALP CONDITION" sub="Your scalp health" filled={!!draft.scalpCondition} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {SCALP_CONDITIONS.map(c => (
-            <TouchableOpacity key={c} style={chip(draft.scalpCondition === c)} onPress={() => setSingle('scalpCondition', c)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.scalpCondition === c)}>{c}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Treatment history */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.history = e.nativeEvent.layout.y; }}>
           <SectionHead label="COLOUR & TREATMENT HISTORY" sub="Previous professional treatments" filled={draft.treatmentHistory.length > 0} editing={editing} theme={theme} optional />
           <View style={styles.chips}>
             {TREATMENT_HISTORY.map(h => (
@@ -444,128 +493,118 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Hair goals */}
-        <SectionHead label="HAIR GOALS" sub="What you're looking to achieve" filled={draft.hairGoals.length > 0} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {HAIR_GOALS.map(g => (
-            <TouchableOpacity key={g} style={chip(draft.hairGoals.includes(g))} onPress={() => toggleMulti('hairGoals', g)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.hairGoals.includes(g))}>{g}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="HAIR GOALS" sub="What you're looking to achieve" filled={draft.hairGoals.length > 0} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {HAIR_GOALS.map(g => (
+              <TouchableOpacity key={g} style={chip(draft.hairGoals.includes(g))} onPress={() => toggleMulti('hairGoals', g)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.hairGoals.includes(g))}>{g}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </CategorySection>
 
         {/* ══ NAILS ═════════════════════════════════════════════════════════ */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.nails = e.nativeEvent.layout.y; }}>
-          <CatDivider label="NAILS" theme={theme} />
-        </View>
+        <CategorySection {...catInfo.nails} expanded={expanded.has('nails')} onToggle={() => toggleCategory('nails')} theme={theme} isDarkMode={isDarkMode}>
+          <SectionHead label="PREFERRED LENGTH" sub="How long do you like your nails?" filled={!!draft.nailLength} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {NAIL_LENGTHS.map(l => (
+              <TouchableOpacity key={l} style={chip(draft.nailLength === l)} onPress={() => setSingle('nailLength', l)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.nailLength === l)}>{l}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="PREFERRED LENGTH" sub="How long do you like your nails?" filled={!!draft.nailLength} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {NAIL_LENGTHS.map(l => (
-            <TouchableOpacity key={l} style={chip(draft.nailLength === l)} onPress={() => setSingle('nailLength', l)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.nailLength === l)}>{l}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <SectionHead label="PREFERRED SHAPE" sub="Your go-to nail shape" filled={!!draft.nailShape} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {NAIL_SHAPES.map(s => (
-            <TouchableOpacity key={s} style={chip(draft.nailShape === s)} onPress={() => setSingle('nailShape', s)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.nailShape === s)}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="PREFERRED SHAPE" sub="Your go-to nail shape" filled={!!draft.nailShape} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {NAIL_SHAPES.map(s => (
+              <TouchableOpacity key={s} style={chip(draft.nailShape === s)} onPress={() => setSingle('nailShape', s)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.nailShape === s)}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </CategorySection>
 
         {/* ══ LASHES & BROWS ════════════════════════════════════════════════ */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.lashes = e.nativeEvent.layout.y; }}>
-          <CatDivider label="LASHES & BROWS" theme={theme} />
-        </View>
+        <CategorySection {...catInfo.lashesBrows} expanded={expanded.has('lashesBrows')} onToggle={() => toggleCategory('lashesBrows')} theme={theme} isDarkMode={isDarkMode}>
+          <SectionHead label="LASH STYLE" sub="Your preferred lash look" filled={!!draft.lashStyle} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {LASH_STYLES.map(s => (
+              <TouchableOpacity key={s} style={chip(draft.lashStyle === s)} onPress={() => setSingle('lashStyle', s)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.lashStyle === s)}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="LASH STYLE" sub="Your preferred lash look" filled={!!draft.lashStyle} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {LASH_STYLES.map(s => (
-            <TouchableOpacity key={s} style={chip(draft.lashStyle === s)} onPress={() => setSingle('lashStyle', s)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.lashStyle === s)}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="LASH STATUS" sub="Current situation" filled={!!draft.lashStatus} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {LASH_STATUS.map(s => (
+              <TouchableOpacity key={s} style={chip(draft.lashStatus === s)} onPress={() => setSingle('lashStatus', s)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.lashStatus === s)}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="LASH STATUS" sub="Current situation" filled={!!draft.lashStatus} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {LASH_STATUS.map(s => (
-            <TouchableOpacity key={s} style={chip(draft.lashStatus === s)} onPress={() => setSingle('lashStatus', s)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.lashStatus === s)}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="BROW STYLE" sub="Your preferred brow look" filled={!!draft.browStyle} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {BROW_STYLES.map(s => (
+              <TouchableOpacity key={s} style={chip(draft.browStyle === s)} onPress={() => setSingle('browStyle', s)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.browStyle === s)}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="BROW STYLE" sub="Your preferred brow look" filled={!!draft.browStyle} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {BROW_STYLES.map(s => (
-            <TouchableOpacity key={s} style={chip(draft.browStyle === s)} onPress={() => setSingle('browStyle', s)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.browStyle === s)}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <SectionHead label="BROW CONDITION" sub="Your natural brows" filled={!!draft.browCondition} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {BROW_CONDITIONS.map(c => (
-            <TouchableOpacity key={c} style={chip(draft.browCondition === c)} onPress={() => setSingle('browCondition', c)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.browCondition === c)}>{c}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="BROW CONDITION" sub="Your natural brows" filled={!!draft.browCondition} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {BROW_CONDITIONS.map(c => (
+              <TouchableOpacity key={c} style={chip(draft.browCondition === c)} onPress={() => setSingle('browCondition', c)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.browCondition === c)}>{c}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </CategorySection>
 
         {/* ══ MAKEUP ════════════════════════════════════════════════════════ */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.makeup = e.nativeEvent.layout.y; }}>
-          <CatDivider label="MAKEUP" theme={theme} />
-        </View>
+        <CategorySection {...catInfo.makeup} expanded={expanded.has('makeup')} onToggle={() => toggleCategory('makeup')} theme={theme} isDarkMode={isDarkMode}>
+          <SectionHead label="COVERAGE" sub="How much coverage do you prefer?" filled={!!draft.makeupCoverage} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {MAKEUP_COVERAGE.map(c => (
+              <TouchableOpacity key={c} style={chip(draft.makeupCoverage === c)} onPress={() => setSingle('makeupCoverage', c)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.makeupCoverage === c)}>{c}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="COVERAGE" sub="How much coverage do you prefer?" filled={!!draft.makeupCoverage} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {MAKEUP_COVERAGE.map(c => (
-            <TouchableOpacity key={c} style={chip(draft.makeupCoverage === c)} onPress={() => setSingle('makeupCoverage', c)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.makeupCoverage === c)}>{c}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="FINISH" sub="Your preferred skin finish" filled={!!draft.makeupFinish} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {MAKEUP_FINISH.map(f => (
+              <TouchableOpacity key={f} style={chip(draft.makeupFinish === f)} onPress={() => setSingle('makeupFinish', f)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.makeupFinish === f)}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="FINISH" sub="Your preferred skin finish" filled={!!draft.makeupFinish} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {MAKEUP_FINISH.map(f => (
-            <TouchableOpacity key={f} style={chip(draft.makeupFinish === f)} onPress={() => setSingle('makeupFinish', f)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.makeupFinish === f)}>{f}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="EYE STYLE" sub="What eye look do you go for?" filled={!!draft.makeupEyes} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {MAKEUP_EYES.map(e => (
+              <TouchableOpacity key={e} style={chip(draft.makeupEyes === e)} onPress={() => setSingle('makeupEyes', e)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.makeupEyes === e)}>{e}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <SectionHead label="EYE STYLE" sub="What eye look do you go for?" filled={!!draft.makeupEyes} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {MAKEUP_EYES.map(e => (
-            <TouchableOpacity key={e} style={chip(draft.makeupEyes === e)} onPress={() => setSingle('makeupEyes', e)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.makeupEyes === e)}>{e}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <SectionHead label="LIP PREFERENCE" sub="Your go-to lip look" filled={!!draft.makeupLips} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {MAKEUP_LIPS.map(l => (
-            <TouchableOpacity key={l} style={chip(draft.makeupLips === l)} onPress={() => setSingle('makeupLips', l)} activeOpacity={editing ? 0.6 : 1}>
-              <Text style={cText(draft.makeupLips === l)}>{l}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          <SectionHead label="LIP PREFERENCE" sub="Your go-to lip look" filled={!!draft.makeupLips} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {MAKEUP_LIPS.map(l => (
+              <TouchableOpacity key={l} style={chip(draft.makeupLips === l)} onPress={() => setSingle('makeupLips', l)} activeOpacity={editing ? 0.6 : 1}>
+                <Text style={cText(draft.makeupLips === l)}>{l}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </CategorySection>
 
         {/* ══ GENERAL ═══════════════════════════════════════════════════════ */}
-        <CatDivider label="GENERAL" theme={theme} />
-
-        {/* Style vibe */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.vibe = e.nativeEvent.layout.y; }}>
+        <CategorySection {...catInfo.general} expanded={expanded.has('general')} onToggle={() => toggleCategory('general')} theme={theme} isDarkMode={isDarkMode}>
           <SectionHead label="STYLE VIBE" sub="How would you describe your overall look?" filled={!!draft.styleVibe} editing={editing} theme={theme} optional />
           <View style={styles.chips}>
             {STYLE_VIBES.map(v => (
@@ -574,10 +613,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        {/* Services */}
-        <View onLayout={(e: LayoutChangeEvent) => { sectionY.current.services = e.nativeEvent.layout.y; }}>
           <SectionHead label="SERVICES I'M INTO" sub="What you typically book" filled={draft.serviceInterests.length > 0} editing={editing} theme={theme} optional />
           <View style={styles.chips}>
             {SERVICE_CATEGORIES.map(s => (
@@ -586,61 +622,52 @@ export default function BeautyProfileScreen({ navigation }: any) {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </CategorySection>
 
         {/* ══ PERSONALISATION ════════════════════════════════════════════════ */}
-        <CatDivider label="PERSONALISATION" theme={theme} />
-
-        {/* Gender */}
-        <SectionHead label="GENDER" sub="Helps us personalise your home feed" filled={!!draft.gender} editing={editing} theme={theme} optional />
-        <View style={styles.chips}>
-          {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => {
-            const label: Record<string, string> = { female: 'Female', male: 'Male', 'non-binary': 'Non-binary', 'prefer-not-to-say': 'Prefer not to say' };
-            return (
+        <CategorySection {...catInfo.personalisation} expanded={expanded.has('personalisation')} onToggle={() => toggleCategory('personalisation')} theme={theme} isDarkMode={isDarkMode}>
+          <SectionHead label="GENDER" sub="Helps us personalise your home feed" filled={!!draft.gender} editing={editing} theme={theme} optional />
+          <View style={styles.chips}>
+            {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => (
               <TouchableOpacity key={g} style={chip(draft.gender === g)} onPress={() => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, gender: prev.gender === g ? null : g })); }} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.gender === g)}>{label[g]}</Text>
+                <Text style={cText(draft.gender === g)}>{genderLabel[g]}</Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Kids services */}
-        <View style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', marginBottom: 32 }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.consentLabel, { color: theme.text }]}>Kids beauty services</Text>
-            <Text style={[styles.consentSub, { color: theme.secondaryText }]}>Show me kids' beauty services in the home feed</Text>
+            ))}
           </View>
-          <Switch
-            value={draft.has_kids}
-            onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
-            trackColor={{ false: '#D1D1D6', true: theme.accent }}
-            thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
-            disabled={!editing}
-          />
-        </View>
+
+          <View style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.consentLabel, { color: theme.text }]}>Kids beauty services</Text>
+              <Text style={[styles.consentSub, { color: theme.secondaryText }]}>Show me kids' beauty services in the home feed</Text>
+            </View>
+            <Switch
+              value={draft.has_kids}
+              onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
+              trackColor={{ false: '#D1D1D6', true: theme.accent }}
+              thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
+              disabled={!editing}
+            />
+          </View>
+        </CategorySection>
 
         {/* ══ CONSENT ════════════════════════════════════════════════════════ */}
-        <CatDivider label="CONSENT" theme={theme} />
-
-        {/* Photography consent */}
-        <View
-          onLayout={(e: LayoutChangeEvent) => { sectionY.current.photo = e.nativeEvent.layout.y; }}
-          style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.consentLabel, { color: theme.text }]}>Photography consent</Text>
-            <Text style={[styles.consentSub, { color: theme.secondaryText }]}>
-              Allow your provider to share before/after photos on their social media
-            </Text>
+        <CategorySection {...catInfo.consent} expanded={expanded.has('consent')} onToggle={() => toggleCategory('consent')} theme={theme} isDarkMode={isDarkMode}>
+          <View style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.consentLabel, { color: theme.text }]}>Photography consent</Text>
+              <Text style={[styles.consentSub, { color: theme.secondaryText }]}>
+                Allow your provider to share before/after photos on their social media
+              </Text>
+            </View>
+            <Switch
+              value={draft.photographyConsent}
+              onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, photographyConsent: v })); }}
+              trackColor={{ false: '#D1D1D6', true: theme.accent }}
+              thumbColor={draft.photographyConsent ? '#fff' : '#f4f3f4'}
+              disabled={!editing}
+            />
           </View>
-          <Switch
-            value={draft.photographyConsent}
-            onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, photographyConsent: v })); }}
-            trackColor={{ false: '#D1D1D6', true: theme.accent }}
-            thumbColor={draft.photographyConsent ? '#fff' : '#f4f3f4'}
-            disabled={!editing}
-          />
-        </View>
+        </CategorySection>
 
         {/* ── SAVE ── */}
         {editing && (
@@ -661,14 +688,41 @@ export default function BeautyProfileScreen({ navigation }: any) {
   );
 }
 
-// ── Category divider ─────────────────────────────────────────────────────────
+// ── Collapsible category section ───────────────────────────────────────────
 
-function CatDivider({ label, theme }: { label: string; theme: any }) {
+interface CategorySectionProps {
+  label: string;
+  summary: string;
+  filled: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  theme: any;
+  isDarkMode: boolean;
+  children: React.ReactNode;
+}
+
+function CategorySection({ label, summary, filled, expanded, onToggle, theme, isDarkMode, children }: CategorySectionProps) {
   return (
-    <View style={styles.catDividerWrap}>
-      <View style={[styles.catDividerLine, { backgroundColor: theme.border ?? 'rgba(0,0,0,0.08)' }]} />
-      <Text style={[styles.catDividerLabel, { color: theme.accent }]}>{label}</Text>
-      <View style={[styles.catDividerLine, { backgroundColor: theme.border ?? 'rgba(0,0,0,0.08)' }]} />
+    <View style={[styles.catSection, { borderColor: theme.border ?? 'rgba(0,0,0,0.08)' }]}>
+      <TouchableOpacity style={styles.catHeader} onPress={onToggle} activeOpacity={0.7}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.catHeaderTitleRow}>
+            <Text style={[styles.catDividerLabel, { color: theme.accent }]}>{label}</Text>
+            {filled && <View style={styles.filledDot} />}
+          </View>
+          {!expanded && (
+            <Text style={[styles.catSummary, { color: theme.secondaryText }]} numberOfLines={1}>
+              {summary}
+            </Text>
+          )}
+        </View>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={18}
+          color={theme.secondaryText}
+        />
+      </TouchableOpacity>
+      {expanded && <View style={styles.catBody}>{children}</View>}
     </View>
   );
 }
@@ -754,8 +808,11 @@ const styles = StyleSheet.create({
   saveBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', borderWidth: 1.5, marginTop: 4 },
   saveBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1 },
 
-  catDividerWrap:  { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 22, marginTop: 8 },
-  catDividerLine:  { flex: 1, height: 1 },
-  catDividerLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 2.5 },
+  catSection: { borderRadius: 16, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
+  catHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16, paddingHorizontal: 18 },
+  catHeaderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  catDividerLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2 },
+  catSummary: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 4 },
+  catBody: { paddingHorizontal: 18, paddingBottom: 18, paddingTop: 4 },
   optionalBadge:   { fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic', marginLeft: 2 },
 });

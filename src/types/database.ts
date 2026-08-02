@@ -27,7 +27,7 @@ export type NotificationType =
   | 'no_show'            | 'payment_success'    | 'new_provider'
   | 'reschedule_request' | 'reschedule_provider_response' | 'reschedule_confirmed'
   | 'review_request'     | 'review_received'    | 'promotion'
-  | 'provider_message'   | 'balance_collected'  | 'balance_reminder'
+  | 'provider_message'   | 'balance_reminder'
   | 'intake_form_reminder'
   | 'waitlist_slot_available'
   | 'new_message'
@@ -35,7 +35,12 @@ export type NotificationType =
   | 'intake_form_received'  // provider sent client a form to fill (client-facing)
   | 'intake_form_completed' // client sent a filled form back (provider-facing)
   | 'info_pack_received'    // provider sent client prep/aftercare info (client-facing)
-  | 'address_released';     // booking address is now visible to the client
+  | 'address_released'      // booking address is now visible to the client
+  | 'birthday_greeting'     // provider's automated birthday message (client-facing)
+  | 'post_appt_check_in'    // provider's automated post-appointment check-in (client-facing)
+  | 'rebooking_nudge'       // "it's been a while" nudge to rebook (client-facing)
+  | 'daily_recap'           // provider's automated today's-schedule summary (provider-facing)
+  | 'schedule_fully_booked'; // provider's whole calendar has no openings in their alert window (provider-facing)
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -95,6 +100,10 @@ export interface DbProvider {
   website: string | null;
   preferred_contact_methods: string[] | null;
   whatsapp_number: string | null;
+  // When set, client-facing "Book" CTAs open this URL (Fresha, Treatwell,
+  // Acuity, etc.) instead of Cerviced's in-app booking flow. Null/empty =
+  // book entirely in-app, unchanged from before this column existed.
+  external_booking_url: string | null;
   rating: number;
   review_count: number;
   years_experience: number | null;
@@ -153,7 +162,13 @@ export interface DbProvider {
     waitlistEnabled?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
+    fullyBookedAlertEnabled?: boolean;
+    fullyBookedAlertDays?: number; // provider's own definition of "the week/month ahead"
   } | null;
+  // Cooldown guard for process_provider_fully_booked_alerts() (provider_
+  // fully_booked_alert.sql) — read-only from the app, written only by that
+  // cron job.
+  fully_booked_alert_last_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -168,6 +183,10 @@ export interface DbService {
   id: string;
   provider_id: string;
   category_name: string;
+  // Shown to clients under the category tab once selected — same value
+  // stored redundantly on every service row sharing that category_name,
+  // mirroring how category_name itself isn't a normalized entity either.
+  category_description: string | null;
   name: string;
   description: string | null;
   price: number;
@@ -331,6 +350,11 @@ export interface DbBookingRescheduleRequest {
   original_date: string;
   original_time: string;
   requested_dates: string[] | null;
+  // Index-aligned with requested_dates (element i is the time requested
+  // alongside requested_dates[i], NULL where no time was supplied). Added by
+  // fix_reschedule_requested_dates_type_mismatch.sql — requested_dates is
+  // DATE[] server-side and cannot carry a time-of-day itself.
+  requested_times?: string[] | null;
   provider_available_slots: { date: string; times: string[] }[] | null;
   status: RescheduleStatus;
   reschedule_count: number;
@@ -482,7 +506,17 @@ export interface ProviderWithServices extends DbProvider {
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {
-  provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url'>;
+  provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url' | 'rating' | 'review_count'>;
+}
+
+/** Service with photo(s) and provider info — powers ExploreScreen's mixed discovery feed */
+export interface DiscoverServiceWithProvider {
+  id: string;
+  provider_id: string;
+  name: string;
+  price: number;
+  service_images: Pick<DbServiceImage, 'url' | 'sort_order'>[];
+  provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url' | 'rating' | 'review_count'>;
 }
 
 /** Booking with add-ons — used by BookingsScreen and ProviderHomeScreen */

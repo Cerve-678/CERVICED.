@@ -1,4 +1,4 @@
-// ExploreScreen.tsx - Pinterest Discovery + Event Planner
+// ExploreScreen.tsx - Pinterest Discovery
 import React, { useState, useCallback, useMemo, memo, useRef, useEffect } from 'react';
 import {
   View,
@@ -8,15 +8,12 @@ import {
   TouchableOpacity,
   Image,
   StatusBar,
-  TextInput,
   Animated,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { ExploreStackParamList } from '../navigation/types';
-import { useCart } from '../contexts/CartContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ThemedBackground } from '../components/ThemedBackground';
 import TabIcon from '../components/TabIcon';
@@ -26,68 +23,50 @@ import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 import { MasonryGrid } from '../components/MasonryGrid';
 import { PortfolioCard } from '../components/PortfolioCard';
 import { ImageDetailModal } from '../components/ImageDetailModal';
-import { CreateEventModal } from '../components/CreateEventModal';
 
 // Data types
 import { PortfolioItem, ServiceCategory } from '../types/providers';
-import { getPortfolioItems, searchPortfolio as dbSearchPortfolio } from '../services/databaseService';
-import type { PortfolioItemWithProvider } from '../types/database';
+import {
+  getPortfolioItems,
+  getDiscoverProviders,
+  getDiscoverServices,
+  getSavedPortfolioDetails,
+} from '../services/databaseService';
+import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../types/database';
 
 // Stores
 import { useBookmarkStore } from '../stores/useBookmarkStore';
-import { usePlannerStore } from '../stores/usePlannerStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ============================================================================
-// SUB-TAB SELECTOR
-// ============================================================================
-interface SubTabProps {
-  activeTab: 'discover' | 'plans';
-  onTabChange: (tab: 'discover' | 'plans') => void;
+// Mixes portfolio photos with provider and service cards for a Pinterest-style
+// feed, instead of stacking every source back-to-back — a run of portfolio
+// items with one provider/service card dropped in periodically.
+function interleaveDiscoverFeed(
+  portfolioCards: PortfolioItem[],
+  serviceCards: PortfolioItem[],
+  providerCards: PortfolioItem[]
+): PortfolioItem[] {
+  const PORTFOLIO_RUN = 4;
+  const result: PortfolioItem[] = [];
+  let pIdx = 0;
+  let sIdx = 0;
+  let vIdx = 0;
+
+  while (pIdx < portfolioCards.length || sIdx < serviceCards.length || vIdx < providerCards.length) {
+    for (let k = 0; k < PORTFOLIO_RUN && pIdx < portfolioCards.length; k++) {
+      result.push(portfolioCards[pIdx++]!);
+    }
+    if (sIdx < serviceCards.length) {
+      result.push(serviceCards[sIdx++]!);
+    }
+    if (vIdx < providerCards.length) {
+      result.push(providerCards[vIdx++]!);
+    }
+  }
+
+  return result;
 }
-
-const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
-  const { isDarkMode, palette: P } = useTheme();
-  return (
-    <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
-      <TouchableOpacity
-        style={[
-          styles.subTab,
-          activeTab === 'discover' && { borderBottomColor: P.accent },
-        ]}
-        onPress={() => onTabChange('discover')}
-      >
-        <Text
-          style={[
-            styles.subTabText,
-            { color: activeTab === 'discover' ? P.accent : P.sub },
-          ]}
-        >
-          Discover
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[
-          styles.subTab,
-          activeTab === 'plans' && { borderBottomColor: P.accent },
-        ]}
-        onPress={() => onTabChange('plans')}
-      >
-        <Text
-          style={[
-            styles.subTabText,
-            { color: activeTab === 'plans' ? P.accent : P.sub },
-          ]}
-        >
-          My Plans
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-});
-SubTabBar.displayName = 'SubTabBar';
 
 // ── Skeleton Masonry Grid ────────────────────────────────────────────────
 function SkeletonMasonryGrid({ isDarkMode }: { isDarkMode: boolean }) {
@@ -158,87 +137,38 @@ const FilterChip = memo<FilterChipProps>(({ label, isSelected, onPress }) => {
 FilterChip.displayName = 'FilterChip';
 
 // ============================================================================
-// EVENT CARD (for My Plans list)
+// SUB-TAB SELECTOR
 // ============================================================================
-interface EventCardProps {
-  event: {
-    id: string;
-    name: string;
-    date: string;
-    goalImageId?: string;
-    tasks: any[];
-    checklist: any[];
-  };
-  onPress: () => void;
+interface SubTabProps {
+  activeTab: 'discover' | 'favourites';
+  onTabChange: (tab: 'discover' | 'favourites') => void;
 }
 
-function getDaysUntil(dateStr: string): number {
-  const target = new Date(dateStr + 'T00:00:00');
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-const EventCard = memo<EventCardProps>(({ event, onPress }) => {
-  const { isDarkMode, palette: P } = useTheme();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const daysUntil = getDaysUntil(event.date);
-  const completedTasks = event.tasks.filter((t: any) => t.status === 'completed').length;
-  const totalTasks = event.tasks.length;
-  const progress = totalTasks > 0 ? completedTasks / totalTasks : 0;
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
+const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
+  const { palette: P } = useTheme();
   return (
-    <Animated.View style={{ opacity: fadeAnim }}>
+    <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
       <TouchableOpacity
-        style={[styles.eventCard, { backgroundColor: P.card, borderColor: P.border }]}
-        onPress={onPress}
-        activeOpacity={0.9}
+        style={[styles.subTab, activeTab === 'discover' && { borderBottomColor: P.accent }]}
+        onPress={() => onTabChange('discover')}
       >
-        <View style={styles.eventCardRow}>
-          <View style={[styles.eventThumbnailPlaceholder, { backgroundColor: P.iconBg }]}>
-            <TabIcon name="star" size={20} color={P.accent} />
-          </View>
-
-          <View style={styles.eventCardInfo}>
-            <Text style={[styles.eventCardName, { color: P.text }]} numberOfLines={1}>
-              {event.name}
-            </Text>
-
-            <Text style={[styles.eventCountdown, { color: daysUntil <= 7 ? '#FF6B6B' : P.accent }]}>
-              {daysUntil > 0
-                ? `${daysUntil} day${daysUntil !== 1 ? 's' : ''} away`
-                : daysUntil === 0
-                  ? "Today!"
-                  : 'Past event'}
-            </Text>
-
-            {totalTasks > 0 && (
-              <View style={styles.eventProgressRow}>
-                <View style={[styles.eventProgressBar, { backgroundColor: P.surface }]}>
-                  <View style={[styles.eventProgressFill, { width: `${progress * 100}%`, backgroundColor: P.accent }]} />
-                </View>
-                <Text style={[styles.eventProgressText, { color: P.sub }]}>
-                  {completedTasks}/{totalTasks}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <TabIcon name="magnifying-glass" size={16} color={P.sub} />
-        </View>
+        <Text style={[styles.subTabText, { color: activeTab === 'discover' ? P.accent : P.sub }]}>
+          Discover
+        </Text>
       </TouchableOpacity>
-    </Animated.View>
+
+      <TouchableOpacity
+        style={[styles.subTab, activeTab === 'favourites' && { borderBottomColor: P.accent }]}
+        onPress={() => onTabChange('favourites')}
+      >
+        <Text style={[styles.subTabText, { color: activeTab === 'favourites' ? P.accent : P.sub }]}>
+          Favourites
+        </Text>
+      </TouchableOpacity>
+    </View>
   );
 });
-EventCard.displayName = 'EventCard';
+SubTabBar.displayName = 'SubTabBar';
 
 // ============================================================================
 // MAIN EXPLORE SCREEN
@@ -248,18 +178,18 @@ const ExploreScreen = memo(() => {
   const { isDarkMode, palette: P } = useTheme();
 
   // State
-  const [activeTab, setActiveTab] = useState<'discover' | 'plans'>('discover');
+  const [activeTab, setActiveTab] = useState<'discover' | 'favourites'>('discover');
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedImage, setSelectedImage] = useState<PortfolioItem | null>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
-  const [isCreateEventVisible, setIsCreateEventVisible] = useState(false);
-  const [pendingPlanItem, setPendingPlanItem] = useState<PortfolioItem | null>(null);
 
   // Stores
-  const { addToCart } = useCart();
-  const { events, activeEventId, addTask, setActiveEvent, loadEvents } = usePlannerStore();
-  const { loadSavedPortfolio } = useBookmarkStore();
+  const { loadSavedPortfolio, savedPortfolioIds } = useBookmarkStore();
+
+  // Favourites — anything the user hearted, resolved from useBookmarkStore's
+  // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
+  const [favouriteItems, setFavouriteItems] = useState<PortfolioItem[]>([]);
+  const [favouritesLoading, setFavouritesLoading] = useState(false);
 
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
@@ -267,7 +197,7 @@ const ExploreScreen = memo(() => {
 
   // Map a Supabase portfolio row to the local PortfolioItem shape
   const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => {
-    const p = item.provider as any;
+    const p = item.provider;
     return {
       id: item.id,
       image: { uri: item.image_url },
@@ -276,19 +206,59 @@ const ExploreScreen = memo(() => {
       aspectRatio: item.aspect_ratio,
       providerId: p?.slug ?? item.provider_id,
       tags: item.tags ?? [],
-      price: item.price != null ? `£${item.price}` : undefined,
-      imageUri: item.image_url ?? undefined,
-      providerName: p?.display_name ?? undefined,
-      providerLogoUri: p?.logo_url ?? undefined,
-      providerSlug: p?.slug ?? undefined,
-      providerRating: p?.rating ?? undefined,
-      providerReviewCount: p?.review_count ?? undefined,
+      imageUri: item.image_url,
+      providerName: p.display_name,
+      providerSlug: p.slug,
+      providerRating: p.rating,
+      providerReviewCount: p.review_count,
+      kind: 'portfolio',
+      ...(item.price != null ? { price: `£${item.price}` } : {}),
+      ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+    };
+  }, []);
+
+  // Map a provider row to a cover-photo card for the mixed discovery feed.
+  // No real dimensions for a cover photo, so a portrait 4:5 default keeps it
+  // in line with typical portfolio photos rather than defaulting to square.
+  const mapDbProviderToCard = useCallback((p: DbProvider): PortfolioItem => ({
+    id: `provider-${p.id}`,
+    image: { uri: p.background_image_url ?? p.logo_url ?? '' },
+    caption: p.about_text ?? '',
+    category: p.service_category as unknown as ServiceCategory,
+    aspectRatio: 0.8,
+    providerId: p.slug,
+    providerName: p.display_name,
+    providerSlug: p.slug,
+    providerRating: p.rating,
+    providerReviewCount: p.review_count,
+    kind: 'provider',
+    ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+  }), []);
+
+  // Map a service + its first photo to a card for the mixed discovery feed.
+  const mapDbServiceToCard = useCallback((s: DiscoverServiceWithProvider): PortfolioItem => {
+    const images = [...s.service_images].sort((a, b) => a.sort_order - b.sort_order);
+    const p = s.provider;
+    return {
+      id: `service-${s.id}`,
+      image: { uri: images[0]?.url ?? '' },
+      caption: s.name,
+      category: p.service_category as unknown as ServiceCategory,
+      aspectRatio: 0.8,
+      providerId: p.slug,
+      price: `£${s.price}`,
+      providerName: p.display_name,
+      providerSlug: p.slug,
+      providerRating: p.rating,
+      providerReviewCount: p.review_count,
+      kind: 'service',
+      serviceId: s.id,
+      ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
     };
   }, []);
 
   // Load stores on mount
   useEffect(() => {
-    loadEvents();
     loadSavedPortfolio();
   }, []);
 
@@ -304,49 +274,103 @@ const ExploreScreen = memo(() => {
     Lashes: 'LASHES',
   }), []);
 
-  // Fetch portfolio from Supabase whenever filter or search changes
+  // Fetch the mixed discovery feed whenever the category filter changes.
+  // Explore's search bar isn't a live filter — tapping it opens SearchScreen
+  // instead — so there's no text-query branch here any more.
   useEffect(() => {
     let cancelled = false;
     setPortfolioLoading(true);
+    const category = selectedFilter !== 'All' ? filterMap[selectedFilter] : undefined;
+
     const load = async () => {
       try {
-        let data: PortfolioItemWithProvider[];
-        if (searchQuery.trim()) {
-          data = await dbSearchPortfolio(searchQuery);
-        } else if (selectedFilter !== 'All' && filterMap[selectedFilter]) {
-          data = await getPortfolioItems(filterMap[selectedFilter]);
-        } else {
-          data = await getPortfolioItems();
-        }
+        const [portfolioData, providerData, serviceData] = await Promise.all([
+          getPortfolioItems(category),
+          getDiscoverProviders(category),
+          getDiscoverServices(category),
+        ]);
+
         if (!cancelled) {
-          setPortfolioItems(data.map(mapDbPortfolioItem));
-          setPortfolioLoading(false);
+          setPortfolioItems(
+            interleaveDiscoverFeed(
+              portfolioData.map(mapDbPortfolioItem),
+              serviceData.map(mapDbServiceToCard),
+              providerData.map(mapDbProviderToCard)
+            )
+          );
         }
       } catch {
-        if (!cancelled) {
-          setPortfolioItems([]);
-          setPortfolioLoading(false);
-        }
+        if (!cancelled) setPortfolioItems([]);
+      } finally {
+        if (!cancelled) setPortfolioLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedFilter, searchQuery, filterMap, mapDbPortfolioItem]);
+  }, [selectedFilter, filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCard]);
+
+  // Fetch favourites whenever the tab is opened or the saved-ids list changes
+  // (e.g. hearting/unhearting something while already on this tab).
+  useEffect(() => {
+    if (activeTab !== 'favourites') return;
+    if (savedPortfolioIds.length === 0) {
+      setFavouriteItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    setFavouritesLoading(true);
+
+    const load = async () => {
+      try {
+        const { portfolioItems: savedPortfolio, providers, services } =
+          await getSavedPortfolioDetails(savedPortfolioIds);
+        if (cancelled) return;
+
+        const cards = [
+          ...savedPortfolio.map(mapDbPortfolioItem),
+          ...providers.map(mapDbProviderToCard),
+          ...services.map(mapDbServiceToCard),
+        ];
+        // Most-recently-saved first, matching save order in savedPortfolioIds.
+        const order = new Map(savedPortfolioIds.map((id, i) => [id, i]));
+        cards.sort((a, b) => (order.get(b.id) ?? 0) - (order.get(a.id) ?? 0));
+        setFavouriteItems(cards);
+      } catch {
+        if (!cancelled) setFavouriteItems([]);
+      } finally {
+        if (!cancelled) setFavouritesLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCard]);
 
   // Column width for masonry
   const columnWidth = useMemo(() => {
     return (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
   }, []);
 
-  // Masonry item height calculator
+  // Masonry item height calculator — aspectRatio is width/height, so height = width / ratio.
   const getItemHeight = useCallback(
     (item: PortfolioItem, colWidth: number) => {
-      return colWidth * item.aspectRatio + 40;
+      return colWidth / item.aspectRatio;
     },
     []
   );
 
   // Handlers
+  const handleOpenSearch = useCallback(() => {
+    // morph: true — this search bar is a real search-bar mockup (unlike
+    // HomeScreen's plain icon button), so it should float-up-and-merge into
+    // SearchScreen's own search bar the same way a Home "Choose Service"
+    // pill tap does, instead of popping in at rest. The screen-level
+    // transition itself is suppressed by the `animation: 'none'` static
+    // option on ExploreNavigator's Search screen, not by a per-navigate
+    // override (navigate() has no such 3rd argument).
+    navigation.navigate('Search', { morph: true });
+  }, [navigation]);
+
   const handleImagePress = useCallback((item: PortfolioItem) => {
     setSelectedImage(item);
     setIsDetailVisible(true);
@@ -367,74 +391,22 @@ const ExploreScreen = memo(() => {
     [navigation]
   );
 
+  // Was previously adding a fake placeholder cart item (£75, "1 hour",
+  // service id 1 — not a real services row) before navigating away. Now it
+  // just navigates, passing the real service id when this card is backed by
+  // one (kind === 'service') — ProviderProfileScreen picks openServiceId up
+  // on load and opens that exact service's booking modal automatically,
+  // ready for date/time (and the consultation flow if this provider
+  // requires one), instead of leaving a fake item sitting in the cart.
   const handleBookNow = useCallback(
-    (providerId: string, providerName: string, providerService: string, providerLogo: any) => {
-      addToCart({
-        providerName,
-        providerSlug: providerId,
-        providerImage: providerLogo,
-        providerService,
-        service: {
-          id: 1,
-          name: `${providerService} Service`,
-          price: 75,
-          duration: '1 hour',
-          description: `Professional ${providerService.toLowerCase()} service`,
-        },
-        quantity: 1,
-      });
+    (providerId: string, _providerName: string, _providerService: string, _providerLogo: any, serviceId?: string) => {
       navigation.navigate('ProviderProfile', {
         providerId,
         source: 'explore',
+        ...(serviceId ? { openServiceId: serviceId } : {}),
       });
     },
-    [addToCart, navigation]
-  );
-
-  const handlePlanThis = useCallback(
-    (item: PortfolioItem) => {
-      if (activeEventId) {
-        addTask(activeEventId, item);
-        setIsDetailVisible(false);
-        setSelectedImage(null);
-        Alert.alert('Added!', 'Added to your plan', [
-          {
-            text: 'View Plan',
-            onPress: () => {
-              setActiveTab('plans');
-              navigation.navigate('EventDetail' as any, { eventId: activeEventId });
-            },
-          },
-          { text: 'Keep Browsing', style: 'cancel' },
-        ]);
-      } else {
-        setPendingPlanItem(item);
-        setIsDetailVisible(false);
-        setIsCreateEventVisible(true);
-      }
-    },
-    [activeEventId, addTask, navigation]
-  );
-
-  const handleEventCreated = useCallback(
-    (eventId: string) => {
-      setIsCreateEventVisible(false);
-      if (pendingPlanItem) {
-        addTask(eventId, pendingPlanItem);
-        setPendingPlanItem(null);
-      }
-      setActiveEvent(eventId);
-      navigation.navigate('EventDetail' as any, { eventId });
-    },
-    [pendingPlanItem, addTask, setActiveEvent, navigation]
-  );
-
-  const handleEventPress = useCallback(
-    (eventId: string) => {
-      setActiveEvent(eventId);
-      navigation.navigate('EventDetail' as any, { eventId });
-    },
-    [setActiveEvent, navigation]
+    [navigation]
   );
 
   const renderPortfolioCard = useCallback(
@@ -455,40 +427,31 @@ const ExploreScreen = memo(() => {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: P.bg }]}>
-          <Text style={[styles.headerTitle, { color: P.text }]}>Explore</Text>
-          <TouchableOpacity
-            style={styles.savedButton}
-            onPress={() => navigation.navigate('BookmarkedProviders' as any)}
-          >
-            <TabIcon name="bookmark" size={22} color={P.text} />
-          </TouchableOpacity>
-        </View>
-
         {/* Sub-tab bar */}
         <SubTabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* ============ DISCOVER TAB ============ */}
         {activeTab === 'discover' && (
           <>
-            {/* Search Bar */}
+            {/* Search Bar — not a live filter; tapping it opens SearchScreen,
+                same as "about to start typing" jumping straight there. */}
             <View style={[styles.searchContainer, { backgroundColor: P.bg }]}>
-              <View style={[styles.searchBar, { backgroundColor: P.card }]}>
+              <TouchableOpacity
+                style={[styles.searchBar, { backgroundColor: P.card }]}
+                activeOpacity={0.7}
+                onPress={handleOpenSearch}
+              >
                 <TabIcon name="magnifying-glass" size={18} color={P.sub} />
-                <TextInput
-                  style={[styles.searchInput, { color: P.text }]}
-                  placeholder="Search looks, styles, providers..."
-                  placeholderTextColor={P.sub}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Text style={[styles.clearButton, { color: P.sub }]}>×</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+                <Text style={[styles.searchInput, { color: P.sub }]} numberOfLines={1}>
+                  Search looks, styles, providers...
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.savedButton}
+                onPress={() => navigation.navigate('BookmarkedProviders' as any)}
+              >
+                <TabIcon name="bookmark" size={20} color={P.text} />
+              </TouchableOpacity>
             </View>
 
             {/* Filter Chips */}
@@ -513,93 +476,60 @@ const ExploreScreen = memo(() => {
             {portfolioLoading ? (
               <SkeletonMasonryGrid isDarkMode={isDarkMode} />
             ) : (
+              <MasonryGrid
+                data={portfolioItems}
+                renderItem={renderPortfolioCard}
+                getItemHeight={getItemHeight}
+                keyExtractor={item => item.id}
+                ListHeaderComponent={
+                  <View style={styles.gridHeader}>
+                    <Text style={[styles.gridCount, { color: P.sub }]}>
+                      {portfolioItems.length} results
+                    </Text>
+                  </View>
+                }
+                ListEmptyComponent={
+                  <View style={styles.emptyContainer}>
+                    <TabIcon name="magnifying-glass" size={48} color={P.sub} />
+                    <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                    <Text style={[styles.emptySubtext, { color: P.sub }]}>
+                      Try a different search or filter
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </>
+        )}
+
+        {/* ============ FAVOURITES TAB ============ */}
+        {activeTab === 'favourites' && (
+          favouritesLoading ? (
+            <SkeletonMasonryGrid isDarkMode={isDarkMode} />
+          ) : (
             <MasonryGrid
-              data={portfolioItems}
+              data={favouriteItems}
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
               keyExtractor={item => item.id}
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridCount, { color: P.sub }]}>
-                    {portfolioItems.length} looks
+                    {favouriteItems.length} saved
                   </Text>
                 </View>
               }
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <TabIcon name="magnifying-glass" size={48} color={P.sub} />
-                  <Text style={[styles.emptyText, { color: P.text }]}>No looks found</Text>
+                  <TabIcon name="heart" size={48} color={P.sub} />
+                  <Text style={[styles.emptyText, { color: P.text }]}>No favourites yet</Text>
                   <Text style={[styles.emptySubtext, { color: P.sub }]}>
-                    Try a different search or filter
+                    Tap the heart on any look, provider or service to save it here
                   </Text>
                 </View>
               }
             />
-            )}
-          </>
-        )}
-
-        {/* ============ MY PLANS TAB ============ */}
-        {activeTab === 'plans' && (
-          <ScrollView
-            style={styles.plansContainer}
-            contentContainerStyle={styles.plansContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {events.length === 0 ? (
-              <View style={styles.emptyPlans}>
-                <View style={[styles.emptyPlansIcon, { backgroundColor: P.iconBg }]}>
-                  <TabIcon name="bookmark" size={36} color={P.accent} />
-                </View>
-                <Text style={[styles.emptyPlansTitle, { color: P.text }]}>
-                  No plans yet
-                </Text>
-                <Text style={[styles.emptyPlansText, { color: P.sub }]}>
-                  Browse Discover, find inspo you love, and tap{'\n'}"Plan This" to start building your look
-                </Text>
-                <TouchableOpacity
-                  style={[styles.emptyPlansButton, { backgroundColor: P.accent }]}
-                  onPress={() => setActiveTab('discover')}
-                  activeOpacity={0.75}
-                >
-                  <Text style={styles.emptyPlansButtonText}>Browse Discover</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.createDirectButton}
-                  onPress={() => setIsCreateEventVisible(true)}
-                >
-                  <Text style={[styles.createDirectText, { color: P.sub }]}>or create a plan</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <>
-                {activeEventId && (
-                  <View style={[styles.activeEventBanner, { backgroundColor: P.iconBg }]}>
-                    <TabIcon name="star" size={14} color={P.accent} />
-                    <Text style={[styles.activeEventText, { color: P.accent }]}>
-                      Active: {events.find(e => e.id === activeEventId)?.name}
-                    </Text>
-                  </View>
-                )}
-
-                {events.map(event => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    onPress={() => handleEventPress(event.id)}
-                  />
-                ))}
-
-                <TouchableOpacity
-                  style={[styles.newPlanButton, { borderColor: P.border }]}
-                  onPress={() => setIsCreateEventVisible(true)}
-                >
-                  <Text style={[styles.newPlanText, { color: P.accent }]}>+ New Plan</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </ScrollView>
+          )
         )}
       </SafeAreaView>
 
@@ -610,17 +540,6 @@ const ExploreScreen = memo(() => {
         onClose={handleCloseDetail}
         onViewProfile={handleViewProfile}
         onBookNow={handleBookNow}
-        onPlanThis={handlePlanThis}
-      />
-
-      <CreateEventModal
-        visible={isCreateEventVisible}
-        onClose={() => {
-          setIsCreateEventVisible(false);
-          setPendingPlanItem(null);
-        }}
-        onCreated={handleEventCreated}
-        {...(pendingPlanItem ? { initialPortfolioItem: pendingPlanItem } : {})}
       />
     </ThemedBackground>
   );
@@ -649,20 +568,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  headerTitle: {
-    fontSize: fonts.title.large,
-    fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
-    letterSpacing: 1,
-  },
   savedButton: {
     padding: spacing.sm,
   },
@@ -671,6 +576,7 @@ const styles = StyleSheet.create({
   subTabBar: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.lg,
   },
@@ -688,10 +594,14 @@ const styles = StyleSheet.create({
 
   // Search Bar
   searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: dimensions.card.smallBorderRadius,
@@ -703,10 +613,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
-  },
-  clearButton: {
-    fontSize: fonts.title.large,
-    fontWeight: '300',
   },
 
   // Filter Section
@@ -758,151 +664,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
 
-  // Plans tab
-  plansContainer: {
-    flex: 1,
-  },
-  plansContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
-
-  // Empty plans
-  emptyPlans: {
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  emptyPlansIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  emptyPlansTitle: {
-    fontSize: fonts.title.medium,
-    fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
-    marginBottom: spacing.sm,
-  },
-  emptyPlansText: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'Jura-VariableFont_wght',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: spacing.lg,
-  },
-  emptyPlansButton: {
-    borderRadius: 100,
-    width: '80%',
-    alignItems: 'center',
-    paddingVertical: 15,
-  },
-  emptyPlansButtonText: {
-    fontSize: fonts.buttonText.medium,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    fontFamily: 'BakbakOne-Regular',
-    letterSpacing: 1,
-  },
-  createDirectButton: {
-    paddingVertical: spacing.md,
-  },
-  createDirectText: {
-    fontSize: fonts.body.medium,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-  },
-
-  // Active event banner
-  activeEventBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: dimensions.card.smallBorderRadius,
-    marginBottom: spacing.md,
-  },
-  activeEventText: {
-    fontSize: fonts.body.small,
-    fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-
-  // Event card
-  eventCard: {
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  eventCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  eventThumbnailPlaceholder: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  eventCardInfo: {
-    flex: 1,
-  },
-  eventCardName: {
-    fontSize: fonts.providerName,
-    fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
-  },
-  eventCountdown: {
-    fontSize: fonts.body.small,
-    fontWeight: '700',
-    fontFamily: 'Jura-VariableFont_wght',
-    marginTop: 2,
-  },
-  eventProgressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-  },
-  eventProgressBar: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  eventProgressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  eventProgressText: {
-    fontSize: 10,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-  },
-
-  // New plan button
-  newPlanButton: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: dimensions.card.smallBorderRadius,
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    marginTop: spacing.sm,
-  },
-  newPlanText: {
-    fontSize: fonts.body.medium,
-    fontWeight: '700',
-    fontFamily: 'BakbakOne-Regular',
-  },
 });

@@ -32,6 +32,17 @@ export interface CartItem {
     name: string;
     price: number;
   }>;
+  /** Date/time picked on the provider profile before adding to cart. Absent
+   *  for items added via other entry points (Explore "Book Now", rebook) —
+   *  those still need scheduling in the cart. */
+  selectedDate?: string;
+  selectedTime?: string;
+  /** Freeform notes for the provider (special requests, allergies, etc.) —
+   *  set on the provider profile or edited later from the cart. */
+  notes?: string;
+  /** Pay a deposit rather than the full amount. The actual amount is derived
+   *  from the provider's live deposit policy at render/checkout time. */
+  isDepositOnly?: boolean;
 }
 
 export interface CartState {
@@ -48,6 +59,7 @@ export interface CartContextType {
   addServiceInstance: (baseItem: CartItem) => void;
   removeFromCart: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
+  updateCartItem: (itemId: string, updates: CartItemUpdates) => void;
   clearCart: () => void;
   clearProviderItems: (providerName: string) => void;
   getItemsByProvider: () => Record<string, CartItem[]>;
@@ -88,7 +100,17 @@ export interface AddToCartParams {
   quantity?: number;
   selectedOptions?: Record<string, any>;
   forceNewInstance?: boolean;
+  /** Date/time picked on the provider profile before adding to cart. */
+  selectedDate?: string | undefined;
+  selectedTime?: string | undefined;
+  notes?: string | undefined;
+  isDepositOnly?: boolean | undefined;
 }
+
+/** Fields a BookingSheet edit can change on an existing cart item. */
+export type CartItemUpdates = Partial<
+  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly'>
+>;
 
 export interface BookingSummary {
   totalProviders: number;
@@ -111,6 +133,7 @@ enum CartActionType {
   ADD_ITEM = 'ADD_ITEM',
   REMOVE_ITEM = 'REMOVE_ITEM',
   UPDATE_QUANTITY = 'UPDATE_QUANTITY',
+  UPDATE_ITEM = 'UPDATE_ITEM',
   CLEAR_CART = 'CLEAR_CART',
   CLEAR_PROVIDER_ITEMS = 'CLEAR_PROVIDER_ITEMS',
   ADD_SERVICE_INSTANCE = 'ADD_SERVICE_INSTANCE',
@@ -121,6 +144,7 @@ type CartAction =
   | { type: CartActionType.ADD_ITEM; payload: AddToCartParams }
   | { type: CartActionType.REMOVE_ITEM; payload: { itemId: string } }
   | { type: CartActionType.UPDATE_QUANTITY; payload: { itemId: string; quantity: number } }
+  | { type: CartActionType.UPDATE_ITEM; payload: { itemId: string; updates: CartItemUpdates } }
   | { type: CartActionType.CLEAR_CART }
   | { type: CartActionType.CLEAR_PROVIDER_ITEMS; payload: { providerName: string } }
   | { type: CartActionType.ADD_SERVICE_INSTANCE; payload: { baseItem: CartItem } }
@@ -194,7 +218,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           service,
           quantity = 1,
           selectedOptions = {},
-          forceNewInstance = false
+          forceNewInstance = false,
+          selectedDate,
+          selectedTime,
+          notes,
+          isDepositOnly
         } = action.payload;
 
         const instanceId = forceNewInstance || safeGet(service, 'instanceId') ? 
@@ -236,7 +264,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             instanceId: instanceId,
             addedAt: new Date().toISOString(),
             serviceInstanceIndex: existingInstances + 1, // FIXED: Start from 1, increment by existing count
-            addOns: safeGet(service, 'addOns', [])
+            addOns: safeGet(service, 'addOns', []),
+            ...(selectedDate ? { selectedDate } : {}),
+            ...(selectedTime ? { selectedTime } : {}),
+            ...(notes ? { notes } : {}),
+            ...(isDepositOnly ? { isDepositOnly } : {})
           };
           newItems = [...state.items, newItem];
         }
@@ -310,6 +342,15 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 
         const newItems = state.items.map(item =>
           safeGet(item, 'id') === itemId ? { ...item, quantity: safeQuantity } : item
+        );
+        const totals = calculateTotals(newItems);
+        return { ...state, items: newItems, ...totals };
+      }
+
+      case CartActionType.UPDATE_ITEM: {
+        const { itemId, updates } = action.payload;
+        const newItems = state.items.map(item =>
+          safeGet(item, 'id') === itemId ? { ...item, ...updates } : item
         );
         const totals = calculateTotals(newItems);
         return { ...state, items: newItems, ...totals };
@@ -414,6 +455,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateQuantity = useCallback((itemId: string, quantity: number) => {
     dispatch({ type: CartActionType.UPDATE_QUANTITY, payload: { itemId, quantity } });
+  }, []);
+
+  const updateCartItem = useCallback((itemId: string, updates: CartItemUpdates) => {
+    dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId, updates } });
   }, []);
 
   const clearCart = useCallback(() => {
@@ -536,6 +581,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addServiceInstance,
     removeFromCart,
     updateQuantity,
+    updateCartItem,
     clearCart,
     clearProviderItems,
     getItemsByProvider: () => itemsByProvider,
@@ -556,6 +602,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addServiceInstance,
     removeFromCart,
     updateQuantity,
+    updateCartItem,
     clearCart,
     clearProviderItems,
     getServiceInstances,

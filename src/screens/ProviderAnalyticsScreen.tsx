@@ -41,10 +41,17 @@ function fmtGBP(n: number) {
   return n >= 1000 ? `£${(n / 1000).toFixed(1)}k` : `£${n.toFixed(0)}`;
 }
 
-function monthLabel(offset: number): string {
+// Anchors to the 1st before subtracting so short months (e.g. Feb) don't
+// overflow into the next month when today's day-of-month doesn't exist there.
+function monthsAgo(offset: number): Date {
   const d = new Date();
+  d.setDate(1);
   d.setMonth(d.getMonth() - offset);
-  return d.toLocaleDateString('en-GB', { month: 'short' });
+  return d;
+}
+
+function monthLabel(offset: number): string {
+  return monthsAgo(offset).toLocaleDateString('en-GB', { month: 'short' });
 }
 
 function monthKey(dateStr: string): string {
@@ -58,8 +65,7 @@ function currentMonthKey(): string {
 }
 
 function prevMonthKey(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
+  const d = monthsAgo(1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -575,8 +581,7 @@ function RatingAnalytics({
 
   const monthlyRatings = useMemo(() =>
     Array.from({ length: RATING_MONTHS }, (_, i) => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - (RATING_MONTHS - 1 - i));
+      const d = monthsAgo(RATING_MONTHS - 1 - i);
       const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('en-GB', { month: 'short' });
       const bucket = reviews.filter(r => r.created_at.startsWith(key));
@@ -793,8 +798,7 @@ function ServiceQuadrantCharts({
   const months = useMemo(
     () =>
       Array.from({ length: 6 }, (_, i) => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - (5 - i));
+        const d = monthsAgo(5 - i);
         return {
           key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
           label: d.toLocaleDateString('en-GB', { month: 'short' }),
@@ -995,8 +999,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   // 6-month bar chart data
   const chartData = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - (5 - i));
+      const d = monthsAgo(5 - i);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const bs  = bookings.filter(b => b.status === 'completed' && monthKey(b.booking_date) === key);
       return {

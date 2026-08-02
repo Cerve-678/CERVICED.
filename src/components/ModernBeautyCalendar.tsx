@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
-import { useTheme } from '../contexts/ThemeContext';
 import { AvailabilityService } from '../services/AvailabilityService';
+import { withAlpha } from '../constants/providerThemes';
 
-const ACCENT = '#AF9197';
-const ACCENT_LIGHT = 'rgba(175,145,151,0.18)';
-                                                    
 type TimeSlot = string;
 
 type DayData = {
@@ -38,6 +35,16 @@ type ModernBeautyCalendarProps = {
   style?: ViewStyle;
   /** Last date clients can book (today + bookingWindowDays). Undefined = no limit. */
   maxDate?: Date;
+  /** Selected day/time highlight colour — the caller derives this from its
+   *  own backdrop (not the OS/app dark-mode setting, not a fixed brand
+   *  colour) so the picker always complements whatever sheet it's in. */
+  accentColor: string;
+  /** Primary / secondary text and neutral-surface colours — all derived by
+   *  the caller from its own backdrop. No colour in this component reads
+   *  the app's light/dark theme. */
+  textColor: string;
+  subColor: string;
+  surfaceColor: string;
 };
 
 // Local YYYY-MM-DD — date.toISOString() converts to UTC first, which shifts
@@ -63,8 +70,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   serviceId,
   style = {},
   maxDate,
+  accentColor,
+  textColor,
+  subColor,
+  surfaceColor,
 }) => {
-  const { theme, isDarkMode } = useTheme();
+  // Popup border — a low-alpha tint of the text colour, so it reads as a
+  // hairline on either a light or dark backdrop without a separate flag.
+  const popupBorder = useMemo(() => withAlpha(textColor, 0.14), [textColor]);
   const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<SlotsMap>({});
   const [showTimeSelection, setShowTimeSelection] = useState<boolean>(false);
@@ -73,6 +86,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
+  // Guards the auto-jump-to-next-availability below so it fires once per
+  // provider/service, not on every manual week navigation.
+  const autoJumpedRef = useRef(false);
 
   // Resolve the provider ONCE up front so a bad/stale name shows a clear
   // message instead of rendering as an indistinguishable "fully booked"
@@ -90,6 +106,33 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   useEffect(() => {
     generateWeeklyAvailability();
   }, [currentWeek, providerName, serviceDuration, serviceId, maxDate]);
+
+  // A new provider/service is a genuinely different schedule to check —
+  // allow one fresh auto-jump attempt for it.
+  useEffect(() => {
+    autoJumpedRef.current = false;
+  }, [providerName, serviceId]);
+
+  // If the week currently on screen has nothing bookable at all, don't make
+  // the client page forward hunting for an open day — jump straight to the
+  // earliest date that has one. Runs once per provider/service; manual
+  // navigation afterwards is left alone even if it lands on an empty week.
+  useEffect(() => {
+    if (autoJumpedRef.current || isLoadingSlots || !providerName || providerFound !== true) return;
+    if (Object.keys(availableSlots).length === 0) return;
+
+    const thisWeekHasOpening = getWeekDays().some(day => day.status === 'available');
+    if (thisWeekHasOpening) {
+      autoJumpedRef.current = true;
+      return;
+    }
+    autoJumpedRef.current = true;
+    AvailabilityService.findNextAvailableDate(providerName, serviceDuration, serviceId).then(nextDate => {
+      if (!nextDate) return;
+      setCurrentWeek(new Date(nextDate + 'T00:00:00'));
+      onDateSelect(nextDate);
+    });
+  }, [availableSlots, isLoadingSlots, providerName, providerFound, serviceDuration, serviceId, onDateSelect]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -319,11 +362,6 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return result;
   }, [calendarDays, availableSlots, providerName]);
 
-  const popupBg   = isDarkMode ? '#252220' : '#FFFFFF';
-  const popupSep  = isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.12)';
-  const popupText = isDarkMode ? '#F0ECE7' : '#1C1A18';
-  const popupSub  = '#7E6667';
-
   return (
     <View style={[styles.container, style]}>
       {/* ── Full Calendar Popup ──────────────────────────────────────── */}
@@ -339,26 +377,26 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           onPress={() => setShowFullCalendar(false)}
         >
           <View
-            style={[styles.calendarPopup, { backgroundColor: popupBg, borderColor: popupSep, borderWidth: StyleSheet.hairlineWidth }]}
+            style={[styles.calendarPopup, { backgroundColor: surfaceColor, borderColor: popupBorder, borderWidth: StyleSheet.hairlineWidth }]}
             onStartShouldSetResponder={() => true}
           >
             {/* Month nav */}
             <View style={styles.monthHeader}>
               <TouchableOpacity onPress={() => navigateMonth(-1)} style={styles.monthNavButton}>
-                <Text style={[styles.monthNavArrow, { color: popupText }]}>‹</Text>
+                <Text style={[styles.monthNavArrow, { color: textColor }]}>‹</Text>
               </TouchableOpacity>
-              <Text style={[styles.monthTitle, { color: popupText }]}>
+              <Text style={[styles.monthTitle, { color: textColor }]}>
                 {calendarMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
               </Text>
               <TouchableOpacity onPress={() => navigateMonth(1)} style={styles.monthNavButton}>
-                <Text style={[styles.monthNavArrow, { color: popupText }]}>›</Text>
+                <Text style={[styles.monthNavArrow, { color: textColor }]}>›</Text>
               </TouchableOpacity>
             </View>
 
             {/* Weekday headers */}
             <View style={styles.weekdayRow}>
               {weekDayHeaders.map(day => (
-                <Text key={day} style={[styles.weekdayText, { color: popupSub }]}>{day}</Text>
+                <Text key={day} style={[styles.weekdayText, { color: subColor }]}>{day}</Text>
               ))}
             </View>
 
@@ -386,8 +424,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     key={`day-${index}`}
                     style={[
                       styles.calendarDay,
-                      isToday && [styles.calendarDayToday, { borderColor: theme.accent }],
-                      isSelected && { backgroundColor: theme.accent },
+                      isToday && [styles.calendarDayToday, { borderColor: accentColor }],
+                      isSelected && { borderWidth: 2, borderColor: accentColor },
                       isDisabled && styles.calendarDayPast
                     ]}
                     onPress={() => handleCalendarDaySelect(date)}
@@ -396,8 +434,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     <Text
                       style={[
                         styles.calendarDayText,
-                        { color: isSelected ? '#fff' : theme.text },
-                        isDisabled && { color: theme.secondaryText }
+                        { color: isSelected ? accentColor : textColor },
+                        isDisabled && { color: subColor }
                       ]}
                     >
                       {date.getDate()}
@@ -405,10 +443,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     {/* Availability dot */}
                     <View style={styles.calDotWrap}>
                       {hasSlots && (
-                        <View style={[
-                          styles.calDot,
-                          { backgroundColor: isSelected ? 'rgba(255,255,255,0.75)' : ACCENT },
-                        ]} />
+                        <View style={[styles.calDot, { backgroundColor: accentColor }]} />
                       )}
                     </View>
                   </TouchableOpacity>
@@ -418,8 +453,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
             {/* Legend */}
             <View style={styles.legendRow}>
-              <View style={[styles.legendDot, { backgroundColor: ACCENT }]} />
-              <Text style={[styles.legendText, { color: popupSub }]}>Available slots</Text>
+              <View style={[styles.legendDot, { backgroundColor: accentColor }]} />
+              <Text style={[styles.legendText, { color: subColor }]}>Available slots</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -428,14 +463,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {/* ── Week navigation ──────────────────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-          <Text style={[styles.navArrow, { color: theme.text }]}>‹</Text>
+          <Text style={[styles.navArrow, { color: textColor }]}>‹</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowFullCalendar(true)} style={styles.weekRangeBtn}>
-          <Text style={[styles.weekTitle, { color: theme.text }]}>{formatWeekRange()}</Text>
-          <Text style={[styles.weekChevron, { color: theme.secondaryText }]}>▼</Text>
+          <Text style={[styles.weekTitle, { color: textColor }]}>{formatWeekRange()}</Text>
+          <Text style={[styles.weekChevron, { color: subColor }]}>▼</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}>
-          <Text style={[styles.navArrow, { color: theme.text }]}>›</Text>
+          <Text style={[styles.navArrow, { color: textColor }]}>›</Text>
         </TouchableOpacity>
       </View>
 
@@ -446,7 +481,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           grid with no way to tell the two failures apart. */}
       {providerFound === false && (
         <View style={styles.notFoundBanner}>
-          <Text style={[styles.notFoundText, { color: theme.text }]}>
+          <Text style={[styles.notFoundText, { color: textColor }]}>
             We couldn't find this provider's schedule. Try reopening their profile and scheduling again.
           </Text>
         </View>
@@ -458,30 +493,29 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
           const isDisabled = day.status === 'past' || day.status === 'closed';
-          const pillBg = isSel ? ACCENT : (isDarkMode ? '#2E2B27' : '#F0EBE6');
           return (
             <TouchableOpacity
               key={day.dateString}
               style={[
                 styles.dayPill,
-                { backgroundColor: pillBg },
-                day.isToday && !isSel && { borderWidth: 1.5, borderColor: ACCENT },
+                { backgroundColor: surfaceColor },
+                isSel && { borderWidth: 2, borderColor: accentColor },
                 isDisabled && styles.pastDayPill,
               ]}
               onPress={() => handleDateClick(day.dateString, day)}
               disabled={isDisabled}
               activeOpacity={0.75}
             >
-              <Text style={[styles.dayText, { color: isSel ? 'rgba(255,255,255,0.82)' : theme.secondaryText }]}>
+              <Text style={[styles.dayText, { color: isSel ? accentColor : subColor }]}>
                 {day.dayName}
               </Text>
-              <Text style={[styles.dayNumberText, { color: isSel ? '#fff' : theme.text }]}>
+              <Text style={[styles.dayNumberText, { color: isSel ? accentColor : textColor }]}>
                 {day.dayNumber}
               </Text>
               {/* Availability dot */}
               <View style={styles.dotWrap}>
                 {day.available > 0
-                  ? <View style={[styles.dot, { backgroundColor: isSel ? 'rgba(255,255,255,0.7)' : ACCENT }]} />
+                  ? <View style={[styles.dot, { backgroundColor: accentColor }]} />
                   : <View style={styles.dotPlaceholder} />
                 }
               </View>
@@ -507,12 +541,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                       key={time}
                       style={[
                         styles.timeTab,
-                        { backgroundColor: timeSel ? ACCENT : (isDarkMode ? '#2E2B27' : ACCENT_LIGHT) },
+                        { backgroundColor: surfaceColor },
+                        timeSel && { borderWidth: 2, borderColor: accentColor },
                       ]}
                       onPress={() => handleTimeClick(time)}
                       activeOpacity={0.75}
                     >
-                      <Text style={[styles.timeText, { color: timeSel ? '#fff' : theme.text }]}>
+                      <Text style={[styles.timeText, { color: timeSel ? accentColor : textColor }]}>
                         {time}
                       </Text>
                     </TouchableOpacity>

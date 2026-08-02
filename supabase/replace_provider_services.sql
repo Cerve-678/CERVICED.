@@ -13,6 +13,11 @@
 -- resolved URLs in p_services.
 --
 -- Run in the Supabase SQL editor. Safe to re-run.
+--
+-- NOTE: category_description was added later — see
+-- supabase/add_category_description.sql for the column + the CREATE OR
+-- REPLACE that actually carries it through. Kept here too so this file
+-- stays the accurate reference for the function as a whole.
 
 CREATE OR REPLACE FUNCTION public.replace_provider_services(
   p_provider_id uuid,
@@ -44,7 +49,7 @@ BEGIN
   FOR v_svc IN SELECT * FROM jsonb_array_elements(COALESCE(p_services, '[]'::jsonb))
   LOOP
     INSERT INTO public.services (
-      provider_id, category_name, name, description, price, duration_minutes,
+      provider_id, category_name, category_description, name, description, price, duration_minutes,
       buffer_before_mins, buffer_after_mins, is_active, sort_order,
       tags, technique_tags, outcome_tags, occasion_tags, trend_names,
       is_pregnancy_safe, patch_test_required, min_age, contraindications,
@@ -52,6 +57,7 @@ BEGIN
     ) VALUES (
       p_provider_id,
       v_svc->>'category_name',
+      v_svc->>'category_description',
       v_svc->>'name',
       v_svc->>'description',
       (v_svc->>'price')::numeric,

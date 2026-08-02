@@ -34,8 +34,11 @@ import {
   BookingStatus,
   PaymentStatus,
 } from '../contexts/BookingContext';
+import { useAuth } from '../contexts/AuthContext';
 import { ProviderHomeScreenProps } from '../navigation/types';
 import { supabase } from '../lib/supabase';
+import { storage } from '../utils/storage';
+import { CoachMarkTour, CoachMarkStep } from '../components/CoachMarkTour';
 import {
   getProviderBookings,
   getMyProviderProfile,
@@ -786,8 +789,101 @@ export default function ProviderHomeScreen({ navigation }: Props) {
     scheduleSet: boolean;
     servicesSet: boolean;
     addressSet: boolean;
+    brandingSet: boolean;
   } | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
+
+  // Fires the go-live celebration exactly once, on a genuine false->true
+  // transition of has_gone_live — not on every app open, and not
+  // retroactively for a provider who was already live before this shipped.
+  // Tracked in persistent storage (not just a ref) so it survives app
+  // restarts between the transition happening and the provider reopening.
+  const [showGoLiveCelebration, setShowGoLiveCelebration] = useState(false);
+  const celebrationScale = useRef(new Animated.Value(0.6)).current;
+  const celebrationOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!showGoLiveCelebration) return;
+    celebrationScale.setValue(0.6);
+    celebrationOpacity.setValue(0);
+    Animated.parallel([
+      Animated.spring(celebrationScale, { toValue: 1, tension: 120, friction: 8, useNativeDriver: true }),
+      Animated.timing(celebrationOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+  }, [showGoLiveCelebration, celebrationScale, celebrationOpacity]);
+
+  // First-run coach-mark tour for brand-new providers.
+  const { user } = useAuth();
+  const [showTour, setShowTour] = useState(false);
+  const tourCheckedRef = useRef(false);
+  const checklistCardRef = useRef<View>(null);
+  const fabRef = useRef<View>(null);
+  const bellRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (tourCheckedRef.current || !user?.id || !setupStatus) return;
+    tourCheckedRef.current = true;
+    const seenKey = `@provider_tour_seen_${user.id}`;
+    storage.getItem<boolean>(seenKey).then(seen => {
+      if (seen) return;
+      // Give the checklist/FAB/bell time to finish their entrance layout
+      // before the tour measures where they actually landed on screen.
+      setTimeout(() => setShowTour(true), 500);
+    }).catch(() => {});
+  }, [user?.id, setupStatus]);
+
+  const finishTour = useCallback(() => {
+    setShowTour(false);
+    if (user?.id) storage.setItem(`@provider_tour_seen_${user.id}`, true).catch(() => {});
+  }, [user?.id]);
+
+  const tourSteps = useMemo<CoachMarkStep[]>(() => {
+    // Mirrors IslandPillTabBar's own layout constants (that component lives
+    // outside this screen's tree, so there's no ref to measure — its
+    // position is fixed and computed the same way it computes its own).
+    const TAB_MARGIN = 32;
+    const TAB_H = 50;
+    const TAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 30 : 20;
+    const { height: screenH } = Dimensions.get('window');
+
+    return [
+      {
+        key: 'tabs',
+        title: 'Your home base',
+        body: 'Swipe or tap to move between Home, My Services, Profile, and Becca — your AI assistant.',
+        target: {
+          rect: {
+            x: TAB_MARGIN,
+            y: screenH - TAB_BOTTOM_OFFSET - TAB_H,
+            width: SW - TAB_MARGIN * 2,
+            height: TAB_H,
+          },
+        },
+        radius: TAB_H / 2,
+      },
+      {
+        key: 'checklist',
+        title: 'Finish setting up to go live',
+        body: "Set your weekly schedule and add at least one service — clients can't find or book you until both are done.",
+        target: { ref: checklistCardRef },
+        radius: 14,
+      },
+      {
+        key: 'fab',
+        title: 'Quick access',
+        body: 'Tap the + button anytime for your schedule, promotions, clientele, forms, and inbox.',
+        target: { ref: fabRef },
+        radius: 26,
+      },
+      {
+        key: 'bell',
+        title: "You'll be notified here",
+        body: 'New bookings, messages, and reminders show up in your notifications.',
+        target: { ref: bellRef },
+        radius: 17,
+      },
+    ];
+  }, []);
 
   // Add-action sheet
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -902,12 +998,39 @@ export default function ProviderHomeScreen({ navigation }: Props) {
         if (cancelled) return;
         setAvailability(avail);
         setBlockedDates(blocked);
-        const p = profile as unknown as { business_type?: string | null; location_text?: string | null };
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
-          addressSet: p.business_type === 'mobile' ? true : !!(fullAddress || p.location_text),
+          // Mobile providers travel to the client, so they're exempt. Everyone
+          // else needs the real private address on file (fullAddress) — the
+          // vague public location_text is already required just to save a
+          // profile at all, so accepting it here made this trivially true for
+          // almost everyone regardless of whether address release could
+          // actually work for them.
+          addressSet: profile.business_type === 'mobile' ? true : !!fullAddress,
+          brandingSet: !!profile.logo_url,
         });
+
+        // Go-live celebration: only on a genuine false->true transition,
+        // persisted so it survives app restarts, and never fired the first
+        // time we ever check an account (that would be a false celebration
+        // for anyone already live before this shipped, or a fresh install).
+        const celebrationKey = `@provider_go_live_celebrated_${profile.user_id}`;
+        storage.getItem<boolean>(celebrationKey).then(alreadyCelebrated => {
+          if (cancelled) return;
+          if (profile.has_gone_live && alreadyCelebrated == null) {
+            // First time we've ever checked this account and it's already
+            // live — seed as celebrated, don't fire retroactively.
+            storage.setItem(celebrationKey, true).catch(() => {});
+          } else if (profile.has_gone_live && alreadyCelebrated === false) {
+            setShowGoLiveCelebration(true);
+            storage.setItem(celebrationKey, true).catch(() => {});
+          } else if (!profile.has_gone_live && alreadyCelebrated == null) {
+            // Not live yet — record false so a later flip is detected as a
+            // real transition rather than looking like a fresh-seed case.
+            storage.setItem(celebrationKey, false).catch(() => {});
+          }
+        }).catch(() => {});
       });
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -1063,6 +1186,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
               <Ionicons name={viewMode === 'timeline' ? 'list-outline' : 'time-outline'} size={17} color={viewMode === 'timeline' ? P.ice : P.sub} />
             </TouchableOpacity>
             <TouchableOpacity
+              ref={bellRef}
               onPress={() => navigation.navigate('Notifications')}
               style={[s.iconBtn, { backgroundColor: P.iconBg }]}
             >
@@ -1078,11 +1202,14 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
         {/* ── Go-live setup checklist ──────────────────────────── */}
         {setupStatus && !setupDismissed &&
-         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet) && (
-          <View style={{
-            marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
-            backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
-          }}>
+         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && setupStatus.brandingSet) && (
+          <View
+            ref={checklistCardRef}
+            style={{
+              marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
+              backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,
+            }}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>Finish setting up to go live</Text>
               {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
@@ -1112,6 +1239,11 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                 done: setupStatus.addressSet,
                 label: 'Add your business address',
                 onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'EditProfile' }),
+              },
+              {
+                done: setupStatus.brandingSet,
+                label: 'Add your logo',
+                onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'Branding' }),
               },
             ]).map((step, i) => (
               <TouchableOpacity
@@ -1335,12 +1467,48 @@ export default function ProviderHomeScreen({ navigation }: Props) {
 
       {/* ── FAB ──────────────────────────────────────────────────── */}
       <TouchableOpacity
+        ref={fabRef}
         activeOpacity={0.85}
         style={[s.fab, { backgroundColor: P.accent }]}
         onPress={openSheet}
       >
         <Ionicons name="add" size={26} color={P.ice} />
       </TouchableOpacity>
+
+      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
+
+      {/* ── Go-live celebration ──────────────────────────────────── */}
+      <Modal visible={showGoLiveCelebration} transparent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Animated.View
+            style={{
+              opacity: celebrationOpacity,
+              transform: [{ scale: celebrationScale }],
+              backgroundColor: P.surface,
+              borderRadius: 20,
+              padding: 28,
+              alignItems: 'center',
+              width: '100%',
+              maxWidth: 340,
+            }}
+          >
+            <Text style={{ fontSize: 44 }}>🎉</Text>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: P.text, marginTop: 12, textAlign: 'center' }}>
+              You're live!
+            </Text>
+            <Text style={{ fontSize: 14, color: P.sub, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
+              Clients can now find and book you. Nice work finishing your setup.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setShowGoLiveCelebration(false)}
+              style={{ marginTop: 20, backgroundColor: P.accent, paddingVertical: 12, paddingHorizontal: 32, borderRadius: 12 }}
+            >
+              <Text style={{ color: P.ice, fontWeight: '700', fontSize: 15 }}>Let's go</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* ── Add-action sheet ─────────────────────────────────────── */}
       <Modal

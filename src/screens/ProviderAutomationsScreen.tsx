@@ -66,6 +66,7 @@ interface ProviderAutomations {
   autoAcceptWaitlist:     boolean;
   maxBookingsPerDay:      string;     // 'unlimited' | '4' | '6' | '8' | '10' | '12'
   bookingWindowDays:      string;     // '14' | '30' | '60' | '90' | '180' | '0' (unlimited)
+  minBookingNoticeHrs:    string;     // '0' | '1' | '2' | '4' | '12' | '24'
   slotIntervalMins:       string;     // '15' | '30' | '60'
 }
 
@@ -76,14 +77,15 @@ const DEFAULTS: ProviderAutomations = {
   postApptCheckIn:         false,
   birthdayGreeting:        false,
   newBookingRecap:         true,
-  autoConfirmBookings:     false,
+  autoConfirmBookings:     true,  // matches providers.auto_accept_bookings DB default
   bufferMins:              '0',
-  cancellationNoticeHours: '24',
+  cancellationNoticeHours: '0',   // matches providers.cancellation_notice_hours DB default
   depositRequiredNew:      false,
   waitlistEnabled:         false,
   autoAcceptWaitlist:      false,
   maxBookingsPerDay:       'unlimited',
   bookingWindowDays:       '60',
+  minBookingNoticeHrs:     '0',    // matches providers.min_booking_notice_hrs DB default
   slotIntervalMins:        '60',
 };
 
@@ -209,14 +211,20 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           postApptCheckIn:         a.postApptCheckIn      ?? m['pa_post_appt_check_in']     ?? DEFAULTS.postApptCheckIn,
           birthdayGreeting:        a.birthdayGreeting     ?? m['pa_birthday_greeting']      ?? DEFAULTS.birthdayGreeting,
           newBookingRecap:         m['pa_new_booking_recap']           ?? DEFAULTS.newBookingRecap,
-          autoConfirmBookings:     m['pa_auto_confirm_bookings']       ?? DEFAULTS.autoConfirmBookings,
-          bufferMins:              m['pa_buffer_mins']                 ?? DEFAULTS.bufferMins,
-          cancellationNoticeHours: m['pa_cancellation_notice_hours']   ?? DEFAULTS.cancellationNoticeHours,
+          // These four are enforced straight off the providers row (cron jobs
+          // and the booking flow read them from there, not user_metadata) —
+          // the row is the real answer, not just a fallback.
+          autoConfirmBookings:     profile?.auto_accept_bookings ?? m['pa_auto_confirm_bookings'] ?? DEFAULTS.autoConfirmBookings,
+          bufferMins:              String(profile?.buffer_mins ?? m['pa_buffer_mins'] ?? DEFAULTS.bufferMins),
+          cancellationNoticeHours: String(profile?.cancellation_notice_hours ?? m['pa_cancellation_notice_hours'] ?? DEFAULTS.cancellationNoticeHours),
           depositRequiredNew:      a.depositRequiredNew   ?? m['pa_deposit_required_new']   ?? DEFAULTS.depositRequiredNew,
           waitlistEnabled:         a.waitlistEnabled      ?? m['pa_waitlist_enabled']       ?? DEFAULTS.waitlistEnabled,
           autoAcceptWaitlist:      a.autoAcceptWaitlist   ?? m['pa_auto_accept_waitlist']   ?? DEFAULTS.autoAcceptWaitlist,
-          maxBookingsPerDay:       m['pa_max_bookings_per_day']        ?? DEFAULTS.maxBookingsPerDay,
+          maxBookingsPerDay:       profile?.max_bookings_per_day != null
+            ? (profile.max_bookings_per_day === 0 ? 'unlimited' : String(profile.max_bookings_per_day))
+            : (m['pa_max_bookings_per_day'] ?? DEFAULTS.maxBookingsPerDay),
           bookingWindowDays:       String(profile?.booking_window_days    ?? m['pa_booking_window_days']    ?? DEFAULTS.bookingWindowDays),
+          minBookingNoticeHrs:     String(profile?.min_booking_notice_hrs ?? m['pa_min_booking_notice_hrs'] ?? DEFAULTS.minBookingNoticeHrs),
           slotIntervalMins:        String(profile?.slot_interval_mins     ?? m['pa_slot_interval_mins']     ?? DEFAULTS.slotIntervalMins),
         });
       } finally {
@@ -245,6 +253,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             pa_waitlist_enabled:          d.waitlistEnabled,
             pa_auto_accept_waitlist:      d.autoAcceptWaitlist,
             pa_max_bookings_per_day:      d.maxBookingsPerDay,
+            pa_min_booking_notice_hrs:    d.minBookingNoticeHrs,
           },
         }).then(({ error }) => { if (error) throw error; }),
       ];
@@ -254,6 +263,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
           booking_window_days:    parseInt(d.bookingWindowDays, 10)    || 60,
           slot_interval_mins:     parseInt(d.slotIntervalMins, 10)     || 60,
           buffer_mins:            parseInt(d.bufferMins, 10)           || 0,
+          min_booking_notice_hrs: parseInt(d.minBookingNoticeHrs, 10)  || 0,
         }));
         // Persist daily cap to providers table (0 = unlimited)
         const capInt = d.maxBookingsPerDay === 'unlimited'
@@ -546,6 +556,26 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
         />
         <Text style={[st.chipHint, { color: C.sub }]}>
           Dates beyond this window won't appear on your booking calendar.
+        </Text>
+
+        {/* Minimum notice before booking */}
+        <ChipSelect
+          label="Minimum notice before booking"
+          options={[
+            { v: '0',  l: 'None'    },
+            { v: '1',  l: '1 hr'    },
+            { v: '2',  l: '2 hrs'   },
+            { v: '4',  l: '4 hrs'   },
+            { v: '12', l: '12 hrs'  },
+            { v: '24', l: '24 hrs'  },
+          ]}
+          selected={d.minBookingNoticeHrs}
+          multi={false}
+          onSelect={v => set('minBookingNoticeHrs', v)}
+          C={C}
+        />
+        <Text style={[st.chipHint, { color: C.sub }]}>
+          Clients can't book a slot that starts sooner than this from now — stops last-minute bookings you can't prepare for.
         </Text>
 
         {/* Slot start-time interval */}

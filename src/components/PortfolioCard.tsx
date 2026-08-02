@@ -28,7 +28,8 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } = useBookmarkStore();
 
   const isSaved = isPortfolioSaved(item.id);
-  const imageHeight = columnWidth * item.aspectRatio;
+  // aspectRatio is stored as width/height, so height = width / ratio.
+  const imageHeight = columnWidth / item.aspectRatio;
 
   useEffect(() => {
     Animated.parallel([
@@ -88,6 +89,7 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
             },
           ]}
           resizeMode="cover"
+          fadeDuration={0}
         />
 
         {/* Gradient overlay at bottom of image */}
@@ -102,6 +104,13 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
             },
           ]}
         />
+
+        {/* Price badge */}
+        {item.price && (
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceBadgeText}>{item.price}</Text>
+          </View>
+        )}
 
         {/* Bookmark button */}
         <TouchableOpacity
@@ -131,20 +140,6 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
           )}
         </View>
       </TouchableOpacity>
-
-      {/* Caption below card */}
-      {item.caption ? (
-        <Text
-          style={[styles.caption, { color: theme.secondaryText }]}
-          numberOfLines={2}
-        >
-          {item.caption}
-        </Text>
-      ) : null}
-
-      {item.price && (
-        <Text style={styles.price}>{item.price}</Text>
-      )}
     </Animated.View>
   );
 };
@@ -189,6 +184,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  priceBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  priceBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'BakbakOne-Regular',
+  },
   overlay: {
     position: 'absolute',
     bottom: 8,
@@ -218,27 +228,5 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
-  },
-  captionContainer: {
-    marginTop: 6,
-  },
-  caption: {
-    fontSize: 11,
-    fontFamily: 'Jura-VariableFont_wght',
-    lineHeight: 15,
-  },
-  expandText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#AF9197',
-    fontFamily: 'Jura-VariableFont_wght',
-    marginTop: 3,
-  },
-  price: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#AF9197',
-    fontFamily: 'Jura-VariableFont_wght',
-    marginTop: 2,
   },
 });

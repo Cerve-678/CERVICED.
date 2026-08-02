@@ -111,7 +111,8 @@ just showed the first 10 providers in DB order under the label
    (`src/utils/distance.ts`, haversine formula) from `userCoords` to every
    provider that has `latitude`/`longitude` set (the `providers` table
    already had these columns — they just weren't being read into the app's
-   `Provider` type before now).
+   `Provider` type before now, and nothing ever wrote to them either — see
+   below).
 4. **Elastic radius:** try a 50km cutoff first. If fewer than 5 providers
    fall inside it, drop the cutoff and just take the nearest 15 regardless of
    distance. This avoids showing a near-empty row in a sparse market or early
@@ -128,6 +129,50 @@ what the user is looking at.
 Top Rated, or Browse by Category — those sections rank on rating/personali-
 zation/recency exactly as before. Near You is currently its own row, not a
 site-wide ranking signal. See "Where this goes next."
+
+#### Where the coordinates actually come from — two tiers, on purpose
+
+Getting `providers.latitude`/`longitude` populated at all turned out to be
+its own gap. Providers have **two separate location fields**, and it matters
+which one this feature is allowed to touch:
+
+| Field | Table | Who can read it | What providers put there |
+|---|---|---|---|
+| `location_text` | `providers` (public) | any client, always | free text — the registration form's own placeholder suggests something as vague as `"North West London"`. A salon/studio might reasonably put their real address here instead, since a storefront isn't sensitive. |
+| `full_address` | `provider_private_details` (private, RLS owner-only) | only the provider themself, until their chosen `address_release_policy` fires for a specific confirmed booking | the real, precise address — deliberately moved out of the public table by `restrict_provider_full_address.sql` specifically so it can't leak to clients before release. |
+
+Before this pass, **neither** field ever produced a coordinate — `location_text`
+was saved as plain text with no geocoding step at all, and
+`providerRegistrationService.ts`'s save function never wrote to
+`latitude`/`longitude` under any circumstance. So the "Near You" row (and a
+second, independently-built distance feature that appeared in
+`SearchScreen.tsx` around the same time as this one) had real distance math
+to run, but zero providers with real coordinates to run it on.
+
+The fix only geocodes `location_text` (via `expo-location`'s built-in
+`Location.geocodeAsync`, no external API/key needed) and writes the result to
+the public `providers.latitude`/`longitude` columns at save time. It
+deliberately does **not** geocode `full_address`, even though that would be
+more accurate: piping the private, release-gated address into a
+publicly-readable coordinate would leak a home-based provider's precise
+location to every client immediately, regardless of their chosen release
+policy — arguably a worse leak than the address text itself, since a
+lat/lng pair drops straight onto a map with no further work. A vague public
+`location_text` like "North West London" now correctly geocodes to a vague,
+low-precision coordinate — that's the right privacy behavior, not a bug. A
+salon that put its real address in the public field gets an accurate pin,
+because there was never anything sensitive about that address to begin
+with.
+
+**Deliberately left for later** (flagged, not built, because it needs care):
+using the private `full_address` to compute *more accurate* distances for
+home-based/mobile providers, without ever exposing the address or exact
+coordinate to the client. That would need a server-side `SECURITY DEFINER`
+Postgres function — mirroring the pattern `provider_private_details`'s own
+RLS already relies on — that accepts the user's coordinates, joins against
+each provider's private (geocoded) address internally, and returns only a
+distance number. The client would only ever see "2.3km away," never the
+coordinate or address it was computed from.
 
 ### New on Cerviced
 **Data flow:** `getTopRatedProviders`'s sibling, `getNewProviders(15)` —

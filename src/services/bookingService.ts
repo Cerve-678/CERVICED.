@@ -495,6 +495,7 @@ export function applyRescheduleRequestRow(
       originalDate: row.original_date,
       originalTime: row.original_time,
       ...(row.requested_dates ? { requestedDates: row.requested_dates } : {}),
+      ...(row.requested_times ? { requestedTimes: row.requested_times } : {}),
       requestedAt: row.created_at,
       ...(responded
         ? {

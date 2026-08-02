@@ -277,6 +277,7 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
   // ── Cache-only fields (need DB migration before persisting to Supabase) ────
   const [instagram, setInstagram]         = useState('');
   const [website, setWebsite]             = useState('');
+  const [externalBookingUrl, setExternalBookingUrl] = useState('');
   const [serviceSetting, setServiceSetting] = useState('');
   const [travelRadius, setTravelRadius]   = useState('');
   const [specialties, setSpecialties]     = useState<string[]>([]);
@@ -329,6 +330,7 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           setServiceCategory((providerData as any).service_category ?? '');
           setOnlineConsult(providerData.online_consultations_available ?? false);
           setConsultRequired(providerData.consultation_required_new_clients ?? false);
+          setExternalBookingUrl(providerData.external_booking_url ?? '');
         }
 
         const stored = await AsyncStorage.getItem(EXTRAS_KEY).catch(() => null);
@@ -400,6 +402,7 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           preferred_contact_methods: preferredContact.length ? preferredContact : null,
           online_consultations_available: onlineConsult,
           consultation_required_new_clients: consultRequired,
+          external_booking_url: externalBookingUrl.trim() || null,
         }));
       }
 
@@ -460,6 +463,17 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
               <Field label="Website" value={website} onChange={setWebsite} placeholder="https://yourbusiness.com" />
               <Field label="Public Contact Email" value={businessEmail} onChange={setBusinessEmail} placeholder="hello@mybusiness.com" keyboardType="email-address" note="Shown on your profile. Leave blank to hide." />
               <Field label="Booking Notification Email" value={bookingEmail} onChange={setBookingEmail} placeholder="bookings@mybusiness.com" keyboardType="email-address" note="Where we send booking confirmations and alerts." />
+            </Card>
+
+            {/* ── External Booking Link ────────────────────────────────── */}
+            <Card title="External Booking Link" sub="Already booking through Fresha, Treatwell, Acuity, or similar?">
+              <Field
+                label="Booking Link"
+                value={externalBookingUrl}
+                onChange={setExternalBookingUrl}
+                placeholder="e.g. your Fresha or Acuity booking page"
+                note="When set, clients tap Book and go straight to this link — Cerviced's in-app booking is skipped for your profile. Leave blank to keep booking in-app."
+              />
             </Card>
 
             {/* ── Where You Work ───────────────────────────────────────── */}

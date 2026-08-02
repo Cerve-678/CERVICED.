@@ -260,7 +260,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   // Address countdown timer
   useEffect(() => {
     if (!booking || booking.clientAddress) return;
-    const policy = addrSettings?.address_release_policy ?? null; // ProviderAddressSettings field
+    const policy = addrSettings?.address_release_policy ?? null; // ProviderAddressPolicy field
     if (!policy || policy === 'always' || policy === 'manual') return;
     const offsetDays: Record<string, number> = {
       on_confirmation: 0, day_before: 1, two_days_before: 2,
@@ -909,6 +909,23 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     ? `${booking.providerName} has responded with available times. Tap Reschedule Now to confirm.`
                     : `Waiting for ${booking.providerName} to respond with available dates.`}
                 </Text>
+                {/* Show what was actually requested — previously not surfaced
+                    anywhere after submission (requestedDates/requestedTimes
+                    come from booking_reschedule_requests via
+                    applyRescheduleRequestRow() in bookingService.ts). */}
+                {!(booking as any).rescheduleRequest?.providerAvailableDates &&
+                  !!(booking as any).rescheduleRequest?.requestedDates?.length && (
+                  <View style={{ marginTop: 8 }}>
+                    {((booking as any).rescheduleRequest.requestedDates as string[]).map((d: string, i: number) => {
+                      const t = (booking as any).rescheduleRequest.requestedTimes?.[i];
+                      return (
+                        <Text key={`${d}-${i}`} style={{ fontSize: 12, color: C.text, fontWeight: '600', marginTop: 2 }}>
+                          You requested: {formatDisplayDate(d)}{t ? ` at ${t}` : ''}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -1118,7 +1135,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Contact Sheet ─── */}
-        <Modal visible={contactSheetVisible} animationType="slide" transparent onRequestClose={() => setContactSheetVisible(false)}>
+        <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setContactSheetVisible(false)}>
             <Pressable style={[st.contactSheet, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
@@ -1300,7 +1317,11 @@ const st = StyleSheet.create({
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
   sheetTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
   sheetSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  sheetBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  // width: '100%' matters here — a lone flex:1 button (Success/Cooldown
+  // modals only ever have one) has no sibling to size against in an
+  // unconstrained row, and Yoga can collapse it to zero width so it never
+  // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
+  sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
   sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },
   reviewInput: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12, minHeight: 80, fontSize: 14, marginBottom: 16 },
   tipChip: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },

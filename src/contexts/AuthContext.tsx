@@ -65,7 +65,7 @@ interface AuthContextType {
   session: Session | null;
   activeMode: 'provider' | 'client';
   switchMode: () => Promise<void>;
-  upgradeToProvider: (businessName: string, businessEmail: string, extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string }) => Promise<void>;
+  upgradeToProvider: (businessName: string, businessEmail: string, extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }) => Promise<void>;
   addClientProfile: (profileData: ClientProfileData) => Promise<void>;
   login: (userData?: UserData) => void;
   logout: () => Promise<void>;
@@ -414,7 +414,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const upgradeToProvider = async (
     businessName: string,
     businessEmail: string,
-    extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string }
+    extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }
   ) => {
     if (!user) throw new Error('No logged-in user');
     await upgradeUserToProvider(user.id, businessName, businessEmail, extras);

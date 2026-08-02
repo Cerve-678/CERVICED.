@@ -9,6 +9,7 @@ import {
   Image,
   StatusBar,
   Animated,
+  Dimensions,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -32,12 +33,15 @@ import { useBooking } from '../contexts/BookingContext';
 import { useAuth } from '../contexts/AuthContext';
 import userLearningService from '../services/userLearningService';
 import { HairTypeSelector } from '../components/HairTypeSelector';
+import LocationModal from '../components/LocationModal';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { storage, STORAGE_KEYS } from '../utils/storage';
 import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders } from '../services/databaseService';
 import type { DbProvider, DbPromotionWithProvider } from '../types/database';
 import { HOME_SECTIONS } from '../config/homeSections';
 import { logger } from '../utils/logger';
 import { getDistanceKm, formatDistance } from '../utils/distance';
+import { CoachMarkTour, CoachMarkStep } from '../components/CoachMarkTour';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -191,16 +195,97 @@ export default function HomeScreen() {
   // Ref for main ScrollView to control scrolling
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // First-run coach-mark tour for brand-new clients.
+  const [showTour, setShowTour] = useState(false);
+  const tourCheckedRef = useRef(false);
+  const searchIconRef = useRef<View>(null);
+  const bellIconRef = useRef<View>(null);
+  const bookingsChipRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (tourCheckedRef.current || !user?.id) return;
+    tourCheckedRef.current = true;
+    const seenKey = `@client_tour_seen_${user.id}`;
+    storage.getItem<boolean>(seenKey).then(seen => {
+      if (seen) return;
+      // Give the header/category section time to finish their entrance
+      // layout before the tour measures where they actually landed.
+      setTimeout(() => setShowTour(true), 500);
+    }).catch(() => {});
+  }, [user?.id]);
+
+  const finishTour = useCallback(() => {
+    setShowTour(false);
+    if (user?.id) storage.setItem(`@client_tour_seen_${user.id}`, true).catch(() => {});
+  }, [user?.id]);
+
+  const tourSteps = useMemo<CoachMarkStep[]>(() => {
+    // Mirrors IslandPillTabBar's own layout constants (that component lives
+    // outside this screen's tree, so there's no ref to measure — its
+    // position is fixed and computed the same way it computes its own).
+    const TAB_MARGIN = 32;
+    const TAB_H = 50;
+    const TAB_BOTTOM_OFFSET = Platform.OS === 'ios' ? 30 : 20;
+    const { width: screenW, height: screenH } = Dimensions.get('window');
+
+    return [
+      {
+        key: 'tabs',
+        title: 'Your home base',
+        body: 'Swipe or tap to move between Becca, Explore, Home, Cart, and Profile.',
+        target: {
+          rect: {
+            x: TAB_MARGIN,
+            y: screenH - TAB_BOTTOM_OFFSET - TAB_H,
+            width: screenW - TAB_MARGIN * 2,
+            height: TAB_H,
+          },
+        },
+        radius: TAB_H / 2,
+      },
+      {
+        key: 'search',
+        title: 'Find a provider',
+        body: 'Search by name, treatment, or category to find who you want to book.',
+        target: { ref: searchIconRef },
+        radius: 18,
+      },
+      {
+        key: 'bell',
+        title: "You'll be notified here",
+        body: 'Booking confirmations, reminders, and messages show up in your notifications.',
+        target: { ref: bellIconRef },
+        radius: 18,
+      },
+      {
+        key: 'bookings',
+        title: 'Your bookings',
+        body: 'Everything you\'ve booked — upcoming and past — lives here.',
+        target: { ref: bookingsChipRef },
+        radius: 18,
+      },
+    ];
+  }, []);
+
 
   // Live providers from Supabase; starts empty until data loads
   const [liveProviders, setLiveProviders] = useState<Provider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
 
   // Device location, for the "Near You" section — null until permission is
-  // granted and a fix is obtained. Left null (rather than retried/blocked on)
-  // if the user denies permission or location services are off; the section
-  // falls back to unsorted providers in that case rather than being empty.
+  // granted and a fix is obtained, OR until the user manually picks a city
+  // (see manualLocationLabel below). If GPS is denied, the fallback is a
+  // region the user actually chose (e.g. "Manchester, UK"), never the
+  // unsorted full provider list — that city gets geocoded once via the same
+  // Location.geocodeAsync used for provider registration, and the result is
+  // set here just as if it were a real GPS fix, so every downstream
+  // distance/sort/elastic-radius calculation stays exactly the same either way.
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  // Set once the user has manually chosen a city (as opposed to GPS) — drives
+  // the "· LONDON" label suffix and lets LocationModal show the current pick.
+  const [manualLocationLabel, setManualLocationLabel] = useState<string | null>(null);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationRadius, setLocationRadius] = useState(10);
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [showHairTypeSelector, setShowHairTypeSelector] = useState(false);
@@ -341,19 +426,35 @@ export default function HomeScreen() {
 
     // Ask for location once on mount — same permission string already
     // declared in app.json ("...show nearby beauty service providers").
-    // Denied/unavailable is a normal, silent outcome: userCoords just stays
-    // null and the Near You section falls back to unsorted providers.
+    // If GPS is denied/unavailable, fall back to a previously-picked city
+    // (never to the unsorted full provider list) — and if the user has never
+    // picked one either, Near You prompts them to instead of guessing.
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const position = await Location.getCurrentPositionAsync({});
-        setUserCoords({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
+        if (status === 'granted') {
+          const position = await Location.getCurrentPositionAsync({});
+          setUserCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+          return;
+        }
       } catch {
-        // Silent failure — Near You falls back to unsorted providers
+        // Falls through to the manual-city fallback below
+      }
+
+      try {
+        const savedCity = await storage.getItem<string>(STORAGE_KEYS.MANUAL_LOCATION);
+        if (savedCity) {
+          const [match] = await Location.geocodeAsync(savedCity);
+          if (match) {
+            setUserCoords({ latitude: match.latitude, longitude: match.longitude });
+            setManualLocationLabel(savedCity);
+          }
+        }
+      } catch {
+        // Silent failure — Near You prompts the user to pick a city instead
       }
     })();
 
@@ -446,6 +547,23 @@ export default function HomeScreen() {
     const withinRadius = withDistance.filter(p => p.distanceKm <= NEARBY_RADIUS_KM);
     return withinRadius.length >= MIN_NEARBY_RESULTS ? withinRadius : withDistance;
   }, [liveProviders, userCoords]);
+
+  // User picked a city from LocationModal (either the first-run prompt, or
+  // reopening it later to change area) — geocode it once and feed it into
+  // userCoords exactly like a real GPS fix, so nearbyProviders above needs no
+  // separate code path for "GPS" vs "manually chosen region."
+  const handleSelectRegion = useCallback(async (city: string) => {
+    try {
+      const [match] = await Location.geocodeAsync(city);
+      if (match) {
+        setUserCoords({ latitude: match.latitude, longitude: match.longitude });
+        setManualLocationLabel(city);
+        await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, city);
+      }
+    } catch {
+      // Silent failure — keeps whatever location state existed before
+    }
+  }, []);
 
   const allCategorizedProviders = useMemo(() => {
     if (!viewAllProviders) return {};
@@ -630,8 +748,9 @@ export default function HomeScreen() {
 
   const navigateToSearch = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // @ts-ignore - navigation options for instant transition
-    navigation.navigate('Search', {}, { animation: 'none' });
+    // Instant transition comes from HomeNavigator's Search screen having
+    // `animation: 'none'` set statically, not from a per-navigate override.
+    navigation.navigate('Search', {});
   }, [navigation]);
 
   const navigateToNotifications = useCallback(() => {
@@ -722,6 +841,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerIcons}>
             <TouchableOpacity
+              ref={searchIconRef}
               style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
               onPress={navigateToSearch}
               activeOpacity={0.7}
@@ -731,6 +851,7 @@ export default function HomeScreen() {
               <SearchIcon size={18} color={P.sub} />
             </TouchableOpacity>
             <TouchableOpacity
+              ref={bellIconRef}
               style={[styles.iconBtn, { backgroundColor: P.iconBg }]}
               onPress={navigateToNotifications}
               activeOpacity={0.7}
@@ -745,6 +866,7 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
+              ref={bookingsChipRef}
               style={[styles.bookingsChip, { backgroundColor: P.accent }]}
               onPress={navigateToBookings}
               activeOpacity={0.7}
@@ -1191,9 +1313,9 @@ export default function HomeScreen() {
           <View style={styles.filteredProvidersSection}>
             <View style={styles.twoColumnContainer}>
               <View style={styles.leftColumn}>
-                {serviceProviders.left.map((provider, index) => (
+                {serviceProviders.left.map((provider) => (
                   <ProviderCard
-                    key={`left-${provider.id}-${index}`}
+                    key={`left-${provider.id}`}
                     provider={provider}
                     onPress={() => provider.logo && navigateToProvider(provider)}
                     style={styles.columnProviderCard}
@@ -1202,9 +1324,9 @@ export default function HomeScreen() {
                 ))}
               </View>
               <View style={styles.rightColumn}>
-                {serviceProviders.right.map((provider, index) => (
+                {serviceProviders.right.map((provider) => (
                   <ProviderCard
-                    key={`right-${provider.id}-${index}`}
+                    key={`right-${provider.id}`}
                     provider={provider}
                     onPress={() => provider.logo && navigateToProvider(provider)}
                     style={styles.columnProviderCard}
@@ -1445,6 +1567,7 @@ export default function HomeScreen() {
                             source={provider.logo}
                             style={styles.roundCardImage}
                             resizeMode="cover"
+                            fadeDuration={0}
                           />
                         )}
                       </View>
@@ -1476,8 +1599,8 @@ export default function HomeScreen() {
 
                 {viewAllMaleServices ? (
                   <View style={styles.expandedGrid}>
-                    {maleProvidersDisplay.map((provider, index) => (
-                      <View key={`male-expanded-${index}-${provider.id}`} style={styles.gridItem}>
+                    {maleProvidersDisplay.map((provider) => (
+                      <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
                         <ProviderCard
                           provider={provider}
                           onPress={() => navigateToProvider(provider)}
@@ -1509,17 +1632,42 @@ export default function HomeScreen() {
             )}
 
             {/* Near You Section — sorted by real distance once we have a
-                location fix; falls back to the plain provider list (and the
-                "ALL PROVIDERS" label) if location was denied/unavailable. */}
+                location fix, from GPS or a manually-chosen city. Never
+                falls back to the plain unsorted "every provider" list —
+                with no location at all yet, it prompts the user to pick a
+                city (LocationModal) instead. */}
             <View style={styles.section}>
-              <View style={styles.sectionHeader}>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowLocationModal(true);
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={[styles.sectionTitle, { color: P.text }]}>
-                  {userCoords ? 'NEAR YOU' : 'ALL PROVIDERS'}
+                  NEAR YOU{manualLocationLabel ? ` · ${manualLocationLabel.split(',')[0]!.toUpperCase()}` : ''}
                 </Text>
-              </View>
+                <Text style={[styles.viewAll, { color: P.sub }]}>
+                  {userCoords ? 'CHANGE' : 'SET AREA'}
+                </Text>
+              </TouchableOpacity>
 
               {providersLoading ? (
                 <SkeletonSection isDarkMode={isDarkMode} cardWidth={100} cardHeight={100} borderRadius={50} count={5} />
+              ) : !userCoords ? (
+                <TouchableOpacity
+                  style={[styles.nearYouPrompt, { backgroundColor: P.surface, borderColor: P.border }]}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowLocationModal(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.nearYouPromptText, { color: P.sub }]}>
+                    Enable location or choose your area to see providers near you
+                  </Text>
+                </TouchableOpacity>
               ) : (
                 <ScrollView
                   horizontal
@@ -1540,6 +1688,7 @@ export default function HomeScreen() {
                             source={provider.logo}
                             style={styles.roundCardImage}
                             resizeMode="cover"
+                            fadeDuration={0}
                           />
                         )}
                       </View>
@@ -1556,6 +1705,15 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
             </View>
+
+            <LocationModal
+              visible={showLocationModal}
+              onClose={() => setShowLocationModal(false)}
+              selectedLocation={manualLocationLabel ?? ''}
+              selectedRadius={locationRadius}
+              onLocationChange={handleSelectRegion}
+              onRadiusChange={setLocationRadius}
+            />
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') */}
             {/* Kids Services Section */}
@@ -1576,8 +1734,8 @@ export default function HomeScreen() {
 
                 {viewAllKidsServices ? (
                   <View style={styles.expandedGrid}>
-                    {kidsProvidersDisplay.map((provider, index) => (
-                      <View key={`kids-expanded-${index}-${provider.id}`} style={styles.gridItem}>
+                    {kidsProvidersDisplay.map((provider) => (
+                      <View key={`kids-expanded-${provider.id}`} style={styles.gridItem}>
                         <ProviderCard
                           provider={provider}
                           onPress={() => navigateToProvider(provider)}
@@ -1631,7 +1789,7 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" /> : <View style={styles.offerLogo} />}
+                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" fadeDuration={0} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything
@@ -1682,6 +1840,7 @@ export default function HomeScreen() {
                             source={provider.logo}
                             style={styles.roundCardImage}
                             resizeMode="cover"
+                            fadeDuration={0}
                           />
                         )}
                       </View>
@@ -1699,6 +1858,7 @@ export default function HomeScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
+      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
     </View>
   );
 }
@@ -2097,6 +2257,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     opacity: 0.7,
+  },
+  nearYouPrompt: {
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  nearYouPromptText: {
+    fontSize: 13,
+    textAlign: 'center',
   },
   // Offer card styles - Horizontal layout with large logo
   offerCard: {

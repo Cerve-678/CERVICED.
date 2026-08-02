@@ -129,7 +129,7 @@ function PromoPickerSheet({ visible, promos, clientName, onClose, onSelect, P }:
 }) {
   const live = promos.filter(p => p.is_active && !isExpired(p.valid_until));
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={ppSt.backdrop} activeOpacity={1} onPress={onClose} />
       <View style={[ppSt.sheet, { backgroundColor: P.surface }]}>
         <View style={[ppSt.handle, { backgroundColor: P.border }]} />
@@ -203,7 +203,7 @@ function ClientHistorySheet({ visible, member, bookings, loading, onClose, P }: 
   loading: boolean; onClose: () => void; P: typeof LIGHT;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={chSt.backdrop} activeOpacity={1} onPress={onClose} />
       <View style={[chSt.sheet, { backgroundColor: P.surface }]}>
         <View style={[chSt.handle, { backgroundColor: P.border }]} />
@@ -333,7 +333,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError,
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <TouchableOpacity style={anSt.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={[anSt.sheet, { backgroundColor: P.surface }]}>
