@@ -42,7 +42,7 @@ Curated: [[Address Release]] · **54 files**
 ## Availability & slots
 Curated: [[Availability & Slots]] · **88 files**
 - `src/services/AvailabilityService.ts` _(265)_
-- `src/services/databaseService.ts` _(121)_
+- `src/services/databaseService.ts` _(120)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(88)_
 - `src/components/ModernBeautyCalendar.tsx` _(78)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(68)_
@@ -112,20 +112,20 @@ Curated: [[Booking Flow]] · **148 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(623)_
 - `src/contexts/BookingContext.tsx` _(586)_
 - `src/screens/client/BookingsScreen.tsx` _(497)_
-- `src/services/databaseService.ts` _(375)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(370)_
+- `src/services/databaseService.ts` _(368)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingDetailScreen.tsx` _(283)_
 - `src/screens/client/CartScreen.tsx` _(240)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(148)_
-- `src/services/AvailabilityService.ts` _(130)_
+- `src/services/AvailabilityService.ts` _(131)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/waitlist_holds.sql` _(125)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/automation_jobs.sql` _(107)_
 - `src/screens/shared/NotificationsScreen.tsx` _(106)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(103)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(102)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(93)_
 - `src/screens/client/RescheduleScreen.tsx` _(80)_
@@ -138,7 +138,7 @@ Curated: [[Booking Flow]] · **148 files**
 - `supabase/waitlist_automation_settings.sql` _(54)_
 - `supabase/client_automation_jobs.sql` _(52)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(51)_
-- `src/screens/shared/InfoRegScreen.tsx` _(49)_
+- `src/screens/shared/DevSettingsScreen.tsx` _(50)_
 - … +118 more
 
 ## Notifications
@@ -185,9 +185,9 @@ Curated: [[Provider Onboarding & Go-Live]] · **44 files**
 - `src/screens/shared/InfoRegScreen.tsx` _(13)_
 - `supabase/require_provider_address.sql` _(13)_
 - `src/services/providerRegistrationService.ts` _(12)_
+- `src/screens/shared/DevSettingsScreen.tsx` _(11)_
 - `supabase/provider_schedule_gating.sql` _(10)_
 - `supabase/dev_reset_provider.sql` _(8)_
-- `src/screens/shared/DevSettingsScreen.tsx` _(7)_
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
 - `src/services/acuityTransferService.ts` _(5)_
@@ -271,8 +271,8 @@ Curated: [[Booking Flow]] · **96 files**
 - `supabase/provider_reminder_jobs.sql` _(16)_
 - `src/screens/provider/ProviderAccountScreen.tsx` _(15)_
 - `src/screens/client/UserProfileScreen.tsx` _(12)_
+- `src/screens/shared/DevSettingsScreen.tsx` _(12)_
 - `src/components/AppDialog.tsx` _(11)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(11)_
 - … +66 more
 
 ## Auth
@@ -294,8 +294,8 @@ Curated: [[Contexts]] · **111 files**
 - `src/screens/auth/EmailVerificationScreen.tsx` _(27)_
 - `src/screens/auth/SignUpStep2Screen.tsx` _(27)_
 - `src/services/beccaStorageService.ts` _(20)_
+- `src/screens/shared/DevSettingsScreen.tsx` _(18)_
 - `supabase/becca_chat_tables.sql` _(18)_
-- `src/screens/shared/DevSettingsScreen.tsx` _(17)_
 - `src/stores/useAppStore.ts` _(15)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(15)_
 - `src/screens/auth/SignUpStep5Screen.tsx` _(12)_
@@ -337,7 +337,7 @@ Curated: [[Services]] · **24 files**
 - `supabase/delete_account.sql` _(1)_
 
 ## Cart & checkout
-Curated: [[Payments]] · **32 files**
+Curated: [[Payments]] · **33 files**
 - `src/screens/client/CartScreen.tsx` _(87)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(57)_
 - `src/contexts/BookingContext.tsx` _(26)_
@@ -351,6 +351,7 @@ Curated: [[Payments]] · **32 files**
 - `src/navigation/types.ts` _(5)_
 - `src/services/AvailabilityService.ts` _(5)_
 - `src/components/MultiBookingSheet.tsx` _(3)_
+- `src/screens/shared/DevSettingsScreen.tsx` _(3)_
 - `supabase/add_external_booking_url.sql` _(3)_
 - `src/components/CartTabBadge.tsx` _(2)_
 - `src/navigation/client/tabs/CartNavigator.tsx` _(2)_
@@ -367,5 +368,4 @@ Curated: [[Payments]] · **32 files**
 - `src/screens/client/HomeScreen.tsx` _(1)_
 - `src/screens/shared/InfoRegScreen.tsx` _(1)_
 - `src/services/notificationTapHandler.ts` _(1)_
-- `src/stores/useBookingStore.ts` _(1)_
-- … +2 more
+- … +3 more

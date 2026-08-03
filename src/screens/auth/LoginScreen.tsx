@@ -72,16 +72,7 @@ export default function LoginScreen({ navigation }: Props) {
   // Shared by every successful sign-in path (password, Apple) — offers to
   // remember this device via biometrics instead of typing credentials again.
   const maybePromptEnableBiometric = useCallback((refreshToken: string | undefined) => {
-    if (!biometricAvailable || biometricEnabled || !refreshToken) {
-      // TEMPORARY DIAGNOSTIC — remove once we confirm why the prompt is/isn't
-      // firing. logger.log is a no-op in production, so this is the only way
-      // to see these values on a TestFlight build.
-      Alert.alert(
-        'Face ID debug',
-        `hardwareAvailable=${biometricAvailable}\nalreadyEnabled=${biometricEnabled}\nhasRefreshToken=${!!refreshToken}`
-      );
-      return;
-    }
+    if (!biometricAvailable || biometricEnabled || !refreshToken) return;
     Alert.alert(
       `Enable ${biometricLabel}?`,
       `Sign in faster next time using ${biometricLabel} instead of your password.`,
@@ -161,23 +152,7 @@ export default function LoginScreen({ navigation }: Props) {
       return;
     }
 
-    if (biometricAvailable && !biometricEnabled && data.session?.refresh_token) {
-      const token = data.session.refresh_token;
-      Alert.alert(
-        `Enable ${biometricLabel}?`,
-        `Sign in faster next time using ${biometricLabel} instead of your password.`,
-        [
-          { text: 'Not now', style: 'cancel' },
-          {
-            text: 'Enable',
-            onPress: async () => {
-              await enableBiometric(token);
-              setBiometricEnabled(true);
-            },
-          },
-        ]
-      );
-    }
+    maybePromptEnableBiometric(data.session?.refresh_token);
     logger.log('[Login] Success — waiting for onAuthStateChange...');
   };
 
@@ -301,7 +276,7 @@ export default function LoginScreen({ navigation }: Props) {
                 disabled={isLoading}
               >
                 <Text style={[styles.biometricText, { color: t.accent }]}>
-                  {biometricLabel === 'Face ID' ? '' : ''} Sign in with {biometricLabel}
+                  Sign in with {biometricLabel}
                 </Text>
               </TouchableOpacity>
             )}

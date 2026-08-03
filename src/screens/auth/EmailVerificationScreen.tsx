@@ -142,11 +142,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       if (session.refresh_token) {
         const refreshToken = session.refresh_token;
         isBiometricAvailable().then(async (available) => {
-          if (!available) {
-            // TEMPORARY DIAGNOSTIC — remove once confirmed working.
-            Alert.alert('Face ID debug', 'isBiometricAvailable() returned false (no hardware, or nothing enrolled).');
-            return;
-          }
+          if (!available) return;
           const label = await getBiometricLabel();
           Alert.alert(
             `Enable ${label}?`,
@@ -156,13 +152,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
               { text: 'Enable', onPress: () => { enableBiometric(refreshToken).catch(() => {}); } },
             ]
           );
-        }).catch((e) => {
-          // TEMPORARY DIAGNOSTIC — this catch previously swallowed errors silently.
-          Alert.alert('Face ID debug', `isBiometricAvailable() threw: ${e?.message ?? String(e)}`);
-        });
-      } else {
-        // TEMPORARY DIAGNOSTIC — remove once confirmed working.
-        Alert.alert('Face ID debug', 'No refresh_token on session after verifyOtp.');
+        }).catch(() => {});
       }
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
