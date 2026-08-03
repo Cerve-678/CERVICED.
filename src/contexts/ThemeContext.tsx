@@ -128,7 +128,7 @@ function createEnterpriseTheme(mode: 'light' | 'dark'): EnterpriseTheme {
       text: colorScheme.text,
       border: colorScheme.border,
       status: colorScheme.status,
-      brand: colors.brand,
+      brand: colorScheme.brand,
     },
     typography,
     spacing,
@@ -152,7 +152,7 @@ export const lightTheme: Theme = {
   cardBackground: colors.light.background.elevated,   // #FFFFFF
   text: colors.light.text.primary,                    // #000000
   secondaryText: colors.light.text.secondary,         // #7E6667
-  accent: colors.brand.primary,                       // #AF9197
+  accent: colors.light.brand.primary,                  // #5C4033
   border: colors.light.border.primary,
   glassBackground: colors.light.surface.glass,
   blurTint: 'light',
@@ -166,7 +166,7 @@ export const darkTheme: Theme = {
   cardBackground: colors.dark.background.elevated,    // #252220
   text: colors.dark.text.primary,                     // #F0ECE7
   secondaryText: colors.dark.text.secondary,
-  accent: colors.brand.primary,                       // #AF9197
+  accent: colors.dark.brand.primary,                   // #AF9197
   border: colors.dark.border.primary,
   glassBackground: colors.dark.surface.glass,
   blurTint: 'dark',

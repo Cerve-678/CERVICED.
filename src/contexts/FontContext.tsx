@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, useMemo, ReactNode } from 'react';
 import { createTextStyles, TextStyles } from '../utils/FontManager';
 
 interface FontContextType {
@@ -14,10 +14,11 @@ interface FontProviderProps {
 }
 
 export function FontProvider({ children, customFontsLoaded }: FontProviderProps) {
-  const textStyles = createTextStyles(customFontsLoaded);
+  const textStyles = useMemo(() => createTextStyles(customFontsLoaded), [customFontsLoaded]);
+  const value = useMemo(() => ({ customFontsLoaded, textStyles }), [customFontsLoaded, textStyles]);
 
   return (
-    <FontContext.Provider value={{ customFontsLoaded, textStyles }}>
+    <FontContext.Provider value={value}>
       {children}
     </FontContext.Provider>
   );

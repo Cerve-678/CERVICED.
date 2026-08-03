@@ -18,6 +18,12 @@ export const colors = {
 
   // Semantic Colors - Light Mode
   light: {
+    brand: {
+      primary: '#5C4033',
+      primaryLight: '#5C4033',
+      primaryDark: '#7E6667',
+      accent: '#5C4033',
+    },
     background: {
       primary: '#F5F1EC',
       secondary: '#EDE8E2',
@@ -39,7 +45,7 @@ export const colors = {
     border: {
       primary: 'rgba(126, 102, 103, 0.14)',
       secondary: 'rgba(126, 102, 103, 0.08)',
-      focus: '#AF9197',
+      focus: '#5C4033',
     },
     status: {
       success: '#34C759',
@@ -51,6 +57,12 @@ export const colors = {
 
   // Semantic Colors - Dark Mode
   dark: {
+    brand: {
+      primary: '#AF9197',
+      primaryLight: '#AF9197',
+      primaryDark: '#7E6667',
+      accent: '#AF9197',
+    },
     background: {
       primary: '#1A1815',
       secondary: '#201D1A',

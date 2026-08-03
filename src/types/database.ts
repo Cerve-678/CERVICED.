@@ -162,12 +162,10 @@ export interface DbProvider {
     waitlistEnabled?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
-    fullyBookedAlertEnabled?: boolean;
-    fullyBookedAlertDays?: number; // provider's own definition of "the week/month ahead"
   } | null;
   // Cooldown guard for process_provider_fully_booked_alerts() (provider_
   // fully_booked_alert.sql) — read-only from the app, written only by that
-  // cron job.
+  // cron job. Fixed weekly check for now, not provider-configurable.
   fully_booked_alert_last_sent_at: string | null;
   created_at: string;
   updated_at: string;
@@ -514,6 +512,7 @@ export interface DiscoverServiceWithProvider {
   id: string;
   provider_id: string;
   name: string;
+  description: string | null;
   price: number;
   service_images: Pick<DbServiceImage, 'url' | 'sort_order'>[];
   provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url' | 'rating' | 'review_count'>;

@@ -1,5 +1,5 @@
 // src/contexts/RegistrationContext.tsx
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AccountType } from './AuthContext';
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -132,10 +132,13 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
     AsyncStorage.removeItem(STORAGE_KEYS.REGISTRATION_DRAFT).catch(() => {});
   }, []);
 
+  const value = useMemo(
+    () => ({ data, updateData, resetData, currentStep, setCurrentStep, totalSteps }),
+    [data, updateData, resetData, currentStep]
+  );
+
   return (
-    <RegistrationContext.Provider
-      value={{ data, updateData, resetData, currentStep, setCurrentStep, totalSteps }}
-    >
+    <RegistrationContext.Provider value={value}>
       {children}
     </RegistrationContext.Provider>
   );

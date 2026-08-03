@@ -3,14 +3,14 @@ export const lightTheme = {
   surface:      '#EDE8E2',
   surfaceRaised:'#FFFFFF',
   card:         '#FFFFFF',
-  accent:       '#AF9197',
-  accentDim:    'rgba(175,145,151,0.12)',
+  accent:       '#5C4033',
+  accentDim:    'rgba(92,64,51,0.12)',
   ice:          '#FFFFFF',
   text:         '#000000',
   sub:          '#7E6667',
   border:       'rgba(126,102,103,0.14)',
   sep:          'rgba(126,102,103,0.08)',
-  iconBg:       'rgba(175,145,151,0.12)',
+  iconBg:       'rgba(92,64,51,0.12)',
 } as const;
 
 export const darkTheme = {

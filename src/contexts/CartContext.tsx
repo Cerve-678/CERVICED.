@@ -43,6 +43,18 @@ export interface CartItem {
   /** Pay a deposit rather than the full amount. The actual amount is derived
    *  from the provider's live deposit policy at render/checkout time. */
   isDepositOnly?: boolean;
+  /** Set when this item was added as part of one MultiBookingSheet submission
+   *  that groups several services from the same provider together — a single
+   *  client-generated id shared by every item from that one submission's
+   *  "grouped" bucket (services NOT pulled into "Schedule Separately"). Absent
+   *  for: items added via any other entry point (Explore, rebook, single-service
+   *  BookingSheet), AND for items that WERE in a MultiBookingSheet submission but
+   *  were marked "Schedule Separately" there (those are singletons, same as a
+   *  standalone add). Scoped to one submission, not "same provider in cart" —
+   *  two separate MultiBookingSheet visits for the same provider must not merge.
+   *  Purely a client-side/local grouping hint; createBookingsFromCart reads this
+   *  to decide which provider-scoped bookings.group_booking_id each item gets. */
+  bookingBatchId?: string;
 }
 
 export interface CartState {
@@ -105,6 +117,8 @@ export interface AddToCartParams {
   selectedTime?: string | undefined;
   notes?: string | undefined;
   isDepositOnly?: boolean | undefined;
+  /** See CartItem.bookingBatchId. */
+  bookingBatchId?: string | undefined;
 }
 
 /** Fields a BookingSheet edit can change on an existing cart item. */
@@ -222,7 +236,8 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           selectedDate,
           selectedTime,
           notes,
-          isDepositOnly
+          isDepositOnly,
+          bookingBatchId
         } = action.payload;
 
         const instanceId = forceNewInstance || safeGet(service, 'instanceId') ? 
@@ -268,7 +283,8 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             ...(selectedDate ? { selectedDate } : {}),
             ...(selectedTime ? { selectedTime } : {}),
             ...(notes ? { notes } : {}),
-            ...(isDepositOnly ? { isDepositOnly } : {})
+            ...(isDepositOnly ? { isDepositOnly } : {}),
+            ...(bookingBatchId ? { bookingBatchId } : {})
           };
           newItems = [...state.items, newItem];
         }

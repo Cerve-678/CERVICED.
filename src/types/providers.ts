@@ -27,6 +27,17 @@ export interface PortfolioItem {
   // "Book Now" jump straight to that exact service's booking modal instead
   // of just the provider's profile.
   serviceId?: string;
+  // The service's own name (e.g. "Gel Manicure") — only present when
+  // kind === 'service'. Shown alongside `caption` (the service's
+  // description there, not its name) so the modal can display both rather
+  // than one having to stand in for the other.
+  serviceName?: string;
+  // Full ordered photo set for this service (only present when
+  // kind === 'service') — `image` is just images[0] repeated per card so
+  // each photo is independently favouritable in the Explore feed, but the
+  // detail modal needs the whole set to render its own swipeable carousel
+  // instead of showing only the single photo that was tapped.
+  images?: ImageSourcePropType[];
 }
 
 export interface Service {

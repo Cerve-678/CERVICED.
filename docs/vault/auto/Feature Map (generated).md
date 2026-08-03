@@ -110,7 +110,7 @@ Curated: [[Payments]] · **58 files**
 ## Booking flow
 Curated: [[Booking Flow]] · **148 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(623)_
-- `src/contexts/BookingContext.tsx` _(586)_
+- `src/contexts/BookingContext.tsx` _(582)_
 - `src/screens/client/BookingsScreen.tsx` _(497)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(366)_
 - `src/services/databaseService.ts` _(363)_
@@ -243,7 +243,7 @@ Curated: [[Booking Flow]] · **29 files**
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **96 files**
-- `src/contexts/BookingContext.tsx` _(224)_
+- `src/contexts/BookingContext.tsx` _(220)_
 - `src/screens/client/BookingsScreen.tsx` _(192)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(117)_
 - `src/screens/client/BookingDetailScreen.tsx` _(114)_
