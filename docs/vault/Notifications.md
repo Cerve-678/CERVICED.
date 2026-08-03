@@ -4,7 +4,9 @@
 Push + in-app notifications. **Driven by DB triggers — never duplicate them in the app** (or users get pinged twice).
 
 ## The rule
-Status-change notifications and waitlist invites are **owned by DB triggers** (`on_booking_status_changed`, waitlist logic; see `supabase/booking_flow_fixes.sql`, `notifications_full_matrix.sql`, `notification_recipient_role.sql`). The app must not insert the same notification after changing status — the trigger already did.
+Status-change notifications and waitlist invites are **owned by DB triggers/functions** (`on_booking_status_changed`; waitlist logic now in `supabase/waitlist_holds.sql` — a full redesign, see [[Waitlist]] — plus `notifications_full_matrix.sql`, `notification_recipient_role.sql`). The app must not insert the same notification after changing status — the trigger already did.
+
+Address-release notifications were a repeat offender of the opposite mistake — three separate paths (a trigger, a cron, and an app-side insert) each carried their own copy of the same notification. Consolidated into one shared `notify_address_released()` function this session → [[Address Release]]. If you're adding a new notification-sending path anywhere, check whether an existing one already covers it before adding another INSERT.
 
 ## The pieces
 - **In-app**: `notifications` table (`DbNotification`), shown in `NotificationsScreen`. `NotificationWithContext` joins booking/provider.

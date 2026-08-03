@@ -17,6 +17,7 @@ The map of the whole app. This is an Obsidian vault: every `[[link]]` is a jump 
 - [[Payments]] — money fields, deposits, who computes them
 - [[Notifications]] — push + in-app, driven by DB triggers
 - [[Provider Onboarding & Go-Live]] — signup → services → `has_gone_live`
+- [[Waitlist]] — real time-boxed holds when a slot frees up, not just a notification
 
 ## The code, by layer
 - [[Screens & Navigation]] — 52 screens, dual client/provider modes
