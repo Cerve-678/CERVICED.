@@ -4052,3 +4052,24 @@ ALTER TABLE public.bookings
 -- ============================================================
 -- DONE — buffer/duration overlap race closed at the database level
 -- ============================================================
+
+-- ════════════════════════════════════════════════════
+-- ⚠️  REQUIRED FOLLOW-UP — NOT INCLUDED ABOVE, RUN SEPARATELY:
+--
+--   supabase/fix_users_table_pii_leak.sql
+--   supabase/security_audit_2026-08-02_rls_and_hardening.sql
+--   supabase/fix_portfolio_items_category.sql
+--
+-- All three are idempotent/safe to re-run.
+--
+-- The first two: has_gone_live/is_active gating on providers and
+-- everything under them exists only as an app-side query convention, not
+-- a database-enforced boundary — see the security note near the top of
+-- phase1_schema.sql.
+--
+-- The third: backfills portfolio_items.category for rows inserted before
+-- addPortfolioItem (databaseService.ts) started stamping it from the
+-- provider's service_category — without it, pre-existing portfolio photos
+-- stay invisible to every Explore category-filter tab (NULL never matches
+-- a Postgres .eq()), even though the upload path itself is now fixed.
+-- ════════════════════════════════════════════════════

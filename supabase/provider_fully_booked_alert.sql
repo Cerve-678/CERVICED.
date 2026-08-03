@@ -5,10 +5,10 @@
 --
 -- Distinct from the waitlist notifications (waitlist_holds.sql): those fire
 -- when ONE slot frees up or gets claimed. This is the opposite direction —
--- a provider opts into being told when their WHOLE calendar (every service
--- combined, not per-service) has nothing bookable for the next N days,
--- where N is their own choice ("a week", "a month", or any custom number —
--- see the new Fully-Booked Alert control on ProviderScheduleScreen).
+-- every live provider is told when their WHOLE calendar (every service
+-- combined, not per-service) has nothing bookable for the coming week.
+-- Fixed at 7 days for now, no per-provider opt-in/opt-out or custom window —
+-- deliberately simple; a configurable version can come later if wanted.
 --
 -- There was previously no server-side notion of "fully booked" at all — the
 -- only existing check (AvailabilityService.hasNearTermAvailabilityForServices)
@@ -28,9 +28,8 @@
 -- ============================================================
 
 -- ── 1. Schema: cooldown guard so a provider who stays fully booked for
---    weeks doesn't get re-notified every single day. Reset only implicitly —
---    once fully_booked_alert_last_sent_at is set, we simply wait out
---    their own alert_days window before checking again. ────────────────────
+--    weeks doesn't get re-notified every single day — at most once every
+--    7 days (the fixed window), regardless of how often the cron runs. ─────
 ALTER TABLE public.providers ADD COLUMN IF NOT EXISTS fully_booked_alert_last_sent_at TIMESTAMPTZ;
 
 -- ── 2. Widen the notifications type CHECK constraint. Full list copied from
@@ -56,7 +55,8 @@ ALTER TABLE public.notifications
 
 -- ── 3. The daily check itself. Mirrors process_provider_daily_recap()'s
 --    shape (notifications_cleanup_2026_08.sql): loop candidate providers,
---    gate on automation_settings, insert one notification per provider. ────
+--    insert one notification per provider. Every live, active provider is a
+--    candidate — no automation_settings opt-in for now. ────────────────────
 CREATE OR REPLACE FUNCTION public.process_provider_fully_booked_alerts()
 RETURNS void
 LANGUAGE plpgsql
@@ -70,27 +70,19 @@ DECLARE
   v_booked_minutes INT;
   v_has_open_day BOOLEAN;
   v_fully_booked BOOLEAN;
+  c_alert_days CONSTANT INT := 7;
 BEGIN
   FOR r IN
-    SELECT
-      p.id AS provider_id,
-      p.user_id AS provider_user_id,
-      GREATEST(1, LEAST(90, COALESCE((p.automation_settings->>'fullyBookedAlertDays')::INT, 7))) AS alert_days
+    SELECT p.id AS provider_id, p.user_id AS provider_user_id
     FROM public.providers p
     WHERE p.is_active = TRUE
       AND p.has_gone_live = TRUE
-      AND COALESCE((p.automation_settings->>'fullyBookedAlertEnabled')::BOOLEAN, FALSE) = TRUE
+      AND (
+        p.fully_booked_alert_last_sent_at IS NULL
+        OR p.fully_booked_alert_last_sent_at <= NOW() - make_interval(days => c_alert_days)
+      )
   LOOP
-    -- Cooldown: don't re-check (let alone re-notify) more often than once
-    -- per this provider's own alert window.
-    CONTINUE WHEN EXISTS (
-      SELECT 1 FROM public.providers
-       WHERE id = r.provider_id
-         AND fully_booked_alert_last_sent_at IS NOT NULL
-         AND fully_booked_alert_last_sent_at > NOW() - make_interval(days => r.alert_days)
-    );
-
-    v_window_end := CURRENT_DATE + r.alert_days;
+    v_window_end := CURRENT_DATE + c_alert_days;
     v_has_open_day := FALSE;
     v_fully_booked := TRUE;
     d := CURRENT_DATE;
@@ -154,7 +146,7 @@ BEGIN
       d := d + 1;
     END LOOP;
 
-    -- No open day at all (provider blocked/closed the entire window) isn't
+    -- No open day at all (provider blocked/closed the entire week) isn't
     -- "fully booked", it's just closed — don't alert on that.
     IF v_has_open_day AND v_fully_booked THEN
       UPDATE public.providers SET fully_booked_alert_last_sent_at = NOW() WHERE id = r.provider_id;
@@ -165,9 +157,7 @@ BEGIN
         r.provider_user_id,
         'schedule_fully_booked',
         'You''re Fully Booked!',
-        'No openings anywhere in your calendar for the next ' || r.alert_days ||
-          ' day' || CASE WHEN r.alert_days = 1 THEN '' ELSE 's' END ||
-          '. Consider opening more availability, or check your waitlist for who to invite next.',
+        'No openings anywhere in your calendar for the next week. Consider opening more availability, or check your waitlist for who to invite next.',
         'medium',
         TRUE,
         r.provider_id,

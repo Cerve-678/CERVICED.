@@ -637,6 +637,20 @@ ALTER TABLE public.transactions                ENABLE ROW LEVEL SECURITY;
 -- ============================================================
 -- STEP 23: RLS Policies
 -- ============================================================
+--
+-- ⚠️  SECURITY NOTE (2026-08-02): several policies below are the ORIGINAL,
+-- since-tightened definitions — this file is a frozen bootstrap script
+-- (RUN_ALL_MIGRATIONS.sql explicitly excludes it as "not re-runnable"), not
+-- a live reflection of current policy. On any fresh environment, running
+-- this file alone reintroduces two known-fixed gaps:
+--   1. users_public_profile_read below was FOR SELECT USING (TRUE), which
+--      leaked email/phone/dob/medical_notes — see fix_users_table_pii_leak.sql.
+--   2. providers_public_read, services_public_read, and every ancillary
+--      provider table below (specialties/service_images/availability/
+--      blocked_dates/portfolio/reviews/service_add_ons) had no
+--      has_gone_live/is_active gating at all — see
+--      security_audit_2026-08-02_rls_and_hardening.sql.
+-- Always run BOTH of those files immediately after this one.
 
 -- ── users — public profile (needed for review author names) ──
 -- Allow reading name + avatar_url for review display.
