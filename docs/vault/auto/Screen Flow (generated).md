@@ -5,26 +5,27 @@
 
 #generated
 
-**53 screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].
+**65 screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].
 
 ## Entry points
 _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[AuthScreen]]
+- [[ReactivateAccountScreen]]
+- [[WelcomeScreen]]
 - [[BeautyBillingScreen]]
-- [[BeccaScreen]]
-- [[ChangeCredentialsScreen]]
 - [[ExploreScreen]]
 - [[HomeScreen]]
-- [[InfoScreen]]
+- [[UserProfileScreen]]
 - [[ProviderAccountScreen]]
 - [[ProviderHomeScreen]]
 - [[ProviderInboxScreen]]
 - [[ProviderInfoPackScreen]]
 - [[ProviderMyProfileScreen]]
-- [[ReactivateAccountScreen]]
-- [[UserProfileScreen]]
+- [[BeccaScreen]]
+- [[ChangeCredentialsScreen]]
+- [[InfoScreen]]
 
 ## All screens
-**Provider:** [[ProviderAccountInfoScreen]] · [[ProviderAccountScreen]] · [[ProviderAnalyticsScreen]] · [[ProviderAutomationsScreen]] · [[ProviderBookingDetailScreen]] · [[ProviderBookingHistoryScreen]] · [[ProviderBusinessEmailScreen]] · [[ProviderChatScreen]] · [[ProviderClienteleScreen]] · [[ProviderCommunicationsScreen]] · [[ProviderConversationScreen]] · [[ProviderHomeScreen]] · [[ProviderInboxScreen]] · [[ProviderInfoPackScreen]] · [[ProviderIntakeFormScreen]] · [[ProviderMyProfileScreen]] · [[ProviderProfileScreen]] · [[ProviderPromotionsScreen]] · [[ProviderScheduleScreen]]
+**Provider:** [[ProviderChatScreen]] · [[ProviderProfileScreen]] · [[BrandingScreen]] · [[BusinessProfileScreen]] · [[ProviderAccountInfoScreen]] · [[ProviderAccountScreen]] · [[ProviderAnalyticsScreen]] · [[ProviderAutomationsScreen]] · [[ProviderBookingDetailScreen]] · [[ProviderBookingHistoryScreen]] · [[ProviderBusinessEmailScreen]] · [[ProviderClienteleScreen]] · [[ProviderCommunicationsScreen]] · [[ProviderConversationScreen]] · [[ProviderHomeScreen]] · [[ProviderInboxScreen]] · [[ProviderInfoPackScreen]] · [[ProviderIntakeFormScreen]] · [[ProviderMyProfileScreen]] · [[ProviderPromotionsScreen]] · [[ProviderScheduleScreen]]
 
-**Client / shared:** [[AboutScreen]] · [[AuthScreen]] · [[BeautyBillingScreen]] · [[BeautyProfileScreen]] · [[BeccaScreen]] · [[BookingDetailScreen]] · [[BookingsScreen]] · [[BookmarkedProvidersScreen]] · [[BrandingScreen]] · [[BusinessProfileScreen]] · [[CartScreen]] · [[ChangeCredentialsScreen]] · [[ChangePasswordScreen]] · [[ClientIntakeFormScreen]] · [[DevSettingsScreen]] · [[ExploreScreen]] · [[HelpCentreScreen]] · [[HomeScreen]] · [[InfoRegScreen]] · [[InfoScreen]] · [[MessagesScreen]] · [[NotificationsScreen]] · [[NotificationsSettingsScreen]] · [[OffersScreen]] · [[PaymentMethodsScreen]] · [[PointsScreen]] · [[ProfileInfoScreen]] · [[ReactivateAccountScreen]] · [[ReportProblemScreen]] · [[RescheduleScreen]] · [[SearchScreen]] · [[SubscriptionScreen]] · [[TermsScreen]] · [[UserProfileScreen]]
+**Client / shared:** [[AuthScreen]] · [[ClaimProviderScreen]] · [[EmailVerificationScreen]] · [[ForgotPasswordScreen]] · [[LoginScreen]] · [[NewPasswordScreen]] · [[ReactivateAccountScreen]] · [[ResetPasswordOTPScreen]] · [[SignUpStep1Screen]] · [[SignUpStep2Screen]] · [[SignUpStep3Screen]] · [[SignUpStep4Screen]] · [[SignUpStep5Screen]] · [[WelcomeScreen]] · [[BeautyBillingScreen]] · [[BeautyProfileScreen]] · [[BookingDetailScreen]] · [[BookingsScreen]] · [[BookmarkedProvidersScreen]] · [[CartScreen]] · [[ClientIntakeFormScreen]] · [[ExploreScreen]] · [[HomeScreen]] · [[MessagesScreen]] · [[NotificationsSettingsScreen]] · [[OffersScreen]] · [[PaymentMethodsScreen]] · [[PointsScreen]] · [[ProfileInfoScreen]] · [[RescheduleScreen]] · [[SearchScreen]] · [[SubscriptionScreen]] · [[UserProfileScreen]] · [[AboutScreen]] · [[BeccaScreen]] · [[ChangeCredentialsScreen]] · [[ChangePasswordScreen]] · [[DevSettingsScreen]] · [[HelpCentreScreen]] · [[InfoRegScreen]] · [[InfoScreen]] · [[NotificationsScreen]] · [[ReportProblemScreen]] · [[TermsScreen]]

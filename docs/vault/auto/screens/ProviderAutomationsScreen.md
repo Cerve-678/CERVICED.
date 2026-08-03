@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderAutomationsScreen
-#screen · `src/screens/ProviderAutomationsScreen.tsx`
+#screen · `src/screens/provider/ProviderAutomationsScreen.tsx`
 
 **Registered route(s):** `Automations`
 

@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # SubscriptionScreen
-#screen · `src/screens/SubscriptionScreen.tsx`
+#screen · `src/screens/client/SubscriptionScreen.tsx`
 
 **Registered route(s):** `Subscription`
 

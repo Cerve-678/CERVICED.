@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # BookingDetailScreen
-#screen · `src/screens/BookingDetailScreen.tsx`
+#screen · `src/screens/client/BookingDetailScreen.tsx`
 
 **Registered route(s):** `BookingDetail`
 

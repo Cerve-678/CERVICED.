@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderMyProfileScreen
-#screen · `src/screens/ProviderMyProfileScreen.tsx`
+#screen · `src/screens/provider/ProviderMyProfileScreen.tsx`
 
 **Registered route(s):** `ProviderServicesMain`
 

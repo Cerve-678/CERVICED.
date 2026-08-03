@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # PaymentMethodsScreen
-#screen · `src/screens/PaymentMethodsScreen.tsx`
+#screen · `src/screens/client/PaymentMethodsScreen.tsx`
 
 **Registered route(s):** `PaymentMethods`
 

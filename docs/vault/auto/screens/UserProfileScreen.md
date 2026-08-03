@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # UserProfileScreen
-#screen · `src/screens/UserProfileScreen.tsx`
+#screen · `src/screens/client/UserProfileScreen.tsx`
 
 **Registered route(s):** `ProfileMain`
 
@@ -21,7 +21,7 @@ tags: [screen, client]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
-- `SignUpStep3` _(navigator / dynamic)_
+- [[SignUpStep3Screen\|SignUpStep3]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

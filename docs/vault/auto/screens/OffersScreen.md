@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # OffersScreen
-#screen · `src/screens/OffersScreen.tsx`
+#screen · `src/screens/client/OffersScreen.tsx`
 
 **Registered route(s):** `Offers`
 

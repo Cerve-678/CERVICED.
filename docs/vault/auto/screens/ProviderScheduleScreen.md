@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderScheduleScreen
-#screen · `src/screens/ProviderScheduleScreen.tsx`
+#screen · `src/screens/provider/ProviderScheduleScreen.tsx`
 
 **Registered route(s):** `ProviderSchedule`
 

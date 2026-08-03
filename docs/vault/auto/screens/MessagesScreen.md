@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # MessagesScreen
-#screen · `src/screens/MessagesScreen.tsx`
+#screen · `src/screens/client/MessagesScreen.tsx`
 
 **Registered route(s):** `Messages`
 

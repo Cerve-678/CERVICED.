@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # AboutScreen
-#screen · `src/screens/AboutScreen.tsx`
+#screen · `src/screens/shared/AboutScreen.tsx`
 
 **Registered route(s):** `About`
 

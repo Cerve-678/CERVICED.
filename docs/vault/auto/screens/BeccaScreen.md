@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # BeccaScreen
-#screen · `src/screens/BeccaScreen.tsx`
+#screen · `src/screens/shared/BeccaScreen.tsx`
 
 **Registered route(s):** `BeccaMain`
 

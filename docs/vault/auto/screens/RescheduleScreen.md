@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # RescheduleScreen
-#screen · `src/screens/RescheduleScreen.tsx`
+#screen · `src/screens/client/RescheduleScreen.tsx`
 
 **Registered route(s):** `Reschedule`
 

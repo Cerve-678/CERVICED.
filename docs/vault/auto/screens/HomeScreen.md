@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # HomeScreen
-#screen · `src/screens/HomeScreen.tsx`
+#screen · `src/screens/client/HomeScreen.tsx`
 
 **Registered route(s):** `HomeMain`
 

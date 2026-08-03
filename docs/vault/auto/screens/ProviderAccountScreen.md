@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderAccountScreen
-#screen · `src/screens/ProviderAccountScreen.tsx`
+#screen · `src/screens/provider/ProviderAccountScreen.tsx`
 
 **Registered route(s):** `ProviderAccountMain`
 
@@ -19,8 +19,8 @@ tags: [screen, provider]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
-- `SignUpStep2` _(navigator / dynamic)_
-- `SignUpStep1` _(navigator / dynamic)_
+- [[SignUpStep2Screen\|SignUpStep2]]
+- [[SignUpStep1Screen\|SignUpStep1]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

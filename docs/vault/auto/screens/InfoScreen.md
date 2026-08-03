@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # InfoScreen
-#screen · `src/screens/InfoScreen.tsx`
+#screen · `src/screens/shared/InfoScreen.tsx`
 
 **Registered route(s):** _unregistered_
 

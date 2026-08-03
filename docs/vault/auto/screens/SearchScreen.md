@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # SearchScreen
-#screen · `src/screens/SearchScreen.tsx`
+#screen · `src/screens/client/SearchScreen.tsx`
 
 **Registered route(s):** `Search`
 

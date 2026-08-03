@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderClienteleScreen
-#screen · `src/screens/ProviderClienteleScreen.tsx`
+#screen · `src/screens/provider/ProviderClienteleScreen.tsx`
 
 **Registered route(s):** `Clientele`
 

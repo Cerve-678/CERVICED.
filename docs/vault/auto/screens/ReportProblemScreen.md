@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # ReportProblemScreen
-#screen · `src/screens/ReportProblemScreen.tsx`
+#screen · `src/screens/shared/ReportProblemScreen.tsx`
 
 **Registered route(s):** `ReportProblem`
 

@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # ChangePasswordScreen
-#screen · `src/screens/ChangePasswordScreen.tsx`
+#screen · `src/screens/shared/ChangePasswordScreen.tsx`
 
 **Registered route(s):** `ChangePassword`
 

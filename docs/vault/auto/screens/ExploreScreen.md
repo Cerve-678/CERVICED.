@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # ExploreScreen
-#screen · `src/screens/ExploreScreen.tsx`
+#screen · `src/screens/client/ExploreScreen.tsx`
 
 **Registered route(s):** `ExploreMain`
 

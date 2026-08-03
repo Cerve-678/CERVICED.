@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # InfoRegScreen
-#screen · `src/screens/InfoRegScreen.tsx`
+#screen · `src/screens/shared/InfoRegScreen.tsx`
 
 **Registered route(s):** `EditProfile`, `InfoReg`
 

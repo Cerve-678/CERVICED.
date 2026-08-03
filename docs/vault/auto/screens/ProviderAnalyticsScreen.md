@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderAnalyticsScreen
-#screen · `src/screens/ProviderAnalyticsScreen.tsx`
+#screen · `src/screens/provider/ProviderAnalyticsScreen.tsx`
 
 **Registered route(s):** `Analytics`
 

@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderInfoPackScreen
-#screen · `src/screens/ProviderInfoPackScreen.tsx`
+#screen · `src/screens/provider/ProviderInfoPackScreen.tsx`
 
 **Registered route(s):** `InfoPacks`
 

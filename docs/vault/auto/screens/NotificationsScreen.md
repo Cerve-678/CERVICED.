@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # NotificationsScreen
-#screen · `src/screens/NotificationsScreen.tsx`
+#screen · `src/screens/shared/NotificationsScreen.tsx`
 
 **Registered route(s):** `Notifications`
 

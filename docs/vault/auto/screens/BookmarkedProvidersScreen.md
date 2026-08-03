@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # BookmarkedProvidersScreen
-#screen · `src/screens/BookmarkedProvidersScreen.tsx`
+#screen · `src/screens/client/BookmarkedProvidersScreen.tsx`
 
 **Registered route(s):** `BookmarkedProviders`
 

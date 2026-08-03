@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderBusinessEmailScreen
-#screen · `src/screens/ProviderBusinessEmailScreen.tsx`
+#screen · `src/screens/provider/ProviderBusinessEmailScreen.tsx`
 
 **Registered route(s):** `BusinessDetails`
 

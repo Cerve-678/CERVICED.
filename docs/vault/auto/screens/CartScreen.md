@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # CartScreen
-#screen · `src/screens/CartScreen.tsx`
+#screen · `src/screens/client/CartScreen.tsx`
 
 **Registered route(s):** `CartMain`
 

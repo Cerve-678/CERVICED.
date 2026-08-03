@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # ChangeCredentialsScreen
-#screen · `src/screens/ChangeCredentialsScreen.tsx`
+#screen · `src/screens/shared/ChangeCredentialsScreen.tsx`
 
 **Registered route(s):** _unregistered_
 

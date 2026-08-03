@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderChatScreen
-#screen · `src/screens/ProviderChatScreen.tsx`
+#screen · `src/screens/client/ProviderChatScreen.tsx`
 
 **Registered route(s):** `ProviderChat`
 

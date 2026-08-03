@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderInboxScreen
-#screen · `src/screens/ProviderInboxScreen.tsx`
+#screen · `src/screens/provider/ProviderInboxScreen.tsx`
 
 **Registered route(s):** `ProviderInbox`
 

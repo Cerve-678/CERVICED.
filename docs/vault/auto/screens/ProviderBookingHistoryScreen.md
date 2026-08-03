@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderBookingHistoryScreen
-#screen · `src/screens/ProviderBookingHistoryScreen.tsx`
+#screen · `src/screens/provider/ProviderBookingHistoryScreen.tsx`
 
 **Registered route(s):** `BookingHistory`
 

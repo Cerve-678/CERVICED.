@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # TermsScreen
-#screen · `src/screens/TermsScreen.tsx`
+#screen · `src/screens/shared/TermsScreen.tsx`
 
 **Registered route(s):** `Terms`
 

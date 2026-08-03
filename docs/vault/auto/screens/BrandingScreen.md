@@ -1,8 +1,8 @@
 ---
-tags: [screen, client]
+tags: [screen, provider]
 ---
 # BrandingScreen
-#screen · `src/screens/BrandingScreen.tsx`
+#screen · `src/screens/provider/BrandingScreen.tsx`
 
 **Registered route(s):** `Branding`
 

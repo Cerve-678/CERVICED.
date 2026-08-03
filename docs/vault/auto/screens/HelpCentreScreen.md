@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # HelpCentreScreen
-#screen · `src/screens/HelpCentreScreen.tsx`
+#screen · `src/screens/shared/HelpCentreScreen.tsx`
 
 **Registered route(s):** `HelpCentre`
 

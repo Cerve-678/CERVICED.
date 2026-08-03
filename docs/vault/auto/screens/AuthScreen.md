@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # AuthScreen
-#screen · `src/screens/AuthScreen.tsx`
+#screen · `src/screens/auth/AuthScreen.tsx`
 
 **Registered route(s):** _unregistered_
 

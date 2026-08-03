@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # BeautyProfileScreen
-#screen · `src/screens/BeautyProfileScreen.tsx`
+#screen · `src/screens/client/BeautyProfileScreen.tsx`
 
 **Registered route(s):** `BeautyProfile`
 

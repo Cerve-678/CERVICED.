@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderIntakeFormScreen
-#screen · `src/screens/ProviderIntakeFormScreen.tsx`
+#screen · `src/screens/provider/ProviderIntakeFormScreen.tsx`
 
 **Registered route(s):** `ProviderIntakeForm`
 

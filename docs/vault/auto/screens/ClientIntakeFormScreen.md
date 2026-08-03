@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # ClientIntakeFormScreen
-#screen · `src/screens/ClientIntakeFormScreen.tsx`
+#screen · `src/screens/client/ClientIntakeFormScreen.tsx`
 
 **Registered route(s):** `ClientIntakeForm`
 

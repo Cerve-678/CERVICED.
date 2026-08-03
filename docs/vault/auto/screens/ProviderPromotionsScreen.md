@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderPromotionsScreen
-#screen · `src/screens/ProviderPromotionsScreen.tsx`
+#screen · `src/screens/provider/ProviderPromotionsScreen.tsx`
 
 **Registered route(s):** `Promotions`
 

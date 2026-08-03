@@ -1,10 +1,10 @@
 ---
 tags: [screen, client]
 ---
-# ProfileInfoScreen
-#screen · `src/screens/client/ProfileInfoScreen.tsx`
+# EmailVerificationScreen
+#screen · `src/screens/auth/EmailVerificationScreen.tsx`
 
-**Registered route(s):** `ProfileInfo`
+**Registered route(s):** `EmailVerification`
 
 ## → Navigates to
 - _— none —_

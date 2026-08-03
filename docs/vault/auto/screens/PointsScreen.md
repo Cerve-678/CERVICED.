@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # PointsScreen
-#screen · `src/screens/PointsScreen.tsx`
+#screen · `src/screens/client/PointsScreen.tsx`
 
 **Registered route(s):** `Points`
 

@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # ReactivateAccountScreen
-#screen · `src/screens/ReactivateAccountScreen.tsx`
+#screen · `src/screens/auth/ReactivateAccountScreen.tsx`
 
 **Registered route(s):** _unregistered_
 

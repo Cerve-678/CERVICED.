@@ -2,7 +2,7 @@
 tags: [screen, client]
 ---
 # DevSettingsScreen
-#screen · `src/screens/DevSettingsScreen.tsx`
+#screen · `src/screens/shared/DevSettingsScreen.tsx`
 
 **Registered route(s):** `DevSettings`
 

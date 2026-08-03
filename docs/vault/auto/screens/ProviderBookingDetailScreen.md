@@ -2,7 +2,7 @@
 tags: [screen, provider]
 ---
 # ProviderBookingDetailScreen
-#screen · `src/screens/ProviderBookingDetailScreen.tsx`
+#screen · `src/screens/provider/ProviderBookingDetailScreen.tsx`
 
 **Registered route(s):** `BookingDetail`
 

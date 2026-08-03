@@ -66,7 +66,7 @@ function parseNavigators() {
   for (const nf of files) {
     const txt = read(nf);
     const imports = new Map(); // ident -> screen file basename
-    for (const m of txt.matchAll(/import\s+([A-Za-z0-9_]+)\s+from\s+['"][^'"]*\/screens\/([A-Za-z0-9_]+)['"]/g)) imports.set(m[1], m[2]);
+    for (const m of txt.matchAll(/import\s+([A-Za-z0-9_]+)\s+from\s+['"][^'"]*\/screens\/([A-Za-z0-9_/]+)['"]/g)) imports.set(m[1], m[2]);
     const alias = new Map(); // alias ident -> source ident
     for (const m of txt.matchAll(/const\s+([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s+as\b/g)) alias.set(m[1], m[2]);
     const resolve = (comp, d = 0) => (d > 4 ? null : imports.get(comp) ?? (alias.has(comp) ? resolve(alias.get(comp), d + 1) : null));
@@ -94,8 +94,9 @@ function resolveTarget(nav, route, fromName) {
   const cands = nav.routeToFiles.get(route);
   if (!cands || !cands.length) return null;
   if (cands.length === 1) return cands[0];
-  const fromProvider = /^Provider/.test(fromName);
-  return cands.find((c) => /^Provider/.test(c) === fromProvider) ?? cands[0];
+  const isProvider = (n) => /^provider\//.test(n) || /^Provider/.test(basename(n));
+  const fromProvider = isProvider(fromName);
+  return cands.find((c) => isProvider(c) === fromProvider) ?? cands[0];
 }
 
 // Route names a screen file navigates to.
@@ -126,11 +127,15 @@ function write(name, body) {
 }
 
 // ── generators ────────────────────────────────────────────────────────────────
-function genScreens() {
+function screenFiles() {
   const dir = join(ROOT, 'src', 'screens');
-  const files = lsFiles(dir, ['.tsx']);
-  const provider = files.filter((f) => /^Provider/.test(f));
-  const client = files.filter((f) => !/^Provider/.test(f));
+  return walk(dir, ['.tsx']).map((f) => rel(f).replace(/^src\/screens\//, ''));
+}
+
+function genScreens() {
+  const files = screenFiles();
+  const provider = files.filter((f) => /^provider\//.test(f) || /^Provider/.test(basename(f)));
+  const client = files.filter((f) => !provider.includes(f));
   const list = (arr) => arr.map((f) => `- \`src/screens/${f}\``).join('\n') || '- _(none)_';
   write('Screens (generated).md',
     `# Screens (generated)\n\n${BANNER()}\n` +
@@ -220,7 +225,7 @@ function genDatabase() {
 
 function genNavigation(nav) {
   const dir = join(ROOT, 'src', 'screens');
-  const files = lsFiles(dir, ['.tsx']);
+  const files = screenFiles();
   const graph = new Map();
   const edges = new Set();
   for (const f of files) {
@@ -232,7 +237,7 @@ function genNavigation(nav) {
     }
     if (tos.size) {
       graph.set(from, [...tos].sort((a, b) => a.localeCompare(b)));
-      for (const t of tos) edges.add(`${from} --> ${t}`);
+      for (const t of tos) edges.add(`${basename(from)} --> ${basename(t)}`);
     }
   }
   const mermaid = edges.size
@@ -253,7 +258,7 @@ function genNavigation(nav) {
 // One note per screen, linked to the screens it navigates to → a real flow graph.
 function genScreenFlow(nav) {
   const dir = join(ROOT, 'src', 'screens');
-  const files = lsFiles(dir, ['.tsx']);
+  const files = screenFiles();
   const outDir = join(OUT, 'screens');
   rmSync(outDir, { recursive: true, force: true }); // drop notes for deleted screens
   mkdirSync(outDir, { recursive: true });
@@ -273,30 +278,32 @@ function genScreenFlow(nav) {
 
   for (const f of files) {
     const name = f.replace(/\.tsx$/, '');
-    const role = /^Provider/.test(name) ? 'provider' : 'client';
+    const noteName = basename(name);
+    const role = /^provider\//.test(name) || /^Provider/.test(noteName) ? 'provider' : 'client';
     const routes = nav.fileToRoutes.get(name) || [];
     const links = linksByName.get(name) || [];
     const seen = new Set();
     const navList = links.length
       ? links
           .filter((l) => { const k = l.comp ?? l.route; if (seen.has(k)) return false; seen.add(k); return true; })
-          .map((l) => (l.comp ? `- [[${l.comp}\\|${l.route}]]` : `- \`${l.route}\` _(navigator / dynamic)_`))
+          .map((l) => (l.comp ? `- [[${basename(l.comp)}\\|${l.route}]]` : `- \`${l.route}\` _(navigator / dynamic)_`))
           .join('\n')
       : '- _— none —_';
-    writeFileSync(join(outDir, `${name}.md`),
-      `---\ntags: [screen, ${role}]\n---\n# ${name}\n#screen · \`src/screens/${f}\`\n\n` +
+    writeFileSync(join(outDir, `${noteName}.md`),
+      `---\ntags: [screen, ${role}]\n---\n# ${noteName}\n#screen · \`src/screens/${f}\`\n\n` +
       `**Registered route(s):** ${routes.length ? routes.map((r) => `\`${r}\``).join(', ') : '_unregistered_'}\n\n` +
       `## → Navigates to\n${navList}\n\n## Map\n[[Screens & Navigation]] · [[Screen Flow (generated)]]\n`);
   }
 
   const names = files.map((f) => f.replace(/\.tsx$/, ''));
   const entry = names.filter((n) => !incoming.has(n)).sort((a, b) => a.localeCompare(b));
-  const group = (pred) => names.filter(pred).sort((a, b) => a.localeCompare(b)).map((n) => `[[${n}]]`).join(' · ') || '_none_';
+  const isProvider = (n) => /^provider\//.test(n) || /^Provider/.test(basename(n));
+  const group = (pred) => names.filter(pred).sort((a, b) => a.localeCompare(b)).map((n) => `[[${basename(n)}]]`).join(' · ') || '_none_';
   write('Screen Flow (generated).md',
     `# Screen Flow (generated)\n\n${BANNER('One note per screen, each linked to the screens it navigates to.')}\n` +
     `**${names.length} screens** wired by their navigation calls. Open the **graph view** (⌘G) to see the whole flow — each screen node links to what it opens. Mermaid version: [[Navigation Graph (generated)]].\n\n` +
-    `## Entry points\n_Screens nothing else navigates to (roots / tab mains / deep-link targets):_\n${entry.map((n) => `- [[${n}]]`).join('\n') || '_none_'}\n\n` +
-    `## All screens\n**Provider:** ${group((n) => /^Provider/.test(n))}\n\n**Client / shared:** ${group((n) => !/^Provider/.test(n))}\n`);
+    `## Entry points\n_Screens nothing else navigates to (roots / tab mains / deep-link targets):_\n${entry.map((n) => `- [[${basename(n)}]]`).join('\n') || '_none_'}\n\n` +
+    `## All screens\n**Provider:** ${group(isProvider)}\n\n**Client / shared:** ${group((n) => !isProvider(n))}\n`);
   return names.length;
 }
 
