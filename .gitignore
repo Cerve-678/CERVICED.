@@ -33,6 +33,7 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+credentials.json
 supabase/push_webhook_trigger.sql
 
 # typescript
@@ -42,6 +43,9 @@ supabase/push_webhook_trigger.sql
 /ios
 /android
 .claude/
+
+# Local recovery copies must remain local; Git history is the source of truth.
+backups/
 
 # Supabase CLI local state
 supabase/.temp/

@@ -16,6 +16,12 @@
       "esnext"
     ],
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "expo-file-system/legacy": [
+        "src/types/expo-file-system-legacy"
+      ]
+    },
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
@@ -27,16 +33,18 @@
     "noPropertyAccessFromIndexSignature": true
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.js",
-    "**/*.jsx",
-    "src/types/**/*.d.ts",
+    "App.tsx",
+    "AppWithErrorBoundary.tsx",
+    "index.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
   "exclude": [
     "node_modules",
+    "backups",
+    "supabase/functions",
     "babel.config.js",
     "metro.config.js",
     "jest.config.js"
