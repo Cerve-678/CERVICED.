@@ -14,6 +14,12 @@ import { PortfolioItem } from '../types/providers';
 import TabIcon from './TabIcon';
 import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
 
+// Deliberately not theme.accent — that resolves to a dark brown in light
+// mode, which reads as low-contrast/muddy over a photo. This dusty-rose
+// value is the one from the dark-mode accent and was confirmed to work fine
+// in light mode too for these two highlight uses specifically.
+const HIGHLIGHT_COLOR = '#AF9197';
+
 interface PortfolioCardProps {
   item: PortfolioItem;
   columnWidth: number;
@@ -112,23 +118,25 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
           </View>
         )}
 
-        {/* Bookmark button */}
+        {/* Save button — heart, standardized to match the same save/unsave
+            action's icon in ImageDetailModal (was a bookmark glyph here,
+            a heart there, for the identical underlying action). */}
         <TouchableOpacity
           style={styles.bookmarkButton}
           onPress={handleBookmark}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <TabIcon
-            name="bookmark"
+            name="heart"
             size={16}
-            color={isSaved ? '#AF9197' : '#FFFFFF'}
+            color={isSaved ? HIGHLIGHT_COLOR : '#FFFFFF'}
           />
         </TouchableOpacity>
 
         {/* Bottom overlay info */}
         <View style={styles.overlay}>
           {/* Category chip */}
-          <View style={styles.categoryChip}>
+          <View style={[styles.categoryChip, { backgroundColor: HIGHLIGHT_COLOR }]}>
             <Text style={styles.categoryText}>{item.category}</Text>
           </View>
 
@@ -210,7 +218,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    backgroundColor: 'rgba(163, 66, 195, 0.8)',
     marginBottom: 4,
   },
   categoryText: {
