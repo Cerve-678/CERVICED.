@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, ScrollView, Dimensions, StyleSheet, RefreshControl } from 'react-native';
+import { View, Animated, Dimensions, StyleSheet, RefreshControl } from 'react-native';
 import { spacing } from '../constants/PlatformDimensions';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface MasonryGridProps<T> {
   data: T[];
@@ -14,6 +15,14 @@ interface MasonryGridProps<T> {
   ListEmptyComponent?: React.ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
+  // Typed off Animated.ScrollView itself so callers can pass either a plain
+  // callback or an Animated.event(...) handle (e.g. useNativeDriver: true,
+  // which returns a non-callable AnimatedEvent object — see
+  // src/utils/exploreTabBarScroll.ts). A plain RN ScrollView would call this
+  // prop as a function and crash on that object.
+  onScroll?: React.ComponentProps<typeof Animated.ScrollView>['onScroll'];
+  onScrollEndDrag?: React.ComponentProps<typeof Animated.ScrollView>['onScrollEndDrag'];
+  onMomentumScrollEnd?: React.ComponentProps<typeof Animated.ScrollView>['onMomentumScrollEnd'];
 }
 
 function MasonryGridInner<T>({
@@ -28,7 +37,11 @@ function MasonryGridInner<T>({
   ListEmptyComponent,
   refreshing,
   onRefresh,
+  onScroll,
+  onScrollEndDrag,
+  onMomentumScrollEnd,
 }: MasonryGridProps<T>) {
+  const { theme } = useTheme();
   const screenWidth = Dimensions.get('window').width;
   const columnWidth = (screenWidth - contentPadding * 2 - columnGap * (numColumns - 1)) / numColumns;
 
@@ -58,32 +71,39 @@ function MasonryGridInner<T>({
 
   if (data.length === 0 && ListEmptyComponent) {
     return (
-      <ScrollView
+      <Animated.ScrollView
         style={styles.container}
         contentContainerStyle={[styles.content, { paddingHorizontal: contentPadding }]}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        scrollEventThrottle={16}
         refreshControl={
           onRefresh ? (
             <RefreshControl
               refreshing={refreshing || false}
               onRefresh={onRefresh}
-              tintColor="#a342c3ff"
-              colors={['#a342c3ff']}
+              tintColor={theme.accent}
+              colors={[theme.accent]}
             />
           ) : undefined
         }
       >
         {ListHeaderComponent}
         {ListEmptyComponent}
-      </ScrollView>
+      </Animated.ScrollView>
     );
   }
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, { paddingHorizontal: contentPadding }]}
       showsVerticalScrollIndicator={false}
+      onScroll={onScroll}
+      onScrollEndDrag={onScrollEndDrag}
+      onMomentumScrollEnd={onMomentumScrollEnd}
       scrollEventThrottle={16}
       refreshControl={
         onRefresh ? (
@@ -108,7 +128,7 @@ function MasonryGridInner<T>({
           </View>
         ))}
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 

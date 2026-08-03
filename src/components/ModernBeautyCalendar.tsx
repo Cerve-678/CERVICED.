@@ -283,7 +283,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     // Set the week to contain this date
     setCurrentWeek(date);
     onDateSelect(dateString);
-    setShowFullCalendar(false);
+    // Deliberately does NOT close the popup — the client picks a date (and
+    // can keep browsing months / re-pick) then taps Done explicitly, rather
+    // than the first tap silently dismissing the whole picker.
   };
 
   const handleDateClick = (dateString: string, dayData: DayData) => {
@@ -451,10 +453,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               })}
             </View>
 
-            {/* Legend */}
-            <View style={styles.legendRow}>
-              <View style={[styles.legendDot, { backgroundColor: accentColor }]} />
-              <Text style={[styles.legendText, { color: subColor }]}>Available slots</Text>
+            {/* Legend + explicit close — picking a date no longer auto-
+                dismisses the popup (see handleCalendarDaySelect), so the
+                client needs an explicit way to confirm and close. */}
+            <View style={styles.legendDoneRow}>
+              <View style={styles.legendRow}>
+                <View style={[styles.legendDot, { backgroundColor: accentColor }]} />
+                <Text style={[styles.legendText, { color: subColor }]}>Available slots</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFullCalendar(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={[styles.calendarDoneButton, { backgroundColor: accentColor }]}
+              >
+                <Text style={styles.calendarDoneText}>Done</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
@@ -634,7 +647,10 @@ const styles = StyleSheet.create({
   calendarDayText: { fontSize: 13, fontWeight: '500' },
   calDotWrap:  { height: 5, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
   calDot:      { width: 4, height: 4, borderRadius: 2 },
-  legendRow:   { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 },
+  legendDoneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+  legendRow:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot:   { width: 6, height: 6, borderRadius: 3 },
   legendText:  { fontSize: 11 },
+  calendarDoneButton: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 14 },
+  calendarDoneText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 });

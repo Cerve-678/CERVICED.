@@ -65,6 +65,7 @@ const measureStep = (step: CoachMarkStep): Promise<Rect | null> => {
  */
 export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, onFinish }) => {
   const { isDarkMode } = useTheme();
+  const accent = isDarkMode ? '#AF9197' : '#5C4033';
   const [stepIndex, setStepIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const hasPositioned = useRef(false);
@@ -156,7 +157,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
           <SvgRect x={0} y={0} width={SCREEN_W} height={SCREEN_H} fill="rgba(10,9,8,0.80)" mask="url(#coachmark-mask)" />
           <AnimatedSvgRect
             x={cutX} y={cutY} width={cutW} height={cutH} rx={radius}
-            stroke={ACCENT} strokeWidth={2.5} fill="none"
+            stroke={accent} strokeWidth={2.5} fill="none"
           />
         </Svg>
 
@@ -183,7 +184,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
             <View style={styles.footer}>
               <View style={styles.dots}>
                 {steps.map((s, i) => (
-                  <View key={s.key} style={[styles.dot, { backgroundColor: i === stepIndex ? ACCENT : dotOff }]} />
+                  <View key={s.key} style={[styles.dot, { backgroundColor: i === stepIndex ? accent : dotOff }]} />
                 ))}
               </View>
               <View style={styles.actions}>
@@ -192,7 +193,7 @@ export const CoachMarkTour: React.FC<CoachMarkTourProps> = ({ visible, steps, on
                     <Text style={[styles.skipText, { color: skipColor }]}>Skip</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.nextBtn} onPress={advance} activeOpacity={0.85}>
+                <TouchableOpacity style={[styles.nextBtn, { backgroundColor: accent }]} onPress={advance} activeOpacity={0.85}>
                   <Text style={styles.nextText}>{isLast ? 'Got it' : 'Next'}</Text>
                   {!isLast && <Ionicons name="arrow-forward" size={14} color="#fff" style={{ marginLeft: 4 }} />}
                 </TouchableOpacity>

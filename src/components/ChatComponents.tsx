@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ChatMessage, ChatSuggestion } from '../services/enhancedAIChatService';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
+import { formatTime12 } from '../utils/dateUtils';
 
 // ==================== CHAT BUBBLE ====================
 
@@ -52,7 +53,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
                 { color: isUser ? 'rgba(255,255,255,0.6)' : theme.secondaryText },
               ]}
             >
-              {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {formatTime12(new Date(message.timestamp))}
             </Text>
           </View>
         </BlurView>

@@ -21,7 +21,7 @@ const P = {
   card: '#FFFFFF',
   text: '#000000',
   sub: '#7E6667',
-  accent: '#AF9197',
+  accent: '#5C4033',
   border: 'rgba(126,102,103,0.14)',
 };
 
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   },
   debugText: {
     fontSize: 12,
-    color: '#AF9197',
+    color: '#5C4033',
     fontFamily: 'monospace',
     marginBottom: 6,
   },
