@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "f63d9533df295019",
+        "id": "58ae3ecf5e517823",
         "type": "tabs",
         "children": [
           {
-            "id": "43f3ab0629633526",
+            "id": "df82c6999956485f",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "auto/screens/BusinessProfileScreen.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "BusinessProfileScreen"
             }
           }
         ]
@@ -176,10 +180,28 @@
       "bases:Create new base": false
     }
   },
-  "active": "43f3ab0629633526",
+  "active": "df82c6999956485f",
   "lastOpenFiles": [
+    "auto/screens/MessagesScreen 2.md",
+    "auto/screens/ResetPasswordOTPScreen 2.md",
+    "auto/screens/PointsScreen 2.md",
+    "auto/screens/AuthScreen 2.md",
+    "auto/screens/ProviderProfileScreen 2.md",
+    "auto/screens/CartScreen 2.md",
+    "auto/screens/BusinessProfileScreen 2.md",
+    "auto/screens/ForgotPasswordScreen 2.md",
+    "auto/screens/ProviderMyProfileScreen 2.md",
+    "auto/screens/RescheduleScreen 2.md",
+    "auto/screens/ProviderAnalyticsScreen 2.md",
+    "auto/screens/InfoRegScreen 2.md",
+    "auto/screens/ProviderAutomationsScreen 2.md",
     "auto/Screen Flow (generated).md",
     "Data Layer — Supabase.md",
+    "Architecture.canvas",
+    "Booking Flow.md",
+    "Availability & Slots.md",
+    "Architecture Overview.md",
+    "_templates/feature.md",
     "auto/screens/UserProfileScreen.md",
     "auto/screens/TermsScreen.md",
     "auto/screens/SubscriptionScreen.md",
@@ -187,23 +209,6 @@
     "auto/screens/RescheduleScreen.md",
     "auto/screens/ReportProblemScreen.md",
     "auto/screens/ProviderScheduleScreen.md",
-    "auto/screens/ProviderPromotionsScreen.md",
-    "auto/screens/ProviderProfileScreen.md",
-    "auto/screens/ProviderMyProfileScreen.md",
-    "auto/screens/ProviderIntakeFormScreen.md",
-    "auto/screens/ProviderInfoPackScreen.md",
-    "auto/screens/ProviderInboxScreen.md",
-    "auto/screens/ProviderHomeScreen.md",
-    "auto/screens/ProviderConversationScreen.md",
-    "auto/screens/ProviderCommunicationsScreen.md",
-    "auto/screens/ProviderClienteleScreen.md",
-    "auto/screens/ProviderChatScreen.md",
-    "auto/screens/ProviderBusinessEmailScreen.md",
-    "auto/screens/ProviderBookingHistoryScreen.md",
-    "auto/screens/ProviderBookingDetailScreen.md",
-    "auto/screens/ProviderAutomationsScreen.md",
-    "auto/screens/ProviderAnalyticsScreen.md",
-    "auto/screens/ProviderAccountScreen.md",
     "auto/screens",
     "_templates",
     "Untitled.base",
