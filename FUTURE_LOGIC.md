@@ -191,6 +191,25 @@ Not now. Add it when a provider starts getting enough simultaneous traffic that 
 
 ---
 
+## Full-Screen Map View (Airbnb-style) for Explore/Search
+
+### What it means
+
+Instead of (or as a toggle alongside) the current list/grid browse, let the map take over the entire screen — like Airbnb's map search. Results aren't a separate screen; they live in a bottom sheet/card that starts docked near the bottom (peeking a header + a couple of result cards) and can be dragged/scrolled up to expand into a full scrollable list, with rounded top corners on the card (slides up over the map, doesn't replace it).
+
+### Rough shape of what's needed
+
+- Full-bleed map component (whatever RN maps lib the app already uses, if any — check before adding a new dependency) as the base layer of the screen.
+- A bottom sheet component with at least two/three snap points (peek / half / full), rounded top-left/top-right corners, drag handle, that scrolls its own content (provider/result cards) once expanded.
+- Map markers for providers in the current viewport; tapping a marker should scroll/highlight the corresponding card in the sheet (and vice versa — tapping a card centers the map on that provider).
+- Needs viewport-bounded querying (map bounds → lat/lng box query), not just the existing list query — don't fetch every provider and filter client-side.
+
+### Not scoped yet
+
+No decision made on: which bottom-sheet library to use, whether this replaces or sits alongside the current Explore grid, or where it lives in navigation. Purely a reminder of the interaction pattern to build later, not a spec.
+
+---
+
 ## Real-Time Calendar Updates
 
 ### What it means

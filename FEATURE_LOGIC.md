@@ -421,3 +421,50 @@ These are the most common ways a feature ends up incomplete:
 | New screen not in navigator | Screen unreachable | Always register with `<Stack.Screen>` |
 | Context not updated after write | Other screens show stale data | Update context state after successful DB write |
 | Real-time channel not cleaned up | Memory leak, duplicate listeners | Always return cleanup in `useEffect` |
+
+---
+
+## Known Follow-Ups (not yet fixed — documented so they get picked up properly)
+
+### No image-resizing/thumbnail pipeline (Explore, portfolio, everywhere)
+
+Every `image_url` / `logo_url` / `background_image_url` read from the DB is used as-is —
+`PortfolioCard` grid tiles (~180px wide), the "More Like This" thumbnails (110px), the
+`ImageDetailModal` hero carousel, and provider profile images all request the **exact same
+full-resolution original**, whatever size it was uploaded at. There's no resize/thumbnail
+generation at upload time and no on-the-fly transform (checked: no `width=`/`resize=`/CDN
+transform params anywhere in `databaseService.ts` or the image-consuming screens). This is a
+likely systemic contributor to "everything feels slow to load" reports on Explore/the detail
+modal — a masonry grid scrolling past a dozen tiles is a dozen full-res downloads+decodes for
+images that only ever render at thumbnail size.
+
+**Proper fix**: if the storage backend is Supabase Storage, it supports on-the-fly image
+transforms (`?width=&height=&resize=`) that could be appended to read URLs without any upload-time
+changes — cheapest fix if applicable. Otherwise, generate and store actual thumbnail-sized
+variants at upload time (needs a size doing the resize — client-side before upload, or a
+storage-triggered function) and pick the right size per context (grid vs. modal hero) rather than
+always requesting the original.
+
+### ImageDetailModal: fixed-image + floating-sheet parallax effect reverted for a working carousel
+
+The modal briefly had a "photo carousel fixed as a full-bleed background, rounded content sheet
+floating on top, scrolling reveals more image" effect (Uber/Airbnb-style parallax). It was reverted
+(2026-08-03) because the floating sheet's `ScrollView` had to span the *entire* image area (via a
+leading transparent spacer) to make the "scroll reveals image" trick work — and that same
+`ScrollView`, sitting on top in z-order, intercepted the horizontal swipe meant for the photo
+carousel's own `FlatList` underneath it before it ever got the gesture. Plain RN `ScrollView`/
+`FlatList` don't negotiate simultaneous orthogonal-direction gestures across separate (non-nested)
+siblings on their own.
+
+Current state: the carousel is nested as a normal in-flow item at the top of the same vertical
+`ScrollView` (not a separate fixed layer) — this is the standard, reliably-supported RN pattern
+(nested scrollables with orthogonal scroll directions negotiate correctly), and it's what actually
+fixes the swipe. The cost is the parallax effect itself — the sheet no longer floats over a fixed
+image; it scrolls away normally.
+
+**Proper fix**, if the parallax look is still wanted: needs real gesture arbitration —
+`react-native-gesture-handler`'s composed gestures (`Gesture.Native()` +
+`Gesture.Simultaneous()`/direction-locked `Gesture.Pan()`) or a dedicated bottom-sheet library
+(e.g. `@gorhom/bottom-sheet`), so a horizontal drag commits to the carousel and a vertical drag
+commits to the sheet, both usable on the same screen region. Not a small change — evaluate whether
+the visual effect is worth the added dependency/complexity before starting.
