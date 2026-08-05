@@ -56,7 +56,7 @@ Curated: [[Availability & Slots]] · **93 files**
 - `supabase/waitlist_holds.sql` _(33)_
 - `src/components/BookingSheet.tsx` _(29)_
 - `src/screens/provider/ProviderAutomationsScreen.tsx` _(29)_
-- `src/services/becca/capabilities/client.ts` _(25)_
+- `src/services/becca/capabilities/client.ts` _(27)_
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(24)_
 - `src/utils/logger.ts` _(24)_
 - `src/screens/client/RescheduleScreen.tsx` _(22)_

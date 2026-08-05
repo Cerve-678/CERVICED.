@@ -19,6 +19,7 @@ import type {
   CapabilityResult,
   ChatMessage,
   ChatSuggestion,
+  ConversationContext,
   EntityBag,
   PendingAction,
   PersonalContext,
@@ -252,6 +253,20 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // about nails. Anything this message resolved for itself always wins.
   entities = carryForward(entities, conversation);
 
+  // Seed the outgoing context from what we know NOW. Every early return below
+  // (ambiguity, low confidence, a capability that threw) then still hands the
+  // next turn the topic and the last shown list — losing them on a fallback
+  // is what would make one unclear message reset the whole conversation.
+  lastContext = {
+    entities,
+    ...(conversation?.lastCapabilityId
+      ? { lastCapabilityId: conversation.lastCapabilityId }
+      : {}),
+    ...(conversation?.lastProviders
+      ? { lastProviders: conversation.lastProviders }
+      : {}),
+  };
+
   // "the first one" / "that one" — resolve an ordinal against the list Becca
   // last showed, before intent matching, so the reference behaves like a
   // named provider rather than an unmatched phrase.
@@ -365,6 +380,22 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // question just asked), fall back to the generic set rather than leaving
   // the reply with no way forward.
   const suggestions = deduped.length > 0 ? deduped : defaultFollowUps(hat);
+
+  // Hand the next turn everything it needs to resolve a follow-up: what was
+  // being discussed, what was answered, and what was shown (so "the first
+  // one" points at a real provider).
+  lastContext = {
+    entities,
+    lastCapabilityId: capability.id,
+    ...(result.providers && result.providers.length > 0
+      ? {
+          lastProviders: result.providers.map((p) => ({
+            slug: p.id,
+            displayName: p.name,
+          })),
+        }
+      : {}),
+  };
 
   return message_(
     {
