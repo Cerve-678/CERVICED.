@@ -384,7 +384,8 @@ const findProviders: Capability = {
   phrases: [
     "find", "find me", "looking for", "need a", "want a", "recommend",
     "who does", "anyone who", "search for", "book a", "show me providers",
-    "show me someone", "find someone",
+    "show me someone", "find someone", "i need my", "need my", "get my",
+    "want my", "sort my", "book me in", "who can do",
   ],
   needs: [{ kind: "service", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
@@ -434,6 +435,71 @@ const findProviders: Capability = {
       suggestions: [
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
         askChip("deals", "Any deals?", `Any ${label} offers on?`),
+      ],
+    };
+  },
+};
+
+const followUpDay: Capability = {
+  id: "discover.followup_day",
+  hat: "client",
+  describe: "What about a different day",
+  // Pure follow-ups: these mean nothing alone, and only score at all once a
+  // date resolves AND a service has been carried in from the last turn — so
+  // "what about Saturday?" works mid-conversation and matches nothing cold.
+  phrases: [
+    "what about", "how about", "and on", "any good for", "what if",
+    "could i do", "can i do", "does that work", "instead",
+  ],
+  needs: [
+    { kind: "date", required: true },
+    { kind: "service", required: true },
+  ],
+  async run(ctx): Promise<CapabilityResult> {
+    // Same answer as an availability search — the only difference is that the
+    // service came from context rather than from this message.
+    return findAvailable.run(ctx);
+  },
+};
+
+const followUpPrice: Capability = {
+  id: "discover.followup_price",
+  hat: "client",
+  describe: "How much are they / what do they charge",
+  phrases: [
+    "how much are they", "how much do they charge", "what do they charge",
+    "how much is that", "what's the price", "whats the price", "price range",
+    "how much roughly", "are they expensive", "how pricey",
+  ],
+  needs: [{ kind: "service", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const service = entities.service!.value;
+    const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
+
+    const dbProviders = await getProviders(service.category);
+    if (dbProviders.length === 0) {
+      return { text: `${softMiss()} I couldn't find any ${label} providers to price up.` };
+    }
+
+    const ranges = await getProviderPriceRanges(dbProviders.map((p) => p.id));
+    const mins = [...ranges.values()].map((r) => r.min).filter((n) => n > 0);
+    const maxes = [...ranges.values()].map((r) => r.max).filter((n) => n > 0);
+
+    if (mins.length === 0) {
+      return {
+        text: `${softMiss()} none of the ${label} providers have published prices yet — you'd need to ask them directly.`,
+      };
+    }
+
+    const low = Math.min(...mins);
+    const high = Math.max(...maxes);
+    return {
+      text:
+        `${label.charAt(0).toUpperCase()}${label.slice(1)} runs from about ` +
+        `**${money(low)}** to **${money(high)}** across the ${dbProviders.length} provider${dbProviders.length !== 1 ? "s" : ""} I can see.`,
+      suggestions: [
+        askChip("cheap", "Show me the cheaper end", `Find ${label} under ${Math.round(low + (high - low) * 0.4)}`),
+        askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),
       ],
     };
   },
@@ -1493,6 +1559,10 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   rescheduleBooking,
   bookingPrep,
   rebook,
+  // Follow-ups first: both REQUIRE entities that usually arrive via carried
+  // context, so they only score mid-conversation and can't win cold.
+  followUpDay,
+  followUpPrice,
   findAvailable,
   // Before `findProviders`: "show me nail ideas" is a request for WORK, not
   // for a provider list — findProviders' generic "show me" would otherwise

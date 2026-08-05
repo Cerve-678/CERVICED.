@@ -23,13 +23,13 @@ const L = {
   bg:      '#F5F1EC',                    // warm cream — main screen background
   surface: '#EDE8E2',                    // slightly darker cream — inputs, list rows
   card:    '#FFFFFF',                    // pure white — cards
-  accent:  '#AF9197',                    // muted dusty rose — buttons, active states, icons
+  accent:  '#5C4033',                    // dark chocolate brown — buttons, active states, icons (light mode ONLY — see Accent Colour below)
   ice:     '#FFFFFF',                    // pure white (alias)
   text:    '#000000',                    // black — primary text
   sub:     '#7E6667',                    // muted rose-brown — secondary text, labels
   border:  'rgba(126,102,103,0.14)',     // very subtle warm border
   sep:     'rgba(126,102,103,0.08)',     // even subtler — dividers/separators
-  iconBg:  'rgba(175,145,151,0.12)',     // icon background tint
+  iconBg:  'rgba(92,64,51,0.12)',        // icon background tint (chocolate-tinted in light mode)
 };
 ```
 
@@ -40,7 +40,7 @@ const D = {
   bg:      '#1A1815',                    // very dark warm brown-black
   surface: '#201D1A',                    // slightly lighter dark
   card:    '#252220',                    // card background
-  accent:  '#AF9197',                    // same dusty rose — identical in both modes
+  accent:  '#AF9197',                    // muted dusty rose — dark mode ONLY (light mode uses #5C4033 — see Accent Colour below)
   ice:     '#FFFFFF',
   text:    '#F0ECE7',                    // warm white — primary text
   sub:     '#7E6667',                    // same rose-brown — identical in both modes
@@ -70,7 +70,7 @@ const P = isDarkMode ? D : L;
 **`<ThemedBackground>` is the mandatory root wrapper for every screen.** Never use a plain `<View>` or `<SafeAreaView>` as the outermost element — always wrap with `<ThemedBackground>` first.
 
 ### Light mode
-Renders `assets/images/background.png` as an `<ImageBackground>` — a warm cream/linen texture fills the entire screen.
+Solid flat `#F5F1EC` — a warm cream fill. (Note: this doc previously described this as an `<ImageBackground>` rendering `assets/images/background.png` as a linen texture — that's not what `ThemedBackground.tsx` actually does. It's a plain `<View>` with a flat background color, same mechanism as dark mode, just a different hex. `background.png` exists as an asset but isn't wired into this component.)
 
 ### Dark mode
 Solid `#1A1815` — a very dark warm brown-black.
@@ -114,7 +114,17 @@ export default function MyScreen() {
 
 ## Accent Colour
 
-The accent is **`#AF9197`** — a muted dusty rose/mauve. It is the same in both light and dark mode.
+The accent is **mode-specific**, per the app's real shared theme
+(`src/constants/theme.ts`), confirmed against how `BookingsScreen.tsx` and
+other recently-built screens actually render:
+
+- **Light mode: `#5C4033`** — dark chocolate brown.
+- **Dark mode: `#AF9197`** — muted dusty rose/mauve.
+
+(This doc previously stated `#AF9197` for both modes — that was inaccurate;
+`#AF9197` is dark-mode-only in the app as it actually ships. If you're
+updating an older screen that still uses `#AF9197` in light mode, treat that
+as drift to reconcile, not as a second valid convention.)
 
 It is used for:
 - Active buttons
@@ -258,9 +268,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const L = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#000000',
+  accent: '#5C4033', ice: '#FFFFFF', text: '#000000',
   sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(175,145,151,0.12)',
+  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(92,64,51,0.12)',
 };
 const D = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
@@ -410,6 +420,177 @@ export default function MyScreen({ navigation }: Props) {
 </View>
 ```
 
+### Emissive glow (the Becca hero mark)
+
+`AmbientMark` in `src/components/ChatComponents.tsx` — the glowing rounded
+square on the Becca hero screen. This is the **only** glowing element in the
+app; the plain `Mark` used in the header and per-reply avatars is static and
+must stay that way.
+
+The goal is light that looks *emitted* — radiating and blooming into the space
+around it — rather than a bright shape with a soft edge painted on. React
+Native has no real light transport, so this is an approximation, but the
+technique matters and is easy to undo by accident.
+
+**The technique: stack three shadow casters instead of one.**
+
+A single shadow at a single `shadowRadius` falls off roughly linearly, which
+is exactly what reads as a painted halo. Real emissive falloff is steep near
+the source with a long faint tail. Three concentric casters at increasing
+radii and decreasing opacity sum into that non-linear curve:
+
+| Layer | `scale` | `shadowRadius` (breathes) | Opacity (breathes) |
+|---|---|---|---|
+| Hot core | 1.06× | 0.40× → 0.60× size | 0.58 → 0.92 |
+| Mid bloom | 1.10× | 1.10× → 1.68× size | 0.28 → 0.62 |
+| Outer haze | 1.14× | 2.30× → 3.70× size | 0.10 → 0.34 |
+
+Cycle is 1150ms each way, `Easing.inOut(Easing.sin)`.
+
+**Light mode multiplies every opacity by 1.45** (clamped to 1). This is not a
+tweak — it's correcting for the palette. The light accent is a dark chocolate
+brown cast against a pale background, so its shadow has very little tonal
+distance to work with, while dark mode's dusty rose against near-black has
+plenty. Identical numbers in both modes look right in dark and washed-out in
+light.
+
+**Both radius and opacity animate.** Opacity-only breathing reads as a dimmer
+switch being turned up and down; animating `shadowRadius` alongside it makes
+the light physically *swell*, which is what sells it as emission rather than a
+brightness change. Don't drop the radius travel to simplify.
+
+**The square itself breathes too** — a 1 → 1.02 scale pulse on the same driver,
+so mark and light stay in sync. A mark sitting perfectly still while its glow
+pulsed read as a static shape with an effect behind it, rather than one object
+emitting. Deliberately tiny: it should be felt, not watched. Scale only — the
+fill colour never animates, or it reads as a flashing element.
+
+**Three dials, easy to confuse:**
+
+- **`rMin`/`rMax` midpoint** — how far the light reaches. The *size* of the glow.
+- **the `rMin`→`rMax` gap** — how much it visibly swells.
+- **the `min`→`max` opacity gap** — how hard it pulses. Perceived depth comes
+  from the **width** of that gap, not from either endpoint. Raising both
+  numbers together makes it brighter without breathing any harder.
+
+The outer haze carries the widest gaps deliberately: the tail moving more than
+the core is what reads as light swelling into the surrounding space, instead
+of the square itself blinking on and off.
+
+**Hard constraints — all of these were learned the hard way:**
+
+- **Never use `BlurView` for this.** It does a real *backdrop* blur: it samples
+  and darkens whatever is actually behind it on screen. Animating one in a
+  loop cyclically dimmed the entire screen. A plain shadow only ever paints —
+  it can't darken siblings.
+- **The caster needs an opaque `backgroundColor`.** iOS derives a shadow's
+  silhouette from the view's actual opaque content, not its bounding box. A
+  `transparent` fill casts nothing at all, no matter how high `shadowOpacity`
+  goes. Each caster is filled with the accent colour and sits fully behind the
+  opaque `Mark`, so only its shadow is ever visible.
+- **Rounded square, never a circle.** A circular caster larger than the square
+  mark lets its round edge peek past the corners, reading as unwanted curvature.
+- **Keep the whole node off the native driver.** `shadowOpacity` and
+  `shadowRadius` have no native-driver support; `useNativeDriver: false`.
+- **Android gets a different implementation.** `elevation` casts a fixed grey,
+  not a coloured bloom, so Android falls back to stacked low-opacity fills.
+
+```tsx
+// Hero screen only — never in a header or an avatar.
+<AmbientMark size={80} />
+```
+
+**Nothing between the mark and the screen root may clip.** The outer haze
+spans ~3.7× the mark's size, so any ancestor with default `overflow` cuts the
+glow off mid-falloff — which reads as a hard edge rather than light fading
+out. `AmbientMark`'s own container, `heroMarkWrap`, and `heroScrollContainer`
+all set `overflow: 'visible'` for this reason. ScrollViews clip by default and
+are the usual culprit.
+
+**Not achievable natively:** true volumetric scattering, HDR, and spill light
+landing on nearby text/surfaces. Spill in particular would mean hand-tinting
+sibling elements toward the accent, which breaks the exact-hex palette rules
+above — don't add it without an explicit decision to do so.
+
+### Hero ⇄ chat transition (Becca)
+
+`BeccaScreen` swaps between the hero greeting and the chat thread on
+`showHero`. The two trees still hard mount/unmount — they have different
+layouts and rendering both at once would double the ScrollViews — but each
+side animates its **entrance** so the change reads as Becca settling into
+conversation rather than a hard cut.
+
+The two directions are deliberately asymmetric, because they mean different
+things:
+
+| Direction | Motion | Reads as |
+|---|---|---|
+| → chat | rises up from +14px, fades in | moving forward into the conversation |
+| → hero | settles down from −10px, fades in, 0.985→1 scale | coming back to rest |
+
+Same duration both ways (340ms transform / 420ms fade, `Easing.out(Easing.cubic)`)
+so neither direction feels laggier than the other. The driver value is reset to
+0 on every switch, so the incoming side always animates — not just on first
+mount.
+
+### Tap activation — never fire from `onPressOut`
+
+Any pressable **inside a ScrollView** must activate on `onPress`, not
+`onPressOut`. `onPressOut` fires on any finger-lift that began on the target —
+including one that was really the start of a scroll, or a drag released
+somewhere else entirely. This caused Becca's hero quick actions to launch a
+chat the user never asked for.
+
+`onPress` only fires when the touch stays on the target *and* the parent
+ScrollView hasn't claimed the gesture as a scroll. Use `onPressIn`/`onPressOut`
+for the visual press animation only.
+
+```tsx
+<TouchableOpacity
+  onPressIn={handlePressIn}     // animation only
+  onPressOut={handlePressOut}   // animation only
+  onPress={handlePress}         // ← activation + haptic lives here
+  activeOpacity={1}
+  delayPressIn={80}
+  pressRetentionOffset={{ top: 6, bottom: 6, left: 6, right: 6 }}
+>
+```
+
+`delayPressIn={80}` makes the finger settle before it counts as intent, and a
+tight `pressRetentionOffset` cancels on a few px of travel. These are tuned
+against accidental launches, **not** for snappiness — don't lower them to make
+a list feel more responsive without checking scroll behaviour first.
+
+### Dialogs — never use the OS `Alert`
+
+Use `useAppDialog()` (`src/components/AppDialog.tsx`), not `Alert.alert`. A
+system popup can't be themed and breaks the screen's visual language.
+
+- `showAlert(title, message?)` — drop-in for a single-button `Alert.alert`.
+- `showConfirm(title, message, buttons)` — same `{ text, style, onPress }`
+  button shape as `Alert.alert`, so conversions are mechanical.
+- Render `<DialogHost />` **last** in the screen's tree so dialogs and toasts
+  layer above any bottom sheet.
+
+The provider side has its own `useProviderDialog()` with a fixed palette —
+clients shouldn't see provider branding.
+
+### Bottom sheets
+
+- **Snap points are `"50%"`, never `"%50"`.** `@gorhom/bottom-sheet` silently
+  fails to parse the reversed form, and the sheet then behaves like a
+  full-height modal. This exact typo shipped in Becca's history sheet.
+- **`snapToIndex(0)` to open, not `expand()`.** `expand()` jumps to the
+  *largest* snap point, which is the full-screen feel a partial sheet exists
+  to avoid.
+- **Unmount the backdrop when the sheet closes** (`onChange` → gate on
+  `index < 0`). Leaving it mounted is what strands a dim layer over the
+  screen: if the close is interrupted — drag-to-dismiss released mid-flight,
+  or `close()` racing the backdrop's own fade — the backdrop can settle at a
+  non-zero opacity with nothing left to drive it back down.
+- Mount the sheet itself at all times with `index={-1}`; its open/close is a
+  driven animation on an always-present component, not a `visible` prop.
+
 ---
 
 ## Haptics
@@ -456,11 +637,11 @@ Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}
 
 | Element | Light | Dark |
 |---|---|---|
-| Screen background | Background image | `#1A1815` |
+| Screen background | `#F5F1EC` (flat fill) | `#1A1815` |
 | Surfaces / inputs | `#EDE8E2` | `#201D1A` |
 | Cards | `#FFFFFF` | `#252220` |
 | Primary text | `#000000` | `#F0ECE7` |
 | Secondary text | `#7E6667` | `#7E6667` |
-| Accent | `#AF9197` | `#AF9197` |
+| Accent | `#5C4033` | `#AF9197` |
 | Borders | `rgba(126,102,103,0.14)` | `rgba(126,102,103,0.18)` |
 | Status bar | dark-content | light-content |

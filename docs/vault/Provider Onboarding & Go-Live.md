@@ -26,7 +26,7 @@ Three triggers can each complete the "last piece": `on_provider_service_insert`,
 - `acuityTransferService.ts` — import an existing profile from an **Acuity Scheduling** link.
 
 ## Connections
-[[Availability & Slots]] · [[Address Release]] · [[Client vs Server Authority]] · [[Services]] · [[Screens & Navigation]]
+[[Availability & Slots]] · [[Address Release]] · [[Client vs Server Authority]] · [[Services]] · [[Screens & Navigation]] · [[Client vs Provider Hats]]
 
 ## Open questions
 - `provider_schedule_gating.sql` and `require_services_for_go_live.sql` were never added to `supabase/RUN_ALL_MIGRATIONS.sql` — a fresh environment today would have no go-live gating at all. `require_provider_address.sql`'s gating piece was deliberately left out of the bundle too, to avoid a misleading partial fix. Needs a dedicated pass. #todo

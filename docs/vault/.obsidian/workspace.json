@@ -11,14 +11,17 @@
             "id": "df82c6999956485f",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "canvas",
               "state": {
-                "file": "auto/screens/BusinessProfileScreen.md",
-                "mode": "source",
-                "source": false
+                "file": "Architecture.canvas",
+                "viewState": {
+                  "x": 790.4319726027401,
+                  "y": 613.8325753424659,
+                  "zoom": -1.2875289677545425
+                }
               },
-              "icon": "lucide-file",
-              "title": "BusinessProfileScreen"
+              "icon": "lucide-layout-dashboard",
+              "title": "Architecture"
             }
           }
         ]
@@ -182,6 +185,17 @@
   },
   "active": "df82c6999956485f",
   "lastOpenFiles": [
+    "Untitled 1.base",
+    "auto/screens/InfoRegScreen 2.md",
+    "auto/screens/BookingsScreen 2.md",
+    "Architecture.canvas",
+    "Address Release.md",
+    "_templates/feature.md",
+    "_templates/decision.md",
+    "Client vs Provider Hats.md",
+    "Client vs Server Authority.md",
+    "auto/screens/BusinessProfileScreen.md",
+    "Dev Reset Tools & Client vs Provider Hats.md",
     "auto/screens/MessagesScreen 2.md",
     "auto/screens/ResetPasswordOTPScreen 2.md",
     "auto/screens/PointsScreen 2.md",
@@ -193,22 +207,11 @@
     "auto/screens/ProviderMyProfileScreen 2.md",
     "auto/screens/RescheduleScreen 2.md",
     "auto/screens/ProviderAnalyticsScreen 2.md",
-    "auto/screens/InfoRegScreen 2.md",
     "auto/screens/ProviderAutomationsScreen 2.md",
     "auto/Screen Flow (generated).md",
     "Data Layer — Supabase.md",
-    "Architecture.canvas",
     "Booking Flow.md",
     "Availability & Slots.md",
-    "Architecture Overview.md",
-    "_templates/feature.md",
-    "auto/screens/UserProfileScreen.md",
-    "auto/screens/TermsScreen.md",
-    "auto/screens/SubscriptionScreen.md",
-    "auto/screens/SearchScreen.md",
-    "auto/screens/RescheduleScreen.md",
-    "auto/screens/ReportProblemScreen.md",
-    "auto/screens/ProviderScheduleScreen.md",
     "auto/screens",
     "_templates",
     "Untitled.base",

@@ -26,6 +26,12 @@ instead of re-deriving their knowledge from scratch:
 - **`cerviced-booking-domain`** — booking/notification internals: status
   mapping, DB-trigger-owned notifications, dual provider-name sources,
   reschedule RPCs, permissive RLS on `bookings`.
+- **`cerviced-becca-intelligence`** — Becca's capability registry, entity
+  resolver, and confidence/fallback behaviour (`src/services/becca/`), plus
+  the staged path to a real LLM. Use it for anything Becca can understand,
+  answer, or route to, and before wiring a model in — the registry is
+  deliberately shaped as the LLM's tool schema, so `matcher.ts` is the only
+  file a model should replace. See `BECCA_CAPABILITIES.md`.
 - **`cerviced-legal-flagger`** — flags (never drafts) legal-adjacent gaps
   when a change touches Terms & Conditions, Privacy Policy, refunds, age
   limits, or payment handling.

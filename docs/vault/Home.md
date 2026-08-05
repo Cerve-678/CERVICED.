@@ -11,6 +11,7 @@ The map of the whole app. This is an Obsidian vault: every `[[link]]` is a jump 
 - [[Data Layer — Supabase]] — tables, triggers, RLS, cron, views
 
 ## Core features (how they actually work)
+- [[Client vs Provider Hats]] — the dual-hat account model: how switching works, what each hat can/can't do, and the known edge cases
 - [[Booking Flow]] — cart → checkout → booking created → confirmed
 - [[Availability & Slots]] — how open times are computed and double-booking is blocked
 - [[Address Release]] — when a client can see the provider's address

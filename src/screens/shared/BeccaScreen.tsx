@@ -490,6 +490,7 @@ export default function BeccaScreen({
         "BookingDetail",
         "Reschedule",
         "ProviderProfile",
+        "ProviderChat",
         "ClientIntakeForm",
         "Notifications",
       ]),

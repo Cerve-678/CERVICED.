@@ -447,39 +447,38 @@ BookmarkedProvidersScreen:
 
 ---
 
-## 10. AI Chat (Becca) Logic
+## 10. Becca (Assistant) Logic
 
-### Chat Flow
+> **Superseded — see `BECCA_CAPABILITIES.md`**, which is authoritative for
+> Becca. This section previously described an OpenAI/GPT-4 call through
+> `aiChatService.ts`; that flow **never existed** and both `aiChatService.ts`
+> and `enhancedAIChatService.ts` were deleted on 2026-08-04. There is no LLM
+> behind Becca today.
+
+### Chat Flow (as actually implemented)
 
 ```
 User opens BeccaScreen
-  → Load conversation history from storage
-  → Display previous messages
+  → Load session history from Supabase (beccaStorageService)
 
 User sends message:
-  → Add user message to chat state
-  → Display typing indicator
-  → aiChatService.sendMessage({
-      message: userInput,
-      conversationHistory: previousMessages,
-      userContext: { preferences, recentBookings, location }
-    })
-  → API call to OpenAI:
-      - Model: GPT-4 (or configured model)
-      - System prompt: "You are Becca, a friendly beauty service assistant
-        for the CERVICED app. Help users find services, answer beauty
-        questions, suggest providers, and assist with bookings."
-      - Include conversation history for context
-  → Receive AI response
-  → Add to chat state with typing animation
-  → Persist conversation to storage
-
-Enhanced Features (enhancedAIChatService):
-  → Context-aware responses using user's booking history
-  → Provider recommendations based on conversation
-  → Ability to trigger actions (e.g., "Book this for me")
-  → Beauty tips and advice knowledge base
+  → engine.respond({ message, hat, bookings, userId })
+      1. resolveEntities()  — message fragments → real app objects
+                              (provider, booking, service, date, money)
+      2. understand()       — score capabilities → an Understanding
+      3. ambiguity?         — two equal matches ⇒ ask which, never guess
+      4. confidence band:
+           high   → answer directly
+           medium → answer, state the assumption out loud
+           low    → say she didn't catch it + ranked options
+      5. capability.run()   — real data via databaseService only
+  → Reply carries tappable chips (deep-link with params, or ask a follow-up)
+  → Persist to Supabase
 ```
+
+Becca **reads and routes; she never writes**. Booking mutations happen on the
+screen that owns them, which her chips deep-link into with the record
+preloaded. An LLM would replace step 2 (`matcher.ts`) and nothing else.
 
 ---
 

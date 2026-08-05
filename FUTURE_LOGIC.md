@@ -228,4 +228,37 @@ In `ModernBeautyCalendar`, set up a Supabase Realtime subscription on `bookings`
 
 ---
 
-*Last updated: 2026-06-07*
+## Bug: Cart's back-to-back slot picker offers times the DB then rejects
+
+### What's actually happening (this is a real bug, not a future idea)
+
+`AvailabilityService.getAvailableSlots()` (single-service path) correctly reads `min_booking_notice_hrs` from `providers` and filters out any slot starting sooner than that from now — the comment there says explicitly "matches the server-side `enforce_booking_bookability` trigger, so the calendar never shows a time the DB will then reject."
+
+But the cart's multi-service flow doesn't call that function. It calls `findBackToBackSlotsForDate` (module-level helper in `AvailabilityService.ts`, used by `findBackToBackSlots`/`findNextBackToBackDay`) — a **second, independently-written slot-generation implementation** that selects `booking_window_days, slot_interval_mins, buffer_mins` from `providers` but never selects `min_booking_notice_hrs` and never filters by it. So the cart happily offers a same-day/near-immediate slot, the user picks it, and `hold_cart_booking_slots`/`createBooking` reject it server-side with "This appointment does not meet the provider's minimum notice" — confirmed live 2026-08-04 testing FacebyJen's cart checkout.
+
+### The fix
+
+Add the same `min_booking_notice_hrs` select + cutoff filter from `getAvailableSlots` (around line 440-444) into `findBackToBackSlotsForDate`'s window-generation loop (around line 255-270) — exclude any `start0` candidate earlier than `Date.now() + noticeHrs * 60 * 60 * 1000`. Small, contained fix; the bug is a missing filter, not a design gap. Worth checking whether other slot-generation call sites in this file have the same drift while in there.
+
+---
+
+## Emergency / Same-Day Bookings
+
+### What it means
+
+Right now `min_booking_notice_hrs` is a hard wall — if a provider requires 24 hours' notice, a client who wants (and the provider would actually accept) a same-day slot has no path to book one in-app. There's no concept of a provider opting into "I'll take emergency/last-minute bookings under my normal notice window."
+
+### Rough shape of what's needed
+
+- A way for a provider to mark themselves as accepting emergency/same-day bookings at all (a new provider-level flag, e.g. `accepts_emergency_bookings boolean`), separate from their normal `min_booking_notice_hrs`.
+- A client-facing path to request one — likely not the normal calendar/time-picker (which should keep hiding times outside the provider's stated notice window, not surface them as if they were normal availability), but a distinct "Request Emergency Appointment" action on the provider's profile that goes through a different flow — a request the provider explicitly approves, rather than an instant-book slot the calendar just shows.
+- Provider-side: needs to see and act on incoming emergency requests (accept/decline), and the app needs a booking status or flag that distinguishes an emergency booking from a normal one, since it bypassed the normal notice-window check on purpose.
+- This is explicitly a provider-opt-in feature, not a client-side toggle — a provider who hasn't opted in should never show any emergency-booking path at all.
+
+### Not scoped yet
+
+No decision made on the request/approval flow's exact screens, whether emergency bookings carry different cancellation-policy terms, or how this interacts with the provider's normal calendar once approved (presumably it just becomes a normal confirmed booking at that point). This is a feature idea flagged from user feedback during 2026-08-04 cart-checkout testing, not a spec — needs product direction before implementation starts.
+
+---
+
+*Last updated: 2026-08-04*

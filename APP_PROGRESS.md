@@ -83,7 +83,7 @@ Reference before touching any feature. Update when something changes state.
 
 | Feature | Status | Where |
 |---|---|---|
-| Becca AI chat (recommendations, Q&A) | ✅ Done | `BeccaScreen`, `src/services/aiChatService.ts`, `enhancedAIChatService.ts` |
+| Becca assistant (bookings, discovery, provider business data) | ✅ Done — **no LLM yet**, deterministic capability layer | `BeccaScreen`, `src/services/becca/` — see **`BECCA_CAPABILITIES.md`** (authoritative; `aiChatService.ts`/`enhancedAIChatService.ts` were deleted 2026-08-04) |
 | Chat history persistence | ✅ Done | `beccaStorageService.ts`, `chat_messages` table |
 | User learning / personalisation | ✅ Done | `userLearningService.ts` — feeds provider scoring in `HomeScreen` |
 
