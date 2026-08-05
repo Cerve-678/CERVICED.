@@ -110,13 +110,23 @@ JOIN public.bookings b
 -- Step 5: the actual guard. Run this only once Step 4 returns zero rows —
 -- otherwise it will fail with "conflicting key value violates exclusion
 -- constraint", which is the correct, safe outcome (see Step 4's note).
+--
+-- DEPLOYED 2026-08-03 with a future-only scope, not the unscoped version
+-- below as originally written. 7 pre-existing overlaps (see PRE-LAUNCH-TODO.md
+-- §2) were all fully in the past; rather than requiring a human business
+-- decision on 7 already-completed bookings before protecting any future
+-- ones, the constraint grandfathers anything ending before the cutoff.
+-- `now()` isn't allowed in an EXCLUDE constraint's WHERE predicate (must be
+-- IMMUTABLE), so the cutoff is a fixed literal timestamp rather than a
+-- rolling window — it protects everything from deploy date forward, it does
+-- not mean "N days before whenever this is queried."
 ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap;
 ALTER TABLE public.bookings
   ADD CONSTRAINT bookings_no_overlap
   EXCLUDE USING gist (
     provider_id WITH =,
     tsrange(effective_start, effective_end) WITH &&
-  ) WHERE (status NOT IN ('cancelled', 'no_show'));
+  ) WHERE (status NOT IN ('cancelled', 'no_show') AND effective_end > '2026-08-03'::timestamp);
 
 -- Violations surface to the app as Postgres error code 23P01
 -- (exclusion_violation) — handled in BookingContext.tsx's createBookingsFromCart

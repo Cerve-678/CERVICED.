@@ -38,6 +38,14 @@ ALTER TABLE public.bookings
   ADD COLUMN IF NOT EXISTS last_rescheduled_at TIMESTAMPTZ;
 
 -- ── 2. Client cancels their own booking ───────────────────────────────────────
+-- Notice-hours precedence mirrors mapCancellationPolicyRow() app-side
+-- (databaseService.ts): prefer providers.cancellation_notice_hours; if unset
+-- (0), fall back to parsing booking_policies.cancelNotice ('none'|'24h'|
+-- '48h'|'72h'). Without this fallback, a provider who only ever set their
+-- policy via registration (never touched the Automations screen) would have
+-- cancellation_notice_hours = 0 here, so this RPC let clients cancel with
+-- zero notice even though the client-facing profile showed a real notice
+-- window — client display and server enforcement must agree.
 CREATE OR REPLACE FUNCTION public.cancel_own_booking(p_booking_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -48,6 +56,7 @@ DECLARE
   v_booking   RECORD;
   v_notice_hrs INT;
   v_hours_until NUMERIC;
+  v_cancel_notice TEXT;
 BEGIN
   SELECT b.status, b.booking_date, b.booking_time, b.provider_id
     INTO v_booking
@@ -64,8 +73,18 @@ BEGIN
     RAISE EXCEPTION 'This booking can no longer be cancelled';
   END IF;
 
-  SELECT cancellation_notice_hours INTO v_notice_hrs
+  SELECT cancellation_notice_hours, booking_policies ->> 'cancelNotice'
+    INTO v_notice_hrs, v_cancel_notice
     FROM public.providers WHERE id = v_booking.provider_id;
+
+  IF COALESCE(v_notice_hrs, 0) = 0 THEN
+    v_notice_hrs := CASE v_cancel_notice
+      WHEN '24h' THEN 24
+      WHEN '48h' THEN 48
+      WHEN '72h' THEN 72
+      ELSE 0
+    END;
+  END IF;
 
   IF COALESCE(v_notice_hrs, 0) > 0 THEN
     v_hours_until := EXTRACT(EPOCH FROM (

@@ -4059,8 +4059,17 @@ ALTER TABLE public.bookings
 --   supabase/fix_users_table_pii_leak.sql
 --   supabase/security_audit_2026-08-02_rls_and_hardening.sql
 --   supabase/fix_portfolio_items_category.sql
+--   supabase/fix_reschedule_request_rls_forgery_gap.sql
+--   supabase/fix_cart_checkout_slot_hold.sql
+--   supabase/fix_hold_cart_booking_slots_missing_snapshots.sql
+--   supabase/fix_claim_cart_booking_slots_ambiguous_column.sql
 --
--- All three are idempotent/safe to re-run.
+-- All seven are idempotent/safe to re-run. NOTE: fix_cart_checkout_slot_hold.sql
+-- itself is not actually present in this repo as a standalone file — it was
+-- applied live 2026-08-04 without being committed (see the migration-drift
+-- pattern this repo already has; check supabase-migration-tracking-gap in
+-- auto-memory). The fifth entry below documents what it did; the sixth
+-- entry's file IS present and is a follow-up patch on top of it.
 --
 -- The first two: has_gone_live/is_active gating on providers and
 -- everything under them exists only as an app-side query convention, not
@@ -4072,4 +4081,42 @@ ALTER TABLE public.bookings
 -- provider's service_category — without it, pre-existing portfolio photos
 -- stay invisible to every Explore category-filter tab (NULL never matches
 -- a Postgres .eq()), even though the upload path itself is now fixed.
+--
+-- The fourth: booking_reschedule_requests' reschedule_user_all /
+-- reschedule_provider_all policies (defined earlier in this file, inside
+-- phase1_schema.sql's inlined section) have no WITH CHECK — a client can
+-- forge status='provider_responded' via direct .update(), which
+-- confirm_reschedule_own_booking() then trusts without independent
+-- verification. Deployed live 2026-08-03; this file's inlined
+-- phase1_schema.sql copy above is NOT updated to match — run the fix file
+-- to actually close the gap, don't rely on the copy above.
+--
+-- The fifth: adds hold_batch_id to bookings plus hold_cart_booking_slots/
+-- claim_cart_booking_slots/release_cart_booking_slots/expire_cart_holds and
+-- a cron job (expire-cart-holds, every 5 min) — reserves cart items as
+-- on_hold bookings for a 10-minute window while a client is on the payment
+-- screen, closing the gap where createBooking()'s insert-time-only conflict
+-- check left a slot completely unreserved for the whole review + payment-
+-- sheet interaction. App-side: CartScreen.tsx calls holdCartCheckoutSlots
+-- (BookingContext) when the user taps "Confirm & Pay"; createBookingsFromCart
+-- claims the batch on payment success instead of inserting fresh rows, with
+-- a normal-insert fallback for any item whose hold expired. Deployed live
+-- 2026-08-04.
+--
+-- The sixth: hold_cart_booking_slots()'s INSERT (added by the fifth entry
+-- above) never set provider_name_snapshot/service_name_snapshot, both
+-- NOT NULL with no default — every cart-checkout hold attempt failed
+-- with 23502 regardless of date/time, discovered testing multi-provider
+-- checkout. Fix gives the hold row placeholder values ('Reserving…') for
+-- both; claim_cart_booking_slots() already overwrites them with the real
+-- names on payment success, so the placeholder is never user-visible.
+-- Deployed live 2026-08-04.
+--
+-- The seventh: claim_cart_booking_slots()'s WHERE clause referenced bare
+-- "provider_id", ambiguous against its own RETURNS TABLE output column of
+-- the same name — every claim failed with 42702, silently falling back to
+-- a direct insert (non-fatal by design, but slower and loses the atomic
+-- claim guarantee). Fix fully qualifies every WHERE-clause column with
+-- public.bookings. Found + deployed live 2026-08-04, same test session as
+-- the sixth entry above.
 -- ════════════════════════════════════════════════════

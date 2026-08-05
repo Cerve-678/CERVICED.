@@ -7,7 +7,6 @@ tags: [screen, client]
 **Registered route(s):** `BeccaMain`
 
 ## → Navigates to
-- [[BookingsScreen\|Bookings]]
 - `Explore` _(navigator / dynamic)_
 - [[ProviderProfileScreen\|ProviderProfile]]
 

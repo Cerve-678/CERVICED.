@@ -5,7 +5,7 @@
 
 #generated
 
-**105 edges** across **36 screens**. Node-graph version: [[Screen Flow (generated)]].
+**104 edges** across **36 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -16,7 +16,6 @@ graph LR
   BeautyBillingScreen --> BeautyProfileScreen
   BeautyBillingScreen --> PaymentMethodsScreen
   BeautyBillingScreen --> SubscriptionScreen
-  BeccaScreen --> BookingsScreen
   BeccaScreen --> Explore
   BeccaScreen --> ProviderProfileScreen
   BookingDetailScreen --> Cart
@@ -154,5 +153,5 @@ graph LR
 - `provider/ProviderInboxScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderConversationScreen`
 - `provider/ProviderMyProfileScreen` → `shared/InfoRegScreen`
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
-- `shared/BeccaScreen` → `client/BookingsScreen`, `client/ProviderProfileScreen`, `Explore`
+- `shared/BeccaScreen` → `client/ProviderProfileScreen`, `Explore`
 - `shared/NotificationsScreen` → `client/BookingsScreen`, `client/ProviderProfileScreen`, `ProviderHome`

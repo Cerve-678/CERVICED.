@@ -8,9 +8,20 @@ CREATE TABLE IF NOT EXISTS public.becca_chat_sessions (
   user_id     UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   title       TEXT NOT NULL DEFAULT 'New Chat',
   preview     TEXT,
+  -- Which Becca this belongs to. A user with both hats has two separate
+  -- assistants answering from different data, so their histories are separate
+  -- lists — without this a provider sees their client-side chats in their
+  -- business history. Applied live 2026-08-04; existing rows backfilled to
+  -- 'client' (provider Becca never persisted sessions before then).
+  hat         TEXT NOT NULL DEFAULT 'client' CHECK (hat IN ('client', 'provider')),
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Safe to re-run against an environment created before `hat` existed.
+ALTER TABLE public.becca_chat_sessions
+  ADD COLUMN IF NOT EXISTS hat TEXT NOT NULL DEFAULT 'client'
+  CHECK (hat IN ('client', 'provider'));
 
 CREATE TABLE IF NOT EXISTS public.becca_chat_messages (
   id          UUID PRIMARY KEY,
@@ -22,8 +33,8 @@ CREATE TABLE IF NOT EXISTS public.becca_chat_messages (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for fast queries
-CREATE INDEX IF NOT EXISTS idx_becca_sessions_user ON public.becca_chat_sessions(user_id, updated_at DESC);
+-- Indexes for fast queries. Every session list query filters user_id + hat.
+CREATE INDEX IF NOT EXISTS idx_becca_sessions_user_hat ON public.becca_chat_sessions(user_id, hat, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_becca_messages_session ON public.becca_chat_messages(session_id, created_at ASC);
 
 -- RLS
