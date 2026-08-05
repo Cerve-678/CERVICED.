@@ -315,7 +315,7 @@ Curated: [[Contexts]] · **118 files**
 Curated: [[Services]] · **31 files**
 - `src/screens/shared/BeccaScreen.tsx` _(65)_
 - `src/services/becca/types.ts` _(28)_
-- `src/services/becca/engine.ts` _(23)_
+- `src/services/becca/engine.ts` _(25)_
 - `src/navigation/client/tabs/BeccaNavigator.tsx` _(20)_
 - `supabase/becca_chat_tables.sql` _(20)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(20)_

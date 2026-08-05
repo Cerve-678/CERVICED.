@@ -1,20 +1,30 @@
 import { supabase } from '../lib/supabase';
-import { ChatMessage } from './enhancedAIChatService';
+import { ChatMessage } from './becca/types';
+
+/**
+ * Which Becca a session belongs to. A user with both hats has two separate
+ * assistants answering from different data, so their chat histories are
+ * separate lists — a provider must never see their client-side chats in their
+ * business history.
+ */
+export type BeccaHat = 'client' | 'provider';
 
 export interface StoredSession {
   id: string;
   title: string;
   preview: string;
+  hat: BeccaHat;
   created_at: string;
   updated_at: string;
 }
 
 const beccaStorageService = {
-  async loadSessions(userId: string): Promise<StoredSession[]> {
+  async loadSessions(userId: string, hat: BeccaHat): Promise<StoredSession[]> {
     const { data, error } = await supabase
       .from('becca_chat_sessions')
-      .select('id, title, preview, created_at, updated_at')
+      .select('id, title, preview, hat, created_at, updated_at')
       .eq('user_id', userId)
+      .eq('hat', hat)
       .order('updated_at', { ascending: false })
       .limit(30);
     if (error) throw error;
@@ -38,10 +48,15 @@ const beccaStorageService = {
     }));
   },
 
-  async createSession(userId: string, title: string, preview: string): Promise<string> {
+  async createSession(
+    userId: string,
+    title: string,
+    preview: string,
+    hat: BeccaHat,
+  ): Promise<string> {
     const { data, error } = await supabase
       .from('becca_chat_sessions')
-      .insert({ user_id: userId, title, preview })
+      .insert({ user_id: userId, title, preview, hat })
       .select('id')
       .single();
     if (error) throw error;
@@ -73,7 +88,25 @@ const beccaStorageService = {
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    await supabase.from('becca_chat_sessions').delete().eq('id', sessionId);
+    const { error } = await supabase
+      .from('becca_chat_sessions')
+      .delete()
+      .eq('id', sessionId);
+    if (error) throw error;
+  },
+
+  /**
+   * Deletes every session for one hat only — clearing business chats must
+   * never touch the user's beauty chats, and vice versa. Messages go with
+   * them via becca_chat_messages' ON DELETE CASCADE.
+   */
+  async clearSessions(userId: string, hat: BeccaHat): Promise<void> {
+    const { error } = await supabase
+      .from('becca_chat_sessions')
+      .delete()
+      .eq('user_id', userId)
+      .eq('hat', hat);
+    if (error) throw error;
   },
 };
 
