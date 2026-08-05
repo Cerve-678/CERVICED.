@@ -154,6 +154,51 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
 
+  // Every navigation path below is "dismiss this formSheet, then navigate", which
+  // means a deferred callback can fire after the sheet is already gone — the user
+  // can swipe a formSheet away mid-timer, or tap twice. Without cleanup those
+  // callbacks still run and call goBack() on an already-popped navigator, which is
+  // the "GO_BACK was not handled by any navigator" warning. Track every timer so
+  // unmount cancels them, and bail out of any callback that outlived the screen.
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+    };
+  }, []);
+
+  const defer = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      fn();
+    }, ms);
+    timersRef.current.push(id);
+  }, []);
+
+  // Dismiss the sheet, then navigate once it's actually gone. `canGoBack()` is the
+  // guard that makes this safe to call from any stack: Notifications is registered
+  // in every navigator, so it is not always guaranteed to have a route beneath it.
+  const dismissThenNavigate = useCallback((navigateFn: () => void) => {
+    if (navigation.canGoBack()) {
+      navigation.dispatch(CommonActions.goBack() as any);
+      defer(navigateFn, 500);
+    } else {
+      // Nothing to dismiss — we're already at the stack root, so navigate directly
+      // rather than firing a goBack() that no navigator can handle.
+      navigateFn();
+    }
+  }, [navigation, defer]);
+
+  // Dismiss with no onward navigation (the notification has nowhere specific to go).
+  const dismissOnly = useCallback(() => {
+    if (navigation.canGoBack()) navigation.goBack();
+  }, [navigation]);
+
   // Map Supabase DbNotification → local Notification shape
   const mapDbNotification = (db: DbNotification): Notification => ({
     id: db.id,
@@ -317,11 +362,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   // handler already does) guarantees the destination stack regardless of where
   // Notifications was opened from.
   const navigateProviderHome = useCallback((screen: string, params?: Record<string, unknown>) => {
-    navigation.dispatch(CommonActions.goBack() as any);
-    setTimeout(() => {
+    dismissThenNavigate(() => {
       (navigation as any).getParent()?.navigate('ProviderHome', { screen, params, initial: false });
-    }, 500);
-  }, [navigation]);
+    });
+  }, [navigation, dismissThenNavigate]);
 
   // ✅ Handle notification action (View Booking, Reschedule, etc.)
   const handleNotificationAction = useCallback((notification: Notification) => {
@@ -376,7 +420,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       const openReschedule = notification.type === 'reschedule_request' ||
                             notification.type === 'reschedule_provider_response';
 
-      setTimeout(() => {
+      defer(() => {
         if (isProviderRef.current) {
           // Provider: always land in the Calendar (ProviderHome) stack, not
           // wherever Notifications happened to be opened from.
@@ -407,18 +451,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // — fall back to the provider profile so there's still somewhere to go.
       if (notification.bookingId) {
         const bookingId = notification.bookingId;
-        setTimeout(() => {
+        defer(() => {
           navigation.dispatch(StackActions.replace('Bookings', { openBookingId: bookingId, highlightBookingId: bookingId }));
         }, 300);
       } else if (notification.providerId) {
         const providerId = notification.providerId;
-        setTimeout(() => {
-          navigation.dispatch(CommonActions.goBack() as any);
-          setTimeout(() => {
+        defer(() => {
+          dismissThenNavigate(() => {
             navigation.dispatch(
               CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
             );
-          }, 500);
+          });
         }, 300);
       }
     } else if (notification.type === 'new_provider') {
@@ -431,16 +474,17 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       }
       const providerId = notification.providerId;
 
-      setTimeout(() => {
-        logger.log('Navigation to ProviderProfile executed with ID:', notification.providerId);
-        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId: notification.providerId!, source: 'notification' }));
+      defer(() => {
+        logger.log('Navigation to ProviderProfile executed with ID:', providerId);
+        navigation.dispatch(StackActions.replace('ProviderProfile', { providerId, source: 'notification' }));
       }, 300);
     } else if (notification.type === 'promotion') {
-      logger.log('Navigating to Home');
-      setTimeout(() => {
-        navigation.goBack();
-        logger.log('Navigation to Home executed');
-      }, 300);
+      // A promotion has no specific destination — dismissing the sheet returns the
+      // user to whatever they were on. (This previously logged "Navigating to Home"
+      // but only ever called goBack(); it reached Home by coincidence of Home being
+      // underneath, and warned when it wasn't.)
+      logger.log('Promotion — dismissing notifications');
+      defer(dismissOnly, 300);
     } else if (notification.type === 'announcement' ||
                notification.type === 'birthday_greeting' ||
                notification.type === 'post_appt_check_in') {
@@ -448,25 +492,25 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       // them) — open that provider's profile if we know them
       if (notification.providerId) {
         const providerId = notification.providerId;
-        setTimeout(() => {
-          navigation.dispatch(CommonActions.goBack() as any);
-          setTimeout(() => {
+        defer(() => {
+          dismissThenNavigate(() => {
             navigation.dispatch(
               CommonActions.navigate({ name: 'ProviderProfile', params: { providerId, source: 'notification' } }) as any
             );
-          }, 500);
+          });
         }, 300);
       } else {
-        setTimeout(() => navigation.goBack(), 300);
+        defer(dismissOnly, 300);
       }
     } else if (notification.type === 'intake_form_reminder' || notification.type === 'intake_form_completed') {
       // reminder → open the send-a-form flow; completed → open responses readonly
       const viewResponses = notification.type === 'intake_form_completed';
       if (!notification.bookingId) return;
       const bookingId = notification.bookingId;
-      setTimeout(async () => {
+      defer(async () => {
         const booking = await getBookingWithAddOnsById(bookingId);
-        if (!booking) return;
+        // Re-check liveness: the await means the sheet may already be dismissed.
+        if (!booking || !isMountedRef.current) return;
         navigateProviderHome('ProviderIntakeForm', {
           bookingId,
           clientUserId: booking.user_id,
@@ -477,42 +521,43 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       }, 300);
     } else if (notification.type === 'provider_message') {
       logger.log('Navigating to ProviderInbox (Messages)');
-      setTimeout(() => {
+      defer(() => {
         navigateProviderHome('ProviderInbox', { initialFilter: 'messages' });
       }, 300);
     } else if (notification.type === 'new_message') {
       // Chat message — providers land in the inbox Messages tab; clients open
       // the chat with that provider (slug + name looked up from provider_id)
       if (isProviderRef.current) {
-        setTimeout(() => {
+        defer(() => {
           navigateProviderHome('ProviderInbox', { initialFilter: 'messages' });
         }, 300);
       } else {
         if (!notification.providerId) return;
         const providerDbId = notification.providerId;
-        setTimeout(async () => {
+        defer(async () => {
           const prov = await getProviderBasicById(providerDbId);
-          if (!prov) return;
-          navigation.dispatch(CommonActions.goBack() as any);
-          setTimeout(() => {
+          // This await gives the user ample time to dismiss the sheet themselves,
+          // so re-check liveness before touching the navigator.
+          if (!prov || !isMountedRef.current) return;
+          dismissThenNavigate(() => {
             navigation.dispatch(
               CommonActions.navigate({
                 name: 'ProviderChat',
                 params: { providerId: prov.slug, providerDbId, providerName: prov.display_name },
               }) as any
             );
-          }, 500);
+          });
         }, 300);
       }
     } else if (notification.type === 'schedule_fully_booked') {
       // Provider-only — carries no booking_id (it's about the whole
       // calendar, not one appointment), so go straight to the Schedule
       // screen rather than through BookingDetail like the booking types.
-      setTimeout(() => {
+      defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
     }
-  }, [navigation, navigateProviderHome]);
+  }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
 
   // ✅ Format timestamp (relative time)
   const formatTimestamp = (timestamp: string) => {

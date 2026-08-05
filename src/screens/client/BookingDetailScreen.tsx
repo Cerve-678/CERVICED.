@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
-  Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView,
+  Keyboard, TouchableWithoutFeedback,
   LayoutAnimation, UIManager,
 } from 'react-native';
 
@@ -20,6 +20,7 @@ import * as Sharing from 'expo-sharing';
 import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
 import { hasMapDestination, isAddressPending } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
@@ -1031,8 +1032,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Rating Modal ─── */}
         <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={st.overlay}>
+          <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
                 {!hasRated ? (
                   <>
@@ -1067,14 +1067,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </>
                 )}
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
+          </KeyboardDismissView>
         </Modal>
 
         {/* ─── Tip Modal ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={st.overlay}>
+          <KeyboardDismissView style={st.overlay} dismissOnTap>
               <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
                 <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Leave a Tip</Text>
                 <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}</Text>
@@ -1099,8 +1097,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </TouchableOpacity>
                 </View>
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
+          </KeyboardDismissView>
         </Modal>
 
         {/* ─── Rebook Add-ons Modal ─── */}

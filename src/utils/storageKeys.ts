@@ -4,8 +4,11 @@
 // names can be changed without grep-hunting the whole codebase.
 
 export const STORAGE_KEYS = {
-  /** Zustand booking store persistence key */
-  BOOKINGS:           '@cerviced_bookings',
+  /** BookingContext's persisted bookings cache — the one screens actually read from */
+  BOOKINGS:           '@bookings',
+  /** Zustand booking store persistence key — kept in sync by BookingContext but
+   *  has no readers of its own (see stores/useBookingStore.ts) */
+  BOOKINGS_STORE_LEGACY: '@cerviced_bookings',
   /** Active mode: 'client' | 'provider' */
   ACTIVE_MODE:        '@active_mode',
   /** User theme preference */

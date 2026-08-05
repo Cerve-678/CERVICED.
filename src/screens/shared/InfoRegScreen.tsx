@@ -12,7 +12,6 @@ import {
   Alert,
   TextInput,
   Modal,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
   ActivityIndicator,
@@ -39,6 +38,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // Auth
 import { useAuth } from '../../contexts/AuthContext';
@@ -1241,11 +1241,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.modalOverlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
+      <KeyboardDismissView style={styles.modalOverlay}>
         <LinearGradient colors={[modalTintTop, modalTintBottom]} start={{ x: 0, y: 0 }} end={{ x: 0.3, y: 1 }} style={styles.serviceModal}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={[styles.modalHeader, { borderBottomColor: `${accentColor}33`, borderBottomWidth: 2 }]}>
@@ -1529,7 +1525,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
             </View>
           </SafeAreaView>
         </LinearGradient>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </Modal>
   );
 };
@@ -1876,10 +1872,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.modalOverlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
         <BlurView intensity={30} tint="light" style={styles.smallModal}>
           <Text style={styles.smallModalTitle}>Edit Category</Text>
           <Text style={styles.inputLabel}>Name</Text>
@@ -1915,7 +1908,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
             </TouchableOpacity>
           </View>
         </BlurView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </Modal>
   );
 };

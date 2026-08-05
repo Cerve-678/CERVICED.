@@ -4,7 +4,6 @@ import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
@@ -32,6 +31,7 @@ import {
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
@@ -197,11 +197,7 @@ export default function LoginScreen({ navigation }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
+      <KeyboardDismissView style={styles.flex}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: 120 }]}
           showsVerticalScrollIndicator={false}
@@ -335,7 +331,7 @@ export default function LoginScreen({ navigation }: Props) {
             </View>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }

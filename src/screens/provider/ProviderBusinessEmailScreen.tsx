@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -14,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
@@ -440,7 +439,7 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
     <View style={[s.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <SafeAreaView style={s.safe} edges={['top']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDismissView style={{ flex: 1 }}>
           <View style={[s.header, { borderBottomColor: C.border }]}>
             <Text style={[s.headerTitle, { color: C.text }]}>Business Details</Text>
             <TouchableOpacity style={[s.closeBtn, { backgroundColor: C.surface }]} onPress={() => navigation.goBack()}>
@@ -573,7 +572,7 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
               }
             </TouchableOpacity>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </SafeAreaView>
     </View>
   );

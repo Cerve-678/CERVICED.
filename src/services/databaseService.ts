@@ -88,14 +88,15 @@ export async function getTopRatedProviders(limit = 10): Promise<DbProvider[]> {
   return (data ?? []) as DbProvider[];
 }
 
-/** Provider IDs trending this week — from the trending_providers view */
+/** Provider IDs trending this week — from the get_trending_providers() RPC.
+ *  This is a SECURITY DEFINER function rather than a plain view because it
+ *  aggregates booking counts across every provider's bookings, which the
+ *  owner-scoped RLS on `bookings` would otherwise restrict per-caller. */
 export async function getTrendingProviderIds(limit = 10): Promise<string[]> {
   const { data, error } = await supabase
-    .from('trending_providers')
-    .select('provider_id')
-    .limit(limit);
+    .rpc('get_trending_providers', { p_limit: limit });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(r => r.provider_id as string);
+  return (data ?? []).map((r: { provider_id: string }) => r.provider_id);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -106,6 +107,10 @@ export async function getTrendingProviderIds(limit = 10): Promise<string[]> {
 // so it changes nothing today, but keeps these queries from scanning/
 // returning the entire table unbounded as the provider base grows.
 const DEFAULT_PROVIDER_QUERY_LIMIT = 200;
+
+// Same rationale, applied to a single provider's review list — no realistic
+// profile needs to render more than this at once.
+const DEFAULT_REVIEWS_QUERY_LIMIT = 200;
 
 /** Fetch all active providers, optionally filtered by service category */
 export async function getProviders(
@@ -128,6 +133,41 @@ export async function getProviders(
   const { data, error } = await query;
   if (error) throw error;
   return data ?? [];
+}
+
+/**
+ * Min/max active-service price per provider, batched into a single `.in()`
+ * query rather than one query per provider — used by Becca's price-range
+ * filtering (see `src/services/becca/`), which previously had no price data
+ * to filter on at all and was a documented no-op. `DbProvider` itself
+ * carries no price field (a provider can offer
+ * many services at different prices), so this is intentionally a separate
+ * lookup rather than something folded into getProviders().
+ */
+export async function getProviderPriceRanges(
+  providerIds: string[]
+): Promise<Map<string, { min: number; max: number }>> {
+  const ranges = new Map<string, { min: number; max: number }>();
+  if (providerIds.length === 0) return ranges;
+
+  const { data, error } = await supabase
+    .from('services')
+    .select('provider_id, price, price_max')
+    .eq('is_active', true)
+    .in('provider_id', providerIds);
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    const high = row.price_max ?? row.price;
+    const existing = ranges.get(row.provider_id);
+    if (!existing) {
+      ranges.set(row.provider_id, { min: row.price, max: high });
+    } else {
+      existing.min = Math.min(existing.min, row.price);
+      existing.max = Math.max(existing.max, high);
+    }
+  }
+  return ranges;
 }
 
 /**
@@ -316,15 +356,34 @@ export async function getProviderPortfolio(providerId: string): Promise<DbPortfo
   return (data ?? []) as DbPortfolioItem[];
 }
 
-/** Add a portfolio item for a provider (image already uploaded to storage) */
+/**
+ * Add a portfolio item for a provider (image already uploaded to storage).
+ * Stamps `category` from the provider's own service_category at insert
+ * time — portfolio photos never had a per-photo category picker in the
+ * upload UI, so without this every row landed with category = NULL, which
+ * made it invisible to every Explore category-filter tab (NULL never
+ * matches a Postgres `.eq()`) despite still showing under "All".
+ */
 export async function addPortfolioItem(
   providerId: string,
   imageUrl: string,
   aspectRatio: number = 1
 ): Promise<DbPortfolioItem> {
+  const { data: provider, error: providerError } = await supabase
+    .from('providers')
+    .select('service_category')
+    .eq('id', providerId)
+    .single();
+  if (providerError) throw providerError;
+
   const { data, error } = await supabase
     .from('portfolio_items')
-    .insert({ provider_id: providerId, image_url: imageUrl, aspect_ratio: aspectRatio })
+    .insert({
+      provider_id: providerId,
+      image_url: imageUrl,
+      aspect_ratio: aspectRatio,
+      category: provider.service_category,
+    })
     .select('*')
     .single();
 
@@ -420,7 +479,7 @@ export async function getDiscoverServices(
   let query = supabase
     .from('services')
     .select(`
-      id, provider_id, name, price,
+      id, provider_id, name, description, price,
       service_images!inner ( url, sort_order ),
       provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
     `)
@@ -450,7 +509,14 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
   services: DiscoverServiceWithProvider[];
 }> {
   const providerIds = ids.filter(id => id.startsWith('provider-')).map(id => id.slice('provider-'.length));
-  const serviceIds = ids.filter(id => id.startsWith('service-')).map(id => id.slice('service-'.length));
+  // service ids carry a per-image suffix (`service-<id>__<imageIndex>`, one
+  // id per carousel photo — see mapDbServiceToCards) so multiple saved ids
+  // can point at the same underlying service; strip the suffix and dedupe
+  // before querying, one row per service regardless of how many of its
+  // photos were saved.
+  const serviceIds = [...new Set(
+    ids.filter(id => id.startsWith('service-')).map(id => id.slice('service-'.length).replace(/__\d+$/, ''))
+  )];
   const portfolioIds = ids.filter(id => !id.startsWith('provider-') && !id.startsWith('service-'));
 
   const [portfolioResult, providerResult, serviceResult] = await Promise.all([
@@ -477,7 +543,7 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
       ? supabase
           .from('services')
           .select(`
-            id, provider_id, name, price,
+            id, provider_id, name, description, price,
             service_images ( url, sort_order ),
             provider: providers!inner ( id, slug, display_name, service_category, logo_url, rating, review_count )
           `)
@@ -671,6 +737,9 @@ export async function markScheduledNotifSent(promoId: string): Promise<boolean> 
 }
 
 /** Get all unique clients who have booked this provider, with stats */
+/** Booking rows scanned when aggregating a provider's clientele. */
+const CLIENTELE_BOOKING_SCAN_LIMIT = 2000;
+
 export async function getProviderClientele(): Promise<import('../types/database').ClienteleMember[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
@@ -688,7 +757,12 @@ export async function getProviderClientele(): Promise<import('../types/database'
     .select('user_id, customer_name, customer_email, booking_date, base_price, add_ons_total')
     .eq('provider_id', provider.id)
     .in('status', ['completed', 'confirmed'])
-    .order('booking_date', { ascending: false });
+    .order('booking_date', { ascending: false })
+    // Rows here are aggregated into unique clients below, so this caps the
+    // booking history scanned, not the clientele size. Ordered newest-first,
+    // so a very long-running provider's oldest bookings fall outside the
+    // window rather than recent clients going missing.
+    .limit(CLIENTELE_BOOKING_SCAN_LIMIT);
 
   if (error) throw error;
   if (!data) return [];
@@ -1015,16 +1089,25 @@ export async function getBookingById(bookingId: string): Promise<RawBooking | nu
  * than being fetched eagerly on every screen load.
  */
 export async function getMyBookings(sinceDaysAgo = 90): Promise<BookingWithAddOns[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - sinceDaysAgo);
   const cutoffDate = cutoff.toISOString().split('T')[0];
 
   // Read from client_bookings (not the base table): a security-invoker view
   // that masks the provider address until the release policy allows it, so the
-  // address is enforced server-side rather than hidden by the UI.
+  // address is enforced server-side rather than hidden by the UI. The view has
+  // no user_id filter of its own — it relies on bookings' RLS, which has TWO
+  // permissive SELECT policies (client side: user_id = auth.uid(); provider
+  // side: provider_id IN caller's own providers) that Postgres ORs together.
+  // For a dual-hat account, an unfiltered read here returns both sides — this
+  // is "my bookings as a client" specifically, so filter to that explicitly.
   const { data, error } = await supabase
     .from('client_bookings')
     .select('*')
+    .eq('user_id', user.id)
     .gte('booking_date', cutoffDate)
     .order('booking_date', { ascending: false })
     .order('booking_time', { ascending: true });
@@ -1040,9 +1123,13 @@ export async function getMyBookings(sinceDaysAgo = 90): Promise<BookingWithAddOn
  * can't skip or duplicate same-day bookings.
  */
 export async function getOlderBookings(beforeDate: string, limit = 30): Promise<BookingWithAddOns[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
   const { data, error } = await supabase
-    .from('client_bookings')  // gated view — see getMyBookings
+    .from('client_bookings')  // gated view, client-side only — see getMyBookings
     .select('*')
+    .eq('user_id', user.id)
     .lt('booking_date', beforeDate)
     .order('booking_date', { ascending: false })
     .order('booking_time', { ascending: true })
@@ -1084,6 +1171,115 @@ export async function isSlotTaken(
     .limit(1);
   if (error) return false; // fail open — the unique index is the backstop
   return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Batched form of isSlotTaken for multiple (providerId, date, time) triples —
+ * one query for every unique (provider, date) pair rather than one per slot,
+ * with the exact-time match done client-side against that day's bookings.
+ * Keyed by `${providerId}|${date}|${time24}`.
+ */
+export async function getSlotsTaken(
+  slots: { providerId: string; date: string; time24: string }[],
+): Promise<Record<string, boolean>> {
+  const result: Record<string, boolean> = {};
+  if (slots.length === 0) return result;
+
+  const uniqueDates = [...new Set(slots.map(s => s.date))];
+  const uniqueProviderIds = [...new Set(slots.map(s => s.providerId))];
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('provider_id, booking_date, booking_time')
+    .in('provider_id', uniqueProviderIds)
+    .in('booking_date', uniqueDates)
+    .not('status', 'in', '("cancelled","no_show")');
+
+  const taken = new Set(
+    (data ?? []).map((row: any) => `${row.provider_id}|${row.booking_date}|${row.booking_time}`)
+  );
+  for (const { providerId, date, time24 } of slots) {
+    const key = `${providerId}|${date}|${time24}`;
+    // fail open on error — the DB's unique index is the real backstop
+    result[key] = error ? false : taken.has(key);
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────
+// CART CHECKOUT SLOT HOLDS
+// ─────────────────────────────────────────────────────────
+
+/** Minimal per-item shape hold_cart_booking_slots() needs to reserve a
+ *  slot — just enough for the existing bookability/overlap triggers to
+ *  evaluate it exactly as they would a real booking. */
+export interface CartHoldItem {
+  provider_id: string;
+  service_id: string | null;
+  booking_date: string;
+  booking_time: string;
+  end_time: string;
+}
+
+/** Reserve every cart item's slot as an on_hold booking row, all-or-
+ *  nothing, right when the user commits to payment (taps "Confirm & Pay")
+ *  — before the payment sheet opens. See
+ *  supabase/fix_cart_checkout_slot_hold.sql. Any bookability/overlap
+ *  failure on any item throws and none of the batch is held. */
+export async function holdCartBookingSlots(
+  holdBatchId: string,
+  items: CartHoldItem[]
+): Promise<void> {
+  const { error } = await supabase.rpc('hold_cart_booking_slots', {
+    p_hold_batch_id: holdBatchId,
+    p_items: items,
+  });
+  if (error) throw error;
+}
+
+/** Full per-item payload claim_cart_booking_slots() writes onto a held row
+ *  when payment succeeds — mirrors every field createBooking()'s fresh
+ *  INSERT would otherwise set. */
+export type CartClaimItem = Omit<DbBooking,
+  'id' | 'user_id' | 'status' | 'created_at' | 'updated_at' | 'address_released_at'
+  | 'occasion_type' | 'style_request' | 'reference_image_url'
+>;
+
+/** One claimed slot's identity + the real booking id it now maps to. */
+export interface CartClaimResult {
+  provider_id: string;
+  booking_date: string;
+  booking_time: string;
+  booking_id: string;
+}
+
+/** Convert this batch's still-live held rows into real bookings in place.
+ *  Items with no matching live hold (expired, or never held) are simply
+ *  absent from the result — the caller must fall back to a normal
+ *  createBooking() INSERT for those, this never throws on a partial or
+ *  empty match. */
+export async function claimCartBookingSlots(
+  holdBatchId: string,
+  items: (CartClaimItem & { provider_id: string; booking_date: string; booking_time: string })[]
+): Promise<CartClaimResult[]> {
+  const { data, error } = await supabase.rpc('claim_cart_booking_slots', {
+    p_hold_batch_id: holdBatchId,
+    p_items: items,
+  });
+  if (error) throw error;
+  return (data ?? []) as CartClaimResult[];
+}
+
+/** Best-effort immediate release when the user backs out of payment
+ *  (close button, booking failure, Stripe Payment Sheet 'Canceled'). Not
+ *  the source of truth for cleanup — expire_cart_holds() cron sweep is —
+ *  this just frees the slot sooner than the 10-minute TTL. Callers should
+ *  catch-and-log, never let a release failure surface as a user error. */
+export async function releaseCartBookingSlots(holdBatchId: string): Promise<void> {
+  const { error } = await supabase.rpc('release_cart_booking_slots', {
+    p_hold_batch_id: holdBatchId,
+  });
+  if (error) throw error;
 }
 
 /** Create a new booking with its add-ons */
@@ -1186,12 +1382,20 @@ export async function createBooking(
   const newEffStart = startMins - newBufferBefore;
   const newEffEnd = endMins + newBufferAfter;
 
+  // Excludes the caller's OWN on_hold rows for this slot: the cart-checkout
+  // fallback path calls createBooking() after a failed claimCartBookingSlots
+  // (e.g. hold expired, claim RPC error), and hold_cart_booking_slots()
+  // already verified bookability for those exact rows at hold time — without
+  // this exclusion, a user's own still-live hold makes this check reject
+  // their own retry as "already booked". Another user's on_hold row for the
+  // same slot is still a real conflict and still blocks correctly.
   const { data: conflicts } = await supabase
     .from('bookings')
     .select('booking_time, end_time, service_id')
     .eq('provider_id', booking.provider_id)
     .eq('booking_date', booking.booking_date)
-    .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']);
+    .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold'])
+    .or(`status.neq.on_hold,user_id.neq.${booking.user_id}`);
 
   if (conflicts && conflicts.length > 0) {
     // Batch-fetch every conflicting booking's service row in one query —
@@ -1361,7 +1565,8 @@ export async function getProviderConversations(): Promise<ProviderConversationWi
     .from('provider_conversations')
     .select('*')
     .eq('provider_id', provider.id)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
 
   if (error) throw error;
   const conversations = (data ?? []) as Omit<ProviderConversationWithClient, 'client'>[];
@@ -1429,6 +1634,31 @@ export async function getProviderBookingsByDate(
     .eq('booking_date', date)
     .not('status', 'in', '("cancelled","on_hold")')
     .order('booking_time', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as BookingWithAddOns[];
+}
+
+/** Bookings across an inclusive date range — one query instead of one per day. */
+export async function getProviderBookingsByDateRange(
+  providerId: string,
+  startDate: string,
+  endDate: string,
+  limit = DEFAULT_PROVIDER_QUERY_LIMIT
+): Promise<BookingWithAddOns[]> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(`
+      *,
+      add_ons: booking_add_ons ( * )
+    `)
+    .eq('provider_id', providerId)
+    .gte('booking_date', startDate)
+    .lte('booking_date', endDate)
+    .not('status', 'in', '("cancelled","on_hold")')
+    .order('booking_date', { ascending: true })
+    .order('booking_time', { ascending: true })
+    .limit(limit);
 
   if (error) throw error;
   return (data ?? []) as BookingWithAddOns[];
@@ -1663,7 +1893,8 @@ export async function getProviderReviews(providerId: string): Promise<ReviewWith
     .from('reviews')
     .select('*')
     .eq('provider_id', providerId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(DEFAULT_REVIEWS_QUERY_LIMIT);
 
   if (error) throw error;
   const reviews = (data ?? []) as DbReview[];
@@ -1835,32 +2066,6 @@ export async function getAvailableSlots(
 // RESCHEDULE REQUESTS
 // ─────────────────────────────────────────────────────────
 
-/** Create or replace a reschedule request when a user initiates one */
-export async function upsertRescheduleRequest(params: {
-  booking_id: string;
-  original_date: string;
-  original_time: string;
-  requested_dates: string[];
-}): Promise<void> {
-  const { error } = await supabase
-    .from('booking_reschedule_requests')
-    .upsert(
-      {
-        booking_id: params.booking_id,
-        requested_by: 'user' as const,
-        original_date: params.original_date,
-        original_time: params.original_time,
-        requested_dates: params.requested_dates,
-        provider_available_slots: null,
-        status: 'pending' as const,
-        reschedule_count: 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'booking_id' }
-    );
-  if (error) throw error;
-}
-
 /** Client requests a reschedule. Routed through request_reschedule_own_booking()
  *  so the 24h anti-spam cooldown, the provider's maxReschedules cap, and the
  *  provider's reschedule notice window are all enforced server-side — upsert
@@ -1921,32 +2126,19 @@ export async function getActiveRescheduleRequestsForBookings(
   return out;
 }
 
-/** Provider responds with their available slots */
+/** Provider responds with their available slots. Routed through
+ *  respond_to_reschedule_request() so the caller's provider ownership of
+ *  the booking and the request's 'pending' status are re-verified
+ *  server-side — RLS on booking_reschedule_requests is SELECT-only, a
+ *  direct .update() can no longer write this row at all. */
 export async function respondToRescheduleRequest(
   bookingId: string,
   availableSlots: { date: string; times: string[] }[]
 ): Promise<void> {
-  const { error } = await supabase
-    .from('booking_reschedule_requests')
-    .update({
-      provider_available_slots: availableSlots,
-      status: 'provider_responded' as const,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('booking_id', bookingId)
-    .eq('status', 'pending');
-  if (error) throw error;
-}
-
-/** Mark a reschedule request as confirmed or rejected */
-export async function closeRescheduleRequest(
-  bookingId: string,
-  status: 'confirmed' | 'rejected'
-): Promise<void> {
-  const { error } = await supabase
-    .from('booking_reschedule_requests')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('booking_id', bookingId);
+  const { error } = await supabase.rpc('respond_to_reschedule_request', {
+    p_booking_id: bookingId,
+    p_available_slots: availableSlots,
+  });
   if (error) throw error;
 }
 
@@ -1989,29 +2181,19 @@ export async function confirmRescheduleOwnBooking(
   if (error) throw error;
 }
 
-/** Provider initiates a reschedule by proposing new slots directly */
+/** Provider initiates a reschedule by proposing new slots directly.
+ *  Routed through provider_initiate_reschedule() so the caller's provider
+ *  ownership of the booking is re-verified server-side (original_date/time
+ *  are read from the booking row itself, not trusted from the client) —
+ *  same reasoning as respondToRescheduleRequest above. */
 export async function upsertProviderRescheduleRequest(params: {
   booking_id: string;
-  original_date: string;
-  original_time: string;
   proposed_slots: { date: string; times: string[] }[];
 }): Promise<void> {
-  const { error } = await supabase
-    .from('booking_reschedule_requests')
-    .upsert(
-      {
-        booking_id: params.booking_id,
-        requested_by: 'provider' as const,
-        original_date: params.original_date,
-        original_time: params.original_time,
-        requested_dates: [],
-        provider_available_slots: params.proposed_slots,
-        status: 'provider_responded' as const,
-        reschedule_count: 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'booking_id' }
-    );
+  const { error } = await supabase.rpc('provider_initiate_reschedule', {
+    p_booking_id: params.booking_id,
+    p_proposed_slots: params.proposed_slots,
+  });
   if (error) throw error;
 }
 
@@ -2173,24 +2355,39 @@ export async function updateProviderAutomationSettings(
   if (error) throw error;
 }
 
+/** Mirrors the precedence the display surfaces (InfoRegScreen, ProviderProfileScreen)
+ *  already use: prefer the dedicated cancellation_notice_hours column (set via the
+ *  Automations screen); if that's unset (0), fall back to parsing the descriptive
+ *  booking_policies.cancelNotice string set during registration ('none'|'24h'|'48h'|'72h').
+ *  Without this fallback, enforcement could silently ignore a policy the client was
+ *  already shown on the provider's profile. */
+function mapCancellationPolicyRow(
+  data: { cancellation_notice_hours: number | null; booking_policies: { cancelNotice?: string } | null } | null
+): number {
+  const hours = data?.cancellation_notice_hours ?? 0;
+  if (hours > 0) return hours;
+  const noticeMap: Record<string, number> = { none: 0, '24h': 24, '48h': 48, '72h': 72 };
+  return noticeMap[data?.booking_policies?.cancelNotice ?? 'none'] ?? 0;
+}
+
 /** Fetch a provider's cancellation notice window by display name. Returns 0 (anytime) on error. */
 export async function getProviderCancellationPolicy(displayName: string): Promise<number> {
   const { data } = await supabase
     .from('providers')
-    .select('cancellation_notice_hours')
+    .select('cancellation_notice_hours, booking_policies')
     .eq('display_name', displayName)
     .maybeSingle();
-  return (data as any)?.cancellation_notice_hours ?? 0;
+  return mapCancellationPolicyRow(data);
 }
 
 /** Cancellation policy by provider id (stable) — prefer over the display-name variant. */
 export async function getProviderCancellationPolicyById(providerId: string): Promise<number> {
   const { data } = await supabase
     .from('providers')
-    .select('cancellation_notice_hours')
+    .select('cancellation_notice_hours, booking_policies')
     .eq('id', providerId)
     .maybeSingle();
-  return (data as any)?.cancellation_notice_hours ?? 0;
+  return mapCancellationPolicyRow(data);
 }
 
 export async function upsertProviderAvailability(
@@ -3364,6 +3561,33 @@ export async function getProviderBookingCapSettings(
 }
 
 /**
+ * Batched form of getProviderBookingCapSettings, keyed by provider id.
+ * Providers not returned (deleted/RLS) are omitted — callers should fall
+ * back to the same {auto_accept: false, max_per_day: 0} default.
+ */
+export async function getProviderBookingCapSettingsForProviders(
+  providerIds: string[],
+): Promise<Record<string, { auto_accept: boolean; max_per_day: number }>> {
+  if (providerIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('providers')
+    .select('id, auto_accept_bookings, max_bookings_per_day')
+    .in('id', providerIds);
+
+  if (error || !data) return {};
+
+  const result: Record<string, { auto_accept: boolean; max_per_day: number }> = {};
+  for (const p of data as any[]) {
+    result[p.id] = {
+      auto_accept: p.auto_accept_bookings ?? false,
+      max_per_day: p.max_bookings_per_day ?? 0,
+    };
+  }
+  return result;
+}
+
+/**
  * Count non-cancelled, non-no_show bookings for a provider on a given date.
  * Used to enforce max_bookings_per_day.
  */
@@ -3379,6 +3603,41 @@ export async function countProviderBookingsOnDate(
     .not('status', 'in', '("cancelled","no_show")');
   if (error) throw error;
   return count ?? 0;
+}
+
+/**
+ * Batched form of countProviderBookingsOnDate for multiple (providerId, date)
+ * pairs at once — one query per unique date rather than one per cart item,
+ * since Supabase can't OR-combine per-pair filters in a single round trip.
+ * Keyed by `${providerId}|${date}`.
+ */
+export async function countProviderBookingsOnDates(
+  pairs: { providerId: string; date: string }[],
+): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+  if (pairs.length === 0) return result;
+
+  const uniqueDates = [...new Set(pairs.map(p => p.date))];
+  const uniqueProviderIds = [...new Set(pairs.map(p => p.providerId))];
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('provider_id, booking_date')
+    .in('provider_id', uniqueProviderIds)
+    .in('booking_date', uniqueDates)
+    .not('status', 'in', '("cancelled","no_show")');
+  if (error) throw error;
+
+  for (const row of (data ?? []) as { provider_id: string; booking_date: string }[]) {
+    const key = `${row.provider_id}|${row.booking_date}`;
+    result[key] = (result[key] ?? 0) + 1;
+  }
+  // Ensure every requested pair has a key, even with zero matches.
+  for (const { providerId, date } of pairs) {
+    const key = `${providerId}|${date}`;
+    if (!(key in result)) result[key] = 0;
+  }
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -3568,14 +3827,14 @@ export async function getUserHealthProfile(
   return data as { allergies: string[]; medical_notes: string | null };
 }
 
-/** Fetch the display_name field from the users table (distinct from providers.display_name) */
+/** Fetch the name field from the users table (distinct from providers.display_name) */
 export async function getUserDisplayName(userId: string): Promise<string | null> {
   const { data } = await supabase
     .from('users')
-    .select('display_name')
+    .select('name')
     .eq('id', userId)
     .maybeSingle();
-  return (data as any)?.display_name ?? null;
+  return (data as { name: string | null } | null)?.name ?? null;
 }
 
 // ─────────────────────────────────────────────────────────

@@ -4,8 +4,6 @@ import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -24,6 +22,7 @@ import { upsertUserAfterVerification } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'EmailVerification'>;
@@ -181,7 +180,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardDismissView>
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
 
@@ -256,7 +255,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }

@@ -4,9 +4,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, closeRescheduleRequest, getProviderLocationsByIds, getProviderBookingCapSettings, countProviderBookingsOnDate, getActiveRescheduleRequest, getActiveRescheduleRequestsForBookings, isSlotTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, updateBookingGroupInfo } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, CartClaimResult } from '../services/databaseService';
+import type { DbBookingRescheduleRequest } from '../types/database';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
+import { STORAGE_KEYS } from '../utils/storageKeys';
 
 export class BookingError extends Error {
   succeededCartItemIds: string[];
@@ -53,6 +55,7 @@ import type {
 import { BookingStatus, PaymentStatus, type PaymentBreakdown } from '../types/booking';
 import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
 import { logger } from '../utils/logger';
+import { formatTime12, formatLongDate } from '../utils/dateUtils';
 
 export interface BookingContextType {
   bookings: ConfirmedBooking[];
@@ -65,8 +68,27 @@ export interface BookingContextType {
   allTodayBookingsCompleted: boolean;
 
   // Actions
-  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], clientAddress?: string) => Promise<void>;
+  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], clientAddress?: string, holdBatchId?: string) => Promise<void>;
   validateBookingsBeforeCheckout: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<BookingConflictResult>;
+  // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
+  // for the 10-minute window while the user is on the payment screen —
+  // closes the gap between "committed to paying" and "booking actually
+  // inserted" that createBooking()'s insert-time-only conflict check can't
+  // cover on its own. Only needs date/time per item (not full
+  // AppointmentData — customer/payment details aren't known yet at this
+  // point in checkout). Returns the batch id to pass into
+  // createBookingsFromCart later (claim), or throws with the same
+  // conflict-message shape validateBookingsBeforeCheckout already produces
+  // if any item can't be held.
+  holdCartCheckoutSlots: (
+    cartItems: CartItem[],
+    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>
+  ) => Promise<string>;
+  // Best-effort release of a hold batch when the user backs out of payment
+  // before claiming it (close button, payment failure/cancel). Never throws
+  // — the 10-minute TTL cron sweep is the real backstop, this just frees the
+  // slot sooner. Safe to call on an already-claimed or already-expired batch.
+  releaseCartCheckoutSlots: (holdBatchId: string) => Promise<void>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<void>;
   cancelBooking: (bookingId: string) => Promise<void>;
   getBookingsByProvider: (providerName: string) => ConfirmedBooking[];
@@ -89,7 +111,7 @@ export interface BookingContextType {
   confirmReschedule: (bookingId: string, newDate: string, newTime: string) => Promise<void>;
 }
 
-const STORAGE_KEY = '@bookings';
+const STORAGE_KEY = STORAGE_KEYS.BOOKINGS;
 
 // Bookings that reached Supabase carry its UUID; legacy/local-only bookings
 // have "booking_…" ids and must never be sent to the DB (uuid cast error)
@@ -104,6 +126,48 @@ const generateUuid = (): string =>
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+
+// Resolve every cart item to a real provider UUID. Chain: providerId
+// carried on the cart item (canonical) → slug lookup → display-name lookup
+// (legacy fallback). Shared by createBookingsFromCart and
+// holdCartCheckoutSlots so both stay in sync — this used to live inline
+// only inside createBookingsFromCart. Returns a map keyed by
+// item.providerName (matching the cache key both callers already used) and
+// the list of item names that failed to resolve, if any.
+const resolveCartProviderIds = async (
+  cartItems: CartItem[]
+): Promise<{ providerIdCache: Record<string, string | null>; unresolvedNames: string[] }> => {
+  const providerIdCache: Record<string, string | null> = {};
+
+  const resolveOne = async (item: CartItem): Promise<string | null> => {
+    if (item.providerId) return item.providerId;
+    if (item.providerSlug) {
+      const bySlug = await getProviderBySlug(item.providerSlug).catch(() => null);
+      if (bySlug?.id) return bySlug.id;
+    }
+    return getProviderIdByDisplayName(item.providerName).catch(() => null);
+  };
+
+  // Genuine per-item fallback logic, so this stays a sequential loop — but
+  // nothing inside it makes more than one Supabase call per distinct
+  // provider name (cached by name across duplicate cart items).
+  for (const item of cartItems) {
+    const name = item.providerName;
+    if (providerIdCache[name] === undefined) {
+      providerIdCache[name] = await resolveOne(item);
+    }
+  }
+
+  const unresolvedNames = [
+    ...new Set(
+      cartItems
+        .filter(item => !providerIdCache[item.providerName])
+        .map(i => i.providerDisplayName ?? i.providerName)
+    ),
+  ];
+
+  return { providerIdCache, unresolvedNames };
+};
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
@@ -165,11 +229,8 @@ const calculateEndTime = (startTime: string, duration: string): string => {
     const totalMinutes = startMinutes + durationMinutes;
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
-    
-    const period = endHours >= 12 ? 'PM' : 'AM';
-    const displayHours = endHours > 12 ? endHours - 12 : endHours === 0 ? 12 : endHours;
-    
-    return `${displayHours}:${endMinutes.toString().padStart(2, '0')} ${period}`;
+
+    return formatTime12(`${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`);
   } catch (error) {
     logger.error('❌ Error calculating end time:', error);
     return startTime;
@@ -425,6 +486,17 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               const missingLocally = dbBookings
                 .filter(d => !localIds.has(d.id))
                 .map(mapDbBookingToConfirmed);
+              // Drop local rows that claim a real Supabase id (already
+              // adopted via the id-swap in createBookingsFromCart) but no
+              // longer exist there — a genuine phantom (e.g. a checkout that
+              // failed after the optimistic local save but before/instead of
+              // the cleanup step ran). A still-`booking_`-prefixed id is a
+              // fresh local-only booking not yet round-tripped (e.g. created
+              // offline) and is kept regardless — it was never adopted, so
+              // its absence from dbBookings doesn't mean anything failed.
+              mergedBookings = mergedBookings.filter(
+                (b: ConfirmedBooking) => dbById.has(b.id) || b.id.startsWith('booking_')
+              );
               mergedBookings = [...mergedBookings, ...missingLocally];
             }
           }
@@ -826,9 +898,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             // while this app was closed (provider-initiated reschedule)
             (!b.isPendingReschedule && b.status === BookingStatus.UPCOMING)
         );
+        const rescheduleRows = await getActiveRescheduleRequestsForBookings(
+          waiting.map(b => b.id)
+        ).catch(() => ({} as Record<string, DbBookingRescheduleRequest>));
         for (const b of waiting) {
           if (cancelled) break;
-          const req = await getActiveRescheduleRequest(b.id).catch(() => null);
+          const req = rescheduleRows[b.id];
           if (req?.status === 'provider_responded') {
             await applyProviderResponse(
               b.id,
@@ -952,15 +1027,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       await confirmRescheduleOwnBooking(bookingId, newDate, newTime, newEndTime);
 
       await saveBookings(updatedBookings);
-
-      // The booking itself has already moved, so a failure to close the request
-      // row must NOT be reported as a failed reschedule — it only leaves a stale
-      // open request, which the catch-up sweep and provider UI tolerate. Log it.
-      try {
-        await closeRescheduleRequest(bookingId, 'confirmed');
-      } catch (err) {
-        logger.warn('Reschedule confirmed but closing the request row failed:', err);
-      }
 
       // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
       const confirmedProviderId = booking.providerId
@@ -1118,70 +1184,68 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const createBookingsFromCart = useCallback(async (
     cartItems: CartItem[],
     appointmentData: AppointmentData[],
-    clientAddress?: string
+    clientAddress?: string,
+    holdBatchId?: string
   ) => {
     try {
       logger.log('Creating bookings from cart...');
 
-      // Validate bookings before creating to prevent double-booking
-      const validation = await validateBookingsBeforeCheckout(cartItems, appointmentData);
-      if (!validation.isValid) {
-        const conflictMessages = validation.conflicts.map(c => c.message).join(' ');
-        throw new BookingError(conflictMessages || "We couldn't book that time. Please pick another.");
+      // Validate bookings before creating to prevent double-booking. Skipped
+      // when a hold batch is present: hold_cart_booking_slots() already did
+      // this exact bookability check server-side (atomically, all-or-
+      // nothing) at hold time — re-running it here would find this cart's
+      // own on_hold rows (inserted by that hold call) and reject every item
+      // as "no longer available", since neither this check nor
+      // getSlotsTaken below excludes the caller's own in-flight hold batch.
+      if (!holdBatchId) {
+        const validation = await validateBookingsBeforeCheckout(cartItems, appointmentData);
+        if (!validation.isValid) {
+          const conflictMessages = validation.conflicts.map(c => c.message).join(' ');
+          throw new BookingError(conflictMessages || "We couldn't book that time. Please pick another.");
+        }
       }
 
       // ── Resolve every cart item to a real provider UUID up front ─────────────
-      // Chain: providerId carried on the cart item (canonical) → slug lookup →
-      // display-name lookup (legacy fallback). If any item can't be resolved we
-      // abort BEFORE saving anything, so the user never sees a phantom booking
-      // that the provider will never receive.
+      // If any item can't be resolved we abort BEFORE saving anything, so the
+      // user never sees a phantom booking that the provider will never
+      // receive. Shared with holdCartCheckoutSlots (see resolveCartProviderIds
+      // above) so the batch this claims later resolved providers identically.
       const providerCapCache: Record<string, { auto_accept: boolean; max_per_day: number }> = {};
-      const providerIdCache: Record<string, string | null> = {};
+      const { providerIdCache, unresolvedNames } = await resolveCartProviderIds(cartItems);
 
-      const resolveProviderId = async (item: CartItem): Promise<string | null> => {
-        if (item.providerId) return item.providerId;
-        if (item.providerSlug) {
-          const bySlug = await getProviderBySlug(item.providerSlug).catch(() => null);
-          if (bySlug?.id) return bySlug.id;
-        }
-        return getProviderIdByDisplayName(item.providerName).catch(() => null);
-      };
-
-      for (const item of cartItems) {
-        const name = item.providerName;
-        if (providerIdCache[name] === undefined) {
-          providerIdCache[name] = await resolveProviderId(item);
-        }
-        const pid = providerIdCache[name];
-        if (pid && !providerCapCache[name]) {
-          providerCapCache[name] = await getProviderBookingCapSettings(pid).catch(
-            () => ({ auto_accept: false, max_per_day: 0 })
-          );
-        }
-        if (!providerCapCache[name]) {
-          providerCapCache[name] = { auto_accept: false, max_per_day: 0 };
-        }
-      }
-
-      const unresolved = cartItems.filter(item => !providerIdCache[item.providerName]);
-      if (unresolved.length > 0) {
-        const names = [...new Set(unresolved.map(i => i.providerDisplayName ?? i.providerName))].join(', ');
+      if (unresolvedNames.length > 0) {
         throw new BookingError(
-          `We couldn't link ${names} to a registered provider, so the booking wasn't placed. ` +
+          `We couldn't link ${unresolvedNames.join(', ')} to a registered provider, so the booking wasn't placed. ` +
           `Please re-add the service from the provider's profile and try again.`
         );
       }
 
+      const resolvedProviderIds = [
+        ...new Set(Object.values(providerIdCache).filter((id): id is string => !!id)),
+      ];
+      const capSettingsById = await getProviderBookingCapSettingsForProviders(resolvedProviderIds);
       for (const item of cartItems) {
-        const apt = appointmentData.find(a => a.cartItemId === item.id);
         const pid = providerIdCache[item.providerName];
-        const caps = providerCapCache[item.providerName];
-        if (apt && pid && caps && caps.max_per_day > 0) {
-          const existingCount = await countProviderBookingsOnDate(pid, apt.date);
-          if (existingCount >= caps.max_per_day) {
-            const displayName = item.providerDisplayName ?? item.providerName;
-            throw new BookingError(`${displayName} is fully booked on that date. Please choose a different day.`);
-          }
+        providerCapCache[item.providerName] =
+          (pid && capSettingsById[pid]) || { auto_accept: false, max_per_day: 0 };
+      }
+
+      const capCheckPairs = cartItems
+        .map(item => {
+          const apt = appointmentData.find(a => a.cartItemId === item.id);
+          const pid = providerIdCache[item.providerName];
+          const caps = providerCapCache[item.providerName];
+          return apt && pid && caps && caps.max_per_day > 0 ? { item, apt, pid, caps } : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      const dailyCounts = await countProviderBookingsOnDates(
+        capCheckPairs.map(({ pid, apt }) => ({ providerId: pid, date: apt.date }))
+      );
+      for (const { item, apt, pid, caps } of capCheckPairs) {
+        const existingCount = dailyCounts[`${pid}|${apt.date}`] ?? 0;
+        if (existingCount >= caps.max_per_day) {
+          const displayName = item.providerDisplayName ?? item.providerName;
+          throw new BookingError(`${displayName} is fully booked on that date. Please choose a different day.`);
         }
       }
 
@@ -1190,16 +1254,29 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // bookings; another client may have taken the slot since the calendar
       // loaded. The DB unique index is the hard guarantee — this check turns a
       // cryptic insert failure into a clear message before anything is saved.
-      for (const item of cartItems) {
-        const apt = appointmentData.find(a => a.cartItemId === item.id);
-        const pid = providerIdCache[item.providerName];
-        if (!apt || !pid) continue;
-        const pgTime = timeTo24(apt.time);
-        if (pgTime && await isSlotTaken(pid, apt.date, pgTime)) {
-          const displayName = item.providerDisplayName ?? item.providerName;
-          throw new BookingError(
-            `${displayName} already has a booking at ${apt.time} on ${apt.date}. Please pick another time.`
-          );
+      // Skipped when a hold batch is present — same self-conflict reason as
+      // validateBookingsBeforeCheckout above: getSlotsTaken doesn't exclude
+      // this cart's own on_hold rows either, so it would find them and
+      // report the caller's own held slot as already taken.
+      if (!holdBatchId) {
+        const slotCheckItems = cartItems
+          .map(item => {
+            const apt = appointmentData.find(a => a.cartItemId === item.id);
+            const pid = providerIdCache[item.providerName];
+            const pgTime = apt ? timeTo24(apt.time) : null;
+            return apt && pid && pgTime ? { item, apt, pid, pgTime } : null;
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null);
+        const slotsTaken = await getSlotsTaken(
+          slotCheckItems.map(({ pid, apt, pgTime }) => ({ providerId: pid, date: apt.date, time24: pgTime }))
+        );
+        for (const { item, apt, pid, pgTime } of slotCheckItems) {
+          if (slotsTaken[`${pid}|${apt.date}|${pgTime}`]) {
+            const displayName = item.providerDisplayName ?? item.providerName;
+            throw new BookingError(
+              `${displayName} already has a booking at ${apt.time} on ${apt.date}. Please pick another time.`
+            );
+          }
         }
       }
 
@@ -1218,10 +1295,31 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const providerLocations: Record<string, import('../services/databaseService').ProviderLocationData> =
         await getProviderLocationsByIds(uniqueProviderIds).catch(() => ({}));
 
-      // Real UUID so it can be persisted to bookings.group_booking_id (UUID
-      // column) — the provider side can then group multi-service checkouts
-      const groupBookingId = generateUuid();
-      const isGroupBooking = cartItems.length > 1;
+      // Resolve a real group_booking_id (DB-facing UUID) per distinct
+      // CartItem.bookingBatchId present in this checkout — NOT one global id
+      // for the whole cart. Items with no bookingBatchId (added standalone,
+      // or marked "Schedule Separately" in MultiBookingSheet) are never
+      // grouped, regardless of how many other items share their provider. A
+      // batch of size 1 in this checkout (e.g. its siblings were removed
+      // from cart before checkout) also does not count as a group — matches
+      // the "a group of 1 isn't a group" convention used when the batch id
+      // was first minted in MultiBookingSheet.
+      const batchIdToGroupUuid = new Map<string, string>();
+      const batchIdToCount = new Map<string, number>();
+      for (const item of cartItems) {
+        if (!item.bookingBatchId) continue;
+        batchIdToCount.set(item.bookingBatchId, (batchIdToCount.get(item.bookingBatchId) ?? 0) + 1);
+      }
+      for (const batchId of batchIdToCount.keys()) {
+        if ((batchIdToCount.get(batchId) ?? 0) > 1) {
+          batchIdToGroupUuid.set(batchId, generateUuid());
+        }
+      }
+      const groupInfoForItem = (item: CartItem): { groupBookingId: string | undefined; isGroupBooking: boolean; groupBookingCount: number } => {
+        const uuid = item.bookingBatchId ? batchIdToGroupUuid.get(item.bookingBatchId) : undefined;
+        if (!uuid) return { groupBookingId: undefined, isGroupBooking: false, groupBookingCount: 1 };
+        return { groupBookingId: uuid, isGroupBooking: true, groupBookingCount: batchIdToCount.get(item.bookingBatchId!) ?? 1 };
+      };
 
       const newBookings: ConfirmedBooking[] = cartItems.map((item) => {
         const appointment = appointmentData.find(a => a.cartItemId === item.id);
@@ -1233,6 +1331,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const fullProviderName = item.providerDisplayName ?? item.providerName;
         // providerLocations is keyed by provider id (display names aren't unique)
         const itemProviderId = providerIdCache[item.providerName];
+        const groupInfo = groupInfoForItem(item);
         const endTime = calculateEndTime(appointment.time, item.duration);
         const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
         const now = new Date();
@@ -1313,9 +1412,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           paymentConfirmedAt: new Date().toISOString(),
           transactionId: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           // Group booking
-          groupBookingId: isGroupBooking ? groupBookingId : undefined,
-          isGroupBooking,
-          groupBookingCount: isGroupBooking ? cartItems.length : undefined,
+          groupBookingId: groupInfo.groupBookingId,
+          isGroupBooking: groupInfo.isGroupBooking,
+          groupBookingCount: groupInfo.isGroupBooking ? groupInfo.groupBookingCount : undefined,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           confirmedAt: new Date().toISOString(),
@@ -1338,17 +1437,117 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          // If this checkout reserved a hold batch (CartScreen calls
+          // holdCartCheckoutSlots when the user commits to payment), claim
+          // it now: every item with a still-live held row gets converted in
+          // place (UPDATE, not a fresh INSERT) and is looked up below by
+          // (provider, date, time) to skip dbCreateBooking entirely. Items
+          // with no live hold (expired, or the hold call never happened —
+          // e.g. an old client build) simply fall through to the normal
+          // insert path unchanged, same as if no hold existed at all.
+          const claimedByKey = new Map<string, string>();
+          if (holdBatchId) {
+            try {
+              const claimItems = cartItems
+                .map(item => {
+                  const apt = appointmentData.find(a => a.cartItemId === item.id);
+                  const providerId = providerIdCache[item.providerName];
+                  if (!apt || !providerId) return null;
+                  const pgTime = timeTo24(apt.time);
+                  if (!pgTime) return null;
+                  const endTimeStr = calculateEndTime(apt.time, item.duration);
+                  const pgEndTime = timeTo24(endTimeStr);
+                  const groupInfo = groupInfoForItem(item);
+                  const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
+                  const logoUrl = typeof item.providerImage === 'string'
+                    ? item.providerImage
+                    : (item.providerImage && typeof item.providerImage === 'object' && 'uri' in item.providerImage
+                        ? (item.providerImage as { uri?: string }).uri ?? null
+                        : null);
+                  const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
+                  return {
+                    provider_id: providerId,
+                    service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
+                    booking_date: apt.date,
+                    booking_time: pgTime,
+                    end_time: pgEndTime,
+                    notes: apt.notes ?? null,
+                    payment_type: apt.paymentType,
+                    base_price: item.price,
+                    add_ons_total: addOnsTotal,
+                    service_charge: apt.serviceCharge,
+                    deposit_amount: apt.depositAmount,
+                    amount_paid: apt.amountPaid,
+                    remaining_balance: apt.remainingBalance,
+                    payment_status: dbPayStatus,
+                    payment_method: apt.paymentMethod ?? null,
+                    payment_intent_id: apt.paymentIntentId ?? null,
+                    is_group_booking: groupInfo.isGroupBooking,
+                    group_booking_id: groupInfo.groupBookingId ?? null,
+                    group_booking_count: groupInfo.isGroupBooking ? groupInfo.groupBookingCount : 1,
+                    provider_name_snapshot: item.providerName,
+                    service_name_snapshot: item.serviceName,
+                    service_category_snapshot: item.providerService || null,
+                    provider_logo_snapshot: logoUrl,
+                    provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
+                    provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
+                    provider_coordinates: (() => {
+                      const c = providerLocations[providerId]?.coordinates;
+                      return c ? { lat: c.latitude, lng: c.longitude } : null;
+                    })(),
+                    customer_name: apt.customerName,
+                    customer_email: apt.customerEmail,
+                    customer_phone: apt.customerPhone,
+                    client_address: clientAddress ?? null,
+                  };
+                })
+                .filter((x): x is NonNullable<typeof x> => x !== null);
+
+              const claimed = await claimCartBookingSlots(holdBatchId, claimItems as any);
+              for (const row of claimed) {
+                claimedByKey.set(`${row.provider_id}|${row.booking_date}|${row.booking_time}`, row.booking_id);
+              }
+            } catch (claimError) {
+              // Claim failing entirely (network, batch id never existed) is
+              // not fatal — every item just falls through to a normal
+              // dbCreateBooking insert below, same as if no hold was ever
+              // taken out. Only log; never surface as a checkout failure.
+              logger.warn('[BookingContext] Cart hold claim failed, falling back to direct insert:', claimError);
+            }
+          }
+
           for (const item of cartItems) {
             const apt = appointmentData.find(a => a.cartItemId === item.id);
             if (!apt) continue;
 
             const providerId = providerIdCache[item.providerName];
             if (!providerId) continue; // unreachable — resolution guaranteed above
+            const groupInfo = groupInfoForItem(item);
 
             try {
 
             const pgTime = timeTo24(apt.time);
             if (!pgTime) continue;
+
+            // Already converted from an on_hold row above — skip the fresh
+            // INSERT entirely, just adopt the id the claim already gave us.
+            const claimedId = claimedByKey.get(`${providerId}|${apt.date}|${pgTime}`);
+            if (claimedId) {
+              dbIdByCartItemId[item.id] = claimedId;
+              if (apt.customerEmail) {
+                const { subject, html } = bookingConfirmationEmail({
+                  clientName: apt.customerName || 'there',
+                  providerName: item.providerName,
+                  service: item.serviceName,
+                  date: formatLongDate(apt.date),
+                  time: formatTime12(apt.time),
+                  location: apt.address || 'Address shared on confirmation',
+                });
+                sendEmail(apt.customerEmail, subject, html).catch(() => {});
+              }
+              continue;
+            }
+
             const endTimeStr = calculateEndTime(apt.time, item.duration);
             const pgEndTime = timeTo24(endTimeStr);
 
@@ -1385,9 +1584,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
                 payment_method: apt.paymentMethod ?? null,
                 payment_intent_id: apt.paymentIntentId ?? null,
-                is_group_booking: cartItems.length > 1,
-                group_booking_id: cartItems.length > 1 ? groupBookingId : null,
-                group_booking_count: cartItems.length,
+                is_group_booking: groupInfo.isGroupBooking,
+                group_booking_id: groupInfo.groupBookingId ?? null,
+                group_booking_count: groupInfo.isGroupBooking ? groupInfo.groupBookingCount : 1,
                 provider_name_snapshot: item.providerName,
                 service_name_snapshot: item.serviceName,
                 service_category_snapshot: item.providerService || null,
@@ -1440,8 +1639,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 clientName: apt.customerName || 'there',
                 providerName: item.providerName,
                 service: item.serviceName,
-                date: new Date(apt.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-                time: apt.time,
+                date: formatLongDate(apt.date),
+                time: formatTime12(apt.time),
                 location: apt.address || 'Address shared on confirmation',
               });
               sendEmail(apt.customerEmail, subject, html).catch(() => {});
@@ -1516,31 +1715,41 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       const succeededBookings = newBookings.filter(nb => !failedCartItemIds.has(nb.cartItemId));
       const succeededAmountPaid = succeededBookings.reduce((sum, b) => sum + b.amountPaid, 0);
 
-      // A partial failure leaves the surviving bookings' group_booking_count
-      // stamped with the ORIGINAL cart size (set before any item's outcome
-      // was known) — e.g. 1 of 3 services books, but that row still claims
-      // "3" and carries a group_booking_id shared with two bookings that
-      // don't exist. Patch it to reality once the real outcome is known.
+      // A partial failure leaves a batch's surviving bookings' group_booking_count
+      // stamped with that BATCH's original size (set before any item's outcome
+      // was known) — e.g. 2 of 3 grouped services book, but those rows still
+      // claim "3" and carry a group_booking_id shared with a booking that
+      // doesn't exist. Patch each affected batch to reality once the real
+      // outcome is known — reconciled per batch, not once for the whole
+      // checkout, since a partial failure in one provider's batch must not
+      // touch another provider's (or another batch's) group info.
       if (persistFailures.length > 0 && succeededBookings.length > 0) {
-        const succeededDbIds = succeededBookings.map(b => b.id);
-        try {
-          if (succeededBookings.length > 1) {
-            await updateBookingGroupInfo(succeededDbIds, {
-              is_group_booking: true,
-              group_booking_id: groupBookingId,
-              group_booking_count: succeededDbIds.length,
-            });
-          } else {
-            await updateBookingGroupInfo(succeededDbIds, {
-              is_group_booking: false,
-              group_booking_id: null,
-              group_booking_count: 1,
-            });
+        for (const batchId of batchIdToGroupUuid.keys()) {
+          const batchSucceededBookings = succeededBookings.filter(b => {
+            const item = cartItems.find(i => i.id === b.cartItemId);
+            return item?.bookingBatchId === batchId;
+          });
+          if (batchSucceededBookings.length === 0) continue;
+          const dbIds = batchSucceededBookings.map(b => b.id);
+          try {
+            if (batchSucceededBookings.length > 1) {
+              await updateBookingGroupInfo(dbIds, {
+                is_group_booking: true,
+                group_booking_id: batchIdToGroupUuid.get(batchId)!,
+                group_booking_count: dbIds.length,
+              });
+            } else {
+              await updateBookingGroupInfo(dbIds, {
+                is_group_booking: false,
+                group_booking_id: null,
+                group_booking_count: 1,
+              });
+            }
+          } catch (groupInfoError) {
+            // Cosmetic (a stale count badge on a surviving booking) — never
+            // let this block the checkout outcome itself.
+            logger.error('[BookingContext] Failed to reconcile group_booking_count for batch', batchId, groupInfoError);
           }
-        } catch (groupInfoError) {
-          // Cosmetic (a "3" badge on a single surviving booking) — never let
-          // this block the checkout outcome itself.
-          logger.error('[BookingContext] Failed to reconcile group_booking_count after partial checkout failure:', groupInfoError);
         }
       }
 
@@ -1575,6 +1784,76 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       throw error;
     }
   }, [bookings, saveBookings]);
+
+  // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
+  // right when the user commits to payment — closes the gap between
+  // "committed to paying" and "booking actually inserted" that
+  // createBooking()'s insert-time-only conflict check leaves open for the
+  // whole review + payment-sheet interaction. Takes only date/time per item
+  // (not full AppointmentData) since customer/payment details aren't known
+  // yet at "Confirm & Pay" time — CartScreen's checkoutSnapshot.bookings
+  // (keyed by cart item id) is exactly this shape already. See
+  // supabase/fix_cart_checkout_slot_hold.sql and the on-hold reasoning
+  // memory this ships with. Throws on any conflict with the same
+  // conflict-message shape validateBookingsBeforeCheckout already produces
+  // — CartScreen's existing "Scheduling Conflict" alert handles both.
+  const holdCartCheckoutSlots = useCallback(async (
+    cartItems: CartItem[],
+    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>
+  ): Promise<string> => {
+    const { providerIdCache, unresolvedNames } = await resolveCartProviderIds(cartItems);
+    if (unresolvedNames.length > 0) {
+      throw new BookingError(
+        `We couldn't link ${unresolvedNames.join(', ')} to a registered provider, so we couldn't reserve that time. ` +
+        `Please re-add the service from the provider's profile and try again.`
+      );
+    }
+
+    const holdItems: CartHoldItem[] = cartItems.map(item => {
+      const schedule = scheduleByItemId[item.id];
+      const providerId = providerIdCache[item.providerName];
+      if (!schedule || !providerId) {
+        throw new BookingError("Missing appointment details — please pick your time again.");
+      }
+      const pgTime = timeTo24(schedule.selectedTime);
+      const endTimeStr = calculateEndTime(schedule.selectedTime, item.duration);
+      const pgEndTime = timeTo24(endTimeStr);
+      if (!pgTime || !pgEndTime) {
+        throw new BookingError("Couldn't confirm this time is still available — please try again.");
+      }
+      return {
+        provider_id: providerId,
+        service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
+        booking_date: schedule.selectedDate,
+        booking_time: pgTime,
+        end_time: pgEndTime,
+      };
+    });
+
+    const batchId = generateUuid();
+    try {
+      await holdCartBookingSlots(batchId, holdItems);
+    } catch (error: any) {
+      if (error?.code === '23505' || error?.code === '23P01') {
+        throw new BookingError("That time slot was just taken by another client. Please choose a different time.");
+      }
+      throw error;
+    }
+    return batchId;
+  }, []);
+
+  // Best-effort release when the user backs out of payment before claiming
+  // a hold batch. Never throws — the 10-minute TTL cron sweep
+  // (expire_cart_holds) is the real backstop, since no reliable
+  // client-side "abandoned checkout" signal exists (see design notes in
+  // fix_cart_checkout_slot_hold.sql). This just frees the slot sooner.
+  const releaseCartCheckoutSlots = useCallback(async (holdBatchId: string): Promise<void> => {
+    try {
+      await releaseCartBookingSlots(holdBatchId);
+    } catch (error) {
+      logger.warn('[BookingContext] Failed to release cart hold batch (TTL will clean it up):', error);
+    }
+  }, []);
 
   const refreshBookingStatuses = useCallback(() => {
     if (bookings.length === 0) return;
@@ -1761,6 +2040,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     nextBookings,
     allTodayBookingsCompleted,
     createBookingsFromCart,
+    holdCartCheckoutSlots,
+    releaseCartCheckoutSlots,
     validateBookingsBeforeCheckout,
     updateBookingStatus,
     cancelBooking,
@@ -1786,6 +2067,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     nextBookings,
     allTodayBookingsCompleted,
     createBookingsFromCart,
+    holdCartCheckoutSlots,
+    releaseCartCheckoutSlots,
     validateBookingsBeforeCheckout,
     updateBookingStatus,
     cancelBooking,

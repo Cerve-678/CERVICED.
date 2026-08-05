@@ -5,13 +5,12 @@ import React, {
   useRef,
   useEffect,
 } from "react";
-import { useBookmarkStore } from "../stores/useBookmarkStore";
+import { useBookmarkStore } from "../../stores/useBookmarkStore";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   StyleSheet,
   StatusBar,
   FlatList,
@@ -26,13 +25,19 @@ import {
   findNodeHandle,
   UIManager,
 } from "react-native";
+// expo-image instead of RN's Image — adds disk+memory caching so portfolio/
+// logo/hero images aren't re-downloaded from scratch on every visit to a
+// provider's profile (RN's plain Image has no app-level cache). contentFit/
+// transition replace resizeMode/fadeDuration; transition={0} keeps the same
+// "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
+import { Image } from "expo-image";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
-import { Vibration } from "react-native";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { StackScreenProps } from "@react-navigation/stack";
+import { useIsFocused, usePreventRemove } from "@react-navigation/native";
 
 // Correct icon imports - using your IconLibrary.tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -40,20 +45,22 @@ import Icon, {
   BookmarkIcon,
   ShareIcon,
   BellIcon,
-} from "../components/IconLibrary";
-import TabIcon from "../components/TabIcon";
-import { useCart } from "../contexts/CartContext";
+} from "../../components/IconLibrary";
+import TabIcon from "../../components/TabIcon";
+import { useCart } from "../../contexts/CartContext";
 
 // Import storage from utils
-import { storage, STORAGE_KEYS } from "../utils/storage";
+import { storage, STORAGE_KEYS } from "../../utils/storage";
 
 // Navigation types
-import { HomeStackParamList } from "../navigation/types";
+import { HomeStackParamList } from "../../navigation/types";
 
 // Theme imports
-import { useTheme } from "../contexts/ThemeContext";
-import { ThemedBackground } from "../components/ThemedBackground";
-import CategoryTabItem from "../components/CategoryTabPill";
+import { useTheme } from "../../contexts/ThemeContext";
+import { ThemedBackground } from "../../components/ThemedBackground";
+import { useAppDialog } from "../../components/AppDialog";
+import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
+import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderBySlug,
   getProviderReviews,
@@ -71,23 +78,25 @@ import {
   getProviderConsultationService,
   getProviderIdsWithBookingHistory,
   type ProviderConsultationService,
-} from "../services/databaseService";
-import userLearningService from "../services/userLearningService";
-import { supabase } from "../lib/supabase";
-import { AvailabilityService } from "../services/AvailabilityService";
-import { BookingSheet, type BookingSheetResult } from "../components/BookingSheet";
+} from "../../services/databaseService";
+import userLearningService from "../../services/userLearningService";
+import { supabase } from "../../lib/supabase";
+import { AvailabilityService } from "../../services/AvailabilityService";
+import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
+import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
 import type {
   ProviderWithServices,
   DbPromotion,
   DbPortfolioItem,
-} from "../types/database";
+} from "../../types/database";
 import {
   resolveProviderTheme,
   withAlpha,
   isDarkColor,
   type ProviderThemeTokens,
-} from "../constants/providerThemes";
-import { logger } from "../utils/logger";
+} from "../../constants/providerThemes";
+import { logger } from "../../utils/logger";
+import { formatShortDate, formatLongDate, formatTime12 } from "../../utils/dateUtils";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -347,7 +356,8 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
         <Image
           source={images[0]}
           style={{ width: size, height: size, borderRadius: size / 2 }}
-          resizeMode="cover"
+          contentFit="cover"
+          transition={0}
         />
       );
     }
@@ -366,7 +376,8 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
             <Image
               source={item}
               style={{ width: size, height: size, borderRadius: size / 2 }}
-              resizeMode="cover"
+              contentFit="cover"
+              transition={0}
             />
           )}
           style={{
@@ -431,7 +442,7 @@ const MultiImagePill: React.FC<{
               activeOpacity={0.85}
               onPress={() => onPress(images, i)}
             >
-              <Image source={img} style={imageStyle} resizeMode="cover" />
+              <Image source={img} style={imageStyle} contentFit="cover" transition={0} />
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -490,7 +501,8 @@ const MultiImageCarousel: React.FC<{ images: any[] }> = React.memo(
             <Image
               source={item}
               style={{ width: cardWidth, height: 180 }}
-              resizeMode="cover"
+              contentFit="cover"
+              transition={0}
             />
           )}
           style={{ height: 180 }}
@@ -671,8 +683,15 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
     animation,
     adaptiveAccentColor,
   }) => {
-    if (!isVisible) return null;
+    // The card was hardcoded light (light blur tint, white gradient, black
+    // text), so in dark mode it appeared as a white slab. Follow the app
+    // theme like every other surface instead.
+    const { isDarkMode, palette: P } = useTheme();
 
+    // Hooks must run before any early return — `if (!isVisible) return null`
+    // used to sit above this useMemo, so the hook count changed between
+    // renders (a Rules of Hooks violation React can throw on). The visibility
+    // check now happens after every hook has run.
     const scaleStyle = useMemo(
       () => ({
         transform: [
@@ -688,12 +707,22 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
       [animation],
     );
 
+    if (!isVisible) return null;
+
     return (
       <View style={styles.successOverlay}>
         <Animated.View style={[styles.successContainer, scaleStyle]}>
-          <BlurView intensity={40} tint="light" style={styles.successBlur}>
+          <BlurView
+            intensity={40}
+            tint={isDarkMode ? "dark" : "light"}
+            style={styles.successBlur}
+          >
             <LinearGradient
-              colors={["rgba(255,255,255,0.9)", "rgba(255,255,255,0.7)"]}
+              colors={
+                isDarkMode
+                  ? ["rgba(37,34,32,0.92)", "rgba(37,34,32,0.78)"]
+                  : ["rgba(255,255,255,0.9)", "rgba(255,255,255,0.7)"]
+              }
               style={styles.successGradient}
             />
 
@@ -708,17 +737,25 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
             </View>
 
             {/* Success Content */}
-            <Text style={styles.successTitle}>{title}</Text>
-            <Text style={styles.successMessage}>{message}</Text>
+            <Text style={[styles.successTitle, { color: P.text }]}>{title}</Text>
+            <Text style={[styles.successMessage, { color: P.sub }]}>{message}</Text>
 
             {/* Action Buttons */}
             <View style={styles.successButtons}>
               <TouchableOpacity
-                style={styles.successCloseButton}
+                style={[
+                  styles.successCloseButton,
+                  {
+                    borderColor: isDarkMode ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.2)",
+                    backgroundColor: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.3)",
+                  },
+                ]}
                 onPress={onClose}
                 activeOpacity={0.8}
               >
-                <Text style={styles.successCloseText}>Continue Shopping</Text>
+                <Text style={[styles.successCloseText, { color: P.text }]}>
+                  Continue Shopping
+                </Text>
               </TouchableOpacity>
 
               {type === "cart" && onViewCart && (
@@ -812,15 +849,19 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
               </View>
             </View>
 
-            {/* Reviews List */}
-            <ScrollView
+            {/* Reviews List — virtualized so a heavily-reviewed provider doesn't
+                mount every BlurView/LinearGradient card at once */}
+            <FlatList
+              data={allReviews}
+              keyExtractor={(review) => String(review.id)}
               style={styles.modalContent}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
-            >
-              {allReviews.map((review) => (
+              initialNumToRender={8}
+              maxToRenderPerBatch={8}
+              windowSize={7}
+              renderItem={({ item: review }) => (
                 <BlurView
-                  key={review.id}
                   intensity={20}
                   tint="light"
                   style={styles.modalReviewCard}
@@ -859,8 +900,8 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
                     </Text>
                   ) : null}
                 </BlurView>
-              ))}
-            </ScrollView>
+              )}
+            />
           </SafeAreaView>
         </View>
       </Modal>
@@ -1629,6 +1670,45 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
 
+  // The floating tab bar is hidden on this screen by default (it has no
+  // business sitting over the multi-select "Book" bar on a screen most
+  // visits never touch the cart from) and only reappears once something is
+  // actually added to cart *during this visit*. Deliberately NOT keyed off
+  // global `totalItems` — arriving here with items already in the cart from
+  // a previous visit/provider should still start hidden, so this is a local
+  // per-mount flag, not a reflection of overall cart state. Every fresh
+  // mount (new navigation push — Becca/Search/Explore/Home all land here)
+  // gets its own state, so entry is always hidden regardless of source.
+  const [addedThisVisit, setAddedThisVisit] = useState(false);
+  const prevTotalItemsRef = useRef(totalItems);
+  useEffect(() => {
+    if (totalItems > prevTotalItemsRef.current) {
+      setAddedThisVisit(true);
+    }
+    prevTotalItemsRef.current = totalItems;
+  }, [totalItems]);
+
+  // setOptions targets the parent Tab.Navigator's currently-focused route
+  // (see IslandPillTabBar's own comment on where it reads this from);
+  // re-runs on every focus/blur and on addedThisVisit change so it updates
+  // immediately after a booking succeeds without leaving this screen. The
+  // cleanup resets to visible (undefined) on blur — this screen's hidden
+  // state must never leak into whatever screen the client navigates to
+  // next. "Hidden again on return" is handled separately: addedThisVisit is
+  // plain component state, so a fresh mount (navigating back in here is
+  // always a new push — see the stack registrations in each tab navigator)
+  // starts at false regardless of global cart contents.
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (!isFocused) return;
+    navigation.getParent()?.setOptions({
+      tabBarStyle: addedThisVisit ? undefined : { display: "none" },
+    });
+    return () => {
+      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
+    };
+  }, [isFocused, addedThisVisit, navigation]);
+
   const [selectedCategory, setSelectedCategory] = useState(() =>
     provider ? Object.keys(provider.categories)[0] || "" : "",
   );
@@ -1692,6 +1772,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showNotification, setShowNotification] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
   const [showBookingSheet, setShowBookingSheet] = useState(false);
+  // Services selected via multi-select "Select" mode, passed to
+  // MultiBookingSheet when the floating bar's "Book" is tapped — shown and
+  // scheduled together as one group, unlike the single-service BookingSheet
+  // above.
+  const [showMultiBookingSheet, setShowMultiBookingSheet] = useState(false);
+  const [multiBookingServices, setMultiBookingServices] = useState<ServiceData[]>([]);
   const [showOffersModal, setShowOffersModal] = useState(false);
   const [promotions, setPromotions] = useState<DbPromotion[]>([]);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
@@ -1855,13 +1941,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       .map((service) => ({ serviceId: service.dbId as string, duration: service.duration }));
     if (serviceRequests.length === 0) return;
 
+    const NEAR_TERM_HORIZON_DAYS = 14;
     const FULL_BOOKING_HORIZON_DAYS = 180;
-    Promise.all([
-      AvailabilityService.hasNearTermAvailabilityForServices(providerDbId, serviceRequests),
-      AvailabilityService.hasNearTermAvailabilityForServices(providerDbId, serviceRequests, FULL_BOOKING_HORIZON_DAYS),
-    ])
-      .then(([nearTermById, fullWindowById]) => {
+    // One call covering both horizons — hasNearTermAvailabilityForServices
+    // fetches the provider's settings/availability/windows/blocked-dates/
+    // overrides/bookings once and scans day-by-day regardless of which
+    // horizon(s) are asked for, so asking for both here in one call (instead
+    // of two separate calls with different horizons) halves the Supabase
+    // round-trips and the per-service/per-day scan work.
+    AvailabilityService.hasNearTermAvailabilityForServices(
+      providerDbId,
+      serviceRequests,
+      FULL_BOOKING_HORIZON_DAYS,
+      NEAR_TERM_HORIZON_DAYS,
+    )
+      .then((fullWindowById) => {
         if (cancelled) return;
+        const nearTermById = fullWindowById.secondary ?? fullWindowById;
         setServiceNearTermAvailability((prev) => ({
           ...prev,
           ...Object.fromEntries(nearTermById),
@@ -1968,6 +2064,62 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [expandedServices, setExpandedServices] = useState<
     Set<string | number>
   >(new Set());
+
+  // Multi-select ("Select" mode) — lets a client pick several services from
+  // this provider (even across category tabs) and add them all to the cart
+  // at once, unscheduled. Kept at this top level (not local to
+  // renderServiceCategoryBlock's closure) because switching category tabs
+  // unmounts that closure's rendered services entirely — a selection made in
+  // one category must survive a tab switch to another.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Confirm before leaving this screen with an in-progress selection or an
+  // open booking sheet — otherwise a back-swipe silently drops services the
+  // client had already picked. usePreventRemove (not a plain
+  // navigation.addListener('beforeRemove', ...)) — this screen's stack is
+  // react-navigation's native-stack, where a manual beforeRemove listener
+  // can desync from the native back gesture (screen removed natively but
+  // not from JS state); usePreventRemove is the hook that actually
+  // coordinates with native-stack to prevent that. showConfirm is the
+  // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
+  const { showConfirm, DialogHost } = useAppDialog();
+  const hasUnsavedSelection =
+    (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
+  usePreventRemove(hasUnsavedSelection, ({ data }) => {
+    showConfirm(
+      "Are you sure you want to discard?",
+      undefined,
+      [
+        { text: "Continue", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            setSelectedServiceIds(new Set());
+            setSelectMode(false);
+            setShowMultiBookingSheet(false);
+            navigation.dispatch(data.action);
+          },
+        },
+      ],
+    );
+  });
+  // usePreventRemove's native-side block (react-native-screens'
+  // preventNativeDismiss) is meant to stop the iOS edge-swipe before it
+  // completes, but in practice the swipe was still removing the screen
+  // immediately and only showing the confirm dialog afterwards — too late
+  // to actually block anything. Disabling the gesture outright while there's
+  // something to lose sidesteps that native race entirely: the client can
+  // only leave via the explicit back button, which calls navigation.goBack()
+  // — a plain synchronous JS call that usePreventRemove's beforeRemove
+  // listener intercepts correctly, no native coordination required.
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: !hasUnsavedSelection });
+  }, [navigation, hasUnsavedSelection]);
+
   const [serviceImageModal, setServiceImageModal] = useState<{
     visible: boolean;
     images: any[];
@@ -2399,7 +2551,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             uuidServiceId,
           ).catch(() => null),
           getProviderDepositPoliciesByDisplayNames([providerDisplayName]).catch(
-            () => ({}) as Record<string, import("../services/databaseService").ProviderDepositPolicy>
+            () => ({}) as Record<string, import("../../services/databaseService").ProviderDepositPolicy>
           ),
         ]);
         // Quick Book skips the payment-choice step entirely, so if the
@@ -2442,7 +2594,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
         // Show redirecting message and navigate to cart for immediate checkout
         const slotLabel = slot
-          ? `${new Date(slot.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at ${slot.time}`
+          ? `${formatShortDate(slot.date)} at ${formatTime12(slot.time)}`
           : null;
         showSuccessMessageWithAnimation(
           "Redirecting to Checkout...",
@@ -2573,10 +2725,132 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
   }, [tryOpenExternalBooking]);
 
+  // ───────────────── Multi-select: add several services to cart at once ────
+  const toggleSelectMode = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectMode((v) => !v);
+  }, []);
+
+  const toggleServiceSelected = useCallback((dbId: string) => {
+    setSelectedServiceIds((prev) => {
+      const next = new Set(prev);
+      next.has(dbId) ? next.delete(dbId) : next.add(dbId);
+      return next;
+    });
+  }, []);
+
+  // Turning select mode off always clears any in-progress selection, so
+  // re-entering it later never shows stale checkmarks.
+  useEffect(() => {
+    if (!selectMode) setSelectedServiceIds(new Set());
+  }, [selectMode]);
+
+  // Defensive: if a selected service resolves to fully-booked after the
+  // async availability check settles, drop it from the selection rather than
+  // letting the client add an unbookable service to their cart.
+  useEffect(() => {
+    setSelectedServiceIds((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(
+        [...prev].filter((id) => serviceFullyBooked[id] !== true)
+      );
+      return next.size === prev.size ? prev : next;
+    });
+  }, [serviceFullyBooked]);
+
+  // Flattened across every category (not just the currently-viewed one) so
+  // a selection made in "Hair", then continued in "Nails" after switching
+  // tabs, is still complete when the client taps "Book".
+  const selectedServicesFlat = useMemo(() => {
+    if (!provider) return [];
+    return Object.values(provider.categories)
+      .flat()
+      .filter((s) => selectedServiceIds.has(s.dbId));
+  }, [provider, selectedServiceIds]);
+
+  const selectedTotal = useMemo(
+    () => selectedServicesFlat.reduce((sum, s) => sum + s.price, 0),
+    [selectedServicesFlat]
+  );
+
+  // Opens MultiBookingSheet with every selected service shown together,
+  // ready to schedule as one group — see handleMultiBookingSheetSubmit for
+  // what happens on submit. Deliberately does NOT clear the selection or
+  // exit select mode here — closing the sheet without submitting (X /
+  // backdrop) should land the client right back where they were, same
+  // services still checked, free to add more before trying again. Only a
+  // successful submit clears the selection (see handleMultiBookingSheetSubmit).
+  //
+  // Exactly one service selected is routed through the normal single-service
+  // BookingSheet/handleBookingSheetSubmit path instead — a "group" of one is
+  // just a normal booking, and the multi sheet's grouped-summary UI has
+  // nothing to show with a single item. Select mode is exited here (rather
+  // than inside handleBookingSheetSubmit, which is generic and used outside
+  // select mode too) so cancelling this sheet doesn't leave the client
+  // stranded in select mode with nothing selected.
+  const handleBookSelected = useCallback(() => {
+    if (!provider || selectedServicesFlat.length === 0) return;
+    // Defensive only — the "Select" entry point is already hidden for these
+    // providers (see tryOpenExternalBooking's other call sites).
+    if (tryOpenExternalBooking()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowAllServicesModal(false);
+    if (selectedServicesFlat.length === 1) {
+      setSelectedService(selectedServicesFlat[0]!);
+      setShowBookingSheet(true);
+      setSelectedServiceIds(new Set());
+      setSelectMode(false);
+      return;
+    }
+    setMultiBookingServices(selectedServicesFlat);
+    setShowMultiBookingSheet(true);
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking]);
+
+  // Floating "N selected • £total — Book" bar. Rendered from two places (the
+  // main screen and the fullscreen "All Services" sheet, which is a separate
+  // Modal render tree) — a shared helper keeps both in sync instead of
+  // duplicating the JSX. `bottomOffset` differs per call site: the main
+  // screen instance sits directly under IslandPillTabBar's floating pill
+  // (it's an overlay on every tab-stack screen, not a docked bar, so it
+  // covers whatever's underneath it — see FLOATING_TAB_BAR_CLEARANCE's own
+  // comment), while the "All Services" sheet instance is already inside a
+  // SafeAreaView that applies the home-indicator inset to it, so it only
+  // needs a small resting gap on top of that.
+  const renderSelectionBar = (bottomOffset: number) => (
+    <BlurView
+      intensity={cardBlurIntensity}
+      tint={cardBlurTint}
+      style={[
+        styles.selectionBar,
+        { bottom: bottomOffset, backgroundColor: cardBg, borderColor: OP.border },
+      ]}
+    >
+      <Text style={[styles.selectionBarText, { color: OP.text }]}>
+        {selectedServicesFlat.length} selected • £{selectedTotal.toFixed(2)}
+      </Text>
+      <TouchableOpacity
+        style={[
+          styles.selectionBarButton,
+          { backgroundColor: adaptiveAccentColor },
+        ]}
+        onPress={handleBookSelected}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.selectionBarButtonText}>Book</Text>
+      </TouchableOpacity>
+    </BlurView>
+  );
+
   // Arriving with route.params.openServiceId (e.g. tapping "Book Now" on a
   // specific service card in Explore) — open that exact service's booking
   // modal automatically once the provider's services have loaded, instead
-  // of leaving the client to find it themselves in the list below.
+  // of leaving the client to find it themselves in the list below. This is
+  // the ONLY thing that makes Explore's "Book Now" behave like the regular
+  // per-service "Book" button below (both end up calling the same
+  // handleBook → BookingSheet); if this effect fails to find a match, the
+  // client silently lands on a bare profile with nothing auto-opened,
+  // which looks like a broken/different flow even though no other code
+  // path diverges — so a miss is logged rather than swallowed silently.
   const openServiceIdHandled = useRef(false);
   useEffect(() => {
     if (openServiceIdHandled.current) return;
@@ -2585,13 +2859,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // silently launch Linking.openURL the moment this screen mounts, before
     // the client has even seen the profile. Let them tap Book themselves.
     if (!targetId || !provider || provider.externalBookingUrl) return;
-    const match = Object.values(provider.categories)
-      .flat()
-      .find((s) => s.dbId === targetId);
+    const allServices = Object.values(provider.categories).flat();
+    const match = allServices.find((s) => s.dbId === targetId);
     if (match) {
       openServiceIdHandled.current = true;
-      handleBook(match);
+      // Give the client a beat to actually see the provider's profile
+      // before BookingSheet slides up over it — without this, the sheet
+      // opens the instant provider.categories finishes loading, so the
+      // profile screen is never visible even for a moment; it reads as the
+      // sheet popping up immediately rather than as a normal navigation.
+      setTimeout(() => handleBook(match), 500);
+    } else if (allServices.length > 0) {
+      // Provider's services have finished loading and none match — this id
+      // will never resolve on a future provider update either, so stop
+      // retrying and leave a trace instead of failing silently forever.
+      openServiceIdHandled.current = true;
+      logger.error(
+        '[ProviderProfileScreen] openServiceId did not match any of this provider\'s services — Explore\'s Book Now could not auto-open BookingSheet.',
+        { targetId, providerId: provider.id }
+      );
     }
+    // else: provider.categories may still be loading — leave the ref unset
+    // so this effect re-checks on the next provider update.
   }, [route.params?.openServiceId, provider, handleBook]);
 
   const handleBookingSheetSubmit = useCallback(
@@ -2663,21 +2952,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           });
         }
 
-        // Show success message
+        // Success copy, one fact per line rather than a single run-on
+        // sentence — with long-form dates the old concatenated version read
+        // as an unbroken wall of text.
         const addOnsText =
           result.selectedAddOns.length > 0
-            ? ` with ${result.selectedAddOns.length} add-on${result.selectedAddOns.length > 1 ? "s" : ""}`
+            ? ` + ${result.selectedAddOns.length} add-on${result.selectedAddOns.length > 1 ? "s" : ""}`
             : "";
-        const scheduledText = result.date
-          ? ` booked for ${new Date(result.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at ${result.time}`
-          : "";
-        const consultationText = result.consultationBooking
-          ? ` Your required consultation is booked for ${new Date(result.consultationBooking.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at ${result.consultationBooking.time}.`
-          : "";
+        const lines = [`${service.name}${addOnsText}`];
+        if (result.date) {
+          lines.push(`${formatLongDate(result.date)} at ${formatTime12(result.time)}`);
+        }
+        lines.push(`Total: £${totalPrice.toFixed(2)}`);
+        if (result.consultationBooking) {
+          lines.push(
+            `Consultation: ${formatLongDate(result.consultationBooking.date)} at ${formatTime12(result.consultationBooking.time)}`,
+          );
+        }
 
         showSuccessMessageWithAnimation(
           "Added to Cart!",
-          `${service.name}${addOnsText}${scheduledText}. Total: £${totalPrice.toFixed(2)}.${consultationText}`,
+          lines.join("\n"),
           "cart",
         );
       } catch (error) {
@@ -2689,6 +2984,67 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       }
     },
     [provider, providerDbId, addToCart, showSuccessMessageWithAnimation, requiredConsultationService],
+  );
+
+  // Submit from MultiBookingSheet — adds every scheduled item from the
+  // group in one pass, mirroring handleBookingSheetSubmit's per-item field
+  // mapping, then shows one combined success message. No required-
+  // consultation handling here — CartScreen's own checkout-time gate
+  // already covers that generically for whatever's in the cart.
+  const handleMultiBookingSheetSubmit = useCallback(
+    (result: MultiBookingSheetResult) => {
+      if (!provider) return;
+      try {
+        result.items.forEach(({ service, selectedAddOns, date, time, isSeparate }) => {
+          addToCart({
+            providerName: provider.providerName,
+            providerDisplayName: provider.displayName,
+            providerSlug: provider.id,
+            providerId: providerDbId ?? undefined,
+            providerImage: provider.providerLogo,
+            providerService: provider.providerService,
+            service: {
+              id: service.dbId || service.id,
+              name: service.name,
+              price: service.price,
+              duration: service.duration,
+              description: service.description,
+              addOns: selectedAddOns,
+            },
+            quantity: 1,
+            selectedOptions: {},
+            forceNewInstance: true,
+            selectedDate: date,
+            selectedTime: time,
+            notes: result.notes || undefined,
+            isDepositOnly: result.isDepositOnly,
+            // A separated item never carries the batch id — it's a
+            // singleton regardless of whether the sheet minted one for its
+            // grouped siblings.
+            bookingBatchId: isSeparate ? undefined : result.groupBatchId,
+          });
+        });
+
+        setShowMultiBookingSheet(false);
+        // Only clear the selection/exit select mode once the booking has
+        // actually gone through — a cancelled sheet leaves both untouched
+        // (see handleBookSelected).
+        setSelectedServiceIds(new Set());
+        setSelectMode(false);
+        // Match the single-service path: show the toast and let the user
+        // tap "View Cart" (handleViewCart) themselves rather than
+        // auto-navigating away after a timeout.
+        showSuccessMessageWithAnimation(
+          "All Booked!",
+          `${result.items.length} services scheduled and added to your cart.`,
+          "cart",
+        );
+      } catch (error) {
+        logger.error("Error adding multi-booking to cart:", error);
+        Alert.alert("Error", "Failed to add services to cart. Please try again.");
+      }
+    },
+    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation],
   );
 
   const handleViewCart = useCallback(() => {
@@ -2776,7 +3132,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <Image
               source={item}
               style={{ width: screenWidth, height: screenHeight * 0.85 }}
-              resizeMode="contain"
+              contentFit="contain"
+              transition={0}
             />
           )}
           style={{ width: screenWidth, flexGrow: 0, zIndex: 1 }}
@@ -2839,6 +3196,23 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           {provider.categoryDescriptions[selectedCategory]}
         </Text>
       ) : null}
+
+      {/* Small text link, not a pill/icon — sits below the category tabs,
+          away from the "Services" title. Shared here (not per call site) so
+          it appears identically in the inline list and the "All Services"
+          sheet without a second control. */}
+      {!provider.externalBookingUrl && (
+        <TouchableOpacity
+          onPress={toggleSelectMode}
+          activeOpacity={0.6}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={styles.selectModeLinkRow}
+        >
+          <Text style={[styles.selectModeLinkText, { color: adaptiveAccentColor }]}>
+            {selectMode ? "Cancel" : "Select"}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Services List */}
       <View style={styles.categoryServicesContainer}>
@@ -2920,7 +3294,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         <Image
                           source={imgSrc}
                           style={styles.serviceImage}
-                          resizeMode="cover"
+                          contentFit="cover"
+                          transition={0}
                         />
                       </View>
                     </TouchableOpacity>
@@ -3029,6 +3404,36 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 <View style={styles.serviceActionColumn}>
                   {(() => {
                     const fullyBooked = DEBUG_FORCE_FULLY_BOOKED || serviceFullyBooked[service.dbId] === true;
+
+                    if (selectMode) {
+                      const isSelected = selectedServiceIds.has(service.dbId);
+                      return (
+                        <TouchableOpacity
+                          disabled={fullyBooked}
+                          // No onBeforeAction here — that hook exists to close the
+                          // "All Services" sheet before ANOTHER modal opens (RN
+                          // can't reliably stack modals), and a checkbox toggle
+                          // opens nothing. Calling it here would close the sheet
+                          // on the very first checkbox tap.
+                          onPress={() => toggleServiceSelected(service.dbId)}
+                          style={[
+                            styles.selectCheckbox,
+                            { borderColor: fullyBooked ? OP.border : adaptiveAccentColor },
+                            isSelected && {
+                              backgroundColor: adaptiveAccentColor,
+                              borderColor: adaptiveAccentColor,
+                            },
+                            fullyBooked && { opacity: 0.4 },
+                          ]}
+                          activeOpacity={0.8}
+                        >
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    }
+
                     return (
                       <TouchableOpacity
                         disabled={fullyBooked}
@@ -3211,7 +3616,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             <Image
               source={{ uri: provider.backgroundImage }}
               style={[styles.heroImage, { opacity: 0.88 }]}
-              resizeMode="cover"
+              contentFit="cover"
+              transition={0}
             />
             <LinearGradient
               colors={["rgba(0,0,0,0.38)", "rgba(0,0,0,0.18)", "transparent"]}
@@ -3289,6 +3695,24 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           }
         />
 
+        {/* Multi-service booking modal — for services picked via "Select" mode */}
+        <MultiBookingSheet
+          isVisible={showMultiBookingSheet}
+          onClose={() => setShowMultiBookingSheet(false)}
+          services={multiBookingServices}
+          onSubmit={handleMultiBookingSheetSubmit}
+          adaptiveAccentColor={adaptiveAccentColor}
+          backgroundColor={OP.card}
+          providerIdentifier={
+            providerDbId ?? provider?.displayName ?? provider?.providerName ?? ""
+          }
+          providerDisplayName={provider?.displayName ?? provider?.providerName ?? ""}
+        />
+
+        {/* App-styled confirm dialog (leave-with-selection prompt, etc.) —
+            not the OS Alert. */}
+        <DialogHost />
+
         {/* Reviews Modal */}
         <ReviewsModal
           isVisible={showReviewsModal}
@@ -3351,6 +3775,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         {selectedCategoryServices.length === 1 ? "" : "s"}
                       </Text>
                     </View>
+                    {/* Select mode toggles from the inline services header
+                        below — one entry point, not a duplicate control
+                        here too. selectMode is shared top-level state, so
+                        checkboxes still show up in this sheet once it's on. */}
                     <TouchableOpacity
                       style={[
                         styles.modalCloseButton,
@@ -3373,6 +3801,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     setShowAllServicesModal(false),
                   )}
                 </ScrollView>
+                {selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(16)}
               </SafeAreaView>
 
               {/* Image viewer as an internal overlay, not a second <Modal> —
@@ -3835,6 +4264,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           </Animated.View>
         )}
 
+        {/* Multi-select "N selected • Book" bar — floats above the
+            scrollable content so it stays visible while the client keeps
+            browsing other categories to add more. Not inside any
+            SafeAreaView (it's a sibling of the one below, rendered before
+            it), and this screen sits under IslandPillTabBar's floating pill
+            — needs FLOATING_TAB_BAR_CLEARANCE or the pill covers it and
+            "Book" becomes untappable. */}
+        {selectMode && selectedServicesFlat.length > 0 && renderSelectionBar(FLOATING_TAB_BAR_CLEARANCE)}
+
         {/* No bottom edge inset — the pink sheet must run under the home indicator */}
         <SafeAreaView style={styles.safeArea} edges={[]}>
           <ScrollView
@@ -3855,7 +4293,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     <Image
                       source={provider.providerLogo}
                       style={styles.providerLogo}
-                      resizeMode="cover"
+                      contentFit="cover"
+                      transition={0}
                     />
                   ) : (
                     <View
@@ -4537,7 +4976,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                             <Image
                               source={{ uri: item.image_url }}
                               style={{ width: "100%", height: item.tileHeight }}
-                              resizeMode="cover"
+                              contentFit="cover"
+                              transition={0}
                             />
                             {item.caption ? (
                               <View style={styles.portfolioCaptionWrap}>
@@ -5046,6 +5486,18 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     paddingHorizontal: 20,
   },
+  // Plain small text link, right-aligned under the category tabs — not a
+  // pill or icon, and deliberately away from the "Services" title.
+  selectModeLinkRow: {
+    alignItems: "flex-end",
+    paddingHorizontal: 20,
+    marginTop: -8,
+    marginBottom: 10,
+  },
+  selectModeLinkText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
   categoryTabs: {
     marginBottom: 20,
     maxHeight: 60, // Increased to accommodate animation
@@ -5251,6 +5703,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
     letterSpacing: 0.4,
+  },
+  selectCheckbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   quickBookButton: {
     borderRadius: 18,
@@ -5673,10 +6133,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
   },
+  // Colour for these comes from the theme at render time (see SuccessMessage).
   successTitle: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 22,
-    color: "#000",
     marginBottom: 12,
     textAlign: "center",
   },
@@ -5684,7 +6144,6 @@ const styles = StyleSheet.create({
     fontFamily: "Jura-VariableFont_wght",
     fontWeight: "600",
     fontSize: 16,
-    color: "#000",
     textAlign: "center",
     lineHeight: 22,
     marginBottom: 25,
@@ -5699,14 +6158,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: "rgba(0,0,0,0.2)",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.3)",
   },
   successCloseText: {
     fontFamily: "BakbakOne-Regular",
     fontSize: 13,
-    color: "#000",
     fontWeight: "bold",
   },
   successViewCartButton: {
@@ -5763,6 +6219,44 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.85)",
     letterSpacing: 1.2,
     marginTop: 2,
+  },
+
+  // ── Multi-select floating bar ───────────────────────────────────────────────
+  selectionBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    // bottom set per call site (see renderSelectionBar) — the main-screen
+    // instance needs to clear the floating pill tab bar, the modal instance
+    // doesn't.
+    zIndex: 999, // matches offersFloatTab — always floats above content
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  selectionBarText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  selectionBarButton: {
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  selectionBarButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   // ── Offers Side Panel ───────────────────────────────────────────────────────

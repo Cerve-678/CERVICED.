@@ -7,6 +7,13 @@ export type Provider = {
   service: string;
   logo: any;
   location?: string;
+  // Min/max price across the provider's active services — populated
+  // separately from the base provider row (see databaseService's
+  // getProviderPriceRanges), since a provider can offer many services at
+  // different prices. Absent when price data hasn't been fetched for this
+  // Provider instance.
+  minPrice?: number;
+  maxPrice?: number;
   totalSlots?: number;
   bookedSlots?: number;
   // Availability settings - providers can customize these

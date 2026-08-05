@@ -10,7 +10,6 @@ import {
   Platform,
   FlatList,
   Animated,
-  KeyboardAvoidingView,
   ActivityIndicator,
   Modal,
 } from 'react-native';
@@ -23,6 +22,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ProviderAccountStackParamList } from '../../navigation/types';
 import { useProviderDialog } from '../../components/ProviderDialog';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import {
   getMyProviderServices,
   getProviderInfoPacksByUserId,
@@ -199,7 +199,7 @@ function SendSheet({
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <Animated.View style={[ss.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? 'auto' : 'none'}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDismissView dismissOnTap>
           <Animated.View style={[ss.sheet, { backgroundColor: P.card, borderColor: P.border, transform: [{ translateY: slideAnim }] }]}>
             <View style={[ss.handle, { backgroundColor: P.border }]} />
             <Text style={[ss.title, { color: P.text }]}>Send Info Pack</Text>
@@ -223,7 +223,7 @@ function SendSheet({
               </TouchableOpacity>
             </View>
           </Animated.View>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </Animated.View>
     </Modal>
   );
@@ -402,7 +402,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
           />
         ) : (
           /* ── Create form ──────────────────────────────── */
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardDismissView style={{ flex: 1 }}>
             <ScrollView contentContainerStyle={s.formContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={[s.fieldLabel, { color: P.sub }]}>TITLE</Text>
               <View style={[s.inputWrap, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -444,7 +444,7 @@ export default function ProviderInfoPackScreen({ navigation }: Props) {
                 <Text style={s.saveBtnText}>Save Info Pack</Text>
               </TouchableOpacity>
             </ScrollView>
-          </KeyboardAvoidingView>
+          </KeyboardDismissView>
         )}
       </SafeAreaView>
 

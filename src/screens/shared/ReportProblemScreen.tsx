@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -15,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 const CATEGORIES = ['Bug / Crash', 'Booking Issue', 'Provider Issue', 'Payment', 'Account', 'Other'];
 
@@ -43,7 +42,7 @@ export default function ReportProblemScreen({ navigation }: any) {
   return (
     <View style={[styles.bg, { backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }]}>
       <StatusBar barStyle={theme.statusBar} translucent />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
           showsVerticalScrollIndicator={false}
@@ -120,7 +119,7 @@ export default function ReportProblemScreen({ navigation }: any) {
             }
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </View>
   );
 }

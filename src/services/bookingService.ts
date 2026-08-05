@@ -18,6 +18,7 @@ import {
   updateBookingDateTime,
 } from './databaseService';
 import { logger } from '../utils/logger';
+import { formatTime12, formatShortDate } from '../utils/dateUtils';
 
 
 export interface DepositPolicy {
@@ -318,13 +319,9 @@ export class BookingService {
         return `• ${item.serviceName} - Not scheduled`;
       }
       
-      const date = new Date(booking.selectedDate).toLocaleDateString('en-GB', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
+      const date = formatShortDate(booking.selectedDate);
 
-      return `• ${item.serviceName} - ${date} at ${booking.selectedTime}`;
+      return `• ${item.serviceName} - ${date} at ${formatTime12(booking.selectedTime)}`;
     });
 
     return summary.join('\n');
@@ -342,15 +339,7 @@ export class BookingService {
  * Screens and contexts import this from here, never redefine it.
  */
 export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
-  const toDisplayTime = (t: string): string => {
-    const parts = t.split(':');
-    let h = parseInt(parts[0] ?? '0');
-    const m = parseInt(parts[1] ?? '0');
-    const period = h >= 12 ? 'PM' : 'AM';
-    if (h > 12) h -= 12;
-    if (h === 0) h = 12;
-    return `${h}:${m.toString().padStart(2, '0')} ${period}`;
-  };
+  const toDisplayTime = (t: string): string => formatTime12(t);
 
   const mapSt = (s: string): BookingStatus => {
     switch (s) {
@@ -447,6 +436,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     serviceCharge: db.service_charge ?? 2.99,
     paymentStatus: mapPay(db.payment_status),
     paymentMethod: (db as any).payment_method ?? undefined,
+    groupBookingId: db.group_booking_id ?? undefined,
     createdAt: db.created_at ?? new Date().toISOString(),
     updatedAt: db.updated_at ?? new Date().toISOString(),
   };

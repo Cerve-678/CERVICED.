@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -17,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { getMyProviderProfile, updateProviderContactDetails } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CP_DARK = {
@@ -178,7 +177,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
     <View style={[s.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <SafeAreaView style={s.safe} edges={['top']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDismissView>
           {/* Header */}
           <View style={[s.header, { borderBottomColor: C.border }]}>
             <Text style={[s.headerTitle, { color: C.text }]}>Contact Preferences</Text>
@@ -288,7 +287,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
               }
             </TouchableOpacity>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </SafeAreaView>
     </View>
   );

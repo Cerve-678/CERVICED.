@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +15,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ── Input component ──────────────────────────────────────────────────────────
 
@@ -153,11 +152,7 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
           <View style={styles.backBtn} />
         </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
-        >
+        <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
@@ -235,7 +230,7 @@ export default function ChangeCredentialsScreen({ navigation }: any) {
                 </TouchableOpacity>
               </View>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </SafeAreaView>
     </ThemedBackground>
   );

@@ -147,11 +147,14 @@ function genScreens() {
 
 function genServices() {
   const dir = join(ROOT, 'src', 'services');
-  const files = lsFiles(dir, ['.ts']);
+  // walk(), not lsFiles(): services are no longer flat — src/services/becca/
+  // nests a capabilities/ subfolder, and a non-recursive read silently omits
+  // every nested module from this index with no error to signal it.
+  const files = walk(dir, ['.ts']);
   const sections = files.map((f) => {
-    const ex = exportsOf(read(join(dir, f)));
+    const ex = exportsOf(read(f));
     const body = ex.length ? ex.map((n) => `\`${n}\``).join(' · ') : '_no named exports_';
-    return `### \`src/services/${f}\`\n${body}`;
+    return `### \`${rel(f)}\`\n${body}`;
   });
   write('Services (generated).md',
     `# Services (generated)\n\n${BANNER()}\n` +

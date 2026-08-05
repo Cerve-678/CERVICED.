@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   Modal,
   StyleSheet,
@@ -12,6 +11,9 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
+// expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
+// masonry grid is unvirtualized, so caching matters more here than elsewhere).
+import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import {
@@ -293,11 +295,14 @@ const ImageCarousel: React.FC<{
       windowSize={3}
       maxToRenderPerBatch={2}
       renderItem={({ item: source }) => (
+        // source is PortfolioItem['image'] (RN's broad ImageSourcePropType)
+        // but always constructed as { uri: string } — see PortfolioCard.tsx
+        // for why this narrowing is needed for expo-image's stricter type.
         <Image
-          source={source}
+          source={{ uri: (source as { uri: string }).uri }}
           style={{ width: SCREEN_WIDTH, height, backgroundColor }}
-          resizeMode="cover"
-          fadeDuration={0}
+          contentFit="cover"
+          transition={0}
         />
       )}
     />
@@ -517,8 +522,8 @@ function ModalBody({
                     styles.providerLogo,
                     { backgroundColor: theme.secondaryBackground },
                   ]}
-                  resizeMode="cover"
-                  fadeDuration={0}
+                  contentFit="cover"
+                  transition={0}
                 />
               ) : (
                 <View
@@ -704,13 +709,13 @@ function ModalBody({
                     activeOpacity={0.5}
                   >
                     <Image
-                      source={si.image}
+                      source={{ uri: (si.image as { uri: string }).uri }}
                       style={[
                         styles.moreLikeThisImage,
                         { backgroundColor: theme.secondaryBackground },
                       ]}
-                      resizeMode="cover"
-                      fadeDuration={0}
+                      contentFit="cover"
+                      transition={0}
                     />
                     {si.providerName && (
                       <Text

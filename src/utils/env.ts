@@ -51,6 +51,15 @@ class EnvironmentService {
     return this.config.BUILD_NUMBER;
   }
 
+  /** True when running inside the generic Expo Go app rather than a dev/
+   *  production build. Expo Go can only load Expo's own bundled native
+   *  modules — third-party native modules like @stripe/stripe-react-native
+   *  are absent, so any screen that mounts StripeProvider/useStripe must
+   *  check this first and fall back to a non-native path. */
+  get isExpoGo(): boolean {
+    return Constants.appOwnership === 'expo';
+  }
+
   get fullConfig(): EnvConfig {
     return { ...this.config };
   }

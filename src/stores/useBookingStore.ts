@@ -80,7 +80,7 @@ export const useBookingStore = create<BookingStore>()(
       },
     }),
     {
-      name: STORAGE_KEYS.BOOKINGS,
+      name: STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

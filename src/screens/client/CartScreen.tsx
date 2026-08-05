@@ -14,15 +14,14 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useStripe } from '@stripe/stripe-react-native';
-import { useCart, CartItem } from '../contexts/CartContext';
-import { useBooking, AppointmentData } from '../contexts/BookingContext';
-import { BookingService, DepositPolicy } from '../services/bookingService';
-import { AvailabilityService } from '../services/AvailabilityService';
-import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../services/stripeService';
+import { useCart, CartItem } from '../../contexts/CartContext';
+import { useBooking, AppointmentData } from '../../contexts/BookingContext';
+import { BookingService, DepositPolicy } from '../../services/bookingService';
+import { AvailabilityService, type BackToBackSlot } from '../../services/AvailabilityService';
+import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../../services/stripeService';
 import {
   getProviderDepositPoliciesByDisplayNames,
   ProviderDepositPolicy,
@@ -32,27 +31,45 @@ import {
   getProviderIdsWithBookingHistory,
   getConsultationServiceIds,
   getProviderConsultationService,
-} from '../services/databaseService';
-import type { DbPromotion } from '../types/database';
-import type { CartScreenProps } from '../navigation/types';
-import ErrorBoundary from '../components/ErrorBoundary';
-import { FONT_SIZES } from '../constants/Typeography';
-import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
-import { ThemedBackground } from '../components/ThemedBackground';
-import { getMobileProviderDisplayNames } from '../services/databaseService';
-import { BookingError } from '../contexts/BookingContext';
-import { useAppDialog } from '../components/AppDialog';
-import { BookingSheet, type BookingSheetResult } from '../components/BookingSheet';
+} from '../../services/databaseService';
+import type { DbPromotion } from '../../types/database';
+import type { CartScreenProps } from '../../navigation/types';
+import ErrorBoundary from '../../components/ErrorBoundary';
+import { FONT_SIZES } from '../../constants/Typeography';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
+import { ThemedBackground } from '../../components/ThemedBackground';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { getMobileProviderDisplayNames } from '../../services/databaseService';
+import { BookingError } from '../../contexts/BookingContext';
+import { useAppDialog } from '../../components/AppDialog';
+import { BookingSheet, type BookingSheetResult } from '../../components/BookingSheet';
+import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
+
+import { supabase } from '../../lib/supabase';
+import { logger } from '../../utils/logger';
+import { env } from '../../utils/env';
+import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
 
 // Flip to true to switch checkout from the mock PaymentModal (fake, instant,
 // no real Stripe call) to StripePaymentModal (real test-mode Stripe Payment
 // Sheet — card, Apple Pay, Google Pay). Both share the same props interface,
-// so this is the only line that needs to change either direction.
-const USE_STRIPE_PAYMENTS = false;
-import { supabase } from '../lib/supabase';
-import { logger } from '../utils/logger';
+// so this is the only line that needs to change either direction. Forced to
+// false under Expo Go regardless of this flag — @stripe/stripe-react-native
+// has no native module there, so StripePaymentModal would crash on mount.
+const USE_STRIPE_PAYMENTS = false && !env.isExpoGo;
+
+// Real useStripe() throws at import time under Expo Go (TurboModuleRegistry.
+// getEnforcing has no native module to find there). StripePaymentModal below
+// is only ever rendered when USE_STRIPE_PAYMENTS is true, which is forced
+// off under Expo Go, so this stub's return value never actually gets called
+// — it only needs to exist so the module loads and the hook-call shape below
+// stays valid.
+const useStripe: () => { initPaymentSheet: (...args: any[]) => Promise<any>; presentPaymentSheet: (...args: any[]) => Promise<any> } =
+  env.isExpoGo
+    ? () => ({ initPaymentSheet: async () => ({}), presentPaymentSheet: async () => ({}) })
+    : require('@stripe/stripe-react-native').useStripe;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -68,6 +85,59 @@ interface ServiceBooking {
   selectedTime: string;
   notes: string;
   isDepositOnly?: boolean;
+}
+
+// One card in a provider's section: either a standalone service, or several
+// services scheduled together (shared bookingBatchId) shown as one card.
+type CartRenderUnit =
+  | { kind: 'single'; item: CartItem }
+  | { kind: 'group'; batchId: string; items: CartItem[] };
+
+/**
+ * Minutes since midnight, for ordering/spanning times within a grouped card.
+ * Accepts the same shapes formatTime12 does ("14:30", "2:30 PM"). Returns
+ * Number.MAX_SAFE_INTEGER for an unparseable/empty time so unscheduled items
+ * sort last rather than jumping to the front as 0.
+ */
+function to24hMinutes(time: string | undefined): number {
+  if (!time) return Number.MAX_SAFE_INTEGER;
+  const ampm = /^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])\.?[Mm]\.?$/.exec(time.trim());
+  if (ampm) {
+    let h = Number(ampm[1]) % 12;
+    if (ampm[3]!.toLowerCase() === 'p') h += 12;
+    return h * 60 + Number(ampm[2]);
+  }
+  const h24 = /^(\d{1,2}):(\d{2})/.exec(time.trim());
+  if (h24) return Number(h24[1]) * 60 + Number(h24[2]);
+  return Number.MAX_SAFE_INTEGER;
+}
+
+/** Parses a duration label ("60 min", "1h 30min", "1h") into minutes. */
+function durationToMinutes(duration: string | undefined): number {
+  if (!duration) return 0;
+  const hours = /(\d+)\s*h/i.exec(duration);
+  const mins = /(\d+)\s*m/i.exec(duration);
+  if (!hours && !mins) {
+    const bare = /(\d+)/.exec(duration);
+    return bare ? Number(bare[1]) : 0;
+  }
+  return (hours ? Number(hours[1]) * 60 : 0) + (mins ? Number(mins[1]) : 0);
+}
+
+/** "2:00pm – 3:45pm · 1h 45m" for a grouped card's header. */
+function formatTimeSpan(startMinutes: number, endMinutes: number): string {
+  const toLabel = (m: number) => {
+    const h = Math.floor(m / 60) % 24;
+    const mm = String(m % 60).padStart(2, '0');
+    const suffix = h >= 12 ? 'pm' : 'am';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${suffix === 'am' ? String(h12).padStart(2, '0') : h12}:${mm}${suffix}`;
+  };
+  const total = Math.max(0, endMinutes - startMinutes);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  const lengthLabel = h > 0 ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`;
+  return `${toLabel(startMinutes)} – ${toLabel(endMinutes)} · ${lengthLabel}`;
 }
 
 // Effective Item for Payment Modal
@@ -262,7 +332,9 @@ const handlePayment = useCallback(async () => {
                     </View>
                   ))}
                   <View style={styles.orderTotal}>
-                    <Text style={[styles.orderTotalLabel, { color: theme.text }]}>Total</Text>
+                    <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
+                      {effectiveCartItems.some(i => i.isDeposit) ? 'Pay Now' : 'Total'}
+                    </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
                 </View>
@@ -276,7 +348,7 @@ const handlePayment = useCallback(async () => {
                       style={[
                         styles.paymentMethodItem,
                         { backgroundColor: P.surface, borderColor: 'transparent' },
-                        selectedPaymentMethod === method.id && { borderColor: P.accent, backgroundColor: 'rgba(175,145,151,0.1)' },
+                        selectedPaymentMethod === method.id && { borderColor: P.accent, backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.1)' : 'rgba(92,64,51,0.1)') },
                       ]}
                       onPress={() => setSelectedPaymentMethod(method.id as any)}
                     >
@@ -365,7 +437,7 @@ const handlePayment = useCallback(async () => {
 
               {/* Payment Button */}
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: 'rgba(175,145,151,0.5)' }]}
+                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.5)' : 'rgba(92,64,51,0.5)') }]}
                 onPress={handlePayment}
                 disabled={isProcessing}
               >
@@ -475,6 +547,11 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
         if (presentError) {
           if (presentError.code === 'Canceled') {
             if (__DEV__) logger.log(`[${timestamp()}] Payment sheet cancelled by user`);
+            // Stripe's own sheet dismiss bypasses this modal's normal close
+            // path entirely — call onClose explicitly so CartScreen's
+            // release-the-hold-batch logic (wired into onClose) still runs
+            // instead of leaving the slot reserved until the TTL sweep.
+            onClose();
             return;
           }
           throw new Error(presentError.message || 'Payment failed. Please try again.');
@@ -567,7 +644,9 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                     </View>
                   ))}
                   <View style={styles.orderTotal}>
-                    <Text style={[styles.orderTotalLabel, { color: theme.text }]}>Total</Text>
+                    <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
+                      {effectiveCartItems.some(i => i.isDeposit) ? 'Pay Now' : 'Total'}
+                    </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
                 </View>
@@ -584,7 +663,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
               </ScrollView>
 
               <TouchableOpacity
-                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: 'rgba(175,145,151,0.5)' }]}
+                style={[styles.payButton, { backgroundColor: P.accent }, isProcessing && { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.5)' : 'rgba(92,64,51,0.5)') }]}
                 onPress={handlePayment}
                 disabled={isProcessing}
               >
@@ -610,6 +689,7 @@ interface ServiceCardProps {
   onEdit: (item: CartItem) => void;
   allCartItems: CartItem[];
   depositPolicy?: ProviderDepositPolicy;
+  hasConflict?: boolean;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
@@ -620,6 +700,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     onEdit,
     allCartItems,
     depositPolicy,
+    hasConflict,
   }) => {
     const { theme, palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
@@ -638,6 +719,16 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
         return Number(item?.price) || 0;
       }
     }, [item?.price, item?.addOns]);
+
+    // Add-ons are surfaced as their own labelled line (not silently merged
+    // into the service name list) so the client can see what the extras are
+    // and what they add before paying.
+    const addOnsSummary = useMemo(() => {
+      const list = (item?.addOns || []).filter((a: any) => a?.name);
+      if (list.length === 0) return null;
+      const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+      return { count: list.length, total, names: list.map((a: any) => a.name).join(', ') };
+    }, [item?.addOns]);
 
     const depositPolicyArg = useMemo((): DepositPolicy | number => {
       if (!depositPolicy) return 20;
@@ -688,17 +779,38 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
           </View>
         )}
       >
-        <View style={[styles.serviceCard, styles.serviceCardShadow, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-          {/* Service Info */}
+        <View style={[
+          styles.serviceCard,
+          styles.serviceCardShadow,
+          { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
+        ]}>
+          {hasConflict && (
+            <View style={styles.conflictBanner}>
+              <Ionicons name="alert-circle" size={14} color="#F44336" />
+              <Text style={styles.conflictBannerText}>
+                This time is no longer available — pick a new time
+              </Text>
+            </View>
+          )}
+          {/* Header binds the service to its price on one line, with the
+              duration tucked directly under the name — previously the title
+              sat alone above a full-width gap and the price lived on a
+              separate row, which read as three loose bands rather than one
+              card. */}
           <View style={styles.serviceHeader}>
             <View style={styles.serviceInfo}>
-              <Text style={[styles.serviceName, { color: theme.text }]}>
+              <Text style={[styles.serviceName, { color: theme.text }]} numberOfLines={2}>
                 {serviceName}
                 {showInstanceNumber ? ` #${serviceInstanceIndex}` : ''}
                 {bookingInfo.isDepositOnly && ' (Deposit)'}
               </Text>
+              <Text style={[styles.priceSummaryText, { color: theme.secondaryText }]} numberOfLines={1}>
+                {duration}
+              </Text>
             </View>
-
+            <Text style={[styles.priceSummaryValue, { color: P.accent }]}>
+              £{effectivePrice.toFixed(2)}
+            </Text>
             <TouchableOpacity
               style={[styles.removeButton, isLoading && styles.disabledButton]}
               onPress={handleRemove}
@@ -712,93 +824,293 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             </TouchableOpacity>
           </View>
 
-          {/* Booking breakdown — base price, add-ons, duration, and how the
-              payment splits, all itemised in one place instead of scattered
-              across separate lines. */}
-          <View style={[styles.breakdownContainer, { backgroundColor: P.bg, borderColor: P.border }]}>
-            <View style={styles.breakdownRow}>
-              <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Base Price</Text>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>£{Number(item?.price || 0).toFixed(2)}</Text>
-            </View>
-            {(item?.addOns || []).map((addOn: any, index: number) => (
-              <View key={addOn?.id || index} style={styles.breakdownRow}>
-                <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]} numberOfLines={1}>
-                  • {addOn?.name || 'Unknown'}
+          {/* Secondary detail — add-ons, deposit note, notes — sits tight
+              together as one block instead of each line carrying its own
+              margin. Cart is for review + payment, not a full pricing
+              ledger, so add-ons stay on one compact labelled line; detailed
+              per-add-on pricing is in BookingSheet via Edit. */}
+          {(addOnsSummary || bookingInfo.isDepositOnly || !!bookingInfo.notes) && (
+            <View style={styles.serviceMetaBlock}>
+              {addOnsSummary && (
+                <Text style={[styles.priceSummaryAddOns, { color: theme.text }]} numberOfLines={2}>
+                  + {addOnsSummary.count} add-on{addOnsSummary.count === 1 ? '' : 's'} (£
+                  {addOnsSummary.total.toFixed(2)}): {addOnsSummary.names}
                 </Text>
-                <Text style={[styles.breakdownValue, { color: theme.text }]}>+£{Number(addOn?.price || 0).toFixed(2)}</Text>
-              </View>
-            ))}
-            {item?.addOns && item.addOns.length > 0 && (
-              <View style={styles.breakdownRow}>
-                <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Subtotal</Text>
-                <Text style={[styles.breakdownValue, { color: theme.text }]}>£{totalPrice.toFixed(2)}</Text>
-              </View>
-            )}
-            <View style={styles.breakdownRow}>
-              <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Duration</Text>
-              <Text style={[styles.breakdownValue, { color: theme.text }]}>{duration}</Text>
+              )}
+              {bookingInfo.isDepositOnly && (
+                <Text style={[styles.depositNote, { color: theme.secondaryText }]}>
+                  Deposit now — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} due at appointment
+                </Text>
+              )}
+              {!!bookingInfo.notes && (
+                <Text style={[styles.notesPreview, { color: P.sub }]} numberOfLines={2}>
+                  Notes: {bookingInfo.notes}
+                </Text>
+              )}
             </View>
-
-            <View style={[styles.breakdownDivider, { backgroundColor: P.border }]} />
-
-            {bookingInfo.isDepositOnly ? (
-              <>
-                <View style={styles.breakdownRow}>
-                  <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Deposit Due Now</Text>
-                  <Text style={[styles.breakdownValue, { color: P.accent }]}>
-                    £{BookingService.calculateDeposit(totalPrice, depositPolicyArg).toFixed(2)}
-                  </Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={[styles.breakdownLabel, { color: theme.secondaryText }]}>Due at Appointment</Text>
-                  <Text style={[styles.breakdownValue, { color: theme.text }]}>
-                    £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.breakdownRow}>
-                <Text style={[styles.breakdownTotalLabel, { color: theme.text }]}>Total</Text>
-                <Text style={[styles.breakdownTotalValue, { color: P.accent }]}>£{effectivePrice.toFixed(2)}</Text>
-              </View>
-            )}
-          </View>
-
-          {!!bookingInfo.notes && (
-            <Text style={[styles.notesPreview, { color: P.sub }]} numberOfLines={2}>
-              Notes: {bookingInfo.notes}
-            </Text>
           )}
 
-          {/* Schedule + Edit — the date/time indicator is now the edit
-              trigger itself, replacing the separate Edit button below it. */}
-          <TouchableOpacity
-            style={[styles.bookingSummaryRow, !isScheduled && styles.bookingSummaryRowWarning]}
-            onPress={() => onEdit(item)}
-            activeOpacity={0.8}
-          >
+          {/* Footer: date/time + Edit, separated by a rule so the card ends
+              on a deliberate band rather than trailing off. A standalone
+              service edits directly, no chooser in between. */}
+          <View style={[styles.dateRow, { borderTopColor: P.border }]}>
             <Text
-              style={[styles.bookingSummaryText, !isScheduled && styles.bookingSummaryTextWarning]}
-              numberOfLines={1}
+              style={[styles.dateText, { color: theme.secondaryText }, !isScheduled && styles.dateTextWarning]}
+              numberOfLines={2}
             >
               {isScheduled
-                ? `${new Date(bookingInfo.selectedDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} at ${bookingInfo.selectedTime}`
+                ? `${formatLongDateNoYear(bookingInfo.selectedDate)} at ${formatTime12(bookingInfo.selectedTime)}`
                 : 'Unscheduled'}
             </Text>
-            <View style={styles.bookingSummaryEdit}>
-              <Ionicons
-                name="pencil-outline"
-                size={13}
-                color={isScheduled ? '#2E7D32' : '#D32F2F'}
-              />
-              <Text style={[styles.bookingSummaryEditText, !isScheduled && styles.bookingSummaryTextWarning]}>
-                Edit
-              </Text>
-            </View>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.itemEditButton, { borderColor: P.accent }]}
+              onPress={() => onEdit(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="pencil-outline" size={12} color={P.accent} />
+              <Text style={[styles.itemEditButtonText, { color: P.accent }]}>Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         <DialogHost />
       </ErrorBoundary>
+    );
+  }
+);
+
+// Grouped card — several of one provider's services scheduled back-to-back on
+// a single day (shared bookingBatchId). Renders as ONE card with the shared
+// date and overall time span in the header, then each service as a row, so a
+// cart with a grouped provider reads as one appointment rather than N cards.
+interface GroupedServiceCardProps {
+  items: CartItem[];
+  getBooking: (itemId: string) => ServiceBooking;
+  onRemove: (itemId: string) => void;
+  /** Opens the chooser for this group — which service (or the whole group). */
+  onEditGroup: (items: CartItem[]) => void;
+  depositPolicy?: ProviderDepositPolicy;
+  conflictedIds: Set<string>;
+}
+
+const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
+  ({ items, getBooking, onRemove, onEditGroup, depositPolicy, conflictedIds }) => {
+    const { theme, palette: P } = useTheme();
+    const { showConfirm, DialogHost } = useAppDialog();
+
+    const depositPolicyArg = useMemo((): DepositPolicy | number => {
+      if (!depositPolicy) return 20;
+      return { type: depositPolicy.depositType, amount: depositPolicy.depositAmount };
+    }, [depositPolicy]);
+
+    const priceOf = useCallback((item: CartItem) => {
+      const base = Number(item?.price) || 0;
+      const addOns = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+      const full = base + addOns;
+      return getBooking(item.id).isDepositOnly
+        ? BookingService.calculateDeposit(full, depositPolicyArg)
+        : full;
+    }, [getBooking, depositPolicyArg]);
+
+    const groupTotal = useMemo(
+      () => items.reduce((sum, item) => sum + priceOf(item), 0),
+      [items, priceOf]
+    );
+
+    // A group can mix deposit and pay-in-full services, so the footer needs
+    // three reconcilable numbers rather than one ambiguous "total": what the
+    // services come to, what's charged now, and what's left for the
+    // appointment. Deposits are per-service — the provider sets that on each
+    // one — so these are summed per item, not derived from the group total.
+    const fullPriceOf = useCallback((item: CartItem) => {
+      const base = Number(item?.price) || 0;
+      const addOns = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+      return base + addOns;
+    }, []);
+
+    const hasDeposit = useMemo(
+      () => items.some(item => getBooking(item.id).isDepositOnly),
+      [items, getBooking]
+    );
+
+    const groupServiceTotal = useMemo(
+      () => items.reduce((sum, item) => sum + fullPriceOf(item), 0),
+      [items, fullPriceOf]
+    );
+
+    const groupRemaining = useMemo(
+      () => items.reduce((sum, item) => (
+        getBooking(item.id).isDepositOnly
+          ? sum + BookingService.calculateRemainingBalance(fullPriceOf(item), depositPolicyArg)
+          : sum
+      ), 0),
+      [items, getBooking, fullPriceOf, depositPolicyArg]
+    );
+
+    // Shared day + the span from the first service's start to the last one's
+    // end. Items are already time-ordered by buildRenderUnits.
+    const first = items[0]!;
+    const firstBooking = getBooking(first.id);
+    const startMinutes = to24hMinutes(firstBooking.selectedTime);
+    const last = items[items.length - 1]!;
+    const lastBooking = getBooking(last.id);
+    const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+    const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
+    const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
+    const hasConflict = items.some(i => conflictedIds.has(i.id));
+
+    const handleRemoveOne = useCallback((item: CartItem) => {
+      showConfirm(
+        'Remove Service',
+        `Remove ${item.serviceName} from this appointment?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: () => onRemove(item.id) },
+        ]
+      );
+    }, [onRemove, showConfirm]);
+
+    return (
+      <View style={[
+        styles.serviceCard,
+        styles.serviceCardShadow,
+        { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
+      ]}>
+        {hasConflict && (
+          <View style={styles.conflictBanner}>
+            <Ionicons name="alert-circle" size={14} color="#F44336" />
+            <Text style={styles.conflictBannerText}>
+              This time is no longer available — pick a new time
+            </Text>
+          </View>
+        )}
+
+        {/* Shared header: a filled badge (not a bare icon) so a group card is
+            obviously different from a single one at a glance, plus this
+            card's Edit — which opens the chooser rather than editing
+            straight through. */}
+        <View style={styles.groupHeader}>
+          <View style={[styles.groupBadge, { backgroundColor: P.accent }]}>
+            <Ionicons name="link" size={11} color="#FFFFFF" />
+            <Text style={styles.groupBadgeText}>
+              GROUP BOOKING · {items.length}
+            </Text>
+          </View>
+          <View style={styles.groupHeaderSpacer} />
+          <TouchableOpacity
+            style={[styles.itemEditButton, { borderColor: P.accent }]}
+            onPress={() => onEditGroup(items)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="pencil-outline" size={12} color={P.accent} />
+            <Text style={[styles.itemEditButtonText, { color: P.accent }]}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+        <Text
+          style={[styles.groupHeaderDate, { color: theme.text }, !isScheduled && styles.dateTextWarning]}
+          numberOfLines={2}
+        >
+          {isScheduled ? formatLongDateNoYear(firstBooking.selectedDate) : 'Unscheduled'}
+        </Text>
+        {spanKnown && (
+          <Text style={[styles.groupHeaderSpan, { color: theme.secondaryText }]}>
+            {formatTimeSpan(startMinutes, endMinutes)}
+          </Text>
+        )}
+
+        {/* One row per service — no per-row date, the header owns it */}
+        <View style={styles.groupRows}>
+          {items.map(item => {
+            const b = getBooking(item.id);
+            return (
+              <View key={item.id} style={[styles.groupRow, { borderTopColor: P.border }]}>
+                <View style={styles.groupRowInfo}>
+                  <Text style={[styles.groupRowName, { color: theme.text }]} numberOfLines={1}>
+                    {item.serviceName}
+                    {b.isDepositOnly ? ' (Deposit)' : ''}
+                  </Text>
+                  <Text style={[styles.groupRowMeta, { color: theme.secondaryText }]} numberOfLines={1}>
+                    {item.duration}
+                  </Text>
+                  {/* Same labelled add-on line as the single card, so both
+                      card types read consistently. */}
+                  {(() => {
+                    const list = (item.addOns || []).filter((a: any) => a?.name);
+                    if (list.length === 0) return null;
+                    const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+                    return (
+                      <Text style={[styles.groupRowAddOns, { color: theme.text }]} numberOfLines={2}>
+                        + {list.length} add-on{list.length === 1 ? '' : 's'} (£{total.toFixed(2)}):{' '}
+                        {list.map((a: any) => a.name).join(', ')}
+                      </Text>
+                    );
+                  })()}
+                  {b.isDepositOnly && (
+                    // Deposit is set per service by the provider, so name this
+                    // row's own deposit and remainder against its own full
+                    // price — the price on the right is only the deposit.
+                    <Text style={[styles.groupRowDeposit, { color: theme.secondaryText }]}>
+                      £{fullPriceOf(item).toFixed(2)} service · £{priceOf(item).toFixed(2)} deposit · £
+                      {BookingService.calculateRemainingBalance(fullPriceOf(item), depositPolicyArg).toFixed(2)} at appointment
+                    </Text>
+                  )}
+                </View>
+                <Text style={[styles.groupRowPrice, { color: P.accent }]}>
+                  £{priceOf(item).toFixed(2)}
+                </Text>
+                <TouchableOpacity
+                  style={styles.groupRowRemove}
+                  onPress={() => handleRemoveOne(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.removeText}>×</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Group footer — on a deposit group the service total and remainder
+            sit above the amount actually charged now, so all three
+            reconcile; otherwise it stays a single total. */}
+        <View style={[styles.groupFooter, { borderTopColor: P.border }]}>
+          {hasDeposit ? (
+            <View style={styles.groupFooterBreakdown}>
+              <View style={styles.groupFooterRow}>
+                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
+                  {items.length} services
+                </Text>
+                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
+                  £{groupServiceTotal.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.groupFooterRow}>
+                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
+                  Remaining at appointment
+                </Text>
+                <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
+                  £{groupRemaining.toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.groupFooterRow}>
+                <Text style={[styles.groupFooterTotalLabel, { color: theme.text }]}>Deposit due now</Text>
+                <Text style={[styles.groupFooterValue, { color: P.accent }]}>
+                  £{groupTotal.toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.groupFooterRow}>
+              <Text style={[styles.groupFooterLabel, { color: theme.secondaryText }]}>
+                {items.length} services
+              </Text>
+              <Text style={[styles.groupFooterValue, { color: P.accent }]}>
+                £{groupTotal.toFixed(2)}
+              </Text>
+            </View>
+          )}
+        </View>
+        <DialogHost />
+      </View>
     );
   }
 );
@@ -807,6 +1119,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  const insets = useSafeAreaInsets();
 
   const {
     items,
@@ -822,7 +1135,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     addToCart,
   } = useCart();
 
-  const { createBookingsFromCart } = useBooking();
+  const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
   const { user, updateUser } = useAuth();
 
   // State management
@@ -830,6 +1143,22 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // BookingSheet in edit mode — opened per cart item via ServiceCard's Edit button
   const [showBookingSheet, setShowBookingSheet] = useState(false);
   const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  // Non-null while the "which service?" chooser is up, holding the candidate
+  // items for one provider. Only ever set for providers with >1 service.
+  const [pickerItems, setPickerItems] = useState<CartItem[] | null>(null);
+  // Non-null while the group date/time picker is up, holding the group's items
+  // in running order. The client picks the day, then a start time out of the
+  // options where the WHOLE chain fits back-to-back.
+  const [groupRescheduleItems, setGroupRescheduleItems] = useState<CartItem[] | null>(null);
+  const [groupRescheduleDate, setGroupRescheduleDate] = useState<string>('');
+  // Chain start options for groupRescheduleDate — each entry is a full
+  // schedule (one slot per service), so picking one assigns every service at
+  // once. Null while the lookup for the selected day is still running.
+  const [groupRescheduleOptions, setGroupRescheduleOptions] = useState<BackToBackSlot[][] | null>(null);
+  const [groupRescheduleChoice, setGroupRescheduleChoice] = useState<BackToBackSlot[] | null>(null);
+  // Providers whose section is collapsed to just its header. Collapsed-by-key
+  // rather than expanded-by-key so a newly added provider defaults to open.
+  const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
   // Set right after auto-adding a required consultation to the cart (see
   // handleCheckout) — the effect below opens its date/time picker as soon
   // as the new item actually shows up in `items`, since addToCart() is a
@@ -841,11 +1170,73 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false);
   const [paymentTotal, setPaymentTotal] = useState(0); // ADD THIS
 
+  // An RN Modal renders in a native overlay above whatever screen is
+  // focused — it isn't scoped to "Cart is the visible screen," just to this
+  // boolean being true. If a push notification is tapped while the success
+  // modal is open, React Navigation moves focus elsewhere but this state
+  // never resets, so the modal keeps rendering on top of the new screen.
+  // Dismiss on blur so leaving Cart (for any reason) always closes it.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      setShowPaymentSuccessModal(false);
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const [checkoutSnapshot, setCheckoutSnapshot] = useState<{
   items: CartItem[];
   bookings: Record<string, ServiceBooking>;
 }>({ items: [], bookings: {} });
+  // The review list is built from the same render units the cart itself uses:
+  // services sharing a bookingBatchId collapse into ONE group block with a
+  // shared header and subtotal, rather than repeating a "group booking" tag
+  // under every member of the batch. A batch of one isn't a group — same rule
+  // buildRenderUnits/MultiBookingSheet apply.
+  const checkoutRenderUnits = useMemo((): CartRenderUnit[] => {
+    const batchCounts = new Map<string, number>();
+    checkoutSnapshot.items.forEach(i => {
+      if (!i.bookingBatchId) return;
+      batchCounts.set(i.bookingBatchId, (batchCounts.get(i.bookingBatchId) ?? 0) + 1);
+    });
+
+    const units: CartRenderUnit[] = [];
+    const emittedBatches = new Set<string>();
+    checkoutSnapshot.items.forEach(item => {
+      const batchId = item.bookingBatchId;
+      if (!batchId || (batchCounts.get(batchId) ?? 0) < 2) {
+        units.push({ kind: 'single', item });
+        return;
+      }
+      if (emittedBatches.has(batchId)) return;
+      emittedBatches.add(batchId);
+      // Ordered by start time so the block reads as the actual running order.
+      // Reads times from the frozen snapshot, not live cart state, since the
+      // snapshot is what's actually being paid for.
+      const members = checkoutSnapshot.items
+        .filter(i => i.bookingBatchId === batchId)
+        .sort((a, b) => to24hMinutes(checkoutSnapshot.bookings[a.id]?.selectedTime)
+          - to24hMinutes(checkoutSnapshot.bookings[b.id]?.selectedTime));
+      units.push({ kind: 'group', batchId, items: members });
+    });
+    return units;
+  }, [checkoutSnapshot]);
+  // Correlation id for the on_hold rows reserved when the user commits to
+  // payment (see holdCartBookingSlots below) — threaded through to
+  // handlePaymentSuccess so createBookingsFromCart can claim the same
+  // batch instead of inserting fresh rows. Null whenever no hold is
+  // currently outstanding (not yet created, already claimed, or released).
+  const [holdBatchId, setHoldBatchId] = useState<string | null>(null);
+  // True only while the "Confirm & Pay" tap's holdCartCheckoutSlots call is
+  // in flight — guards against a double-tap firing two hold batches for
+  // the same cart.
+  const [isReservingSlots, setIsReservingSlots] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Cart item ids that failed to book on the last checkout attempt (e.g.
+  // "time slot no longer available") — flagged with a banner on their
+  // ServiceCard so the client can see which item needs a new time, instead
+  // of just reading a one-off alert and having no visible next step. Cleared
+  // whenever the item is edited/removed or a new checkout attempt starts.
+  const [conflictedItemIds, setConflictedItemIds] = useState<Set<string>>(new Set());
 
   // Customer details review modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -854,6 +1245,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const [reviewEmail, setReviewEmail] = useState('');
   const [reviewPhone, setReviewPhone] = useState('');
   const [saveAsDefault, setSaveAsDefault] = useState(false);
+  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [confirmedCustomerInfo, setConfirmedCustomerInfo] = useState<{
     name: string; email: string; phone: string;
   } | null>(null);
@@ -1066,6 +1458,52 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     [effectiveTotalNoPromo, effectiveTotal]
   );
 
+  // Splits one provider's items into render units: services sharing a
+  // bookingBatchId (scheduled together, so they run back-to-back on one day)
+  // collapse into a single grouped card; everything else stays its own card.
+  // A batch that's down to one surviving item is no longer a group — same
+  // rule MultiBookingSheet applies when it decides whether to mint an id at
+  // all — so it renders as a plain single card.
+  const buildRenderUnits = useCallback((providerItems: CartItem[]): CartRenderUnit[] => {
+    const batchCounts = new Map<string, number>();
+    providerItems.forEach(item => {
+      if (!item.bookingBatchId) return;
+      batchCounts.set(item.bookingBatchId, (batchCounts.get(item.bookingBatchId) ?? 0) + 1);
+    });
+
+    const units: CartRenderUnit[] = [];
+    const emittedBatches = new Set<string>();
+    providerItems.forEach(item => {
+      const batchId = item.bookingBatchId;
+      if (!batchId || (batchCounts.get(batchId) ?? 0) < 2) {
+        units.push({ kind: 'single', item });
+        return;
+      }
+      if (emittedBatches.has(batchId)) return;
+      emittedBatches.add(batchId);
+      // Ordered by start time so the card reads as the actual running order.
+      const members = providerItems
+        .filter(i => i.bookingBatchId === batchId)
+        .sort((a, b) => {
+          const ta = getServiceBooking(a.id).selectedTime;
+          const tb = getServiceBooking(b.id).selectedTime;
+          return to24hMinutes(ta) - to24hMinutes(tb);
+        });
+      units.push({ kind: 'group', batchId, items: members });
+    });
+    return units;
+  }, [getServiceBooking]);
+
+  // Whether any item in the cart is deposit-only. When true the summary's
+  // bottom line isn't the cost of the services — it's just the amount being
+  // charged now — so the label says "Pay Now" instead of "Total". The
+  // per-item remaining balance stays on the individual service cards; the
+  // app deliberately doesn't total up or track off-app balances here.
+  const hasDepositItem = useMemo(
+    () => items.some(item => getServiceBooking(item.id).isDepositOnly),
+    [items, getServiceBooking]
+  );
+
   // Compute effective cart items for payment modal
   const effectiveCartItems = useMemo(() => {
     return items.map(item => {
@@ -1093,6 +1531,134 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const handleEditItem = useCallback((item: CartItem) => {
     setEditingItem(item);
     setShowBookingSheet(true);
+    // Editing is how the client acts on a conflict flag — clear it so the
+    // banner doesn't linger once they've picked a new time.
+    setConflictedItemIds(prev => {
+      if (!prev.has(item.id)) return prev;
+      const next = new Set(prev);
+      next.delete(item.id);
+      return next;
+    });
+  }, []);
+
+  // Picking a single service out of the chooser. If that service is currently
+  // part of a group, editing it means it no longer runs back-to-back with the
+  // rest — so it leaves the group (bookingBatchId cleared) and becomes its own
+  // booking. Warn first, since the client arranged that grouping deliberately.
+  const handlePickerSelect = useCallback(
+    (item: CartItem) => {
+      const batchId = item.bookingBatchId;
+      const siblings = batchId
+        ? items.filter(i => i.bookingBatchId === batchId && i.id !== item.id)
+        : [];
+
+      if (siblings.length === 0) {
+        setPickerItems(null);
+        handleEditItem(item);
+        return;
+      }
+
+      setPickerItems(null);
+      showConfirm(
+        'Split this out?',
+        `${item.serviceName} will become its own appointment and may no longer run back-to-back with your other service${siblings.length > 1 ? 's' : ''}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: () => {
+              updateCartItem(item.id, { bookingBatchId: undefined });
+              // A group of one isn't a group (same rule MultiBookingSheet
+              // applies) — release the last remaining sibling too, so it
+              // doesn't render as a one-item "Booked together" card or
+              // produce a single-member group_booking_id at checkout.
+              if (siblings.length === 1) {
+                updateCartItem(siblings[0]!.id, { bookingBatchId: undefined });
+              }
+              handleEditItem(item);
+            },
+          },
+        ]
+      );
+    },
+    [items, handleEditItem, showConfirm, updateCartItem]
+  );
+
+  // "Reschedule all to a new day" from the chooser — opens the group date/time
+  // picker rather than silently assigning the next day that happens to fit.
+  // The client chose to move this group, so they pick WHERE it moves to; the
+  // old behaviour auto-committed a date they never saw until the confirm.
+  const handlePickerSelectGroup = useCallback(
+    (groupItems: CartItem[]) => {
+      setPickerItems(null);
+      setGroupRescheduleItems(groupItems);
+      setGroupRescheduleDate('');
+      setGroupRescheduleOptions(null);
+      setGroupRescheduleChoice(null);
+    },
+    []
+  );
+
+  // Load the start times the whole chain fits at on the picked day. Runs only
+  // while the group picker is open with a date chosen — the options are for
+  // THAT day, so they're cleared and refetched whenever the day changes.
+  useEffect(() => {
+    const groupItems = groupRescheduleItems;
+    if (!groupItems || !groupRescheduleDate) return;
+    let cancelled = false;
+    setGroupRescheduleOptions(null);
+    setGroupRescheduleChoice(null);
+    (async () => {
+      try {
+        const providerKey = groupItems[0]!.providerId ?? groupItems[0]!.providerName;
+        const options = await AvailabilityService.findAllBackToBackSlots(
+          providerKey,
+          groupItems.map(item => ({ serviceId: item.serviceId, duration: item.duration })),
+          groupRescheduleDate,
+        );
+        // A stale response for a day the client already moved off must not
+        // overwrite the current day's options.
+        if (cancelled) return;
+        setGroupRescheduleOptions(options ?? []);
+      } catch (error) {
+        logger.error('Error loading group reschedule slots:', error);
+        if (!cancelled) setGroupRescheduleOptions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [groupRescheduleItems, groupRescheduleDate]);
+
+  // Commit the picked chain — every service moves to the new day at its own
+  // slot, and the group stays one group (same batch id reused, or minted if
+  // these somehow weren't grouped yet).
+  const handleConfirmGroupReschedule = useCallback(() => {
+    const groupItems = groupRescheduleItems;
+    const schedule = groupRescheduleChoice;
+    if (!groupItems || !schedule || !groupRescheduleDate) return;
+    const existingBatchIds = new Set(
+      groupItems.map(i => i.bookingBatchId).filter(Boolean) as string[]
+    );
+    const batchId =
+      existingBatchIds.size === 1
+        ? [...existingBatchIds][0]!
+        : `cart-group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    groupItems.forEach((item, i) => {
+      updateCartItem(item.id, {
+        selectedDate: groupRescheduleDate,
+        selectedTime: schedule[i]!.time,
+        bookingBatchId: batchId,
+      });
+    });
+    setGroupRescheduleItems(null);
+  }, [groupRescheduleItems, groupRescheduleChoice, groupRescheduleDate, updateCartItem]);
+
+  const toggleProviderCollapsed = useCallback((providerName: string) => {
+    setCollapsedProviders(prev => {
+      const next = new Set(prev);
+      if (next.has(providerName)) next.delete(providerName);
+      else next.add(providerName);
+      return next;
+    });
   }, []);
 
   // Opens the date/time picker for an auto-added required consultation as
@@ -1126,60 +1692,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     },
     [editingItem, updateCartItem, showAlert]
   );
-
-  // "Schedule together" — find one day where every service in this
-  // provider's cart section fits back-to-back, instead of the client
-  // picking a time for each service individually and hoping they don't
-  // clash (or worse, discovering the clash only after paying). Order
-  // follows how the services already appear in the cart.
-  const [isSchedulingTogether, setIsSchedulingTogether] = useState(false);
-  const handleScheduleTogether = useCallback(async (providerItems: CartItem[]) => {
-    if (providerItems.length < 2) return;
-    setIsSchedulingTogether(true);
-    try {
-      const providerKey = providerItems[0]!.providerId ?? providerItems[0]!.providerName;
-      const result = await AvailabilityService.findNextBackToBackDay(
-        providerKey,
-        providerItems.map(item => ({ serviceId: item.serviceId, duration: item.duration }))
-      );
-      if (!result) {
-        showAlert(
-          'No Availability Found',
-          "We couldn't find a day in the next couple of weeks with room for all these services back-to-back. Try scheduling them individually instead."
-        );
-        return;
-      }
-      const displayDate = new Date(result.date + 'T12:00:00').toLocaleDateString('en-GB', {
-        weekday: 'long', day: 'numeric', month: 'long',
-      });
-      const summary = providerItems
-        .map((item, i) => `${item.serviceName}: ${result.schedule[i]!.time}`)
-        .join('\n');
-      showConfirm(
-        `Schedule for ${displayDate}?`,
-        summary,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Schedule All',
-            onPress: () => {
-              providerItems.forEach((item, i) => {
-                updateCartItem(item.id, {
-                  selectedDate: result.date,
-                  selectedTime: result.schedule[i]!.time,
-                });
-              });
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      logger.error('Error scheduling services together:', error);
-      showAlert("Couldn't find a shared time", 'Please try again or schedule these individually.');
-    } finally {
-      setIsSchedulingTogether(false);
-    }
-  }, [showAlert, showConfirm, updateCartItem]);
 
   // Detect if any provider in the cart is mobile (travels to client)
   useEffect(() => {
@@ -1441,6 +1953,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       await updateUser({ name: reviewName, phone: reviewPhone });
     }
 
+    // Re-confirm agreement per checkout attempt rather than letting a stale
+    // check from a previous cart session carry through silently.
+    setAgreedToPolicy(false);
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
   }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showAlert, hasMobileProvider, clientAddress]);
@@ -1560,11 +2075,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       logger.log('- Appointments:', appointmentData.length);
     }
     try {
-      await createBookingsFromCart(itemsToBook, appointmentData, clientAddress.trim() || undefined);
+      // Pass the hold batch (if one is outstanding) so createBookingsFromCart
+      // claims the already-reserved on_hold rows instead of inserting fresh
+      // ones. holdBatchId is cleared unconditionally after this call — the
+      // batch is either now claimed, or claim found nothing live and every
+      // item fell back to a normal insert; either way there's nothing left
+      // to release.
+      await createBookingsFromCart(itemsToBook, appointmentData, clientAddress.trim() || undefined, holdBatchId ?? undefined);
+      setHoldBatchId(null);
       if (__DEV__) {
         logger.log('STEP 3 COMPLETE - createBookingsFromCart returned');
       }
     } catch (bookingError) {
+      setHoldBatchId(null);
       logger.error('STEP 3 FAILED:', bookingError);
       logger.error('Error details:', JSON.stringify(bookingError, null, 2));
       throw bookingError;
@@ -1623,16 +2146,21 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     // A multi-service checkout can partially succeed — clear only the
     // services that actually booked, so the ones that failed stay in the
     // cart for the client to retry without re-booking (and re-paying for)
-    // the ones that already went through.
+    // the ones that already went through. Whatever's left (didn't succeed)
+    // gets flagged so the client can see which item needs attention.
     if (error instanceof BookingError) {
       error.succeededCartItemIds.forEach(id => removeFromCart(id));
+      const failedIds = checkoutSnapshot.items
+        .map(i => i.id)
+        .filter(id => !error.succeededCartItemIds.includes(id));
+      setConflictedItemIds(new Set(failedIds));
     }
     // The caller (PaymentModal.handlePayment) owns showing the single
     // "Booking Failed" alert and closing the payment sheet — this only needs
     // to propagate the error up to it (after the diagnostics above).
     throw error;
   }
-}, [checkoutSnapshot, createBookingsFromCart, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart]);
+}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart]);
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
@@ -1720,7 +2248,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             <View style={styles.headerRightButtons}>
               {/* View Bookings Button */}
               <TouchableOpacity
-                style={[styles.bookingsButton, { backgroundColor: 'rgba(175,145,151,0.18)' }]}
+                style={[styles.bookingsButton, { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.18)' : 'rgba(92,64,51,0.18)') }]}
                 onPress={() => {
                   try {
                     navigation.navigate('Bookings'); // NAVIGATES TO BOOKINGS SCREEN
@@ -1766,7 +2294,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     </View>
                     {!isEditingDetails && (
                       <TouchableOpacity
-                        style={[styles.reviewEditBtn, { backgroundColor: 'rgba(175,145,151,0.12)', borderColor: P.border }]}
+                        style={[styles.reviewEditBtn, { backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.12)' : 'rgba(92,64,51,0.12)'), borderColor: P.border }]}
                         onPress={() => setIsEditingDetails(true)}
                         activeOpacity={0.7}
                       >
@@ -1932,39 +2460,142 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     {/* Appointments */}
                     <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
                       <Text style={[styles.summarySectionTitle, { color: P.sub }]}>APPOINTMENTS</Text>
-                      {checkoutSnapshot.items.map((item, index) => {
-                        const booking = checkoutSnapshot.bookings[item.id] || {};
-                        const basePrice = Number(item?.price) || 0;
-                        const addOnsTotal = (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
-                        const itemTotal = basePrice + addOnsTotal;
-                        const isDeposit = !!(booking as ServiceBooking).isDepositOnly;
-                        // Use the provider's actual deposit policy (percent OR flat £) —
-                        // never the 20% fallback, which silently ignores fixed-fee policies.
-                        const itemPromoName = item.providerDisplayName ?? item.providerName;
-                        const itemDepositPolicy = providerDepositPolicies[itemPromoName];
-                        const itemDepositPolicyArg: DepositPolicy | number = itemDepositPolicy
-                          ? { type: itemDepositPolicy.depositType, amount: itemDepositPolicy.depositAmount }
-                          : 20;
-                        const displayPrice = isDeposit ? BookingService.calculateDeposit(itemTotal, itemDepositPolicyArg) : itemTotal;
-                        const b = booking as ServiceBooking;
+                      {checkoutRenderUnits.map((unit, index) => {
+                        // Price for one snapshot item, using the provider's actual
+                        // deposit policy (percent OR flat £) — never the 20%
+                        // fallback, which silently ignores fixed-fee policies.
+                        const priceOf = (item: CartItem) => {
+                          const booking = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
+                          const full = (Number(item?.price) || 0)
+                            + (item?.addOns || []).reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+                          if (!booking.isDepositOnly) return full;
+                          const policy = providerDepositPolicies[item.providerDisplayName ?? item.providerName];
+                          const policyArg: DepositPolicy | number = policy
+                            ? { type: policy.depositType, amount: policy.depositAmount }
+                            : 20;
+                          return BookingService.calculateDeposit(full, policyArg);
+                        };
+                        // Add-ons are named and priced here too — this is the last
+                        // screen before paying, so it must account for the number
+                        // being charged.
+                        const renderAddOns = (item: CartItem) => {
+                          const list = (item.addOns || []).filter((a: any) => a?.name);
+                          if (list.length === 0) return null;
+                          const total = list.reduce((s: number, a: any) => s + (Number(a?.price) || 0), 0);
+                          return (
+                            <Text style={[styles.summaryItemAddOns, { color: P.text }]} numberOfLines={2}>
+                              + {list.length} add-on{list.length === 1 ? '' : 's'} (£{total.toFixed(2)}):{' '}
+                              {list.map((a: any) => a.name).join(', ')}
+                            </Text>
+                          );
+                        };
+
+                        // Divider only between two plain items. A group draws its
+                        // own bordered box, so a divider directly above or below
+                        // one reads as a doubled line.
+                        const divider = index > 0 && checkoutRenderUnits[index - 1]!.kind === 'single'
+                          ? <View style={[styles.summaryDivider, { backgroundColor: P.sep }]} />
+                          : null;
+
+                        // A group renders as ONE block: shared provider/date/span
+                        // header, its services as indented rows, and a subtotal —
+                        // so it reads as a single appointment rather than N
+                        // unrelated bookings each carrying a repeated group tag.
+                        if (unit.kind === 'group') {
+                          const first = unit.items[0]!;
+                          const firstBooking = (checkoutSnapshot.bookings[first.id] || {}) as ServiceBooking;
+                          const last = unit.items[unit.items.length - 1]!;
+                          const lastBooking = (checkoutSnapshot.bookings[last.id] || {}) as ServiceBooking;
+                          const startMinutes = to24hMinutes(firstBooking.selectedTime);
+                          const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
+                          const spanKnown = !!firstBooking.selectedDate
+                            && startMinutes !== Number.MAX_SAFE_INTEGER
+                            && endMinutes > startMinutes;
+                          const groupTotal = unit.items.reduce((sum, i) => sum + priceOf(i), 0);
+
+                          return (
+                            // No divider above a group — its own border already
+                            // separates it from whatever precedes it, and both
+                            // together reads as a doubled line.
+                            <View
+                              key={unit.batchId}
+                              style={[styles.summaryGroupBlock, { borderColor: P.accent, backgroundColor: P.accentDim }]}
+                            >
+                              <View style={[styles.summaryGroupBadge, { backgroundColor: P.accent }]}>
+                                <Ionicons name="link" size={10} color="#FFFFFF" />
+                                <Text style={styles.summaryGroupBadgeText}>
+                                  GROUP BOOKING · {unit.items.length}
+                                </Text>
+                              </View>
+                              <Text style={[styles.summaryItemProvider, { color: P.sub }]}>
+                                {first.providerDisplayName ?? first.providerName ?? ''}
+                              </Text>
+                              {!!firstBooking.selectedDate && (
+                                <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
+                                  {formatLongDateNoYear(firstBooking.selectedDate)}
+                                  {spanKnown ? ` · ${formatTimeSpan(startMinutes, endMinutes)}` : ''}
+                                </Text>
+                              )}
+
+                              {/* One row per service — no per-row date or
+                                  provider, the header owns both. */}
+                              <View style={styles.summaryGroupRows}>
+                                {unit.items.map(groupItem => {
+                                  const gb = (checkoutSnapshot.bookings[groupItem.id] || {}) as ServiceBooking;
+                                  return (
+                                    <View key={groupItem.id} style={styles.summaryGroupRow}>
+                                      <View style={styles.summaryItemRow}>
+                                        <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
+                                          {groupItem.serviceName}{gb.isDepositOnly ? ' (Dep.)' : ''}
+                                        </Text>
+                                        <Text style={[styles.summaryItemPrice, { color: P.accent }]}>
+                                          £{priceOf(groupItem).toFixed(2)}
+                                        </Text>
+                                      </View>
+                                      {!!gb.selectedTime && (
+                                        <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
+                                          {formatTime12(gb.selectedTime)} · {groupItem.duration}
+                                        </Text>
+                                      )}
+                                      {renderAddOns(groupItem)}
+                                    </View>
+                                  );
+                                })}
+                              </View>
+
+                              <View style={[styles.summaryGroupFooter, { borderTopColor: P.sep }]}>
+                                <Text style={[styles.summaryGroupFooterLabel, { color: P.sub }]}>
+                                  {unit.items.length} services back-to-back
+                                </Text>
+                                <Text style={[styles.summaryGroupFooterValue, { color: P.accent }]}>
+                                  £{groupTotal.toFixed(2)}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        }
+
+                        const item = unit.item;
+                        const b = (checkoutSnapshot.bookings[item.id] || {}) as ServiceBooking;
                         return (
                           <View key={item.id}>
-                            {index > 0 && <View style={[styles.summaryDivider, { backgroundColor: P.sep }]} />}
+                            {divider}
                             <View style={styles.summaryBookingItem}>
                               <View style={styles.summaryItemRow}>
                                 <Text style={[styles.summaryItemService, { color: P.text }]} numberOfLines={1}>
-                                  {item.serviceName}{isDeposit ? ' (Dep.)' : ''}
+                                  {item.serviceName}{b.isDepositOnly ? ' (Dep.)' : ''}
                                 </Text>
                                 <Text style={[styles.summaryItemPrice, { color: P.accent }]}>
-                                  £{displayPrice.toFixed(2)}
+                                  £{priceOf(item).toFixed(2)}
                                 </Text>
                               </View>
                               <Text style={[styles.summaryItemProvider, { color: P.sub }]}>
                                 {item.providerDisplayName ?? item.providerName ?? ''}
                               </Text>
+                              {renderAddOns(item)}
                               {b.selectedDate && b.selectedTime && (
                                 <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
-                                  {new Date(b.selectedDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} · {b.selectedTime}
+                                  {formatLongDateNoYear(b.selectedDate)} · {formatTime12(b.selectedTime)}
                                 </Text>
                               )}
                             </View>
@@ -1984,10 +2615,28 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{getServiceFee().toFixed(2)}</Text>
                       </View>
                       <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
-                        <Text style={[styles.summaryGrandLabel, { color: P.text }]}>Total</Text>
+                        <Text style={[styles.summaryGrandLabel, { color: P.text }]}>{hasDepositItem ? 'Pay Now' : 'Total'}</Text>
                         <Text style={[styles.summaryGrandValue, { color: P.accent }]}>£{effectiveFinalTotal.toFixed(2)}</Text>
                       </View>
                     </View>
+
+                    {/* Policy & Terms agreement */}
+                    <TouchableOpacity
+                      style={styles.reviewCheckboxRow}
+                      onPress={() => { console.log('[CartScreen] checkbox toggled', !agreedToPolicy); setAgreedToPolicy(!agreedToPolicy); }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.reviewCheckbox, {
+                        borderColor: P.border,
+                        backgroundColor: agreedToPolicy ? P.accent : 'transparent',
+                      }]}>
+                        {agreedToPolicy && <Text style={styles.reviewCheckmark}>✓</Text>}
+                      </View>
+                      {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
+                      <Text style={[styles.reviewCheckboxLabel, { color: P.text, flex: 1 }]}>
+                        I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and each provider's cancellation policy
+                      </Text>
+                    </TouchableOpacity>
 
                     {/* Buttons */}
                     <View style={styles.reviewButtonRow}>
@@ -2002,14 +2651,42 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         <Text style={[styles.reviewCancelText, { color: P.text }]}>Back</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
-                        onPress={() => {
-                          setShowBookingSummaryModal(false);
-                          setShowPaymentModal(true);
+                        style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }, (!agreedToPolicy || isReservingSlots) && styles.payButtonDisabled]}
+                        onPress={async () => {
+                          console.log('[CartScreen] Confirm & Pay pressed', { agreedToPolicy, isReservingSlots, itemCount: checkoutSnapshot.items.length });
+                          // Reserve every item's slot as an on_hold booking
+                          // BEFORE opening the payment sheet — closes the
+                          // window between "committed to paying" and
+                          // "booking actually inserted" that createBooking()'s
+                          // insert-time-only conflict check leaves open for
+                          // the whole payment-sheet interaction.
+                          setIsReservingSlots(true);
+                          try {
+                            console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
+                            const batchId = await holdCartCheckoutSlots(
+                              checkoutSnapshot.items,
+                              checkoutSnapshot.bookings
+                            );
+                            console.log('[CartScreen] holdCartCheckoutSlots succeeded', batchId);
+                            setHoldBatchId(batchId);
+                            setShowBookingSummaryModal(false);
+                            setShowPaymentModal(true);
+                          } catch (err) {
+                            console.log('[CartScreen] holdCartCheckoutSlots FAILED', err);
+                            const message = err instanceof BookingError
+                              ? err.message
+                              : "We couldn't reserve that time. Please try again.";
+                            showAlert('Scheduling Conflict', message);
+                          } finally {
+                            setIsReservingSlots(false);
+                          }
                         }}
                         activeOpacity={0.8}
+                        disabled={!agreedToPolicy || isReservingSlots}
                       >
-                        <Text style={styles.reviewConfirmText}>Confirm & Pay</Text>
+                        {isReservingSlots
+                          ? <ActivityIndicator color="#FFFFFF" />
+                          : <Text style={styles.reviewConfirmText}>Confirm & Pay</Text>}
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2024,7 +2701,17 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             return (
               <ActivePaymentModal
                 isVisible={showPaymentModal}
-                onClose={() => setShowPaymentModal(false)}
+                onClose={() => {
+                  // User backed out via the × close button without paying —
+                  // free the held slots immediately rather than making the
+                  // next client wait out the 10-minute TTL. Best-effort:
+                  // releaseCartCheckoutSlots never throws.
+                  if (holdBatchId) {
+                    releaseCartCheckoutSlots(holdBatchId);
+                    setHoldBatchId(null);
+                  }
+                  setShowPaymentModal(false);
+                }}
                 effectiveCartItems={effectiveCartItems}
                 totalAmount={effectiveFinalTotal}
                 onPaymentSuccess={(method, paymentIntentId) => handlePaymentSuccess(method, paymentIntentId)}
@@ -2033,7 +2720,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                   setShowPaymentModal(false);
                   setShowPaymentSuccessModal(true);
                 }}
-                onBookingFailed={(message) => showAlert('Booking Failed', message)}
+                onBookingFailed={(message) => {
+                  // Booking failed after payment (or during) — the held
+                  // slots are either already claimed/converted by
+                  // createBookingsFromCart or still on_hold; releasing here
+                  // is a safe no-op for the former (release only matches
+                  // rows still status='on_hold') and correct cleanup for
+                  // the latter.
+                  if (holdBatchId) {
+                    releaseCartCheckoutSlots(holdBatchId);
+                    setHoldBatchId(null);
+                  }
+                  showAlert('Booking Failed', message);
+                }}
               />
             );
           })()}
@@ -2086,6 +2785,255 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             </Modal>
           )}
 
+          {/* "Which service?" chooser — only reachable from a provider header
+              with more than one service in the cart. Picking one hands off to
+              the same BookingSheet a single-service provider opens directly. */}
+          <Modal
+            visible={pickerItems !== null}
+            animationType="fade"
+            transparent
+            onRequestClose={() => setPickerItems(null)}
+          >
+            <TouchableOpacity
+              style={styles.pickerOverlay}
+              activeOpacity={1}
+              onPress={() => setPickerItems(null)}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                style={[styles.pickerSheet, { backgroundColor: P.card, borderColor: P.border }]}
+              >
+                {/* The chooser now only ever opens from a group card, so the
+                    title can name the group directly instead of asking a
+                    generic "which one" question. */}
+                <Text style={[styles.pickerTitle, { color: theme.text }]}>
+                  Edit group booking
+                </Text>
+                <Text style={[styles.pickerSubtitle, { color: P.sub }]}>
+                  {(pickerItems ?? [])[0]?.providerDisplayName
+                    ?? (pickerItems ?? [])[0]?.providerName
+                    ?? ''}
+                </Text>
+
+                {/* Reschedule the whole group as a unit, keeping every service
+                    back-to-back. Listed first because it's the non-destructive
+                    option — the per-service rows below all break the group. */}
+                <TouchableOpacity
+                  style={[styles.pickerRow, styles.pickerRowFirst, { borderColor: P.border }]}
+                  onPress={() => handlePickerSelectGroup(pickerItems ?? [])}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="link" size={16} color={P.accent} />
+                  <View style={styles.pickerRowInfo}>
+                    <Text style={[styles.pickerRowName, { color: theme.text }]} numberOfLines={1}>
+                      Reschedule all {(pickerItems ?? []).length} to a new day
+                    </Text>
+                    <Text style={[styles.pickerRowMeta, { color: theme.secondaryText }]} numberOfLines={2}>
+                      Pick a date & time — they stay one group, back-to-back
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={P.accent} />
+                </TouchableOpacity>
+
+                <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
+                  Or edit one service — it leaves the group
+                </Text>
+
+                {(pickerItems ?? []).map((pItem) => {
+                  const b = getServiceBooking(pItem.id);
+                  const scheduled = Boolean(b.selectedDate && b.selectedTime);
+                  // The same service can be in the cart more than once, which
+                  // would otherwise render two identical rows here — mirror
+                  // ServiceCard and append the instance number when it's a dupe.
+                  const isDuplicate =
+                    (pickerItems ?? []).filter(i => i.serviceName === pItem.serviceName).length > 1;
+                  return (
+                    <TouchableOpacity
+                      key={pItem.id}
+                      style={[styles.pickerRow, { borderColor: P.border }]}
+                      onPress={() => handlePickerSelect(pItem)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.pickerRowInfo}>
+                        <Text style={[styles.pickerRowName, { color: theme.text }]} numberOfLines={1}>
+                          {pItem.serviceName}
+                          {isDuplicate ? ` #${pItem.serviceInstanceIndex ?? 1}` : ''}
+                          {b.isDepositOnly ? ' (Deposit)' : ''}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.pickerRowMeta,
+                            { color: theme.secondaryText },
+                            !scheduled && styles.dateTextWarning,
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {scheduled
+                            ? `${formatLongDateNoYear(b.selectedDate)} at ${formatTime12(b.selectedTime)}`
+                            : 'Unscheduled'}
+                        </Text>
+                        <Text style={[styles.pickerRowHint, { color: P.sub }]} numberOfLines={1}>
+                          Leaves the group
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={P.accent} />
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={styles.pickerCancel}
+                  onPress={() => setPickerItems(null)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickerCancelText, { color: P.sub }]}>Cancel</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* Group reschedule — the client picks the day, then a start time out
+              of the options where the WHOLE chain still fits back-to-back. The
+              per-service times are derived from that one choice, so the group
+              can't be broken apart here. */}
+          <Modal
+            visible={groupRescheduleItems !== null}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setGroupRescheduleItems(null)}
+          >
+            <View style={styles.groupSheetOverlay}>
+              <View style={[styles.groupSheet, { backgroundColor: P.card, borderColor: P.border }]}>
+                <View style={styles.groupSheetHeader}>
+                  <View style={styles.groupSheetHeaderText}>
+                    <Text style={[styles.pickerTitle, { color: theme.text }]}>
+                      Reschedule {(groupRescheduleItems ?? []).length} services
+                    </Text>
+                    <Text style={[styles.pickerSubtitle, { color: P.sub }]}>
+                      {(groupRescheduleItems ?? [])[0]?.providerDisplayName
+                        ?? (groupRescheduleItems ?? [])[0]?.providerName
+                        ?? ''}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setGroupRescheduleItems(null)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={22} color={P.sub} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                  {/* Date only — the times below are chain start times, not
+                      this-service slots, so the calendar's own slot list would
+                      be wrong here. */}
+                  <ModernBeautyCalendar
+                    selectedDate={groupRescheduleDate}
+                    onDateSelect={setGroupRescheduleDate}
+                    onTimeSelect={() => {}}
+                    providerName={
+                      (groupRescheduleItems ?? [])[0]?.providerId
+                      ?? (groupRescheduleItems ?? [])[0]?.providerName
+                      ?? ''
+                    }
+                    accentColor={P.accent}
+                    textColor={theme.text}
+                    subColor={P.sub}
+                    surfaceColor={P.surface}
+                  />
+
+                  {!!groupRescheduleDate && (
+                    <View style={styles.groupSheetSection}>
+                      <Text style={[styles.pickerSectionLabel, { color: P.sub }]}>
+                        Start time — all {(groupRescheduleItems ?? []).length} run back-to-back
+                      </Text>
+
+                      {groupRescheduleOptions === null && (
+                        <View style={styles.groupSheetLoadingRow}>
+                          <ActivityIndicator size="small" color={P.accent} />
+                          <Text style={[styles.groupSheetLoadingText, { color: P.sub }]}>
+                            Finding times that fit all {(groupRescheduleItems ?? []).length}…
+                          </Text>
+                        </View>
+                      )}
+
+                      {groupRescheduleOptions?.length === 0 && (
+                        <Text style={[styles.groupSheetEmptyText, { color: P.sub }]}>
+                          No room for all {(groupRescheduleItems ?? []).length} services back-to-back on this day. Try another date.
+                        </Text>
+                      )}
+
+                      <View style={styles.groupSheetTimeWrap}>
+                        {(groupRescheduleOptions ?? []).map(option => {
+                          const start = option[0]!.time;
+                          const selected = groupRescheduleChoice?.[0]?.time === start;
+                          return (
+                            <TouchableOpacity
+                              key={start}
+                              style={[
+                                styles.groupSheetTimeChip,
+                                { backgroundColor: P.surface, borderColor: selected ? P.accent : 'transparent' },
+                              ]}
+                              onPress={() => setGroupRescheduleChoice(option)}
+                              activeOpacity={0.75}
+                            >
+                              <Text
+                                style={[
+                                  styles.groupSheetTimeText,
+                                  { color: selected ? P.accent : theme.text },
+                                ]}
+                              >
+                                {start}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Exactly what each service ends up at, before committing —
+                      the old flow showed this only in a confirm dialog after
+                      the day had already been chosen for them. */}
+                  {groupRescheduleChoice && (
+                    <View style={[styles.groupSheetPreview, { borderColor: P.sep }]}>
+                      {(groupRescheduleItems ?? []).map((item, i) => (
+                        <View key={item.id} style={styles.groupSheetPreviewRow}>
+                          <Text
+                            style={[styles.groupSheetPreviewName, { color: theme.text }]}
+                            numberOfLines={1}
+                          >
+                            {item.serviceName}
+                          </Text>
+                          <Text style={[styles.groupSheetPreviewTime, { color: P.accent }]}>
+                            {groupRescheduleChoice[i]!.time}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
+
+                <TouchableOpacity
+                  style={[
+                    styles.groupSheetConfirm,
+                    { backgroundColor: P.accent },
+                    !groupRescheduleChoice && styles.payButtonDisabled,
+                  ]}
+                  onPress={handleConfirmGroupReschedule}
+                  disabled={!groupRescheduleChoice}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.groupSheetConfirmText}>
+                    {groupRescheduleChoice
+                      ? `Move all to ${formatLongDateNoYear(groupRescheduleDate)}`
+                      : 'Pick a date & time'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
           {/* Edit a cart item's booking — same sheet used to add it from the
               provider profile, pre-filled with what's already set. */}
           {editingItem && (
@@ -2128,33 +3076,31 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor="#AF9197"
-                colors={['#AF9197']}
+                tintColor={isDarkMode ? '#AF9197' : '#5C4033'}
+                colors={[(isDarkMode ? '#AF9197' : '#5C4033')]}
                 progressBackgroundColor={isDarkMode ? '#252220' : '#FFF'}
               />
             }
           >
             {items.length > 0 ? (
               <>
-                {/* Provider Sections — always shown, no expand/collapse */}
+                {/* Provider Sections — collapsible, so a cart with several
+                    providers stays scannable instead of becoming a wall of
+                    cards. Collapsed shows the header (and its totals) only. */}
                 {Object.entries(itemsByProvider).map(([providerName, providerItems]) => {
                   const providerData = bookingSummary.providers?.[providerName];
 
                   if (!providerData || !providerItems?.length) return null;
 
+                  const isCollapsed = collapsedProviders.has(providerName);
+                  const renderUnits = buildRenderUnits(providerItems);
+
                   return (
                     <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {/* Provider Header */}
+                      {/* Provider Header — no Edit button here: editing acts on
+                          a card (a single service, or a whole group), not on
+                          the provider as a whole. */}
                       <View style={styles.providerHeader}>
-                        <TouchableOpacity
-                          style={[styles.headerEditButton, { borderColor: P.accent }]}
-                          onPress={() => providerItems[0] && handleEditItem(providerItems[0])}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="pencil-outline" size={12} color={P.accent} />
-                          <Text style={[styles.headerEditButtonText, { color: P.accent }]}>Edit</Text>
-                        </TouchableOpacity>
-
                         <TouchableOpacity onPress={() => navigateToProvider(providerItems)}>
                           <View style={styles.providerLogoContainer}>
                             {providerItems[0]?.providerImage ? (
@@ -2187,50 +3133,68 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         </View>
                       </View>
 
-                      {/* Multiple services with this one provider — offer to find one
-                          day where they all fit back-to-back, instead of the client
-                          scheduling each one individually and hoping they don't clash. */}
-                      {providerItems.length > 1 && (
-                        <TouchableOpacity
-                          style={[styles.scheduleTogetherButton, { borderColor: P.accent }]}
-                          onPress={() => handleScheduleTogether(providerItems)}
-                          disabled={isSchedulingTogether}
-                          activeOpacity={0.8}
-                        >
-                          {isSchedulingTogether ? (
-                            <ActivityIndicator size="small" color={P.accent} />
-                          ) : (
-                            <>
-                              <Ionicons name="calendar-outline" size={14} color={P.accent} />
-                              <Text style={[styles.scheduleTogetherText, { color: P.accent }]}>
-                                Schedule all {providerItems.length} together
-                              </Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
+                      {/* Services — one card per render unit: a grouped card
+                          for services scheduled together, a single card for
+                          everything else. Hidden entirely when collapsed. */}
+                      {!isCollapsed && (
+                        <View style={styles.servicesList}>
+                          {renderUnits.map((unit, index) => {
+                            const policyKey = providerItems[0]?.providerDisplayName ?? providerName;
+                            const policy = providerDepositPolicies[policyKey];
+                            return (
+                              <View
+                                key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id}
+                                style={styles.serviceItemWrapper}
+                              >
+                                {unit.kind === 'group' ? (
+                                  <GroupedServiceCard
+                                    items={unit.items}
+                                    getBooking={getServiceBooking}
+                                    onRemove={removeFromCart}
+                                    onEditGroup={setPickerItems}
+                                    conflictedIds={conflictedItemIds}
+                                    {...(policy !== undefined ? { depositPolicy: policy } : {})}
+                                  />
+                                ) : (
+                                  <ServiceCard
+                                    item={unit.item}
+                                    bookingInfo={getServiceBooking(unit.item.id)}
+                                    onRemove={removeFromCart}
+                                    onEdit={handleEditItem}
+                                    allCartItems={items}
+                                    hasConflict={conflictedItemIds.has(unit.item.id)}
+                                    {...(policy !== undefined ? { depositPolicy: policy } : {})}
+                                  />
+                                )}
+                                {/* Visual Separator */}
+                                {index < renderUnits.length - 1 && (
+                                  <View style={styles.serviceSeparator} />
+                                )}
+                              </View>
+                            );
+                          })}
+                        </View>
                       )}
 
-                      {/* Services List — always visible, breakdown included on each card */}
-                      <View style={styles.servicesList}>
-                        {providerItems.map((item, index) => (
-                          <View key={item.id} style={styles.serviceItemWrapper}>
-                            <ServiceCard
-                              item={item}
-                              bookingInfo={getServiceBooking(item.id)}
-                              onRemove={removeFromCart}
-                              onEdit={handleEditItem}
-                              allCartItems={items}
-                              {...(providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] !== undefined
-                                ? { depositPolicy: providerDepositPolicies[providerItems[0]?.providerDisplayName ?? providerName] }
-                                : {})}
-                            />
-                            {/* Visual Separator */}
-                            {index < providerItems.length - 1 && (
-                              <View style={styles.serviceSeparator} />
-                            )}
-                          </View>
-                        ))}
-                      </View>
+                      {/* Collapse/expand handle — sits at the bottom of the
+                          card so collapsing a long section leaves the control
+                          under your thumb rather than scrolled off the top. */}
+                      <TouchableOpacity
+                        style={[styles.collapseHandle, { borderTopColor: P.border }]}
+                        onPress={() => toggleProviderCollapsed(providerName)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
+                          {isCollapsed
+                            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
+                            : 'Hide'}
+                        </Text>
+                        <Ionicons
+                          name={isCollapsed ? 'chevron-down' : 'chevron-up'}
+                          size={16}
+                          color={P.sub}
+                        />
+                      </TouchableOpacity>
                     </View>
                   );
                 })}
@@ -2278,14 +3242,23 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     <Text style={dynamicStyles.summaryValue}>£{getServiceFee().toFixed(2)}</Text>
                   </View>
                   <View style={[styles.summaryRow, styles.totalRow]}>
-                    <Text style={dynamicStyles.totalLabel}>Total</Text>
+                    <Text style={dynamicStyles.totalLabel}>{hasDepositItem ? 'Pay Now' : 'Total'}</Text>
                     <Text style={dynamicStyles.totalValue}>£{effectiveFinalTotal.toFixed(2)}</Text>
                   </View>
                 </View>
 
-                {/* Checkout Button - USE EFFECTIVE TOTAL */}
+                {/* Checkout Button - USE EFFECTIVE TOTAL. marginBottom tops up
+                    to FLOATING_TAB_BAR_CLEARANCE on top of whatever the
+                    screen's own SafeAreaView already reserves for the home
+                    indicator (insets.bottom) — this screen sits under
+                    IslandPillTabBar's floating pill, and a flat spacing.xxl
+                    margin left "Book All" sitting right under it. */}
                 <TouchableOpacity
-                  style={[styles.checkoutButton, { backgroundColor: P.accent }, isLoading && styles.disabledButton]}
+                  style={[
+                    styles.checkoutButton,
+                    { backgroundColor: P.accent, marginBottom: Math.max(spacing.xxl, FLOATING_TAB_BAR_CLEARANCE - insets.bottom) },
+                    isLoading && styles.disabledButton,
+                  ]}
                   onPress={handleCheckout}
                   disabled={isLoading}
                 >
@@ -2465,21 +3438,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.lg,
   },
-  scheduleTogetherButton: {
+  // Per-card Edit pill — used by both a single service card (edits it
+  // directly) and a group card (opens the chooser).
+  itemEditButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: dimensions.card.smallBorderRadius,
+    borderWidth: 1.5,
+  },
+  itemEditButtonText: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'BakbakOne-Regular',
+    fontWeight: 'bold',
+  },
+
+  // Collapse/expand control at the foot of each provider section.
+  collapseHandle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: 10,
-    borderStyle: 'dashed',
+    gap: 5,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  scheduleTogetherText: {
-    fontSize: 13,
-    fontWeight: '600',
+  collapseHandleText: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'BakbakOne-Regular',
   },
   providerLogo: {
     width: dimensions.providerLogo.size + 10,
@@ -2506,26 +3493,6 @@ const styles = StyleSheet.create({
     fontSize: fonts.serviceTag,
     fontFamily: 'BakbakOne-Regular',
     color: '#AF9197',
-    fontWeight: 'bold',
-  },
-  // Header Edit button — replaces the old "SCHEDULED X/Y" pill; opens
-  // BookingSheet for this provider's (first) cart item.
-  headerEditButton: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: 1.5,
-    zIndex: 10,
-  },
-  headerEditButtonText: {
-    fontSize: fonts.body.xsmall,
-    fontFamily: 'BakbakOne-Regular',
     fontWeight: 'bold',
   },
   providerInfo: {
@@ -2576,10 +3543,26 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
+  conflictBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(244, 67, 54, 0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  conflictBannerText: {
+    color: '#F44336',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
   serviceHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
   serviceInfo: {
     flex: 1,
@@ -2588,45 +3571,35 @@ const styles = StyleSheet.create({
     fontSize: fonts.serviceText,
     fontFamily: 'BakbakOne-Regular',
     color: '#000',
-    marginBottom: spacing.xs,
+    marginBottom: 1,
   },
-  // Booking breakdown — itemised base price, add-ons, duration, and payment
-  // split. Replaces the old scattered price/duration/add-ons text.
-  breakdownContainer: {
-    padding: spacing.md,
-    borderRadius: dimensions.card.smallBorderRadius,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: spacing.md,
+  // Add-ons/deposit/notes as one tight block under the header, rather than
+  // three separately-margined full-width rows.
+  serviceMetaBlock: {
+    marginTop: spacing.xs,
+    gap: 2,
   },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  breakdownLabel: {
+  // Duration, directly under the service name in the header.
+  priceSummaryText: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
-    flexShrink: 1,
-    marginRight: spacing.sm,
   },
-  breakdownValue: {
+  // Bold/darker so add-ons read as labelled paid extras rather than blending
+  // into the plain secondary-text lines around them. Spacing is owned by the
+  // serviceMetaBlock wrapper, not this line.
+  priceSummaryAddOns: {
     fontSize: fonts.body.xsmall,
-    fontFamily: 'Jura-VariableFont_wght bold',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
   },
-  breakdownDivider: {
-    height: 1,
-    marginVertical: spacing.xs,
-  },
-  breakdownTotalLabel: {
+  priceSummaryValue: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
     fontWeight: '700',
   },
-  breakdownTotalValue: {
-    fontSize: fonts.body.small,
-    fontFamily: 'BakbakOne-Regular',
-    fontWeight: '700',
+  depositNote: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
   },
   removeButton: {
     width: dimensions.button.small.width,
@@ -2644,48 +3617,288 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  // Schedule row — date/time on the left, doubles as the item's Edit
-  // trigger (tap anywhere on it) instead of a separate Edit button below.
-  bookingSummaryRow: {
+  // Schedule row — plain long-form date/time text. Not interactive: editing
+  // is reached from the provider header's Edit button.
+  dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(76,175,80,0.1)',
-    borderRadius: dimensions.card.smallBorderRadius,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(76,175,80,0.3)',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  bookingSummaryRowWarning: {
-    backgroundColor: 'rgba(244,67,54,0.1)',
-    borderColor: 'rgba(244,67,54,0.3)',
-  },
-  bookingSummaryText: {
+  dateText: {
     fontSize: fonts.body.small,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#2E7D32',
-    fontWeight: 'bold',
+    fontFamily: 'Jura-VariableFont_wght',
     flexShrink: 1,
     marginRight: spacing.sm,
   },
-  bookingSummaryTextWarning: {
+  dateTextWarning: {
     color: '#D32F2F',
+    fontWeight: 'bold',
   },
-  bookingSummaryEdit: {
+  // "Which service?" chooser, opened from a provider header with >1 service.
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  pickerSheet: {
+    borderRadius: dimensions.card.borderRadius,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
+  pickerTitle: {
+    fontSize: fonts.title.medium,
+    fontFamily: 'BakbakOne-Regular',
+    marginBottom: spacing.md,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  pickerRowFirst: {
+    borderTopWidth: 0,
+  },
+  pickerSubtitle: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+  },
+  pickerSectionLabel: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'BakbakOne-Regular',
+    letterSpacing: 0.3,
+    marginTop: spacing.lg,
+    marginBottom: 2,
+  },
+  pickerRowHint: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 1,
+  },
+
+  // Group reschedule sheet — bottom sheet (not the centred chooser dialog),
+  // since it holds a calendar and needs the height.
+  groupSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  groupSheet: {
+    maxHeight: '88%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+  groupSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  groupSheetHeaderText: {
+    flex: 1,
+  },
+  groupSheetSection: {
+    marginTop: spacing.md,
+  },
+  groupSheetLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  groupSheetLoadingText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  groupSheetEmptyText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    paddingVertical: spacing.md,
+    lineHeight: 18,
+  },
+  groupSheetTimeWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  groupSheetTimeChip: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 10,
+    borderWidth: 2,
+  },
+  groupSheetTimeText: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+  },
+  groupSheetPreview: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  groupSheetPreviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: 3,
+  },
+  groupSheetPreviewName: {
+    flex: 1,
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  groupSheetPreviewTime: {
+    fontSize: fonts.body.small,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  groupSheetConfirm: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  groupSheetConfirmText: {
+    color: '#FFFFFF',
+    fontSize: fonts.body.medium,
+    fontFamily: 'BakbakOne-Regular',
+  },
+
+  // Grouped card — services scheduled back-to-back, shown as one appointment.
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  groupHeaderSpacer: {
+    flex: 1,
+  },
+  groupBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  bookingSummaryEditText: {
+  groupBadgeText: {
+    fontSize: 9,
+    fontFamily: 'BakbakOne-Regular',
+    letterSpacing: 0.5,
+    color: '#FFFFFF',
+  },
+  groupHeaderDate: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  groupHeaderSpan: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 1,
+  },
+  groupRows: {
+    marginTop: spacing.md,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  groupRowInfo: {
+    flex: 1,
+  },
+  groupRowName: {
     fontSize: fonts.body.small,
     fontFamily: 'BakbakOne-Regular',
-    fontWeight: 'bold',
-    color: '#2E7D32',
+    marginBottom: 1,
+  },
+  groupRowMeta: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  groupRowAddOns: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  groupRowDeposit: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    marginTop: 1,
+  },
+  groupRowPrice: {
+    fontSize: fonts.body.small,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  groupRowRemove: {
+    paddingLeft: 2,
+    marginTop: -2,
+  },
+  groupFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  groupFooterBreakdown: {
+    gap: 2,
+  },
+  groupFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  groupFooterLabel: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  groupFooterTotalLabel: {
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  groupFooterValue: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'BakbakOne-Regular',
+  },
+  pickerRowInfo: {
+    flex: 1,
+  },
+  pickerRowName: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'BakbakOne-Regular',
+    marginBottom: 2,
+  },
+  pickerRowMeta: {
+    fontSize: fonts.body.small,
+    fontFamily: 'Jura-VariableFont_wght',
+  },
+  pickerCancel: {
+    alignItems: 'center',
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  pickerCancelText: {
+    fontSize: fonts.body.medium,
+    fontFamily: 'BakbakOne-Regular',
   },
   notesPreview: {
     fontSize: fonts.body.xsmall,
-    marginBottom: spacing.sm,
   },
 
   // Disabled Button State
@@ -3181,6 +4394,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
   },
+  requiredAsterisk: {
+    color: '#FF3B30',
+    fontWeight: '700',
+  },
   reviewButtonRow: {
     flexDirection: 'row',
     gap: 10,
@@ -3287,9 +4504,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 2,
   },
+  summaryItemAddOns: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
   summaryItemDateTime: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
+  },
+  // Group block: its own rounded, accent-bordered box so the grouped services
+  // are visibly fenced off as one appointment — the flat badge alone didn't
+  // read as obviously grouped against the surrounding plain rows.
+  summaryGroupBlock: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginVertical: 8,
+  },
+  summaryGroupBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginBottom: 5,
+  },
+  summaryGroupBadgeText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: '#FFFFFF',
+  },
+  summaryGroupRows: {
+    marginTop: 6,
+  },
+  summaryGroupRow: {
+    paddingVertical: 5,
+  },
+  summaryGroupFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  summaryGroupFooterLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  summaryGroupFooterValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
   },
   summaryDivider: {
     height: StyleSheet.hairlineWidth,

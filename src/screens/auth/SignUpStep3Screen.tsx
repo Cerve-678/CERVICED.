@@ -2,7 +2,6 @@
 import React, { useState, useCallback } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
@@ -20,6 +19,7 @@ import { validateEmail, validateDob } from '../../utils/validation';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep3'>;
 
@@ -119,11 +119,7 @@ export default function SignUpStep3Screen({ navigation }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
+      <KeyboardDismissView style={styles.flex}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: 120 }]}
           showsVerticalScrollIndicator={false}
@@ -322,7 +318,7 @@ export default function SignUpStep3Screen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }

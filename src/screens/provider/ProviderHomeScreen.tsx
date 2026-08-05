@@ -25,20 +25,19 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useTheme } from '../contexts/ThemeContext';
-import type { AppTheme } from '../constants/theme';
-import { ThemedBackground } from '../components/ThemedBackground';
+import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
+import { ThemedBackground } from '../../components/ThemedBackground';
 import {
   useBooking,
   ConfirmedBooking,
   BookingStatus,
-  PaymentStatus,
-} from '../contexts/BookingContext';
-import { useAuth } from '../contexts/AuthContext';
-import { ProviderHomeScreenProps } from '../navigation/types';
-import { supabase } from '../lib/supabase';
-import { storage } from '../utils/storage';
-import { CoachMarkTour, CoachMarkStep } from '../components/CoachMarkTour';
+} from '../../contexts/BookingContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { ProviderHomeScreenProps } from '../../navigation/types';
+import { supabase } from '../../lib/supabase';
+import { storage } from '../../utils/storage';
+import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import {
   getProviderBookings,
   getMyProviderProfile,
@@ -48,8 +47,10 @@ import {
   getUnreadNotificationCount,
   countProviderServices,
   getOrCreateConversation,
-} from '../services/databaseService';
-import type { BookingWithAddOns, DbProviderAvailability, DbProviderBlockedDate } from '../types/database';
+} from '../../services/databaseService';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
+import type { DbProviderAvailability, DbProviderBlockedDate } from '../../types/database';
+import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix } from '../../utils/dateUtils';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -91,10 +92,7 @@ const DAY_ABBREV   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 function formatDateString(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return dateToYMD(date);
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -111,13 +109,7 @@ function parseTimeToMinutes(t: string): number {
 }
 
 function fmtTime12(t: string): string {
-  const [hs, ms] = t.split(':');
-  let h = parseInt(hs || '0', 10);
-  const m = parseInt(ms || '0', 10);
-  const ap = h >= 12 ? 'pm' : 'am';
-  if (h > 12) h -= 12;
-  if (h === 0) h = 12;
-  return `${h}:${String(m).padStart(2, '0')}${ap}`;
+  return formatTime12(t);
 }
 
 function countdownLabel(bookingDate: string, bookingTime: string): string | null {
@@ -146,12 +138,7 @@ function sectionLabel(dateStr: string): string {
 }
 
 function sectionTitle(dateStr: string): string {
-  const [y, mo, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y!, mo! - 1, d!);
-  const dayName = DAY_FULL[dt.getDay()] ?? '';
-  const date    = dt.getDate();
-  const ord     = [,'st','nd','rd'][(date % 100 - 20) % 10] ?? ['th','st','nd','rd'][date % 100] ?? 'th';
-  return `${dayName} ${date}${ord}`;
+  return formatSectionTitle(dateStr);
 }
 
 function isPastBooking(dateStr: string, timeStr: string): boolean {
@@ -183,9 +170,10 @@ function getBookingRef(id: string) {
 function formatCreatedAt(iso: string): string {
   const d = new Date(iso);
   const date = d.getDate();
-  const ord  = [,'st','nd','rd'][(date % 100 - 20) % 10] ?? ['th','st','nd','rd'][date % 100] ?? 'th';
-  const h12  = d.getHours() % 12 || 12;
-  return `${DAY_FULL[d.getDay()]} ${date}${ord} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}, ${h12}:${String(d.getMinutes()).padStart(2, '0')}${d.getHours() >= 12 ? 'pm' : 'am'}`;
+  const dayName = DAY_FULL[d.getDay()];
+  const month = MONTH_NAMES[d.getMonth()];
+  const time = formatTime12(d);
+  return `${dayName} ${ordinalSuffix(date)} ${month} ${d.getFullYear()}, ${time}`;
 }
 
 // ─── Date strip ───────────────────────────────────────────────────────────────
@@ -275,7 +263,7 @@ function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewM
         <View style={bc.topRight}>
           {!!booking.bookingTime && (
             <Text style={[bc.time, { color: P.text }]}>
-              {booking.bookingTime.replace(/\s*(AM|PM)/i, m => m.toLowerCase())}
+              {booking.bookingTime}
             </Text>
           )}
           <Animated.View style={{ transform: [{ scale: expandScale }] }}>
@@ -595,7 +583,7 @@ function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availa
                 }}
               >
                 <Text style={{ fontSize: 11, fontWeight: '700', color: color.dark }} numberOfLines={1}>
-                  {booking.bookingTime.replace(/\s*(AM|PM)/i, m => m.toLowerCase())}
+                  {booking.bookingTime}
                 </Text>
                 <Text style={{ fontSize: 12, fontWeight: '600', color: P.text, marginTop: 1 }} numberOfLines={1}>
                   {booking.serviceName}
@@ -649,7 +637,7 @@ function SkeletonCard() {
 
 function SectionBanner({ dateStr, P }: { dateStr: string; P: AppTheme }) {
   const { isDarkMode: dark } = useTheme();
-  const banner = dark ? '#3A2E2F' : '#AF9197';
+  const banner = dark ? '#3A2E2F' : '#5C4033';
   const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
   const todayLabel = dark ? 'rgba(240,236,231,0.50)' : 'rgba(0,0,0,0.45)';
   const kind = sectionLabel(dateStr);
@@ -678,64 +666,6 @@ const sh = StyleSheet.create({
   bannerSub:   { fontSize: 12, fontWeight: '500', marginTop: 2, opacity: 0.7 },
 });
 
-// ─── Supabase mapper ──────────────────────────────────────────────────────────
-
-function mapDbToProviderBooking(db: BookingWithAddOns): ConfirmedBooking {
-  const toDisplay = (t: string) => {
-    const [hs, ms] = t.split(':');
-    let h = parseInt(hs ?? '0');
-    const m = parseInt(ms ?? '0');
-    const p = h >= 12 ? 'PM' : 'AM';
-    if (h > 12) h -= 12;
-    if (h === 0) h = 12;
-    return `${h}:${String(m).padStart(2, '0')} ${p}`;
-  };
-  const mapStatus = (s: string): BookingStatus => {
-    switch (s) {
-      case 'pending':     return BookingStatus.PENDING;
-      case 'in_progress': return BookingStatus.IN_PROGRESS;
-      case 'completed':   return BookingStatus.COMPLETED;
-      case 'cancelled':   return BookingStatus.CANCELLED;
-      case 'no_show':     return BookingStatus.NO_SHOW;
-      default:            return BookingStatus.UPCOMING;
-    }
-  };
-  return {
-    id:                  db.id,
-    cartItemId:          db.id,
-    providerName:        db.provider_name_snapshot,
-    providerImage:       db.provider_logo_snapshot ?? null,
-    providerService:     '',
-    serviceName:         db.service_name_snapshot,
-    serviceDescription:  '',
-    price:               db.base_price,
-    duration:            (() => { const s = db.booking_time.split(':'); const e = db.end_time?.split(':'); const sm = parseInt(s[0]??'0')*60+parseInt(s[1]??'0'); const em = e ? parseInt(e[0]??'0')*60+parseInt(e[1]??'0') : sm+60; const d = Math.max(30, em-sm); const h = Math.floor(d/60); const m = d%60; return m===0 ? `${h}h` : `${h}h ${m}m`; })(),
-    quantity:            1,
-    bookingDate:         db.booking_date,
-    bookingTime:         toDisplay(db.booking_time),
-    endTime:             db.end_time ? toDisplay(db.end_time) : toDisplay(db.booking_time),
-    status:              mapStatus(db.status),
-    address:             db.provider_address_snapshot ?? '',
-    coordinates:         { latitude: 0, longitude: 0 },
-    phone:               db.provider_phone_snapshot ?? '',
-    customerName:        db.customer_name ?? '',
-    customerEmail:       db.customer_email ?? '',
-    customerPhone:       db.customer_phone ?? '',
-    paymentType:         (db.payment_type ?? 'full') as 'full' | 'deposit',
-    amountPaid:          db.amount_paid,
-    depositAmount:       db.deposit_amount ?? 0,
-    remainingBalance:    db.remaining_balance ?? 0,
-    serviceCharge:       db.service_charge ?? 2.99,
-    paymentStatus:       PaymentStatus.PAID_IN_FULL,
-    notes:               db.notes ?? undefined,
-    bookingInstructions: db.booking_instructions ?? undefined,
-    addOns:              (db.add_ons ?? []).map(a => ({ id: a.add_on_id ?? a.id, name: a.name_snapshot, price: a.price_snapshot })),
-    providerId:          db.provider_id,
-    groupBookingId:      db.group_booking_id ?? undefined,
-    createdAt:           db.created_at ?? new Date().toISOString(),
-    updatedAt:           db.updated_at ?? new Date().toISOString(),
-  };
-}
 
 // ─── Row types for main list ──────────────────────────────────────────────────
 
@@ -748,7 +678,7 @@ type ListRow =
 
 export default function ProviderHomeScreen({ navigation }: Props) {
   const { isDarkMode: dark, palette: P } = useTheme();
-  const banner = dark ? '#3A2E2F' : '#AF9197';
+  const banner = dark ? '#3A2E2F' : '#5C4033';
   const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
   const todayLabel = dark ? 'rgba(240,236,231,0.50)' : 'rgba(0,0,0,0.45)';
   useBooking();
@@ -969,7 +899,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
     if (showLoad) setLoading(true);
     try {
       const rows = await getProviderBookings();
-      setBookings(rows.map(mapDbToProviderBooking));
+      setBookings(rows.map(mapDbBookingToConfirmed));
     } catch {}
     setLoading(false);
   }, []);

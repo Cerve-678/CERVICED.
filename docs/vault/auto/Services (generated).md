@@ -26,7 +26,7 @@
 `askChip` · `chip` · `goodNews` · `money` · `navChip` · `providerFromDb` · `softMiss`
 
 ### `src/services/becca/engine.ts`
-`confirmToken` · `respond`
+`confirmToken` · `converse` · `respond`
 
 ### `src/services/becca/entityResolver.ts`
 `containsPhrase` · `resolveBooking` · `resolveDate` · `resolveEntities` · `resolveMoney` · `resolveProvider` · `resolveService` · `resolveTimeOfDay`

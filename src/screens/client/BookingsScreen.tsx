@@ -18,8 +18,6 @@ import {
   RefreshControl,
   TextInput,
   Keyboard,
-  TouchableWithoutFeedback,
-  KeyboardAvoidingView,
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,16 +28,19 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { useFont } from '../contexts/FontContext';
-import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../contexts/BookingContext';
-import { hasMapDestination } from '../types/booking';
-import { useCart } from '../contexts/CartContext';
-import { useAuth } from '../contexts/AuthContext';
-import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking } from '../services/databaseService';
-import { ThemedBackground } from '../components/ThemedBackground';
-import { useTheme, Theme } from '../contexts/ThemeContext';
-import { HomeScreenProps } from '../navigation/types';
-import { logger } from '../utils/logger';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { useFont } from '../../contexts/FontContext';
+import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
+import { hasMapDestination } from '../../types/booking';
+import { useCart } from '../../contexts/CartContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getProviderCancellationPolicy, getProviderCancellationPolicyById, getInfoPacksByBooking, markInfoPackViewed, getMyBookingActionItems, BookingInfoPack, getProviderReschedulePolicyByDisplayName, getProviderReschedulePolicyById, ProviderReschedulePolicy, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking } from '../../services/databaseService';
+import { ThemedBackground } from '../../components/ThemedBackground';
+import SlidingTabs from '../../components/SlidingTabs';
+import { useTheme, Theme } from '../../contexts/ThemeContext';
+import { HomeScreenProps } from '../../navigation/types';
+import { logger } from '../../utils/logger';
+import { formatLongDate, formatShortDate, formatTime12 } from '../../utils/dateUtils';
 
 // ==================== TYPES ====================
 
@@ -83,17 +84,12 @@ const _DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Satu
 const _MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function formatDisplayDate(dateStr: string): string {
-  const iso = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (iso) {
-    const d = new Date(`${iso[1]}-${iso[2]}-${iso[3]}T12:00:00`);
-    if (!isNaN(d.getTime())) return `${_DAYS[d.getDay()]} ${d.getDate()} ${_MONTHS[d.getMonth()]}`;
-  }
-  return dateStr;
+  return formatLongDate(dateStr);
 }
 
 function resolveDateLabel(label: string): string {
   const today = new Date();
-  const fmt = (d: Date) => `${_DAYS[d.getDay()]} ${d.getDate()} ${_MONTHS[d.getMonth()]}`;
+  const fmt = (d: Date) => formatLongDate(d);
   const nextDay = (dow: number) => {
     const d = new Date(today);
     const diff = ((dow - d.getDay() + 7) % 7) || 7;
@@ -317,7 +313,7 @@ function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     `<tr><td style="padding:6px 0;color:#555;padding-left:16px">+ ${a.name}</td><td style="padding:6px 0;color:#555;text-align:right">£${Number(a.price).toFixed(2)}</td></tr>`
   ).join('');
 
-  const dateStr = new Date(booking.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const dateStr = formatShortDate(new Date(booking.createdAt));
   const ref = (booking.id ?? '').slice(0, 8).toUpperCase();
   const m = (booking as any).paymentMethod as string | undefined;
   const METHOD_LABELS: Record<string, string> = {
@@ -425,10 +421,11 @@ const calculatePaymentBreakdown = (booking: ConfirmedBooking) => {
 
 // ==================== COMPONENTS ====================
 
-// TEMPORARY — testing-only access to Dev Settings via a triple-tap on the
-// top-right corner. Remove this component and its mount point below before
-// shipping to TestFlight / production (it is not gated by __DEV__).
-const HiddenDevMenuTrigger = ({ navigation }: any) => {
+// TEMPORARY — testing-only access to Dev Settings via a triple-tap on a
+// header-right icon button. Remove this component and its mount point
+// above (navigation.setOptions' headerRight) before shipping to
+// TestFlight / production (it is not gated by __DEV__).
+const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: Theme }) => {
   const tapCountRef = React.useRef(0);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -444,22 +441,33 @@ const HiddenDevMenuTrigger = ({ navigation }: any) => {
       navigation.navigate('DevSettings');
       tapCountRef.current = 0;
       if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
   };
 
   return (
     <TouchableOpacity
       onPress={handleTap}
-      style={{ width: 28, alignSelf: 'stretch' }}
-      // left/right stay INSIDE the row's 12px gap to each neighboring pill —
-      // going wider overlaps their real touch bounds and steals taps meant
-      // for this trigger. top/bottom are safe to expand generously since
-      // there's nothing else competing there.
-      hitSlop={{ top: 24, bottom: 24, left: 10, right: 10 }}
-      activeOpacity={1}
-    />
+      style={{
+        width: 34,
+        height: 34,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 4,
+      }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      activeOpacity={0.6}
+    >
+      <Ionicons name="construct-outline" size={18} color={theme.text} />
+    </TouchableOpacity>
   );
 };
+
+const CATEGORY_TABS = [
+  { key: 'all' as const,  label: 'Upcoming Bookings' },
+  { key: 'past' as const, label: 'Past Bookings' },
+];
 
 // ==================== GROUP BOOKING CARD ====================
 
@@ -525,10 +533,10 @@ const GroupBookingCard = React.memo<GroupBookingCardProps>(
       return `${_MONTHS[d.getMonth()]} ${d.getDate()}`;
     }, [earliestDate]);
 
-    const cardBg = isDarkMode ? '#2C2C2E' : '#FFFFFF';
+    const cardBg = isDarkMode ? '#252220' : '#FFFFFF';
     const borderColor = isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
     const divColor = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-    const titleColor = isDarkMode ? '#F0F0F0' : '#111';
+    const titleColor = isDarkMode ? '#F0ECE7' : '#000000';
     const metaColor = isDarkMode ? 'rgba(255,255,255,0.55)' : '#666';
     const feeColor = isDarkMode ? 'rgba(255,255,255,0.45)' : '#999';
     const itemProviderColor = isDarkMode ? '#F0F0F0' : '#222';
@@ -585,6 +593,7 @@ const GroupBookingCard = React.memo<GroupBookingCardProps>(
                     <Image
                       source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage}
                       style={styles.groupBookingItemImage}
+                      fadeDuration={0}
                     />
                   ) : (
                     <View style={[styles.groupBookingItemImage, { backgroundColor: isDarkMode ? '#3C3C3E' : '#EEE' }]} />
@@ -653,12 +662,12 @@ const BookingCard = React.memo<BookingCardProps>(
 
     const highlightBorderColor = highlightAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', '#AF9197'],
+      outputRange: [isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)', (isDarkMode ? '#AF9197' : '#5C4033')],
     });
 
     const highlightBackgroundColor = highlightAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [isDarkMode ? '#2C2C2E' : '#FFFFFF', 'rgba(175, 145, 151, 0.08)'],
+      outputRange: [isDarkMode ? '#2C2C2E' : '#FFFFFF', (isDarkMode ? 'rgba(175, 145, 151, 0.08)' : 'rgba(92, 64, 51, 0.08)')],
     });
 
     const showStatusBadge =
@@ -679,7 +688,7 @@ const BookingCard = React.memo<BookingCardProps>(
     }, [booking.isPendingReschedule, booking.status]);
 
     const badgeColor = useMemo(() => {
-      if (booking.isPendingReschedule) return '#AF9197';
+      if (booking.isPendingReschedule) return (isDarkMode ? '#AF9197' : '#5C4033');
       if (booking.status === BookingStatus.PENDING) return '#FF9500';
       return statusColors[booking.status as keyof typeof statusColors] || '#9E9E9E';
     }, [booking.isPendingReschedule, booking.status]);
@@ -703,9 +712,9 @@ const BookingCard = React.memo<BookingCardProps>(
           >
             <View style={styles.providerImageWrapper}>
               {booking.providerImage ? (
-                <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.providerLogo} resizeMode="cover" />
+                <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.providerLogo} resizeMode="cover" fadeDuration={0} />
               ) : (
-                <View style={[styles.providerLogo, { backgroundColor: '#AF9197', alignItems: 'center', justifyContent: 'center' }]}>
+                <View style={[styles.providerLogo, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'), alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>
                     {booking.providerName?.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() || 'P'}
                   </Text>
@@ -787,7 +796,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const { theme, isDarkMode } = useTheme();
   const styles = useMemo(() => createStyles(theme, isDarkMode), [theme, isDarkMode]);
   const { user } = useAuth();
-  const { addToCart, items: cartItems } = useCart();
+  const { addToCart } = useCart();
   
   const {
     upcomingBookings,
@@ -996,7 +1005,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // ==================== HELPER FUNCTIONS ====================
 
   const getStatusColor = useCallback((status: string, isPending?: boolean) => {
-    if (isPending) return '#AF9197';
+    if (isPending) return (isDarkMode ? '#AF9197' : '#5C4033');
     
     const colorMap: Record<string, string> = {
       [BookingStatus.UPCOMING]: '#4CAF50',
@@ -1100,35 +1109,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   // - 24-hour cooldown
   // - pending status checks
 
-  // ✅ FIXED: Book Again - checks cart, shows proper modals
+  // Book Again — always adds a new, independently-schedulable cart instance.
+  // No "already in cart" gate: a client can have more than one booking with
+  // the same provider (even the same service) in a single checkout, each
+  // with its own date/time.
   const handleRebook = useCallback(async (booking: ConfirmedBooking) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Check if already in cart — prefer matching by the real service/provider
-    // IDs (name text can collide, e.g. two providers both offering
-    // "Haircut"); fall back to name matching only for legacy bookings that
-    // predate serviceId being tracked.
-    const alreadyInCart = cartItems.some(item =>
-      booking.serviceId && item.serviceId
-        ? item.serviceId === booking.serviceId && item.providerId === booking.providerId
-        : item.serviceName === booking.serviceName && item.providerName === booking.providerName
-    );
-
-    if (alreadyInCart) {
-      // Close the booking details modal
-      setModalVisible(false);
-
-      // Re-enable scrolling
-      setTimeout(() => {
-        mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
-        modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
-      }, 100);
-
-      // Show warning modal
-      setSuccessMessage(`${booking.serviceName} from ${booking.providerName} is already in your cart.`);
-      setSuccessIcon('⚠️');
-      setShowSuccessModal(true);
-      return;
-    }
 
     // ✅ FIX: Set selectedBooking BEFORE showing modal
     setSelectedBooking(booking);
@@ -1192,6 +1178,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           addOns: [],
         },
         quantity: 1,
+        // Always a new cart instance — the client may already have this
+        // same provider/service in the cart from an earlier "Book Again" or
+        // from the provider profile, and each rebook is its own appointment.
+        forceNewInstance: true,
       };
 
       addToCart(cartItem);
@@ -1202,33 +1192,13 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility
       setShouldNavigateToCart(true);
     }
-  }, [cartItems, addToCart]);
+  }, [addToCart]);
 
   // ✅ Confirm rebook with/without add-ons
   const confirmRebook = useCallback((selection?: 'with' | 'without') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const finalSelection = selection || rebookSelection;
     if (!selectedBooking || !finalSelection) return;
-
-    // Check if already in cart before adding — see handleRebook for why IDs
-    // are preferred over name matching.
-    const alreadyInCart = cartItems.some(item =>
-      selectedBooking.serviceId && item.serviceId
-        ? item.serviceId === selectedBooking.serviceId && item.providerId === selectedBooking.providerId
-        : item.serviceName === selectedBooking.serviceName && item.providerName === selectedBooking.providerName
-    );
-
-    if (alreadyInCart) {
-      setShowRebookAddOnsModal(false);
-      setTimeout(() => {
-        mainScrollRef.current?.setNativeProps({ scrollEnabled: true });
-        modalScrollRef.current?.setNativeProps({ scrollEnabled: true });
-      }, 100);
-      setSuccessMessage(`${selectedBooking.serviceName} from ${selectedBooking.providerName} is already in your cart.`);
-      setSuccessIcon('⚠️');
-      setShowSuccessModal(true);
-      return;
-    }
 
     setShowRebookAddOnsModal(false);
 
@@ -1264,6 +1234,10 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         addOns: liveAddOns,
       },
       quantity: 1,
+      // Always a new cart instance — see handleRebook for why rebooking must
+      // never merge into an existing item's quantity instead of creating a
+      // separately-schedulable appointment.
+      forceNewInstance: true,
     };
 
     addToCart(cartItem);
@@ -1275,7 +1249,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     setShowSuccessModal(true);
     // ✅ FIX: Set flag to navigate when modal closes instead of during modal visibility
     setShouldNavigateToCart(true);
-  }, [selectedBooking, rebookSelection, rebookContext, addToCart, cartItems]);
+  }, [selectedBooking, rebookSelection, rebookContext, addToCart]);
 
   // ==================== ACTION HANDLERS ====================
 
@@ -1676,6 +1650,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         color: theme.text,
       },
       headerTintColor: theme.text,
+      // TEMPORARY — testing-only access to Dev Settings, triple-tap. See
+      // removal note on HiddenDevMenuTrigger's definition above.
+      headerRight: () => <HiddenDevMenuTrigger navigation={navigation} theme={theme} />,
     });
   }, [navigation, isFilterView, theme, isDarkMode]);
 
@@ -2019,6 +1996,50 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
   const hasBookingBeenTipped = useCallback((bookingId: string) => tippedBookings.has(bookingId), [tippedBookings]);
 
+  // Stable renderItem reference so the outer bookings FlatList doesn't hand a
+  // brand-new function to every row on every parent re-render.
+  const renderServiceCategoryRow = useCallback(({ item }: { item: { serviceType: string; bookings: ConfirmedBooking[] } }) => {
+    const { serviceType, bookings } = item;
+    const rowHasTag = bookings.some((b: ConfirmedBooking) => b.isPendingReschedule);
+    return (
+      <View style={styles.serviceCategory}>
+        <View style={styles.serviceCategoryHeader}>
+          <View style={styles.serviceCategoryTag}>
+            <Text style={styles.serviceCategoryName}>
+              {serviceType.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+        <FlatList
+          horizontal
+          data={bookings}
+          keyExtractor={booking => booking.id}
+          renderItem={({ item: booking }) => (
+            <BookingCard
+              booking={booking}
+              onPress={handleBookingPress}
+              isHighlighted={highlightedBookingId === booking.id}
+              isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
+              actionCount={bookingActionItems[booking.id] ?? 0}
+              rowHasTag={rowHasTag}
+            />
+          )}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.serviceImagesContainer}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          initialNumToRender={3}
+          getItemLayout={(_data, index) => ({
+            length: 160,
+            offset: 160 * index,
+            index,
+          })}
+        />
+      </View>
+    );
+  }, [handleBookingPress, highlightedBookingId, recentlyAddedBookings, bookingActionItems]);
+
   // ==================== RENDER ====================
 
   return (
@@ -2036,8 +2057,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#AF9197"
-              colors={['#AF9197']}
+              tintColor={isDarkMode ? '#AF9197' : '#5C4033'}
+              colors={[(isDarkMode ? '#AF9197' : '#5C4033')]}
               progressBackgroundColor={isDarkMode ? '#201D1A' : '#EDE8E2'}
               progressViewOffset={60}
             />
@@ -2053,61 +2074,26 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 here in the always-visible content area just below the header. */}
             {refreshing && (
               <View style={styles.refreshIndicatorRow}>
-                <ActivityIndicator size="small" color="#AF9197" />
+                <ActivityIndicator size="small" color={isDarkMode ? '#AF9197' : '#5C4033'} />
               </View>
             )}
 
             {/* Category Toggle */}
             <View style={styles.categoryContainer}>
-              <TouchableOpacity
-                onPress={() => toggleFilter('all')}
-                style={styles.categoryButtonWrapper}
-              >
-                <BlurView
-                  intensity={25}
-                  tint={isDarkMode ? 'dark' : 'light'}
-                  style={[
-                    styles.categoryButton,
-                    activeFilters.has('all') && styles.categoryButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      activeFilters.has('all') && styles.categoryTextActive,
-                    ]}
-                  >
-                    Upcoming
-                  </Text>
-                </BlurView>
-              </TouchableOpacity>
-
-              {/* TEMPORARY — testing-only dev menu access, triple-tap. See
-                  removal note on HiddenDevMenuTrigger's definition above. */}
-              <HiddenDevMenuTrigger navigation={navigation} />
-
-              <TouchableOpacity
-                onPress={() => toggleFilter('past')}
-                style={styles.categoryButtonWrapper}
-              >
-                <BlurView
-                  intensity={25}
-                  tint={isDarkMode ? 'dark' : 'light'}
-                  style={[
-                    styles.categoryButton,
-                    activeFilters.has('past') && styles.categoryButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      activeFilters.has('past') && styles.categoryTextActive,
-                    ]}
-                  >
-                    Past Bookings
-                  </Text>
-                </BlurView>
-              </TouchableOpacity>
+              <SlidingTabs
+                tabs={CATEGORY_TABS}
+                activeKey={activeFilters.has('all') ? 'all' : activeFilters.has('past') ? 'past' : null}
+                onPress={toggleFilter}
+                accentColor={isDarkMode ? '#AF9197' : '#5C4033'}
+                inactiveTextColor={isDarkMode ? '#F0ECE7' : '#000000'}
+                inactiveBackgroundColor={theme.secondaryBackground}
+                tabFontFamily="BakbakOne-Regular"
+                centerContent
+                equalWidth
+                gap={16}
+                springBounciness={0}
+                springSpeed={14}
+              />
             </View>
             {/* Tracking View */}
             {!isFilterView && (
@@ -2167,7 +2153,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                         {routeCoordinates.length > 1 && (
                           <Polyline
                             coordinates={routeCoordinates}
-                            strokeColor="#AF9197"
+                            strokeColor={isDarkMode ? '#AF9197' : '#5C4033'}
                             strokeWidth={3}
                             lineDashPattern={[5, 5]}
                           />
@@ -2520,13 +2506,6 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 >
                   <Text style={styles.backToTrackingText}>← Back to Tracking</Text>
                 </TouchableOpacity>
-                <Text style={styles.bookingsTitle}>
-                  {activeFilters.has('all') && activeFilters.has('past')
-                    ? 'ALL BOOKINGS'
-                    : activeFilters.has('all')
-                      ? 'UPCOMING BOOKINGS'
-                      : 'PAST BOOKINGS'}
-                </Text>
                 {bookingsError && (
                   <View style={{
                     flexDirection: 'row',
@@ -2576,47 +2555,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                         animated: true,
                       });
                     }}
-                    renderItem={({ item }) => {
-                      const { serviceType, bookings } = item;
-                      const rowHasTag = bookings.some((b: ConfirmedBooking) => b.isPendingReschedule);
-                      return (
-                        <View style={styles.serviceCategory}>
-                          <View style={styles.serviceCategoryHeader}>
-                            <View style={styles.serviceCategoryTag}>
-                              <Text style={styles.serviceCategoryName}>
-                                {serviceType.toUpperCase()}
-                              </Text>
-                            </View>
-                          </View>
-                          <FlatList
-                            horizontal
-                            data={bookings}
-                            keyExtractor={booking => booking.id}
-                            renderItem={({ item: booking }) => (
-                              <BookingCard
-                                booking={booking}
-                                onPress={handleBookingPress}
-                                isHighlighted={highlightedBookingId === booking.id}
-                                isRecentlyAdded={recentlyAddedBookings.has(booking.id)}
-                                actionCount={bookingActionItems[booking.id] ?? 0}
-                                rowHasTag={rowHasTag}
-                              />
-                            )}
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.serviceImagesContainer}
-                            removeClippedSubviews={true}
-                            maxToRenderPerBatch={5}
-                            windowSize={5}
-                            initialNumToRender={3}
-                            getItemLayout={(_data, index) => ({
-                              length: 160,
-                              offset: 160 * index,
-                              index,
-                            })}
-                          />
-                        </View>
-                      );
-                    }}
+                    renderItem={renderServiceCategoryRow}
                     showsVerticalScrollIndicator={false}
                     scrollEnabled={false}
                     removeClippedSubviews={true}
@@ -2640,17 +2579,17 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     borderRadius: 16,
                     borderWidth: 1,
                     borderColor: theme.border ?? 'rgba(126,102,103,0.14)',
-                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(175,145,151,0.08)',
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(92,64,51,0.08)',
                     padding: 16,
                     marginBottom: 10,
                   }}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'BakbakOne', fontSize: 15, color: theme.text, marginBottom: 2 }}>
+                      <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, color: theme.text, marginBottom: 2 }}>
                         {entry.service_name_snapshot}
                       </Text>
-                      <Text style={{ fontFamily: 'Jura-Regular', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
+                      <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
                         {entry.provider_name_snapshot}
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -2661,7 +2600,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           paddingVertical: 3,
                         }}>
                           <Text style={{
-                            fontFamily: 'BakbakOne',
+                            fontFamily: 'BakbakOne-Regular',
                             fontSize: 10,
                             letterSpacing: 0.4,
                             color: entry.status === 'notified' ? '#34C759' : '#FF9500',
@@ -2674,7 +2613,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     {entry.status === 'notified' && (
                       <TouchableOpacity
                         style={{
-                          backgroundColor: '#AF9197',
+                          backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
                           borderRadius: 20,
                           paddingHorizontal: 14,
                           paddingVertical: 8,
@@ -2686,7 +2625,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                         }}
                         activeOpacity={0.8}
                       >
-                        <Text style={{ fontFamily: 'BakbakOne', fontSize: 11, color: '#fff' }}>Book Now</Text>
+                        <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: '#fff' }}>Book Now</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -2700,7 +2639,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={{ fontFamily: 'Jura-Regular', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
+                    <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
                       Leave waitlist
                     </Text>
                   </TouchableOpacity>
@@ -2714,64 +2653,64 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={csSt.overlay} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); }}>
-            <Pressable style={csSt.sheet} onPress={e => e.stopPropagation()}>
-              <View style={csSt.handle} />
-              <Text style={csSt.title}>Contact {contactSheetBooking?.providerName}</Text>
-              <Text style={csSt.subtitle}>Choose how you'd like to get in touch</Text>
-              {contactSheetLoading ? <ActivityIndicator color="#AF9197" style={{ marginVertical: 24 }} /> : (
+            <Pressable style={[csSt.sheet, { backgroundColor: isDarkMode ? '#252220' : '#FFFFFF' }]} onPress={e => e.stopPropagation()}>
+              <View style={[csSt.handle, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
+              <Text style={[csSt.title, { color: isDarkMode ? '#F0ECE7' : '#000000' }]}>Contact {contactSheetBooking?.providerName}</Text>
+              <Text style={[csSt.subtitle, { color: '#7E6667' }]}>Choose how you'd like to get in touch</Text>
+              {contactSheetLoading ? <ActivityIndicator color={isDarkMode ? '#AF9197' : '#5C4033'} style={{ marginVertical: 24 }} /> : (
                 <View style={csSt.options}>
                   <TouchableOpacity
-                    style={csSt.option}
+                    style={[csSt.option, { backgroundColor: isDarkMode ? '#2C2C2E' : '#EDE8E2' }]}
                     activeOpacity={0.7}
                     onPress={() => { setContactSheetVisible(false); if (contactSheetBooking) openProviderChat(contactSheetBooking); }}
                   >
                     <View style={[csSt.optionIcon, { backgroundColor: '#5B1E32' }]}><Text style={csSt.optionEmoji}>💬</Text></View>
                     <View style={csSt.optionText}>
-                      <Text style={csSt.optionLabel}>In-app message</Text>
-                      <Text style={csSt.optionDesc}>Chat directly inside Cerviced</Text>
+                      <Text style={[csSt.optionLabel, { color: isDarkMode ? '#F0ECE7' : '#000000' }]}>In-app message</Text>
+                      <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>Chat directly inside Cerviced</Text>
                     </View>
-                    <Text style={csSt.optionChevron}>›</Text>
+                    <Text style={[csSt.optionChevron, { color: isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)' }]}>›</Text>
                   </TouchableOpacity>
                   {contactSheetInfo?.preferred_contact_methods?.includes('email') && contactSheetInfo.email && (
                     <TouchableOpacity
-                      style={csSt.option}
+                      style={[csSt.option, { backgroundColor: isDarkMode ? '#2C2C2E' : '#EDE8E2' }]}
                       activeOpacity={0.7}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#1C3A5B' }]}><Text style={csSt.optionEmoji}>✉️</Text></View>
                       <View style={csSt.optionText}>
-                        <Text style={csSt.optionLabel}>Email</Text>
-                        <Text style={csSt.optionDesc} numberOfLines={1}>{contactSheetInfo.email}</Text>
+                        <Text style={[csSt.optionLabel, { color: isDarkMode ? '#F0ECE7' : '#000000' }]}>Email</Text>
+                        <Text style={[csSt.optionDesc, { color: '#7E6667' }]} numberOfLines={1}>{contactSheetInfo.email}</Text>
                       </View>
-                      <Text style={csSt.optionChevron}>›</Text>
+                      <Text style={[csSt.optionChevron, { color: isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)' }]}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('whatsapp') && contactSheetInfo.whatsapp_number && (
                     <TouchableOpacity
-                      style={csSt.option}
+                      style={[csSt.option, { backgroundColor: isDarkMode ? '#2C2C2E' : '#EDE8E2' }]}
                       activeOpacity={0.7}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#1A3D2B' }]}><Text style={csSt.optionEmoji}>💚</Text></View>
                       <View style={csSt.optionText}>
-                        <Text style={csSt.optionLabel}>WhatsApp</Text>
-                        <Text style={csSt.optionDesc}>{contactSheetInfo.whatsapp_number}</Text>
+                        <Text style={[csSt.optionLabel, { color: isDarkMode ? '#F0ECE7' : '#000000' }]}>WhatsApp</Text>
+                        <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{contactSheetInfo.whatsapp_number}</Text>
                       </View>
-                      <Text style={csSt.optionChevron}>›</Text>
+                      <Text style={[csSt.optionChevron, { color: isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)' }]}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('phone') && contactSheetInfo.phone && (
                     <TouchableOpacity
-                      style={csSt.option}
+                      style={[csSt.option, { backgroundColor: isDarkMode ? '#2C2C2E' : '#EDE8E2' }]}
                       activeOpacity={0.7}
                       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}
                     >
                       <View style={[csSt.optionIcon, { backgroundColor: '#2B2B1A' }]}><Text style={csSt.optionEmoji}>📞</Text></View>
                       <View style={csSt.optionText}>
-                        <Text style={csSt.optionLabel}>Phone call</Text>
-                        <Text style={csSt.optionDesc}>{contactSheetInfo.phone}</Text>
+                        <Text style={[csSt.optionLabel, { color: isDarkMode ? '#F0ECE7' : '#000000' }]}>Phone call</Text>
+                        <Text style={[csSt.optionDesc, { color: '#7E6667' }]}>{contactSheetInfo.phone}</Text>
                       </View>
-                      <Text style={csSt.optionChevron}>›</Text>
+                      <Text style={[csSt.optionChevron, { color: isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)' }]}>›</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -2805,7 +2744,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => confirmRebook('without')} activeOpacity={0.7}>
                   <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Without Add-Ons</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
                   <Text style={{ color: '#FFF', fontWeight: '600' }}>With Add-Ons</Text>
                 </TouchableOpacity>
               </View>
@@ -2826,7 +2765,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
               <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>{successMessage}</Text>
               <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]}
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart' as never); } }} activeOpacity={0.7}>
                   <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
@@ -2843,7 +2782,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cannot Reschedule</Text>
               <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>{cooldownMessage}</Text>
               <View style={[popSt.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowCooldownModal(false); }} activeOpacity={0.7}>
+                <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowCooldownModal(false); }} activeOpacity={0.7}>
                   <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
@@ -2863,14 +2802,9 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
               {waitlistHold && (
                 <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>
                   {waitlistHold.service_name_snapshot} with {waitlistHold.provider_name_snapshot}{'\n'}
-                  {new Date(waitlistHold.booking_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {formatLongDate(waitlistHold.booking_date)}
                   {' at '}
-                  {(() => {
-                    const [h, m] = waitlistHold.booking_time.split(':').map(Number);
-                    const period = h! < 12 ? 'AM' : 'PM';
-                    const displayH = h === 0 ? 12 : h! > 12 ? h! - 12 : h;
-                    return `${displayH}:${String(m).padStart(2, '0')} ${period}`;
-                  })()}
+                  {formatTime12(waitlistHold.booking_time)}
                   {'\n\n'}This is held just for you — it'll be released to the next person if you don't respond in time.
                 </Text>
               )}
@@ -2884,7 +2818,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111', fontWeight: '600', textAlign: 'center' }}>Not This Time</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[popSt.sheetBtn, { backgroundColor: '#AF9197' }]}
+                  style={[popSt.sheetBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]}
                   onPress={handleConfirmWaitlistHold}
                   disabled={waitlistHoldBusy}
                   activeOpacity={0.7}
@@ -2905,9 +2839,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             tapping Rate did nothing visible. handleRatingSubmit already wired
             up a real submitReview() call; only the UI was missing. ─── */}
         <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={popSt.overlay}>
-              <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+          <KeyboardDismissView style={popSt.overlay} dismissOnTap>
+            <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
                 {!hasRated ? (
                   <>
                     <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Rate Your Experience</Text>
@@ -2934,7 +2867,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                       <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
                         <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Skip</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : '#AF9197' }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
+                      <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: rating === 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : (isDarkMode ? '#AF9197' : '#5C4033') }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
                         {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Submit</Text>}
                       </TouchableOpacity>
                     </View>
@@ -2947,17 +2880,15 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   </>
                 )}
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
+          </KeyboardDismissView>
         </Modal>
 
         {/* ─── Tip Modal — same dead-state issue as Rating above. handleTipSubmit
             now actually persists via setBookingTip() instead of only flipping
             local state. ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={popSt.overlay}>
-              <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+          <KeyboardDismissView style={popSt.overlay} dismissOnTap>
+            <View style={[popSt.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
                 <Text style={[popSt.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Leave a Tip</Text>
                 <Text style={[popSt.sheetSub, { color: isDarkMode ? 'rgba(255,255,255,0.6)' : '#666' }]}>
                   Show your appreciation for {selectedBooking?.providerName}
@@ -2987,13 +2918,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                   <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F5F5F5', borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
                     <Text style={{ color: isDarkMode ? '#F0ECE7' : '#111' }}>Skip</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: tipAmount <= 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : '#AF9197' }]} disabled={tipAmount <= 0 || isLoading} onPress={handleTipSubmit} activeOpacity={0.7}>
+                  <TouchableOpacity style={[popSt.sheetBtn, { backgroundColor: tipAmount <= 0 ? (isDarkMode ? '#3A3A3C' : '#E0E0E0') : (isDarkMode ? '#AF9197' : '#5C4033') }]} disabled={tipAmount <= 0 || isLoading} onPress={handleTipSubmit} activeOpacity={0.7}>
                     {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Send Tip</Text>}
                   </TouchableOpacity>
                 </View>
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
+          </KeyboardDismissView>
         </Modal>
 
       </SafeAreaView>
@@ -3028,9 +2958,9 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     paddingTop: 1,
   },
   headerTitle: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 28,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: theme.text,
     textAlign: 'center',
     letterSpacing: 1,
     marginBottom: 4,
@@ -3039,42 +2969,15 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   headerSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    color: isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
+    color: theme.secondaryText,
     textAlign: 'center',
   },
   categoryContainer: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: 12,
     marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  categoryButtonWrapper: {
-    flex: 1,
-  },
-  categoryButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.14)',
-    overflow: 'hidden',
-    backgroundColor: isDarkMode ? '#201D1A' : '#EDE8E2',
-  },
-  categoryButtonActive: {
-    backgroundColor: '#AF9197',
-    borderColor: '#AF9197',
-  },
-  categoryText: {
-    fontFamily: 'BakbakOne',
-    fontSize: 12,
-    color: isDarkMode ? '#F0ECE7' : '#000000',
-    letterSpacing: 1,
-    fontWeight: '800',
-  },
-  categoryTextActive: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+    paddingHorizontal: 32,
   },
   mapContainer: {
     height: 300,
@@ -3097,7 +3000,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: 'rgba(175, 145, 151, 0.3)',
+    borderColor: (isDarkMode ? 'rgba(175, 145, 151, 0.3)' : 'rgba(92, 64, 51, 0.3)'),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -3105,7 +3008,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     elevation: 6,
   },
   activeServiceMarker: {
-    borderColor: '#AF9197',
+    borderColor: (isDarkMode ? '#AF9197' : '#5C4033'),
     borderWidth: 3,
   },
   markerContent: {
@@ -3113,9 +3016,9 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     alignItems: 'center',
   },
   serviceLabel: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     letterSpacing: 1,
   },
   serviceDuration: {
@@ -3125,7 +3028,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: '600',
   },
   activeServiceLabel: {
-    color: '#AF9197',
+    color: (isDarkMode ? '#AF9197' : '#5C4033'),
   },
   activeMarkerDot: {
     position: 'absolute',
@@ -3133,7 +3036,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     right: -5,
     width: 12,
     height: 12,
-    backgroundColor: '#AF9197',
+    backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
     borderRadius: 6,
     borderWidth: 2,
     borderColor: isDarkMode ? '#201D1A' : '#fff',
@@ -3157,21 +3060,21 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   upcomingLabelText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: '#AF9197',
+    color: (isDarkMode ? '#AF9197' : '#5C4033'),
     letterSpacing: 1,
     fontWeight: '800',
   },
   nextLabelText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     letterSpacing: 1,
     fontWeight: '800',
   },
   congratsLabelText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
     color: isDarkMode ? '#FFFFFF' : '#000000ff',
     letterSpacing: 0.5,
@@ -3224,9 +3127,9 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     flex: 1,
   },
   appointmentService: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     marginBottom: 4,
     letterSpacing: 0.5,
     fontWeight: 'bold',
@@ -3242,13 +3145,13 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontWeight: '400',
     fontSize: 12,
-    color: '#AF9197',
+    color: (isDarkMode ? '#AF9197' : '#5C4033'),
     fontStyle: 'italic',
   },
   nextAppointmentService: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     marginBottom: 4,
     fontWeight: 'bold',
   },
@@ -3298,8 +3201,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   rateButton: {
     flex: 1,
-    backgroundColor: 'rgba(175,145,151,0.18)',
-    borderColor: '#AF9197',
+    backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.18)' : 'rgba(92,64,51,0.18)'),
+    borderColor: (isDarkMode ? '#AF9197' : '#5C4033'),
     borderWidth: 1,
     borderStyle: 'solid',
     paddingHorizontal: 8,
@@ -3342,15 +3245,15 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0',
   },
   buttonText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 9,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     fontWeight: 'bold',
   },
   buttonTextWhite: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 9,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     fontWeight: 'bold',
   },
   bookingsContainer: {
@@ -3362,15 +3265,15 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginBottom: 12,
   },
   backToTrackingText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
     color: '#2196F3',
     fontWeight: '800',
   },
   bookingsTitle: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     textAlign: 'center',
     marginBottom: 24,
     letterSpacing: 1,
@@ -3392,7 +3295,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderRadius: 20,
   },
   serviceCategoryName: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     color: isDarkMode ? '#000' : '#fff',
     letterSpacing: 1,
@@ -3468,13 +3371,16 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     fontWeight: '600',
   },
   emptyState: {
-    flex: 1,
+    // Not flex: 1 — this View sits inside a ScrollView's content (itself
+    // flex: 1, height driven by content not viewport), so a flexed child
+    // here has nothing real to grow against and can render at zero height,
+    // silently hiding the text inside it.
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
   },
   emptyStateText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 16,
     color: isDarkMode ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)',
     textAlign: 'center',
@@ -3532,26 +3438,26 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     borderRadius: 40,
     marginBottom: 12,
     borderWidth: 3,
-    borderColor: 'rgba(175, 145, 151, 0.3)',
+    borderColor: (isDarkMode ? 'rgba(175, 145, 151, 0.3)' : 'rgba(92, 64, 51, 0.3)'),
   },
   modalProviderName: { 
     fontSize: 20, 
     fontWeight: 'bold', 
-    color: isDarkMode ? '#FFFFFF' : '#000', 
+    color: isDarkMode ? '#F0ECE7' : '#000000', 
     marginBottom: 8 
   },
   modalServiceTypeBadge: {
-    backgroundColor: 'rgba(175, 145, 151, 0.1)',
+    backgroundColor: (isDarkMode ? 'rgba(175, 145, 151, 0.1)' : 'rgba(92, 64, 51, 0.1)'),
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(175, 145, 151, 0.3)',
+    borderColor: (isDarkMode ? 'rgba(175, 145, 151, 0.3)' : 'rgba(92, 64, 51, 0.3)'),
   },
   modalServiceTypeText: {
     fontSize: 11,
     fontWeight: 'bold',
-    color: '#AF9197',
+    color: (isDarkMode ? '#AF9197' : '#5C4033'),
     letterSpacing: 0.5
   },
   completedStatusBadge: {
@@ -3605,14 +3511,14 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   modalValue: { 
     fontSize: 13, 
-    color: isDarkMode ? '#FFFFFF' : '#000', 
+    color: isDarkMode ? '#F0ECE7' : '#000000', 
     fontWeight: '500', 
     textAlign: 'right',
     flex: 1,
   },
   modalTimeValue: { 
     fontSize: 13, 
-    color: isDarkMode ? '#FFFFFF' : '#000', 
+    color: isDarkMode ? '#F0ECE7' : '#000000', 
     fontWeight: 'bold', 
     flex: 1, 
     textAlign: 'right' 
@@ -3642,7 +3548,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   modalPriceValueBlack: { 
     fontSize: 16, 
-    color: isDarkMode ? '#FFFFFF' : '#000', 
+    color: isDarkMode ? '#F0ECE7' : '#000000', 
     fontWeight: 'bold' 
   },
   modalDescriptionSection: {
@@ -3794,11 +3700,11 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     lineHeight: 18 
   },
   modalInstructionsCard: {
-    backgroundColor: 'rgba(175, 145, 151, 0.05)',
+    backgroundColor: (isDarkMode ? 'rgba(175, 145, 151, 0.05)' : 'rgba(92, 64, 51, 0.05)'),
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: 'rgba(175, 145, 151, 0.2)',
+    borderColor: (isDarkMode ? 'rgba(175, 145, 151, 0.2)' : 'rgba(92, 64, 51, 0.2)'),
   },
   modalInstructionsText: { 
     fontSize: 12, 
@@ -3878,7 +3784,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   modalActionButton: {
     flex: 1,
-    backgroundColor: '#AF9197',
+    backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -3920,8 +3826,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
   },
   modalRateButton: {
     flex: 1,
-    backgroundColor: 'rgba(175,145,151,0.12)',
-    borderColor: 'rgba(175,145,151,0.4)',
+    backgroundColor: (isDarkMode ? 'rgba(175,145,151,0.12)' : 'rgba(92,64,51,0.12)'),
+    borderColor: (isDarkMode ? 'rgba(175,145,151,0.4)' : 'rgba(92,64,51,0.4)'),
     borderWidth: 1,
     paddingVertical: 10,
     borderRadius: 12,
@@ -3952,9 +3858,9 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     minHeight: 44,
   },
   modalButtonText: {
-    fontFamily: 'BakbakOne',
+    fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
-    color: isDarkMode ? '#FFFFFF' : '#000',
+    color: isDarkMode ? '#F0ECE7' : '#000000',
     fontWeight: 'bold',
   },
   modalBottomSpace: {
@@ -4187,15 +4093,15 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     justifyContent: 'center',
   },
   dateSuggestionActive: { 
-    backgroundColor: isDarkMode ? 'rgba(175, 145, 151, 0.25)' : 'rgba(175,145,151,0.2)', 
-    borderColor: '#AF9197' 
+    backgroundColor: isDarkMode ? 'rgba(175, 145, 151, 0.25)' : 'rgba(92,64,51,0.2)', 
+    borderColor: (isDarkMode ? '#AF9197' : '#5C4033') 
   },
   dateSuggestionText: { 
     fontSize: 14, 
     color: isDarkMode ? 'rgba(255,255,255,0.7)' : '#666' 
   },
   dateSuggestionTextActive: { 
-    color: '#AF9197', 
+    color: (isDarkMode ? '#AF9197' : '#5C4033'), 
     fontWeight: '600' 
   },
   rescheduleActions: { 
@@ -4219,7 +4125,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#AF9197',
+    backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 44,
@@ -4276,16 +4182,16 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginTop: 4,
   },
   rescheduleStatusCard: {
-    backgroundColor: 'rgba(175, 145, 151, 0.08)',
+    backgroundColor: (isDarkMode ? 'rgba(175, 145, 151, 0.08)' : 'rgba(92, 64, 51, 0.08)'),
     borderRadius: 16,
     padding: 20,
     borderWidth: 2,
-    borderColor: 'rgba(175, 145, 151, 0.3)',
+    borderColor: (isDarkMode ? 'rgba(175, 145, 151, 0.3)' : 'rgba(92, 64, 51, 0.3)'),
   },
   rescheduleStatusTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#AF9197',
+    color: (isDarkMode ? '#AF9197' : '#5C4033'),
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -4315,12 +4221,12 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     marginBottom: 20,
   },
   dateOptionCard: {
-    backgroundColor: 'rgba(175, 145, 151, 0.05)',
+    backgroundColor: (isDarkMode ? 'rgba(175, 145, 151, 0.05)' : 'rgba(92, 64, 51, 0.05)'),
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(175, 145, 151, 0.15)',
+    borderColor: (isDarkMode ? 'rgba(175, 145, 151, 0.15)' : 'rgba(92, 64, 51, 0.15)'),
   },
   dateOptionDate: {
     fontSize: 15,
@@ -4346,8 +4252,8 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     alignItems: 'center',
   },
   timeSlotChipActive: {
-    backgroundColor: '#AF9197',
-    borderColor: '#AF9197',
+    backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
+    borderColor: (isDarkMode ? '#AF9197' : '#5C4033'),
   },
   timeSlotText: {
     fontSize: 13,
@@ -4367,7 +4273,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#AF9197',
+    backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
   },
   rescheduleBadge: {
     alignSelf: 'flex-start',
@@ -4431,17 +4337,17 @@ const createStyles = (theme: Theme, isDarkMode: boolean) => StyleSheet.create({
     justifyContent: 'flex-start',
   },
   rescheduledBadge: {
-    backgroundColor: 'rgba(175, 145, 151, 0.15)',
+    backgroundColor: (isDarkMode ? 'rgba(175, 145, 151, 0.15)' : 'rgba(92, 64, 51, 0.15)'),
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#AF9197',
+    borderColor: (isDarkMode ? '#AF9197' : '#5C4033'),
     marginRight: 5,
   },
   rescheduledBadgeText: {
     fontSize: 9,
-    color: '#AF9197',
+    color: (isDarkMode ? '#AF9197' : '#5C4033'),
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
@@ -4583,7 +4489,7 @@ chatHeaderInfo: {
 chatProviderName: {
   fontSize: 15,
   fontWeight: '600',
-  color: isDarkMode ? '#FFFFFF' : '#000',
+  color: isDarkMode ? '#F0ECE7' : '#000000',
 },
 chatAppointmentInfo: {
   fontSize: 11,
@@ -4622,7 +4528,7 @@ chatEmptyIcon: {
 chatEmptyTitle: {
   fontSize: 18,
   fontWeight: '600',
-  color: isDarkMode ? '#FFFFFF' : '#000',
+  color: isDarkMode ? '#F0ECE7' : '#000000',
   marginBottom: 8,
 },
 chatEmptySubtitle: {
@@ -4667,7 +4573,7 @@ chatMessageBubbleUser: {
 },
 chatMessageText: {
   fontSize: 15,
-  color: isDarkMode ? '#FFFFFF' : '#000',
+  color: isDarkMode ? '#F0ECE7' : '#000000',
   lineHeight: 20,
 },
 chatMessageTextUser: {
@@ -4702,7 +4608,7 @@ chatInputWrapper: {
 chatInput: {
   flex: 1,
   fontSize: 16,
-  color: isDarkMode ? '#FFFFFF' : '#000',
+  color: isDarkMode ? '#F0ECE7' : '#000000',
   maxHeight: 100,
   paddingVertical: 6,
 },
@@ -4749,7 +4655,7 @@ msgBackButton: {
 msgBackArrow: {
   fontSize: 32,
   fontWeight: '300',
-  color: '#AF9197',
+  color: (isDarkMode ? '#AF9197' : '#5C4033'),
   marginTop: -2,
 },
 msgHeaderCenter: {
@@ -4770,7 +4676,7 @@ msgAvatarFallback: {
   width: 36,
   height: 36,
   borderRadius: 18,
-  backgroundColor: '#AF9197',
+  backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
   alignItems: 'center',
   justifyContent: 'center',
 },
@@ -4858,7 +4764,7 @@ msgBubble: {
 },
 msgBubbleUser: {
   alignSelf: 'flex-end',
-  backgroundColor: '#AF9197',
+  backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
   borderBottomRightRadius: 6,
 },
 msgBubbleProvider: {
@@ -4906,7 +4812,7 @@ msgSendCircle: {
   width: 36,
   height: 36,
   borderRadius: 18,
-  backgroundColor: '#AF9197',
+  backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
   alignItems: 'center',
   justifyContent: 'center',
 },
@@ -4939,17 +4845,17 @@ intakeFormTodoIcon: {
 intakeFormTodoTitle: {
   fontSize: 14,
   fontWeight: '700',
-  color: '#AF9197',
+  color: (isDarkMode ? '#AF9197' : '#5C4033'),
   marginBottom: 3,
 },
 intakeFormTodoSub: {
   fontSize: 12,
-  color: '#AF9197',
+  color: (isDarkMode ? '#AF9197' : '#5C4033'),
   opacity: 0.75,
   lineHeight: 17,
 },
 intakeFormTodoBadge: {
-  backgroundColor: '#AF9197',
+  backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
   borderRadius: 6,
   paddingHorizontal: 7,
   paddingVertical: 3,
@@ -5038,20 +4944,22 @@ groupBookingPlatformFeeValue: {
 });
 
 // ── Contact Sheet Styles ──────────────────────────────────────────────────────
+// Layout only — colors are theme-dependent and applied at the call site via
+// isDarkMode-branched overrides, same pattern as popSt below.
 const csSt = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  sheet:       { backgroundColor: '#1C1C1E', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
-  handle:      { width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginTop: 12, marginBottom: 20 },
-  title:       { fontSize: 18, fontWeight: '700', color: '#F2EBF0', textAlign: 'center', marginBottom: 4 },
-  subtitle:    { fontSize: 13, color: 'rgba(183,225,218,0.55)', textAlign: 'center', marginBottom: 20 },
+  sheet:       { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40, paddingHorizontal: 20 },
+  handle:      { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 20 },
+  title:       { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
+  subtitle:    { fontSize: 13, textAlign: 'center', marginBottom: 20 },
   options:     { gap: 10 },
-  option:      { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2C2C2E', borderRadius: 14, padding: 14, gap: 14 },
+  option:      { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, gap: 14 },
   optionIcon:  { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   optionEmoji: { fontSize: 20 },
   optionText:  { flex: 1 },
-  optionLabel: { fontSize: 15, fontWeight: '600', color: '#F2EBF0' },
-  optionDesc:  { fontSize: 12, color: 'rgba(183,225,218,0.55)', marginTop: 2 },
-  optionChevron: { fontSize: 22, color: 'rgba(255,255,255,0.3)', fontWeight: '300' },
+  optionLabel: { fontSize: 15, fontWeight: '600' },
+  optionDesc:  { fontSize: 12, marginTop: 2 },
+  optionChevron: { fontSize: 22, fontWeight: '300' },
 });
 
 // Centered popup-card modals (confirmations, rate, tip) — as opposed to csSt's

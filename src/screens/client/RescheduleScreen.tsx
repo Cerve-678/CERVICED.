@@ -14,6 +14,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useBooking, ConfirmedBooking, AvailableDate } from '../../contexts/BookingContext';
 import {
+  getProviderReschedulePolicyById,
   getProviderReschedulePolicyByDisplayName,
   ProviderReschedulePolicy,
 } from '../../services/databaseService';
@@ -102,8 +103,10 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   // Load policy and build date options
   useEffect(() => {
     if (!booking) return;
-    getProviderReschedulePolicyByDisplayName(booking.providerName)
-      .then(setReschedulePolicy).catch(() => {});
+    (booking.providerId
+      ? getProviderReschedulePolicyById(booking.providerId)
+      : getProviderReschedulePolicyByDisplayName(booking.providerName)
+    ).then(setReschedulePolicy).catch(() => {});
 
     // If provider has already responded with available dates, use those
     const providerDates = booking.rescheduleRequest?.providerAvailableDates;

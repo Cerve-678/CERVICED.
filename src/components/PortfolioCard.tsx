@@ -2,11 +2,15 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Animated,
 } from 'react-native';
+// expo-image instead of RN's Image — Explore's masonry grid is unvirtualized
+// (every card mounts at once, see MasonryGrid.tsx), so disk/memory caching
+// matters even more here than elsewhere: without it, every image on every
+// visit to the same feed re-downloads from network from scratch.
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 import { useBookmarkStore } from '../stores/useBookmarkStore';
@@ -84,8 +88,13 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
         ]}
       >
         {/* Image */}
+        {/* item.image is typed as RN's ImageSourcePropType (broad union) but
+            is always constructed as { uri: string } (see ExploreScreen.tsx's
+            mapDb*ToCard helpers) — narrowed here since expo-image's stricter
+            ImageSource type doesn't structurally match the wider RN union
+            under exactOptionalPropertyTypes. */}
         <Image
-          source={item.image}
+          source={{ uri: (item.image as { uri: string }).uri }}
           style={[
             styles.image,
             {
@@ -94,8 +103,8 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
               borderRadius: dimensions.card.smallBorderRadius,
             },
           ]}
-          resizeMode="cover"
-          fadeDuration={0}
+          contentFit="cover"
+          transition={0}
         />
 
         {/* Gradient overlay at bottom of image */}

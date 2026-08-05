@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { BookingService, DepositPolicy } from '../services/bookingService';
@@ -32,6 +33,13 @@ import type { DbPromotion } from '../types/database';
 import { logger } from '../utils/logger';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Matches MultiBookingSheet's own formatShortDate — same "Wed, 12 Aug" style
+// used everywhere else a booked date is summarised.
+const formatShortDate = (dateStr: string): string =>
+  new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  });
 
 export interface BookingSheetAddOn {
   id: string | number;
@@ -133,6 +141,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
   const [isDepositOnly, setIsDepositOnly] = useState(false);
+  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [isResolvingSlot, setIsResolvingSlot] = useState(false);
   const [depositPolicy, setDepositPolicy] = useState<ProviderDepositPolicy | undefined>(undefined);
 
@@ -164,6 +173,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setSelectedTime(initial?.selectedTime ?? '');
     setNotes(initial?.notes ?? '');
     setIsDepositOnly(initial?.isDepositOnly ?? false);
+    setAgreedToPolicy(false);
     setLocalPromo(undefined);
     setConsultationDate('');
     setConsultationTime('');
@@ -273,6 +283,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     ? BookingService.calculateDeposit(subtotal, depositPolicyArg)
     : subtotal - localPromoDiscount;
 
+  // Deposit-booking summary figures — same `subtotal` basis the deposit
+  // itself is calculated from, so the three numbers always reconcile.
+  const summaryServiceTotal = subtotal;
+  const summaryRemaining = useMemo(
+    () => (isDepositOnly ? BookingService.calculateRemainingBalance(subtotal, depositPolicyArg) : 0),
+    [isDepositOnly, subtotal, depositPolicyArg]
+  );
+
   const handleLocalApplyPromo = useCallback(async (_key: string, code: string): Promise<string | null> => {
     const trimmed = code.trim();
     if (!trimmed) return 'Enter a code first.';
@@ -293,6 +311,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const handleSubmit = useCallback(() => {
     if (!service) return;
     if (consultationScheduleMissing) return; // guarded by disabling the button too
+    if (!agreedToPolicy) return; // guarded by disabling the button too
     onSubmit({
       selectedAddOns,
       date: selectedDate,
@@ -305,7 +324,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, agreedToPolicy, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -315,7 +334,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   return (
     <Modal visible={isVisible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      {/* Without this, opening the keyboard for the Notes field left the
+          footer (Add to Cart / Save Changes) exactly where it was — on
+          shorter screens the keyboard covered it outright, or squeezed it
+          off the bottom of the visible sheet. */}
+      <KeyboardDismissView style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
           <SafeAreaView style={styles.container}>
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
@@ -544,6 +567,86 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   />
                 </View>
               )}
+
+              {service && (
+                <View style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Booking Summary</Text>
+                  <View style={styles.summaryItemRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.summaryItemName, { color: tokens.text }]}>{service.name}</Text>
+                      <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
+                        {selectedDate && selectedTime ? `${formatShortDate(selectedDate)} at ${selectedTime}` : 'Not scheduled yet'}
+                      </Text>
+                    </View>
+                    <Text style={[styles.summaryItemPrice, { color: adaptiveAccentColor }]}>£{(service.price ?? 0).toFixed(2)}</Text>
+                  </View>
+                  {/* Add-ons are itemised here rather than folded into the
+                      service price — the summary shouldn't show a number the
+                      client can't account for. */}
+                  {selectedAddOns.map(a => (
+                    <View key={a.id} style={styles.summaryAddOnRow}>
+                      <Text style={[styles.summaryAddOnName, { color: tokens.sub }]} numberOfLines={1}>
+                        + {a.name}
+                      </Text>
+                      <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{a.price.toFixed(2)}</Text>
+                    </View>
+                  ))}
+                  {consultationRequired && (
+                    <View style={styles.summaryItemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.summaryItemName, { color: tokens.text }]}>{consultationRequired.name}</Text>
+                        <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
+                          {consultationDate && consultationTime ? `${formatShortDate(consultationDate)} at ${consultationTime}` : 'Not scheduled yet'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.summaryItemPrice, { color: adaptiveAccentColor }]}>£{consultationRequired.price.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
+                  {/* On a deposit booking the service total and the amount
+                      actually charged now are different numbers — show both,
+                      plus what's left to settle with the provider, rather
+                      than a single "Total" that means neither. */}
+                  {isDepositOnly ? (
+                    <>
+                      <View style={styles.summaryAddOnRow}>
+                        <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Service total</Text>
+                        <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryServiceTotal.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.summaryAddOnRow}>
+                        <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Remaining at appointment</Text>
+                        <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryRemaining.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.summaryItemRow}>
+                        <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>Deposit Due Now</Text>
+                        <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.summaryItemRow}>
+                      <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>Total</Text>
+                      <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.policyCheckboxRow}
+                onPress={() => setAgreedToPolicy(!agreedToPolicy)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.addOnCheckbox,
+                  { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
+                ]}>
+                  {agreedToPolicy && <Text style={styles.addOnCheckmark}>✓</Text>}
+                </View>
+                {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
+                <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
+                  I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
+                </Text>
+              </TouchableOpacity>
             </>
           )}
         </ScrollView>
@@ -555,7 +658,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               onPress={() => setStep('book')}
               activeOpacity={0.8}
             >
-              <Text style={styles.submitButtonText}>Next{totalAddOnsPrice > 0 ? ` • +£${totalAddOnsPrice.toFixed(2)}` : ''}</Text>
+              <Text style={styles.submitButtonText}>
+                {`Next${totalAddOnsPrice > 0 ? ` • +£${totalAddOnsPrice.toFixed(2)}` : ''}`}
+              </Text>
             </TouchableOpacity>
           ) : (
             <>
@@ -564,14 +669,16 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
               </View>
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, consultationScheduleMissing && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, (consultationScheduleMissing || !agreedToPolicy) && styles.submitButtonDisabled]}
                 onPress={handleSubmit}
                 activeOpacity={0.8}
-                disabled={consultationScheduleMissing}
+                disabled={consultationScheduleMissing || !agreedToPolicy}
               >
                 <Text style={styles.submitButtonText}>
                   {consultationScheduleMissing
                     ? 'Choose a consultation time'
+                    : !agreedToPolicy
+                    ? 'Agree to terms to continue'
                     : mode === 'add' ? 'Add to Cart' : 'Save Changes'}
                 </Text>
               </TouchableOpacity>
@@ -580,7 +687,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         </View>
           </SafeAreaView>
         </View>
-      </View>
+      </KeyboardDismissView>
     </Modal>
   );
 };
@@ -621,6 +728,9 @@ const styles = StyleSheet.create({
   addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   addOnCheckmark: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 },
+  policyCheckboxLabel: { flex: 1, fontSize: 13 },
+  requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   resolvingText: { fontSize: 13 },
   consultationNotice: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
@@ -637,6 +747,16 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   totalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
   totalPrice: { fontFamily: 'BakbakOne-Regular', fontSize: 20, fontWeight: 'bold' },
+  summaryAddOnRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2, paddingLeft: 12 },
+  summaryAddOnName: { fontSize: 12, flex: 1, marginRight: 8 },
+  summaryAddOnPrice: { fontSize: 12 },
+  summaryItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  summaryItemName: { fontSize: 14, fontWeight: '600' },
+  summaryItemDateTime: { fontSize: 12, marginTop: 2 },
+  summaryItemPrice: { fontSize: 14, fontWeight: '700' },
+  summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
+  summaryTotalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: '700' },
+  summaryTotalValue: { fontFamily: 'BakbakOne-Regular', fontSize: 16, fontWeight: '700' },
   submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
   submitButtonDisabled: { opacity: 0.5 },
   submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: '#fff', fontWeight: 'bold' },

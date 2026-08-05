@@ -10,8 +10,6 @@ import {
   Modal,
   ScrollView,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +28,7 @@ import type { ClienteleMember, DbPromotion, DbBooking } from '../../types/databa
 import { useProviderDialog } from '../../components/ProviderDialog';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { formatTime12 } from '../../utils/dateUtils';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
@@ -335,7 +334,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError,
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView style={{ flex: 1 }}>
         <TouchableOpacity style={anSt.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={[anSt.sheet, { backgroundColor: P.surface }]}>
           <View style={[anSt.handle, { backgroundColor: P.border }]} />
@@ -412,7 +411,7 @@ function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onError,
             )}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </Modal>
   );
 }

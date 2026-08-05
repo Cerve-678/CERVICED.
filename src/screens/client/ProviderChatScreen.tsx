@@ -5,7 +5,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   ActivityIndicator,
@@ -18,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { supabase } from '../../lib/supabase';
 import {
   getProviderAddressPolicy,
@@ -314,10 +314,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardDismissView
       style={{ flex: 1, backgroundColor: OP.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      extraOffset={90}
     >
       <FlatList
         ref={flatListRef}
@@ -450,7 +449,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </KeyboardDismissView>
   );
 }
 

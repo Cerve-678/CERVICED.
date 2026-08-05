@@ -7,15 +7,14 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
   Switch,
-  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import {
   createIntakeForm,
   getIntakeFormByBooking,
@@ -570,7 +569,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         </View>
       </SafeAreaView>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView style={{ flex: 1 }}>
 
         {/* ══════════════ PICKER ══════════════ */}
         {mode === 'picker' && (
@@ -867,7 +866,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             </View>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
 
       {/* ── Form Preview Modal ── */}
       <Modal visible={showPreview} animationType="none" presentationStyle="pageSheet" onRequestClose={() => setShowPreview(false)}>

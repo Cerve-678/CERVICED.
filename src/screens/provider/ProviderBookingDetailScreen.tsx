@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  KeyboardAvoidingView,
   Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,9 +20,11 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { supabase } from '../../lib/supabase';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import {
   getActiveRescheduleRequest,
   respondToRescheduleRequest,
@@ -287,7 +288,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [initRescheduleSlots, setInitRescheduleSlots] = useState<{ date: string; times: string[] }[]>([]);
   const [initSlotDate, setInitSlotDate] = useState(''); // ISO YYYY-MM-DD, set only via the date picker
   const [initSlotDatePickerVisible, setInitSlotDatePickerVisible] = useState(false);
-  const [initSlotTimes, setInitSlotTimes] = useState('');
+  const [initCustomTimePickerVisible, setInitCustomTimePickerVisible] = useState(false);
   const [initSuggestedTimes, setInitSuggestedTimes] = useState<string[]>([]);
   const [initSelectedTimes, setInitSelectedTimes] = useState<string[]>([]);
   const [initLoadingTimes, setInitLoadingTimes] = useState(false);
@@ -315,41 +316,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     getBookingWithAddOnsById(bookingId)
       .then(raw => {
         if (!raw) { setFetching(false); return; }
-        const d = raw as any;
-        const to12 = (t: string) => formatTime12(t);
-        const rawStart = d.booking_time ? d.booking_time.slice(0, 5) : '';
-        const rawEnd   = d.end_time   ? d.end_time.slice(0, 5)   : '';
-        const mapped = {
-          id: d.id,
-          providerId: d.provider_id,
-          providerName: d.provider_name_snapshot ?? '',
-          providerImage: d.provider_logo_snapshot ?? '',
-          serviceName: d.service_name_snapshot ?? '',
-          duration: '',
-          price: d.base_price ?? 0,
-          bookingDate: d.booking_date ?? '',
-          bookingTime: rawStart ? to12(rawStart) : '',
-          endTime: rawEnd ? to12(rawEnd) : '',
-          address: d.provider_address_snapshot ?? '',
-          status: mapDbBookingStatus(d.status),
-          paymentType: d.payment_type ?? 'full',
-          amountPaid: d.amount_paid ?? 0,
-          depositAmount: d.deposit_amount ?? 0,
-          remainingBalance: d.remaining_balance ?? 0,
-          serviceCharge: d.service_charge ?? 0,
-          customerName: d.customer_name ?? '',
-          customerEmail: d.customer_email ?? '',
-          customerPhone: d.customer_phone ?? '',
-          isPendingReschedule: false,
-          addOns: (d.add_ons ?? []).map((a: any) => ({ name: a.name_snapshot, price: a.price_snapshot })),
-          groupBookingId: d.group_booking_id ?? undefined,
-          notes: d.notes ?? undefined,
-          bookingInstructions: d.booking_instructions ?? undefined,
-          clientAddress: d.client_address ?? undefined,
-          clientUserId: d.user_id ?? undefined,
-        } as unknown as ConfirmedBooking;
+        const mapped = { ...mapDbBookingToConfirmed(raw), isPendingReschedule: false };
         setFetchedBooking(mapped);
-        if (d.user_id) setClientUserId(d.user_id);
+        if ((raw as any).user_id) setClientUserId((raw as any).user_id);
         setFetching(false);
       })
       .catch(() => { setFetching(false); });
@@ -589,19 +558,24 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitSelectedTimes(prev => prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]);
   }, []);
 
+  const handlePickCustomTime = useCallback((d: Date) => {
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const time = `${hh}:${mm}`;
+    setInitSelectedTimes(prev => prev.includes(time) ? prev : [...prev, time]);
+  }, []);
+
   const handleAddInitSlot = useCallback(() => {
     if (!initSlotDate) { setInitInputError('Pick a date first.'); return; }
-    const manual = initSlotTimes.trim().split(',').map(t => t.trim()).filter(Boolean);
-    const allTimes = [...new Set([...initSelectedTimes, ...manual])];
-    if (allTimes.length === 0) { setInitInputError('Select or enter at least one time.'); return; }
+    if (initSelectedTimes.length === 0) { setInitInputError('Select or add at least one time.'); return; }
     setInitInputError('');
     setInitRescheduleSlots(prev => {
       const existing = prev.find(s => s.date === initSlotDate);
-      if (existing) return prev.map(s => s.date === initSlotDate ? { ...s, times: [...new Set([...s.times, ...allTimes])] } : s);
-      return [...prev, { date: initSlotDate, times: allTimes }];
+      if (existing) return prev.map(s => s.date === initSlotDate ? { ...s, times: [...new Set([...s.times, ...initSelectedTimes])] } : s);
+      return [...prev, { date: initSlotDate, times: initSelectedTimes }];
     });
-    setInitSlotDate(''); setInitSlotTimes(''); setInitSuggestedTimes([]); setInitSelectedTimes([]);
-  }, [initSlotDate, initSlotTimes, initSelectedTimes]);
+    setInitSlotDate(''); setInitSuggestedTimes([]); setInitSelectedTimes([]);
+  }, [initSlotDate, initSelectedTimes]);
 
   const handleInitRescheduleSubmit = useCallback(async () => {
     if (initRescheduleSlots.length === 0) { setInitInputError('Add at least one date and time slot.'); return; }
@@ -611,8 +585,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     try {
       await upsertProviderRescheduleRequest({
         booking_id: booking.id,
-        original_date: booking.bookingDate,
-        original_time: booking.bookingTime,
         proposed_slots: initRescheduleSlots,
       });
       await insertBookingUserNotification({
@@ -639,8 +611,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
   const closeInitRescheduleModal = useCallback(() => {
     setShowInitRescheduleModal(false);
-    setInitRescheduleSlots([]); setInitSlotDate(''); setInitSlotTimes('');
-    setInitSuggestedTimes([]); setInitSelectedTimes([]);
+    setInitRescheduleSlots([]); setInitSlotDate('');
+    setInitSuggestedTimes([]); setInitSelectedTimes([]); setInitCustomTimePickerVisible(false);
     setInitInputError(''); setInitSent(false);
   }, []);
 
@@ -1566,10 +1538,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         animationType="fade"
         onRequestClose={closeRespondModal}
       >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
           <View style={[styles.respondModal, { backgroundColor: P.card }]}>
 
             {respondSent ? (
@@ -1792,7 +1761,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </ScrollView>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </Modal>
 
       {/* ── Client history modal ── */}
@@ -1882,7 +1851,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         animationType="fade"
         onRequestClose={closeInitRescheduleModal}
       >
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
           <View style={[styles.respondModal, { backgroundColor: P.card }]}>
             {initSent ? (
               <View style={styles.sentState}>
@@ -1955,33 +1924,67 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   )
                 )}
 
-                {/* Suggested chips */}
+                {/* Time chips: from the provider's real availability, plus any custom time picked below */}
+                <Text style={[styles.inputLabel, { color: P.text + '77', marginTop: 8 }]}>TIMES</Text>
                 {initLoadingTimes && <ActivityIndicator size="small" color={P.accent} style={{ marginBottom: 8 }} />}
-                {initSuggestedTimes.length > 0 && (
+                {(initSuggestedTimes.length > 0 || initSelectedTimes.length > 0) && (
                   <View style={styles.chipsRow}>
-                    {initSuggestedTimes.map(t => (
+                    {[...new Set([...initSuggestedTimes, ...initSelectedTimes])].sort().map(t => (
                       <TouchableOpacity
                         key={t}
                         style={[styles.timeChip, initSelectedTimes.includes(t) && { backgroundColor: P.accent }]}
                         onPress={() => toggleInitTime(t)}
                       >
-                        <Text style={[styles.timeChipText, { color: initSelectedTimes.includes(t) ? '#fff' : P.text }]}>{t}</Text>
+                        <Text style={[styles.timeChipText, { color: initSelectedTimes.includes(t) ? '#fff' : P.text }]}>{formatTime12(t)}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
 
-                {/* Manual time entry */}
-                <Text style={[styles.inputLabel, { color: P.text + '77', marginTop: 8 }]}>TIMES (comma-separated)</Text>
-                <TextInput
-                  style={[styles.respondInput, { color: P.text, borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}
-                  value={initSlotTimes}
-                  onChangeText={setInitSlotTimes}
-                  placeholder="e.g. 10:00, 14:30"
-                  placeholderTextColor={P.text + '44'}
-                />
+                {/* Escape hatch: propose a time outside the normal availability grid */}
+                <TouchableOpacity
+                  style={[styles.addSlotBtn, { borderColor: P.accent + '66', marginTop: 4 }]}
+                  onPress={() => { if (!initSlotDate) { setInitInputError('Pick a date first.'); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
+                >
+                  <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add custom time</Text>
+                </TouchableOpacity>
+                {initCustomTimePickerVisible && (
+                  Platform.OS === 'ios' ? (
+                    <Modal transparent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
+                      <View style={styles.pickerModalWrap}>
+                        <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setInitCustomTimePickerVisible(false)} />
+                        <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                          <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
+                            <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Select Time</Text>
+                            <TouchableOpacity onPress={() => setInitCustomTimePickerVisible(false)}>
+                              <Text style={[styles.pickerDoneLabel, { color: '#FF9500' }]}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            mode="time"
+                            value={new Date()}
+                            onChange={(_, d) => { if (d) handlePickCustomTime(d); }}
+                            display="spinner"
+                            themeVariant={isDarkMode ? 'dark' : 'light'}
+                            textColor={P.text}
+                            minuteInterval={5}
+                            style={{ width: '100%' }}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  ) : (
+                    <DateTimePicker
+                      mode="time"
+                      value={new Date()}
+                      onChange={(_, d) => { setInitCustomTimePickerVisible(false); if (d) handlePickCustomTime(d); }}
+                      display="default"
+                      minuteInterval={5}
+                    />
+                  )
+                )}
 
-                <TouchableOpacity style={[styles.addSlotBtn, { borderColor: P.accent + '66' }]} onPress={handleAddInitSlot}>
+                <TouchableOpacity style={[styles.addSlotBtn, { borderColor: P.accent + '66', marginTop: 10 }]} onPress={handleAddInitSlot}>
                   <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add date</Text>
                 </TouchableOpacity>
 
@@ -1992,7 +1995,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   <View key={i} style={[styles.slotRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.slotRowDate, { color: P.text }]}>{formatDisplayDate(slot.date)}</Text>
-                      <Text style={[styles.slotRowTimes, { color: P.text + '88' }]}>{slot.times.join(', ')}</Text>
+                      <Text style={[styles.slotRowTimes, { color: P.text + '88' }]}>{slot.times.map(t => formatTime12(t)).join(', ')}</Text>
                     </View>
                     <TouchableOpacity onPress={() => setInitRescheduleSlots(prev => prev.filter((_, idx) => idx !== i))}>
                       <Ionicons name="close-circle" size={18} color={P.text + '55'} />
@@ -2015,7 +2018,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               </ScrollView>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </Modal>
 
       {/* ── Help dropdown ── */}

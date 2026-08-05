@@ -5,7 +5,6 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   ActivityIndicator,
@@ -18,6 +17,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { supabase } from '../../lib/supabase';
 import {
   markConversationReadByProvider,
@@ -237,10 +237,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         </View>
       </SafeAreaView>
 
-      <KeyboardAvoidingView
+      <KeyboardDismissView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={kvOffset}
+        extraOffset={kvOffset}
       >
         <FlatList
           ref={flatListRef}
@@ -287,7 +286,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             )}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </View>
   );
 }

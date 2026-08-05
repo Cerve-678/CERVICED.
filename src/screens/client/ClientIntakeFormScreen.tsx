@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { getIntakeFormById, submitIntakeFormAnswers, IntakeForm, IntakeFormQuestion } from '../../services/databaseService';
 import { HomeScreenProps } from '../../navigation/types';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 type Props = HomeScreenProps<'ClientIntakeForm'>;
 
@@ -43,6 +44,22 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   // already-completed form later hits `submitted` without this, so it goes
   // straight to the read-only answers view instead of the congrats screen.
   const [justSubmitted, setJustSubmitted] = useState(false);
+
+  // footer's bottom padding clears the floating tab bar when the keyboard is
+  // closed, but that same clearance becomes a dead gap between the Submit
+  // button and the keyboard once it's open (same fix as ProviderChatScreen /
+  // ChatComponents.tsx's ChatInput).
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     getIntakeFormById(formId).then(f => {
@@ -135,7 +152,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         </View>
       ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={[styles.content, { paddingBottom: 120 }]}
@@ -206,7 +223,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
 
           {/* Submit button — hidden once completed, since there's nothing left to submit */}
           {!submitted && (
-            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border }]}>
+            <View style={[styles.footer, { backgroundColor: P.bg, borderTopColor: P.border, paddingBottom: keyboardVisible ? 12 : FLOATING_TAB_BAR_CLEARANCE }]}>
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: P.accent }]}
                 onPress={handleSubmit}
@@ -220,7 +237,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
           )}
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       )}
     </View>
   );
@@ -392,11 +409,11 @@ const styles = StyleSheet.create({
 
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    // Bottom padding clears the floating pill tab bar that overlays this
-    // screen (it's nested in a tab's stack) — it used to be a flat 36, which
-    // is roughly home-indicator clearance only, so the pill sat right on top
-    // of the Submit button.
-    paddingHorizontal: 16, paddingBottom: FLOATING_TAB_BAR_CLEARANCE, paddingTop: 12,
+    // Bottom padding clears the floating pill tab bar when the keyboard is
+    // closed (see the keyboardVisible swap at the call site) — it used to be
+    // a flat 36, which is roughly home-indicator clearance only, so the pill
+    // sat right on top of the Submit button.
+    paddingHorizontal: 16, paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   submitBtn:     { borderRadius: 14, paddingVertical: 16, alignItems: 'center' },

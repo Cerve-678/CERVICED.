@@ -57,6 +57,19 @@ export function formatLongDate(input: string | Date): string {
   return `${weekday} ${day} ${month} ${year}`;
 }
 
+/**
+ * "Wednesday 8th June" — same as formatLongDate but without the year, for
+ * near-term appointment dates (checkout confirmation, success) where the
+ * year is noise rather than information.
+ */
+export function formatLongDateNoYear(input: string | Date): string {
+  const date = toLocalDate(input);
+  const weekday = DAY_NAMES_FULL[date.getDay()];
+  const day = ordinalSuffix(date.getDate());
+  const month = MONTH_NAMES_FULL[date.getMonth()];
+  return `${weekday} ${day} ${month}`;
+}
+
 /** "08/06/2026" (DD/MM/YYYY) */
 export function formatShortDate(input: string | Date): string {
   const date = toLocalDate(input);

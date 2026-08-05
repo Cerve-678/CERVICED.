@@ -37,6 +37,24 @@ export interface EngineInput {
   userId?: string;
   /** Injected so date logic is deterministic and testable. */
   now?: Date;
+  /**
+   * What the previous turn established. Pass back what the last `respond()`
+   * returned as `context` — the engine is otherwise stateless, so without
+   * this every follow-up ("what about Saturday?") arrives with no idea what
+   * came before.
+   */
+  conversation?: ConversationContext;
+}
+
+/**
+ * A reply, plus the context to feed into the next turn.
+ *
+ * Returned rather than held in a module singleton: the screen owns the
+ * conversation, and history-loading/new-chat have to be able to reset it.
+ */
+export interface EngineReply {
+  message: ChatMessage;
+  context: ConversationContext;
 }
 
 /**
@@ -89,9 +107,118 @@ export function confirmToken(id: string): string {
 const DISMISSAL_RE =
   /^(never ?mind|nevermind|no thanks?|no ta|cancel that|forget it|leave it|not now|nothing|nah|no)\.?$/i;
 
+/**
+ * Reuses last turn's entities for anything this message didn't resolve.
+ *
+ * Only fills gaps — a value the current message resolved always wins, so
+ * "what about hair instead?" switches service rather than stubbornly keeping
+ * nails. Bookings are deliberately NOT carried: they're specific enough that
+ * a stale one silently answering a new question is worse than asking.
+ */
+function carryForward(
+  current: EntityBag,
+  prior: ConversationContext | undefined,
+): EntityBag {
+  if (!prior) return current;
+  const p = prior.entities;
+  return {
+    ...current,
+    ...(current.service ? {} : p.service ? { service: p.service } : {}),
+    ...(current.provider ? {} : p.provider ? { provider: p.provider } : {}),
+    ...(current.money ? {} : p.money ? { money: p.money } : {}),
+    // Date is NOT carried: "what about Saturday?" is precisely a request to
+    // CHANGE the date, and a sticky one would make every later question
+    // silently about the first day mentioned.
+  };
+}
+
+/** "the first one", "that one", "the second", "number 2". */
+const ORDINALS: Record<string, number> = {
+  first: 0, "1st": 0, one: 0,
+  second: 1, "2nd": 1, two: 1,
+  third: 2, "3rd": 2, three: 2,
+  fourth: 3, "4th": 3, four: 3,
+  fifth: 4, "5th": 4, five: 4,
+  last: -1,
+};
+
+/**
+ * Resolves "the first one" against the providers Becca last showed.
+ *
+ * Without this, every reference to a result Becca just displayed matched
+ * nothing — the single most jarring break in a real conversation, because
+ * the user is pointing at something visibly on screen.
+ */
+function resolveOrdinalReference(
+  message: string,
+  prior: ConversationContext | undefined,
+): EntityBag["provider"] | undefined {
+  const list = prior?.lastProviders;
+  if (!list || list.length === 0) return undefined;
+
+  const lower = message.toLowerCase();
+  // Must look like a reference to a listed item, not a bare number in some
+  // unrelated sentence ("under 50").
+  if (!/\b(that|this|the|number|option|no\.?)\s*\w*\b|\bone\b/.test(lower)) {
+    return undefined;
+  }
+
+  let index: number | undefined;
+  for (const [word, i] of Object.entries(ORDINALS)) {
+    if (new RegExp(`(^|[^a-z0-9])${word}([^a-z0-9]|$)`, "i").test(lower)) {
+      index = i;
+      break;
+    }
+  }
+  // "number 2" / "option 3"
+  const numbered = lower.match(/\b(?:number|option|no\.?)\s*(\d+)\b/);
+  if (numbered?.[1]) index = parseInt(numbered[1], 10) - 1;
+
+  // A bare "that one" with a single result is unambiguous.
+  if (index === undefined && /\b(that|this)\s+one\b/.test(lower) && list.length === 1) {
+    index = 0;
+  }
+  if (index === undefined) return undefined;
+
+  const target = index === -1 ? list[list.length - 1] : list[index];
+  if (!target) return undefined;
+
+  return {
+    kind: "provider",
+    value: {
+      slug: target.slug,
+      ...(target.dbId ? { dbId: target.dbId } : {}),
+      displayName: target.displayName,
+    },
+    confidence: 0.85,
+    sourceText: message,
+    label: target.displayName,
+  };
+}
+
+/**
+ * The conversational entry point: replies AND returns the context to pass
+ * into the next turn. Prefer this over `respond()` — a caller that drops the
+ * context gets an assistant that can't follow a conversation.
+ */
+export async function converse(input: EngineInput): Promise<EngineReply> {
+  const reply = await respond(input);
+  return { message: reply, context: lastContext };
+}
+
+/**
+ * Context produced by the most recent `respond()` call.
+ *
+ * `respond` has many early returns (confirmations, dismissals, ambiguity,
+ * fallbacks) and threading a return-tuple through all of them would obscure
+ * the actual logic. This is written once per call and read immediately by
+ * `converse`, which is the only supported way to read it.
+ */
+let lastContext: ConversationContext = { entities: {} };
+
 export async function respond(input: EngineInput): Promise<ChatMessage> {
   const now = input.now ?? new Date();
-  const { message, hat, bookings, userId } = input;
+  const { message, hat, bookings, userId, conversation } = input;
 
   // A confirmation short-circuits everything: it's not natural language and
   // must never be re-parsed as an intent.

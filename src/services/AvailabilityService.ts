@@ -3,8 +3,10 @@
 
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-const BOOKINGS_STORAGE_KEY = '@cerviced_bookings';
+import { STORAGE_KEYS } from '../utils/storageKeys';
+const BOOKINGS_STORAGE_KEY = STORAGE_KEYS.BOOKINGS_STORE_LEGACY;
 import { logger } from '../utils/logger';
+import { formatTime12 } from '../utils/dateUtils';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -77,15 +79,12 @@ const parse24HTimeToMinutes = (timeStr: string): number => {
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
 };
 
-// Minutes-since-midnight -> "H:MM AM/PM", the display format every slot/time
+// Minutes-since-midnight -> "09:00am", the display format every slot/time
 // string in this file already uses (see parseTimeToMinutes for the inverse).
 const formatMinutesTo12h = (mins: number): string => {
-  const h = Math.floor(mins / 60);
+  const h = Math.floor(mins / 60) % 24;
   const m = mins % 60;
-  const period = h < 12 ? 'AM' : 'PM';
-  const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  const displayM = m === 0 ? '00' : String(m).padStart(2, '0');
-  return `${displayH}:${displayM} ${period}`;
+  return formatTime12(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
 };
 
 // Generate time slots between open_time and close_time at a configurable interval
@@ -185,6 +184,67 @@ const resolveProviderId = async (providerIdOrName: string): Promise<string | nul
   return id;
 };
 
+/**
+ * Re-checks the two time-relative rules a slot can fail purely because the
+ * clock moved: it's now in the past, or it has fallen inside the provider's
+ * minimum-notice window.
+ *
+ * getAvailableSlots() applies both when generating the picker, but only at
+ * selection time — a cart item sat on overnight can name a slot that was
+ * valid when picked. Without re-checking at checkout it sails through and is
+ * only rejected by the enforce_booking_bookability trigger mid-hold, with no
+ * way for the client to tell which appointment was at fault.
+ *
+ * Returns a BookingConflict to surface, or null when the slot is still fine.
+ */
+const checkNoticeWindow = async (
+  providerId: string,
+  date: string,
+  time: string,
+): Promise<BookingConflict | null> => {
+  // Same construction as the slot generators above: midnight on the date,
+  // then offset by the slot's minutes-from-midnight. Parsing "HH:MM AM/PM"
+  // into a Date directly isn't reliable across platforms.
+  const slotStart = new Date(date + 'T00:00:00');
+  if (Number.isNaN(slotStart.getTime())) return null;
+  slotStart.setMinutes(parseTimeToMinutes(time));
+
+  if (slotStart.getTime() < Date.now()) {
+    return {
+      hasConflict: true,
+      message: 'That time has already passed — please pick a new slot.',
+    };
+  }
+
+  const { data, error } = await supabase
+    .from('providers')
+    .select('min_booking_notice_hrs')
+    .eq('id', providerId)
+    .maybeSingle();
+
+  // Fails open by design — the server-side enforce_booking_bookability
+  // trigger is the real gate, and blocking checkout on a transient read
+  // would be worse than letting the trigger reject it. But log it: a
+  // persistent failure here silently disables every provider's notice window
+  // at the point where the client could still be given a clear message.
+  if (error) {
+    logger.error('checkNoticeWindow: provider lookup failed', error);
+    return null;
+  }
+
+  const noticeHrs =
+    (data as { min_booking_notice_hrs: number } | null)?.min_booking_notice_hrs ?? 0;
+  if (noticeHrs <= 0) return null;
+
+  if (slotStart.getTime() < Date.now() + noticeHrs * 60 * 60 * 1000) {
+    return {
+      hasConflict: true,
+      message: `This provider needs at least ${noticeHrs}h notice — please pick a later slot.`,
+    };
+  }
+  return null;
+};
+
 export type BackToBackSlot = { serviceId: string; time: string; endTime: string };
 
 // Try to fit an ORDERED list of services back-to-back for one provider on
@@ -194,11 +254,27 @@ export type BackToBackSlot = { serviceId: string; time: string; endTime: string 
 // doesn't have to individually pick non-conflicting times and hope they
 // work. Returns null if the whole chain doesn't fit anywhere in the day's
 // working hours without clashing with an existing booking.
-const findBackToBackSlotsForDate = async (
+// When `collectAll` is set it instead returns EVERY start time the chain fits
+// at (for a picker), rather than returning at the first one.
+async function findBackToBackSlotsForDate(
   providerId: string,
   services: Array<{ serviceId: string; duration?: string }>,
   date: string,
-): Promise<BackToBackSlot[] | null> => {
+  collectAll?: false,
+): Promise<BackToBackSlot[] | null>;
+async function findBackToBackSlotsForDate(
+  providerId: string,
+  services: Array<{ serviceId: string; duration?: string }>,
+  date: string,
+  collectAll: true,
+): Promise<BackToBackSlot[][] | null>;
+async function findBackToBackSlotsForDate(
+  providerId: string,
+  services: Array<{ serviceId: string; duration?: string }>,
+  date: string,
+  collectAll = false,
+): Promise<BackToBackSlot[] | BackToBackSlot[][] | null> {
+  const allSchedules: BackToBackSlot[][] = [];
   const dateObj = new Date(date + 'T12:00:00');
   const dayOfWeek = dateObj.getDay();
   const today = new Date();
@@ -288,15 +364,30 @@ const findBackToBackSlotsForDate = async (
       });
       if (conflict) continue;
 
-      return services.map((s, i) => ({
+      const schedule = services.map((s, i) => ({
         serviceId: s.serviceId,
         time: formatMinutesTo12h(chain[i]!.start),
         endTime: formatMinutesTo12h(chain[i]!.end),
       }));
+      if (!collectAll) return schedule;
+      allSchedules.push(schedule);
     }
   }
-  return null;
-};
+  return collectAll ? (allSchedules.length > 0 ? allSchedules : null) : null;
+}
+
+/**
+ * Every start time on `date` where the whole ordered chain fits, not just the
+ * earliest one. Powers the cart's "reschedule this group to a new day" picker,
+ * where the client chooses the start time rather than being handed the first
+ * slot that happens to work. Returns null if nothing fits that day.
+ */
+const findAllBackToBackSlotsForDate = async (
+  providerId: string,
+  services: Array<{ serviceId: string; duration?: string }>,
+  date: string,
+): Promise<BackToBackSlot[][] | null> =>
+  findBackToBackSlotsForDate(providerId, services, date, true) as Promise<BackToBackSlot[][] | null>;
 
 export const AvailabilityService = {
   /**
@@ -542,6 +633,17 @@ export const AvailabilityService = {
           return { hasConflict: true, message: 'Provider is not available on this date.' };
         }
 
+        // A slot that was valid when it was picked goes stale as the clock
+        // moves — a cart item sat on overnight can name a time that's since
+        // passed, or fallen inside the provider's minimum-notice window.
+        // getAvailableSlots() applies these same two rules when generating
+        // the picker, but only at selection time; without re-checking here a
+        // stale item sails through checkout and is only rejected by the
+        // enforce_booking_bookability trigger, mid-hold, with no way for the
+        // client to tell which appointment was at fault.
+        const noticeConflict = await checkNoticeWindow(providerId, date, time);
+        if (noticeConflict) return noticeConflict;
+
         // Check the slot falls within the provider's working hours
         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
         const [availResult, windowsResult, overridesResult] = await Promise.all([
@@ -705,17 +807,26 @@ export const AvailabilityService = {
    * which service is being checked. Used to gate "fully booked" UI (e.g. a
    * waitlist button) so it only appears when there's genuinely nothing to
    * book soon, not on every service unconditionally.
+   *
+   * `secondaryWithinDays`, when passed, adds a second (smaller) horizon
+   * answered from the SAME provider-data fetch and day-by-day scan as
+   * `withinDays` — for a caller (ProviderProfileScreen) that used to call
+   * this function twice back-to-back with different horizons, duplicating
+   * ~6 Supabase queries and the whole per-service/per-day scan. Returned as
+   * `result.secondary`, `undefined` when the param is omitted.
    */
   async hasNearTermAvailabilityForServices(
     providerIdOrName: string,
     services: Array<{ serviceId: string; duration?: string }>,
-    withinDays = 14
-  ): Promise<Map<string, boolean>> {
+    withinDays = 14,
+    secondaryWithinDays?: number
+  ): Promise<Map<string, boolean> & { secondary?: Map<string, boolean> }> {
     // Fail open — don't show "fully booked" waitlist UI off the back of a
     // network hiccup or an unknown provider; that's a misleading,
     // high-consequence guess.
-    const failOpen = new Map<string, boolean>();
+    const failOpen: Map<string, boolean> & { secondary?: Map<string, boolean> } = new Map<string, boolean>();
     for (const s of services) failOpen.set(s.serviceId, true);
+    if (secondaryWithinDays !== undefined) failOpen.secondary = new Map(failOpen);
     if (services.length === 0) return failOpen;
 
     try {
@@ -751,10 +862,20 @@ export const AvailabilityService = {
       const noticeCutoff = noticeHrs > 0 ? Date.now() + noticeHrs * 60 * 60 * 1000 : null;
 
       const windowDays = settings?.booking_window_days ?? 60;
-      const horizon = windowDays > 0 ? Math.min(withinDays, windowDays) : withinDays;
+      // Scan out to whichever requested horizon is larger — one fetch/scan
+      // covers both answers, since the smaller horizon's answer is just
+      // "did an open slot turn up within its own, shorter day range."
+      const requestedMax = secondaryWithinDays !== undefined
+        ? Math.max(withinDays, secondaryWithinDays)
+        : withinDays;
+      const horizon = windowDays > 0 ? Math.min(requestedMax, windowDays) : requestedMax;
+      const secondaryHorizon = secondaryWithinDays !== undefined
+        ? (windowDays > 0 ? Math.min(secondaryWithinDays, windowDays) : secondaryWithinDays)
+        : undefined;
       if (horizon <= 0) {
-        const map = new Map<string, boolean>();
+        const map: Map<string, boolean> & { secondary?: Map<string, boolean> } = new Map<string, boolean>();
         for (const s of services) map.set(s.serviceId, false);
+        if (secondaryHorizon !== undefined) map.secondary = new Map(map);
         return map;
       }
 
@@ -822,12 +943,14 @@ export const AvailabilityService = {
         bufferMins
       );
 
-      const result = new Map<string, boolean>();
+      const result: Map<string, boolean> & { secondary?: Map<string, boolean> } = new Map<string, boolean>();
+      const secondaryResult = secondaryHorizon !== undefined ? new Map<string, boolean>() : undefined;
       for (const service of services) {
         const durationMinutes = service.duration ? parseDurationToMinutes(service.duration) : 60;
         const newBuffer = bufferByServiceId.get(service.serviceId) ?? { before: 0, after: bufferMins };
 
         let hasAvailability = false;
+        let hasSecondaryAvailability = false;
         for (let i = 0; i < horizon; i++) {
           const d = new Date(today);
           d.setDate(d.getDate() + i);
@@ -868,10 +991,19 @@ export const AvailabilityService = {
             });
             return !conflict;
           });
-          if (hasOpenSlot) { hasAvailability = true; break; }
+          if (hasOpenSlot) {
+            // Days are scanned in ascending order, so the first hit is
+            // necessarily the earliest open slot — safe to derive the
+            // secondary (smaller-horizon) answer from it and stop here.
+            hasAvailability = true;
+            if (secondaryHorizon !== undefined && i < secondaryHorizon) hasSecondaryAvailability = true;
+            break;
+          }
         }
         result.set(service.serviceId, hasAvailability);
+        secondaryResult?.set(service.serviceId, hasSecondaryAvailability);
       }
+      if (secondaryResult) result.secondary = secondaryResult;
       return result;
     } catch (error) {
       console.error('Error checking near-term availability:', error);
@@ -1104,6 +1236,27 @@ export const AvailabilityService = {
       return await findBackToBackSlotsForDate(providerId, services, date);
     } catch (error) {
       logger.error('Error finding back-to-back slots:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Same as findBackToBackSlots but returns EVERY start time the chain fits
+   * at that day, so a picker can offer real choices instead of committing the
+   * client to the earliest one. Ordered earliest-first.
+   */
+  async findAllBackToBackSlots(
+    providerIdOrName: string,
+    services: Array<{ serviceId: string; duration?: string }>,
+    date: string,
+  ): Promise<BackToBackSlot[][] | null> {
+    if (services.length === 0) return null;
+    try {
+      const providerId = await resolveProviderId(providerIdOrName);
+      if (!providerId) return null;
+      return await findAllBackToBackSlotsForDate(providerId, services, date);
+    } catch (error) {
+      logger.error('Error finding all back-to-back slots:', error);
       return null;
     }
   },

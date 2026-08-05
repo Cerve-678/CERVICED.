@@ -17,17 +17,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { useBooking } from '../contexts/BookingContext';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-import { ThemedBackground } from '../components/ThemedBackground';
-import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { useBooking } from '../../contexts/BookingContext';
+import { STORAGE_KEYS } from '../../utils/storageKeys';
+import { ThemedBackground } from '../../components/ThemedBackground';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 import {
   registerForPushNotifications,
   unregisterPushToken,
-} from '../services/pushNotificationService';
-import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } from '../utils/logger';
+} from '../../services/pushNotificationService';
+import { logger, getLogBuffer, clearLogBuffer, subscribeToLogBuffer, LogEntry } from '../../utils/logger';
 
 export default function DevSettingsScreen({ navigation }: any) {
   const [bookingCount, setBookingCount] = useState<number>(0);
@@ -113,10 +113,14 @@ export default function DevSettingsScreen({ navigation }: any) {
           onPress: async () => {
             try {
               await AsyncStorage.removeItem(STORAGE_KEYS.BOOKINGS);
+              // Also clear the legacy Zustand-backed key — BookingContext keeps
+              // it in sync (setBookings/refreshBookings), so leaving it stale
+              // would let it repopulate the screen with pre-clear data.
+              await AsyncStorage.removeItem(STORAGE_KEYS.BOOKINGS_STORE_LEGACY);
               await reloadBookings();
               setBookingCount(0);
               setStorageSize('0 KB');
-              Alert.alert('Success', 'All bookings cleared');
+              Alert.alert('Success', 'Local booking cache cleared');
             } catch (error) {
               logger.error('[DevSettings] clearBookings failed:', error);
               Alert.alert('Error', 'Failed to clear bookings');
@@ -321,6 +325,43 @@ export default function DevSettingsScreen({ navigation }: any) {
     Alert.alert('Cleared', 'push_token cleared in the DB for this user.');
   };
 
+  // Clears client-side data that lives on THIS device (bookings cache, bookmarks,
+  // cart, registration draft, learning data). Does not sign out or touch the
+  // provider hat's local data, and does not touch the database — that's a
+  // separate, guarded action (fullClientReset below).
+  const clearClientData = async () => {
+    Alert.alert(
+      'Clear Client Data',
+      'Remove local client-side data on this device (bookings cache, bookmarks, cart, registration draft, learning data)? This does NOT touch the database or sign you out.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.multiRemove([
+                STORAGE_KEYS.BOOKINGS,
+                STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
+                STORAGE_KEYS.BOOKMARK_IDS,
+                STORAGE_KEYS.CART_ITEMS,
+                STORAGE_KEYS.REGISTRATION_DRAFT,
+                STORAGE_KEYS.USER_LEARNING,
+              ]);
+              await reloadBookings();
+              setBookingCount(0);
+              setStorageSize('0 KB');
+              Alert.alert('Cleared', 'Local client-side data removed from this device.');
+            } catch (error) {
+              logger.error('[DevSettings] clearClientData failed:', error);
+              Alert.alert('Error', 'Failed to clear client data');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Clears provider-side data that lives on THIS device (extras cache + registration
   // drafts). Does not touch the database — that's a separate, guarded action.
   const clearProviderData = async () => {
@@ -345,6 +386,109 @@ export default function DevSettingsScreen({ navigation }: any) {
             } catch (error) {
               logger.error('[DevSettings] clearProviderData failed:', error);
               Alert.alert('Error', 'Failed to clear provider data');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Full server-side reset for bookings made BY this user as a client (not
+  // their provider hat, if any). RLS forbids client deletes, so this calls a
+  // self-scoped SECURITY DEFINER RPC (supabase/dev_reset_client.sql).
+  const fullClientReset = async () => {
+    Alert.alert(
+      'Full Client Reset',
+      "DELETE all bookings you've made as a client (with any provider), your reviews, and your notifications. Transactions are kept (see transactions_survive_account_deletion.sql). This cannot be undone. Continue?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset everything',
+          style: 'destructive',
+          onPress: async () => {
+            setPushBusy(true);
+            try {
+              const { data, error } = await supabase.rpc('dev_reset_client');
+              if (error) {
+                logger.error('[DevSettings] dev_reset_client RPC error:', error);
+                Alert.alert(
+                  'Reset failed',
+                  /dev_reset_client|function|does not exist|schema cache/i.test(error.message)
+                    ? 'RPC not found. Run supabase/dev_reset_client.sql in the Supabase SQL editor first.'
+                    : error.message
+                );
+                return;
+              }
+              const res = data as any;
+              if (res?.ok === false) {
+                Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
+                return;
+              }
+              const d = res?.deleted ?? {};
+              await reloadBookings();
+              setBookingCount(0);
+              Alert.alert(
+                'Client reset ✓',
+                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}\nNotifications: ${d.notifications ?? 0}`
+              );
+            } catch (err) {
+              logger.error('[DevSettings] fullClientReset failed:', err);
+              Alert.alert('Error', String(err));
+            } finally {
+              setPushBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Bookings-only reset for the logged-in provider — clears bookings other
+  // users made against this provider (+ reviews, which can't outlive the
+  // booking they reference) WITHOUT touching transactions, schedule, services,
+  // or has_gone_live. Narrower sibling of fullProviderReset below, for when
+  // you just want a clean booking list. RLS forbids client deletes, so this
+  // calls a self-scoped SECURITY DEFINER RPC
+  // (supabase/dev_reset_provider_bookings_only.sql).
+  const providerBookingsOnlyReset = async () => {
+    Alert.alert(
+      'Clear Provider Bookings Only',
+      "DELETE bookings other users made against your provider profile, and their reviews. Does NOT touch transactions, schedule, services, or has_gone_live. This cannot be undone. Continue?",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear bookings',
+          style: 'destructive',
+          onPress: async () => {
+            setPushBusy(true);
+            try {
+              const { data, error } = await supabase.rpc('dev_reset_provider_bookings_only');
+              if (error) {
+                logger.error('[DevSettings] dev_reset_provider_bookings_only RPC error:', error);
+                Alert.alert(
+                  'Reset failed',
+                  /dev_reset_provider_bookings_only|function|does not exist|schema cache/i.test(error.message)
+                    ? 'RPC not found. Run supabase/dev_reset_provider_bookings_only.sql in the Supabase SQL editor first.'
+                    : error.message
+                );
+                return;
+              }
+              const res = data as any;
+              if (res?.ok === false) {
+                Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
+                return;
+              }
+              const d = res?.deleted ?? {};
+              await reloadBookings();
+              Alert.alert(
+                'Provider bookings cleared ✓',
+                `Bookings: ${d.bookings ?? 0}\nReviews: ${d.reviews ?? 0}`
+              );
+            } catch (err) {
+              logger.error('[DevSettings] providerBookingsOnlyReset failed:', err);
+              Alert.alert('Error', String(err));
+            } finally {
+              setPushBusy(false);
             }
           },
         },
@@ -612,9 +756,9 @@ export default function DevSettingsScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
 
-            {/* Booking Actions */}
+            {/* Client (dev) */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: P.sub }]}>BOOKING ACTIONS</Text>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>CLIENT (bookings YOU made)</Text>
 
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: P.iconBg, borderColor: P.border }]}
@@ -631,14 +775,53 @@ export default function DevSettingsScreen({ navigation }: any) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40` }]}
+                style={[styles.primaryButton, { backgroundColor: P.iconBg, borderColor: P.border }]}
                 onPress={clearBookings}
                 disabled={bookingCount === 0}
               >
-                <Text style={[styles.dangerButtonText, { color: danger }]}>
-                  Clear Bookings ({bookingCount})
+                <Text style={[styles.primaryButtonText, { color: P.text }]}>
+                  Clear Bookings Cache Only ({bookingCount})
                 </Text>
               </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Wipes the on-device bookings cache only. Bookings live in the
+                DB and will reload right back — this does not delete anything.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: P.iconBg, borderColor: P.border, marginTop: 8 }]}
+                onPress={clearClientData}
+              >
+                <Text style={[styles.primaryButtonText, { color: P.text }]}>
+                  Clear Client Data (device)
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Wipes bookings cache + bookmarks, cart, registration draft and
+                learning data on this device. Stays logged in — does not touch
+                the provider hat or the database. For that, use the real DB
+                reset below.
+              </Text>
+
+              <View style={{ height: 1, backgroundColor: P.border, marginVertical: 16 }} />
+
+              <Text style={[styles.infoText, { color: P.sub, marginBottom: 8 }]}>
+                Actually deletes from the database — cannot be undone:
+              </Text>
+              <TouchableOpacity
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40`, opacity: pushBusy ? 0.5 : 1 }]}
+                disabled={pushBusy}
+                onPress={fullClientReset}
+              >
+                <Text style={[styles.dangerButtonText, { color: danger }]}>
+                  {pushBusy ? 'Working…' : '⚠ DELETE Bookings From DB'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Wipes bookings you made as a client (any provider), your
+                reviews + notifications. Transactions are kept. Requires
+                supabase/dev_reset_client.sql.
+              </Text>
             </View>
 
             {/* Storage Actions */}
@@ -667,24 +850,50 @@ export default function DevSettingsScreen({ navigation }: any) {
 
             {/* Provider (dev) */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: P.sub }]}>PROVIDER</Text>
+              <Text style={[styles.sectionTitle, { color: P.sub }]}>PROVIDER (bookings made AGAINST you)</Text>
               <TouchableOpacity
-                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40` }]}
+                style={[styles.primaryButton, { backgroundColor: P.iconBg, borderColor: P.border }]}
                 onPress={clearProviderData}
               >
-                <Text style={[styles.dangerButtonText, { color: danger }]}>Clear Provider Data (local)</Text>
+                <Text style={[styles.primaryButtonText, { color: P.text }]}>Clear Local Cache Only</Text>
               </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Wipes on-device provider cache only — does not touch the
+                database. For that, use the real DB reset below.
+              </Text>
+
+              <View style={{ height: 1, backgroundColor: P.border, marginVertical: 16 }} />
+
+              <Text style={[styles.infoText, { color: P.sub, marginBottom: 8 }]}>
+                Actually deletes from the database — cannot be undone:
+              </Text>
+
               <TouchableOpacity
                 style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40`, opacity: pushBusy ? 0.5 : 1 }]}
+                disabled={pushBusy}
+                onPress={providerBookingsOnlyReset}
+              >
+                <Text style={[styles.dangerButtonText, { color: danger }]}>
+                  {pushBusy ? 'Working…' : '⚠ DELETE Provider Bookings Only'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
+                Wipes bookings other users made against this provider (+ their
+                reviews). Does NOT touch transactions, schedule, services, or
+                has_gone_live. Requires supabase/dev_reset_provider_bookings_only.sql.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.dangerButton, { backgroundColor: `${danger}18`, borderColor: `${danger}40`, opacity: pushBusy ? 0.5 : 1, marginTop: 12 }]}
                 disabled={pushBusy}
                 onPress={fullProviderReset}
               >
                 <Text style={[styles.dangerButtonText, { color: danger }]}>
-                  {pushBusy ? 'Working…' : 'Full Provider Reset (DB)'}
+                  {pushBusy ? 'Working…' : '⚠ DELETE Provider Data From DB (everything)'}
                 </Text>
               </TouchableOpacity>
               <Text style={[styles.infoText, { color: P.sub, marginTop: 8 }]}>
-                DB reset wipes this provider's bookings, reviews, transactions + your
+                Wipes this provider's bookings, reviews, transactions + your
                 notifications and resets go-live. Requires supabase/dev_reset_provider.sql
                 — and supabase/fix_notifications_type_check.sql if it fails mentioning
                 "notifications_type_check".

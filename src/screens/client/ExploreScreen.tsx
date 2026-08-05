@@ -6,36 +6,39 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   Animated,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
-import { ExploreStackParamList } from '../navigation/types';
-import { useTheme } from '../contexts/ThemeContext';
-import { ThemedBackground } from '../components/ThemedBackground';
-import TabIcon from '../components/TabIcon';
-import { dimensions, fonts, spacing } from '../constants/PlatformDimensions';
+import * as Haptics from 'expo-haptics';
+import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
+import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
+import { exploreScrollHandler, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
+import { ExploreStackParamList } from '../../navigation/types';
+import { useTheme } from '../../contexts/ThemeContext';
+import { ThemedBackground } from '../../components/ThemedBackground';
+import TabIcon from '../../components/TabIcon';
+import SlidingTabs from '../../components/SlidingTabs';
+import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 
 // Discover components
-import { MasonryGrid } from '../components/MasonryGrid';
-import { PortfolioCard } from '../components/PortfolioCard';
-import { ImageDetailModal } from '../components/ImageDetailModal';
+import { MasonryGrid } from '../../components/MasonryGrid';
+import { PortfolioCard } from '../../components/PortfolioCard';
+import { ImageDetailModal } from '../../components/ImageDetailModal';
 
 // Data types
-import { PortfolioItem, ServiceCategory } from '../types/providers';
+import { PortfolioItem, ServiceCategory } from '../../types/providers';
 import {
   getPortfolioItems,
   getDiscoverProviders,
   getDiscoverServices,
   getSavedPortfolioDetails,
-} from '../services/databaseService';
-import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../types/database';
+} from '../../services/databaseService';
+import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../../types/database';
 
 // Stores
-import { useBookmarkStore } from '../stores/useBookmarkStore';
+import { useBookmarkStore } from '../../stores/useBookmarkStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -103,40 +106,6 @@ function SkeletonMasonryGrid({ isDarkMode }: { isDarkMode: boolean }) {
 }
 
 // ============================================================================
-// FILTER CHIP
-// ============================================================================
-interface FilterChipProps {
-  label: string;
-  isSelected: boolean;
-  onPress: () => void;
-}
-
-const FilterChip = memo<FilterChipProps>(({ label, isSelected, onPress }) => {
-  const { isDarkMode, palette: P } = useTheme();
-  return (
-    <TouchableOpacity
-      style={[
-        styles.filterChip,
-        { backgroundColor: P.card, borderColor: P.border },
-        isSelected && { backgroundColor: P.accent, borderColor: P.accent },
-      ]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <Text
-        style={[
-          styles.filterChipText,
-          { color: isSelected ? '#FFFFFF' : P.sub },
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-});
-FilterChip.displayName = 'FilterChip';
-
-// ============================================================================
 // SUB-TAB SELECTOR
 // ============================================================================
 interface SubTabProps {
@@ -144,27 +113,37 @@ interface SubTabProps {
   onTabChange: (tab: 'discover' | 'favourites') => void;
 }
 
+const SUB_TABS = [
+  { key: 'discover' as const,   label: 'Discover' },
+  { key: 'favourites' as const, label: 'Favourites' },
+];
+
+// Both tabs match — same heavier BakbakOne treatment, sitting side by side
+// on the left. Underline-when-active, no shared SlidingTabs pill (that
+// treatment is used elsewhere — Bookings, the filter chips below).
 const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
   const { palette: P } = useTheme();
   return (
     <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
-      <TouchableOpacity
-        style={[styles.subTab, activeTab === 'discover' && { borderBottomColor: P.accent }]}
-        onPress={() => onTabChange('discover')}
-      >
-        <Text style={[styles.subTabText, { color: activeTab === 'discover' ? P.accent : P.sub }]}>
-          Discover
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.subTab, activeTab === 'favourites' && { borderBottomColor: P.accent }]}
-        onPress={() => onTabChange('favourites')}
-      >
-        <Text style={[styles.subTabText, { color: activeTab === 'favourites' ? P.accent : P.sub }]}>
-          Favourites
-        </Text>
-      </TouchableOpacity>
+      {SUB_TABS.map(tab => {
+        const active = tab.key === activeTab;
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              onTabChange(tab.key);
+            }}
+            activeOpacity={0.5}
+            style={styles.subTab}
+          >
+            <Text style={[styles.discoverLabel, { color: active ? P.text : P.sub }]}>
+              {tab.label}
+            </Text>
+            <View style={[styles.subTabUnderline, { backgroundColor: active ? P.accent : 'transparent' }]} />
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 });
@@ -176,9 +155,29 @@ SubTabBar.displayName = 'SubTabBar';
 const ExploreScreen = memo(() => {
   const navigation = useNavigation<NavigationProp<ExploreStackParamList>>();
   const { isDarkMode, palette: P } = useTheme();
+  const setExploreFocused = useExploreFocusStore(s => s.setExploreFocused);
+
+  // Tell the floating tab bar it should apply its scroll-hide/opacity
+  // treatment only while this exact screen (not Search, not a provider
+  // profile pushed on top of it) is the visible one — and always start
+  // fully shown when arriving here.
+  useFocusEffect(
+    useCallback(() => {
+      resetExplorePillTracking();
+      setExploreFocused(true);
+      return () => setExploreFocused(false);
+    }, [setExploreFocused])
+  );
 
   // State
   const [activeTab, setActiveTab] = useState<'discover' | 'favourites'>('discover');
+
+  // Switching Discover <-> Favourites swaps in a different ScrollView at
+  // offset 0 — reset the pill's tracking so it doesn't carry over a
+  // scrolled-away state (or stale direction baseline) from the other tab.
+  useEffect(() => {
+    resetExplorePillTracking();
+  }, [activeTab]);
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [selectedImage, setSelectedImage] = useState<PortfolioItem | null>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
@@ -202,7 +201,12 @@ const ExploreScreen = memo(() => {
       id: item.id,
       image: { uri: item.image_url },
       caption: item.caption ?? '',
-      category: (item.category?.toUpperCase() as ServiceCategory) ?? 'NAILS',
+      // Falls back to the provider's own service_category rather than a
+      // fixed literal — addPortfolioItem now stamps category on insert
+      // (see databaseService.ts), but any legacy row still sitting at
+      // category = NULL should read as whatever its provider's real
+      // category is, not silently masquerade as Nails.
+      category: (item.category?.toUpperCase() as ServiceCategory) ?? (p.service_category as unknown as ServiceCategory),
       aspectRatio: item.aspect_ratio,
       providerId: p?.slug ?? item.provider_id,
       tags: item.tags ?? [],
@@ -235,14 +239,21 @@ const ExploreScreen = memo(() => {
     ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
   }), []);
 
-  // Map a service + its first photo to a card for the mixed discovery feed.
-  const mapDbServiceToCard = useCallback((s: DiscoverServiceWithProvider): PortfolioItem => {
+  // Map a service to one card PER photo in its carousel (not just the cover
+  // shot) — each carries the same serviceId/price/provider so tapping any of
+  // them books the same service. Ids carry a `__<imageIndex>` suffix so each
+  // photo is independently favouritable and uniquely keyed; see the matching
+  // strip-and-dedupe in getSavedPortfolioDetails.
+  const mapDbServiceToCards = useCallback((s: DiscoverServiceWithProvider): PortfolioItem[] => {
     const images = [...s.service_images].sort((a, b) => a.sort_order - b.sort_order);
+    const imageSources = images.map(img => ({ uri: img.url }));
     const p = s.provider;
-    return {
-      id: `service-${s.id}`,
-      image: { uri: images[0]?.url ?? '' },
-      caption: s.name,
+    return images.map((img, idx) => ({
+      id: `service-${s.id}__${idx}`,
+      image: { uri: img.url },
+      images: imageSources,
+      caption: s.description ?? '',
+      serviceName: s.name,
       category: p.service_category as unknown as ServiceCategory,
       aspectRatio: 0.8,
       providerId: p.slug,
@@ -251,10 +262,10 @@ const ExploreScreen = memo(() => {
       providerSlug: p.slug,
       providerRating: p.rating,
       providerReviewCount: p.review_count,
-      kind: 'service',
+      kind: 'service' as const,
       serviceId: s.id,
       ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
-    };
+    }));
   }, []);
 
   // Load stores on mount
@@ -264,6 +275,7 @@ const ExploreScreen = memo(() => {
 
   // Filters
   const filters = useMemo(() => ['All', 'Hair', 'Nails', 'Makeup', 'Aesthetics', 'Brows', 'Lashes'], []);
+  const filterTabs = useMemo(() => filters.map(f => ({ key: f, label: f })), [filters]);
 
   const filterMap: Record<string, ServiceCategory> = useMemo(() => ({
     Hair: 'HAIR',
@@ -294,7 +306,7 @@ const ExploreScreen = memo(() => {
           setPortfolioItems(
             interleaveDiscoverFeed(
               portfolioData.map(mapDbPortfolioItem),
-              serviceData.map(mapDbServiceToCard),
+              serviceData.flatMap(mapDbServiceToCards),
               providerData.map(mapDbProviderToCard)
             )
           );
@@ -307,7 +319,7 @@ const ExploreScreen = memo(() => {
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedFilter, filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCard]);
+  }, [selectedFilter, filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
 
   // Fetch favourites whenever the tab is opened or the saved-ids list changes
   // (e.g. hearting/unhearting something while already on this tab).
@@ -327,10 +339,15 @@ const ExploreScreen = memo(() => {
           await getSavedPortfolioDetails(savedPortfolioIds);
         if (cancelled) return;
 
+        // getSavedPortfolioDetails returns each saved service's full row —
+        // every photo in its carousel, not just the specific one(s) that
+        // were actually saved — so the flat-mapped cards need filtering back
+        // down to exactly the saved ids before they're shown as favourites.
+        const savedIdSet = new Set(savedPortfolioIds);
         const cards = [
           ...savedPortfolio.map(mapDbPortfolioItem),
           ...providers.map(mapDbProviderToCard),
-          ...services.map(mapDbServiceToCard),
+          ...services.flatMap(mapDbServiceToCards).filter(c => savedIdSet.has(c.id)),
         ];
         // Most-recently-saved first, matching save order in savedPortfolioIds.
         const order = new Map(savedPortfolioIds.map((id, i) => [id, i]));
@@ -344,7 +361,7 @@ const ExploreScreen = memo(() => {
     };
     load();
     return () => { cancelled = true; };
-  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCard]);
+  }, [activeTab, savedPortfolioIds, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
 
   // Column width for masonry
   const columnWidth = useMemo(() => {
@@ -456,20 +473,14 @@ const ExploreScreen = memo(() => {
 
             {/* Filter Chips */}
             <View style={[styles.filterSection, { backgroundColor: P.bg, borderBottomColor: P.sep }]}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterScrollContent}
-              >
-                {filters.map(filter => (
-                  <FilterChip
-                    key={filter}
-                    label={filter}
-                    isSelected={selectedFilter === filter}
-                    onPress={() => setSelectedFilter(filter)}
-                  />
-                ))}
-              </ScrollView>
+              <SlidingTabs
+                tabs={filterTabs}
+                activeKey={selectedFilter}
+                onPress={setSelectedFilter}
+                accentColor={P.accent}
+                inactiveTextColor={P.sub}
+                containerStyle={styles.filterScrollContent}
+              />
             </View>
 
             {/* Masonry Grid */}
@@ -481,6 +492,9 @@ const ExploreScreen = memo(() => {
                 renderItem={renderPortfolioCard}
                 getItemHeight={getItemHeight}
                 keyExtractor={item => item.id}
+                onScroll={exploreScrollHandler}
+                onScrollEndDrag={settleExplorePillTracking}
+                onMomentumScrollEnd={settleExplorePillTracking}
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
                     <Text style={[styles.gridCount, { color: P.sub }]}>
@@ -512,6 +526,9 @@ const ExploreScreen = memo(() => {
               renderItem={renderPortfolioCard}
               getItemHeight={getItemHeight}
               keyExtractor={item => item.id}
+              onScroll={exploreScrollHandler}
+              onScrollEndDrag={settleExplorePillTracking}
+              onMomentumScrollEnd={settleExplorePillTracking}
               ListHeaderComponent={
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridCount, { color: P.sub }]}>
@@ -540,6 +557,8 @@ const ExploreScreen = memo(() => {
         onClose={handleCloseDetail}
         onViewProfile={handleViewProfile}
         onBookNow={handleBookNow}
+        similarItems={portfolioItems}
+        onSelectItem={setSelectedImage}
       />
     </ThemedBackground>
   );
@@ -575,23 +594,26 @@ const styles = StyleSheet.create({
   // Sub-tabs
   subTabBar: {
     flexDirection: 'row',
+    justifyContent: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
     gap: spacing.lg,
   },
   subTab: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    alignItems: 'center',
   },
-  subTabText: {
-    fontSize: fonts.body.medium,
-    fontWeight: '600',
+  discoverLabel: {
+    fontSize: 17,
+    fontWeight: '700',
     fontFamily: 'BakbakOne-Regular',
   },
-
+  subTabUnderline: {
+    marginTop: 4,
+    height: 2,
+    width: '100%',
+    borderRadius: 1,
+  },
   // Search Bar
   searchContainer: {
     flexDirection: 'row',
@@ -624,18 +646,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: 6,
   },
-  filterChip: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: 100,
-    borderWidth: 1,
-  },
-  filterChipText: {
-    fontSize: fonts.body.medium,
-    fontWeight: '600',
-    fontFamily: 'Jura-VariableFont_wght',
-  },
-
   // Grid
   gridHeader: {
     paddingBottom: spacing.sm,

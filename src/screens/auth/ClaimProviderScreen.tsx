@@ -12,8 +12,6 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -25,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import {
@@ -135,7 +134,7 @@ export default function ClaimProviderScreen({ navigation }: Props) {
   return (
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView>
         <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
           <TouchableOpacity onPress={() => (step === 'search' ? navigation.goBack() : setStep('search'))} style={styles.backBtn}>
             <Text style={[styles.backText, { color: t.accent }]}>{'‹ Back'}</Text>
@@ -240,7 +239,7 @@ export default function ClaimProviderScreen({ navigation }: Props) {
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }

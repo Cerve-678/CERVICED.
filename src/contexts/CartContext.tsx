@@ -122,9 +122,21 @@ export interface AddToCartParams {
 }
 
 /** Fields a BookingSheet edit can change on an existing cart item. */
+/**
+ * Fields the cart can change on an existing item. `bookingBatchId` is
+ * included because grouping is mutable from the cart: scheduling several of
+ * one provider's services together assigns a shared id, and editing one of
+ * them out of that group clears it (passing it explicitly as `undefined`
+ * splits the item back into a standalone booking).
+ */
 export type CartItemUpdates = Partial<
   Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly'>
->;
+> & {
+  /** Explicitly `| undefined` (not just optional): under
+   *  exactOptionalPropertyTypes, clearing the group requires passing the key
+   *  with an undefined value, which a plain optional prop would reject. */
+  bookingBatchId?: string | undefined;
+};
 
 export interface BookingSummary {
   totalProviders: number;
@@ -365,8 +377,11 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 
       case CartActionType.UPDATE_ITEM: {
         const { itemId, updates } = action.payload;
-        const newItems = state.items.map(item =>
-          safeGet(item, 'id') === itemId ? { ...item, ...updates } : item
+        // Spread, not a merge that skips undefined: callers clear a field by
+        // passing it explicitly as undefined (splitting an item out of a
+        // group sends bookingBatchId: undefined), and that must overwrite.
+        const newItems: CartItem[] = state.items.map(item =>
+          safeGet(item, 'id') === itemId ? ({ ...item, ...updates } as CartItem) : item
         );
         const totals = calculateTotals(newItems);
         return { ...state, items: newItems, ...totals };

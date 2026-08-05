@@ -1,11 +1,11 @@
 // src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { Alert, AppState } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken, startExpoGoNotificationBridge } from '../services/pushNotificationService';
-import { updateBiometricToken, disableBiometric } from '../services/biometricService';
+import { updateBiometricToken } from '../services/biometricService';
 import { registerModeSetter } from '../navigation/modeController';
 import {
   getUserProfileById,
@@ -220,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const loadUserProfile = async (session: Session) => {
+  const loadUserProfile = useCallback(async (session: Session) => {
     try {
       logger.log('[AuthContext] loadUserProfile for:', session.user.id, '| email_confirmed_at:', session.user.email_confirmed_at ?? 'NOT CONFIRMED');
 
@@ -383,7 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Directly set the mode (used by notification taps / deep-links that must land
   // in a specific hat). Exposed to non-React code via the mode controller so the
@@ -397,7 +397,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     registerModeSetter((mode) => { applyMode(mode).catch(() => {}); });
   }, [applyMode]);
 
-  const switchMode = async () => {
+  const switchMode = useCallback(async () => {
     const next = activeMode === 'provider' ? 'client' : 'provider';
     setSwitchingTo(next);
     setIsSwitching(true);
@@ -407,11 +407,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, next).catch(() => {});
     await new Promise(resolve => setTimeout(resolve, 600));
     setIsSwitching(false);
-  };
+  }, [activeMode]);
 
   // Upgrades an existing client account to provider in-place — no new auth user created.
   // Updates the DB role, local state, and activeMode all in one call.
-  const upgradeToProvider = async (
+  const upgradeToProvider = useCallback(async (
     businessName: string,
     businessEmail: string,
     extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }
@@ -427,11 +427,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(upgraded);
     setActiveMode('provider');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'provider').catch(() => {});
-  };
+  }, [user]);
 
   // Adds a client profile to an existing provider account in-place.
   // Saves beauty profile + preferences to DB, then switches activeMode to client.
-  const addClientProfile = async (profileData: ClientProfileData) => {
+  const addClientProfile = useCallback(async (profileData: ClientProfileData) => {
     if (!user) throw new Error('No logged-in user');
     // Only build a DOB when all three parts are present — an empty part yields a
     // malformed date string like "-00-00" that the DATE column rejects, which
@@ -463,13 +463,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
-  };
+  }, [user]);
 
   // No-op: only called from AuthScreen which is not in the navigation stack.
   // All real auth goes through onAuthStateChange → loadUserProfile.
-  const login = (_userData?: UserData) => {};
+  const login = useCallback((_userData?: UserData) => {}, []);
 
-  const updateUser = async (partial: Partial<UserData>) => {
+  const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
     setUser(updated);
@@ -478,9 +478,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       logger.warn('updateUser DB error:', err.message);
     }
-  };
+  }, [user, session]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     // Mark as intentional so the SIGNED_OUT event handler suppresses the alert
     intentionalLogoutRef.current = true;
     const loggedOutUserId = user?.id;
@@ -497,22 +497,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       'bookmarked_videos',
       'saved_portfolio_items',
       'planner_events',
-      '@bookings',
+      STORAGE_KEYS.BOOKINGS,
+      // Zustand-backed legacy bookings key — BookingContext keeps it in sync,
+      // so leaving it behind would bleed this account's bookings into the
+      // next account that logs in on this device.
+      STORAGE_KEYS.BOOKINGS_STORE_LEGACY,
       STORAGE_KEYS.ACTIVE_MODE,
     ]).catch(() => {});
     await unregisterPushToken().catch(() => {});
-    disableBiometric().catch(() => {});
+    // Biometric enrollment intentionally survives logout — the entire point
+    // of enabling Face ID is to skip password re-entry on the NEXT sign-in,
+    // and Face ID itself (not this flag) is the actual security gate. Wiping
+    // it here would erase it before that next sign-in ever happens. It's
+    // still cleared explicitly via the Settings toggle, and self-heals in
+    // handleBiometricLogin if the stored token ever turns out to be invalid.
     // Await signOut so the session is fully cleared in AsyncStorage before the
     // function returns. If the app is killed immediately after logout, the session
     // won't linger and re-log the user in on next launch.
     await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
-  };
+  }, [user]);
 
   // Called from ReactivateAccountScreen when someone mid-grace-period logs
   // back in and confirms they want to keep their account. Nothing was ever
   // deleted during the grace window, so clearing the flag is the entire
   // operation — loadUserProfile then re-runs and logs them in normally.
-  const reactivateAccount = async () => {
+  const reactivateAccount = useCallback(async () => {
     if (!session) throw new Error('No session');
     setIsReactivating(true);
     try {
@@ -526,26 +535,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsReactivating(false);
     }
-  };
+  }, [session, loadUserProfile]);
 
   // "Not now" on the reactivation prompt — the account stays flagged and the
   // scheduled cron job (process_scheduled_account_deletions) will still purge
   // it once the 30 days are up. Just end this session the same way logout() would.
-  const declineReactivation = async () => {
+  const declineReactivation = useCallback(async () => {
     intentionalLogoutRef.current = true;
     setPendingReactivation(null);
     setUser(null);
     setSession(null);
     setIsLoggedIn(false);
     await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
-  };
+  }, []);
 
   // Deletes only the CLIENT side of the account via a SECURITY DEFINER RPC
   // (RLS has no DELETE policy on bookings/notifications, and only that RPC
   // knows whether this is the user's only hat). If there's no provider
   // profile, this removes the whole account, auth.users included, since
   // there'd be nothing left to keep it around for. See supabase/delete_account.sql.
-  const deleteClientProfile = async () => {
+  const deleteClientProfile = useCallback(async () => {
     if (!user) throw new Error('No logged-in user');
     const { data, error } = await supabase.rpc('delete_client_profile');
     if (error) throw error;
@@ -561,12 +570,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // state from the DB so nothing stale (e.g. hasClientProfile) lingers.
     if (activeMode === 'client') await applyMode('provider');
     if (session) await loadUserProfile(session);
-  };
+  }, [user, activeMode, session, logout, applyMode, loadUserProfile]);
 
   // Deletes only the PROVIDER side of the account — mirror of
   // deleteClientProfile above. If there's no client profile, this removes
   // the whole account. See supabase/delete_account.sql.
-  const deleteProviderProfile = async () => {
+  const deleteProviderProfile = useCallback(async () => {
     if (!user) throw new Error('No logged-in user');
     const { data, error } = await supabase.rpc('delete_provider_profile');
     if (error) throw error;
@@ -587,10 +596,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // state from the DB (role is reset to 'user' server-side).
     if (activeMode === 'provider') await applyMode('client');
     if (session) await loadUserProfile(session);
-  };
+  }, [user, activeMode, session, logout, applyMode, loadUserProfile]);
+
+  const value = useMemo<AuthContextType>(() => ({
+    isLoggedIn, isLoading, isSwitching, switchingTo, user, session, activeMode,
+    switchMode, upgradeToProvider, addClientProfile, login, logout,
+    deleteClientProfile, deleteProviderProfile, updateUser,
+    pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
+  }), [
+    isLoggedIn, isLoading, isSwitching, switchingTo, user, session, activeMode,
+    switchMode, upgradeToProvider, addClientProfile, login, logout,
+    deleteClientProfile, deleteProviderProfile, updateUser,
+    pendingReactivation, isReactivating, reactivateAccount, declineReactivation,
+  ]);
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, isLoading, isSwitching, switchingTo, user, session, activeMode, switchMode, upgradeToProvider, addClientProfile, login, logout, deleteClientProfile, deleteProviderProfile, updateUser, pendingReactivation, isReactivating, reactivateAccount, declineReactivation }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

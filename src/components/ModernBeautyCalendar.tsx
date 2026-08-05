@@ -1,7 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutAnimation, Modal, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View, ViewStyle } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
+import { formatLongDateNoYear } from '../utils/dateUtils';
+
+// LayoutAnimation is opt-in on old-architecture Android; without this the
+// collapse/expand below snaps instead of animating there.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type TimeSlot = string;
 
@@ -53,6 +61,14 @@ type ModernBeautyCalendarProps = {
 // date in UTC+ zones). That wrong date then gets sent to AvailabilityService,
 // which re-derives day-of-week from it — silently querying the wrong
 // weekday's hours.
+// Height-only ease. Deliberately not a spring/scale: this is a container
+// resizing under content that stays put, not an element with its own physics.
+const COLLAPSE_ANIM = LayoutAnimation.create(
+  220,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity
+);
+
 const toLocalDateString = (date: Date): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -86,6 +102,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
+  // Once the client has actively picked a time, the whole picker collapses to
+  // a one-line summary — a week strip plus ~20 time chips is the single
+  // largest block in the booking sheet, and it's pure noise once the choice
+  // is made. Only a real tap sets this: a date/time arriving from props (the
+  // auto-resolved earliest slot, or an edit-mode initial value) must NOT
+  // start the picker collapsed, or the client never sees that something was
+  // chosen on their behalf.
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   // Guards the auto-jump-to-next-availability below so it fires once per
   // provider/service, not on every manual week navigation.
   const autoJumpedRef = useRef(false);
@@ -144,6 +168,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const hasSlots = availableSlots[selectedDate] !== undefined;
     setShowTimeSelection(hasSlots);
   }, [selectedDate, availableSlots]);
+
+  // Changing the date invalidates the collapsed summary: the chosen time
+  // belongs to the old day and may not even exist on the new one, so the
+  // picker has to reopen for a fresh time pick. Skips the very first run so
+  // an initial/auto-resolved date doesn't count as a "change".
+  const lastCollapsedDateRef = useRef<string | undefined>(selectedDate);
+  useEffect(() => {
+    if (lastCollapsedDateRef.current === selectedDate) return;
+    lastCollapsedDateRef.current = selectedDate;
+    setIsCollapsed(prev => {
+      if (!prev) return prev;
+      LayoutAnimation.configureNext(COLLAPSE_ANIM);
+      return false;
+    });
+  }, [selectedDate]);
 
   const generateWeeklyAvailability = async () => {
     setIsLoadingSlots(true);
@@ -290,12 +329,26 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
   const handleDateClick = (dateString: string, dayData: DayData) => {
     if (dayData.status === 'past' || dayData.status === 'closed') return;
+    Haptics.selectionAsync().catch(() => {});
     onDateSelect(dateString);
   };
 
+  // Picking a time is the last step of the flow, so it's what collapses the
+  // picker down to the summary row. Re-tapping the already-selected time
+  // collapses too (rather than being a no-op) — that's the obvious gesture
+  // for "yes, this one" once a slot was auto-resolved for you.
   const handleTimeClick = (time: string) => {
+    Haptics.selectionAsync().catch(() => {});
     onTimeSelect(time);
+    LayoutAnimation.configureNext(COLLAPSE_ANIM);
+    setIsCollapsed(true);
   };
+
+  const handleExpand = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    LayoutAnimation.configureNext(COLLAPSE_ANIM);
+    setIsCollapsed(false);
+  }, []);
 
   const formatWeekRange = (): string => {
     const startOfWeek = getStartOfWeek(currentWeek);
@@ -363,6 +416,30 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     });
     return result;
   }, [calendarDays, availableSlots, providerName]);
+
+  // Collapsed summary — replaces the entire week strip + time grid once the
+  // client has confirmed a slot, so the sheet below it stays readable.
+  if (isCollapsed && selectedDate && selectedTime) {
+    return (
+      <View style={[styles.container, style]}>
+        <TouchableOpacity
+          style={[styles.summaryRow, { backgroundColor: surfaceColor, borderColor: withAlpha(accentColor, 0.45) }]}
+          onPress={handleExpand}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={`Selected ${formatLongDateNoYear(selectedDate)} at ${selectedTime}. Tap to change.`}
+        >
+          <View style={styles.summaryTextWrap}>
+            <Text style={[styles.summaryDate, { color: textColor }]} numberOfLines={1}>
+              {formatLongDateNoYear(selectedDate)}
+            </Text>
+            <Text style={[styles.summaryTime, { color: accentColor }]}>{selectedTime}</Text>
+          </View>
+          <Text style={[styles.summaryChange, { color: accentColor }]}>Change</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, style]}>
@@ -587,6 +664,22 @@ const chunkArray = <T,>(arr: T[], size: number): T[][] => {
 const styles = StyleSheet.create({
   // ── Main container ──────────────────────────────────────────────────
   container: { paddingVertical: 10, paddingHorizontal: 4 },
+
+  // ── Collapsed summary row ───────────────────────────────────────────
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginHorizontal: 2,
+  },
+  summaryTextWrap: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  summaryDate:     { fontSize: 15, fontWeight: '600', letterSpacing: -0.2, flexShrink: 1 },
+  summaryTime:     { fontSize: 15, fontWeight: '700', letterSpacing: -0.2 },
+  summaryChange:   { fontSize: 13, fontWeight: '600', marginLeft: 10 },
 
   // ── Provider-not-found banner ─────────────────────────────────────────
   notFoundBanner: { paddingVertical: 14, paddingHorizontal: 10 },

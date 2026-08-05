@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import {
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StatusBar,
@@ -14,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth, AccountType } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ── Validation ──────────────────────────────────────────────────────
 
@@ -201,11 +201,7 @@ export default function AuthScreen({ navigation }: any) {
     <ThemedBackground style={styles.bg}>
       <StatusBar barStyle={theme.statusBar} translucent />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
+      <KeyboardDismissView style={styles.flex}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: 120 }]}
           showsVerticalScrollIndicator={false}
@@ -467,7 +463,7 @@ export default function AuthScreen({ navigation }: any) {
             </Text>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }

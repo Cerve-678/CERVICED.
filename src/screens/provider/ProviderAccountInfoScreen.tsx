@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +17,7 @@ import { supabase } from '../../lib/supabase';
 import { getUserBasicInfo, updateUserNamePhone, updateUserDob } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 const CP_DARK = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
@@ -143,7 +142,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     <View style={[styles.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDismissView style={{ flex: 1 }}>
 
           <View style={[styles.header, { borderBottomColor: C.border }]}>
             <Text style={[styles.headerTitle, { color: C.text }]}>Account Info</Text>
@@ -243,7 +242,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
               }
             </TouchableOpacity>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </SafeAreaView>
     </View>
   );

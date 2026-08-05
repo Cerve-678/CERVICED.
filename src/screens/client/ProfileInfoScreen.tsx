@@ -3,8 +3,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 export default function ProfileInfoScreen({ navigation }: any) {
   const { user, updateUser, deleteClientProfile } = useAuth();
@@ -85,7 +84,7 @@ export default function ProfileInfoScreen({ navigation }: any) {
   return (
     <ThemedBackground style={styles.bg}>
       <StatusBar barStyle={theme.statusBar} translucent />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
           showsVerticalScrollIndicator={false}
@@ -171,7 +170,7 @@ export default function ProfileInfoScreen({ navigation }: any) {
             }
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }

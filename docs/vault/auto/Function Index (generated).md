@@ -5,7 +5,7 @@
 
 #generated
 
-**1437 functions** across **183 files**.
+**1438 functions** across **183 files**.
 
 ### `src/components/` (30)
 - `AppBackground.tsx` — AppBackground
@@ -170,7 +170,7 @@
 - `UploadService.ts` — **useUploadService**
 
 ### `src/services/becca/` (5)
-- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · carryForward · **confirmToken** · defaultFollowUps · defaultStarters · loadPersonalContext · message_ · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · topUp
+- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · carryForward · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · loadPersonalContext · message_ · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · topUp
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — scoreEntities · scorePhrases · **understand**
 - `registry.ts` — **capabilitiesFor** · **getCapability** · **toToolSchema**

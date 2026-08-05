@@ -11,7 +11,6 @@ import {
   Animated,
   StatusBar,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Modal,
   Image,
@@ -20,6 +19,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -900,7 +900,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <KeyboardDismissView style={{ flex: 1 }}>
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={fmSt.scroll}
@@ -1239,7 +1239,7 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
               }
             </TouchableOpacity>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardDismissView>
       </View>
     </Modal>
   );

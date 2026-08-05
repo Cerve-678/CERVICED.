@@ -1,7 +1,6 @@
-// src/screens/BeautyProfileScreen.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+// src/screens/client/BeautyProfileScreen.tsx
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,13 +12,25 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { useAppDialog } from '../../components/AppDialog';
 import { supabase } from '../../lib/supabase';
 import { upsertUserBeautyProfile } from '../../services/databaseService';
+import {
+  type BeautyData,
+  type CategoryKey,
+  type Gender,
+  EMPTY_BEAUTY_DATA,
+} from '../../types/beautyProfile';
+import {
+  computeBeautyProfileStats,
+  CATEGORY_ORDER,
+  CATEGORY_LABELS,
+  type CategoryStats,
+} from '../../utils/beautyProfileStats';
 
 // ── Option lists ────────────────────────────────────────────────────────────
 
@@ -54,65 +65,11 @@ const TREATMENT_HISTORY = [
 ];
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
-type CategoryKey =
-  | 'health' | 'skin' | 'hair' | 'nails' | 'lashesBrows'
-  | 'makeup' | 'general' | 'personalisation' | 'consent';
-
-// Collapsed-category summary line: first few filled values, or a nudge to fill it in.
-function summarize(items: string[], emptyText: string): string {
-  const parts = items.filter(Boolean);
-  if (parts.length === 0) return emptyText;
-  if (parts.length <= 3) return parts.join(' · ');
-  return `${parts.slice(0, 3).join(' · ')} +${parts.length - 3} more`;
-}
-
-// ── Data shape ──────────────────────────────────────────────────────────────
-
-interface BeautyData {
-  // Hair
-  hairType:           string;
-  scalpCondition:     string;
-  hairGoals:          string[];
-  treatmentHistory:   string[];
-  // Skin
-  skinType:           string;
-  skinTone:           string;
-  skinConcerns:       string[];
-  sensitiveAreas:     string[];
-  // Nails
-  nailLength:         string;
-  nailShape:          string;
-  // Lashes & Brows
-  lashStyle:          string;
-  lashStatus:         string;
-  browStyle:          string;
-  browCondition:      string;
-  // Makeup
-  makeupCoverage:     string;
-  makeupFinish:       string;
-  makeupEyes:         string;
-  makeupLips:         string;
-  // General
-  styleVibe:          string;
-  serviceInterests:   string[];
-  // Personalisation
-  gender:             'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
-  has_kids:           boolean;
-  // Health & Consent
-  allergies:          string[];
-  medicalNotes:       string;
-  photographyConsent: boolean;
-}
-
-const EMPTY: BeautyData = {
-  hairType: '', scalpCondition: '', hairGoals: [], treatmentHistory: [],
-  skinType: '', skinTone: '', skinConcerns: [], sensitiveAreas: [],
-  nailLength: '', nailShape: '',
-  lashStyle: '', lashStatus: '', browStyle: '', browCondition: '',
-  makeupCoverage: '', makeupFinish: '', makeupEyes: '', makeupLips: '',
-  styleVibe: '', serviceInterests: [],
-  gender: null, has_kids: false,
-  allergies: [], medicalNotes: '', photographyConsent: true,
+const GENDER_LABELS: Record<Gender, string> = {
+  female: 'Female',
+  male: 'Male',
+  'non-binary': 'Non-binary',
+  'prefer-not-to-say': 'Prefer not to say',
 };
 
 // ── Main screen ─────────────────────────────────────────────────────────────
@@ -121,24 +78,29 @@ export default function BeautyProfileScreen({ navigation }: any) {
   const { user } = useAuth();
   const { theme, isDarkMode } = useTheme();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const { showAlert, DialogHost } = useAppDialog();
 
-  const [fetching,  setFetching]  = useState(true);
-  const [saving,    setSaving]    = useState(false);
-  const [editing,   setEditing]   = useState(false);
-  const [saved,     setSaved]     = useState<BeautyData>(EMPTY);
-  const [draft,     setDraft]     = useState<BeautyData>(EMPTY);
+  const [fetching, setFetching] = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [editing,  setEditing]  = useState(false);
+  const [saved,    setSaved]    = useState<BeautyData>(EMPTY_BEAUTY_DATA);
+  const [draft,    setDraft]    = useState<BeautyData>(EMPTY_BEAUTY_DATA);
 
-  // Categories start collapsed — expanding one shows its fields, collapsing
-  // shows just a one-line summary instead of every chip for every field.
-  const [expanded, setExpanded] = useState<Set<CategoryKey>>(new Set());
-  const toggleCategory = (key: CategoryKey) => {
-    Haptics.selectionAsync().catch(() => {});
-    setExpanded(prev => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+  // The grid ⇄ focused-category swap. This is screen state, not navigation:
+  // SAVE PROFILE is one transaction across all nine categories, so the draft
+  // has to stay screen-level regardless of which category is on screen. A route
+  // push per category would put nine entries on the stack all sharing one
+  // pending save.
+  const [selectedCategory, setSelectedCategory] = useState<CategoryKey | null>(null);
+
+  const openCategory = (key: CategoryKey) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSelectedCategory(key);
+  };
+
+  const closeCategory = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setSelectedCategory(null);
   };
 
   // ── Load ─────────────────────────────────────────────────────────────────
@@ -169,7 +131,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
         makeupLips:         m['makeup_lips']         ?? '',
         styleVibe:          m['style_vibe']          ?? '',
         serviceInterests:   m['service_interests']   ?? [],
-        gender:             (m['gender'] as 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null) ?? null,
+        gender:             (m['gender'] as Gender | null) ?? null,
         has_kids:           m['has_kids']            ?? false,
         allergies:          m['allergies']           ?? [],
         medicalNotes:       m['medical_notes']       ?? '',
@@ -240,7 +202,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
     setSaving(false);
     if (error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      Alert.alert('Error', 'Couldn\'t save your profile. Please try again.');
+      showAlert('Error', 'Couldn\'t save your profile. Please try again.');
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setSaved(draft);
@@ -281,30 +243,37 @@ export default function BeautyProfileScreen({ navigation }: any) {
     });
   };
 
-  // ── Chip styling ──────────────────────────────────────────────────────────
+  // ── Derived stats ─────────────────────────────────────────────────────────
+  // Every number on this screen comes from here. Recomputed only when the draft
+  // changes, since the whole grid reads from it on each render.
 
-  const glassStyle = (active?: boolean) => ({
-    backgroundColor: active
-      ? (isDarkMode ? 'rgba(175,145,151,0.35)' : 'rgba(92,64,51,0.2)')
-      : (isDarkMode ? 'rgba(58,58,60,0.6)'     : 'rgba(255,255,255,0.12)'),
-    borderTopColor:    isDarkMode ? (active ? 'rgba(175,145,151,0.7)' : theme.border) : (active ? 'rgba(92,64,51,0.8)' : 'rgba(255,255,255,0.7)'),
-    borderLeftColor:   isDarkMode ? (active ? 'rgba(175,145,151,0.5)' : theme.border) : (active ? 'rgba(92,64,51,0.6)' : 'rgba(255,255,255,0.5)'),
-    borderRightColor:  isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-    borderBottomColor: isDarkMode ? theme.border : 'rgba(255,255,255,0.2)',
-  });
+  const stats = useMemo(() => computeBeautyProfileStats(draft), [draft]);
 
-  const chip  = (on: boolean) => [styles.chip, glassStyle(on)];
-  const cText = (on: boolean) => [styles.chipText, { color: on ? (isDarkMode ? '#fff' : theme.text) : theme.secondaryText }];
+  // ── Palette ───────────────────────────────────────────────────────────────
 
-  const allergyChip = (item: string) => {
-    const on    = draft.allergies.includes(item);
-    const isNone = item === 'None known';
-    return [
-      styles.chip,
-      glassStyle(on),
-      on && isNone && { backgroundColor: isDarkMode ? 'rgba(52,199,89,0.3)' : 'rgba(52,199,89,0.2)' },
-    ];
+  const P = {
+    text:   theme.text,
+    sub:    theme.secondaryText,
+    accent: theme.accent,
+    card:   isDarkMode ? '#252220' : '#FFFFFF',
+    surface: isDarkMode ? '#201D1A' : '#EDE8E2',
+    border: isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.14)',
+    sep:    isDarkMode ? 'rgba(126,102,103,0.10)' : 'rgba(126,102,103,0.08)',
+    chipOn: isDarkMode ? 'rgba(175,145,151,0.35)' : 'rgba(92,64,51,0.2)',
+    chipBorderOn: isDarkMode ? 'rgba(175,145,151,0.55)' : 'rgba(92,64,51,0.55)',
   };
+
+  const chipStyle = (on: boolean) => [
+    styles.chip,
+    {
+      backgroundColor: on ? P.chipOn : P.surface,
+      borderColor: on ? P.chipBorderOn : P.border,
+    },
+  ];
+  const chipTextStyle = (on: boolean) => [
+    styles.chipText,
+    { color: on ? P.text : P.sub },
+  ];
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -318,344 +287,234 @@ export default function BeautyProfileScreen({ navigation }: any) {
     );
   }
 
-  const hasAnyData = draft.hairType || draft.skinType || draft.allergies.length ||
-    draft.skinConcerns.length || draft.styleVibe || draft.treatmentHistory.length ||
-    draft.medicalNotes || draft.serviceInterests.length || draft.nailLength ||
-    draft.lashStyle || draft.browStyle || draft.makeupCoverage;
+  // ── Chip group ────────────────────────────────────────────────────────────
 
-  const genderLabel: Record<string, string> = { female: 'Female', male: 'Male', 'non-binary': 'Non-binary', 'prefer-not-to-say': 'Prefer not to say' };
+  const renderChips = (
+    options: string[],
+    isOn: (opt: string) => boolean,
+    onPress: (opt: string) => void,
+  ) => (
+    <View style={styles.chips}>
+      {options.map(opt => (
+        <TouchableOpacity
+          key={opt}
+          style={chipStyle(isOn(opt))}
+          onPress={() => onPress(opt)}
+          activeOpacity={editing ? 0.5 : 1}
+        >
+          <Text style={chipTextStyle(isOn(opt))}>{opt}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
-  const catInfo: Record<CategoryKey, { label: string; summary: string; filled: boolean }> = {
-    health: {
-      label: 'HEALTH & SAFETY',
-      summary: summarize([...draft.allergies, draft.medicalNotes ? 'Medical notes added' : ''], 'Not set — allergies & medical notes'),
-      filled: draft.allergies.length > 0 || !!draft.medicalNotes,
-    },
-    skin: {
-      label: 'SKIN',
-      summary: summarize([draft.skinType, draft.skinTone, ...draft.skinConcerns, ...draft.sensitiveAreas], 'Not set'),
-      filled: !!draft.skinType || !!draft.skinTone || draft.skinConcerns.length > 0 || draft.sensitiveAreas.length > 0,
-    },
-    hair: {
-      label: 'HAIR',
-      summary: summarize([draft.hairType, draft.scalpCondition, ...draft.treatmentHistory, ...draft.hairGoals], 'Not set'),
-      filled: !!draft.hairType || !!draft.scalpCondition || draft.treatmentHistory.length > 0 || draft.hairGoals.length > 0,
-    },
-    nails: {
-      label: 'NAILS',
-      summary: summarize([draft.nailLength, draft.nailShape], 'Not set'),
-      filled: !!draft.nailLength || !!draft.nailShape,
-    },
-    lashesBrows: {
-      label: 'LASHES & BROWS',
-      summary: summarize([draft.lashStyle, draft.lashStatus, draft.browStyle, draft.browCondition], 'Not set'),
-      filled: !!draft.lashStyle || !!draft.lashStatus || !!draft.browStyle || !!draft.browCondition,
-    },
-    makeup: {
-      label: 'MAKEUP',
-      summary: summarize([draft.makeupCoverage, draft.makeupFinish, draft.makeupEyes, draft.makeupLips], 'Not set'),
-      filled: !!draft.makeupCoverage || !!draft.makeupFinish || !!draft.makeupEyes || !!draft.makeupLips,
-    },
-    general: {
-      label: 'GENERAL',
-      summary: summarize([draft.styleVibe, ...draft.serviceInterests], 'Not set'),
-      filled: !!draft.styleVibe || draft.serviceInterests.length > 0,
-    },
-    personalisation: {
-      label: 'PERSONALISATION',
-      summary: summarize([draft.gender ? (genderLabel[draft.gender] ?? '') : '', draft.has_kids ? 'Kids services' : ''], 'Not set'),
-      filled: !!draft.gender || draft.has_kids,
-    },
-    consent: {
-      label: 'CONSENT',
-      summary: draft.photographyConsent ? 'Photos allowed' : 'Photos not allowed',
-      filled: true,
-    },
-  };
-
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  return (
-    <ThemedBackground style={styles.bg}>
-      <StatusBar barStyle={theme.statusBar} translucent />
-
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header row */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }} activeOpacity={0.7}>
-            <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))} activeOpacity={0.7}>
-            <Text style={[styles.editToggle, { color: theme.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={[styles.title, { color: theme.text }]}>Beauty Profile</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
-          {editing
-            ? 'Tap to select — this is shared with your providers'
-            : hasAnyData
-              ? 'Your saved profile — providers see this before each appointment'
-              : 'No profile set yet — tap Edit to get started'}
+  const sectionHead = (
+    label: string,
+    sub: string,
+    count?: { selected: number; total: number },
+    opts?: { warning?: boolean; optional?: boolean },
+  ) => (
+    <View style={styles.sectionTitleRow}>
+      <Text style={[styles.sectionLabel, { color: P.text }]}>{label}</Text>
+      {opts?.warning && <Text style={styles.warnIcon}>⚠</Text>}
+      {opts?.optional && <Text style={[styles.optionalBadge, { color: P.sub }]}>optional</Text>}
+      {count && (
+        <Text style={[styles.sectionCount, { color: P.sub }]}>
+          {count.selected}/{count.total}
         </Text>
+      )}
+    </View>
+  );
 
-        {/* ══ HEALTH & SAFETY (always fill) ══════════════════════════════ */}
-        <CategorySection {...catInfo.health} expanded={expanded.has('health')} onToggle={() => toggleCategory('health')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="ALLERGIES" sub="Known allergies or sensitivities — always shared with providers" filled={draft.allergies.length > 0} editing={editing} theme={theme} warning />
-          <View style={styles.chips}>
-            {ALLERGENS.map(item => (
-              <TouchableOpacity key={item} style={allergyChip(item)} onPress={() => toggleAllergen(item)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.allergies.includes(item))}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+  // ── Focused single-category body ──────────────────────────────────────────
 
-          <SectionHead label="MEDICAL NOTES" sub="Pregnancy, medications, health conditions that affect treatments" filled={!!draft.medicalNotes} editing={editing} theme={theme} warning />
-          <TextInput
-            style={[styles.medicalInput, { color: theme.text, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', opacity: editing ? 1 : 0.7 }]}
-            value={draft.medicalNotes}
-            onChangeText={text => editing && setDraft(prev => ({ ...prev, medicalNotes: text }))}
-            placeholder={editing ? 'e.g. currently pregnant, on blood thinners, photosensitive medication...' : (draft.medicalNotes ? '' : 'None noted')}
-            placeholderTextColor={theme.secondaryText}
-            multiline numberOfLines={3} textAlignVertical="top" editable={editing}
-          />
-        </CategorySection>
+  const renderCategoryBody = (key: CategoryKey) => {
+    switch (key) {
+      case 'health':
+        return (
+          <>
+            {sectionHead('ALLERGIES', '', { selected: draft.allergies.length, total: ALLERGENS.length }, { warning: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Known allergies or sensitivities — always shared with providers
+            </Text>
+            {renderChips(ALLERGENS, o => draft.allergies.includes(o), toggleAllergen)}
 
-        {/* ══ SKIN ══════════════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.skin} expanded={expanded.has('skin')} onToggle={() => toggleCategory('skin')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="SKIN TYPE" sub="Your skin type" filled={!!draft.skinType} editing={editing} theme={theme} />
-          <View style={styles.chips}>
-            {SKIN_TYPES.map(t => (
-              <TouchableOpacity key={t} style={chip(draft.skinType === t)} onPress={() => setSingle('skinType', t)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.skinType === t)}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="SKIN TONE" sub="Your complexion" filled={!!draft.skinTone} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {SKIN_TONES.map(t => (
-              <TouchableOpacity key={t} style={chip(draft.skinTone === t)} onPress={() => setSingle('skinTone', t)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.skinTone === t)}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="SKIN CONCERNS" sub="Select all that apply" filled={draft.skinConcerns.length > 0} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {SKIN_CONCERNS.map(c => (
-              <TouchableOpacity key={c} style={chip(draft.skinConcerns.includes(c))} onPress={() => toggleMulti('skinConcerns', c)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.skinConcerns.includes(c))}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="SENSITIVE AREAS" sub="Areas of sensitivity for treatments like waxing or facial work" filled={draft.sensitiveAreas.length > 0} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {SENSITIVE_AREAS.map(a => (
-              <TouchableOpacity key={a} style={chip(draft.sensitiveAreas.includes(a))} onPress={() => toggleMulti('sensitiveAreas', a)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.sensitiveAreas.includes(a))}>{a}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </CategorySection>
-
-        {/* ══ HAIR ══════════════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.hair} expanded={expanded.has('hair')} onToggle={() => toggleCategory('hair')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="HAIR TYPE" sub="Your hair texture" filled={!!draft.hairType} editing={editing} theme={theme} />
-          <View style={styles.chips}>
-            {HAIR_TYPES.map(t => (
-              <TouchableOpacity key={t} style={chip(draft.hairType === t)} onPress={() => setSingle('hairType', t)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.hairType === t)}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="SCALP CONDITION" sub="Your scalp health" filled={!!draft.scalpCondition} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {SCALP_CONDITIONS.map(c => (
-              <TouchableOpacity key={c} style={chip(draft.scalpCondition === c)} onPress={() => setSingle('scalpCondition', c)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.scalpCondition === c)}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="COLOUR & TREATMENT HISTORY" sub="Previous professional treatments" filled={draft.treatmentHistory.length > 0} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {TREATMENT_HISTORY.map(h => (
-              <TouchableOpacity key={h} style={chip(draft.treatmentHistory.includes(h))} onPress={() => toggleMulti('treatmentHistory', h)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.treatmentHistory.includes(h))}>{h}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="HAIR GOALS" sub="What you're looking to achieve" filled={draft.hairGoals.length > 0} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {HAIR_GOALS.map(g => (
-              <TouchableOpacity key={g} style={chip(draft.hairGoals.includes(g))} onPress={() => toggleMulti('hairGoals', g)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.hairGoals.includes(g))}>{g}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </CategorySection>
-
-        {/* ══ NAILS ═════════════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.nails} expanded={expanded.has('nails')} onToggle={() => toggleCategory('nails')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="PREFERRED LENGTH" sub="How long do you like your nails?" filled={!!draft.nailLength} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {NAIL_LENGTHS.map(l => (
-              <TouchableOpacity key={l} style={chip(draft.nailLength === l)} onPress={() => setSingle('nailLength', l)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.nailLength === l)}>{l}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="PREFERRED SHAPE" sub="Your go-to nail shape" filled={!!draft.nailShape} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {NAIL_SHAPES.map(s => (
-              <TouchableOpacity key={s} style={chip(draft.nailShape === s)} onPress={() => setSingle('nailShape', s)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.nailShape === s)}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </CategorySection>
-
-        {/* ══ LASHES & BROWS ════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.lashesBrows} expanded={expanded.has('lashesBrows')} onToggle={() => toggleCategory('lashesBrows')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="LASH STYLE" sub="Your preferred lash look" filled={!!draft.lashStyle} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {LASH_STYLES.map(s => (
-              <TouchableOpacity key={s} style={chip(draft.lashStyle === s)} onPress={() => setSingle('lashStyle', s)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.lashStyle === s)}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="LASH STATUS" sub="Current situation" filled={!!draft.lashStatus} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {LASH_STATUS.map(s => (
-              <TouchableOpacity key={s} style={chip(draft.lashStatus === s)} onPress={() => setSingle('lashStatus', s)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.lashStatus === s)}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="BROW STYLE" sub="Your preferred brow look" filled={!!draft.browStyle} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {BROW_STYLES.map(s => (
-              <TouchableOpacity key={s} style={chip(draft.browStyle === s)} onPress={() => setSingle('browStyle', s)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.browStyle === s)}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="BROW CONDITION" sub="Your natural brows" filled={!!draft.browCondition} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {BROW_CONDITIONS.map(c => (
-              <TouchableOpacity key={c} style={chip(draft.browCondition === c)} onPress={() => setSingle('browCondition', c)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.browCondition === c)}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </CategorySection>
-
-        {/* ══ MAKEUP ════════════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.makeup} expanded={expanded.has('makeup')} onToggle={() => toggleCategory('makeup')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="COVERAGE" sub="How much coverage do you prefer?" filled={!!draft.makeupCoverage} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {MAKEUP_COVERAGE.map(c => (
-              <TouchableOpacity key={c} style={chip(draft.makeupCoverage === c)} onPress={() => setSingle('makeupCoverage', c)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.makeupCoverage === c)}>{c}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="FINISH" sub="Your preferred skin finish" filled={!!draft.makeupFinish} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {MAKEUP_FINISH.map(f => (
-              <TouchableOpacity key={f} style={chip(draft.makeupFinish === f)} onPress={() => setSingle('makeupFinish', f)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.makeupFinish === f)}>{f}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="EYE STYLE" sub="What eye look do you go for?" filled={!!draft.makeupEyes} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {MAKEUP_EYES.map(e => (
-              <TouchableOpacity key={e} style={chip(draft.makeupEyes === e)} onPress={() => setSingle('makeupEyes', e)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.makeupEyes === e)}>{e}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="LIP PREFERENCE" sub="Your go-to lip look" filled={!!draft.makeupLips} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {MAKEUP_LIPS.map(l => (
-              <TouchableOpacity key={l} style={chip(draft.makeupLips === l)} onPress={() => setSingle('makeupLips', l)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.makeupLips === l)}>{l}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </CategorySection>
-
-        {/* ══ GENERAL ═══════════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.general} expanded={expanded.has('general')} onToggle={() => toggleCategory('general')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="STYLE VIBE" sub="How would you describe your overall look?" filled={!!draft.styleVibe} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {STYLE_VIBES.map(v => (
-              <TouchableOpacity key={v} style={chip(draft.styleVibe === v)} onPress={() => setSingle('styleVibe', v)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.styleVibe === v)}>{v}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <SectionHead label="SERVICES I'M INTO" sub="What you typically book" filled={draft.serviceInterests.length > 0} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {SERVICE_CATEGORIES.map(s => (
-              <TouchableOpacity key={s} style={chip(draft.serviceInterests.includes(s))} onPress={() => toggleMulti('serviceInterests', s)} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.serviceInterests.includes(s))}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </CategorySection>
-
-        {/* ══ PERSONALISATION ════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.personalisation} expanded={expanded.has('personalisation')} onToggle={() => toggleCategory('personalisation')} theme={theme} isDarkMode={isDarkMode}>
-          <SectionHead label="GENDER" sub="Helps us personalise your home feed" filled={!!draft.gender} editing={editing} theme={theme} optional />
-          <View style={styles.chips}>
-            {(['female', 'male', 'non-binary', 'prefer-not-to-say'] as const).map(g => (
-              <TouchableOpacity key={g} style={chip(draft.gender === g)} onPress={() => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, gender: prev.gender === g ? null : g })); }} activeOpacity={editing ? 0.6 : 1}>
-                <Text style={cText(draft.gender === g)}>{genderLabel[g]}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.consentLabel, { color: theme.text }]}>Kids beauty services</Text>
-              <Text style={[styles.consentSub, { color: theme.secondaryText }]}>Show me kids' beauty services in the home feed</Text>
-            </View>
-            <Switch
-              value={draft.has_kids}
-              onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
-              trackColor={{ false: '#D1D1D6', true: theme.accent }}
-              thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
-              disabled={!editing}
+            {sectionHead('MEDICAL NOTES', '', undefined, { warning: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Pregnancy, medications, health conditions that affect treatments
+            </Text>
+            <TextInput
+              style={[styles.medicalInput, {
+                color: P.text,
+                backgroundColor: P.surface,
+                borderColor: P.border,
+                opacity: editing ? 1 : 0.7,
+              }]}
+              value={draft.medicalNotes}
+              onChangeText={text => editing && setDraft(prev => ({ ...prev, medicalNotes: text }))}
+              placeholder={editing ? 'e.g. currently pregnant, on blood thinners, photosensitive medication...' : (draft.medicalNotes ? '' : 'None noted')}
+              placeholderTextColor={P.sub}
+              multiline numberOfLines={3} textAlignVertical="top" editable={editing}
             />
-          </View>
-        </CategorySection>
+          </>
+        );
 
-        {/* ══ CONSENT ════════════════════════════════════════════════════════ */}
-        <CategorySection {...catInfo.consent} expanded={expanded.has('consent')} onToggle={() => toggleCategory('consent')} theme={theme} isDarkMode={isDarkMode}>
-          <View style={[styles.consentRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }]}>
+      case 'skin':
+        return (
+          <>
+            {sectionHead('SKIN TYPE', '', { selected: draft.skinType ? 1 : 0, total: 1 })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your skin type</Text>
+            {renderChips(SKIN_TYPES, o => draft.skinType === o, o => setSingle('skinType', o))}
+
+            {sectionHead('SKIN TONE', '', { selected: draft.skinTone ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your complexion</Text>
+            {renderChips(SKIN_TONES, o => draft.skinTone === o, o => setSingle('skinTone', o))}
+
+            {sectionHead('SKIN CONCERNS', '', { selected: draft.skinConcerns.length, total: SKIN_CONCERNS.length }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Select all that apply</Text>
+            {renderChips(SKIN_CONCERNS, o => draft.skinConcerns.includes(o), o => toggleMulti('skinConcerns', o))}
+
+            {sectionHead('SENSITIVE AREAS', '', { selected: draft.sensitiveAreas.length, total: SENSITIVE_AREAS.length }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>
+              Areas of sensitivity for treatments like waxing or facial work
+            </Text>
+            {renderChips(SENSITIVE_AREAS, o => draft.sensitiveAreas.includes(o), o => toggleMulti('sensitiveAreas', o))}
+          </>
+        );
+
+      case 'hair':
+        return (
+          <>
+            {sectionHead('HAIR TYPE', '', { selected: draft.hairType ? 1 : 0, total: 1 })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your hair texture</Text>
+            {renderChips(HAIR_TYPES, o => draft.hairType === o, o => setSingle('hairType', o))}
+
+            {sectionHead('SCALP CONDITION', '', { selected: draft.scalpCondition ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your scalp health</Text>
+            {renderChips(SCALP_CONDITIONS, o => draft.scalpCondition === o, o => setSingle('scalpCondition', o))}
+
+            {sectionHead('COLOUR & TREATMENT HISTORY', '', { selected: draft.treatmentHistory.length, total: TREATMENT_HISTORY.length }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Previous professional treatments</Text>
+            {renderChips(TREATMENT_HISTORY, o => draft.treatmentHistory.includes(o), o => toggleMulti('treatmentHistory', o))}
+
+            {sectionHead('HAIR GOALS', '', { selected: draft.hairGoals.length, total: HAIR_GOALS.length }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>What you're looking to achieve</Text>
+            {renderChips(HAIR_GOALS, o => draft.hairGoals.includes(o), o => toggleMulti('hairGoals', o))}
+          </>
+        );
+
+      case 'nails':
+        return (
+          <>
+            {sectionHead('PREFERRED LENGTH', '', { selected: draft.nailLength ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>How long do you like your nails?</Text>
+            {renderChips(NAIL_LENGTHS, o => draft.nailLength === o, o => setSingle('nailLength', o))}
+
+            {sectionHead('PREFERRED SHAPE', '', { selected: draft.nailShape ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your go-to nail shape</Text>
+            {renderChips(NAIL_SHAPES, o => draft.nailShape === o, o => setSingle('nailShape', o))}
+          </>
+        );
+
+      case 'lashesBrows':
+        return (
+          <>
+            {sectionHead('LASH STYLE', '', { selected: draft.lashStyle ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your preferred lash look</Text>
+            {renderChips(LASH_STYLES, o => draft.lashStyle === o, o => setSingle('lashStyle', o))}
+
+            {sectionHead('LASH STATUS', '', { selected: draft.lashStatus ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Current situation</Text>
+            {renderChips(LASH_STATUS, o => draft.lashStatus === o, o => setSingle('lashStatus', o))}
+
+            {sectionHead('BROW STYLE', '', { selected: draft.browStyle ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your preferred brow look</Text>
+            {renderChips(BROW_STYLES, o => draft.browStyle === o, o => setSingle('browStyle', o))}
+
+            {sectionHead('BROW CONDITION', '', { selected: draft.browCondition ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your natural brows</Text>
+            {renderChips(BROW_CONDITIONS, o => draft.browCondition === o, o => setSingle('browCondition', o))}
+          </>
+        );
+
+      case 'makeup':
+        return (
+          <>
+            {sectionHead('COVERAGE', '', { selected: draft.makeupCoverage ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>How much coverage do you prefer?</Text>
+            {renderChips(MAKEUP_COVERAGE, o => draft.makeupCoverage === o, o => setSingle('makeupCoverage', o))}
+
+            {sectionHead('FINISH', '', { selected: draft.makeupFinish ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your preferred skin finish</Text>
+            {renderChips(MAKEUP_FINISH, o => draft.makeupFinish === o, o => setSingle('makeupFinish', o))}
+
+            {sectionHead('EYE STYLE', '', { selected: draft.makeupEyes ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>What eye look do you go for?</Text>
+            {renderChips(MAKEUP_EYES, o => draft.makeupEyes === o, o => setSingle('makeupEyes', o))}
+
+            {sectionHead('LIP PREFERENCE', '', { selected: draft.makeupLips ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Your go-to lip look</Text>
+            {renderChips(MAKEUP_LIPS, o => draft.makeupLips === o, o => setSingle('makeupLips', o))}
+          </>
+        );
+
+      case 'general':
+        return (
+          <>
+            {sectionHead('STYLE VIBE', '', { selected: draft.styleVibe ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>How would you describe your overall look?</Text>
+            {renderChips(STYLE_VIBES, o => draft.styleVibe === o, o => setSingle('styleVibe', o))}
+
+            {sectionHead("SERVICES I'M INTO", '', { selected: draft.serviceInterests.length, total: SERVICE_CATEGORIES.length }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>What you typically book</Text>
+            {renderChips(SERVICE_CATEGORIES, o => draft.serviceInterests.includes(o), o => toggleMulti('serviceInterests', o))}
+          </>
+        );
+
+      case 'personalisation':
+        return (
+          <>
+            {sectionHead('GENDER', '', { selected: draft.gender ? 1 : 0, total: 1 }, { optional: true })}
+            <Text style={[styles.sectionSub, { color: P.sub }]}>Helps us personalise your home feed</Text>
+            <View style={styles.chips}>
+              {(Object.keys(GENDER_LABELS) as Gender[]).map(g => (
+                <TouchableOpacity
+                  key={g}
+                  style={chipStyle(draft.gender === g)}
+                  onPress={() => {
+                    if (!editing) return;
+                    Haptics.selectionAsync().catch(() => {});
+                    setDraft(prev => ({ ...prev, gender: prev.gender === g ? null : g }));
+                  }}
+                  activeOpacity={editing ? 0.5 : 1}
+                >
+                  <Text style={chipTextStyle(draft.gender === g)}>{GENDER_LABELS[g]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={[styles.consentRow, { backgroundColor: P.surface, borderColor: P.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.consentLabel, { color: P.text }]}>Kids beauty services</Text>
+                <Text style={[styles.consentSub, { color: P.sub }]}>Show me kids' beauty services in the home feed</Text>
+              </View>
+              <Switch
+                value={draft.has_kids}
+                onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
+                trackColor={{ false: '#D1D1D6', true: theme.accent }}
+                thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
+                disabled={!editing}
+              />
+            </View>
+          </>
+        );
+
+      case 'consent':
+        return (
+          <View style={[styles.consentRow, { backgroundColor: P.surface, borderColor: P.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.consentLabel, { color: theme.text }]}>Photography consent</Text>
-              <Text style={[styles.consentSub, { color: theme.secondaryText }]}>
+              <Text style={[styles.consentLabel, { color: P.text }]}>Photography consent</Text>
+              <Text style={[styles.consentSub, { color: P.sub }]}>
                 Allow your provider to share before/after photos on their social media
               </Text>
             </View>
@@ -667,91 +526,303 @@ export default function BeautyProfileScreen({ navigation }: any) {
               disabled={!editing}
             />
           </View>
-        </CategorySection>
+        );
+    }
+  };
 
-        {/* ── SAVE ── */}
-        {editing && (
+  // ── Focused view ──────────────────────────────────────────────────────────
+
+  if (selectedCategory) {
+    const cat = stats.byCategory[selectedCategory];
+    const isHealth = selectedCategory === 'health';
+
+    return (
+      <ThemedBackground style={styles.bg}>
+        <StatusBar barStyle={theme.statusBar} translucent />
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={closeCategory} activeOpacity={0.5}>
+              <Text style={[styles.focusBack, { color: P.accent }]}>← ALL CATEGORIES</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))}
+              activeOpacity={0.5}
+            >
+              <Text style={[styles.editToggle, { color: P.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.focusTitleRow}>
+            <Text style={[styles.focusTitle, { color: P.text }]}>{CATEGORY_LABELS[selectedCategory]}</Text>
+            <Text style={[styles.focusPct, { color: P.accent }]}>
+              {cat.complete ? '✓' : `${cat.percent}%`}
+            </Text>
+          </View>
+
+          <View style={[styles.progressTrack, { backgroundColor: P.sep }]}>
+            <View style={[
+              styles.progressFill,
+              { width: `${cat.percent}%`, backgroundColor: cat.complete ? '#34C759' : P.accent },
+            ]} />
+          </View>
+
+          <Text style={[styles.focusFieldsCount, { color: P.sub }]}>
+            {isHealth
+              ? `${draft.allergies.length} of ${ALLERGENS.length} allergens flagged · ${draft.medicalNotes ? 'medical notes on file' : 'no medical notes'} · always shared`
+              : cat.fieldsTotal > 0
+                ? `${cat.fieldsSet} of ${cat.fieldsTotal} fields set · ${cat.selections} selection${cat.selections === 1 ? '' : 's'}`
+                : 'Always shared with your provider'}
+          </Text>
+
+          {renderCategoryBody(selectedCategory)}
+
+          {editing && (
+            <TouchableOpacity
+              style={[styles.saveBtn, {
+                backgroundColor: isDarkMode ? theme.accent : 'rgba(92,64,51,0.25)',
+                borderColor: isDarkMode ? 'rgba(175,145,151,0.4)' : 'rgba(92,64,51,0.4)',
+              }]}
+              onPress={handleSave}
+              disabled={saving}
+              activeOpacity={0.75}
+            >
+              {saving
+                ? <ActivityIndicator color={isDarkMode ? '#1A1815' : theme.text} />
+                : <Text style={[styles.saveBtnText, { color: isDarkMode ? '#1A1815' : theme.text }]}>SAVE PROFILE</Text>}
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+        {/* Rendered last so dialogs layer above the scroll content. */}
+        <DialogHost />
+      </ThemedBackground>
+    );
+  }
+
+  // ── Grid view ─────────────────────────────────────────────────────────────
+
+  const health = stats.byCategory.health;
+  const healthOnFile = health.started;
+
+  return (
+    <ThemedBackground style={styles.bg}>
+      <StatusBar barStyle={theme.statusBar} translucent />
+
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.headerRow}>
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: isDarkMode ? theme.accent : 'rgba(92,64,51,0.25)', borderColor: (isDarkMode ? 'rgba(175,145,151,0.4)' : 'rgba(92,64,51,0.4)') }]}
-            onPress={handleSave}
-            disabled={saving}
-            activeOpacity={0.8}
+            style={styles.backBtn}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+            activeOpacity={0.5}
           >
-            {saving
-              ? <ActivityIndicator color={isDarkMode ? '#fff' : theme.text} />
-              : <Text style={[styles.saveBtnText, { color: isDarkMode ? '#fff' : theme.text }]}>SAVE PROFILE</Text>
-            }
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))}
+            activeOpacity={0.5}
+          >
+            <Text style={[styles.editToggle, { color: P.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ══ HERO ══════════════════════════════════════════════════════════ */}
+        <View style={styles.heroTopRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.eyebrow, { color: P.accent }]}>PROFILE ANALYSIS</Text>
+            {stats.isEmpty ? (
+              <Text style={[styles.heroNumeralEmpty, { color: P.text }]}>NEW</Text>
+            ) : (
+              <View style={styles.heroNumeralRow}>
+                <Text style={[styles.heroNumeral, { color: P.text }]}>{stats.overallPercent}</Text>
+                <Text style={[styles.heroDenominator, { color: P.sub }]}>/100</Text>
+              </View>
+            )}
+            <Text style={[styles.heroQualifier, { color: P.accent }]}>
+              {stats.isEmpty
+                ? "LET'S BEGIN"
+                : stats.overallPercent >= 80 ? 'LOOKING GREAT'
+                : stats.overallPercent >= 40 ? 'GOOD START'
+                : 'JUST STARTED'}
+            </Text>
+            <Text style={[styles.heroSub, { color: P.sub }]}>
+              {stats.isEmpty
+                ? 'Nothing shared with providers yet — allergies take 20 seconds.'
+                : `${healthOnFile ? 'Health & Safety is on file.' : 'Health & Safety not set yet.'} ${stats.untouchedCount} categor${stats.untouchedCount === 1 ? 'y' : 'ies'} still untouched.`}
+            </Text>
+          </View>
+
+          <View style={styles.heroSideStats}>
+            <View style={styles.heroSideStat}>
+              <View style={styles.heroSideNumRow}>
+                <Text style={[styles.heroSideNum, { color: P.text }]}>{stats.categoriesStarted}</Text>
+                <Text style={[styles.heroSideDenom, { color: P.sub }]}>/{stats.categoriesTotal}</Text>
+              </View>
+              <Text style={[styles.heroSideLabel, { color: P.sub }]}>STARTED</Text>
+            </View>
+            <View style={styles.heroSideStat}>
+              <Text style={[styles.heroSideNum, { color: P.text }]}>{stats.totalSelections}</Text>
+              <Text style={[styles.heroSideLabel, { color: P.sub }]}>SELECTIONS</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* leader-line annotation */}
+        <View style={styles.leaderRow}>
+          <Text style={[styles.leaderLabel, { color: P.sub }]}>BEAUTY PROFILE</Text>
+          <View style={[styles.leaderLine, { backgroundColor: P.border }]} />
+          <Text style={[styles.leaderLabel, { color: P.sub }]}>SHARED W/ PROVIDERS</Text>
+        </View>
+
+        {/* ══ ASYMMETRIC STAT ROW ═══════════════════════════════════════════ */}
+        <View style={styles.statRow}>
+          <View style={[styles.statCard, styles.statCardWide, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.eyebrowSmall, { color: P.sub }]}>
+              {stats.isEmpty ? 'RECOMMENDED FIRST STEP' : 'MOST COMPLETE'}
+            </Text>
+            {stats.isEmpty ? (
+              <>
+                <Text style={[styles.statBignumWord, { color: P.text }]}>Health & Safety</Text>
+                <Text style={[styles.statCaption, { color: P.sub }]}>
+                  The one thing every provider needs before they treat you
+                </Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.statBignumRow}>
+                  <Text style={[styles.statBignumWord, { color: P.text }]}>
+                    {stats.mostComplete ? CATEGORY_LABELS[stats.mostComplete.key] : '—'}
+                  </Text>
+                  <Text style={[styles.statBignumSmall, { color: P.sub }]}>
+                    {stats.mostComplete ? `${stats.mostComplete.percent}%` : ''}
+                  </Text>
+                </View>
+                <Text style={[styles.statCaption, { color: P.sub }]}>
+                  {stats.mostComplete
+                    ? `${stats.mostComplete.fieldsSet} of ${stats.mostComplete.fieldsTotal} fields set`
+                    : 'Nothing set yet'}
+                </Text>
+              </>
+            )}
+          </View>
+
+          <View style={[styles.statCard, styles.statCardNarrow, { backgroundColor: P.card, borderColor: P.border }]}>
+            <Text style={[styles.eyebrowSmall, { color: P.sub }]}>UNTOUCHED</Text>
+            <View style={styles.statBignumRow}>
+              <Text style={[styles.statBignum, { color: P.text }]}>{stats.untouchedCount}</Text>
+              <Text style={[styles.statBignumSmall, { color: P.sub }]}>/{stats.categoriesTotal}</Text>
+            </View>
+            <Text style={[styles.statCaption, { color: P.sub }]}>categories</Text>
+          </View>
+        </View>
+
+        {/* ══ HEALTH & SAFETY BANNER ════════════════════════════════════════ */}
+        <TouchableOpacity
+          style={[styles.hsBanner, { backgroundColor: P.card, borderColor: P.border }]}
+          onPress={() => openCategory('health')}
+          activeOpacity={0.5}
+        >
+          <Text style={styles.hsIcon}>{healthOnFile ? '✓' : '⚠'}</Text>
+          <View style={styles.hsNumBlock}>
+            <Text style={[styles.hsNum, { color: P.text }]}>{draft.allergies.length}</Text>
+            <Text style={[styles.hsNumDenom, { color: P.sub }]}>/{ALLERGENS.length}</Text>
+          </View>
+          <View style={styles.hsText}>
+            <Text style={[styles.hsLabel, { color: P.text }]}>HEALTH & SAFETY</Text>
+            <Text style={[styles.hsSub, { color: P.sub }]} numberOfLines={1}>
+              {healthOnFile
+                ? `${draft.allergies.length} allergen${draft.allergies.length === 1 ? '' : 's'} flagged${draft.medicalNotes ? ' · notes on file' : ''}`
+                : "Not started — the one section we'd fill in first"}
+            </Text>
+          </View>
+          <View style={[styles.hsStatus, {
+            backgroundColor: healthOnFile ? 'rgba(52,199,89,0.16)' : 'rgba(255,214,10,0.2)',
+          }]}>
+            <Text style={[styles.hsStatusText, {
+              color: healthOnFile ? (isDarkMode ? '#4FD67A' : '#1F8A3D') : (isDarkMode ? '#FFD60A' : '#8A6D00'),
+            }]}>
+              {healthOnFile ? 'ON FILE' : 'ADD NOW'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ══ CATEGORY GRID ═════════════════════════════════════════════════ */}
+        <View style={styles.gridEyebrowRow}>
+          <Text style={[styles.eyebrow, { color: P.sub }]}>ALL CATEGORIES</Text>
+          <Text style={[styles.gridCount, { color: P.text }]}>
+            {stats.categoriesStarted}/{stats.categoriesTotal} STARTED
+          </Text>
+        </View>
+
+        <View style={styles.catGrid}>
+          {CATEGORY_ORDER.filter(k => k !== 'health').map(key => {
+            const cat: CategoryStats = stats.byCategory[key];
+            const isConsent = key === 'consent';
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.catTile, { backgroundColor: P.card, borderColor: P.border }]}
+                onPress={() => openCategory(key)}
+                activeOpacity={0.5}
+              >
+                {cat.started && <View style={styles.catTileDot} />}
+                {isConsent ? (
+                  <Text style={[styles.catTilePct, { color: '#34C759' }]}>✓</Text>
+                ) : (
+                  <View style={styles.catTilePctRow}>
+                    <Text style={[styles.catTilePct, { color: cat.complete ? '#34C759' : cat.started ? P.text : P.sub }]}>
+                      {cat.percent}
+                    </Text>
+                    <Text style={[styles.catTilePctSign, { color: cat.complete ? '#34C759' : cat.started ? P.text : P.sub }]}>%</Text>
+                  </View>
+                )}
+                <Text style={[styles.catTileLabel, { color: P.accent }]} numberOfLines={2}>
+                  {CATEGORY_LABELS[key]}
+                </Text>
+                {!isConsent && (
+                  <View style={[styles.catTileBar, { backgroundColor: P.sep }]}>
+                    <View style={[styles.catTileBarFill, {
+                      width: `${cat.percent}%`,
+                      backgroundColor: cat.complete ? '#34C759' : P.accent,
+                    }]} />
+                  </View>
+                )}
+                <Text style={[styles.catTileDetail, { color: P.sub }]} numberOfLines={1}>
+                  {isConsent
+                    ? `Photos: ${draft.photographyConsent ? 'ON' : 'OFF'}`
+                    : cat.started
+                      ? `${cat.fieldsSet}/${cat.fieldsTotal} fields`
+                      : 'Not set'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Selections ranking — only meaningful once something is filled in. */}
+        {!stats.isEmpty && (
+          <View style={[styles.rankCard, { backgroundColor: P.surface }]}>
+            <Text style={[styles.rankEyebrow, { color: P.sub }]}>SELECTIONS BY CATEGORY</Text>
+            <Text style={[styles.rankValue, { color: P.text }]}>
+              {stats.ordered
+                .filter(c => c.selections > 0)
+                .sort((a, b) => b.selections - a.selections)
+                .slice(0, 3)
+                .map(c => `${CATEGORY_LABELS[c.key]} ${c.selections}`)
+                .join('  ·  ') || 'None yet'}
+            </Text>
+          </View>
         )}
       </ScrollView>
+      {/* Rendered last so dialogs layer above the scroll content. */}
+      <DialogHost />
     </ThemedBackground>
-  );
-}
-
-// ── Collapsible category section ───────────────────────────────────────────
-
-interface CategorySectionProps {
-  label: string;
-  summary: string;
-  filled: boolean;
-  expanded: boolean;
-  onToggle: () => void;
-  theme: any;
-  isDarkMode: boolean;
-  children: React.ReactNode;
-}
-
-function CategorySection({ label, summary, filled, expanded, onToggle, theme, isDarkMode, children }: CategorySectionProps) {
-  return (
-    <View style={[styles.catSection, { borderColor: theme.border ?? 'rgba(0,0,0,0.08)' }]}>
-      <TouchableOpacity style={styles.catHeader} onPress={onToggle} activeOpacity={0.7}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.catHeaderTitleRow}>
-            <Text style={[styles.catDividerLabel, { color: theme.accent }]}>{label}</Text>
-            {filled && <View style={styles.filledDot} />}
-          </View>
-          {!expanded && (
-            <Text style={[styles.catSummary, { color: theme.secondaryText }]} numberOfLines={1}>
-              {summary}
-            </Text>
-          )}
-        </View>
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={18}
-          color={theme.secondaryText}
-        />
-      </TouchableOpacity>
-      {expanded && <View style={styles.catBody}>{children}</View>}
-    </View>
-  );
-}
-
-// ── Section header component ─────────────────────────────────────────────────
-
-interface SectionHeadProps {
-  label: string;
-  sub: string;
-  filled: boolean;
-  editing: boolean;
-  theme: any;
-  warning?: boolean;
-  optional?: boolean;
-}
-
-function SectionHead({ label, sub, filled, editing, theme, warning, optional }: SectionHeadProps) {
-  return (
-    <View style={styles.sectionWrap}>
-      <View style={styles.sectionTitleRow}>
-        <Text style={[styles.sectionLabel, { color: theme.text }]}>{label}</Text>
-        {!editing && filled && <View style={styles.filledDot} />}
-        {warning && <Text style={styles.warnIcon}>⚠</Text>}
-        {optional && (
-          <Text style={[styles.optionalBadge, { color: theme.secondaryText }]}>optional</Text>
-        )}
-      </View>
-      <Text style={[styles.sectionSub, { color: theme.secondaryText }]}>{sub}</Text>
-    </View>
   );
 }
 
@@ -760,59 +831,123 @@ function SectionHead({ label, sub, filled, editing, theme, warning, optional }: 
 const styles = StyleSheet.create({
   bg:          { flex: 1 },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll:      { paddingHorizontal: 24 },
+  scroll:      { paddingHorizontal: 18 },
 
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   backBtn:   { padding: 4 },
   backArrow: { fontSize: 22, fontWeight: '900' },
-  editToggle:{ fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 0.5 },
+  editToggle:{ fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.5 },
+  focusBack: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 0.5 },
 
-  title:    { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
-  subtitle: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 20, marginBottom: 36 },
+  // Eyebrows — wide-tracked micro-caps, the screen's telemetry voice.
+  // Floored at 9.5px: BakbakOne is a blocky display face that loses character
+  // distinction faster than a humanist sans as size drops, and anything smaller
+  // fails at default OS text-scaling on smaller phones. letterSpacing stays at
+  // or under 2 to match DESIGN_SYSTEM.md's stated caps-label range.
+  eyebrow:      { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 2 },
+  eyebrowSmall: { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.4 },
 
-  sectionWrap:     { marginBottom: 14 },
+  // Hero
+  heroTopRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  heroNumeralRow:   { flexDirection: 'row', alignItems: 'flex-end' },
+  heroNumeral:      { fontFamily: 'BakbakOne-Regular', fontSize: 88, letterSpacing: -3, lineHeight: 92 },
+  heroNumeralEmpty: { fontFamily: 'BakbakOne-Regular', fontSize: 56, letterSpacing: -1, lineHeight: 66 },
+  heroDenominator:  { fontFamily: 'BakbakOne-Regular', fontSize: 22, letterSpacing: -0.5, paddingBottom: 12 },
+  heroQualifier:    { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 2, marginTop: 6 },
+  heroSub:          { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18, marginTop: 6 },
+
+  heroSideStats:  { alignItems: 'flex-end', gap: 12, paddingTop: 4 },
+  heroSideStat:   { alignItems: 'flex-end' },
+  heroSideNumRow: { flexDirection: 'row', alignItems: 'baseline' },
+  heroSideNum:    { fontFamily: 'BakbakOne-Regular', fontSize: 22, lineHeight: 24 },
+  heroSideDenom:  { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
+  heroSideLabel:  { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.4, marginTop: 2 },
+
+  leaderRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 14 },
+  leaderLine:  { flex: 1, height: 1 },
+  leaderLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 2 },
+
+  // Asymmetric stat row
+  statRow:         { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  statCard:        { borderRadius: 16, borderWidth: 1, padding: 13 },
+  statCardWide:    { flex: 1.65 },
+  statCardNarrow:  { flex: 1, justifyContent: 'space-between' },
+  statBignumRow:   { flexDirection: 'row', alignItems: 'baseline', gap: 3, marginTop: 6, marginBottom: 4 },
+  statBignum:      { fontFamily: 'BakbakOne-Regular', fontSize: 30, letterSpacing: -1, lineHeight: 32 },
+  statBignumWord:  { fontFamily: 'BakbakOne-Regular', fontSize: 17, letterSpacing: 0.3, marginTop: 6, marginBottom: 4 },
+  statBignumSmall: { fontFamily: 'BakbakOne-Regular', fontSize: 13 },
+  statCaption:     { fontFamily: 'Jura-VariableFont_wght', fontSize: 10.5, lineHeight: 14 },
+
+  // Health & Safety banner
+  hsBanner:  {
+    flexDirection: 'row', alignItems: 'center', gap: 11,
+    borderRadius: 16, borderWidth: 1, borderLeftWidth: 3, borderLeftColor: '#FFD60A',
+    padding: 13, marginBottom: 14,
+  },
+  hsIcon:      { fontSize: 15 },
+  hsNumBlock:  { flexDirection: 'row', alignItems: 'baseline' },
+  hsNum:       { fontFamily: 'BakbakOne-Regular', fontSize: 24, lineHeight: 26 },
+  hsNumDenom:  { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
+  hsText:      { flex: 1, minWidth: 0 },
+  hsLabel:     { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.4, marginBottom: 2 },
+  hsSub:       { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, lineHeight: 14 },
+  hsStatus:    { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 5 },
+  hsStatusText:{ fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 0.5 },
+
+  // Category grid
+  gridEyebrowRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
+  gridCount:      { fontFamily: 'BakbakOne-Regular', fontSize: 10, letterSpacing: 1 },
+
+  catGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  catTile:    {
+    width: '31.5%', minHeight: 94, borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 8, paddingTop: 10, paddingBottom: 9, gap: 5,
+  },
+  catTilePctRow:  { flexDirection: 'row', alignItems: 'baseline' },
+  catTilePct:     { fontFamily: 'BakbakOne-Regular', fontSize: 20, letterSpacing: -0.5, lineHeight: 22 },
+  catTilePctSign: { fontFamily: 'BakbakOne-Regular', fontSize: 11 },
+  catTileLabel:   { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 0.9 },
+  catTileBar:     { height: 3, borderRadius: 2, overflow: 'hidden', marginTop: 'auto' },
+  catTileBarFill: { height: '100%', borderRadius: 2 },
+  catTileDetail:  { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, lineHeight: 13 },
+  catTileDot:     { position: 'absolute', top: 9, right: 9, width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' },
+
+  rankCard:    { borderRadius: 12, paddingHorizontal: 11, paddingVertical: 9, marginBottom: 8 },
+  rankEyebrow: { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 1.2, marginBottom: 3 },
+  rankValue:   { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.3 },
+
+  // Focused view
+  focusTitleRow:    { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 10, marginBottom: 6 },
+  focusTitle:       { fontFamily: 'BakbakOne-Regular', fontSize: 30, letterSpacing: -0.5, lineHeight: 34 },
+  focusPct:         { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
+  progressTrack:    { height: 4, borderRadius: 2, overflow: 'hidden', marginBottom: 6 },
+  progressFill:     { height: '100%', borderRadius: 2 },
+  focusFieldsCount: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, lineHeight: 16, marginBottom: 20 },
+
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   sectionLabel:    { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2 },
-  filledDot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' },
+  sectionCount:    { fontFamily: 'BakbakOne-Regular', fontSize: 9.5, letterSpacing: 0.5, marginLeft: 'auto' },
+  sectionSub:      { fontFamily: 'Jura-VariableFont_wght', fontSize: 12.5, lineHeight: 18, marginBottom: 10 },
   warnIcon:        { fontSize: 12, color: '#FFD60A' },
-  sectionSub:      { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 18 },
+  optionalBadge:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic' },
 
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 32 },
-  chip:  { borderRadius: 100, borderWidth: 1.5, paddingVertical: 11, paddingHorizontal: 18 },
-  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 0.8 },
+  chips:    { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 24 },
+  chip:     { borderRadius: 100, borderWidth: 1.5, paddingVertical: 9, paddingHorizontal: 15 },
+  chipText: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 0.7 },
 
   medicalInput: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 14,
-    lineHeight: 22,
-    minHeight: 90,
-    marginBottom: 32,
+    borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12,
+    fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 20,
+    minHeight: 80, marginBottom: 24,
   },
 
   consentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 32,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 24,
   },
-  consentLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.5, marginBottom: 4 },
-  consentSub:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 18 },
+  consentLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 0.4, marginBottom: 3 },
+  consentSub:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, lineHeight: 16 },
 
-  saveBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', borderWidth: 1.5, marginTop: 4 },
-  saveBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1 },
-
-  catSection: { borderRadius: 16, borderWidth: 1, marginBottom: 16, overflow: 'hidden' },
-  catHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16, paddingHorizontal: 18 },
-  catHeaderTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  catDividerLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 2 },
-  catSummary: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 4 },
-  catBody: { paddingHorizontal: 18, paddingBottom: 18, paddingTop: 4 },
-  optionalBadge:   { fontSize: 10, letterSpacing: 0.3, fontStyle: 'italic', marginLeft: 2 },
+  saveBtn:     { borderRadius: 100, paddingVertical: 15, alignItems: 'center', borderWidth: 1.5, marginTop: 4 },
+  saveBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 1 },
 });
