@@ -30,6 +30,9 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,10 +50,107 @@ import * as Haptics from 'expo-haptics';
 import type { BookingSheetAddOn, BookingSheetService } from './BookingSheet';
 import { StepProgress } from './BookingSheet';
 
-/** The group sheet has no add-ons screen of its own (add-ons are picked
- *  inline per service), so its flow is exactly the three shared steps. */
-type MultiBookingStep = 'when' | 'pay' | 'confirm';
-const MULTI_STEPS: MultiBookingStep[] = ['when', 'pay', 'confirm'];
+// LayoutAnimation is opt-in on old-architecture Android; same guard as the
+// other sheets so the extras blocks animate rather than snap there.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Matches BookingSheet/ModernBeautyCalendar timing so every expand in the
+// booking flow feels like one behaviour.
+const EXTRAS_ANIM = LayoutAnimation.create(
+  220,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity
+);
+
+/** Mirrors the single-service sheet: an optional extras screen first, then
+ *  the three shared steps. "addons" drops out entirely when no service in
+ *  the group offers any, so nobody is walked through an empty upsell page. */
+type MultiBookingStep = 'addons' | 'when' | 'pay' | 'confirm';
+
+/**
+ * One service's add-ons on the extras step, collapsed by default.
+ *
+ * The reason this isn't just a flat list: with several services each having
+ * several add-ons, an all-expanded step is a scroll of a dozen-plus cards
+ * before the client reaches anything they came for. Collapsed, the step is
+ * as long as the number of services, and opens only what's asked for.
+ */
+const ServiceAddOnsBlock: React.FC<{
+  serviceName: string;
+  addOns: BookingSheetAddOn[];
+  selected: Array<{ id: string | number; name: string; price: number }>;
+  selectedTotal: number;
+  onToggle: (addOn: BookingSheetAddOn) => void;
+  tokens: { text: string; sub: string; border: string; surface: string };
+  accentColor: string;
+}> = ({ serviceName, addOns, selected, selectedTotal, onToggle, tokens, accentColor }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.section}>
+      <TouchableOpacity
+        style={[styles.extrasHeader, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+        onPress={() => {
+          Haptics.selectionAsync().catch(() => {});
+          LayoutAnimation.configureNext(EXTRAS_ANIM);
+          setOpen(v => !v);
+        }}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`${serviceName} add-ons, ${selected.length} selected. Tap to ${open ? 'collapse' : 'expand'}.`}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.extrasServiceName, { color: tokens.text }]} numberOfLines={1}>{serviceName}</Text>
+          <Text style={[styles.extrasSummary, { color: selected.length > 0 ? accentColor : tokens.sub }]}>
+            {selected.length > 0
+              ? `${selected.length} selected · +£${selectedTotal.toFixed(2)}`
+              : `${addOns.length} available`}
+          </Text>
+        </View>
+        <Text style={[styles.extrasChevron, { color: tokens.sub }]}>{open ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+
+      {open && (
+        <View style={styles.addOnsWrap}>
+          {addOns.map(addOn => {
+            const isSelected = selected.some(a => a.id === addOn.id);
+            return (
+              <TouchableOpacity
+                key={addOn.id}
+                style={[
+                  styles.addOnCard,
+                  { borderColor: isSelected ? accentColor : tokens.border, backgroundColor: tokens.surface },
+                  isSelected && { borderWidth: 2 },
+                ]}
+                onPress={() => onToggle(addOn)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.addOnName, { color: tokens.text }]}>{addOn.name}</Text>
+                  {!!addOn.description && (
+                    <Text style={[styles.addOnDescription, { color: tokens.sub }]}>{addOn.description}</Text>
+                  )}
+                </View>
+                <Text style={[styles.addOnPrice, { color: accentColor }]}>+£{addOn.price}</Text>
+                <View
+                  style={[
+                    styles.addOnCheckbox,
+                    { borderColor: tokens.border },
+                    isSelected && { backgroundColor: accentColor, borderColor: accentColor },
+                  ]}
+                >
+                  {isSelected && <Text style={styles.addOnCheckmark}>✓</Text>}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
+};
 
 export interface MultiBookingSheetResult {
   items: Array<{
@@ -193,7 +293,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     if (!isVisible) return;
     setAddOnsByService({});
     setNotes('');
-    setStep('when');
+    setStep(services.some(s => (s.addOns?.length ?? 0) > 0) ? 'addons' : 'when');
     setIsDepositOnly(false);
     setAgreedToPolicy(false);
     setSeparateServiceKeys(new Set());
@@ -372,6 +472,28 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   // they shouldn't feel like different parts of the app. Scheduling stays
   // one step regardless of how many services or whether they're scheduled
   // together or separately, so the step count never varies with cart size.
+  // Any service offering extras at all. When nothing does, the extras step is
+  // skipped rather than shown empty.
+  const anyAddOns = useMemo(
+    () => services.some(s => (s.addOns?.length ?? 0) > 0),
+    [services]
+  );
+
+  // Every selected add-on across every service — shown on the extras step's
+  // button so the client sees what they've added before moving on.
+  const allAddOnsTotal = useMemo(
+    () =>
+      Object.values(addOnsByService)
+        .flat()
+        .reduce((sum, a) => sum + a.price, 0),
+    [addOnsByService]
+  );
+
+  const stepOrder = useMemo<MultiBookingStep[]>(
+    () => (anyAddOns ? ['addons', 'when', 'pay', 'confirm'] : ['when', 'pay', 'confirm']),
+    [anyAddOns]
+  );
+
   const stepBlocker = useMemo((): string | null => {
     // Checked on "when" (where it's fixable) AND "confirm" (where it's
     // committed), since a schedule can be invalidated after moving past it.
@@ -394,15 +516,17 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   }, []);
 
   const handleBack = useCallback(() => {
-    const i = MULTI_STEPS.indexOf(step);
-    if (i > 0) goToStep(MULTI_STEPS[i - 1]!);
-  }, [step, goToStep]);
+    const i = stepOrder.indexOf(step);
+    if (i > 0) goToStep(stepOrder[i - 1]!);
+  }, [step, stepOrder, goToStep]);
 
   const handleNext = useCallback(() => {
     if (stepBlocker) return; // guarded by disabling the button too
-    const i = MULTI_STEPS.indexOf(step);
-    if (i >= 0 && i < MULTI_STEPS.length - 1) goToStep(MULTI_STEPS[i + 1]!);
-  }, [step, stepBlocker, goToStep]);
+    const i = stepOrder.indexOf(step);
+    if (i >= 0 && i < stepOrder.length - 1) goToStep(stepOrder[i + 1]!);
+  }, [step, stepOrder, stepBlocker, goToStep]);
+
+  const isFirstStep = stepOrder.indexOf(step) === 0;
 
   const handleSubmit = useCallback(() => {
     if (!submitReady) return;
@@ -438,7 +562,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
           <SafeAreaView style={styles.container}>
             <View style={[styles.header, { borderBottomColor: tokens.border }]}>
-              {step !== 'when' && (
+              {!isFirstStep && (
                 <TouchableOpacity
                   style={styles.backButton}
                   onPress={handleBack}
@@ -472,6 +596,37 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
             />
 
             <ScrollView ref={scrollRef} style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+              {step === 'addons' && (
+              <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Any extras?</Text>
+
+              {/* One collapsible block per service rather than every add-on
+                  for every service expanded at once — with several services
+                  that was the wall of upsells this step exists to tame. Each
+                  starts shut, showing what's picked, so the page length is
+                  the number of SERVICES, not the number of add-ons. */}
+              {services.map(service => {
+                const serviceKey = serviceKeyOf(service);
+                const addOns = service.addOns ?? [];
+                if (addOns.length === 0) return null;
+                const selected = addOnsByService[serviceKey] ?? [];
+                const selectedTotal = selected.reduce((sum, a) => sum + a.price, 0);
+                return (
+                  <ServiceAddOnsBlock
+                    key={serviceKey}
+                    serviceName={service.name}
+                    addOns={addOns}
+                    selected={selected}
+                    selectedTotal={selectedTotal}
+                    onToggle={addOn => toggleAddOn(serviceKey, addOn)}
+                    tokens={tokens}
+                    accentColor={adaptiveAccentColor}
+                  />
+                );
+              })}
+              </>
+              )}
+
               {step === 'when' && (
               <>
               <Text style={[styles.stepQuestion, { color: tokens.text }]}>When works for you?</Text>
@@ -506,7 +661,6 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 </View>
                 {services.map(service => {
                   const serviceKey = serviceKeyOf(service);
-                  const addOns = service.addOns ?? [];
                   const selected = addOnsByService[serviceKey] ?? [];
                   const isSeparate = separateServiceKeys.has(serviceKey);
                   return (
@@ -535,40 +689,20 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                         <Text style={[styles.servicePrice, { color: adaptiveAccentColor }]}>£{service.price}</Text>
                       </View>
 
-                      {addOns.length > 0 && (
+                      {/* Read-only here — picking happens on the extras step,
+                          which owns that decision. Showing it keeps the
+                          summary honest without re-opening the choice inside
+                          a step that's asking about timing. */}
+                      {selected.length > 0 && (
                         <View style={styles.addOnsWrap}>
-                          {addOns.map(addOn => {
-                            const isSelected = selected.some(a => a.id === addOn.id);
-                            return (
-                              <TouchableOpacity
-                                key={addOn.id}
-                                style={[
-                                  styles.addOnCard,
-                                  { borderColor: isSelected ? adaptiveAccentColor : tokens.border, backgroundColor: tokens.surface },
-                                  isSelected && { borderWidth: 2 },
-                                ]}
-                                onPress={() => toggleAddOn(serviceKey, addOn)}
-                                activeOpacity={0.8}
-                              >
-                                <View style={{ flex: 1 }}>
-                                  <Text style={[styles.addOnName, { color: tokens.text }]}>{addOn.name}</Text>
-                                  {!!addOn.description && (
-                                    <Text style={[styles.addOnDescription, { color: tokens.sub }]}>{addOn.description}</Text>
-                                  )}
-                                </View>
-                                <Text style={[styles.addOnPrice, { color: adaptiveAccentColor }]}>+£{addOn.price}</Text>
-                                <View
-                                  style={[
-                                    styles.addOnCheckbox,
-                                    { borderColor: tokens.border },
-                                    isSelected && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
-                                  ]}
-                                >
-                                  {isSelected && <Text style={styles.addOnCheckmark}>✓</Text>}
-                                </View>
-                              </TouchableOpacity>
-                            );
-                          })}
+                          {selected.map(a => (
+                            <View key={a.id} style={styles.addOnSummaryRow}>
+                              <Text style={[styles.addOnSummaryName, { color: tokens.sub }]} numberOfLines={1}>
+                                + {a.name}
+                              </Text>
+                              <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>+£{a.price}</Text>
+                            </View>
+                          ))}
                         </View>
                       )}
                     </View>
@@ -926,6 +1060,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     ? stepBlocker
                     : step === 'confirm'
                     ? `Book All ${services.length} Service${services.length === 1 ? '' : 's'}`
+                    : step === 'addons' && allAddOnsTotal > 0
+                    ? `Continue • +£${allAddOnsTotal.toFixed(2)}`
                     : 'Continue'}
                 </Text>
               </TouchableOpacity>
@@ -999,6 +1135,19 @@ const styles = StyleSheet.create({
   scheduleRowTime: { fontSize: 13, fontWeight: '600' },
   notFoundText: { fontSize: 13, lineHeight: 18, marginTop: 10 },
   changeLink:     { fontSize: 13, fontWeight: '700' },
+  // ── Extras step ─────────────────────────────────────────────────────
+  extrasHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
+    paddingVertical: 13, paddingHorizontal: 14,
+  },
+  extrasServiceName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+  extrasSummary:     { fontSize: 12, marginTop: 3 },
+  extrasChevron:     { fontSize: 10, marginLeft: 12 },
+  addOnSummaryRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  addOnSummaryName:  { fontSize: 13, flex: 1, marginRight: 10 },
+  addOnSummaryPrice: { fontSize: 13 },
+
   backButton:     { width: 28, alignItems: 'flex-start', justifyContent: 'center', marginRight: 4 },
   backButtonText: { fontSize: 28, fontWeight: '300', lineHeight: 28 },
   // The one question each step asks — matches BookingSheet's own stepQuestion.

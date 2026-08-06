@@ -5,7 +5,7 @@
 
 #generated
 
-**28 service modules.** Curated overview: [[Services]].
+**27 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
@@ -15,9 +15,6 @@
 
 ### `src/services/AvailabilityService.ts`
 `AvailabilityService` · `parseDurationToMinutes`
-
-### `src/services/becca/capabilities/client 2.ts`
-`CLIENT_CAPABILITIES`
 
 ### `src/services/becca/capabilities/client.ts`
 `CLIENT_CAPABILITIES`

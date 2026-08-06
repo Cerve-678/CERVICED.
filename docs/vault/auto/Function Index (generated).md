@@ -5,7 +5,7 @@
 
 #generated
 
-**1451 functions** across **184 files**.
+**1451 functions** across **183 files**.
 
 ### `src/components/` (30)
 - `AppBackground.tsx` — AppBackground
@@ -24,7 +24,7 @@
 - `LocationModal.tsx` — chipStyles · createStyles · LocationModal · styles
 - `MasonryGrid.tsx` — and · columns · MasonryGridInner
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder
-- `MultiBookingSheet.tsx` — depositPolicyArg · goToStep · groupRangeText · groupServices · handleBack · handleNext · handleSubmit · **MultiBookingSheet** · separateServicesList · servicesTotal · stepBlocker · toggleAddOn · toggleSeparate · tokens · totalAddOnsPrice
+- `MultiBookingSheet.tsx` — allAddOnsTotal · anyAddOns · depositPolicyArg · goToStep · groupRangeText · groupServices · handleBack · handleNext · handleSubmit · **MultiBookingSheet** · separateServicesList · servicesTotal · stepBlocker · toggleAddOn · toggleSeparate · tokens · totalAddOnsPrice
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `PromoCodeRow.tsx` — handleApplyPromoPress
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**
@@ -176,8 +176,7 @@
 - `registry.ts` — **capabilitiesFor** · **getCapability** · **toToolSchema**
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
-### `src/services/becca/capabilities/` (3)
-- `client 2.ts` — soleUpcoming · sortUpcoming
+### `src/services/becca/capabilities/` (2)
 - `client.ts` — soleUpcoming · sortUpcoming
 - `shared.ts` — **askChip** · **chip** · **goodNews** · **money** · **navChip** · pick · **providerFromDb** · **resolveProviderDbId** · **softMiss**
 
