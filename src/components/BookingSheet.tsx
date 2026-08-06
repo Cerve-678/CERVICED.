@@ -61,6 +61,63 @@ const formatShortDate = (dateStr: string): string =>
     weekday: 'short', day: 'numeric', month: 'short',
   });
 
+type BookingStep = 'addons' | 'when' | 'pay' | 'confirm';
+
+/** The three steps the progress dots count. "addons" is deliberately absent:
+ *  it's conditional on the service having any, so including it would make the
+ *  same booking show a different number of steps depending on the service. */
+const PROGRESS_STEPS: { key: BookingStep; label: string }[] = [
+  { key: 'when', label: 'When' },
+  { key: 'pay', label: 'Pay' },
+  { key: 'confirm', label: 'Confirm' },
+];
+
+/** Slim progress indicator — shows where you are and how much is left, which
+ *  is the thing a multi-step flow has to answer to not feel longer than a
+ *  single scroll. */
+const StepProgress: React.FC<{
+  current: BookingStep;
+  accentColor: string;
+  subColor: string;
+  borderColor: string;
+}> = ({ current, accentColor, subColor, borderColor }) => {
+  const activeIndex = PROGRESS_STEPS.findIndex(s => s.key === current);
+  if (activeIndex < 0) return null; // "addons" — no progress shown yet
+  return (
+    <View style={styles.progressRow}>
+      {PROGRESS_STEPS.map((s, i) => {
+        const done = i < activeIndex;
+        const active = i === activeIndex;
+        return (
+          <React.Fragment key={s.key}>
+            {i > 0 && (
+              <View style={[styles.progressBar, { backgroundColor: done || active ? accentColor : borderColor }]} />
+            )}
+            <View style={styles.progressStep}>
+              <View
+                style={[
+                  styles.progressDot,
+                  { borderColor: done || active ? accentColor : borderColor },
+                  (done || active) && { backgroundColor: accentColor },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.progressLabel,
+                  { color: active ? accentColor : subColor },
+                  active && { fontWeight: '700' },
+                ]}
+              >
+                {s.label}
+              </Text>
+            </View>
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+};
+
 /**
  * An optional section that stays shut until the client asks for it.
  *
@@ -239,15 +296,18 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   // mode="add" local promo preview (mode="edit" uses the real cart state via props)
   const [localPromo, setLocalPromo] = useState<DbPromotion | undefined>(undefined);
 
-  // Two-step flow: pick add-ons first (its own screen, like the old
-  // AddOnsModal), then "Next" into the booking screen — add-ons, notes,
-  // payment and promo, and where the picked add-ons show up as a read-only
-  // summary instead of the interactive list. Services with no add-ons skip
-  // straight to "book" — there's nothing to pick.
-  const [step, setStep] = useState<'addons' | 'book'>('book');
+  // Guided flow. Each step asks for one kind of thing, so the client is never
+  // reading a scroll of seven competing sections:
+  //   addons  — optional extras (skipped entirely when the service has none)
+  //   when    — date & time, plus the consultation's own date & time
+  //   pay     — deposit vs full, promo code, notes
+  //   confirm — the full booking read back, and the terms gate
+  // "addons" stays first and stays conditional, exactly as before.
+  const [step, setStep] = useState<BookingStep>('when');
 
   const resolvedOnce = useRef(false);
   const depositFetched = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
   useEffect(() => {
@@ -261,7 +321,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setLocalPromo(undefined);
     setConsultationDate('');
     setConsultationTime('');
-    setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'book');
+    setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'when');
     resolvedOnce.current = false;
     depositFetched.current = false;
     consultationResolvedOnce.current = false;
@@ -392,6 +452,67 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   const consultationScheduleMissing = !!consultationRequired && (!consultationDate || !consultationTime);
 
+  // ── Step navigation ────────────────────────────────────────────────────
+  // The order is computed, not hardcoded, so "addons" can drop out entirely
+  // for a service that has none without every back/next call having to know
+  // about that special case.
+  // Reads service?.addOns rather than the `hasAddOns` const below, which is
+  // declared after this component's early `return null` and so can't be a
+  // hook dependency.
+  const stepOrder = useMemo<BookingStep[]>(
+    () =>
+      (service?.addOns?.length ?? 0) > 0
+        ? ['addons', 'when', 'pay', 'confirm']
+        : ['when', 'pay', 'confirm'],
+    [service?.addOns?.length]
+  );
+
+  // What's missing before this step can be left. null = good to continue.
+  // Each step gates only its OWN requirements, so the client is told what's
+  // wrong while they're still looking at it, instead of at the very end.
+  const stepBlocker = useMemo((): string | null => {
+    // Scheduling is checked on "when" (where it's fixable) AND on "confirm"
+    // (where it's committed). Re-checking at the end isn't redundant: the
+    // date/time can be cleared after the client has already moved past that
+    // step, which would otherwise leave an enabled "Add to Cart" that
+    // silently does nothing because handleSubmit's own guard rejects it.
+    if (step === 'when' || step === 'confirm') {
+      if (!selectedDate || !selectedTime) return 'Choose a date and time';
+      if (consultationScheduleMissing) return 'Choose a consultation time';
+    }
+    if (step === 'confirm' && !agreedToPolicy) return 'Agree to the terms to continue';
+    return null;
+  }, [step, selectedDate, selectedTime, consultationScheduleMissing, agreedToPolicy]);
+
+  const goToStep = useCallback((next: BookingStep) => {
+    Haptics.selectionAsync().catch(() => {});
+    setStep(next);
+    // A step change is a new screen — start it at the top, or the client
+    // lands mid-content carried over from the previous step's scroll.
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  const handleBack = useCallback(() => {
+    const i = stepOrder.indexOf(step);
+    if (i > 0) goToStep(stepOrder[i - 1]!);
+  }, [step, stepOrder, goToStep]);
+
+  const handleNext = useCallback(() => {
+    if (stepBlocker) return; // guarded by disabling the button too
+    const i = stepOrder.indexOf(step);
+    if (i >= 0 && i < stepOrder.length - 1) goToStep(stepOrder[i + 1]!);
+  }, [step, stepOrder, stepBlocker, goToStep]);
+
+  const isFirstStep = stepOrder.indexOf(step) === 0;
+
+  // A scheduling blocker reached on the confirm step is the one case where the
+  // button must stay tappable rather than disabled: what needs fixing lives on
+  // an earlier step, so greying it out here would strand the client with no
+  // way forward. It sends them back to "when" instead. (Terms, by contrast,
+  // IS fixable right here, so that one stays disabled as normal.)
+  const schedulingFixableElsewhere =
+    step === 'confirm' && (!selectedDate || !selectedTime || consultationScheduleMissing);
+
   const handleSubmit = useCallback(() => {
     if (!service) return;
     if (consultationScheduleMissing) return; // guarded by disabling the button too
@@ -426,10 +547,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
           <SafeAreaView style={styles.container}>
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
-          {step === 'book' && hasAddOns && (
+          {!isFirstStep && (
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => setStep('addons')}
+              onPress={handleBack}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={[styles.backButtonText, { color: adaptiveAccentColor }]}>‹</Text>
@@ -437,7 +558,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           )}
           <View style={{ flex: 1 }}>
             <Text style={[styles.headerTitle, { color: tokens.text }]}>
-              {step === 'addons' ? 'Choose Add-ons' : mode === 'add' ? 'Book Service' : 'Edit Booking'}
+              {step === 'addons'
+                ? 'Choose Add-ons'
+                : mode === 'add' ? 'Book Service' : 'Edit Booking'}
             </Text>
             <Text style={[styles.headerSubtitle, { color: tokens.sub }]}>
               {service.name} • £{service.price}
@@ -452,7 +575,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+        <StepProgress
+          current={step}
+          accentColor={adaptiveAccentColor}
+          subColor={tokens.sub}
+          borderColor={tokens.border}
+        />
+
+        <ScrollView ref={scrollRef} style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
           {step === 'addons' ? (
             <View style={styles.section}>
               {availableAddOns.map(addOn => {
@@ -488,18 +618,15 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 );
               })}
             </View>
-          ) : (
+          ) : step === 'when' ? (
             <>
-              {/* First of the two groups — see PAYMENT & DETAILS below. */}
-              <Text style={[styles.groupHeading, styles.groupHeadingFirst, { color: tokens.sub }]}>
-                YOUR APPOINTMENT
-              </Text>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>When works for you?</Text>
 
               {hasAddOns && (
                 <View style={styles.section}>
                   <View style={styles.summaryHeaderRow}>
                     <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add-ons</Text>
-                    <TouchableOpacity onPress={() => setStep('addons')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <TouchableOpacity onPress={() => goToStep('addons')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change</Text>
                     </TouchableOpacity>
                   </View>
@@ -568,33 +695,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   {...(uuidServiceId ? { serviceId: uuidServiceId } : {})}
                 />
               </View>
-
-              <OptionalSection
-                label="Add notes"
-                summary={notes.trim() ? notes.trim() : undefined}
-                tokens={tokens}
-                accentColor={adaptiveAccentColor}
-              >
-                <TextInput
-                  style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
-                  value={notes}
-                  onChangeText={setNotes}
-                  placeholder="Add special requests, allergies, or preferences..."
-                  placeholderTextColor={tokens.sub}
-                  multiline
-                  numberOfLines={4}
-                  maxLength={500}
-                />
-                <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
-              </OptionalSection>
-
-              {/* Second of the two groups. Everything above is about the
-                  appointment itself; everything below is about paying for
-                  it. Two headings give the eye somewhere to rest in what
-                  was otherwise seven equally-weighted sections in a row. */}
-              <Text style={[styles.groupHeading, { color: tokens.sub, borderTopColor: tokens.border }]}>
-                PAYMENT & DETAILS
-              </Text>
+            </>
+          ) : step === 'pay' ? (
+            <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>How would you like to pay?</Text>
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
@@ -673,10 +777,41 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </OptionalSection>
               )}
 
+              <OptionalSection
+                label="Add notes"
+                summary={notes.trim() ? notes.trim() : undefined}
+                tokens={tokens}
+                accentColor={adaptiveAccentColor}
+              >
+                <TextInput
+                  style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Add special requests, allergies, or preferences..."
+                  placeholderTextColor={tokens.sub}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={500}
+                />
+                <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
+              </OptionalSection>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Does this look right?</Text>
+
               {service && (
                 <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Booking Summary</Text>
-                  <View style={styles.summaryItemRow}>
+                  <View style={styles.summaryHeaderRow}>
+                    <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Booking Summary</Text>
+                    {/* The confirm step is where a mistake gets noticed, so
+                        it has to offer a way back to the step that owns it
+                        rather than making the client hunt for the ‹ button. */}
+                    <TouchableOpacity onPress={() => goToStep('when')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change time</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={[styles.summaryItemRow, { marginTop: 12 }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.summaryItemName, { color: tokens.text }]}>{service.name}</Text>
                       <Text style={[styles.summaryItemDateTime, { color: tokens.sub }]}>
@@ -752,7 +887,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           {step === 'addons' ? (
             <TouchableOpacity
               style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }]}
-              onPress={() => setStep('book')}
+              onPress={() => goToStep('when')}
               activeOpacity={0.8}
             >
               <Text style={styles.submitButtonText}>
@@ -761,28 +896,45 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             </TouchableOpacity>
           ) : (
             <>
-              {/* The single "what am I paying" figure in the sheet. On a
-                  deposit booking this is the deposit, not the service total,
-                  so it must not be labelled "Total" — the rest of the service
-                  price is still owed to the provider at the appointment. */}
+              {/* The running total rides along on every step so the price is
+                  never a surprise revealed only at the end. On a deposit
+                  booking this is the deposit, not the service total, so it
+                  must not be labelled "Total" — the rest is still owed to
+                  the provider at the appointment. */}
               <View style={styles.totalRow}>
                 <Text style={[styles.totalLabel, { color: tokens.text }]}>
                   {isDepositOnly ? 'Deposit due now' : 'Total'}
                 </Text>
                 <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
               </View>
+
+              {/* On the last step this commits the booking; before that it
+                  just advances. Either way the label says what will happen,
+                  and a blocker replaces it with what's missing. */}
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, (consultationScheduleMissing || !agreedToPolicy) && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
+                style={[
+                  styles.submitButton,
+                  { backgroundColor: adaptiveAccentColor },
+                  !!stepBlocker && styles.submitButtonDisabled,
+                ]}
+                onPress={
+                  schedulingFixableElsewhere
+                    ? () => goToStep('when')
+                    : step === 'confirm'
+                    ? handleSubmit
+                    : handleNext
+                }
                 activeOpacity={0.8}
-                disabled={consultationScheduleMissing || !agreedToPolicy}
+                disabled={!!stepBlocker && !schedulingFixableElsewhere}
               >
                 <Text style={styles.submitButtonText}>
-                  {consultationScheduleMissing
-                    ? 'Choose a consultation time'
-                    : !agreedToPolicy
-                    ? 'Agree to terms to continue'
-                    : mode === 'add' ? 'Add to Cart' : 'Save Changes'}
+                  {schedulingFixableElsewhere
+                    ? 'Choose a date and time'
+                    : stepBlocker
+                    ? stepBlocker
+                    : step === 'confirm'
+                    ? (mode === 'add' ? 'Add to Cart' : 'Save Changes')
+                    : 'Continue'}
                 </Text>
               </TouchableOpacity>
             </>
@@ -837,15 +989,23 @@ const styles = StyleSheet.create({
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   resolvingText: { fontSize: 13 },
   consultationNotice: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
-  // Group heading — smaller and quieter than a sectionTitle. It separates
-  // the two halves of the sheet without competing with the section titles
-  // inside them.
-  groupHeading: {
-    fontSize: 11, fontWeight: '700', letterSpacing: 0.8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 18, marginBottom: 16,
+  // The one question each step is asking. Sets the step's purpose before any
+  // controls appear, so the client reads an intent rather than a form.
+  stepQuestion: {
+    fontFamily: 'BakbakOne-Regular', fontSize: 20,
+    letterSpacing: -0.3, marginBottom: 22,
   },
-  groupHeadingFirst: { borderTopWidth: 0, paddingTop: 0 },
+
+  // ── Step progress ───────────────────────────────────────────────────
+  progressRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 2,
+  },
+  progressStep:  { alignItems: 'center', gap: 5 },
+  progressDot:   { width: 11, height: 11, borderRadius: 6, borderWidth: 1.5 },
+  progressLabel: { fontSize: 10, fontWeight: '500' },
+  // Sits level with the dots, not the labels below them.
+  progressBar:   { height: 1.5, width: 34, marginHorizontal: 7, marginBottom: 15 },
 
   // Collapsed optional section — deliberately lighter than a sectionTitle so
   // the required steps stay visually dominant.

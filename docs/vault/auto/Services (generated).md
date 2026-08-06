@@ -14,7 +14,7 @@
 `api`
 
 ### `src/services/AvailabilityService.ts`
-`AvailabilityService`
+`AvailabilityService` · `parseDurationToMinutes`
 
 ### `src/services/becca/capabilities/client 2.ts`
 `CLIENT_CAPABILITIES`
