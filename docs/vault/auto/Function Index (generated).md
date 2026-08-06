@@ -5,7 +5,7 @@
 
 #generated
 
-**1447 functions** across **184 files**.
+**1451 functions** across **184 files**.
 
 ### `src/components/` (30)
 - `AppBackground.tsx` — AppBackground
@@ -24,7 +24,7 @@
 - `LocationModal.tsx` — chipStyles · createStyles · LocationModal · styles
 - `MasonryGrid.tsx` — and · columns · MasonryGridInner
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder
-- `MultiBookingSheet.tsx` — depositPolicyArg · groupRangeText · groupServices · handleSubmit · **MultiBookingSheet** · separateServicesList · servicesTotal · toggleAddOn · toggleSeparate · tokens · totalAddOnsPrice
+- `MultiBookingSheet.tsx` — depositPolicyArg · goToStep · groupRangeText · groupServices · handleBack · handleNext · handleSubmit · **MultiBookingSheet** · separateServicesList · servicesTotal · stepBlocker · toggleAddOn · toggleSeparate · tokens · totalAddOnsPrice
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `PromoCodeRow.tsx` — handleApplyPromoPress
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**

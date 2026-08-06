@@ -43,7 +43,14 @@ import {
 } from '../services/databaseService';
 import { buildThemeTokens, withAlpha } from '../constants/providerThemes';
 import { logger } from '../utils/logger';
+import * as Haptics from 'expo-haptics';
 import type { BookingSheetAddOn, BookingSheetService } from './BookingSheet';
+import { StepProgress } from './BookingSheet';
+
+/** The group sheet has no add-ons screen of its own (add-ons are picked
+ *  inline per service), so its flow is exactly the three shared steps. */
+type MultiBookingStep = 'when' | 'pay' | 'confirm';
+const MULTI_STEPS: MultiBookingStep[] = ['when', 'pay', 'confirm'];
 
 export interface MultiBookingSheetResult {
   items: Array<{
@@ -148,6 +155,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
   const [addOnsByService, setAddOnsByService] = useState<Record<string, SelectedAddOn[]>>({});
   const [notes, setNotes] = useState('');
+  const [step, setStep] = useState<MultiBookingStep>('when');
   const [isDepositOnly, setIsDepositOnly] = useState(false);
   const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [depositPolicy, setDepositPolicy] = useState<ProviderDepositPolicy | undefined>(undefined);
@@ -176,6 +184,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const separateResolvedRef = useRef<Set<string>>(new Set());
 
   const depositFetched = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Reset local state each time the sheet opens. Unlike BookingSheet,
   // `services` is set once by the caller right before opening and never
@@ -184,6 +193,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     if (!isVisible) return;
     setAddOnsByService({});
     setNotes('');
+    setStep('when');
     setIsDepositOnly(false);
     setAgreedToPolicy(false);
     setSeparateServiceKeys(new Set());
@@ -356,6 +366,44 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const scheduleReady = groupReady && separateReady;
   const submitReady = scheduleReady && agreedToPolicy;
 
+  // ── Guided flow ────────────────────────────────────────────────────────
+  // Same three steps as the single-service BookingSheet, deliberately — the
+  // two sheets are the same task with a different number of services, so
+  // they shouldn't feel like different parts of the app. Scheduling stays
+  // one step regardless of how many services or whether they're scheduled
+  // together or separately, so the step count never varies with cart size.
+  const stepBlocker = useMemo((): string | null => {
+    // Checked on "when" (where it's fixable) AND "confirm" (where it's
+    // committed), since a schedule can be invalidated after moving past it.
+    if (step === 'when' || step === 'confirm') {
+      if (!scheduleReady) return 'Choose a date for each service';
+    }
+    if (step === 'confirm' && !agreedToPolicy) return 'Agree to the terms to continue';
+    return null;
+  }, [step, scheduleReady, agreedToPolicy]);
+
+  // A scheduling blocker on confirm keeps the button tappable and routes back
+  // to "when" — what needs fixing lives on an earlier step, so disabling it
+  // here would be a dead end. Terms is fixable in place, so it stays disabled.
+  const schedulingFixableElsewhere = step === 'confirm' && !scheduleReady;
+
+  const goToStep = useCallback((next: MultiBookingStep) => {
+    Haptics.selectionAsync().catch(() => {});
+    setStep(next);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  const handleBack = useCallback(() => {
+    const i = MULTI_STEPS.indexOf(step);
+    if (i > 0) goToStep(MULTI_STEPS[i - 1]!);
+  }, [step, goToStep]);
+
+  const handleNext = useCallback(() => {
+    if (stepBlocker) return; // guarded by disabling the button too
+    const i = MULTI_STEPS.indexOf(step);
+    if (i >= 0 && i < MULTI_STEPS.length - 1) goToStep(MULTI_STEPS[i + 1]!);
+  }, [step, stepBlocker, goToStep]);
+
   const handleSubmit = useCallback(() => {
     if (!submitReady) return;
     // One batch id per submission, only when the grouped bucket actually has
@@ -390,6 +438,15 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
           <SafeAreaView style={styles.container}>
             <View style={[styles.header, { borderBottomColor: tokens.border }]}>
+              {step !== 'when' && (
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={handleBack}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.backButtonText, { color: adaptiveAccentColor }]}>‹</Text>
+                </TouchableOpacity>
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={[styles.headerTitle, { color: tokens.text }]}>
                   Book {services.length} Service{services.length === 1 ? '' : 's'}
@@ -407,7 +464,18 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+            <StepProgress
+              current={step}
+              accentColor={adaptiveAccentColor}
+              subColor={tokens.sub}
+              borderColor={tokens.border}
+            />
+
+            <ScrollView ref={scrollRef} style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+              {step === 'when' && (
+              <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>When works for you?</Text>
+
               <View style={styles.section}>
                 <View style={styles.summaryHeaderRow}>
                   <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Services</Text>
@@ -575,6 +643,13 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 );
               })}
 
+              </>
+              )}
+
+              {step === 'pay' && (
+              <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>How would you like to pay?</Text>
+
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Notes</Text>
                 <TextInput
@@ -641,9 +716,22 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   </View>
                 )}
               </View>
+              </>
+              )}
+
+              {step === 'confirm' && (
+              <>
+              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Does this look right?</Text>
 
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Booking Summary</Text>
+                <View style={styles.summaryHeaderRow}>
+                  <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>Booking Summary</Text>
+                  {/* The confirm step is where a mistake gets noticed, so it
+                      offers a way back to the step that owns it. */}
+                  <TouchableOpacity onPress={() => goToStep('when')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>Change time</Text>
+                  </TouchableOpacity>
+                </View>
 
                 {/* Every back-to-back service lives inside ONE bordered box,
                     headed by a single link badge — the box is the thing that
@@ -784,13 +872,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     </View>
                   );
                 })}
-                <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
-                <View style={styles.summaryItemRow}>
-                  <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>
-                    {isDepositOnly ? 'Deposit Due Now' : 'Total'}
-                  </Text>
-                  <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-                </View>
+                {/* The amount charged now is NOT repeated here — the footer
+                    owns that number, so there's exactly one "what am I
+                    paying" figure in the sheet. */}
               </View>
 
               <TouchableOpacity
@@ -809,25 +893,40 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
                 </Text>
               </TouchableOpacity>
+              </>
+              )}
             </ScrollView>
 
             <View style={[styles.footer, { borderTopColor: tokens.border, backgroundColor: sheetBackground }]}>
+              {/* Rides along on every step so the price is never a surprise
+                  revealed only at the end. On a deposit booking this is the
+                  deposit, not the service total, so it isn't called "Total". */}
               <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: tokens.text }]}>Total</Text>
+                <Text style={[styles.totalLabel, { color: tokens.text }]}>
+                  {isDepositOnly ? 'Deposit due now' : 'Total'}
+                </Text>
                 <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
               </View>
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, !submitReady && styles.submitButtonDisabled]}
-                onPress={handleSubmit}
+                style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, !!stepBlocker && styles.submitButtonDisabled]}
+                onPress={
+                  schedulingFixableElsewhere
+                    ? () => goToStep('when')
+                    : step === 'confirm'
+                    ? handleSubmit
+                    : handleNext
+                }
                 activeOpacity={0.8}
-                disabled={!submitReady}
+                disabled={!!stepBlocker && !schedulingFixableElsewhere}
               >
                 <Text style={styles.submitButtonText}>
-                  {!scheduleReady
+                  {schedulingFixableElsewhere
                     ? 'Choose a date for each service'
-                    : !agreedToPolicy
-                    ? 'Agree to terms to continue'
-                    : `Book All ${services.length} Service${services.length === 1 ? '' : 's'}`}
+                    : stepBlocker
+                    ? stepBlocker
+                    : step === 'confirm'
+                    ? `Book All ${services.length} Service${services.length === 1 ? '' : 's'}`
+                    : 'Continue'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -899,6 +998,12 @@ const styles = StyleSheet.create({
   scheduleRowService: { fontSize: 14, flex: 1, marginRight: 10 },
   scheduleRowTime: { fontSize: 13, fontWeight: '600' },
   notFoundText: { fontSize: 13, lineHeight: 18, marginTop: 10 },
+  changeLink:     { fontSize: 13, fontWeight: '700' },
+  backButton:     { width: 28, alignItems: 'flex-start', justifyContent: 'center', marginRight: 4 },
+  backButtonText: { fontSize: 28, fontWeight: '300', lineHeight: 28 },
+  // The one question each step asks — matches BookingSheet's own stepQuestion.
+  stepQuestion:   { fontFamily: 'BakbakOne-Regular', fontSize: 20, letterSpacing: -0.3, marginBottom: 22 },
+
   notesInput: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 90, textAlignVertical: 'top' },
   characterCount: { fontSize: 11, textAlign: 'right', marginTop: 6 },
   paymentButtons: { flexDirection: 'row', gap: 10 },
@@ -931,8 +1036,6 @@ const styles = StyleSheet.create({
   summaryItemDateTime: { fontSize: 12, marginTop: 2 },
   summaryItemPrice: { fontSize: 14, fontWeight: '700' },
   summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
-  summaryTotalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: '700' },
-  summaryTotalValue: { fontFamily: 'BakbakOne-Regular', fontSize: 16, fontWeight: '700' },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 20 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   totalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },

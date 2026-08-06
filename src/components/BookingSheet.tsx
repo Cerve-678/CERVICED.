@@ -61,7 +61,7 @@ const formatShortDate = (dateStr: string): string =>
     weekday: 'short', day: 'numeric', month: 'short',
   });
 
-type BookingStep = 'addons' | 'when' | 'pay' | 'confirm';
+export type BookingStep = 'addons' | 'when' | 'pay' | 'confirm';
 
 /** The three steps the progress dots count. "addons" is deliberately absent:
  *  it's conditional on the service having any, so including it would make the
@@ -74,8 +74,9 @@ const PROGRESS_STEPS: { key: BookingStep; label: string }[] = [
 
 /** Slim progress indicator — shows where you are and how much is left, which
  *  is the thing a multi-step flow has to answer to not feel longer than a
- *  single scroll. */
-const StepProgress: React.FC<{
+ *  single scroll. Shared with MultiBookingSheet so the group flow reads as
+ *  the same task, not a different corner of the app. */
+export const StepProgress: React.FC<{
   current: BookingStep;
   accentColor: string;
   subColor: string;

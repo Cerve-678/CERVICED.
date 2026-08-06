@@ -79,7 +79,7 @@ Curated: [[Payments]] · **63 files**
 - `src/contexts/BookingContext.tsx` _(115)_
 - `src/services/bookingService.ts` _(108)_
 - `src/components/BookingSheet.tsx` _(101)_
-- `src/components/MultiBookingSheet.tsx` _(86)_
+- `src/components/MultiBookingSheet.tsx` _(88)_
 - `src/screens/client/BookingDetailScreen.tsx` _(74)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(70)_
 - `src/screens/shared/InfoRegScreen.tsx` _(60)_
@@ -210,7 +210,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **49 files**
 - … +19 more
 
 ## Waitlist
-Curated: [[Booking Flow]] · **32 files**
+Curated: [[Booking Flow]] · **33 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(213)_
 - `src/screens/client/BookingsScreen.tsx` _(59)_
 - `supabase/waitlist_holds.sql` _(54)_
@@ -237,11 +237,11 @@ Curated: [[Booking Flow]] · **32 files**
 - `src/screens/provider/ProviderBusinessEmailScreen.tsx` _(2)_
 - `src/services/AvailabilityService.ts` _(2)_
 - `supabase/provider_reminder_jobs.sql` _(2)_
+- `src/services/becca/types.ts` _(1)_
 - `supabase/address_release_notification.sql` _(1)_
 - `supabase/chat_two_way_fix.sql` _(1)_
 - `supabase/delete_account.sql` _(1)_
-- `supabase/fix_notifications_type_check.sql` _(1)_
-- … +2 more
+- … +3 more
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **104 files**
@@ -359,7 +359,7 @@ Curated: [[Payments]] · **40 files**
 - `src/services/bookingService.ts` _(8)_
 - `src/services/checkoutService.ts` _(8)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(8)_
-- `src/components/MultiBookingSheet.tsx` _(5)_
+- `src/components/MultiBookingSheet.tsx` _(6)_
 - `src/navigation/types.ts` _(5)_
 - `supabase/fix_hold_cart_booking_slots_missing_snapshots.sql` _(4)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(3)_
