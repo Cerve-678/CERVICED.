@@ -439,10 +439,26 @@ intent.
 
 ### Behavioural gaps
 
-- **No conversational memory across turns.** Each message resolves
-  independently, so "what about Sunday?" doesn't inherit the previous turn's
-  service. Deliberate — multi-turn state is what an LLM does far better than a
-  hand-rolled slot-filler, and a half-built version gets thrown away at step 6.
+- **Conversational memory: BUILT (2026-08-05).** Each turn returns a
+  `ConversationContext` the caller passes into the next (`converse()`, not
+  `respond()`). It carries service/provider/money entities, the last
+  capability, and the last shown provider list. Deliberately narrow: a
+  carry-over for reference resolution, not a transcript.
+  - **Date is never carried** — "what about Saturday?" is precisely a request
+    to CHANGE the date; a sticky one would make every later question silently
+    about the first day mentioned.
+  - **Bookings are never carried** — specific enough that a stale one
+    silently answering a new question is worse than asking.
+  - **The shown list survives turns that show nothing.** "find nails" → "any
+    free Saturday?" → "none" → "the first one" still points at what's on
+    screen.
+  - A **bare entity** ("nails", "under £40") routes to search: it's an answer
+    or a refinement, and nothing in it looks like a request. Detected by
+    stripping the entity's own words plus filler and requiring nothing
+    meaningful to remain — so "who's free this week" still matches on its
+    phrases instead.
+  - Reset on new chat, loading a past chat, deleting the active chat, and
+    clearing history — none of those continue the current thread.
 - **Image uploads still do nothing.** `ChatMessage.imageAnalysis` exists and is
   never populated (§3.3). The picker accepts a photo and the message reads
   "Sent an image."

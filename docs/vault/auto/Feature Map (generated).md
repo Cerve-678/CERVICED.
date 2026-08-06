@@ -317,10 +317,10 @@ Curated: [[Services]] · **31 files**
 - `src/services/becca/types.ts` _(28)_
 - `src/services/becca/engine.ts` _(26)_
 - `src/navigation/client/tabs/BeccaNavigator.tsx` _(20)_
+- `src/services/becca/capabilities/client.ts` _(20)_
 - `supabase/becca_chat_tables.sql` _(20)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(20)_
 - `src/services/beccaStorageService.ts` _(19)_
-- `src/services/becca/capabilities/client.ts` _(18)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(17)_
 - `src/navigation/types.ts` _(17)_
 - `src/components/ChatComponents.tsx` _(16)_
@@ -329,9 +329,9 @@ Curated: [[Services]] · **31 files**
 - `src/navigation/provider/ProviderTabNavigator.tsx` _(7)_
 - `src/navigation/client/ClientTabNavigator.tsx` _(6)_
 - `src/services/becca/capabilities/shared.ts` _(5)_
+- `src/services/becca/matcher.ts` _(5)_
 - `src/screens/shared/HelpCentreScreen.tsx` _(3)_
 - `src/services/becca/entityResolver.ts` _(3)_
-- `src/services/becca/matcher.ts` _(3)_
 - `src/services/userLearningService.ts` _(3)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(2)_
 - `src/services/databaseService.ts` _(2)_

@@ -384,17 +384,19 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // Hand the next turn everything it needs to resolve a follow-up: what was
   // being discussed, what was answered, and what was shown (so "the first
   // one" points at a real provider).
+  // A turn that shows no providers must NOT erase the list the user is still
+  // looking at: "find nails" -> "any free Saturday?" -> "none" -> "the first
+  // one" still refers to the results from two turns ago, which are what's
+  // actually on screen. Only a turn showing a NEW list replaces it.
+  const shown =
+    result.providers && result.providers.length > 0
+      ? result.providers.map((p) => ({ slug: p.id, displayName: p.name }))
+      : conversation?.lastProviders;
+
   lastContext = {
     entities,
     lastCapabilityId: capability.id,
-    ...(result.providers && result.providers.length > 0
-      ? {
-          lastProviders: result.providers.map((p) => ({
-            slug: p.id,
-            displayName: p.name,
-          })),
-        }
-      : {}),
+    ...(shown && shown.length > 0 ? { lastProviders: shown } : {}),
   };
 
   return message_(

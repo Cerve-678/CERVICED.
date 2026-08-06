@@ -440,6 +440,57 @@ const findProviders: Capability = {
   },
 };
 
+const pickFromList: Capability = {
+  id: "discover.pick",
+  hat: "client",
+  describe: "Tell me about the one you just showed me",
+  // Pointing at a result Becca just displayed. Requires a resolved provider,
+  // which for these phrasings only ever comes from the engine's ordinal
+  // resolution against the last shown list — so this can't fire cold.
+  phrases: [
+    "the first one", "the second one", "the third one", "the last one",
+    "that one", "this one", "first one", "second one", "number one",
+    "tell me about", "more about", "what about them", "who are they",
+    "book the first", "book that one", "go with", "i'll take",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+
+    // Prices and reviews are independent reads — fetch together.
+    const [rangeRes, reviewRes] = await Promise.allSettled([
+      provider.dbId ? getProviderPriceRanges([provider.dbId]) : Promise.resolve(new Map()),
+      provider.dbId ? getProviderReviews(provider.dbId) : Promise.resolve([]),
+    ]);
+
+    const range =
+      rangeRes.status === "fulfilled" && provider.dbId
+        ? rangeRes.value.get(provider.dbId)
+        : undefined;
+    const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
+
+    const bits: string[] = [];
+    if (range) bits.push(`${money(range.min)}–${money(range.max)}`);
+    if (reviews.length > 0) {
+      const avg = reviews.reduce((s, r) => s + (r.rating ?? 0), 0) / reviews.length;
+      bits.push(`${avg.toFixed(1)}\u2605 from ${reviews.length} review${reviews.length !== 1 ? "s" : ""}`);
+    }
+
+    return {
+      text:
+        `**${provider.displayName}**` +
+        (bits.length > 0 ? `\n\n${bits.join(" \u00b7 ")}` : ""),
+      suggestions: [
+        navChip("profile", "View profile", "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
+        askChip("free", "When are they free?", `When is ${provider.displayName} next free?`),
+      ],
+    };
+  },
+};
+
 const followUpDay: Capability = {
   id: "discover.followup_day",
   hat: "client",
@@ -1561,6 +1612,8 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   rebook,
   // Follow-ups first: both REQUIRE entities that usually arrive via carried
   // context, so they only score mid-conversation and can't win cold.
+  // Pointing at a shown result beats a generic follow-up question.
+  pickFromList,
   followUpDay,
   followUpPrice,
   findAvailable,

@@ -20,8 +20,12 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { BeccaScreenProps } from "../../navigation/types";
-import type { ChatMessage, ChatSuggestion } from "../../services/becca/types";
-import { respond as beccaRespond } from "../../services/becca/engine";
+import type {
+  ChatMessage,
+  ChatSuggestion,
+  ConversationContext,
+} from "../../services/becca/types";
+import { converse as beccaConverse } from "../../services/becca/engine";
 import beccaStorageService, {
   StoredSession,
   type BeccaHat,
@@ -134,6 +138,10 @@ export default function BeccaScreen({
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const historySheetRef = useRef<BottomSheet>(null);
+  // Conversation context carried between turns — reset on new chat and when
+  // loading a past chat, since neither continues the current thread.
+  const conversationRef = useRef<ConversationContext | undefined>(undefined);
+
   // "50%" — NOT "%50". The percent sign trails the number; @gorhom/bottom-sheet
   // silently fails to parse the reversed form, which is what made this sheet
   // behave like a full-height modal instead of snapping to half the screen.
@@ -364,12 +372,19 @@ export default function BeccaScreen({
     }
 
     setTimeout(async () => {
-      const response = await beccaRespond({
+      const { message: response, context } = await beccaConverse({
         message: textToSend || "What can you tell me about this?",
         hat: isProviderMode ? "provider" : "client",
         bookings,
         ...(user?.id ? { userId: user.id } : {}),
+        // What the last turn established. Without this every follow-up
+        // ("what about Saturday?", "the first one") arrives with no idea
+        // what came before and matches nothing.
+        ...(conversationRef.current ? { conversation: conversationRef.current } : {}),
       });
+      // A ref, not state: the next turn reads it inside this same async
+      // callback, and a state update wouldn't have landed by then.
+      conversationRef.current = context;
       setMessages((prev) => [...prev, response]);
       setIsTyping(false);
 
@@ -411,6 +426,7 @@ export default function BeccaScreen({
           setMessages([buildWelcomeMessage()]);
           setInputText("");
           setSelectedImage(null);
+          conversationRef.current = undefined;
         },
       },
     ]);
@@ -422,6 +438,8 @@ export default function BeccaScreen({
       const msgs = await beccaStorageService.loadMessages(session.id);
       setMessages(msgs.length > 0 ? msgs : [buildWelcomeMessage()]);
       setCurrentSessionId(session.id);
+      // A loaded chat is not a continuation of the current thread.
+      conversationRef.current = undefined;
     } catch (_) {
       showAlert("Error", "Could not load chat.");
     }
@@ -434,6 +452,7 @@ export default function BeccaScreen({
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
         setMessages([buildWelcomeMessage()]);
+        conversationRef.current = undefined;
       }
     } catch (_) {
       // Say so rather than leaving the row on screen with no explanation —
@@ -464,6 +483,7 @@ export default function BeccaScreen({
               setSessions([]);
               setCurrentSessionId(null);
               setMessages([buildWelcomeMessage()]);
+              conversationRef.current = undefined;
               historySheetRef.current?.close();
               Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Success,
