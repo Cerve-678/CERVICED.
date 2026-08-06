@@ -5,7 +5,7 @@
 
 #generated
 
-**27 service modules.** Curated overview: [[Services]].
+**28 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
@@ -16,6 +16,9 @@
 ### `src/services/AvailabilityService.ts`
 `AvailabilityService`
 
+### `src/services/becca/capabilities/client 2.ts`
+`CLIENT_CAPABILITIES`
+
 ### `src/services/becca/capabilities/client.ts`
 `CLIENT_CAPABILITIES`
 
@@ -23,7 +26,7 @@
 `PROVIDER_CAPABILITIES`
 
 ### `src/services/becca/capabilities/shared.ts`
-`askChip` · `chip` · `goodNews` · `money` · `navChip` · `providerFromDb` · `softMiss`
+`askChip` · `chip` · `goodNews` · `money` · `navChip` · `providerFromDb` · `resolveProviderDbId` · `softMiss`
 
 ### `src/services/becca/engine.ts`
 `confirmToken` · `converse` · `respond`

@@ -5,7 +5,7 @@
 
 #generated
 
-**1438 functions** across **183 files**.
+**1441 functions** across **184 files**.
 
 ### `src/components/` (30)
 - `AppBackground.tsx` — AppBackground
@@ -176,9 +176,10 @@
 - `registry.ts` — **capabilitiesFor** · **getCapability** · **toToolSchema**
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
-### `src/services/becca/capabilities/` (2)
+### `src/services/becca/capabilities/` (3)
+- `client 2.ts` — soleUpcoming · sortUpcoming
 - `client.ts` — soleUpcoming · sortUpcoming
-- `shared.ts` — **askChip** · **chip** · **goodNews** · **money** · **navChip** · pick · **providerFromDb** · **softMiss**
+- `shared.ts` — **askChip** · **chip** · **goodNews** · **money** · **navChip** · pick · **providerFromDb** · **resolveProviderDbId** · **softMiss**
 
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles

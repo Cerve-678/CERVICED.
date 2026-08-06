@@ -16,7 +16,11 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
@@ -34,12 +38,92 @@ import { logger } from '../utils/logger';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// LayoutAnimation is opt-in on old-architecture Android; without this the
+// optional sections snap open instead of animating there. Same guard as
+// ModernBeautyCalendar/HomeScreen — set here too so this sheet doesn't
+// depend on another module's import side effect.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Matches ModernBeautyCalendar's collapse timing so the two kinds of
+// expand/collapse in this sheet feel like one behaviour, not two.
+const OPTIONAL_ANIM = LayoutAnimation.create(
+  220,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity
+);
+
 // Matches MultiBookingSheet's own formatShortDate — same "Wed, 12 Aug" style
 // used everywhere else a booked date is summarised.
 const formatShortDate = (dateStr: string): string =>
   new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', {
     weekday: 'short', day: 'numeric', month: 'short',
   });
+
+/**
+ * An optional section that stays shut until the client asks for it.
+ *
+ * Notes and Promo Code are the two things in this sheet nobody has to fill
+ * in, but expanded they read as heavily as the required steps — a textarea
+ * and a text input demanding attention before you can reach the button.
+ * Collapsed to one line each, the default view shows only what's actually
+ * needed to book, and the capability is one tap away rather than gone.
+ *
+ * `summary` is what the row shows once there's something to show, so a
+ * filled-in section never hides its own content behind a generic label.
+ */
+const OptionalSection: React.FC<{
+  label: string;
+  summary?: string | undefined;
+  tokens: { text: string; sub: string; border: string; surface: string };
+  accentColor: string;
+  children: React.ReactNode;
+}> = ({ label, summary, tokens, accentColor, children }) => {
+  const [open, setOpen] = useState(false);
+
+  if (open) {
+    return (
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.summaryHeaderRow}
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            LayoutAnimation.configureNext(OPTIONAL_ANIM);
+            setOpen(false);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>{label}</Text>
+          <Text style={[styles.changeLink, { color: accentColor }]}>Done</Text>
+        </TouchableOpacity>
+        <View style={{ marginTop: 12 }}>{children}</View>
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[styles.optionalRow, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        LayoutAnimation.configureNext(OPTIONAL_ANIM);
+        setOpen(true);
+      }}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={summary ? `${label}: ${summary}. Tap to edit.` : `${label}. Tap to add.`}
+    >
+      <Text
+        style={[styles.optionalRowText, { color: summary ? tokens.text : tokens.sub }]}
+        numberOfLines={1}
+      >
+        {summary ?? label}
+      </Text>
+      <Text style={[styles.optionalRowAction, { color: accentColor }]}>{summary ? 'Edit' : 'Add'}</Text>
+    </TouchableOpacity>
+  );
+};
 
 export interface BookingSheetAddOn {
   id: string | number;
@@ -406,6 +490,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             </View>
           ) : (
             <>
+              {/* First of the two groups — see PAYMENT & DETAILS below. */}
+              <Text style={[styles.groupHeading, styles.groupHeadingFirst, { color: tokens.sub }]}>
+                YOUR APPOINTMENT
+              </Text>
+
               {hasAddOns && (
                 <View style={styles.section}>
                   <View style={styles.summaryHeaderRow}>
@@ -480,8 +569,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 />
               </View>
 
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Notes</Text>
+              <OptionalSection
+                label="Add notes"
+                summary={notes.trim() ? notes.trim() : undefined}
+                tokens={tokens}
+                accentColor={adaptiveAccentColor}
+              >
                 <TextInput
                   style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
                   value={notes}
@@ -493,7 +586,15 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   maxLength={500}
                 />
                 <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
-              </View>
+              </OptionalSection>
+
+              {/* Second of the two groups. Everything above is about the
+                  appointment itself; everything below is about paying for
+                  it. Two headings give the eye somewhere to rest in what
+                  was otherwise seven equally-weighted sections in a row. */}
+              <Text style={[styles.groupHeading, { color: tokens.sub, borderTopColor: tokens.border }]}>
+                PAYMENT & DETAILS
+              </Text>
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
@@ -551,8 +652,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   the cart itself has no promo code input; a code carried in
                   via CartItem.initialPromoCode still auto-applies there. */}
               {mode === 'add' && (
-                <View style={styles.section}>
-                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Promo Code</Text>
+                <OptionalSection
+                  label="Have a promo code?"
+                  summary={localPromo?.promo_code ? `Promo ${localPromo.promo_code} applied` : undefined}
+                  tokens={tokens}
+                  accentColor={adaptiveAccentColor}
+                >
                   <PromoCodeRow
                     providerKey={providerKey}
                     {...(localPromo !== undefined ? { appliedPromo: localPromo } : {})}
@@ -565,7 +670,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     subColor={tokens.sub}
                     accentColor={adaptiveAccentColor}
                   />
-                </View>
+                </OptionalSection>
               )}
 
               {service && (
@@ -602,13 +707,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       <Text style={[styles.summaryItemPrice, { color: adaptiveAccentColor }]}>£{consultationRequired.price.toFixed(2)}</Text>
                     </View>
                   )}
-                  <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
-                  {/* On a deposit booking the service total and the amount
-                      actually charged now are different numbers — show both,
-                      plus what's left to settle with the provider, rather
-                      than a single "Total" that means neither. */}
-                  {isDepositOnly ? (
+                  {/* On a deposit booking the service total and what's left to
+                      settle with the provider are context the footer can't
+                      show. The amount being charged now is NOT repeated here —
+                      the footer owns that number, so there's exactly one
+                      "what am I paying" figure in the sheet. */}
+                  {isDepositOnly && (
                     <>
+                      <View style={[styles.summaryDivider, { backgroundColor: tokens.border }]} />
                       <View style={styles.summaryAddOnRow}>
                         <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Service total</Text>
                         <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryServiceTotal.toFixed(2)}</Text>
@@ -617,16 +723,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         <Text style={[styles.summaryAddOnName, { color: tokens.sub }]}>Remaining at appointment</Text>
                         <Text style={[styles.summaryAddOnPrice, { color: tokens.sub }]}>£{summaryRemaining.toFixed(2)}</Text>
                       </View>
-                      <View style={styles.summaryItemRow}>
-                        <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>Deposit Due Now</Text>
-                        <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-                      </View>
                     </>
-                  ) : (
-                    <View style={styles.summaryItemRow}>
-                      <Text style={[styles.summaryTotalLabel, { color: tokens.text }]}>Total</Text>
-                      <Text style={[styles.summaryTotalValue, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-                    </View>
                   )}
                 </View>
               )}
@@ -664,8 +761,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             </TouchableOpacity>
           ) : (
             <>
+              {/* The single "what am I paying" figure in the sheet. On a
+                  deposit booking this is the deposit, not the service total,
+                  so it must not be labelled "Total" — the rest of the service
+                  price is still owed to the provider at the appointment. */}
               <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: tokens.text }]}>Total</Text>
+                <Text style={[styles.totalLabel, { color: tokens.text }]}>
+                  {isDepositOnly ? 'Deposit due now' : 'Total'}
+                </Text>
                 <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
               </View>
               <TouchableOpacity
@@ -734,6 +837,26 @@ const styles = StyleSheet.create({
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   resolvingText: { fontSize: 13 },
   consultationNotice: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
+  // Group heading — smaller and quieter than a sectionTitle. It separates
+  // the two halves of the sheet without competing with the section titles
+  // inside them.
+  groupHeading: {
+    fontSize: 11, fontWeight: '700', letterSpacing: 0.8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 18, marginBottom: 16,
+  },
+  groupHeadingFirst: { borderTopWidth: 0, paddingTop: 0 },
+
+  // Collapsed optional section — deliberately lighter than a sectionTitle so
+  // the required steps stay visually dominant.
+  optionalRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
+    paddingVertical: 13, paddingHorizontal: 14, marginBottom: 12,
+  },
+  optionalRowText:   { flex: 1, fontSize: 14, marginRight: 12 },
+  optionalRowAction: { fontSize: 13, fontWeight: '700' },
+
   notesInput: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 90, textAlignVertical: 'top' },
   characterCount: { fontSize: 11, textAlign: 'right', marginTop: 6 },
   paymentButtons: { flexDirection: 'row', gap: 10 },
@@ -755,8 +878,6 @@ const styles = StyleSheet.create({
   summaryItemDateTime: { fontSize: 12, marginTop: 2 },
   summaryItemPrice: { fontSize: 14, fontWeight: '700' },
   summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
-  summaryTotalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: '700' },
-  summaryTotalValue: { fontFamily: 'BakbakOne-Regular', fontSize: 16, fontWeight: '700' },
   submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
   submitButtonDisabled: { opacity: 0.5 },
   submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: '#fff', fontWeight: 'bold' },
