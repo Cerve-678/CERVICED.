@@ -4,7 +4,7 @@ Reference doc for the full booking lifecycle: availability, checkout, payment,
 fully-booked handling, reschedule, and cancellation. Written directly against
 the current code (not aspirational) — file:line references throughout so it
 stays checkable. See [WAITLIST.md](WAITLIST.md) for the waitlist system
-specifically, and `LOGIC.md`/`CLAUDE.md` for the rest of the app.
+specifically, and `APP_STATE.md`/`CLAUDE.md` for the rest of the app.
 
 ---
 

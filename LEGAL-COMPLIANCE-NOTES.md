@@ -59,7 +59,7 @@ verifies or guarantees that payment.
 
 ## 5. Age verification and cosmetic-treatment minimum ages
 
-Per `LOGIC.md`, sign-up enforces 16+ generally. Two separate legal questions
+Per `APP_STATE.md`, sign-up enforces 16+ generally. Two separate legal questions
 worth checking: (a) whether 16 is an appropriate age for entering a paid
 contract via the app under UK law, and (b) whether any service categories
 offered (fillers, botulinum toxin / "Botox"-type treatments, tattooing,

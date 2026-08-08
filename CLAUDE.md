@@ -2,10 +2,10 @@
 
 Read this at the start of every session. It's the standing bar for how work gets
 done in this repo — security, scalability, and functionality — not a description
-of what the app does (see `LOGIC.md` for that, though treat it as aspirational/
-stale, not authoritative — verify against actual code) and not a log of ongoing
-work (see the auto-memory `MEMORY.md`, which tracks facts, bugs, and decisions
-over time).
+of what the app does (see `APP_STATE.md` for that — a living doc, kept current,
+not a one-time snapshot; verify anything load-bearing against actual code
+regardless) and not a log of ongoing work (see the auto-memory `MEMORY.md`,
+which tracks facts, bugs, and decisions over time).
 
 CERVICED is a two-sided beauty & wellness marketplace (React Native/Expo +
 TypeScript, Supabase backend), UK-based (£ pricing), connecting clients with
@@ -203,13 +203,15 @@ agent — these are the standing rules of thumb for every session.
   still imports it, migrate that screen to `<ThemedBackground>` in the same
   pass instead of leaving the shim in place indefinitely.
 - **Root-level docs are already sprawled — don't add to it without
-  consolidating.** `LOGIC.md`, `FEATURE_LOGIC.md`, `FUTURE_LOGIC.md`,
-  `APP_OVERVIEW.md`, `APP_PROGRESS.md`, and `FINAL_STATUS.md` all describe
-  overlapping "what the app does / where it's headed" ground, and several are
-  already explicitly stale. Before adding a new top-level `*.md`, check
-  whether an existing doc should be updated instead — and if a new one is
-  genuinely warranted, note in it which older doc(s) it supersedes so the
-  next person isn't guessing which of six files is current.
+  consolidating.** `LOGIC.md`, `APP_OVERVIEW.md`, `APP_PROGRESS.md`, and
+  `FINAL_STATUS.md` used to describe overlapping "current app state" ground
+  and were consolidated into a single living doc, `APP_STATE.md`, on
+  2026-08-08 (the four originals were deleted). `FEATURE_LOGIC.md` (build
+  methodology) and `FUTURE_LOGIC.md` (roadmap) are a different genre and
+  remain separate on purpose. Before adding a new top-level `*.md`, check
+  whether `APP_STATE.md` or an existing doc should be updated instead — and
+  if a new one is genuinely warranted, note in it which older doc(s) it
+  supersedes so the next person isn't guessing which file is current.
 - **`docs/vault/auto/` is an auto-generated pipeline, not a place to
   hand-edit.** Files landing there as untracked `"<Name> 2.md"` duplicates
   (e.g. `BeautyProfileScreen 2.md`, `ExploreScreen 2.md`) are a generator
