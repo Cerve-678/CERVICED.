@@ -24,8 +24,11 @@ How a booking goes from cart to confirmed appointment.
 ## Weak spots → [[Client vs Server Authority]]
 - Prices are client-supplied (#1). Cap/auto-accept are client-enforced (#2). Status transitions are unconstrained (#3). Cancel/reschedule eligibility is client-computed (#5).
 
+## Cancelling a booking
+Its own note now, not just a bullet here → [[Cancellations]] (notice-window gate, deposit disclosure copy, provider-cancel → client-notify wiring).
+
 ## Connections
-[[Availability & Slots]] · [[Address Release]] · [[Payments]] · [[Notifications]] · [[Contexts]]
+[[Availability & Slots]] · [[Address Release]] · [[Payments]] · [[Notifications]] · [[Cancellations]] · [[Contexts]]
 
 ## Open questions
 - Group bookings: how is `group_booking_id` assigned and shown? #needs-verification
