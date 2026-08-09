@@ -32,7 +32,7 @@ import {
 // "no fade, avoid flicker on unrelated re-renders" intent as fadeDuration={0}.
 import { Image } from "expo-image";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -54,6 +54,7 @@ import { storage, STORAGE_KEYS } from "../../utils/storage";
 
 // Navigation types
 import { HomeStackParamList } from "../../navigation/types";
+import { navigationRef } from "../../navigation/navigationRef";
 
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
@@ -75,15 +76,17 @@ import {
   joinWaitlist,
   leaveWaitlist,
   type WaitlistEntry,
-  getProviderConsultationService,
-  getProviderIdsWithBookingHistory,
-  type ProviderConsultationService,
+  checkFollowNotifyEnabled,
+  setProviderFollowNotify,
 } from "../../services/databaseService";
 import userLearningService from "../../services/userLearningService";
+import { getUnclaimedProviderDetail, type UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { supabase } from "../../lib/supabase";
 import { AvailabilityService } from "../../services/AvailabilityService";
+import type { AvailabilitySummary, WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
 import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
+import { AddOnPickerModal } from "../../components/AddOnPickerModal";
 import type {
   ProviderWithServices,
   DbPromotion,
@@ -95,6 +98,7 @@ import {
   isDarkColor,
   type ProviderThemeTokens,
 } from "../../constants/providerThemes";
+import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12 } from "../../utils/dateUtils";
 
@@ -132,6 +136,9 @@ interface ProviderData {
   providerLogo: any;
   location: string;
   rating: number;
+  /** Provider's own free-text pill message (e.g. "Slots out every 15th of
+   *  the month") — the client's own words, shown as-is in the hero pill.
+   *  Not derived from the live schedule. */
   slotsText: string;
   aboutText: string;
   categories: Record<string, ServiceData[]>;
@@ -157,7 +164,6 @@ interface ProviderData {
   isVerified: boolean;
   preferredContactMethods: string[];
   onlineConsultationsAvailable: boolean;
-  consultationRequiredNewClients: boolean;
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;
@@ -300,7 +306,6 @@ function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
     isVerified: p.is_verified ?? false,
     preferredContactMethods: p.preferred_contact_methods ?? [],
     onlineConsultationsAvailable: p.online_consultations_available ?? false,
-    consultationRequiredNewClients: p.consultation_required_new_clients ?? false,
     bookingPolicies: p.booking_policies ?? null,
     cancellationNoticeHours: p.cancellation_notice_hours ?? 0,
     // Absent setting = waitlist stays available (pre-toggle behaviour)
@@ -781,13 +786,13 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
 interface ReviewsModalProps {
   isVisible: boolean;
   onClose: () => void;
-  reviews: Array<{
+  reviews: {
     id: number | string;
     name: string;
     rating: number;
     comment: string;
     date: string;
-  }>;
+  }[];
   providerName: string;
   adaptiveAccentColor: string;
   providerGradient: [string, string, ...string[]];
@@ -920,8 +925,6 @@ interface NotificationAlertProps {
 
 const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
   ({ isVisible, message, onHide, slideAnimation, isNotificationsEnabled }) => {
-    if (!isVisible) return null;
-
     const slideStyle = useMemo(
       () => ({
         transform: [
@@ -952,6 +955,8 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
         };
       }
     }, [isNotificationsEnabled]);
+
+    if (!isVisible) return null;
 
     return (
       <Animated.View style={[styles.notificationAlert, slideStyle]}>
@@ -1249,7 +1254,7 @@ const offersStyles = StyleSheet.create({
   },
   headerSub: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     opacity: 0.7,
   },
@@ -1277,7 +1282,7 @@ const offersStyles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 14,
     opacity: 0.6,
   },
@@ -1312,7 +1317,7 @@ const offersStyles = StyleSheet.create({
   },
   offerDescription: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 10,
@@ -1333,7 +1338,7 @@ const offersStyles = StyleSheet.create({
   },
   validity: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 11,
     marginBottom: 12,
     opacity: 0.5,
@@ -1384,6 +1389,149 @@ const offersStyles = StyleSheet.create({
     fontSize: 13,
     color: "#fff",
     letterSpacing: 0.5,
+  },
+});
+
+// ── Unclaimed Provider View ──────────────────────────────────────────────────
+// Read-only card for an imported-but-unclaimed listing (is_claimed = false).
+// Deliberately has no services/availability/booking UI at all — those don't
+// exist for a row nobody has onboarded yet. Its one job is to show enough to
+// recognise the business and offer a way to claim it.
+function UnclaimedProviderView({
+  provider,
+  theme,
+  onBack,
+  onClaim,
+}: {
+  provider: UnclaimedProviderDetail;
+  theme: ProviderThemeTokens;
+  onBack: () => void;
+  onClaim: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[unclaimedStyles.container, { backgroundColor: theme.bg }]}>
+      <View style={[unclaimedStyles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          onPress={onBack}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={[unclaimedStyles.backButton, { backgroundColor: theme.surface }]}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
+          <Text style={[unclaimedStyles.backButtonText, { color: theme.text }]}>←</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={unclaimedStyles.content}>
+        {provider.logoUrl ? (
+          <Image
+            source={{ uri: provider.logoUrl }}
+            style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]}
+            contentFit="cover"
+            transition={0}
+          />
+        ) : (
+          <View style={[unclaimedStyles.logo, { backgroundColor: theme.surface }]} />
+        )}
+
+        <Text style={[unclaimedStyles.name, { color: theme.text }]}>
+          {provider.displayName}
+        </Text>
+
+        <View style={[unclaimedStyles.chip, { backgroundColor: theme.surface }]}>
+          <Text style={[unclaimedStyles.chipText, { color: theme.sub }]}>
+            {[provider.serviceCategory, provider.locationText].filter(Boolean).join(" · ")}
+          </Text>
+        </View>
+
+        {provider.aboutText && (
+          <Text style={[unclaimedStyles.about, { color: theme.sub }]}>
+            {provider.aboutText}
+          </Text>
+        )}
+
+        <View style={[unclaimedStyles.noticeCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[unclaimedStyles.noticeText, { color: theme.sub }]}>
+            This listing hasn't been claimed by its owner yet, so it isn't
+            bookable — details here were imported and may be out of date.
+          </Text>
+        </View>
+      </View>
+
+      <View style={[unclaimedStyles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.sep }]}>
+        <TouchableOpacity
+          style={[unclaimedStyles.claimButton, { backgroundColor: theme.accent }]}
+          onPress={onClaim}
+          activeOpacity={0.85}
+        >
+          <Text style={unclaimedStyles.claimButtonText}>Claim this business</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+const unclaimedStyles = StyleSheet.create({
+  container: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 8 },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backButtonText: { fontSize: 20, lineHeight: 22 },
+  content: { flex: 1, alignItems: "center", paddingHorizontal: 32, paddingTop: 24 },
+  logo: { width: 88, height: 88, borderRadius: 44 },
+  name: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 20,
+    marginTop: 16,
+    textAlign: "center",
+  },
+  chip: {
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  chipText: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  about: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 16,
+  },
+  noticeCard: {
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 28,
+  },
+  noticeText: {
+    flex: 1,
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  footer: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  claimButton: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  claimButtonText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 14,
+    color: "#FFFFFF",
   },
 });
 
@@ -1577,12 +1725,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Provider state — seeded with local hardcoded data, overridden by Supabase if available
   const [provider, setProvider] = useState<ProviderData | null>(null);
   const [loading, setLoading] = useState(true);
-  // Only populated when this provider requires a consultation for new
-  // clients and the current client has no booking history with them —
-  // passed into BookingSheet so it can schedule the consultation alongside
-  // whatever real service the client is booking, in the same sheet.
-  const [requiredConsultationService, setRequiredConsultationService] = useState<ProviderConsultationService | null>(null);
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
+  // Set only when getProviderBySlug comes back empty AND the id resolves to
+  // an unclaimed (is_claimed = false) row instead. Renders a separate,
+  // minimal read-only view further down — never mixed into `provider`,
+  // since ProviderData/mapDbProviderToProviderData assume a fully onboarded
+  // provider with real services/availability that an unclaimed row has none
+  // of.
+  const [unclaimedProvider, setUnclaimedProvider] = useState<UnclaimedProviderDetail | null>(null);
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
@@ -1604,7 +1754,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     setLoading(true);
     getProviderBySlug(providerId)
       .then(async (data) => {
-        if (cancelled || !data) return;
+        if (cancelled) return;
+        if (!data) {
+          // Not a live claimed provider — providerId may instead be the raw
+          // id of an unclaimed/scraped row (see ExploreScreen's
+          // mapDbUnclaimedProviderToCard, which intentionally omits
+          // providerSlug so it resolves here). getProviderBySlug requires
+          // has_gone_live = true, which unclaimed rows never have, so this
+          // fallback is the only way they're ever found.
+          const unclaimed = await getUnclaimedProviderDetail(providerId).catch(() => null);
+          if (!cancelled) setUnclaimedProvider(unclaimed);
+          return;
+        }
         setProvider(mapDbProviderToProviderData(data));
         setProviderDbId(data.id);
 
@@ -1626,10 +1787,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // fetch them in parallel instead of one after another so the
         // screen's loading state clears after the slowest single request
         // rather than the sum of all three.
-        const [reviewsResult, promosResult, portfolioResult] = await Promise.allSettled([
+        const [reviewsResult, promosResult, portfolioResult, availabilityResult, openingHoursResult, followNotifyResult] = await Promise.allSettled([
           getProviderReviews(data.id),
           getProviderActivePromotions(data.id),
           getProviderPortfolio(data.id),
+          AvailabilityService.getAvailabilitySummary(data.id),
+          AvailabilityService.getWeeklyOpeningHours(data.id),
+          checkFollowNotifyEnabled(data.id),
         ]);
 
         if (!cancelled && reviewsResult.status === "fulfilled") {
@@ -1655,12 +1819,35 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         if (!cancelled && portfolioResult.status === "fulfilled") {
           setPortfolio(portfolioResult.value);
         }
+
+        // A rejected availability fetch leaves the card hidden rather than
+        // asserting anything about this provider's schedule.
+        if (!cancelled) {
+          setAvailability(
+            availabilityResult.status === "fulfilled" ? availabilityResult.value : null,
+          );
+          setAvailabilityLoading(false);
+          setOpeningHours(
+            openingHoursResult.status === "fulfilled" ? openingHoursResult.value : null,
+          );
+          // A rejected/logged-out check leaves the bell off rather than
+          // asserting the client is subscribed.
+          setIsNotificationsEnabled(
+            followNotifyResult.status === "fulfilled" ? followNotifyResult.value : false,
+          );
+        }
       })
       .catch(() => {
         /* provider not found — loading=false, provider remains null */
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          // Also clears on the not-found/early-return paths above, which never
+          // reach the availability assignment — otherwise the card would sit
+          // on "Checking availability…" forever.
+          setAvailabilityLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -1769,6 +1956,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showDatePickerFrom, setShowDatePickerFrom] = useState(false);
   const [showDatePickerTo, setShowDatePickerTo] = useState(false);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
+  const [openingHours, setOpeningHours] = useState<WeeklyOpeningHoursDay[] | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
   const [showBookingSheet, setShowBookingSheet] = useState(false);
@@ -1841,9 +2031,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // from the item's aspect ratio, giving the staggered masonry look.
   const PORTFOLIO_COL_W = (screenWidth - 40 - 12) / 2;
   const portfolioColumns = useMemo(() => {
-    const cols: Array<
-      Array<DbPortfolioItem & { tileHeight: number; globalIndex: number }>
-    > = [[], []];
+    const cols: (DbPortfolioItem & { tileHeight: number; globalIndex: number })[][] = [[], []];
     const colHeights = [0, 0];
     portfolio.forEach((item, i) => {
       const ratio =
@@ -1975,31 +2163,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     };
   }, [provider, providerDbId]);
 
-  // If this provider requires a consultation before a new client's first
-  // booking, and this client has no booking history with them, fetch the
-  // consultation service so handleBook can pass it into BookingSheet.
-  useEffect(() => {
-    if (!provider?.consultationRequiredNewClients || !providerDbId) {
-      setRequiredConsultationService(null);
-      return;
-    }
-    let cancelled = false;
-    Promise.all([
-      getProviderConsultationService(providerDbId),
-      getProviderIdsWithBookingHistory([providerDbId]),
-    ])
-      .then(([service, historyIds]) => {
-        if (cancelled) return;
-        setRequiredConsultationService(historyIds.has(providerDbId) ? null : service);
-      })
-      .catch(() => {
-        if (!cancelled) setRequiredConsultationService(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [provider?.consultationRequiredNewClients, providerDbId]);
-
   const openOffersPanel = useCallback(() => {
     setShowOffersModal(true);
     Animated.spring(offersPanelSlide, {
@@ -2046,13 +2209,19 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Notification toggle handler
   const handleNotificationToggle = useCallback(() => {
-    logger.warn("Bell button pressed");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const newState = !isNotificationsEnabled;
+    // Optimistic — the toast fires immediately either way; roll back only
+    // if the write actually fails.
     setIsNotificationsEnabled(newState);
     setNotificationMessageType("bell"); // SET TO BELL
     showRightNotification();
-  }, [isNotificationsEnabled, showRightNotification]);
+    if (!providerDbId) return;
+    setProviderFollowNotify(providerDbId, newState).catch((error) => {
+      logger.error("Error updating follow notifications:", error);
+      setIsNotificationsEnabled(!newState);
+    });
+  }, [isNotificationsEnabled, showRightNotification, providerDbId]);
 
   // Bookmark toggle handler
   const {
@@ -2075,6 +2244,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(
     new Set()
   );
+
+  // Add-ons chosen per selected service, keyed by service dbId — filled in
+  // by the popup below rather than a later step in MultiBookingSheet, so the
+  // client decides extras for a service the moment they check it rather than
+  // walking a second, separate "any extras?" pass afterwards.
+  const [addOnsBySelectedService, setAddOnsBySelectedService] = useState<
+    Record<string, { id: string | number; name: string; price: number }[]>
+  >({});
+  const [addOnPickerService, setAddOnPickerService] = useState<ServiceData | null>(null);
 
   // Confirm before leaving this screen with an in-progress selection or an
   // open booking sheet — otherwise a back-swipe silently drops services the
@@ -2101,6 +2279,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             setSelectedServiceIds(new Set());
             setSelectMode(false);
             setShowMultiBookingSheet(false);
+            setAddOnsBySelectedService({});
             navigation.dispatch(data.action);
           },
         },
@@ -2268,7 +2447,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const handleOpenDatePicker = useCallback(
     (which: "from" | "to") => {
       if (Platform.OS === "android") {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const {
           DateTimePickerAndroid,
         } = require("@react-native-community/datetimepicker");
@@ -2462,6 +2641,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     adaptiveAccentColor,
     handleBookmarkToggle,
     handleShare,
+    OP.bg,
+    OP.text,
   ]);
   const handleScroll = useCallback(
     (event: any) => {
@@ -2731,32 +2912,101 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     setSelectMode((v) => !v);
   }, []);
 
-  const toggleServiceSelected = useCallback((dbId: string) => {
+  // Checking a service on opens the add-on popup immediately when it has
+  // any — the client decides extras right there, taps Done, and lands back
+  // here free to keep selecting. Unchecking just drops it (and whatever
+  // add-ons were chosen for it) with no popup.
+  const toggleServiceSelected = useCallback((service: ServiceData) => {
+    const dbId = service.dbId;
     setSelectedServiceIds((prev) => {
       const next = new Set(prev);
-      next.has(dbId) ? next.delete(dbId) : next.add(dbId);
+      if (next.has(dbId)) {
+        next.delete(dbId);
+        setAddOnsBySelectedService((prevAddOns) => {
+          if (!(dbId in prevAddOns)) return prevAddOns;
+          const nextAddOns = { ...prevAddOns };
+          delete nextAddOns[dbId];
+          return nextAddOns;
+        });
+      } else {
+        next.add(dbId);
+        if ((service.addOns?.length ?? 0) > 0) {
+          Haptics.selectionAsync().catch(() => {});
+          setAddOnPickerService(service);
+        }
+      }
       return next;
     });
   }, []);
 
   // Turning select mode off always clears any in-progress selection, so
-  // re-entering it later never shows stale checkmarks.
+  // re-entering it later never shows stale checkmarks. addOnsBySelectedService
+  // is deliberately NOT cleared here — exiting select mode is exactly what
+  // happens on the way into BookingSheet for a single-service selection (see
+  // handleBookSelected), and that sheet still needs to read this render's
+  // popup pick via `initial`. It's cleared on successful submit instead (see
+  // handleBookingSheetSubmit/handleMultiBookingSheetSubmit) and fresh on
+  // re-entering select mode below.
   useEffect(() => {
     if (!selectMode) setSelectedServiceIds(new Set());
   }, [selectMode]);
 
+  // Re-entering select mode always starts from a clean slate.
+  useEffect(() => {
+    if (selectMode) setAddOnsBySelectedService({});
+  }, [selectMode]);
+
+  // Commits the popup's picks (possibly empty — choosing nothing is valid)
+  // and closes it, landing the client back on the service list to keep
+  // selecting. Doesn't touch selectedServiceIds — the service was already
+  // checked on before the popup opened.
+  const handleAddOnPickerDone = useCallback(
+    (selected: { id: string | number; name: string; price: number }[]) => {
+      const dbId = addOnPickerService?.dbId;
+      if (dbId) {
+        setAddOnsBySelectedService((prev) => {
+          if (selected.length > 0) return { ...prev, [dbId]: selected };
+          if (!(dbId in prev)) return prev;
+          const next = { ...prev };
+          delete next[dbId];
+          return next;
+        });
+      }
+      setAddOnPickerService(null);
+    },
+    [addOnPickerService]
+  );
+
   // Defensive: if a selected service resolves to fully-booked after the
-  // async availability check settles, drop it from the selection rather than
-  // letting the client add an unbookable service to their cart.
+  // async availability check settles, drop it from the selection (and any
+  // add-ons chosen for it) rather than letting the client add an unbookable
+  // service to their cart.
   useEffect(() => {
     setSelectedServiceIds((prev) => {
       if (prev.size === 0) return prev;
-      const next = new Set(
-        [...prev].filter((id) => serviceFullyBooked[id] !== true)
-      );
-      return next.size === prev.size ? prev : next;
+      const dropped = [...prev].filter((id) => serviceFullyBooked[id] === true);
+      if (dropped.length === 0) return prev;
+      setAddOnsBySelectedService((prevAddOns) => {
+        const next = { ...prevAddOns };
+        dropped.forEach((id) => delete next[id]);
+        return next;
+      });
+      const next = new Set([...prev].filter((id) => serviceFullyBooked[id] !== true));
+      return next;
     });
   }, [serviceFullyBooked]);
+
+  // BookingSheet's `initial` prop — populated only when selectedService came
+  // through select mode's add-on popup; a normal direct "Book" tap has
+  // nothing in addOnsBySelectedService for it, so this resolves to
+  // undefined. Computed as its own memo (rather than inline in the JSX prop)
+  // so the addOnsBySelectedService[...] narrowing isn't lost to
+  // exactOptionalPropertyTypes.
+  const bookingSheetInitial = useMemo(() => {
+    if (!selectedService) return undefined;
+    const addOns = addOnsBySelectedService[selectedService.dbId];
+    return addOns ? { selectedAddOns: addOns } : undefined;
+  }, [selectedService, addOnsBySelectedService]);
 
   // Flattened across every category (not just the currently-viewed one) so
   // a selection made in "Hair", then continued in "Nails" after switching
@@ -2796,6 +3046,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShowAllServicesModal(false);
     if (selectedServicesFlat.length === 1) {
+      // BookingSheet reads addOnsBySelectedService via `initial` above before
+      // this clears it, so the single popup pick still carries through.
       setSelectedService(selectedServicesFlat[0]!);
       setShowBookingSheet(true);
       setSelectedServiceIds(new Set());
@@ -2926,32 +3178,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // Add to cart context
         addToCart(cartItem);
 
-        // A required consultation was scheduled alongside this service in
-        // the same sheet (see requiredConsultationService) — add it as its
-        // own cart item too, with its own date/time.
-        if (result.consultationBooking && requiredConsultationService) {
-          addToCart({
-            providerName: provider.providerName,
-            providerDisplayName: provider.displayName,
-            providerSlug: provider.id,
-            providerId: providerDbId ?? undefined,
-            providerImage: provider.providerLogo,
-            providerService: requiredConsultationService.categoryName,
-            service: {
-              id: requiredConsultationService.id,
-              name: requiredConsultationService.name,
-              price: requiredConsultationService.price,
-              duration: `${requiredConsultationService.durationMinutes} min`,
-              description: requiredConsultationService.description,
-            },
-            quantity: 1,
-            selectedOptions: {},
-            forceNewInstance: true,
-            selectedDate: result.consultationBooking.date,
-            selectedTime: result.consultationBooking.time,
-          });
-        }
-
         // Success copy, one fact per line rather than a single run-on
         // sentence — with long-form dates the old concatenated version read
         // as an unbroken wall of text.
@@ -2964,17 +3190,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           lines.push(`${formatLongDate(result.date)} at ${formatTime12(result.time)}`);
         }
         lines.push(`Total: £${totalPrice.toFixed(2)}`);
-        if (result.consultationBooking) {
-          lines.push(
-            `Consultation: ${formatLongDate(result.consultationBooking.date)} at ${formatTime12(result.consultationBooking.time)}`,
-          );
-        }
 
         showSuccessMessageWithAnimation(
           "Added to Cart!",
           lines.join("\n"),
           "cart",
         );
+        setAddOnsBySelectedService({});
       } catch (error) {
         logger.error("Error adding service to cart:", error);
         Alert.alert(
@@ -2983,14 +3205,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         );
       }
     },
-    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation, requiredConsultationService],
+    [provider, providerDbId, addToCart, showSuccessMessageWithAnimation],
   );
 
   // Submit from MultiBookingSheet — adds every scheduled item from the
   // group in one pass, mirroring handleBookingSheetSubmit's per-item field
-  // mapping, then shows one combined success message. No required-
-  // consultation handling here — CartScreen's own checkout-time gate
-  // already covers that generically for whatever's in the cart.
+  // mapping, then shows one combined success message.
   const handleMultiBookingSheetSubmit = useCallback(
     (result: MultiBookingSheetResult) => {
       if (!provider) return;
@@ -3031,6 +3251,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // (see handleBookSelected).
         setSelectedServiceIds(new Set());
         setSelectMode(false);
+        setAddOnsBySelectedService({});
         // Match the single-service path: show the toast and let the user
         // tap "View Cart" (handleViewCart) themselves rather than
         // auto-navigating away after a timeout.
@@ -3080,10 +3301,34 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isNotificationsEnabled,
     providerIsBookmarked,
     provider?.providerName,
-    providerId,
   ]);
 
   if (loading || !provider) {
+    // Unclaimed row — render the minimal read-only card instead of the
+    // full booking profile. Checked before "not found" since this is the
+    // one case where !provider is expected, not an error.
+    if (!loading && unclaimedProvider) {
+      return (
+        <UnclaimedProviderView
+          provider={unclaimedProvider}
+          theme={OP}
+          onBack={() => navigation.goBack()}
+          onClaim={() => {
+            // ClaimProvider is a root-stack screen, several levels above
+            // wherever this tab screen sits — navigating via the root ref
+            // (rather than this screen's own `navigation`, whose parent
+            // chain doesn't reliably reach the root stack from every tab)
+            // is the same pattern notificationTapHandler.ts uses to jump to
+            // a screen outside the current tab.
+            if (navigationRef.isReady()) {
+              (navigationRef as any).navigate("ClaimProvider", {
+                providerId: unclaimedProvider.id,
+              });
+            }
+          }}
+        />
+      );
+    }
     // Show skeleton while loading, error text only when not found
     if (!loading && !provider) {
       return (
@@ -3201,7 +3446,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           away from the "Services" title. Shared here (not per call site) so
           it appears identically in the inline list and the "All Services"
           sheet without a second control. */}
-      {!provider.externalBookingUrl && (
+      {/* Multi-service select flow is gated off (MULTI_SERVICE_BOOKING_ENABLED)
+          — with the "Select" entry point hidden, select mode can never be
+          entered, so the floating bar and MultiBookingSheet below never show
+          either. Single-service "Book" is unaffected. See FUTURE_LOGIC.md. */}
+      {MULTI_SERVICE_BOOKING_ENABLED && !provider.externalBookingUrl && (
         <TouchableOpacity
           onPress={toggleSelectMode}
           activeOpacity={0.6}
@@ -3407,30 +3656,54 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                     if (selectMode) {
                       const isSelected = selectedServiceIds.has(service.dbId);
+                      const hasAddOns = (service.addOns?.length ?? 0) > 0;
+                      const pickedAddOns = addOnsBySelectedService[service.dbId] ?? [];
                       return (
-                        <TouchableOpacity
-                          disabled={fullyBooked}
-                          // No onBeforeAction here — that hook exists to close the
-                          // "All Services" sheet before ANOTHER modal opens (RN
-                          // can't reliably stack modals), and a checkbox toggle
-                          // opens nothing. Calling it here would close the sheet
-                          // on the very first checkbox tap.
-                          onPress={() => toggleServiceSelected(service.dbId)}
-                          style={[
-                            styles.selectCheckbox,
-                            { borderColor: fullyBooked ? OP.border : adaptiveAccentColor },
-                            isSelected && {
-                              backgroundColor: adaptiveAccentColor,
-                              borderColor: adaptiveAccentColor,
-                            },
-                            fullyBooked && { opacity: 0.4 },
-                          ]}
-                          activeOpacity={0.8}
-                        >
-                          {isSelected && (
-                            <Ionicons name="checkmark" size={16} color="#fff" />
+                        <>
+                          <TouchableOpacity
+                            disabled={fullyBooked}
+                            // Checking a service that HAS add-ons opens the
+                            // add-on popup — another Modal — so onBeforeAction
+                            // has to run first to close the "All Services"
+                            // sheet when this row is rendered inside it, same
+                            // as Book/Waitlist below. Unchecking, and checking
+                            // a service with no add-ons, opens nothing, so the
+                            // sheet stays open for those.
+                            onPress={() => {
+                              const isSelecting = !selectedServiceIds.has(service.dbId);
+                              if (isSelecting && hasAddOns) onBeforeAction();
+                              toggleServiceSelected(service);
+                            }}
+                            style={[
+                              styles.selectCheckbox,
+                              { borderColor: fullyBooked ? OP.border : adaptiveAccentColor },
+                              isSelected && {
+                                backgroundColor: adaptiveAccentColor,
+                                borderColor: adaptiveAccentColor,
+                              },
+                              fullyBooked && { opacity: 0.4 },
+                            ]}
+                            activeOpacity={0.8}
+                          >
+                            {isSelected && (
+                              <Ionicons name="checkmark" size={16} color="#fff" />
+                            )}
+                          </TouchableOpacity>
+                          {isSelected && hasAddOns && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                onBeforeAction();
+                                Haptics.selectionAsync().catch(() => {});
+                                setAddOnPickerService(service);
+                              }}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Text style={[styles.editAddOnsLink, { color: adaptiveAccentColor }]}>
+                                {pickedAddOns.length > 0 ? 'Edit' : 'Add extras'}
+                              </Text>
+                            </TouchableOpacity>
                           )}
-                        </TouchableOpacity>
+                        </>
                       );
                     }
 
@@ -3673,6 +3946,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           onClose={() => setShowBookingSheet(false)}
           mode="add"
           service={selectedService}
+          // Only populated when this service came through select mode's
+          // add-on popup (a select-mode selection of exactly one service
+          // still routes here, not to MultiBookingSheet) — a normal direct
+          // "Book" tap has nothing in this map, so `initial` is undefined.
+          initial={bookingSheetInitial}
           onSubmit={(result) => selectedService && handleBookingSheetSubmit(selectedService, result)}
           adaptiveAccentColor={adaptiveAccentColor}
           backgroundColor={OP.card}
@@ -3682,17 +3960,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerDisplayName={provider?.displayName ?? provider?.providerName ?? ""}
           providerKey={provider?.providerName ?? ""}
           providerServiceCategory={provider?.providerService}
-          consultationRequired={
-            selectedService?.serviceType !== "consultation" && requiredConsultationService
-              ? {
-                  id: requiredConsultationService.id,
-                  name: requiredConsultationService.name,
-                  price: requiredConsultationService.price,
-                  duration: `${requiredConsultationService.durationMinutes} min`,
-                  description: requiredConsultationService.description,
-                }
-              : null
-          }
         />
 
         {/* Multi-service booking modal — for services picked via "Select" mode */}
@@ -3700,6 +3967,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           isVisible={showMultiBookingSheet}
           onClose={() => setShowMultiBookingSheet(false)}
           services={multiBookingServices}
+          initialAddOnsByService={addOnsBySelectedService}
           onSubmit={handleMultiBookingSheetSubmit}
           adaptiveAccentColor={adaptiveAccentColor}
           backgroundColor={OP.card}
@@ -3707,6 +3975,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             providerDbId ?? provider?.displayName ?? provider?.providerName ?? ""
           }
           providerDisplayName={provider?.displayName ?? provider?.providerName ?? ""}
+        />
+
+        {/* Add-on popup — opens the instant a service with add-ons is
+            checked in select mode (see toggleServiceSelected), not a step
+            inside either booking sheet. */}
+        <AddOnPickerModal
+          visible={!!addOnPickerService}
+          serviceName={addOnPickerService?.name ?? ""}
+          addOns={addOnPickerService?.addOns ?? []}
+          initialSelected={
+            addOnPickerService ? addOnsBySelectedService[addOnPickerService.dbId] ?? [] : []
+          }
+          accentColor={adaptiveAccentColor}
+          tokens={{ text: OP.text, sub: OP.sub, border: OP.border, surface: OP.surface, bg: OP.bg }}
+          onDone={handleAddOnPickerDone}
         />
 
         {/* App-styled confirm dialog (leave-with-selection prompt, etc.) —
@@ -4404,8 +4687,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </Text>
                 ) : null}
 
-                {/* Slots + bell */}
-                {provider.slotsText ? (
+                {/* Slots + bell — the provider's own free-text pill message
+                    (set on InfoRegScreen, e.g. "Slots out every 15th of the
+                    month"), NOT the computed live-availability headline —
+                    the provider's own words win here. Falls back to the
+                    live headline/detail only for a provider who hasn't
+                    filled in the text box yet, so the pill doesn't just
+                    disappear for everyone mid-migration. Still hidden
+                    entirely for a provider with no schedule published at
+                    all (state === 'unpublished') AND no slots text either —
+                    createBooking rejects every booking for them, so neither
+                    text nor a "notify me when slots open" bell would be
+                    true. The bell/notify-on-release-day logic is unchanged
+                    either way — it isn't tied to this text. */}
+                {(() => {
+                  const pillText = provider.slotsText || (
+                    availability && availability.state !== "unpublished"
+                      ? `${availability.headline}${availability.detail ? ` · ${availability.detail}` : ""}`
+                      : ""
+                  );
+                  if (availabilityLoading || !pillText) return null;
+                  return (
                   <BlurView
                     intensity={cardBlurIntensity}
                     tint={cardBlurTint}
@@ -4421,7 +4723,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       style={styles.slotsCardHighlight}
                     />
                     <Text style={[styles.slotsText, { color: OP.sub }]}>
-                      {provider.slotsText}
+                      {pillText}
                     </Text>
                     <TouchableOpacity
                       style={styles.bellButtonInline}
@@ -4437,7 +4739,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       />
                     </TouchableOpacity>
                   </BlurView>
-                ) : null}
+                  );
+                })()}
+
               </View>
             </View>
 
@@ -4947,6 +5251,57 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </TouchableOpacity>
               </BlurView>
 
+              {/* Opening Hours — the provider's recurring weekly schedule,
+                  Monday → Sunday, open/closed and hours per day. Distinct
+                  from the hero's live availability pill above (today's
+                  booking-status headline) — this is the fixed week, not
+                  today's snapshot. */}
+              {openingHours && openingHours.length > 0 ? (
+                <BlurView
+                  intensity={cardBlurIntensity}
+                  tint={cardBlurTint}
+                  style={[
+                    styles.contactCard,
+                    { backgroundColor: cardBg, borderColor: OP.border },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={cardHighlightColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.cardHighlight}
+                  />
+                  <Text style={[styles.sectionTitle, { color: OP.text }]}>
+                    Opening Hours
+                  </Text>
+                  {openingHours.map((day, index) => {
+                    const isToday = day.dayOfWeek === new Date().getDay();
+                    return (
+                      <View
+                        key={day.dayOfWeek}
+                        style={[
+                          styles.contactRow,
+                          index === openingHours.length - 1 && { borderBottomWidth: 0 },
+                          { borderBottomColor: OP.sep },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.contactRowLabel,
+                            { color: isToday ? adaptiveAccentColor : OP.sub },
+                          ]}
+                        >
+                          {day.label}
+                        </Text>
+                        <Text style={[styles.contactRowText, { color: day.isOpen ? OP.text : OP.sub }]}>
+                          {day.isOpen ? day.hours : "Closed"}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </BlurView>
+              ) : null}
+
               {/* Portfolio — Pinterest-style two-column masonry of client work */}
               {portfolio.length > 0 && (
                 <View style={styles.portfolioSection}>
@@ -5161,7 +5516,7 @@ const styles = StyleSheet.create({
   },
   providerHandle: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
     marginBottom: 14,
     textAlign: "center",
@@ -5442,7 +5797,7 @@ const styles = StyleSheet.create({
   },
   aboutText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
@@ -5598,7 +5953,7 @@ const styles = StyleSheet.create({
   },
   serviceDescription: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     marginBottom: 4,
   },
@@ -5654,7 +6009,7 @@ const styles = StyleSheet.create({
   },
   serviceDuration: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 11,
   },
   servicePrice: {
@@ -5711,6 +6066,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
+  },
+  editAddOnsLink: {
+    fontSize: 11,
+    fontWeight: "700",
   },
   quickBookButton: {
     borderRadius: 18,
@@ -5806,13 +6165,13 @@ const styles = StyleSheet.create({
   },
   reviewDate: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 10,
     marginLeft: "auto",
   },
   reviewComment: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     lineHeight: 18,
     marginTop: 8,
@@ -5897,6 +6256,7 @@ const styles = StyleSheet.create({
   contactCard: {
     padding: 22,
     borderRadius: 26,
+    marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     shadowColor: "#B87E92",
@@ -5933,7 +6293,7 @@ const styles = StyleSheet.create({
   },
   contactText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     marginBottom: 8,
   },
@@ -5994,7 +6354,7 @@ const styles = StyleSheet.create({
   },
   modalSubtitle: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 14,
     color: "rgba(0,0,0,0.85)",
   },
@@ -6065,14 +6425,14 @@ const styles = StyleSheet.create({
   },
   modalReviewDate: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     color: "rgba(0, 0, 0, 0.75)",
     marginLeft: "auto",
   },
   modalReviewComment: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 14,
     color: "#000",
     lineHeight: 20,
@@ -6142,7 +6502,7 @@ const styles = StyleSheet.create({
   },
   successMessage: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 16,
     textAlign: "center",
     lineHeight: 22,
@@ -6342,7 +6702,7 @@ const styles = StyleSheet.create({
   },
   waitlistLeaveText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 10,
     opacity: 0.6,
   },
@@ -6382,13 +6742,13 @@ const styles = StyleSheet.create({
   waitlistPopupTitle: { fontFamily: "BakbakOne-Regular", fontSize: 17 },
   waitlistPopupService: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     marginTop: 1,
   },
   waitlistPopupSub: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
     marginBottom: 16,
     opacity: 0.7,
@@ -6441,7 +6801,7 @@ const styles = StyleSheet.create({
   waitlistDateValue: {
     flex: 1,
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
   },
   waitlistPickerDone: {
@@ -6461,7 +6821,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 14,
     minHeight: 72,
     textAlignVertical: "top",
@@ -6469,7 +6829,7 @@ const styles = StyleSheet.create({
   },
   waitlistErrorText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 12,
     marginBottom: 10,
     textAlign: "center",
@@ -6537,7 +6897,7 @@ const styles = StyleSheet.create({
   },
   leavePopupBody: {
     fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 13,
     lineHeight: 19,
     textAlign: "center",

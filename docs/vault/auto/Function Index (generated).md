@@ -5,7 +5,7 @@
 
 #generated
 
-**1526 functions** across **189 files**.
+**1527 functions** across **189 files**.
 
 ### `src/components/` (32)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -129,7 +129,7 @@
 ### `src/screens/provider/` (20)
 - `BrandingScreen.tsx` — BrandingScreen · handleSave · handleThemeChange · pickImage · removeImage · uploadBackgroundImage
 - `BusinessProfileScreen.tsx` — BusinessProfileScreen
-- `InfoRegScreen.tsx` — AccentColorPickerModal · adaptiveAccentColor · addCategory · AddCategoryModal · applyDragPosition · ChipSelect · DurationPicker · EditCategoryModal · editTheme · fgFor · getCategoryDragResponder · GradientPickerModal · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteCategory · handleDeleteService · handleInputFocus · handlePickPolicyImage · handleRemoveAddOn · handleRemoveImage · handleRemovePolicyImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleSave · handleSaveService · handleScroll · handleSelectLogo · handleSetCategoryOrder · handleSubmit · handleTransferData · handleTransferPress · InfoRegScreen · isAestheticsService · isDuplicate · makeStyles · pickSuggestion · portfolioColumns · PreviewModal · ReleaseDayPicker · RequiredLabel · ServiceImageCarousel · ServiceModal · ServiceTemplatePicker · setPolicy · startCategoryAutoScroll · stopCategoryAutoScroll · surfFor · tick · toggleTag · TransferDataModal · useChrome · useScreenStyles
+- `InfoRegScreen.tsx` — AccentColorPickerModal · adaptiveAccentColor · addCategory · AddCategoryModal · ChipSelect · DurationPicker · EditCategoryModal · editTheme · fgFor · filled · goToStep · GradientPickerModal · handleAddAddOn · handleAddCategory · handleAddContraindication · handleAddImage · handleAddPortfolioImages · handleAddTrend · handleDeleteCategory · handleDeleteService · handleInputFocus · handlePickPolicyImage · handleRemoveAddOn · handleRemoveImage · handleRemovePolicyImage · handleRemovePortfolioItem · handleRenameCategory · handleReorderCategory · handleSave · handleSaveService · handleScroll · handleSelectLogo · handleStepBack · handleStepNext · handleSubmit · handleTransferData · handleTransferPress · InfoRegScreen · isAestheticsService · isDuplicate · makeStyles · missingRequired · pickSuggestion · portfolioColumns · PreviewModal · ReleaseDayPicker · RequiredLabel · reviewGroups · ServiceImageCarousel · ServiceModal · ServiceTemplatePicker · setPolicy · surfFor · toggleCategoryExpanded · toggleTag · TransferDataModal · useChrome · useScreenStyles
 - `ProviderAccountInfoScreen.tsx` — handleDeleteAccount · handleSave · ProviderAccountInfoScreen
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
 - `ProviderAnalyticsScreen.tsx` — accentColor · AnimatedFillBar · AnimatedNumber · AnimatedPath · bookingServiceMap · chartData · CompletionRing · currentMonthKey · DeckCard · fetchAll · fmtGBP · handlePress · inRange · kpi · LivePulse · monthKey · monthlyRatings · months · monthsAgo · onRefresh · pressIn · pressOut · PressScale · prevMonthKey · ProviderAnalyticsScreen · RangeSelector · ranked · RatingAnalytics · recent · RecentStream · Reveal · RevenueChart · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · StatTile · topServices · TopServices · totalForBookings

@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,14 +21,16 @@ import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
-import { useBooking, BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
+import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { supabase } from '../../lib/supabase';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
+import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
+import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
 import {
   getActiveRescheduleRequest,
   respondToRescheduleRequest,
-  insertBookingUserNotification,
+  rejectRescheduleRequest,
   getAvailableSlots,
   upsertProviderRescheduleRequest,
   getClientBeautyProfile,
@@ -39,7 +41,13 @@ import {
   releaseBookingAddress,
   getBookingAddressReleasedAt,
   getBookingWithAddOnsById,
+  getGroupBookingSiblings,
   getBookingUserId,
+  updateBookingStatus as dbUpdateBookingStatus,
+  providerCancelOwnBooking,
+  updateGroupBookingStatus,
+  providerCancelGroupBooking,
+  providerInitiateGroupReschedule,
   getProviderServiceCategoryByUserId,
   getOrCreateConversation,
   getProviderInfoPacksByUserId,
@@ -50,10 +58,10 @@ import {
   ProviderInfoPackRow,
   ProviderAddressPolicy,
 } from '../../services/databaseService';
-import type { DbBooking, ServiceCategory } from '../../types/database';
-import type { DbBookingRescheduleRequest } from '../../types/database';
+import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
 import { formatLongDate, formatTime12, dateToYMD } from '../../utils/dateUtils';
+import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -99,6 +107,18 @@ const STATUS_LABELS: Record<string, string> = {
   [BookingStatus.COMPLETED]: 'Completed',
   [BookingStatus.CANCELLED]: 'Cancelled',
   [BookingStatus.NO_SHOW]: 'No Show',
+};
+
+// Context BookingStatus enum → DB status string, for the provider-side RPCs.
+// Mirrors the map in BookingContext; kept local so this screen never depends on
+// the client-hat booking context (see the note where the mutations are defined).
+const PROVIDER_DB_STATUS: Record<string, string> = {
+  [BookingStatus.PENDING]:     'pending',
+  [BookingStatus.UPCOMING]:    'confirmed',
+  [BookingStatus.IN_PROGRESS]: 'in_progress',
+  [BookingStatus.COMPLETED]:   'completed',
+  [BookingStatus.CANCELLED]:   'cancelled',
+  [BookingStatus.NO_SHOW]:     'no_show',
 };
 
 // Which beauty profile fields are relevant per provider service category.
@@ -235,23 +255,25 @@ function buildInvoiceHTML(booking: any, totalPrice: number): string {
 }
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
-  const { bookingId, booking: passedBooking } = route.params;
+  const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const insets = useSafeAreaInsets();
-  const { getBookingById, updateBookingStatus, cancelBooking } = useBooking();
-
-  const contextBooking = useMemo(
-    () => passedBooking ?? getBookingById(bookingId),
-    [passedBooking, bookingId, getBookingById]
-  );
+  // Deliberately NOT wired to BookingContext: that cache is the client hat's
+  // own appointments (getMyBookings filters .eq('user_id', me)), and its rows
+  // come from the client_bookings view where the address is masked until
+  // release. Reading it here would render a provider their client-side
+  // projection of the same booking, and writing to it would rewrite client-hat
+  // storage. Provider data comes from the passed booking (sourced from
+  // getProviderBookings, scoped .eq('provider_id', mine)) or a direct fetch.
+  const passedProviderBooking = passedBooking ?? null;
 
   const [fetchedBooking, setFetchedBooking] = useState<ConfirmedBooking | null>(null);
   const [fetching, setFetching] = useState(false);
   // Seed from the booking object directly — clientUserId on ConfirmedBooking is the source of truth.
   // The DB fallback below only fires when the field is absent (legacy local-only bookings).
   const [clientUserId, setClientUserId] = useState<string | null>(
-    contextBooking?.clientUserId ?? null
+    passedProviderBooking?.clientUserId ?? null
   );
   const [clientProfile, setClientProfile] = useState<ClientBeautyProfile | null>(null);
   const [intakeForm, setIntakeForm] = useState<IntakeForm | null>(null);
@@ -259,7 +281,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showSupportDropdown, setShowSupportDropdown] = useState(false);
   const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const [dbReschedule, setDbReschedule] = useState<DbBookingRescheduleRequest | null>(null);
-  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: string } | null>(null);
+  // `status` is a MAPPED BookingStatus, never a raw DB string — it is merged
+  // straight into booking.status, which the screen compares against
+  // BookingStatus members. Typed as such so a raw 'confirmed' can't slip in.
+  const [liveBookingOverrides, setLiveBookingOverrides] = useState<{ bookingDate?: string; bookingTime?: string; endTime?: string; status?: BookingStatus } | null>(null);
   const [showRespondModal, setShowRespondModal] = useState(false);
   const [outboundSlots, setOutboundSlots] = useState<{ date: string; times: string[] }[]>([]);
   const [slotDate, setSlotDate] = useState(''); // ISO YYYY-MM-DD, set only via the date picker
@@ -296,6 +321,24 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [initSent, setInitSent] = useState(false);
   const [initLoading, setInitLoading] = useState(false);
 
+  // Group reschedule-initiate: provider picks ONE new day for the whole
+  // group; ModernBeautyCalendar (fed groupSlotResolver below) only offers
+  // times where every sibling's chain still fits back-to-back that day —
+  // same interaction CartScreen.tsx already uses client-side for the
+  // pre-booking group reschedule. groupDateOptions accumulates day+chain
+  // proposals the provider has explicitly added (mirrors initRescheduleSlots'
+  // "add multiple options" pattern for the single-booking flow) before
+  // sending them all via providerInitiateGroupReschedule.
+  const [showGroupRescheduleModal, setShowGroupRescheduleModal] = useState(false);
+  const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
+  const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
+  const [groupDateOptions, setGroupDateOptions] = useState<
+    { date: string; chain: BackToBackSlot[] }[]
+  >([]);
+  const [groupRescheduleSending, setGroupRescheduleSending] = useState(false);
+  const [groupRescheduleError, setGroupRescheduleError] = useState('');
+  const groupChainsByStart = useRef<Map<string, BackToBackSlot[]>>(new Map());
+
   const [addressSettings, setAddressSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addressReleasedAt, setAddressReleasedAt] = useState<string | null>(null);
   const [releasingAddress, setReleasingAddress] = useState(false);
@@ -310,8 +353,16 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const [showInfoPackPicker, setShowInfoPackPicker] = useState(false);
   const [isAttachingInfoPack, setIsAttachingInfoPack] = useState(false);
 
+  // ProviderBookingHistoryScreen already collapses group siblings into one
+  // card and passes them here directly (groupSiblings param) — no refetch
+  // needed on that path. Anywhere else this screen is opened (a
+  // notification tap, a deep link) only has a bookingId, so once the real
+  // booking loads and turns out to be part of a group, fetch its siblings
+  // (scoped to this provider's own rows — see getGroupBookingSiblings).
+  const [fetchedGroupSiblings, setFetchedGroupSiblings] = useState<ConfirmedBooking[] | null>(null);
+
   useEffect(() => {
-    if (contextBooking || !bookingId) return;
+    if (passedProviderBooking || !bookingId) return;
     setFetching(true);
     getBookingWithAddOnsById(bookingId)
       .then(raw => {
@@ -322,7 +373,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         setFetching(false);
       })
       .catch(() => { setFetching(false); });
-  }, [bookingId, contextBooking]);
+  }, [bookingId, passedProviderBooking]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -346,7 +397,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         { event: '*', schema: 'public', table: 'booking_reschedule_requests', filter: `booking_id=eq.${bookingId}` },
         (payload) => {
           const row = payload.new as DbBookingRescheduleRequest | null;
-          // If row was deleted or status is confirmed/rejected, clear the reschedule UI
+          // A deleted row clears the UI outright. Any other row (including
+          // one that just turned confirmed/rejected/cancelled) is still set
+          // as-is — hasRescheduleRequest/canRespondToReschedule below only
+          // match 'pending'/'provider_responded', so a closed request's
+          // banner/actions disappear on the next render without needing a
+          // separate branch here.
           if (!row || (payload.eventType === 'DELETE')) {
             setDbReschedule(null);
           } else {
@@ -377,12 +433,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   }, [bookingId]);
 
   useEffect(() => {
-    const providerId = contextBooking?.providerId ?? fetchedBooking?.providerId;
+    const providerId = passedProviderBooking?.providerId ?? fetchedBooking?.providerId;
     if (!providerId) return;
     getProviderAddressPolicy(providerId)
       .then(s => setAddressSettings(s))
       .catch(() => {});
-  }, [contextBooking?.providerId, fetchedBooking?.providerId]);
+  }, [passedProviderBooking?.providerId, fetchedBooking?.providerId]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -438,14 +494,77 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     })();
   }, []);
 
-  const baseBooking = contextBooking ?? fetchedBooking;
-  const booking = baseBooking ? {
-    ...baseBooking,
-    ...(liveBookingOverrides?.bookingDate !== undefined && { bookingDate: liveBookingOverrides.bookingDate }),
-    ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
-    ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
-    ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status as BookingStatus }),
-  } as ConfirmedBooking : baseBooking;
+  const baseBooking = passedProviderBooking ?? fetchedBooking;
+  // Keep the derived booking reference stable. The action handlers below are
+  // intentionally memoized; recreating this object every render invalidated
+  // all of them and caused needless re-renders of the detail screen.
+  const booking = useMemo(() => {
+    if (!baseBooking) return baseBooking;
+    return {
+      ...baseBooking,
+      ...(liveBookingOverrides?.bookingDate !== undefined && { bookingDate: liveBookingOverrides.bookingDate }),
+      ...(liveBookingOverrides?.bookingTime !== undefined && { bookingTime: liveBookingOverrides.bookingTime }),
+      ...(liveBookingOverrides?.endTime !== undefined && { endTime: liveBookingOverrides.endTime }),
+      ...(liveBookingOverrides?.status !== undefined && { status: liveBookingOverrides.status }),
+    } as ConfirmedBooking;
+  }, [baseBooking, liveBookingOverrides]);
+
+  useEffect(() => {
+    // Multi-service booking is gated off (MULTI_SERVICE_BOOKING_ENABLED): don't
+    // resolve a booking's group siblings, so even a pre-existing group booking
+    // opened directly (e.g. from a notification) is treated as a single booking
+    // — the group badge, sibling list, and all-or-nothing group RPCs below all
+    // key off groupSiblings.length > 1, which stays 1 here. See FUTURE_LOGIC.md.
+    if (!MULTI_SERVICE_BOOKING_ENABLED) return;
+    if (passedGroupSiblings || !booking?.groupBookingId) return;
+    getGroupBookingSiblings(booking.groupBookingId)
+      .then(rows => setFetchedGroupSiblings(rows.map(mapDbBookingToConfirmed)))
+      .catch(() => setFetchedGroupSiblings([]));
+  }, [passedGroupSiblings, booking?.groupBookingId]);
+
+  // Every other service in this client's group booking that this provider
+  // also owns, INCLUDING the currently open one (so "3 services" reads as
+  // the whole group, not "2 others"). Empty/single-item when not grouped.
+  const groupSiblings: ConfirmedBooking[] = passedGroupSiblings ?? fetchedGroupSiblings ?? [];
+
+  // Provider-hat mutations. These call the provider RPCs directly rather than
+  // BookingContext's versions, which also rewrite the client's local booking
+  // cache — wrong storage for this hat. The DB status-change trigger still owns
+  // notifying the client, so there are no app-side inserts here either way.
+  // Local status is reflected via liveBookingOverrides so the screen updates
+  // without touching client-hat state.
+  // The override is merged into `booking.status`, which the whole screen
+  // compares against BookingStatus members — so store the MAPPED status, never
+  // the raw DB string. They aren't interchangeable: DB 'confirmed' maps to
+  // BookingStatus.UPCOMING ('upcoming'), so writing the raw value here would
+  // silently match none of the status checks until the screen refetched.
+  // Group bookings (groupSiblings.length > 1) route through the atomic group
+  // RPCs so ALL of this provider's own sibling services move together — no
+  // mixed status where one service confirms and another stays pending. Both
+  // RPCs are all-or-nothing server-side (see fix_group_booking_atomic_
+  // actions.sql): if any sibling can't legally make the transition, the RPC
+  // throws and nothing changes, so the caller's catch block already gets a
+  // specific, actionable message — no separate partial-failure UI needed
+  // here. A single (non-grouped) booking is unaffected — same RPC as before.
+  const updateBookingStatus = useCallback(async (id: string, status: BookingStatus) => {
+    const dbStatus = PROVIDER_DB_STATUS[status];
+    if (!dbStatus) throw new Error(`Unsupported provider status transition: ${status}`);
+    if (groupSiblings.length > 1 && booking?.groupBookingId) {
+      await updateGroupBookingStatus(booking.groupBookingId, dbStatus as DbBooking['status']);
+    } else {
+      await dbUpdateBookingStatus(id, dbStatus as DbBooking['status']);
+    }
+    setLiveBookingOverrides(prev => ({ ...(prev ?? {}), status }));
+  }, [groupSiblings.length, booking?.groupBookingId]);
+
+  const cancelBooking = useCallback(async (id: string) => {
+    if (groupSiblings.length > 1 && booking?.groupBookingId) {
+      await providerCancelGroupBooking(booking.groupBookingId);
+    } else {
+      await providerCancelOwnBooking(id);
+    }
+    setLiveBookingOverrides(prev => ({ ...(prev ?? {}), status: BookingStatus.CANCELLED }));
+  }, [groupSiblings.length, booking?.groupBookingId]);
 
   // Fetch real available slots once the provider picks a date
   useEffect(() => {
@@ -509,18 +628,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setRespondLoading(true);
     setInputError('');
     try {
-      await respondToRescheduleRequest(booking.id, outboundSlots);
-      await insertBookingUserNotification({
-        booking_id: booking.id,
-        type: 'reschedule_provider_response',
-        title: sendApology ? `${booking.providerName} can't make those dates` : 'Provider Responded',
-        message: sendApology
-          ? apologyText
-          : `${booking.providerName} has shared available dates for your reschedule request.`,
-        priority: 'high',
-        is_actionable: true,
-        provider_id: booking.providerId,
-      });
+      // Notification to the client is now trigger-owned (see
+      // handle_reschedule_request_change() in
+      // supabase/fix_reschedule_flow_completion.sql) — it reads this same
+      // apology text back off the response_note column, so the RPC call
+      // below is the only write needed here.
+      await respondToRescheduleRequest(booking.id, outboundSlots, sendApology ? apologyText : undefined);
       setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: outboundSlots } : prev);
       setRespondSent(true);
     } catch {
@@ -529,6 +642,21 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       setRespondLoading(false);
     }
   }, [outboundSlots, booking, sendApology, apologyText]);
+
+  const handleDeclineRequest = useCallback(async () => {
+    if (!booking) return;
+    setRespondLoading(true);
+    setInputError('');
+    try {
+      await rejectRescheduleRequest(booking.id, sendApology ? apologyText : undefined);
+      setDbReschedule(prev => prev ? { ...prev, status: 'rejected' } : prev);
+      setRespondSent(true);
+    } catch {
+      setInputError('Could not decline the request. Please try again.');
+    } finally {
+      setRespondLoading(false);
+    }
+  }, [booking, sendApology, apologyText]);
 
   const closeRespondModal = useCallback(() => {
     setShowRespondModal(false);
@@ -583,18 +711,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitLoading(true);
     setInitInputError('');
     try {
+      // Notification to the client is now trigger-owned (see
+      // handle_reschedule_request_change() in
+      // supabase/fix_reschedule_flow_completion.sql).
       await upsertProviderRescheduleRequest({
         booking_id: booking.id,
         proposed_slots: initRescheduleSlots,
-      });
-      await insertBookingUserNotification({
-        booking_id: booking.id,
-        type: 'reschedule_request',
-        title: `${booking.providerName} needs to reschedule`,
-        message: `${booking.providerName} has proposed new times for your ${booking.serviceName} appointment. Tap to choose a slot.`,
-        priority: 'high',
-        is_actionable: true,
-        provider_id: booking.providerId,
       });
       setDbReschedule(prev => prev ? { ...prev, status: 'provider_responded', provider_available_slots: initRescheduleSlots, requested_by: 'provider' } : {
         id: '', booking_id: booking.id, requested_by: 'provider', original_date: booking.bookingDate,
@@ -614,6 +736,106 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitRescheduleSlots([]); setInitSlotDate('');
     setInitSuggestedTimes([]); setInitSelectedTimes([]); setInitCustomTimePickerVisible(false);
     setInitInputError(''); setInitSent(false);
+  }, []);
+
+  // What counts as a bookable time for the group on a given day: a start
+  // where the WHOLE chain (every sibling this provider owns, in original
+  // date/time order) fits back-to-back — same rule and same
+  // AvailabilityService call CartScreen.tsx's client-side group reschedule
+  // already uses. Chains are cached by start time so tapping a calendar
+  // time resolves straight back to its full per-sibling schedule without a
+  // second round trip.
+  const groupSlotResolver = useCallback(
+    async (date: string): Promise<string[]> => {
+      if (groupSiblings.length < 2 || !booking?.providerId) return [];
+      try {
+        const orderedSiblings = [...groupSiblings].sort(
+          (a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime)
+        );
+        const chains = await AvailabilityService.findAllBackToBackSlots(
+          booking.providerId,
+          orderedSiblings.map(s => ({ serviceId: s.serviceId ?? '', duration: s.duration })),
+          date,
+        );
+        if (!chains) return [];
+        chains.forEach(chain => {
+          groupChainsByStart.current.set(`${date}|${chain[0]!.time}`, chain);
+        });
+        return chains.map(chain => chain[0]!.time);
+      } catch {
+        return [];
+      }
+    },
+    [groupSiblings, booking?.providerId]
+  );
+
+  const groupRescheduleChain = useMemo(
+    () => (groupRescheduleDate && groupRescheduleTime
+      ? groupChainsByStart.current.get(`${groupRescheduleDate}|${groupRescheduleTime}`) ?? null
+      : null),
+    [groupRescheduleDate, groupRescheduleTime]
+  );
+
+  // Add the currently-picked day+chain as one proposed option (the provider
+  // can add several candidate days before sending, same "build a list of
+  // options" pattern as the single-booking initiate flow above).
+  const handleAddGroupDateOption = useCallback(() => {
+    if (!groupRescheduleDate || !groupRescheduleChain) {
+      setGroupRescheduleError('Pick a date and time first.');
+      return;
+    }
+    setGroupRescheduleError('');
+    setGroupDateOptions(prev => {
+      if (prev.some(o => o.date === groupRescheduleDate)) return prev;
+      return [...prev, { date: groupRescheduleDate, chain: groupRescheduleChain }];
+    });
+    setGroupRescheduleDate('');
+    setGroupRescheduleTime('');
+  }, [groupRescheduleDate, groupRescheduleChain]);
+
+  const handleSendGroupReschedule = useCallback(async () => {
+    if (groupDateOptions.length === 0) {
+      setGroupRescheduleError('Add at least one date option.');
+      return;
+    }
+    if (!booking?.groupBookingId) return;
+
+    const orderedSiblings = [...groupSiblings].sort(
+      (a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime)
+    );
+
+    setGroupRescheduleSending(true);
+    setGroupRescheduleError('');
+    try {
+      // One proposal entry per sibling, each carrying its OWN shifted time
+      // across every candidate day — index-aligned with orderedSiblings
+      // since every chain in groupDateOptions was resolved against that
+      // same ordering (see groupSlotResolver).
+      const proposals = orderedSiblings.map((sibling, i) => ({
+        booking_id: sibling.id,
+        available_slots: groupDateOptions.map(opt => ({
+          date: opt.date,
+          times: [opt.chain[i]!.time],
+        })),
+      }));
+      await providerInitiateGroupReschedule(booking.groupBookingId, proposals);
+      setInitSent(true);
+    } catch (err: unknown) {
+      setGroupRescheduleError(
+        err instanceof Error && 'code' in err
+          ? err.message
+          : 'Could not send reschedule request. Please try again.'
+      );
+    } finally {
+      setGroupRescheduleSending(false);
+    }
+  }, [groupDateOptions, booking?.groupBookingId, groupSiblings]);
+
+  const closeGroupRescheduleModal = useCallback(() => {
+    setShowGroupRescheduleModal(false);
+    setGroupRescheduleDate(''); setGroupRescheduleTime('');
+    setGroupDateOptions([]); setGroupRescheduleError(''); setInitSent(false);
+    groupChainsByStart.current = new Map();
   }, []);
 
   const handleReleaseAddress = useCallback(async () => {
@@ -655,13 +877,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     });
   }, [booking, addressReleasedAt, addressPolicy]);
 
+  // Group-scoped copy for the confirm modal — shown whenever this booking is
+  // one of multiple services this provider has in the same client group, so
+  // the provider isn't surprised that tapping one button moves every sibling
+  // service at once (that's the point — see updateBookingStatus/cancelBooking
+  // above, which already route to the atomic group RPC in this case).
+  const groupSuffix = groupSiblings.length > 1
+    ? ` This applies to all ${groupSiblings.length} of this client's services with you.`
+    : '';
+
   const handleStatusChange = useCallback(
     (newStatus: BookingStatus) => {
       if (!booking) return;
       const label = STATUS_LABELS[newStatus] || newStatus;
       setPendingConfirm({
         title: `Mark as ${label}`,
-        message: `The booking status will be updated to ${label}.`,
+        message: `The booking status will be updated to ${label}.${groupSuffix}`,
         confirmLabel: `Mark ${label}`,
         destructive: newStatus === BookingStatus.NO_SHOW,
         onConfirm: async () => {
@@ -673,14 +904,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         },
       });
     },
-    [booking, updateBookingStatus, navigation]
+    [booking, updateBookingStatus, navigation, groupSuffix]
   );
 
   const handleConfirm = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
       title: 'Confirm Booking',
-      message: 'The client will be notified that their booking is confirmed.',
+      message: `The client will be notified that their booking is confirmed.${groupSuffix}`,
       confirmLabel: 'Confirm Booking',
       onConfirm: async () => {
         // pending → confirmed fires the DB trigger, which notifies the client
@@ -688,13 +919,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         navigation.goBack();
       },
     });
-  }, [booking, updateBookingStatus, navigation]);
+  }, [booking, updateBookingStatus, navigation, groupSuffix]);
 
   const handleDecline = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
       title: 'Decline Booking',
-      message: 'The client will be notified. This cannot be undone.',
+      message: `The client will be notified. This cannot be undone.${groupSuffix}`,
       confirmLabel: 'Decline',
       destructive: true,
       onConfirm: async () => {
@@ -705,13 +936,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         navigation.goBack();
       },
     });
-  }, [booking, cancelBooking, navigation]);
+  }, [booking, cancelBooking, navigation, groupSuffix]);
 
   const handleCancel = useCallback(() => {
     if (!booking) return;
     setPendingConfirm({
       title: 'Cancel Booking',
-      message: 'This cannot be undone. The client will be notified.',
+      message: `This cannot be undone. The client will be notified.${groupSuffix}`,
       confirmLabel: 'Cancel Booking',
       destructive: true,
       onConfirm: async () => {
@@ -721,7 +952,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         navigation.goBack();
       },
     });
-  }, [booking, cancelBooking, navigation]);
+  }, [booking, cancelBooking, navigation, groupSuffix]);
 
   const handleCallClient = useCallback(() => {
     if (!booking?.customerPhone) return;
@@ -782,7 +1013,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       }
     }
     return '';
-  }, [booking?.duration, booking?.bookingTime, booking?.endTime]);
+  }, [booking]);
 
   if (fetching) {
     return (
@@ -824,7 +1055,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const apptStart = booking.bookingDate && booking.bookingTime
     ? createBookingDateTime(booking.bookingDate, booking.bookingTime)
     : null;
-  const isApptToday = booking.bookingDate === new Date().toISOString().split('T')[0];
+  const isApptToday = booking.bookingDate === dateToYMD(new Date());
   const apptStartPassed = !!apptStart && apptStart.getTime() < Date.now();
   const pendingExpired = isPendingConfirmation && apptStartPassed;
 
@@ -845,7 +1076,20 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: P.text }]}>Booking Details</Text>
+          {/* Hat label: this screen is reachable directly from a provider
+              notification on cold launch, where the tab bar is the only other
+              hat signal and is easy to miss. A dual-hat user must be able to
+              tell their own appointment from their client's job at a glance —
+              the two afford opposite actions. This screen is always the
+              provider hat's view of a job they are performing. */}
+          <View style={styles.headerTitleWrap}>
+            <Text style={[styles.headerHat, { color: P.accent }]} numberOfLines={1}>
+              BUSINESS
+            </Text>
+            <Text style={[styles.headerTitle, { color: P.text }]} numberOfLines={1}>
+              Your Client's Booking
+            </Text>
+          </View>
           <View style={styles.headerRight}>
             <TouchableOpacity
               onPress={() => setShowHelpDropdown(v => !v)}
@@ -941,6 +1185,58 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
                 )}
               </View>
+
+              {/* ── GROUP BOOKING section — only when this client booked more than
+                  one of this provider's services together (see bookingBatchId in
+                  CartScreen). Every sibling this provider owns is listed,
+                  including the one currently open, so the count reads as the
+                  whole group rather than "N others". Tapping a sibling pushes
+                  its own detail screen rather than replacing this one, so back
+                  returns here. ── */}
+              {groupSiblings.length > 1 && (
+                <>
+                  <Perf color={perf} />
+                  <View style={styles.section}>
+                    <View style={styles.groupSectionHeader}>
+                      <Ionicons name="link" size={12} color={P.sub} />
+                      <Text style={[styles.sectionLabel, { color: P.sub, marginBottom: 0 }]}>
+                        GROUP BOOKING · {groupSiblings.length} SERVICES
+                      </Text>
+                    </View>
+                    {groupSiblings
+                      .slice()
+                      .sort((a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime))
+                      .map((sib, i, arr) => {
+                        const isCurrent = sib.id === booking.id;
+                        const rowContent = (
+                          <Row
+                            label={`${sib.serviceName}${isCurrent ? ' (this one)' : ''}`}
+                            value={`${formatDisplayDate(sib.bookingDate)} · ${sib.bookingTime}`}
+                            textColor={isCurrent ? P.accent : P.text}
+                            divColor={rowDiv}
+                            bold={isCurrent}
+                            last={i === arr.length - 1}
+                          />
+                        );
+                        return isCurrent ? (
+                          <View key={sib.id}>{rowContent}</View>
+                        ) : (
+                          <TouchableOpacity
+                            key={sib.id}
+                            activeOpacity={0.6}
+                            onPress={() => navigation.push('BookingDetail', {
+                              bookingId: sib.id,
+                              booking: sib,
+                              groupSiblings,
+                            })}
+                          >
+                            {rowContent}
+                          </TouchableOpacity>
+                        );
+                      })}
+                  </View>
+                </>
+              )}
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} />
@@ -1521,7 +1817,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 <ActionButton color="#FF9500" label="No Show" onPress={() => handleStatusChange(BookingStatus.NO_SHOW)} ghost />
               )}
               {booking.status === BookingStatus.UPCOMING && !isApptToday && !apptStartPassed && !hasRescheduleRequest && (
-                <ActionButton color="#FF9500" label="Reschedule" onPress={() => setShowInitRescheduleModal(true)} ghost />
+                <ActionButton
+                  color="#FF9500"
+                  label="Reschedule"
+                  onPress={() => (groupSiblings.length > 1 ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true))}
+                  ghost
+                />
               )}
               <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
             </View>
@@ -1544,10 +1845,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             {respondSent ? (
               /* ── Success state ── */
               <View style={styles.sentState}>
-                <Text style={styles.sentIcon}>✓</Text>
-                <Text style={[styles.sentTitle, { color: P.text }]}>Response Sent</Text>
+                <Text style={styles.sentIcon}>{dbReschedule?.status === 'rejected' ? '✕' : '✓'}</Text>
+                <Text style={[styles.sentTitle, { color: P.text }]}>
+                  {dbReschedule?.status === 'rejected' ? 'Request Declined' : 'Response Sent'}
+                </Text>
                 <Text style={[styles.sentSub, { color: P.text + '88' }]}>
-                  The client has been notified of your available dates.
+                  {dbReschedule?.status === 'rejected'
+                    ? 'The client has been notified. Their original appointment time stands.'
+                    : 'The client has been notified of your available dates.'}
                 </Text>
                 {/* respondModalBtn is `flex:1`, meant to share a row with a
                     sibling button — used alone it had no row to fill and
@@ -1739,6 +2044,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     ))}
                   </View>
                 )}
+
+                {/* Decline outright — no alternative slots required, unlike
+                    the "Apologise" flow above which still needs >=1 slot
+                    added before Send Response unlocks. Separate action, not
+                    a replacement for it — see reject_reschedule_request in
+                    supabase/fix_reschedule_flow_completion.sql. */}
+                <TouchableOpacity
+                  onPress={handleDeclineRequest}
+                  disabled={respondLoading}
+                  activeOpacity={0.7}
+                  style={{ alignSelf: 'center', marginTop: 14, opacity: respondLoading ? 0.5 : 1 }}
+                >
+                  <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '600' }}>
+                    Decline Request (no alternative times)
+                  </Text>
+                </TouchableOpacity>
 
                 <View style={[styles.respondModalActions, { marginTop: 16 }]}>
                   <TouchableOpacity
@@ -2021,6 +2342,118 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </KeyboardDismissView>
       </Modal>
 
+      {/* ── Group reschedule-initiate modal — every one of this provider's
+          own sibling services in the group moves together to a shared new
+          day. Reuses ModernBeautyCalendar with a chain-aware slotResolver,
+          same pattern CartScreen.tsx uses client-side pre-booking. ── */}
+      <Modal
+        visible={showGroupRescheduleModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeGroupRescheduleModal}
+      >
+        <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
+          <View style={[styles.respondModal, { backgroundColor: P.card }]}>
+            {initSent ? (
+              <View style={styles.sentState}>
+                <Text style={styles.sentIcon}>✓</Text>
+                <Text style={[styles.sentTitle, { color: P.text }]}>Request Sent</Text>
+                <Text style={[styles.sentSub, { color: P.text + '88' }]}>
+                  {booking?.customerName ?? 'The client'} has been notified and can choose from your proposed dates for all {groupSiblings.length} services.
+                </Text>
+                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20 }}>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: '#FF9500' }]}
+                    onPress={closeGroupRescheduleModal}
+                  >
+                    <Text style={styles.respondModalBtnText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={[styles.respondModalTitle, { color: P.text }]}>
+                  Propose New Day — {groupSiblings.length} Services
+                </Text>
+                <Text style={[styles.respondModalSub, { color: P.text + '77', marginBottom: 14 }]}>
+                  Times shown fit all {groupSiblings.length} services back-to-back. Add one or more days — the client will pick one to confirm the whole group.
+                </Text>
+
+                <ModernBeautyCalendar
+                  selectedDate={groupRescheduleDate}
+                  onDateSelect={setGroupRescheduleDate}
+                  selectedTime={groupRescheduleTime}
+                  onTimeSelect={setGroupRescheduleTime}
+                  providerName={booking?.providerId ?? ''}
+                  slotResolver={groupSlotResolver}
+                  accentColor="#FF9500"
+                  textColor={P.text}
+                  subColor={P.text + '77'}
+                  surfaceColor={P.card}
+                />
+
+                {groupRescheduleChain && (
+                  <View style={{ marginTop: 12, gap: 6 }}>
+                    {[...groupSiblings]
+                      .sort((a, b) => (a.bookingDate + a.bookingTime).localeCompare(b.bookingDate + b.bookingTime))
+                      .map((sib, i) => (
+                        <View key={sib.id} style={[styles.row, { borderBottomColor: 'transparent' }]}>
+                          <Text style={[styles.rowLabel, { color: P.text }]} numberOfLines={1}>{sib.serviceName}</Text>
+                          <Text style={[styles.rowValue, { color: '#FF9500' }]}>
+                            {groupRescheduleChain[i]!.time} – {groupRescheduleChain[i]!.endTime}
+                          </Text>
+                        </View>
+                      ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.respondModalBtn, { backgroundColor: groupRescheduleChain ? '#FF9500' : '#FF950055', marginTop: 14 }]}
+                  onPress={handleAddGroupDateOption}
+                  disabled={!groupRescheduleChain}
+                >
+                  <Text style={styles.respondModalBtnText}>Add This Day</Text>
+                </TouchableOpacity>
+
+                {groupDateOptions.length > 0 && (
+                  <View style={{ marginTop: 14, gap: 6 }}>
+                    <Text style={[styles.inputLabel, { color: P.text + '77' }]}>PROPOSED DAYS</Text>
+                    {groupDateOptions.map(opt => (
+                      <View key={opt.date} style={[styles.row, { borderBottomColor: 'transparent' }]}>
+                        <Text style={[styles.rowLabel, { color: P.text }]}>{formatDisplayDate(opt.date)}</Text>
+                        <TouchableOpacity onPress={() => setGroupDateOptions(prev => prev.filter(o => o.date !== opt.date))}>
+                          <Ionicons name="close-circle" size={18} color={P.text + '55'} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {groupRescheduleError ? (
+                  <Text style={{ color: '#FF3B30', fontSize: 13, marginTop: 10 }}>{groupRescheduleError}</Text>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', width: '100%', marginTop: 20, gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: P.text + '22' }]}
+                    onPress={closeGroupRescheduleModal}
+                  >
+                    <Text style={[styles.respondModalBtnText, { color: P.text }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.respondModalBtn, { backgroundColor: groupDateOptions.length > 0 ? '#FF9500' : '#FF950055', opacity: groupRescheduleSending ? 0.6 : 1 }]}
+                    onPress={handleSendGroupReschedule}
+                    disabled={groupRescheduleSending || groupDateOptions.length === 0}
+                  >
+                    {groupRescheduleSending ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.respondModalBtnText}>Send Request</Text>}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </KeyboardDismissView>
+      </Modal>
+
       {/* ── Help dropdown ── */}
       <Modal
         visible={showHelpDropdown}
@@ -2074,7 +2507,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           {booking && (booking.status === BookingStatus.UPCOMING || booking.status === BookingStatus.IN_PROGRESS) && (
             <TouchableOpacity
               style={[styles.moreSheetRow, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
-              onPress={() => { setShowMoreSheet(false); setTimeout(() => setShowInitRescheduleModal(true), 260); }}
+              onPress={() => {
+                setShowMoreSheet(false);
+                const openGroup = groupSiblings.length > 1;
+                setTimeout(() => (openGroup ? setShowGroupRescheduleModal(true) : setShowInitRescheduleModal(true)), 260);
+              }}
               activeOpacity={0.7}
             >
               <View style={[styles.moreSheetIcon, { backgroundColor: '#FF950018' }]}>
@@ -2128,9 +2565,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 onPress={() => {
                   const fn = pendingConfirm.onConfirm;
                   setPendingConfirm(null);
-                  Promise.resolve(fn()).catch(() =>
-                    Alert.alert('Action failed', 'Could not complete this action. Check your connection and try again.')
-                  );
+                  Promise.resolve(fn()).catch((err: unknown) => {
+                    // The group RPCs (provider_update_group_booking_status /
+                    // provider_cancel_group_booking) are all-or-nothing and
+                    // RAISE EXCEPTION with a specific, actionable reason
+                    // (e.g. "Booking X is already completed") when even one
+                    // sibling can't legally make the transition — surface
+                    // that verbatim instead of a generic message so the
+                    // provider knows what actually blocked it. Network/
+                    // unexpected errors (no 'code', or an explicit Network
+                    // mention) still fall back to the generic copy.
+                    const message =
+                      err instanceof Error && 'code' in err && !err.message.includes('Network')
+                        ? err.message
+                        : 'Could not complete this action. Check your connection and try again.';
+                    Alert.alert('Action failed', message);
+                  });
                 }}
               >
                 <Text style={[styles.dialogBtnText, { color: pendingConfirm.destructive ? '#FF3B30' : '#007AFF', fontWeight: '600' }]}>
@@ -2341,6 +2791,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    alignItems: 'center',
+  },
+  headerHat: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 1,
   },
   headerTitle: {
     fontSize: 17,
@@ -2554,6 +3013,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 2,
+    marginBottom: 12,
+  },
+  groupSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginBottom: 12,
   },
 

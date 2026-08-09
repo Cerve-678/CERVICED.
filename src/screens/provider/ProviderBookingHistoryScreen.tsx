@@ -29,9 +29,11 @@ import {
   type WaitlistEntry,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
+import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import type { BookingWithAddOns } from '../../types/database';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
+import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -114,6 +116,14 @@ const TABS = [
 type TabKey = typeof TABS[number]['key'];
 type BookingTab = Exclude<TabKey, 'waitlist'>;
 
+// A list row: `booking` is the representative (earliest appointment) of a
+// group-booking's siblings, or the booking itself when it's not grouped.
+// `siblings` is always non-empty and always includes `booking`.
+interface GroupedBooking {
+  booking: BookingWithAddOns;
+  siblings: BookingWithAddOns[];
+}
+
 function agendaSort(items: BookingWithAddOns[]): BookingWithAddOns[] {
   const upcoming = items
     .filter(b => b.booking_date >= TODAY_STR)
@@ -127,11 +137,11 @@ function agendaSort(items: BookingWithAddOns[]): BookingWithAddOns[] {
 function filterBookings(bookings: BookingWithAddOns[], tab: BookingTab): BookingWithAddOns[] {
   let items = bookings;
   switch (tab) {
-    case 'pending':     items = items.filter(b => b.status === 'pending'); break;
-    case 'upcoming':    items = items.filter(b => b.status === 'confirmed' && b.booking_date >= TODAY_STR); break;
-    case 'in_progress': items = items.filter(b => b.status === 'in_progress'); break;
-    case 'completed':   items = items.filter(b => b.status === 'completed'); break;
-    case 'cancelled':   items = items.filter(b => b.status === 'cancelled' || b.status === 'no_show'); break;
+    case 'pending':     items = items.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING); break;
+    case 'upcoming':    items = items.filter(b => mapDbBookingStatus(b.status) === BookingStatus.UPCOMING && b.booking_date >= TODAY_STR); break;
+    case 'in_progress': items = items.filter(b => mapDbBookingStatus(b.status) === BookingStatus.IN_PROGRESS); break;
+    case 'completed':   items = items.filter(b => mapDbBookingStatus(b.status) === BookingStatus.COMPLETED); break;
+    case 'cancelled':   items = items.filter(b => mapDbBookingStatus(b.status) === BookingStatus.CANCELLED || mapDbBookingStatus(b.status) === BookingStatus.NO_SHOW); break;
   }
   if (tab === 'completed' || tab === 'cancelled') {
     return items.sort((a, b) => b.booking_date.localeCompare(a.booking_date) || b.booking_time.localeCompare(a.booking_time));
@@ -141,15 +151,15 @@ function filterBookings(bookings: BookingWithAddOns[], tab: BookingTab): Booking
 
 // ─── Booking card ─────────────────────────────────────────────────────────────
 
-function BookingCard({ booking, dark, P, onPress }: {
-  booking: BookingWithAddOns; dark: boolean; P: Palette; onPress: () => void;
+function BookingCard({ booking, siblingCount, total, dark, P, onPress }: {
+  booking: BookingWithAddOns; siblingCount: number; total: number; dark: boolean; P: Palette; onPress: () => void;
 }) {
   const st    = statusFor(booking.status);
-  const total = (booking.base_price ?? 0) + (booking.add_ons_total ?? 0);
-  const done  = booking.status === 'cancelled' || booking.status === 'no_show';
+  const mappedStatus = mapDbBookingStatus(booking.status);
+  const done  = mappedStatus === BookingStatus.CANCELLED || mappedStatus === BookingStatus.NO_SHOW;
   const name  = booking.customer_name ?? 'Client';
   const initials = name.trim().split(/\s+/).map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase();
-  const isGroup = booking.is_group_booking && booking.group_booking_count > 1;
+  const isGroup = siblingCount > 1;
   const timeStr = fmtTime(booking.booking_time) + (booking.end_time ? ` – ${fmtTime(booking.end_time)}` : '');
 
   return (
@@ -168,13 +178,13 @@ function BookingCard({ booking, dark, P, onPress }: {
           </Text>
           {isGroup && (
             <View style={[bc.groupTag, { backgroundColor: P.accentSoft }]}>
-              <Ionicons name="people" size={10} color={P.accent} />
-              <Text style={[bc.groupCount, { color: P.accent }]}>{booking.group_booking_count}</Text>
+              <Ionicons name="link" size={10} color={P.accent} />
+              <Text style={[bc.groupCount, { color: P.accent }]}>{siblingCount}</Text>
             </View>
           )}
         </View>
         <Text style={[bc.service, { color: P.sub, textDecorationLine: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }]} numberOfLines={1}>
-          {booking.service_name_snapshot}
+          {isGroup ? `${booking.service_name_snapshot} + ${siblingCount - 1} more` : booking.service_name_snapshot}
         </Text>
         <Text style={[bc.time, { color: P.faint }]}>{fmtDayLabel(booking.booking_date)} · {timeStr}</Text>
       </View>
@@ -269,7 +279,13 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
   }, []);
 
   const fetchBookings = useCallback(async () => {
-    try { setBookings(await getProviderBookings()); } catch {}
+    // This screen's "Completed"/"Cancelled"/"All" tabs and header counts are a
+    // full booking ledger, not a recent-activity view — unlike
+    // ProviderHomeScreen/ProviderInboxScreen, older bookings here don't get
+    // cleared out by the auto-complete/expire-stale-pending cron, so a
+    // windowed fetch would silently hide real history. Request everything,
+    // same opt-in getProviderBookings() gives ProviderAnalyticsScreen.
+    try { setBookings(await getProviderBookings(Infinity)); } catch {}
   }, []);
 
   const fetchWaitlist = useCallback(async () => {
@@ -302,17 +318,54 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
 
   const counts = useMemo(() => ({
     all:         bookings.length,
-    pending:     bookings.filter(b => b.status === 'pending').length,
-    upcoming:    bookings.filter(b => b.status === 'confirmed' && b.booking_date >= TODAY_STR).length,
-    in_progress: bookings.filter(b => b.status === 'in_progress').length,
-    completed:   bookings.filter(b => b.status === 'completed').length,
-    cancelled:   bookings.filter(b => b.status === 'cancelled' || b.status === 'no_show').length,
+    pending:     bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).length,
+    upcoming:    bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.UPCOMING && b.booking_date >= TODAY_STR).length,
+    in_progress: bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.IN_PROGRESS).length,
+    completed:   bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.COMPLETED).length,
+    cancelled:   bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.CANCELLED || mapDbBookingStatus(b.status) === BookingStatus.NO_SHOW).length,
     waitlist:    waitlist.filter(e => e.status === 'waiting').length,
   }), [bookings, waitlist]);
 
-  const items = useMemo(() => {
+  // Collapse group-booking siblings (same client, same group_booking_id,
+  // same tab) into one card — a provider's own multi-service group booking
+  // (see bookingBatchId in CartScreen) otherwise shows as N separate cards
+  // for what the client experiences as one booking. Siblings are only
+  // collapsed together if they land in the SAME tab: a group with one
+  // confirmed and one still-pending sibling must show separately in each
+  // tab rather than being silently merged into one status. The earliest
+  // appointment in the group is the representative card (same convention
+  // as the notify_address_released/handle_booking_status_change dedup),
+  // carrying the full sibling list so the card can show the group badge
+  // and the detail screen can list every service.
+  const items = useMemo((): GroupedBooking[] => {
     if (activeTab === 'waitlist') return [];
-    return filterBookings(bookings, activeTab as BookingTab);
+    const filtered = filterBookings(bookings, activeTab as BookingTab);
+    const byGroup = new Map<string, BookingWithAddOns[]>();
+    const singles: GroupedBooking[] = [];
+    for (const b of filtered) {
+      // Multi-service booking is gated off (MULTI_SERVICE_BOOKING_ENABLED):
+      // don't collapse siblings into one group card. Any pre-existing group
+      // booking's rows each show as their own single card and are managed
+      // individually (per-booking RPCs), instead of showing a group badge and
+      // routing through the all-or-nothing group RPCs. See FUTURE_LOGIC.md.
+      if (MULTI_SERVICE_BOOKING_ENABLED && b.group_booking_id) {
+        const key = b.group_booking_id;
+        const list = byGroup.get(key);
+        if (list) list.push(b); else byGroup.set(key, [b]);
+      } else {
+        singles.push({ booking: b, siblings: [b] });
+      }
+    }
+    const grouped: GroupedBooking[] = singles;
+    for (const siblings of byGroup.values()) {
+      siblings.sort((a, b) => a.booking_date.localeCompare(b.booking_date) || a.booking_time.localeCompare(b.booking_time));
+      grouped.push({ booking: siblings[0]!, siblings });
+    }
+    // Re-apply the tab's ordering (agenda for live tabs, most-recent-first
+    // for completed/cancelled) using each group's representative booking.
+    const order = filterBookings(grouped.map(g => g.booking), activeTab as BookingTab);
+    const byRepresentativeId = new Map(grouped.map(g => [g.booking.id, g]));
+    return order.map(b => byRepresentativeId.get(b.id)!);
   }, [bookings, activeTab]);
 
   const tabEmptyText: Record<TabKey, string> = {
@@ -509,17 +562,23 @@ export default function ProviderBookingHistoryScreen({ navigation }: any) {
           <FlatList
             ref={listRef}
             data={items}
-            keyExtractor={b => b.id}
+            keyExtractor={g => g.booking.id}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.accent} />}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[s.listContent, items.length === 0 && s.listCentered]}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-            renderItem={({ item }) => (
+            renderItem={({ item: group }) => (
               <BookingCard
-                booking={item}
+                booking={group.booking}
+                siblingCount={group.siblings.length}
+                total={group.siblings.reduce((sum: number, b: BookingWithAddOns) => sum + (b.base_price ?? 0) + (b.add_ons_total ?? 0), 0)}
                 dark={dark}
                 P={P}
-                onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id, booking: mapDbBookingToConfirmed(item) })}
+                onPress={() => navigation.navigate('BookingDetail', {
+                  bookingId: group.booking.id,
+                  booking: mapDbBookingToConfirmed(group.booking),
+                  groupSiblings: group.siblings.length > 1 ? group.siblings.map(mapDbBookingToConfirmed) : undefined,
+                })}
               />
             )}
             ListEmptyComponent={

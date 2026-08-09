@@ -261,4 +261,63 @@ No decision made on the request/approval flow's exact screens, whether emergency
 
 ---
 
-*Last updated: 2026-08-04*
+---
+
+## Offers / Promotions — deferred (client-facing browse)
+
+### What it means
+
+Offers/Promotions are temporarily pulled from BOTH sides of the app as of 2026-08-09: the "CURRENT OFFERS" carousel on the client Home screen (and the full-browse `OffersScreen` it links to), and every provider-side entry point into `ProviderPromotionsScreen` (creating/editing/managing promotions). Nobody — client or provider — can currently reach promotions through the UI. This is a UI-visibility decision, not a data/backend change.
+
+### What was done
+
+A single flag, `OFFERS_ENABLED` in `src/constants/featureFlags.ts`, gates:
+- The "CURRENT OFFERS" section render in `HomeScreen.tsx` (and its `handleViewAllOffers` navigation trigger) — client side.
+- The `getActivePromotions()` fetch in `HomeScreen.tsx`'s initial-load effect, so no promotion data is even fetched while the flag is off — client side.
+- The two "Promotions" `GridTile`s in `ProviderAccountScreen.tsx` (QUICK ACCESS and MY BUSINESS sections) — provider side.
+- The "Promotions" row in `ProviderHomeScreen.tsx`'s Quick Access bottom sheet (filtered out of the array before render) — provider side.
+
+Left untouched (so re-enabling is a one-line flip, not a rebuild):
+- `OffersScreen.tsx` and `ProviderPromotionsScreen.tsx`, and all their route registrations (`Offers` in `HomeNavigator.tsx`; `Promotions` in `ProviderHomeNavigator.tsx`, `ProviderAccountNavigator.tsx`, `ProviderServicesNavigator.tsx`, `ProviderBeccaNavigator.tsx`) — still exist, just unreachable from the UI since nothing navigates to them anymore.
+- `getActivePromotions` / `getProviderActivePromotions` and all provider-side promotion CRUD functions (`getMyPromotions`, `upsertPromotion`, `togglePromotion`, `deletePromotion`, `patchPromotion`) in `databaseService.ts` — these only run when their screen is focused, and the screen is now unreachable, so no separate guarding was needed.
+- Promo code redemption at checkout (`PromoCodeRow.tsx`, `validatePromoCode`, `BookingSheet.tsx`) — this is a separate feature (a code entered against a specific booking) from the Offers/Promotions browse-and-manage screens, and was never in scope for this removal.
+- `ProviderClienteleScreen.tsx`'s in-screen promo picker (calls `getMyPromotions()` directly for its own announcement feature) — unrelated to the standalone Promotions screen/route, left as-is.
+
+### To bring it back
+
+Flip `OFFERS_ENABLED` to `true` in `src/constants/featureFlags.ts`. No other changes needed unless the underlying screens/data have drifted in the meantime.
+
+---
+
+## Multi-service (group) booking — deferred (client + provider)
+
+### What it means
+
+Multi-service booking — a client selecting several services from ONE provider and booking them together as a single grouped appointment — is temporarily pulled from BOTH sides of the app as of 2026-08-09. On the client, the provider profile's "Select" mode (multi-select checkboxes, the floating "N selected • £total — Book" bar, and the grouped `MultiBookingSheet`) is gone; a client now books one service at a time via the normal per-service "Book". On the provider, booking screens no longer collapse a group booking's siblings into one group card or route through the all-or-nothing group RPCs. This is a UI-visibility decision, not a data/backend change.
+
+Single-service booking is entirely unaffected: per-service "Book" (`BookingSheet`), Offers/Explore "Book Now" (`handleQuickBook`/`handleBookOffer`), the cart, and checkout all work exactly as before.
+
+### Why it's clean to gate at one point
+
+Every `bookingBatchId` / `group_booking_id` in the app originates in exactly one place: `handleMultiBookingSheetSubmit` in `ProviderProfileScreen.tsx`, reachable only through select mode → the "Select" link. The cart's own group-reschedule (`handleConfirmGroupReschedule` in `CartScreen.tsx`) only ever REUSES or re-mints a batch id for items that are ALREADY grouped — it never creates a group from ungrouped items. So gating the "Select" link alone stops all new group bookings at the source; the cart's group-block rendering and reschedule UI simply never have grouped items to act on and go dormant.
+
+### What was done
+
+A single flag, `MULTI_SERVICE_BOOKING_ENABLED` in `src/constants/featureFlags.ts`, gates:
+- The "Select" link in `ProviderProfileScreen.tsx` — hidden, so select mode can never be entered. `setSelectMode(true)` is only reachable via `toggleSelectMode` (the link's onPress); every other `setSelectMode` call sets it `false`. With select mode permanently off, the two `renderSelectionBar(...)` call sites and the `<MultiBookingSheet>` render (all guarded by `selectMode`) never show — client side.
+- The group-sibling collapse in `ProviderBookingHistoryScreen.tsx` — with the flag off, siblings are NOT grouped, so each service in any pre-existing group booking shows as its own single card (`siblingCount` 1, no group badge) and is managed individually — provider side.
+- The group-sibling refetch effect in `ProviderBookingDetailScreen.tsx` (`getGroupBookingSiblings`) — skipped when off, so a group booking opened directly (e.g. from a notification) is treated as a single booking. Every group-specific branch keys off `groupSiblings.length > 1`, which stays 1, so the GROUP BOOKING badge, sibling list, group reschedule modal, and all-or-nothing group RPCs (`updateGroupBookingStatus` / `providerCancelGroupBooking` / `providerInitiateGroupReschedule`) never fire — provider side.
+
+Left untouched (so re-enabling is a one-line flip, not a rebuild):
+- `MultiBookingSheet.tsx` and all its handlers (`handleBookSelected`, `handleMultiBookingSheetSubmit`, `renderSelectionBar`, `toggleSelectMode`, the select-mode state/effects) in `ProviderProfileScreen.tsx` — still present, just unreachable since the "Select" entry point is hidden.
+- `CartContext.tsx`'s `bookingBatchId` plumbing and `CartScreen.tsx`'s group-block rendering / group-reschedule flow — the cart itself is unchanged; it simply never receives grouped items while the flag is off.
+- The provider-side group RPCs in `databaseService.ts` (`getGroupBookingSiblings`, `updateGroupBookingStatus`, `providerCancelGroupBooking`, `providerInitiateGroupReschedule`) and the `group_booking_id` / `is_group_booking` DB columns — no data/backend change; existing group rows still exist and are simply handled as individual bookings.
+- The provider's "Group bookings" profile toggle in `ProviderBusinessEmailScreen.tsx` — this is an UNRELATED marketing preference (bridal parties, hen dos — one client, many people), not the multi-service cart grouping, and was never in scope.
+
+### To bring it back
+
+Flip `MULTI_SERVICE_BOOKING_ENABLED` to `true` in `src/constants/featureFlags.ts`. No other changes needed unless the underlying screens/data have drifted in the meantime.
+
+---
+
+*Last updated: 2026-08-09*
