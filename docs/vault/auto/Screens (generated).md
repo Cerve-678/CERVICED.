@@ -7,11 +7,12 @@
 
 **65 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (21)
+## Provider (22)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
 - `src/screens/provider/BrandingScreen.tsx`
 - `src/screens/provider/BusinessProfileScreen.tsx`
+- `src/screens/provider/InfoRegScreen.tsx`
 - `src/screens/provider/ProviderAccountInfoScreen.tsx`
 - `src/screens/provider/ProviderAccountScreen.tsx`
 - `src/screens/provider/ProviderAnalyticsScreen.tsx`
@@ -30,7 +31,7 @@
 - `src/screens/provider/ProviderPromotionsScreen.tsx`
 - `src/screens/provider/ProviderScheduleScreen.tsx`
 
-## Client / shared (44)
+## Client / shared (43)
 - `src/screens/auth/AuthScreen.tsx`
 - `src/screens/auth/ClaimProviderScreen.tsx`
 - `src/screens/auth/EmailVerificationScreen.tsx`
@@ -70,7 +71,6 @@
 - `src/screens/shared/ChangePasswordScreen.tsx`
 - `src/screens/shared/DevSettingsScreen.tsx`
 - `src/screens/shared/HelpCentreScreen.tsx`
-- `src/screens/shared/InfoRegScreen.tsx`
 - `src/screens/shared/InfoScreen.tsx`
 - `src/screens/shared/NotificationsScreen.tsx`
 - `src/screens/shared/ReportProblemScreen.tsx`

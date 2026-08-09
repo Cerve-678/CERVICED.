@@ -8,6 +8,7 @@ tags: [screen, client]
 
 ## → Navigates to
 - `Explore` _(navigator / dynamic)_
+- `Profile` _(navigator / dynamic)_
 - [[ProviderProfileScreen\|ProviderProfile]]
 
 ## Map

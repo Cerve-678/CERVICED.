@@ -36,6 +36,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 // Theme imports
 import { useTheme } from '../../contexts/ThemeContext';
+import { lightTheme, darkTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -89,8 +90,8 @@ const INFO_TABS = [
 ];
 
 const PROFILE_TABS = [
-  { key: 'profile' as const,  label: 'Profile' },
-  { key: 'policies' as const, label: 'Policies' },
+  { key: 'profile' as const,  label: 'Profile & services' },
+  { key: 'policies' as const, label: 'Booking rules' },
 ];
 
 // Accent color options
@@ -110,7 +111,7 @@ const ACCENT_COLORS = [
 ];
 
 // Predefined gradient options - expanded with more themes
-const GRADIENT_PRESETS: Array<{ name: string; colors: [string, string, ...string[]] }> = [
+const GRADIENT_PRESETS: { name: string; colors: [string, string, ...string[]] }[] = [
   { name: 'App Default', colors: ['#EDE8E2', '#C4A8AE', '#AF9197'] },
   { name: 'Sunset', colors: ['#FF6B6B', '#4ECDC4', '#45B7D1'] },
   { name: 'Rose Gold', colors: ['#FF69B4', '#FFB6C1', '#FFC1CC'] },
@@ -175,6 +176,81 @@ interface ProviderPolicies {
    *  profile view, on top of the structured fields above. */
   policyImageUrl: string;
 }
+
+/** A deliberately app-native day picker. The platform date spinner was easy
+ * to miss beneath the full-screen edit modal, and a calendar implies a month
+ * and year that do not matter here. This exposes the one real choice — a day
+ * of the month — reliably on iOS and Android. */
+const ReleaseDayPicker = ({
+  visible,
+  value,
+  accentColor,
+  cardColor,
+  textColor,
+  subColor,
+  borderColor,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  value: number;
+  accentColor: string;
+  cardColor: string;
+  textColor: string;
+  subColor: string;
+  borderColor: string;
+  onSelect: (day: number) => void;
+  onClose: () => void;
+}) => {
+  const styles = useScreenStyles();
+  return (
+  <Modal
+    transparent
+    animationType="slide"
+    visible={visible}
+    onRequestClose={onClose}
+    presentationStyle="overFullScreen"
+  >
+    <View style={styles.releasePickerOverlay}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+      <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor }]}>
+        <View style={styles.releasePickerHeader}>
+          <View>
+            <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING NOTIFICATIONS</Text>
+            <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel="Close release day picker">
+            <Ionicons name="close" size={20} color={textColor} />
+          </TouchableOpacity>
+        </View>
+        <Text style={[styles.releasePickerSubtext, { color: subColor }]}>
+          Followers will be reminded when your next month of slots opens.
+        </Text>
+        <View style={styles.releaseDayGrid}>
+          {Array.from({ length: 31 }, (_, index) => index + 1).map(day => {
+            const selected = value === day;
+            return (
+              <TouchableOpacity
+                key={day}
+                style={[styles.releaseDayOption, { borderColor }, selected && { backgroundColor: accentColor, borderColor: accentColor }]}
+                onPress={() => onSelect(day)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.releaseDayOptionText, { color: textColor }, selected && styles.releaseDayOptionTextSelected]}>{day}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={onClose}>
+          <Text style={styles.releasePickerDoneText}>Done</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+  );
+};
 
 const DEFAULT_POLICIES: ProviderPolicies = {
   cancelNotice:     '24h',
@@ -730,6 +806,7 @@ const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = ({
   onRemoveImage,
   size = 80,
 }) => {
+  const styles = useScreenStyles();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
@@ -813,10 +890,12 @@ const GradientPickerModal: React.FC<GradientPickerModalProps> = ({
   onSelect,
   currentGradient,
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint="light" style={styles.gradientPickerModal}>
+        <BlurView intensity={30} tint={chrome.blurTint} style={styles.gradientPickerModal}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose Your Gradient</Text>
@@ -864,7 +943,9 @@ interface ChipSelectProps {
   onToggle: (tag: string) => void;
   accentColor?: string;
 }
-const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onToggle, accentColor = '#9C27B0' }) => (
+const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onToggle, accentColor = '#9C27B0' }) => {
+  const styles = useScreenStyles();
+  return (
   <View style={styles.chipGrid}>
     {options.map(opt => {
       const active = selected.includes(opt);
@@ -879,15 +960,19 @@ const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onToggle, ac
       );
     })}
   </View>
-);
+  );
+};
 
 // ─── Label with a red required asterisk ───────────────────────────────────────
-const RequiredLabel: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => (
+const RequiredLabel: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => {
+  const styles = useScreenStyles();
+  return (
   <Text style={styles.inputLabel}>
     {children}
     {required && <Text style={styles.requiredStar}> *</Text>}
   </Text>
-);
+  );
+};
 
 // ─── Duration quick-picker ────────────────────────────────────────────────────
 // Providers tap a preset instead of typing "1 hour". A value that isn't a preset
@@ -898,6 +983,7 @@ interface DurationPickerProps {
   accentColor?: string;
 }
 const DurationPicker: React.FC<DurationPickerProps> = ({ value, onChange, accentColor = '#AF9197' }) => {
+  const styles = useScreenStyles();
   const presets = DURATION_PRESETS.includes(value) || !value
     ? DURATION_PRESETS
     : [value, ...DURATION_PRESETS];
@@ -934,6 +1020,8 @@ interface ServiceTemplatePickerProps {
 const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   visible, categoryName, fallbackKind, accentColor, onPick, onClose,
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   const kind = inferCategoryKind(categoryName, fallbackKind);
   const allTemplates = SERVICE_TEMPLATES_BY_CATEGORY[kind] ?? SERVICE_TEMPLATES_BY_CATEGORY.OTHER;
   const meta = CATEGORY_META[kind];
@@ -950,7 +1038,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint="light" style={styles.templateSheet}>
+        <BlurView intensity={30} tint={chrome.blurTint} style={styles.templateSheet}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
@@ -979,7 +1067,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.templateName}>{t.name}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="time-outline" size={12} color="rgba(0,0,0,0.5)" />
+                      <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
                       <Text style={styles.templateDuration}>{t.duration}</Text>
                     </View>
                   </View>
@@ -1002,7 +1090,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                       <View style={{ flex: 1 }}>
                         <Text style={styles.templateName}>{categoryName.trim()} ({opt})</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Ionicons name="time-outline" size={12} color="rgba(0,0,0,0.5)" />
+                          <Ionicons name="time-outline" size={12} color={chrome.fg(0.5)} />
                           <Text style={styles.templateDuration}>{group.duration ?? '30 min'}</Text>
                         </View>
                       </View>
@@ -1043,6 +1131,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   fallbackKind,
   accentColor = '#AF9197',
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   // Text boxes and modal background stay tinted with the provider's own
   // accent colour (matching their chosen brand aesthetic) instead of a
   // generic white/grey — just blended much closer to white so they stay
@@ -1136,7 +1226,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindications(service?.contraindications || []);
     setContraindicationInput('');
     setAftercareNotes(service?.aftercareNotes || '');
-  }, [service]);
+  }, [service, catKey]);
 
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
     setArr(arr.includes(tag) ? arr.filter(t => t !== tag) : [...arr, tag]);
@@ -1271,16 +1361,16 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
                 <RequiredLabel required>Service Name</RequiredLabel>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                  <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor="rgba(0,0,0,0.4)" onFocus={() => handleInputFocus('name')} />
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                  <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
                 </BlurView>
               </View>
 
               {/* Price */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['price'] = e.nativeEvent.layout.y; }}>
                 <RequiredLabel required>Price (£)</RequiredLabel>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                  <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('price')} />
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                  <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('price')} />
                 </BlurView>
               </View>
 
@@ -1298,14 +1388,14 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.inputHint, { marginBottom: 4 }]}>Before</Text>
-                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                      <TextInput style={styles.textInput} value={bufferBefore} onChangeText={setBufferBefore} placeholder="0" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('bufferBefore')} />
+                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                      <TextInput style={styles.textInput} value={bufferBefore} onChangeText={setBufferBefore} placeholder="0" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('bufferBefore')} />
                     </BlurView>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.inputHint, { marginBottom: 4 }]}>After</Text>
-                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                      <TextInput style={styles.textInput} value={bufferAfter} onChangeText={setBufferAfter} placeholder="Default" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('bufferAfter')} />
+                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                      <TextInput style={styles.textInput} value={bufferAfter} onChangeText={setBufferAfter} placeholder="Default" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('bufferAfter')} />
                     </BlurView>
                   </View>
                 </View>
@@ -1314,8 +1404,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* Description */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['serviceDescription'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
-                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={description} onChangeText={setDescription} placeholder="Describe your service..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={4} textAlignVertical="top" onFocus={() => handleInputFocus('serviceDescription')} />
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
+                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={description} onChangeText={setDescription} placeholder="Describe your service..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={4} textAlignVertical="top" onFocus={() => handleInputFocus('serviceDescription')} />
                 </BlurView>
               </View>
 
@@ -1332,7 +1422,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Patch Test Required</Text>
                       <Text style={styles.toggleHint}>Client must be patch tested before this treatment</Text>
                     </View>
-                    <Switch value={patchTestRequired} onValueChange={setPatchTestRequired} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={patchTestRequired} onValueChange={setPatchTestRequired} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.toggleRow}>
@@ -1340,13 +1430,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
                       <Text style={styles.toggleHint}>This treatment is safe during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
                     <Text style={styles.inputLabel}>Minimum Age</Text>
-                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, { backgroundColor: inputTint }]}>
-                      <TextInput style={styles.textInput} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('minAge')} />
+                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
+                      <TextInput style={styles.textInput} value={minAge} onChangeText={setMinAge} placeholder="e.g. 18" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('minAge')} />
                     </BlurView>
                   </View>
 
@@ -1363,8 +1453,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       </View>
                     )}
                     <View style={styles.addAddOnRow}>
-                      <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
-                        <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
+                      <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
+                        <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
                       </BlurView>
                       <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddContraindication}>
                         <Text style={styles.addAddOnButtonText}>+</Text>
@@ -1391,7 +1481,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
                       <Text style={styles.toggleHint}>This service is safe during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: 'rgba(0,0,0,0.1)', true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
                 </View>
               )}
@@ -1399,8 +1489,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* ── Aftercare Notes ──────────────────────────────────── */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['aftercareNotes'] = e.nativeEvent.layout.y; }}>
                 <Text style={styles.inputLabel}>Aftercare Notes (Optional)</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
-                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor="rgba(0,0,0,0.4)" multiline numberOfLines={3} textAlignVertical="top" onFocus={() => handleInputFocus('aftercareNotes')} />
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
+                  <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={3} textAlignVertical="top" onFocus={() => handleInputFocus('aftercareNotes')} />
                 </BlurView>
               </View>
 
@@ -1466,8 +1556,8 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor="rgba(0,0,0,0.4)" onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
                   </BlurView>
                   <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
@@ -1502,11 +1592,11 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   </View>
                 )}
                 <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnNameInput, { backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor="rgba(0,0,0,0.4)" onFocus={() => handleInputFocus('newAddOnName')} />
+                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.addOnNameInput, { backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={newAddOnName} onChangeText={setNewAddOnName} placeholder="Add-on name" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('newAddOnName')} />
                   </BlurView>
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.addOnPriceInput, { backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor="rgba(0,0,0,0.4)" keyboardType="numeric" onFocus={() => handleInputFocus('newAddOnPrice')} />
+                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.addOnPriceInput, { backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('newAddOnPrice')} />
                   </BlurView>
                   <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddAddOn}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
@@ -1544,6 +1634,8 @@ interface AddCategoryModalProps {
 }
 
 const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, onAdd, existing, businessKind, accentColor = '#AF9197' }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   const [categoryName, setCategoryName] = useState('');
   const [categoryDescription, setCategoryDescription] = useState('');
 
@@ -1586,7 +1678,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint="light" style={styles.templateSheet}>
+        <BlurView intensity={30} tint={chrome.blurTint} style={styles.templateSheet}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
@@ -1606,13 +1698,13 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
               <Text style={styles.templateGroupLabel}>Category Name</Text>
               <Text style={styles.inputHint}>Type your own, or tap a suggestion below.</Text>
               <View style={styles.addAddOnRow}>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, { flex: 1 }]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1 }]}>
                   <TextInput
                     style={styles.textInput}
                     value={categoryName}
                     onChangeText={setCategoryName}
                     placeholder={CATEGORY_NAME_EXAMPLE_BY_CATEGORY[myKind]}
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     onSubmitEditing={() => addCategory(categoryName, categoryDescription)}
                     returnKeyType="done"
                   />
@@ -1624,13 +1716,13 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
 
               <Text style={[styles.templateGroupLabel, { marginTop: 18 }]}>Description</Text>
               <Text style={styles.inputHint}>Shown to clients under this category — what it includes and why they should book.</Text>
-              <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
+              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.inputBlurMultiline, { marginTop: 8 }]}>
                 <TextInput
                   style={[styles.textInput, styles.textInputMultiline]}
                   value={categoryDescription}
                   onChangeText={setCategoryDescription}
                   placeholder="e.g. Cuts, colour and treatments tailored to your hair type."
-                  placeholderTextColor="rgba(0,0,0,0.4)"
+                  placeholderTextColor={chrome.fg(0.4)}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
@@ -1697,6 +1789,8 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   onTransfer,
   onSkip,
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   const [acuityUrl, setAcuityUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -1728,9 +1822,9 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={40} tint="light" style={styles.transferModal}>
+        <BlurView intensity={40} tint={chrome.blurTint} style={styles.transferModal}>
           <LinearGradient
-            colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)']}
+            colors={[chrome.surf(0.9), chrome.surf(0.7)]}
             style={styles.transferGradient}
           />
           <Text style={styles.transferTitle}>Import from Acuity</Text>
@@ -1738,13 +1832,13 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
             Paste your Acuity Scheduling link and we'll automatically import your services, prices, and business info.
           </Text>
 
-          <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+          <BlurView intensity={15} tint={chrome.blurTint} style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={acuityUrl}
               onChangeText={(text) => { setAcuityUrl(text); setErrorMsg(''); }}
               placeholder="https://acuityscheduling.com/schedule.php?owner=…"
-              placeholderTextColor="rgba(0,0,0,0.4)"
+              placeholderTextColor={chrome.fg(0.4)}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
@@ -1797,10 +1891,12 @@ const AccentColorPickerModal: React.FC<AccentColorPickerModalProps> = ({
   onSelect,
   currentColor,
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint="light" style={styles.accentPickerModal}>
+        <BlurView intensity={30} tint={chrome.blurTint} style={styles.accentPickerModal}>
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose Accent Color</Text>
@@ -1854,6 +1950,8 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   categoryName,
   categoryDescription,
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   const [newName, setNewName] = useState(categoryName);
   const [description, setDescription] = useState(categoryDescription);
 
@@ -1873,27 +1971,27 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <KeyboardDismissView style={styles.modalOverlay} dismissOnTap>
-        <BlurView intensity={30} tint="light" style={styles.smallModal}>
+        <BlurView intensity={30} tint={chrome.blurTint} style={styles.smallModal}>
           <Text style={styles.smallModalTitle}>Edit Category</Text>
           <Text style={styles.inputLabel}>Name</Text>
-          <BlurView intensity={15} tint="light" style={styles.inputBlur}>
+          <BlurView intensity={15} tint={chrome.blurTint} style={styles.inputBlur}>
             <TextInput
               style={styles.textInput}
               value={newName}
               onChangeText={setNewName}
               placeholder="Category name"
-              placeholderTextColor="rgba(0,0,0,0.4)"
+              placeholderTextColor={chrome.fg(0.4)}
               autoFocus
             />
           </BlurView>
           <Text style={[styles.inputLabel, { marginTop: 14 }]}>Description (shown to clients)</Text>
-          <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.inputBlurMultiline]}>
+          <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.inputBlurMultiline]}>
             <TextInput
               style={[styles.textInput, styles.textInputMultiline]}
               value={description}
               onChangeText={setDescription}
               placeholder="What's included in this category, and why clients should book it..."
-              placeholderTextColor="rgba(0,0,0,0.4)"
+              placeholderTextColor={chrome.fg(0.4)}
               multiline
               numberOfLines={3}
               textAlignVertical="top"
@@ -1936,6 +2034,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   portfolio,
   policies,
 }) => {
+  const styles = useScreenStyles();
+  const chrome = useChrome();
   const categoryNames = Object.keys(providerData.categories);
   const [selectedPreviewCategory, setSelectedPreviewCategory] = useState<string>(
     categoryNames[0] || ''
@@ -1986,7 +2086,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   // shorter" layout as ProviderProfileScreen's portfolio grid.
   const PREVIEW_PORTFOLIO_COL_W = (screenWidth - 40 - 12) / 2;
   const portfolioColumns = useMemo(() => {
-    const cols: Array<Array<DbPortfolioItem & { tileHeight: number }>> = [[], []];
+    const cols: (DbPortfolioItem & { tileHeight: number })[][] = [[], []];
     const colHeights = [0, 0];
     portfolio.forEach(item => {
       const ratio = item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
@@ -2065,7 +2165,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   </View>
                 )}
                 <LinearGradient
-                  colors={['rgba(255,255,255,0.3)', 'transparent']}
+                  colors={[chrome.surf(0.3), 'transparent']}
                   style={styles.previewLogoGloss}
                 />
               </View>
@@ -2116,8 +2216,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewSlotsCardHighlight}
                 />
+                {/* Echoes the free-text box below — this is the client's
+                    own words, shown exactly as typed. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {providerData.slotsText || 'Booking info here'}
+                  {providerData.slotsText || "Add a slots message below"}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
@@ -2487,7 +2589,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
 // Main Component
 const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
+  const styles = useScreenStyles();
+  const chrome = useChrome();
+  // Header/inline icons can't read a StyleSheet colour, so they take the same
+  // palette token the sheet above is built from.
+  const chromeText = isDarkMode ? darkTheme.text : lightTheme.text;
   const { user } = useAuth();
 
   // Ref for main scrollview to enable auto-scroll to focused inputs
@@ -2518,6 +2625,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     location: '',
     aboutText: '',
     slotsText: 'Slots out every 15th of the month',
+    scheduleReleaseDay: null,
     gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
     hasCustomGradient: false,
     accentColor: '#7B1FA2',
@@ -2545,6 +2653,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'policies'>('profile');
+  const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
   const [policyImageUploading, setPolicyImageUploading] = useState(false);
 
@@ -3070,14 +3179,33 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies]);
+  }, [providerData, user, policies, navigation]);
 
   // Get adaptive accent color - now uses user-selected accent color
   const adaptiveAccentColor = useMemo(() => {
     return providerData.accentColor;
   }, [providerData.accentColor]);
+  // The editor is part of the provider's brand experience too. Use exactly
+  // the same resolved theme tokens as the public-profile preview rather than
+  // defaulting new surfaces to white.
+  const editTheme = useMemo(
+    () => resolveProviderTheme(providerData.profileTheme),
+    [providerData.profileTheme],
+  );
+  const editCardBg = withAlpha(editTheme.card, editTheme.isDark ? 0.62 : 0.72);
 
   const categoryNames = Object.keys(providerData.categories);
+  const serviceCount = Object.values(providerData.categories).reduce(
+    (total, services) => total + services.length,
+    0,
+  );
+  const editorChecklist = [
+    { label: 'Business details', done: Boolean(providerData.providerName.trim() && providerData.location.trim()) },
+    { label: 'Introduction', done: Boolean(providerData.aboutText.trim()) },
+    { label: 'Services & prices', done: serviceCount > 0 },
+    { label: 'Portfolio', done: portfolioItems.length > 0 },
+  ];
+  const completedEditorSteps = editorChecklist.filter(item => item.done).length;
 
   // Keep the draggable order in sync with the real data — but never while a
   // drag is in progress, or the live reflow would get stomped mid-gesture.
@@ -3415,13 +3543,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{isEditMode ? 'Edit Profile' : 'Provider Registration'}</Text>
+            <Text style={styles.headerTitle}>{isEditMode ? 'Public Profile' : 'Set Up Your Profile'}</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.headerIconButton}
                 onPress={() => setShowPreviewModal(true)}
               >
-                <Ionicons name="eye-outline" size={20} color="#000" />
+                <Ionicons name="eye-outline" size={20} color={chromeText} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.headerIconButton, isSubmitting && { opacity: 0.6 }]}
@@ -3429,8 +3557,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 disabled={isSubmitting}
               >
                 {isSubmitting
-                  ? <ActivityIndicator size="small" color="#000" />
-                  : <Ionicons name="checkmark" size={22} color="#000" />}
+                  ? <ActivityIndicator size="small" color={chromeText} />
+                  : <Ionicons name="checkmark" size={22} color={chromeText} />}
               </TouchableOpacity>
             </View>
           </View>
@@ -3462,8 +3590,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // like the other pills weren't reacting to the drag at all.
               scrollEnabled={!draggingCategory}
             >
-            {/* Logo Section */}
-            <View style={styles.logoSection}>
+            {/* Brand identity is now a compact, editable summary rather than
+                a large standalone avatar that pushes the useful fields down. */}
+            <View style={[styles.brandIdentityCard, { backgroundColor: editCardBg, borderColor: editTheme.border }]}>
               <TouchableOpacity
                 style={styles.logoContainer}
                 onPress={handleSelectLogo}
@@ -3485,6 +3614,44 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Ionicons name="pencil-outline" size={14} color="#fff" />
                 </View>
               </TouchableOpacity>
+              <View style={styles.brandIdentityCopy}>
+                <Text style={[styles.brandIdentityEyebrow, { color: editTheme.sub }]}>YOUR BUSINESS</Text>
+                <Text style={[styles.brandIdentityName, { color: editTheme.text }]} numberOfLines={1}>
+                  {providerData.providerName || 'Business name'}
+                </Text>
+                <Text style={[styles.brandIdentityHint, { color: editTheme.sub }]}>Tap the image to add or update your logo</Text>
+              </View>
+            </View>
+
+            {/* A small orientation card makes this editor feel like one focused
+                profile-building flow instead of a long, unprioritised form. */}
+            <View style={[styles.setupGuide, { backgroundColor: editCardBg, borderColor: editTheme.border }]}>
+              <View style={styles.setupGuideHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.setupGuideEyebrow, { color: editTheme.sub }]}>PUBLIC PROFILE</Text>
+                  <Text style={[styles.setupGuideTitle, { color: editTheme.text }]}>
+                    {completedEditorSteps === editorChecklist.length ? 'Looking good — ready for clients' : 'Build a profile clients can trust'}
+                  </Text>
+                </View>
+                <View style={[styles.setupGuideCount, { backgroundColor: adaptiveAccentColor }]}>
+                  <Text style={styles.setupGuideCountText}>{completedEditorSteps}/{editorChecklist.length}</Text>
+                </View>
+              </View>
+              <Text style={[styles.setupGuideSubtext, { color: editTheme.sub }]}>
+                Add the essentials first, then use the preview to check exactly what clients will see.
+              </Text>
+              <View style={styles.setupGuideSteps}>
+                {editorChecklist.map(item => (
+                  <View key={item.label} style={styles.setupGuideStep}>
+                    <Ionicons
+                      name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={16}
+                      color={item.done ? adaptiveAccentColor : editTheme.sub}
+                    />
+                    <Text style={[styles.setupGuideStepText, { color: item.done ? editTheme.text : editTheme.sub }]}>{item.label}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
 
             {/* Tab switcher */}
@@ -3494,7 +3661,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 activeKey={activeTab}
                 onPress={setActiveTab}
                 accentColor={adaptiveAccentColor}
-                inactiveTextColor="rgba(255,255,255,0.75)"
+                inactiveTextColor={chrome.fg(0.75)}
                 scrollable={false}
               />
             </View>
@@ -3503,9 +3670,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
             {/* Business Name */}
             <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint="light" style={styles.card}>
+            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
               <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                colors={[chrome.surf(0.3), 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
@@ -3518,7 +3685,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                      <Ionicons name="lock-closed" size={11} color="rgba(0,0,0,0.5)" />
+                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
                       <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
                         {providerData.providerName}
                       </Text>
@@ -3526,7 +3693,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <Text style={styles.inputHint}>Set at sign-up — contact support to change your business name.</Text>
                   </>
                 ) : (
-                  <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                     <TextInput
                       style={styles.textInput}
                       value={providerData.providerName}
@@ -3534,7 +3701,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         setProviderData({ ...providerData, providerName: text })
                       }
                       placeholder="Enter your business name"
-                      placeholderTextColor="rgba(0,0,0,0.4)"
+                      placeholderTextColor={chrome.fg(0.4)}
                       onFocus={() => handleInputFocus('businessName')}
                     />
                   </BlurView>
@@ -3550,7 +3717,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
-                      <Ionicons name="lock-closed" size={11} color="rgba(0,0,0,0.5)" />
+                      <Ionicons name="lock-closed" size={11} color={chrome.fg(0.5)} />
                       <Text style={[styles.serviceCategoryText, styles.serviceCategoryTextSelected]}>
                         {providerData.providerService}
                       </Text>
@@ -3594,7 +3761,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     style={styles.customServiceInput}
                     onLayout={(e) => { inputPositions.current['customService'] = e.nativeEvent.layout.y + 150; }}
                   >
-                    <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                    <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                       <TextInput
                         style={styles.textInput}
                         value={providerData.customServiceType}
@@ -3602,7 +3769,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           setProviderData({ ...providerData, customServiceType: text })
                         }
                         placeholder="What service do you provide?"
-                        placeholderTextColor="rgba(0,0,0,0.4)"
+                        placeholderTextColor={chrome.fg(0.4)}
                         autoFocus
                         onFocus={() => handleInputFocus('customService')}
                       />
@@ -3617,7 +3784,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['location'] = e.nativeEvent.layout.y + 200; }}
               >
                 <RequiredLabel required>Location</RequiredLabel>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.location}
@@ -3625,7 +3792,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       setProviderData({ ...providerData, location: text })
                     }
                     placeholder="e.g., North West London"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     onFocus={() => handleInputFocus('location')}
                   />
                 </BlurView>
@@ -3635,9 +3802,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
             {/* About Section */}
             <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint="light" style={styles.card}>
+            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
               <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                colors={[chrome.surf(0.3), 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
@@ -3648,7 +3815,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['about'] = e.nativeEvent.layout.y + 500; }}
               >
                 <Text style={styles.inputLabel}>Description</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlurMultiline, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox]}>
                   <TextInput
                     style={[styles.textInput, styles.textInputMultiline]}
                     value={providerData.aboutText}
@@ -3656,7 +3823,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       setProviderData({ ...providerData, aboutText: text })
                     }
                     placeholder="Tell clients about your services, policies, deposit requirements..."
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     multiline
                     numberOfLines={6}
                     textAlignVertical="top"
@@ -3667,30 +3834,66 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['slots'] = e.nativeEvent.layout.y + 600; }}
+                onLayout={(e) => { inputPositions.current['slotsText'] = e.nativeEvent.layout.y + 500; }}
               >
-                <Text style={styles.inputLabel}>Availability Message</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <Text style={styles.inputLabel}>Slots Message</Text>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.slotsText}
                     onChangeText={(text) =>
                       setProviderData({ ...providerData, slotsText: text })
                     }
-                    placeholder="e.g., Slots out every 15th of the month"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
-                    onFocus={() => handleInputFocus('slots')}
+                    placeholder="e.g. Slots out every 15th of the month"
+                    placeholderTextColor={chrome.fg(0.4)}
+                    onFocus={() => handleInputFocus('slotsText')}
                   />
                 </BlurView>
+                <Text style={styles.inputHint}>
+                  Shown as a short pill on your profile, next to the notification bell — your own words, not pulled from your schedule.
+                </Text>
+
+                {/* Same setting as ProviderAutomationsScreen's "Notify
+                    followers on schedule release day" card — both read/write
+                    providers.automation_settings.scheduleReleaseDay, so
+                    changing it here or there updates the same value and each
+                    screen shows the current one on its own next load. */}
+                <View style={[styles.toggleRow, { marginTop: 16 }]}>
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Notify Followers on Release Day</Text>
+                    <Text style={styles.toggleHint}>Clients who turned on notifications for your profile get a reminder on this day each month</Text>
+                  </View>
+                  <Switch
+                    value={providerData.scheduleReleaseDay != null}
+                    onValueChange={(v) =>
+                      setProviderData({
+                        ...providerData,
+                        scheduleReleaseDay: v ? new Date().getDate() : null,
+                      })
+                    }
+                    trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }}
+                    thumbColor="#fff"
+                  />
+                </View>
+                {providerData.scheduleReleaseDay != null && (
+                  <TouchableOpacity
+                    style={styles.releaseDayBtn}
+                    onPress={() => setReleaseDayPickerVisible(true)}
+                  >
+                    <Text style={styles.releaseDayBtnText}>
+                      Day {providerData.scheduleReleaseDay} of every month
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </BlurView>
             </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
             <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint="light" style={styles.card}>
+            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
               <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                colors={[chrome.surf(0.3), 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
@@ -3745,9 +3948,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
             {/* Contact Information */}
             <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint="light" style={styles.card}>
+            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
               <LinearGradient
-                colors={['rgba(255,255,255,0.3)', 'transparent']}
+                colors={[chrome.surf(0.3), 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
@@ -3762,13 +3965,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['phone'] = e.nativeEvent.layout.y + 700; }}
               >
                 <Text style={styles.inputLabel}>Phone Number</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.phone}
                     onChangeText={(text) => setProviderData({ ...providerData, phone: text })}
                     placeholder="+44 7XXX XXXXXX"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="phone-pad"
                     onFocus={() => handleInputFocus('phone')}
                   />
@@ -3780,13 +3983,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['contactEmail'] = e.nativeEvent.layout.y + 750; }}
               >
                 <Text style={styles.inputLabel}>Contact Email</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.email}
                     onChangeText={(text) => setProviderData({ ...providerData, email: text })}
                     placeholder="bookings@yourbusiness.com"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -3800,7 +4003,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['instagram'] = e.nativeEvent.layout.y + 800; }}
               >
                 <Text style={styles.inputLabel}>Instagram Handle</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.instagram}
@@ -3808,7 +4011,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       setProviderData({ ...providerData, instagram: text.replace(/^@/, '') })
                     }
                     placeholder="yourbusiness"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     autoCapitalize="none"
                     autoCorrect={false}
                     onFocus={() => handleInputFocus('instagram')}
@@ -3821,13 +4024,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['website'] = e.nativeEvent.layout.y + 850; }}
               >
                 <Text style={styles.inputLabel}>Website</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.website}
                     onChangeText={(text) => setProviderData({ ...providerData, website: text })}
                     placeholder="https://yourbusiness.com"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="url"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -3841,13 +4044,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['externalBookingUrl'] = e.nativeEvent.layout.y + 875; }}
               >
                 <Text style={styles.inputLabel}>External Booking Link (optional)</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.externalBookingUrl}
                     onChangeText={(text) => setProviderData({ ...providerData, externalBookingUrl: text })}
                     placeholder="e.g. your Fresha or Acuity booking page"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="url"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -3864,13 +4067,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 onLayout={(e) => { inputPositions.current['experience'] = e.nativeEvent.layout.y + 900; }}
               >
                 <Text style={styles.inputLabel}>Years of Experience</Text>
-                <BlurView intensity={15} tint="light" style={[styles.inputBlur, styles.profileInputBox]}>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
                     value={providerData.yearsExperience}
                     onChangeText={(text) => setProviderData({ ...providerData, yearsExperience: text.replace(/[^0-9]/g, '') })}
                     placeholder="e.g., 5"
-                    placeholderTextColor="rgba(0,0,0,0.4)"
+                    placeholderTextColor={chrome.fg(0.4)}
                     keyboardType="numeric"
                     onFocus={() => handleInputFocus('experience')}
                   />
@@ -3892,8 +4095,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
 
               {categoryNames.length === 0 ? (
-                <BlurView intensity={50} tint="light" style={styles.emptyServicesCard}>
-                  <Ionicons name="folder-open-outline" size={36} color="rgba(0,0,0,0.35)" style={styles.emptyServicesEmoji} />
+                <BlurView intensity={50} tint={chrome.blurTint} style={styles.emptyServicesCard}>
+                  <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
                   <Text style={styles.emptyServicesText}>
                     Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
                     (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
@@ -4005,7 +4208,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           >
                             <BlurView
                               intensity={isDragging ? 40 : isSel ? 16 : 10}
-                              tint="light"
+                              tint={chrome.blurTint}
                               style={[
                                 styles.categoryTabBlur,
                                 isSel && styles.selectedCategoryTabBlur,
@@ -4033,7 +4236,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   starts a reorder, so tapping, long-pressing and
                                   side-scrolling the strip are never mistaken for a drag. */}
                               <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}>
-                                <Ionicons name="reorder-three-outline" size={20} color="rgba(0,0,0,0.4)" />
+                                <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
                               </View>
                             </BlurView>
                           </TouchableOpacity>
@@ -4056,9 +4259,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <View style={styles.categoryServicesContainer}>
                       {providerData.categories[selectedCategory]?.map((service) => (
                         <View key={service.id} style={styles.serviceItemCard}>
-                          <BlurView intensity={50} tint="light" style={styles.serviceCardBlur}>
+                          <BlurView intensity={50} tint={chrome.blurTint} style={styles.serviceCardBlur}>
                             <LinearGradient
-                              colors={['rgba(255,255,255,0.3)', 'transparent']}
+                              colors={[chrome.surf(0.3), 'transparent']}
                               start={{ x: 0, y: 0 }}
                               end={{ x: 0, y: 1 }}
                               style={styles.cardHighlight}
@@ -4083,7 +4286,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   />
                                 ) : (
                                   <View style={styles.serviceImagePlaceholder}>
-                                    <Ionicons name="camera-outline" size={24} color="rgba(0,0,0,0.3)" />
+                                    <Ionicons name="camera-outline" size={24} color={chrome.fg(0.3)} />
                                   </View>
                                 )}
                                 {service.images.length > 1 && (
@@ -4148,7 +4351,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         }}
                         activeOpacity={0.85}
                       >
-                        <BlurView intensity={30} tint="light" style={styles.addServiceBlur}>
+                        <BlurView intensity={30} tint={chrome.blurTint} style={styles.addServiceBlur}>
                           <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
                             + Add Service to {selectedCategory}
                           </Text>
@@ -4163,9 +4366,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </>)}
 
             {activeTab === 'policies' && (
-              <BlurView intensity={50} tint="light" style={styles.policiesCard}>
+              <BlurView intensity={50} tint={chrome.blurTint} style={styles.policiesCard}>
                 <LinearGradient
-                  colors={['rgba(255,255,255,0.3)', 'transparent']}
+                  colors={[chrome.surf(0.3), 'transparent']}
                   start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
                   style={styles.cardHighlight}
                 />
@@ -4205,7 +4408,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <TextInput
                   style={styles.policyNote}
                   placeholder="Note (e.g. cancellations via message only)"
-                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  placeholderTextColor={chrome.fg(0.3)}
                   value={policies.cancelNote}
                   onChangeText={v => setPolicy('cancelNote', v)}
                 />
@@ -4248,7 +4451,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <TextInput
                   style={styles.policyNote}
                   placeholder="Note (optional)"
-                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  placeholderTextColor={chrome.fg(0.3)}
                   value={policies.rescheduleNote}
                   onChangeText={v => setPolicy('rescheduleNote', v)}
                 />
@@ -4262,7 +4465,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Switch
                     value={policies.depositRequired}
                     onValueChange={v => setPolicy('depositRequired', v)}
-                    trackColor={{ false: 'rgba(0,0,0,0.12)', true: adaptiveAccentColor }}
+                    trackColor={{ false: chrome.fg(0.12), true: adaptiveAccentColor }}
                     thumbColor="#fff"
                   />
                 </View>
@@ -4285,7 +4488,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       <TextInput
                         style={styles.depositInput}
                         placeholder={policies.depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
-                        placeholderTextColor="rgba(0,0,0,0.3)"
+                        placeholderTextColor={chrome.fg(0.3)}
                         value={policies.depositAmount}
                         onChangeText={v => setPolicy('depositAmount', v)}
                         keyboardType="numeric"
@@ -4294,7 +4497,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <TextInput
                       style={styles.policyNote}
                       placeholder="Note (optional)"
-                      placeholderTextColor="rgba(0,0,0,0.3)"
+                      placeholderTextColor={chrome.fg(0.3)}
                       value={policies.depositNote}
                       onChangeText={v => setPolicy('depositNote', v)}
                     />
@@ -4308,7 +4511,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       <Switch
                         value={policies.depositOnly}
                         onValueChange={v => setPolicy('depositOnly', v)}
-                        trackColor={{ false: 'rgba(0,0,0,0.12)', true: adaptiveAccentColor }}
+                        trackColor={{ false: chrome.fg(0.12), true: adaptiveAccentColor }}
                         thumbColor="#fff"
                       />
                     </View>
@@ -4339,7 +4542,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <TextInput
                   style={styles.policyNote}
                   placeholder="Note (optional)"
-                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  placeholderTextColor={chrome.fg(0.3)}
                   value={policies.noShowNote}
                   onChangeText={v => setPolicy('noShowNote', v)}
                 />
@@ -4352,7 +4555,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <TextInput
                   style={styles.policyNote}
                   placeholder='e.g. "Please arrive 10 minutes early", parking info…'
-                  placeholderTextColor="rgba(0,0,0,0.3)"
+                  placeholderTextColor={chrome.fg(0.3)}
                   value={policies.bookingInstructions}
                   onChangeText={v => setPolicy('bookingInstructions', v)}
                   multiline
@@ -4478,7 +4681,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <TextInput
                     style={styles.policyNote}
                     placeholder="e.g. 42 Oak Street, London, N1 2AB"
-                    placeholderTextColor="rgba(0,0,0,0.3)"
+                    placeholderTextColor={chrome.fg(0.3)}
                     value={providerData.fullAddress}
                     onChangeText={v => setProviderData(prev => ({ ...prev, fullAddress: v }))}
                     multiline
@@ -4536,13 +4739,54 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             )}
 
           </ScrollView>
+
+          <ReleaseDayPicker
+            visible={releaseDayPickerVisible}
+            value={providerData.scheduleReleaseDay ?? 1}
+            accentColor={adaptiveAccentColor}
+            cardColor={editTheme.card}
+            textColor={editTheme.text}
+            subColor={editTheme.sub}
+            borderColor={editTheme.border}
+            onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
+            onClose={() => setReleaseDayPickerVisible(false)}
+          />
         </SafeAreaView>
       </ThemedBackground>
     </SafeAreaProvider>
   );
 };
 
-const styles = StyleSheet.create({
+// ── Theme-aware styles ───────────────────────────────────────────────────────
+// This screen's chrome (header, section titles, field labels, frosted cards)
+// used to hardcode #000 text on translucent-white fills, which rendered as
+// black-on-near-black once ThemedBackground switched to the dark palette.
+//
+// Rather than thread the provider theme through all 13 sub-components in this
+// file (they share this one `styles` object), the sheet is built per mode from
+// the app's provider-hat palette — the same tokens ThemedBackground itself
+// paints with — so every component keeps calling `styles.x` unchanged. Only
+// colour values branch; every layout value below is exactly as it was.
+//
+// The per-provider `resolveProviderTheme()` tokens (editTheme/editCardBg) stay
+// where they already are: they colour the provider's own BRANDED surfaces
+// (brand identity card, setup guide, preview). This sheet covers the editor
+// chrome around them, which follows the app's light/dark mode instead.
+// Foreground ramp — replaces the old rgba(0,0,0,α) text tiers. In light mode
+// these resolve to exactly the same near-black tones as before; in dark mode
+// they become the palette's light text at the equivalent emphasis.
+const fgFor = (isDark: boolean) => (alpha: number) =>
+  isDark ? withAlpha('#F0ECE7', alpha) : `rgba(0,0,0,${alpha})`;
+// Surface ramp — replaces the old rgba(255,255,255,α) frosted fills, which read
+// as bright glass over a light background but as glare over a dark one.
+const surfFor = (isDark: boolean) => (alpha: number) =>
+  isDark ? withAlpha('#FFFFFF', alpha * 0.34) : `rgba(255,255,255,${alpha})`;
+
+const makeStyles = (isDark: boolean) => {
+  const P = isDark ? darkTheme : lightTheme;
+  const fg = fgFor(isDark);
+  const surf = surfFor(isDark);
+  return StyleSheet.create({
   loading: {
     flex: 1,
     justifyContent: 'center',
@@ -4572,13 +4816,13 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: surf(0.25),
     borderRadius: 20,
   },
   backButtonText: {
     fontSize: 24,
     fontFamily: 'BakbakOne-Regular',
-    color: '#000',
+    color: P.text,
   },
   headerActions: {
     flexDirection: 'row',
@@ -4589,13 +4833,13 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: surf(0.25),
     borderRadius: 20,
   },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
-    color: '#000',
+    color: P.text,
   },
   claimErrorBanner: {
     flexDirection: 'row',
@@ -4631,44 +4875,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 25,
   },
+  brandIdentityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 16,
+    borderRadius: 24,
+    backgroundColor: surf(0.42),
+    borderWidth: 1,
+    borderColor: surf(0.65),
+    marginBottom: 18,
+  },
+  brandIdentityCopy: { flex: 1, minWidth: 0 },
+  brandIdentityEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.15,
+    color: fg(0.48),
+    marginBottom: 4,
+  },
+  brandIdentityName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 19,
+    color: '#20191C',
+  },
+  brandIdentityHint: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 16,
+    color: fg(0.55),
+    marginTop: 4,
+  },
   logoContainer: {
     position: 'relative',
   },
   providerLogo: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 4,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 3,
+    borderColor: surf(0.8),
   },
   logoPlaceholder: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: surf(0.3),
     borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderColor: surf(0.5),
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
   logoPlaceholderIcon: {
-    fontSize: 32,
-    marginBottom: 5,
+    fontSize: 24,
+    marginBottom: 2,
   },
   logoPlaceholderText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.6)',
+    fontSize: 10,
+    color: fg(0.6),
   },
   logoEditBadge: {
     position: 'absolute',
-    bottom: 5,
-    right: 5,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: surf(0.9),
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -4681,37 +4958,116 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
+  // Orientation at the top of the public-profile editor. The old screen
+  // dropped straight into fields, which made a first-time setup feel longer
+  // than it was and offered no indication of what was still useful to do.
+  setupGuide: {
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: surf(0.5),
+    borderWidth: 1,
+    borderColor: surf(0.62),
+    marginBottom: 20,
+  },
+  setupGuideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  setupGuideEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: fg(0.52),
+    marginBottom: 4,
+  },
+  setupGuideTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 17,
+    color: P.text,
+  },
+  setupGuideCount: {
+    minWidth: 46,
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  setupGuideCountText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: '#fff',
+  },
+  setupGuideSubtext: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 18,
+    color: fg(0.6),
+    marginTop: 12,
+  },
+  setupGuideSteps: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  setupGuideStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  setupGuideStepText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 11,
+    fontWeight: '700',
+    color: fg(0.48),
+  },
+
   // Cards
   // Shadow lives on the OUTER wrapper (cardShadowWrap), not here — this is a
   // BlurView, and overflow:hidden is required for the native blur effect to
   // clip to the rounded corners (without it, the blur renders as a square
   // block poking past the rounded border). overflow:hidden also silently
   // kills a shadow on the same view, hence the separate wrapper.
+  // Calmer card treatment. Every section on this screen used an identical
+  // recipe at identical weight — full drop shadow + top sheen + border, six
+  // times down one scroll — so nothing anchored the eye and it read as a
+  // single undifferentiated wall. Same frosted language, less shouting:
+  // roomier padding, a shallow shadow instead of a spotlight, and no sheen
+  // (see cardHighlight below).
   card: {
-    padding: 20,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 22,
+    borderRadius: 24,
+    backgroundColor: surf(0.1),
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: surf(0.28),
   },
   cardShadowWrap: {
-    borderRadius: 25,
-    marginBottom: 20,
+    borderRadius: 24,
+    // Bigger gap BETWEEN cards (spacing within them is tighter) so related
+    // fields group into one thought instead of an even grey rhythm.
+    marginBottom: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
-    shadowRadius: 20,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
+  // Zero-height: the 40px white gradient that sat on top of every card is
+  // gone. Kept as a style (rather than deleting the <LinearGradient> from
+  // six render sites) so the markup stays untouched and the sheen is one
+  // line away if it's ever wanted back.
   cardHighlight: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 40,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
+    height: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
 
   // Portfolio manager
@@ -4763,57 +5119,64 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.25)',
+    borderColor: fg(0.25),
     alignItems: 'center',
     justifyContent: 'center',
   },
   portfolioAddPlus: {
     fontSize: 22,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     fontWeight: '300',
     lineHeight: 24,
   },
   portfolioAddText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 9,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     marginTop: 2,
   },
 
-  // Section Titles
+  // Section Titles — a section title (18) and a field label (14) were close
+  // enough in size that neither clearly outranked the other. The title now
+  // leads and the label steps back to a quiet uppercase eyebrow, so a card
+  // reads title → label → value instead of three near-equal lines.
   sectionTitle: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    color: '#000',
-    marginBottom: 10,
+    fontSize: 20,
+    color: P.text,
+    marginBottom: 4,
   },
   sectionSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    color: 'rgba(0, 0, 0, 0.6)',
-    marginBottom: 15,
+    lineHeight: 19,
+    color: fg(0.55),
+    marginBottom: 18,
   },
   sectionTitleNoCard: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    color: '#000',
+    fontSize: 20,
+    color: P.text,
   },
 
   // Input Groups
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 14,
   },
   inputLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    color: '#000',
-    marginBottom: 8,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: fg(0.55),
+    marginBottom: 7,
   },
   inputHint: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(0, 0, 0, 0.72)',
+    color: fg(0.72),
     marginTop: 6,
   },
   // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
@@ -4821,9 +5184,9 @@ const styles = StyleSheet.create({
   inputBlur: {
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: P.surfaceRaised,
     borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderColor: fg(0.08),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -4833,9 +5196,9 @@ const styles = StyleSheet.create({
   inputBlurMultiline: {
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: P.surfaceRaised,
     borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderColor: fg(0.08),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -4846,9 +5209,14 @@ const styles = StyleSheet.create({
   // translucent look (only the Add Service modal's boxes got the brighter
   // card treatment) — merged over inputBlur/inputBlurMultiline to cancel
   // out the border/shadow/solid-fill additions.
+  //
+  // Quieter still now: a soft tonal fill with no border and no shadow, so the
+  // field sits INSIDE its card instead of reading as a second raised surface
+  // stacked on the first. The card carries the weight; the input just holds
+  // the value.
   profileInputBox: {
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    backgroundColor: surf(0.16),
     borderWidth: 0,
     shadowOpacity: 0,
     elevation: 0,
@@ -4856,7 +5224,7 @@ const styles = StyleSheet.create({
   textInput: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 15,
-    color: '#000',
+    color: P.text,
     paddingHorizontal: 15,
     paddingVertical: 12,
   },
@@ -4873,22 +5241,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: surf(0.2),
     marginRight: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: surf(0.3),
   },
   serviceCategoryChipSelected: {
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    borderColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: fg(0.15),
+    borderColor: fg(0.3),
   },
   serviceCategoryText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.7)',
+    color: fg(0.7),
   },
   serviceCategoryTextSelected: {
-    color: '#000',
+    color: P.text,
   },
 
   // Gradient Selector
@@ -4904,7 +5272,7 @@ const styles = StyleSheet.create({
   gradientSelectorText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
   },
 
   // Services Section
@@ -4932,7 +5300,7 @@ const styles = StyleSheet.create({
     padding: 25,
     borderRadius: 20,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: surf(0.15),
   },
   emptyServicesEmoji: {
     fontSize: 30,
@@ -4941,7 +5309,7 @@ const styles = StyleSheet.create({
   emptyServicesText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -4951,14 +5319,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     marginBottom: 10,
   },
   selectedCategoryDescription: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
     lineHeight: 18,
-    color: 'rgba(0,0,0,0.65)',
+    color: fg(0.65),
     marginBottom: 14,
   },
   categoryTabs: {
@@ -4973,10 +5341,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: surf(0.25),
   },
   selectedCategoryTab: {
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: surf(0.4),
   },
   categoryTabBlur: {
     flexDirection: 'row',
@@ -4984,23 +5352,23 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: surf(0.08),
     borderRadius: 20,
     overflow: 'hidden',
   },
   selectedCategoryTabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: surf(0.16),
   },
   draggingCategoryTabBlur: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: surf(0.9),
   },
   categoryTabText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.7)',
+    color: fg(0.7),
   },
   selectedCategoryTabText: {
-    color: '#000',
+    color: P.text,
   },
   categoryDragHandle: {
     marginLeft: 6,
@@ -5014,9 +5382,12 @@ const styles = StyleSheet.create({
 
   // Required-field asterisk
   requiredStar: {
-    color: '#E53935',
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
+    // Scaled with inputLabel (14 → 11): at the old 13 it outweighed the label
+    // it was marking. Softened too — it's a marker, not a warning.
+    color: 'rgba(229,57,53,0.85)',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
   },
 
   // Duration quick-picker chips
@@ -5025,13 +5396,13 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0.14)',
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    borderColor: fg(0.14),
+    backgroundColor: surf(0.45),
   },
   durationChipText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: 'rgba(0,0,0,0.7)',
+    color: fg(0.7),
   },
   durationChipTextActive: {
     color: '#fff',
@@ -5044,27 +5415,27 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: surf(0.75),
   },
   sheetHandle: {
     alignSelf: 'center',
     width: 42,
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    backgroundColor: fg(0.18),
     marginTop: 10,
     marginBottom: 2,
   },
   templateSheetSub: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     marginTop: 3,
   },
   templateGroupLabel: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     marginTop: 22,
     marginBottom: 4,
   },
@@ -5076,7 +5447,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: surf(0.4),
   },
   templateScratchIcon: {
     fontSize: 22,
@@ -5084,12 +5455,12 @@ const styles = StyleSheet.create({
   templateScratchTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
-    color: '#000',
+    color: P.text,
   },
   templateScratchSub: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     marginTop: 2,
   },
   templateCard: {
@@ -5098,9 +5469,9 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 16,
     marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: surf(0.55),
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: fg(0.06),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
@@ -5110,12 +5481,12 @@ const styles = StyleSheet.create({
   templateName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 15,
-    color: '#000',
+    color: P.text,
   },
   templateDuration: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     marginTop: 3,
   },
   templateAdd: {
@@ -5139,9 +5510,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 18,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: surf(0.55),
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: fg(0.06),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.06,
@@ -5154,12 +5525,12 @@ const styles = StyleSheet.create({
   categoryTypeLabel: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: '#000',
+    color: P.text,
   },
   categoryTypeBlurb: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     textAlign: 'center',
     marginTop: 3,
     lineHeight: 13,
@@ -5172,9 +5543,9 @@ const styles = StyleSheet.create({
   serviceItemCard: {
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: surf(0.1),
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: surf(0.2),
   },
   serviceCardBlur: {
     flex: 1,
@@ -5199,7 +5570,7 @@ const styles = StyleSheet.create({
   serviceImagePlaceholder: {
     width: 60,
     height: 60,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: surf(0.3),
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 12,
@@ -5225,13 +5596,13 @@ const styles = StyleSheet.create({
   serviceName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#000',
+    color: P.text,
     marginBottom: 4,
   },
   serviceDescription: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     marginBottom: 6,
   },
   serviceDetails: {
@@ -5242,7 +5613,7 @@ const styles = StyleSheet.create({
   serviceDuration: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
   },
   servicePrice: {
     fontFamily: 'BakbakOne-Regular',
@@ -5256,7 +5627,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: surf(0.4),
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -5281,12 +5652,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.2)',
+    borderColor: fg(0.2),
   },
   addServiceBlur: {
     paddingVertical: 15,
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: surf(0.1),
   },
   addServiceText: {
     fontFamily: 'BakbakOne-Regular',
@@ -5309,23 +5680,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    borderBottomColor: fg(0.1),
   },
   modalTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
-    color: '#000',
+    color: P.text,
   },
   modalCloseButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: fg(0.15),
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalCloseText: {
-    color: '#000',
+    color: P.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -5339,7 +5710,7 @@ const styles = StyleSheet.create({
     gap: 15,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopColor: fg(0.1),
   },
 
   // Gradient Picker Modal
@@ -5365,8 +5736,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   gradientOptionSelected: {
-    borderColor: '#000',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderColor: P.text,
+    backgroundColor: surf(0.3),
   },
   gradientPreview: {
     width: '100%',
@@ -5377,7 +5748,7 @@ const styles = StyleSheet.create({
   gradientName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 11,
-    color: '#000',
+    color: P.text,
     textAlign: 'center',
   },
 
@@ -5397,7 +5768,7 @@ const styles = StyleSheet.create({
     marginBottom: 'auto',
     padding: 25,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: surf(0.95),
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -5408,7 +5779,7 @@ const styles = StyleSheet.create({
   smallModalTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    color: '#000',
+    color: P.text,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -5437,14 +5808,14 @@ const styles = StyleSheet.create({
   transferTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 22,
-    color: '#000',
+    color: P.text,
     textAlign: 'center',
     marginBottom: 10,
   },
   transferSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    color: 'rgba(0,0,0,0.7)',
+    color: fg(0.7),
     textAlign: 'center',
     marginBottom: 25,
     lineHeight: 20,
@@ -5468,14 +5839,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.2)',
+    borderColor: fg(0.2),
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: surf(0.3),
   },
   skipButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#000',
+    color: P.text,
   },
   transferError: {
     fontSize: 13,
@@ -5503,14 +5874,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.2)',
+    borderColor: fg(0.2),
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: surf(0.2),
   },
   cancelButtonText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
-    color: '#000',
+    color: P.text,
   },
   saveButton: {
     flex: 2,
@@ -5561,19 +5932,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: 'rgba(0,0,0,0.3)',
+    borderColor: fg(0.3),
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: surf(0.2),
   },
   addImageIcon: {
     fontSize: 24,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
   },
   addImageText: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
   },
   carouselDots: {
     flexDirection: 'row',
@@ -5584,10 +5955,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: fg(0.2),
   },
   carouselDotActive: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: fg(0.6),
   },
 
   // Accent Color Picker Modal
@@ -5601,7 +5972,7 @@ const styles = StyleSheet.create({
   accentPickerSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -5621,8 +5992,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   accentColorOptionSelected: {
-    borderColor: '#000',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderColor: P.text,
+    backgroundColor: surf(0.3),
   },
   accentColorSwatch: {
     width: 50,
@@ -5638,7 +6009,7 @@ const styles = StyleSheet.create({
   accentColorName: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
-    color: '#000',
+    color: P.text,
     textAlign: 'center',
   },
 
@@ -5669,7 +6040,7 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: surf(0.25),
     borderRadius: 20,
   },
   previewBackText: {
@@ -5696,7 +6067,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   previewHeroTextShadow: {
-    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowColor: fg(0.55),
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 8,
   },
@@ -5832,7 +6203,7 @@ const styles = StyleSheet.create({
   previewBellButtonInline: {
     padding: 4,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: surf(0.3),
     zIndex: 2,
   },
   // Generic frosted card — About / Reviews / Contact
@@ -6184,7 +6555,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.55)',
+    color: fg(0.55),
     marginTop: 2,
   },
 
@@ -6198,7 +6569,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: surf(0.3),
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 15,
@@ -6213,7 +6584,7 @@ const styles = StyleSheet.create({
   addOnName: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 14,
-    color: '#000',
+    color: P.text,
     flex: 1,
   },
   addOnPrice: {
@@ -6272,9 +6643,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: surf(0.55),
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: fg(0.06),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -6288,7 +6659,7 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    color: '#000',
+    color: P.text,
   },
   chipTextActive: {
     fontFamily: 'BakbakOne-Regular',
@@ -6324,13 +6695,119 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.75)',
+    color: fg(0.75),
   },
   toggleHint: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     marginTop: 1,
+  },
+
+  releaseDayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: fg(0.12),
+    backgroundColor: fg(0.04),
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  releaseDayBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: fg(0.75),
+  },
+
+  releasePickerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(20,14,18,0.46)',
+  },
+  releasePickerSheet: {
+    backgroundColor: P.surfaceRaised,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 34,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  releasePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  releasePickerEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.1,
+    color: fg(0.46),
+    marginBottom: 4,
+  },
+  releasePickerTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 21,
+    color: '#20191C',
+  },
+  releasePickerClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fg(0.06),
+  },
+  releasePickerSubtext: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 18,
+    color: fg(0.57),
+    marginTop: 10,
+    marginBottom: 18,
+  },
+  releaseDayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+  },
+  releaseDayOption: {
+    width: (screenWidth - 40 - 54) / 7,
+    aspectRatio: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: fg(0.045),
+    borderWidth: 1,
+    borderColor: fg(0.06),
+  },
+  releaseDayOptionText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 13,
+    color: fg(0.72),
+  },
+  releaseDayOptionTextSelected: { color: '#FFFFFF' },
+  releasePickerDoneButton: {
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    marginTop: 20,
+  },
+  releasePickerDoneText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 
   // ── Tab switcher ──
@@ -6338,7 +6815,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 20,
     marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: surf(0.18),
     borderRadius: 14,
     padding: 4,
     gap: 4,
@@ -6346,27 +6823,32 @@ const styles = StyleSheet.create({
   // ── Policies tab ──
   policiesCard: {
     marginHorizontal: 16,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 20,
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 28,
     overflow: 'hidden',
   },
+  // Matched to the Profile tab's hierarchy. These were the only headings on
+  // the screen with no fontFamily at all, so they rendered in the OS default
+  // while everything around them used the app's two fonts.
   policySectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: 'rgba(0,0,0,0.75)',
-    marginBottom: 10,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 17,
+    color: fg(0.82),
+    marginBottom: 12,
   },
   policyLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    color: 'rgba(0,0,0,0.4)',
+    fontWeight: '700',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    color: fg(0.42),
     marginBottom: 8,
   },
   policySubLabel: {
     fontSize: 12,
-    color: 'rgba(0,0,0,0.5)',
+    color: fg(0.5),
     lineHeight: 16,
   },
   pillRow: {
@@ -6379,27 +6861,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: fg(0.08),
   },
   policyPillText: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.55)',
+    color: fg(0.55),
   },
   policyNote: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
+    borderColor: fg(0.12),
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
-    color: 'rgba(0,0,0,0.7)',
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    color: fg(0.7),
+    backgroundColor: fg(0.03),
   },
   policySep: {
     height: 1,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: fg(0.08),
     marginVertical: 18,
   },
   depositHeader: {
@@ -6417,13 +6899,13 @@ const styles = StyleSheet.create({
   depositInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
+    borderColor: fg(0.12),
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 14,
-    color: 'rgba(0,0,0,0.7)',
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    color: fg(0.7),
+    backgroundColor: fg(0.03),
   },
   savePoliciesBtn: {
     marginTop: 20,
@@ -6439,12 +6921,45 @@ const styles = StyleSheet.create({
   addressHint: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(0,0,0,0.6)',
+    color: fg(0.6),
     marginTop: 6,
     marginBottom: 4,
     lineHeight: 18,
   },
 
-});
+  });
+};
+
+// Both sheets are built once at module load (there are only two modes), so
+// `useScreenStyles()` is a lookup rather than a per-render StyleSheet.create.
+const lightStyles = makeStyles(false);
+const darkStyles = makeStyles(true);
+
+/** The themed style sheet for the current app mode. Every component in this
+ *  file calls this instead of closing over a single static `styles` object. */
+const useScreenStyles = () => (useTheme().isDarkMode ? darkStyles : lightStyles);
+
+// Same two ramps the sheets are built from, for the colours that can't live in
+// a StyleSheet: `placeholderTextColor`, `<Ionicons color>`, `trackColor`, etc.
+// `blurTint` matters as much as the text colours: a `tint="light"` BlurView in
+// dark mode washes its surface pale, which would undo the foreground fix by
+// putting light text back on a light frosted panel.
+const lightChrome = {
+  fg: fgFor(false),
+  surf: surfFor(false),
+  text: lightTheme.text,
+  onAccent: lightTheme.onAccent,
+  blurTint: 'light' as const,
+};
+const darkChrome = {
+  fg: fgFor(true),
+  surf: surfFor(true),
+  text: darkTheme.text,
+  onAccent: darkTheme.onAccent,
+  blurTint: 'dark' as const,
+};
+
+/** Theme-aware colours for inline props that a StyleSheet can't carry. */
+const useChrome = () => (useTheme().isDarkMode ? darkChrome : lightChrome);
 
 export default InfoRegScreen;

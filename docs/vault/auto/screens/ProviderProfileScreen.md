@@ -10,6 +10,7 @@ tags: [screen, provider]
 - [[ProviderChatScreen\|ProviderChat]]
 - [[CartScreen\|CartMain]]
 - `Cart` _(navigator / dynamic)_
+- [[ClaimProviderScreen\|ClaimProvider]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

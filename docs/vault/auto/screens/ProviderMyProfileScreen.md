@@ -8,6 +8,7 @@ tags: [screen, provider]
 
 ## → Navigates to
 - [[InfoRegScreen\|EditProfile]]
+- [[ProviderScheduleScreen\|ProviderSchedule]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

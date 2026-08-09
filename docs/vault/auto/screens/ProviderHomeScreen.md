@@ -10,7 +10,8 @@ tags: [screen, provider]
 - [[ProviderConversationScreen\|ProviderConversation]]
 - [[NotificationsScreen\|Notifications]]
 - [[ProviderScheduleScreen\|ProviderSchedule]]
-- `Profile` _(navigator / dynamic)_
+- [[InfoRegScreen\|EditProfile]]
+- [[BrandingScreen\|Branding]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map
