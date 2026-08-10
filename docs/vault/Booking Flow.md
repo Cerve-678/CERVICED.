@@ -27,8 +27,11 @@ How a booking goes from cart to confirmed appointment.
 ## Cancelling a booking
 Its own note now, not just a bullet here → [[Cancellations]] (notice-window gate, deposit disclosure copy, provider-cancel → client-notify wiring).
 
+## Marking a no-show
+Also its own note now → [[No-Show]] (same-day + no-active-reschedule guardrails, terminal state, the `NEW.id`/`NEW.booking_id` notification bug fixed 2026-08-10).
+
 ## Connections
-[[Availability & Slots]] · [[Address Release]] · [[Payments]] · [[Notifications]] · [[Cancellations]] · [[Contexts]]
+[[Availability & Slots]] · [[Address Release]] · [[Payments]] · [[Notifications]] · [[Cancellations]] · [[No-Show]] · [[Contexts]]
 
 ## Open questions
 - Group bookings: how is `group_booking_id` assigned and shown? #needs-verification

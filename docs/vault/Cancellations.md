@@ -30,7 +30,7 @@ DB trigger `handle_booking_status_change()` (`supabase/booking_flow_fixes.sql`) 
 Not a wiring bug — a **missing data model**. There's nothing to compute or display a tiered/percentage cancellation fee even where a provider's policy might genuinely have one, because the column doesn't exist. Any future "show the fee that applies" feature needs that schema piece first; the UI can't invent a number it was never given.
 
 ## Connections
-[[Booking Flow]] · [[Payments]] · [[Notifications]] · [[Client vs Server Authority]] · [[Availability & Slots]]
+[[Booking Flow]] · [[Payments]] · [[Notifications]] · [[Client vs Server Authority]] · [[Availability & Slots]] · [[No-Show]]
 
 ## Open questions
 - Should `getProviderCancellationPolicy` grow a fee-percentage/fixed-fee field, and if so, does that need a Terms & Conditions update first (the UI shouldn't claim more than the contract does)? #todo

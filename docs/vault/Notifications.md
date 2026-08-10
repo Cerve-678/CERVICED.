@@ -19,7 +19,7 @@ Address-release notifications were a repeat offender of the opposite mistake —
 The push Edge Function reads the send **ticket**, not the **receipt** — so real delivery failures are silent. Diagnose via **DevSettings → "Send Test Push (+ receipt)"**. #todo
 
 ## Connections
-[[Data Layer — Supabase]] · [[Booking Flow]] · [[Cancellations]] · [[Services]] · [[Screens & Navigation]]
+[[Data Layer — Supabase]] · [[Booking Flow]] · [[Cancellations]] · [[No-Show]] · [[Services]] · [[Screens & Navigation]]
 
 ## Open questions
 - Full matrix of which events notify which role (client vs provider)? See `notifications_full_matrix.sql`. #needs-verification
