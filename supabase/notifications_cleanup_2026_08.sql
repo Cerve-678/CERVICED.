@@ -235,7 +235,7 @@ BEGIN
     GROUP BY p.id, p.user_id
   LOOP
     INSERT INTO public.notifications
-      (user_id, type, title, message, priority, is_actionable, provider_id, metadata)
+      (user_id, type, title, message, priority, is_actionable, provider_id, recipient_role, metadata)
     VALUES (
       r.provider_user_id,
       'daily_recap',
@@ -246,6 +246,7 @@ BEGIN
       'medium',
       TRUE,
       r.provider_id,
+      'provider',
       jsonb_build_object('kind', 'daily_recap')
     );
   END LOOP;

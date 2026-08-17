@@ -14,11 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 const CATEGORIES = ['Bug / Crash', 'Booking Issue', 'Provider Issue', 'Payment', 'Account', 'Other'];
 
 export default function ReportProblemScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
@@ -40,7 +41,7 @@ export default function ReportProblemScreen({ navigation }: any) {
   const chipActive = (val: string) => val === category;
 
   return (
-    <View style={[styles.bg, { backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }]}>
+    <ThemedBackground style={styles.bg}>
       <StatusBar barStyle={theme.statusBar} translucent />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
@@ -53,15 +54,15 @@ export default function ReportProblemScreen({ navigation }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: theme.text }]}>Report a Problem</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+          <Text style={[styles.title, { color: P.text }]}>Report a Problem</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>
             Tell us what went wrong and we'll fix it
           </Text>
 
-          <Text style={[styles.label, { color: theme.secondaryText }]}>CATEGORY</Text>
+          <Text style={[styles.label, { color: P.sub }]}>CATEGORY</Text>
           <View style={styles.chips}>
             {CATEGORIES.map(cat => (
               <TouchableOpacity
@@ -69,28 +70,26 @@ export default function ReportProblemScreen({ navigation }: any) {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: chipActive(cat)
-                      ? (isDarkMode ? '#AF9197' : '#5C4033')
-                      : (isDarkMode ? 'rgba(175,145,151,0.08)' : 'rgba(92,64,51,0.06)'),
-                    borderColor: chipActive(cat) ? (isDarkMode ? '#AF9197' : '#5C4033') : theme.border,
+                    backgroundColor: chipActive(cat) ? P.accent : P.accentDim,
+                    borderColor: chipActive(cat) ? P.accent : P.border,
                   },
                 ]}
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); setCategory(cat); }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.chipText, { color: chipActive(cat) ? '#fff' : theme.secondaryText }]}>
+                <Text style={[styles.chipText, { color: chipActive(cat) ? '#fff' : P.sub }]}>
                   {cat}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={[styles.label, { color: theme.secondaryText, marginTop: 8 }]}>DESCRIPTION</Text>
+          <Text style={[styles.label, { color: P.sub, marginTop: 8 }]}>DESCRIPTION</Text>
           <TextInput
             style={[
               styles.textArea,
               {
-                color: theme.text,
+                color: P.text,
                 backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
                 borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
               },
@@ -98,7 +97,7 @@ export default function ReportProblemScreen({ navigation }: any) {
             value={description}
             onChangeText={setDescription}
             placeholder="Describe what happened..."
-            placeholderTextColor={theme.secondaryText}
+            placeholderTextColor={P.sub}
             multiline
             numberOfLines={5}
             textAlignVertical="top"
@@ -106,7 +105,7 @@ export default function ReportProblemScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={[styles.submitBtn, {
-              backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'),
+              backgroundColor: P.accent,
               borderColor: 'transparent',
             }]}
             onPress={handleSubmit}
@@ -120,7 +119,7 @@ export default function ReportProblemScreen({ navigation }: any) {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardDismissView>
-    </View>
+    </ThemedBackground>
   );
 }
 

@@ -18,7 +18,7 @@ interface ExtractedProfile {
   email?: string;
   instagram?: string;
   website?: string;
-  categories?: Record<string, Array<{ name?: string; price?: number | string; duration?: string; description?: string }>>;
+  categories?: Record<string, { name?: string; price?: number | string; duration?: string; description?: string }[]>;
 }
 
 export async function transferFromAcuity(url: string): Promise<ProviderRegistrationData> {
@@ -66,6 +66,9 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     location: extracted.location || '',
     aboutText: extracted.aboutText || '',
     slotsText: extracted.slotsText || '',
+    // Acuity has no equivalent concept to import — provider sets this
+    // themselves afterward via InfoRegScreen/ProviderAutomationsScreen.
+    scheduleReleaseDay: null,
     gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
     hasCustomGradient: false,
     accentColor: '#7B1FA2',
@@ -82,7 +85,14 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     externalBookingUrl: '',
     yearsExperience: '',
     businessType: '',
+    teamSize: '',
+    accessibilityNotes: '',
+    languagesSpoken: [],
+    priceRange: '',
+    serviceLocations: [],
+    preferredPaymentMethods: [],
     fullAddress: '',
+    fullAddressCoordinates: null,
     addressReleasePolicy: 'on_confirmation',
     backgroundImage: null,
     isVerified: false,

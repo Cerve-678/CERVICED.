@@ -118,3 +118,13 @@ deferred (#1/#2). No deleting out from under a paid, scheduled appointment.
 
 **Setup required:** run the three `.sql` files in Supabase, in this order:
 `transactions_survive_account_deletion.sql` → `account_deletion_grace_period.sql` → `delete_account.sql`.
+
+**Note (2026-08-08):** live production had drifted from this file — the
+deployed `delete_client_profile()`/`delete_provider_profile()` were an older
+version that still hard-deleted `transactions` and never wrote to
+`account_deletion_log`, despite the schema half of the fix (dropped FKs,
+the `account_deletion_log` table) already being live. Reconciled by
+redeploying this file's function bodies live via Supabase MCP; verified via
+`pg_get_functiondef` that transactions are no longer deleted and both
+functions now log. The retention approach here (orphaned-UUID pseudonymisation)
+has not been reviewed by counsel — see `LEGAL-COMPLIANCE-NOTES.md`.

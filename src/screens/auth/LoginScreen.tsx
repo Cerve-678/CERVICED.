@@ -43,6 +43,7 @@ export default function LoginScreen({ navigation }: Props) {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -240,16 +241,24 @@ export default function LoginScreen({ navigation }: Props) {
             {/* Password */}
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
-              <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: touched['password'] && errors.password ? '#DC2626' : t.border }]}>
+              <View style={[styles.inputWrap, styles.passwordInputWrap, { backgroundColor: t.surface, borderColor: touched['password'] && errors.password ? '#DC2626' : t.border }]}>
                 <TextInput
-                  style={[styles.input, { color: t.text }]}
+                  style={[styles.input, styles.passwordInput, { color: t.text }]}
                   value={password}
                   onChangeText={setPassword}
                   onBlur={() => markTouched('password')}
                   placeholder="••••••••"
                   placeholderTextColor={t.sub}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
                 />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
+                </TouchableOpacity>
               </View>
               {renderError('password')}
             </View>
@@ -382,6 +391,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 0.3,
     padding: 0,
+  },
+  passwordInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+  },
+  eyeBtn: { paddingLeft: 8 },
+  eyeText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     fontFamily: 'Jura-VariableFont_wght',

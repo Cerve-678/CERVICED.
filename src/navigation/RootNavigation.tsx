@@ -82,6 +82,12 @@ export default function RootNavigation() {
       <View style={styles.switchOverlay}>
         <View style={styles.switchCard}>
           <ActivityIndicator size="large" color="#DA70D6" />
+          {/* State the hat being left as well as the one being entered — the
+              two trees look alike on arrival, so direction is the only cue the
+              user gets that the switch did what they expected. */}
+          <Text style={styles.switchFrom}>
+            Leaving {switchingTo === 'provider' ? 'Client' : 'Provider'} Mode
+          </Text>
           <Text style={styles.switchText}>
             Switching to {switchingTo === 'provider' ? 'Provider' : 'Client'} Mode
           </Text>
@@ -116,6 +122,12 @@ export default function RootNavigation() {
             <Stack.Screen name="SignUpStep3" component={SignUpStep3Screen} />
             <Stack.Screen name="SignUpStep4" component={SignUpStep4Screen} />
             <Stack.Screen name="SignUpStep5" component={SignUpStep5Screen} />
+            {/* Reachable from ProviderProfileScreen's "Claim this business"
+                CTA on an unclaimed listing — a logged-in client claiming a
+                business ends up on the same SignUpStep1 upgrade path
+                already registered above, just entered from a different
+                starting point. */}
+            <Stack.Screen name="ClaimProvider" component={ClaimProviderScreen} />
           </>
         ) : (
           // ── Auth screens only ───────────────────────────────────────────────
@@ -156,6 +168,13 @@ const styles = StyleSheet.create({
     gap: 16,
     borderWidth: 1,
     borderColor: 'rgba(218,112,214,0.25)',
+  },
+  switchFrom: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.4,
+    marginBottom: 2,
   },
   switchText: {
     color: '#fff',

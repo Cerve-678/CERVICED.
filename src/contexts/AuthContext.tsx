@@ -10,8 +10,11 @@ import { registerModeSetter } from '../navigation/modeController';
 import {
   getUserProfileById,
   upgradeUserToProvider,
-  updateClientProfileData,
   updateUserNamePhone,
+  updateClientProfileFields,
+  cancelAccountDeletionRequest,
+  deleteClientAccountProfile,
+  deleteProviderAccountProfile,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
@@ -65,7 +68,15 @@ interface AuthContextType {
   session: Session | null;
   activeMode: 'provider' | 'client';
   switchMode: () => Promise<void>;
-  upgradeToProvider: (businessName: string, businessEmail: string, extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }) => Promise<void>;
+  upgradeToProvider: (businessName: string, businessEmail: string, extras?: {
+    businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
+    dobDay?: string; dobMonth?: string; dobYear?: string;
+    serviceInterests?: string[]; serviceLocations?: string[];
+    priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+    accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
+    preferredPaymentMethods?: string[];
+    referralSource?: string;
+  }) => Promise<void>;
   addClientProfile: (profileData: ClientProfileData) => Promise<void>;
   login: (userData?: UserData) => void;
   logout: () => Promise<void>;
@@ -124,12 +135,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [activeMode, setActiveMode] = useState<'provider' | 'client'>('client');
+
+  // Restore the persisted hat, but never into a hat this account doesn't hold.
+  // The saved mode is a device-local preference; `role` is the server's
+  // statement of which hats exist. If they disagree the server wins — otherwise
+  // deleting the provider hat on one device leaves another device booted into
+  // an empty provider tree with no obvious way back (the switch control only
+  // renders for accounts that actually have the other hat).
+  const resolveRestoredMode = useCallback(
+    (savedMode: string | null, role: AccountType): 'provider' | 'client' => {
+      const canBeProvider = role === 'provider';
+      const saved = savedMode === 'provider' || savedMode === 'client' ? savedMode : null;
+      if (saved === 'provider' && !canBeProvider) return 'client';
+      return saved ?? (canBeProvider ? 'provider' : 'client');
+    },
+    []
+  );
   const [isSwitching, setIsSwitching] = useState(false);
   const [switchingTo, setSwitchingTo] = useState<'provider' | 'client'>('client');
   const [pendingReactivation, setPendingReactivation] = useState<string | null>(null);
   const [isReactivating, setIsReactivating] = useState(false);
   // Tracks user-initiated logouts so SIGNED_OUT doesn't show a spurious alert
   const intentionalLogoutRef = useRef(false);
+  // The auth subscription is intentionally installed once. Keep the latest
+  // profile loader in a ref so it does not close over stale role-resolution
+  // logic without repeatedly tearing down the Supabase subscription.
+  const loadUserProfileRef = useRef<(activeSession: Session) => Promise<void>>(async () => {});
 
   // Expo Go can't receive remote push (dropped in SDK 53) — mirror notification
   // rows as local notifications instead so content is still visible while
@@ -206,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(session);
       if (session?.user) {
-        await loadUserProfile(session);
+        await loadUserProfileRef.current(session);
       } else {
         setUser(null);
         setIsLoggedIn(false);
@@ -250,11 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.warn('[AuthContext] profile fetch error — staying logged in via metadata:', profileError.message);
         const role = (meta?.['role'] as AccountType) ?? 'user';
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
-        setActiveMode(
-          savedMode === 'provider' || savedMode === 'client'
-            ? savedMode
-            : role === 'provider' ? 'provider' : 'client'
-        );
+        setActiveMode(resolveRestoredMode(savedMode, role));
         setUser({
           id: session.user.id,
           name: meta?.['name'] ?? session.user.email?.split('@')[0] ?? '',
@@ -313,11 +340,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           service_interests: profile.service_interests ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
-        setActiveMode(
-          savedMode === 'provider' || savedMode === 'client'
-            ? savedMode
-            : role === 'provider' ? 'provider' : 'client'
-        );
+        const restoredMode = resolveRestoredMode(savedMode, role);
+        setActiveMode(restoredMode);
+        // Persist the corrected hat so the stale value can't win a later restore
+        // (e.g. if the next launch hits the metadata-fallback path instead).
+        if (restoredMode !== savedMode) {
+          await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, restoredMode).catch(() => {});
+        }
         setUser(userData);
         setIsLoggedIn(true);
         logger.log('[AuthContext] setIsLoggedIn(true) — navigating in');
@@ -383,14 +412,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [resolveRestoredMode]);
+
+  loadUserProfileRef.current = loadUserProfile;
 
   // Directly set the mode (used by notification taps / deep-links that must land
   // in a specific hat). Exposed to non-React code via the mode controller so the
   // push tap handler can switch hats before deep-linking.
   const applyMode = useCallback(async (mode: 'provider' | 'client') => {
     setActiveMode(mode);
-    await AsyncStorage.setItem('@active_mode', mode).catch(() => {});
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, mode).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -414,7 +445,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const upgradeToProvider = useCallback(async (
     businessName: string,
     businessEmail: string,
-    extras?: { businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string }
+    extras?: {
+      businessPhone?: string; instagram?: string; tiktok?: string; website?: string; businessType?: string;
+      dobDay?: string; dobMonth?: string; dobYear?: string;
+      serviceInterests?: string[]; serviceLocations?: string[];
+      priceRange?: string; teamSize?: string; preferredContactMethods?: string[];
+      accessibilityNotes?: string; languagesSpoken?: string[]; specialties?: string[];
+      preferredPaymentMethods?: string[];
+      referralSource?: string;
+    }
   ) => {
     if (!user) throw new Error('No logged-in user');
     await upgradeUserToProvider(user.id, businessName, businessEmail, extras);
@@ -440,7 +479,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const dob = profileData.dobYear && profileData.dobMonth && profileData.dobDay
       ? `${profileData.dobYear}-${profileData.dobMonth.padStart(2, '0')}-${profileData.dobDay.padStart(2, '0')}`
       : null;
-    const { error } = await supabase.from('users').update({
+    try {
+      await updateClientProfileFields(user.id, {
       ...(dob ? { dob } : {}),
       hair_type: profileData.hairType || null,
       skin_type: profileData.skinType || null,
@@ -456,10 +496,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
       ...(profileData.has_kids != null ? { has_kids: profileData.has_kids } : {}),
-    }).eq('id', user.id);
+      });
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
-    if (error) { logger.error('addClientProfile failed:', error); throw error; }
+    } catch (error) { logger.error('addClientProfile failed:', error); throw error; }
     setUser({ ...user, ...(dob ? { dob } : {}), hasClientProfile: true });
     setActiveMode('client');
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, 'client').catch(() => {});
@@ -525,10 +565,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session) throw new Error('No session');
     setIsReactivating(true);
     try {
-      const { data, error } = await supabase.rpc('cancel_account_deletion');
-      if (error) throw error;
-      if (data && (data as any).ok === false) {
-        throw new Error((data as any).error || 'Could not reactivate your account.');
+      const data = await cancelAccountDeletionRequest();
+      if (data.ok === false) {
+        throw new Error(data.error || 'Could not reactivate your account.');
       }
       setPendingReactivation(null);
       await loadUserProfile(session);
@@ -556,9 +595,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // there'd be nothing left to keep it around for. See supabase/delete_account.sql.
   const deleteClientProfile = useCallback(async () => {
     if (!user) throw new Error('No logged-in user');
-    const { data, error } = await supabase.rpc('delete_client_profile');
-    if (error) throw error;
-    if (data && (data as any).ok === false) throw accountDeletionError(data);
+    const data = await deleteClientAccountProfile();
+    if (data.ok === false) throw accountDeletionError(data);
 
     await clearStorageFolder('avatars', user.id);
 
@@ -577,9 +615,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // the whole account. See supabase/delete_account.sql.
   const deleteProviderProfile = useCallback(async () => {
     if (!user) throw new Error('No logged-in user');
-    const { data, error } = await supabase.rpc('delete_provider_profile');
-    if (error) throw error;
-    if (data && (data as any).ok === false) throw accountDeletionError(data);
+    const data = await deleteProviderAccountProfile();
+    if (data.ok === false) throw accountDeletionError(data);
 
     await Promise.all([
       clearStorageFolder('provider-logos', user.id),

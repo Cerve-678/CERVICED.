@@ -5,11 +5,12 @@
 
 #generated
 
-**65 screens.** Curated overview: [[Screens & Navigation]].
+**66 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (22)
+## Provider (23)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
+- `src/screens/provider/AddBookingScreen.tsx`
 - `src/screens/provider/BrandingScreen.tsx`
 - `src/screens/provider/BusinessProfileScreen.tsx`
 - `src/screens/provider/InfoRegScreen.tsx`

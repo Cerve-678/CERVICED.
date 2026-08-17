@@ -17,7 +17,7 @@ const STEP_LABELS: Record<number, string> = {
 };
 
 export default function StepProgressIndicator({ currentStep, totalSteps, stepLabel }: StepProgressIndicatorProps) {
-  const { isDarkMode, palette: t } = useTheme();
+  const { palette: t } = useTheme();
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function StepProgressIndicator({ currentStep, totalSteps, stepLab
       friction: 12,
       useNativeDriver: false,
     }).start();
-  }, [currentStep, totalSteps]);
+  }, [currentStep, progressAnim, totalSteps]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],

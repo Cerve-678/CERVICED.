@@ -102,12 +102,12 @@ export default function BeccaNavigator() {
       <BeccaStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
       <BeccaStack.Screen
         name="Reschedule"
         component={RescheduleScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
       <BeccaStack.Screen
         name="DevSettings"

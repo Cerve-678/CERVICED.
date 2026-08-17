@@ -20,6 +20,7 @@ import {
   Share,
   Linking,
   Modal,
+  Keyboard,
   TextInput,
   Platform,
   findNodeHandle,
@@ -41,16 +42,13 @@ import { useIsFocused, usePreventRemove } from "@react-navigation/native";
 
 // Correct icon imports - using your IconLibrary.tsx
 import { Ionicons } from "@expo/vector-icons";
-import Icon, {
+import {
   BookmarkIcon,
   ShareIcon,
   BellIcon,
 } from "../../components/IconLibrary";
 import TabIcon from "../../components/TabIcon";
 import { useCart } from "../../contexts/CartContext";
-
-// Import storage from utils
-import { storage, STORAGE_KEYS } from "../../utils/storage";
 
 // Navigation types
 import { HomeStackParamList } from "../../navigation/types";
@@ -59,14 +57,13 @@ import { navigationRef } from "../../navigation/navigationRef";
 // Theme imports
 import { useTheme } from "../../contexts/ThemeContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
+import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
 import CategoryTabItem from "../../components/CategoryTabPill";
 import {
   getProviderBySlug,
   getProviderReviews,
-  addBookmark as dbAddBookmark,
-  removeBookmark as dbRemoveBookmark,
   trackUserInteraction,
   getProviderActivePromotions,
   getProviderPortfolio,
@@ -87,11 +84,7 @@ import type { AvailabilitySummary, WeeklyOpeningHoursDay } from "../../services/
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
 import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
 import { AddOnPickerModal } from "../../components/AddOnPickerModal";
-import type {
-  ProviderWithServices,
-  DbPromotion,
-  DbPortfolioItem,
-} from "../../types/database";
+import type { DbPromotion, DbPortfolioItem } from "../../types/database";
 import {
   resolveProviderTheme,
   withAlpha,
@@ -101,6 +94,10 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12 } from "../../utils/dateUtils";
+import { BUSINESS_TYPE_LABEL, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
+import { mapProviderProfileData } from "../../features/providers/profileMapper";
+import type { ProviderProfileData, ProviderProfileService } from "../../features/providers/profileTypes";
+import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -118,303 +115,12 @@ const SIDE_PANEL_W = screenWidth * 0.85;
 // the content sheet starts right after them, rising over the photo with a rounded lip.
 const SHEET_LIP_RADIUS = 36;
 
-// Fallback icons using text symbols
-const HeartIcon = ({ size, color }: { size: number; color: string }) => (
-  <Text style={{ fontSize: size, color }}>♥</Text>
-);
-
 const StarIcon = ({ size, color }: { size: number; color: string }) => (
   <Text style={{ fontSize: size, color }}>★</Text>
 );
 
-// Provider interface
-interface ProviderData {
-  id: string;
-  displayName: string;
-  providerName: string;
-  providerService: string;
-  providerLogo: any;
-  location: string;
-  rating: number;
-  /** Provider's own free-text pill message (e.g. "Slots out every 15th of
-   *  the month") — the client's own words, shown as-is in the hero pill.
-   *  Not derived from the live schedule. */
-  slotsText: string;
-  aboutText: string;
-  categories: Record<string, ServiceData[]>;
-  /** Shown under the category tab once selected — keyed the same as
-   *  `categories`, missing/empty for categories without one. */
-  categoryDescriptions: Record<string, string>;
-  gradient: [string, string, ...string[]];
-  hasCustomGradient: boolean;
-  accentColor: string | null;
-  backgroundImage: string | null;
-  profileTheme: string; // preset key from providerThemes.ts — 'app' follows viewer's theme
-  phone: string;
-  email: string;
-  instagram: string;
-  website: string;
-  /** When set, "Book" sends the client here instead of Cerviced's in-app
-   *  booking flow (Fresha, Treatwell, Acuity, etc.). */
-  externalBookingUrl: string | null;
-  yearsExperience: string;
-  specialties: string[];
-  customServiceType: string;
-  whatsapp: string;
-  isVerified: boolean;
-  preferredContactMethods: string[];
-  onlineConsultationsAvailable: boolean;
-  bookingPolicies: {
-    cancelNotice?: string;
-    cancelPenalty?: string;
-    cancelNote?: string;
-    rescheduleNotice?: string;
-    maxReschedules?: string;
-    depositRequired?: boolean;
-    /** Client must pay the deposit — no "pay in full" choice at booking. */
-    depositOnly?: boolean;
-    depositType?: string;
-    depositAmount?: string;
-    noShowAction?: string;
-    /** Optional photo of a fuller policy document — a house-rules sheet, a
-     *  consent form, etc. — shown via the "View policy details" pop-up. */
-    policyImageUrl?: string;
-  } | null;
-  /** Enforced at cancellation (providers.cancellation_notice_hours) — takes
-   *  precedence over the descriptive bookingPolicies.cancelNotice text. */
-  cancellationNoticeHours: number;
-  /** Provider's Automations toggle — hides the join-waitlist button when off. */
-  waitlistEnabled: boolean;
-}
-
-interface AddOnData {
-  id: string | number;
-  name: string;
-  price: number;
-  description: string;
-}
-
-interface ServiceData {
-  id: number;
-  dbId: string;
-  name: string;
-  price: number;
-  duration: string;
-  description: string;
-  image: any;
-  images?: any[]; // Optional array for carousel
-  addOns?: AddOnData[]; // Optional per-service add-ons
-  // Treatment safety — captured by the provider, shown to the client right
-  // under the description so they see it before booking.
-  isPregnancySafe?: boolean;
-  patchTestRequired?: boolean;
-  minAge?: number | null;
-  contraindications?: string[];
-  aftercareNotes?: string;
-  serviceType?: string | null;
-}
-
-// ─── Duration formatter ────────────────────────────────────────────────────
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m > 0 ? `${h}h ${m}min` : `${h} hour${h > 1 ? "s" : ""}`;
-}
-
-// ─── Policy helpers ─────────────────────────────────────────────────────────
-/** True when the provider has anything worth showing on the Policy tab —
- *  either descriptive booking_policies or the enforced cancellation window. */
-function hasPolicyInfo(provider: ProviderData): boolean {
-  const bp = provider.bookingPolicies;
-  return (
-    provider.cancellationNoticeHours > 0 ||
-    (!!bp &&
-      ((!!bp.depositRequired && !!bp.depositAmount) ||
-        (!!bp.cancelNotice && bp.cancelNotice !== "none") ||
-        !!(bp.rescheduleNotice || bp.maxReschedules) ||
-        (!!bp.noShowAction && bp.noShowAction !== "none")))
-  );
-}
-
-// ─── Map Supabase ProviderWithServices → local ProviderData ─────────────────
-function mapDbProviderToProviderData(p: ProviderWithServices): ProviderData {
-  const categories: Record<string, ServiceData[]> = {};
-  const categoryDescriptions: Record<string, string> = {};
-  p.services.forEach((s, idx) => {
-    const key = s.category_name;
-    if (!categories[key]) categories[key] = [];
-    if (s.category_description && !categoryDescriptions[key]) {
-      categoryDescriptions[key] = s.category_description;
-    }
-    categories[key].push({
-      id: idx,
-      dbId: s.id,
-      name: s.name,
-      price: Number(s.price),
-      duration: formatDuration(s.duration_minutes),
-      description: s.description ?? "",
-      image: null,
-      images: s.images
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((img) => ({ uri: img.url })),
-      addOns: s.add_ons
-        .filter((a) => a.is_active)
-        .map((a) => ({
-          id: a.id,
-          name: a.name,
-          price: Number(a.price),
-          description: a.description ?? "",
-        })),
-      isPregnancySafe: s.is_pregnancy_safe,
-      patchTestRequired: s.patch_test_required,
-      minAge: s.min_age,
-      contraindications: s.contraindications ?? [],
-      aftercareNotes: s.aftercare_notes ?? "",
-      serviceType: s.service_type ?? null,
-    });
-  });
-
-  return {
-    id: p.slug,
-    displayName: p.display_name,
-    providerName: p.display_name.toUpperCase(),
-    providerService: p.service_category,
-    providerLogo: p.logo_url ? { uri: p.logo_url } : null,
-    location: p.location_text ?? "",
-    rating: Number(p.rating),
-    slotsText: p.slots_text ?? "",
-    aboutText: p.about_text ?? "",
-    gradient: (p.gradient && p.gradient.length >= 2
-      ? p.gradient
-      : ["#AF9197", "#C4A8AD"]) as [string, string, ...string[]],
-    hasCustomGradient: !!(p.gradient && p.gradient.length >= 2),
-    accentColor: p.accent_color ?? null,
-    backgroundImage: p.background_image_url ?? null,
-    profileTheme: p.profile_theme ?? "app",
-    categories,
-    categoryDescriptions,
-    phone: p.phone ?? "",
-    email: p.email ?? "",
-    instagram: p.instagram ?? "",
-    website: p.website ?? "",
-    externalBookingUrl: p.external_booking_url ?? null,
-    yearsExperience: p.years_experience ? String(p.years_experience) : "",
-    specialties: p.specialties?.map((s) => s.specialty) ?? [],
-    customServiceType: p.custom_service_type ?? "",
-    whatsapp: p.whatsapp_number ?? "",
-    isVerified: p.is_verified ?? false,
-    preferredContactMethods: p.preferred_contact_methods ?? [],
-    onlineConsultationsAvailable: p.online_consultations_available ?? false,
-    bookingPolicies: p.booking_policies ?? null,
-    cancellationNoticeHours: p.cancellation_notice_hours ?? 0,
-    // Absent setting = waitlist stays available (pre-toggle behaviour)
-    waitlistEnabled: p.automation_settings?.waitlistEnabled !== false,
-  };
-}
-
-// Get adaptive accent color based on gradient - Enhanced for better contrast - Memoized
-const getAdaptiveAccentColor = (
-  gradient: [string, string, ...string[]],
-): string => {
-  // Extract the dominant color from gradient and ensure visibility
-  const primaryColor = gradient[0];
-
-  // Enhanced visibility mapping for different gradients with better contrast
-  const colorMap: Record<string, string> = {
-    "#FF6B6B": "#C2185B", // Deeper pink for red gradients
-    "#FF4500": "#7B1FA2", // Purple for orange gradients
-    "#FF69B4": "#6A1B9A", // Deep purple for pink gradients
-    "#E6E6FA": "#4A148C", // Deep purple for lavender gradients
-    "#708090": "#3F51B5", // Indigo for gray gradients
-    "#99FFCC": "#00838F", // Dark cyan for mint gradients
-    "#1B4332": "#E91E63", // Pink for Kiki's dark green (better contrast)
-    "#FFE4B5": "#E65100", // Dark orange for beige gradients
-    "#D4A574": "#8D4E85", // Deep mauve for Her Brows brown-pink gradients
-  };
-
-  return colorMap[primaryColor] || "#7B1FA2"; // Default deep purple
-};
-
-// Service Image Carousel Component
-interface ServiceImageCarouselProps {
-  images: any[];
-  size?: number;
-}
-
-const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = React.memo(
-  ({ images, size = 60 }) => {
-    const [activeIndex, setActiveIndex] = useState(0);
-
-    const handleScroll = useCallback(
-      (event: any) => {
-        const offsetX = event.nativeEvent.contentOffset.x;
-        const index = Math.round(offsetX / size);
-        setActiveIndex(index);
-      },
-      [size],
-    );
-
-    if (images.length <= 1) {
-      // Single image, render normally
-      return (
-        <Image
-          source={images[0]}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
-          contentFit="cover"
-          transition={0}
-        />
-      );
-    }
-
-    return (
-      <View style={{ width: size, alignItems: "center" }}>
-        <FlatList
-          data={images}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          keyExtractor={(_item, index) => `img-${index}`}
-          renderItem={({ item }) => (
-            <Image
-              source={item}
-              style={{ width: size, height: size, borderRadius: size / 2 }}
-              contentFit="cover"
-              transition={0}
-            />
-          )}
-          style={{
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            overflow: "hidden",
-          }}
-          nestedScrollEnabled={true}
-        />
-        {images.length > 1 && (
-          <View style={{ flexDirection: "row", gap: 3, marginTop: 4 }}>
-            {images.map((_: any, index: number) => (
-              <View
-                key={index}
-                style={{
-                  width: activeIndex === index ? 8 : 4,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor:
-                    activeIndex === index
-                      ? "rgba(0,0,0,0.7)"
-                      : "rgba(0,0,0,0.25)",
-                }}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  },
-);
+type ProviderData = ProviderProfileData;
+type ServiceData = ProviderProfileService;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
 const MultiImagePill: React.FC<{
@@ -472,199 +178,7 @@ const MultiImagePill: React.FC<{
   );
 });
 
-// Full-width image carousel for services with multiple images
-const MultiImageCarousel: React.FC<{ images: any[] }> = React.memo(
-  ({ images }) => {
-    const [activeIndex, setActiveIndex] = useState(0);
-    const [cardWidth, setCardWidth] = useState(screenWidth - 80);
-
-    return (
-      <View
-        onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}
-        style={{
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          overflow: "hidden",
-        }}
-      >
-        <FlatList
-          data={images}
-          horizontal
-          pagingEnabled
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={(e) => {
-            if (cardWidth > 0) {
-              setActiveIndex(
-                Math.round(e.nativeEvent.contentOffset.x / cardWidth),
-              );
-            }
-          }}
-          keyExtractor={(_, i) => `mc-${i}`}
-          renderItem={({ item }) => (
-            <Image
-              source={item}
-              style={{ width: cardWidth, height: 180 }}
-              contentFit="cover"
-              transition={0}
-            />
-          )}
-          style={{ height: 180 }}
-          nestedScrollEnabled
-        />
-        {images.length > 1 && (
-          <View
-            style={{
-              position: "absolute",
-              bottom: 10,
-              left: 0,
-              right: 0,
-              flexDirection: "row",
-              justifyContent: "center",
-              gap: 6,
-            }}
-          >
-            {images.map((_, i) => (
-              <View
-                key={i}
-                style={{
-                  width: activeIndex === i ? 18 : 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor:
-                    activeIndex === i
-                      ? "rgba(255,255,255,0.95)"
-                      : "rgba(255,255,255,0.5)",
-                }}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  },
-);
-
-// Enhanced Action Button Component - Properly Typed
-interface ActionButtonProps {
-  onPress: () => void;
-  style: any;
-  textStyle: any;
-  children: React.ReactNode;
-  intensity?: number;
-  isHighlighted?: boolean;
-}
-
-const ActionButton: React.FC<ActionButtonProps> = React.memo(
-  ({
-    onPress,
-    style,
-    textStyle,
-    children,
-    intensity = 10,
-    isHighlighted = false,
-  }) => {
-    const pressAnimatedValue = useRef<Animated.Value>(
-      new Animated.Value(1),
-    ).current;
-    const glowAnimatedValue = useRef<Animated.Value>(
-      new Animated.Value(0),
-    ).current;
-
-    const handlePressIn = useCallback(() => {
-      Animated.parallel([
-        Animated.spring(pressAnimatedValue, {
-          toValue: 0.92,
-          useNativeDriver: true,
-          tension: 300,
-          friction: 10,
-        }),
-        Animated.timing(glowAnimatedValue, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, [pressAnimatedValue, glowAnimatedValue]);
-
-    const handlePressOut = useCallback(() => {
-      Animated.parallel([
-        Animated.spring(pressAnimatedValue, {
-          toValue: 1,
-          useNativeDriver: true,
-          tension: 300,
-          friction: 10,
-        }),
-        Animated.timing(glowAnimatedValue, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      onPress();
-    }, [pressAnimatedValue, glowAnimatedValue, onPress]);
-
-    const glowStyle = useMemo(
-      () => ({
-        opacity: glowAnimatedValue,
-        transform: [
-          {
-            scale: glowAnimatedValue.interpolate({
-              inputRange: [0, 1],
-              outputRange: [1, 1.05],
-            }),
-          },
-        ],
-      }),
-      [glowAnimatedValue],
-    );
-
-    return (
-      <TouchableOpacity
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-        style={style}
-      >
-        <Animated.View style={{ transform: [{ scale: pressAnimatedValue }] }}>
-          {/* Glow effect layer */}
-          <Animated.View style={[StyleSheet.absoluteFill, glowStyle]}>
-            <LinearGradient
-              colors={[
-                "rgba(255,255,255,0.6)",
-                "rgba(255,255,255,0.2)",
-                "transparent",
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: 18 }]}
-            />
-          </Animated.View>
-
-          <BlurView
-            intensity={intensity}
-            tint="light"
-            style={styles.actionButtonBlur}
-          >
-            {/* Reflective highlight */}
-            <LinearGradient
-              colors={[
-                "rgba(255,255,255,0.4)",
-                "rgba(255,255,255,0.1)",
-                "transparent",
-              ]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.buttonReflection}
-            />
-            <Text style={textStyle}>{children}</Text>
-          </BlurView>
-        </Animated.View>
-      </TouchableOpacity>
-    );
-  },
-);
+MultiImagePill.displayName = "MultiImagePill";
 
 // Success Message Component
 interface SuccessMessageProps {
@@ -782,6 +296,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
     );
   },
 );
+SuccessMessage.displayName = "SuccessMessage";
 // Reviews Modal Component
 interface ReviewsModalProps {
   isVisible: boolean;
@@ -914,6 +429,8 @@ const ReviewsModal: React.FC<ReviewsModalProps> = React.memo(
   },
 );
 
+ReviewsModal.displayName = "ReviewsModal";
+
 // Notification Alert Component
 interface NotificationAlertProps {
   isVisible: boolean;
@@ -983,6 +500,8 @@ const NotificationAlert: React.FC<NotificationAlertProps> = React.memo(
     );
   },
 );
+
+NotificationAlert.displayName = "NotificationAlert";
 
 // Elegant serif for display names & section headings (matches the reference look)
 const SERIF = "Prata-Regular";
@@ -1238,6 +757,8 @@ const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
   },
 );
 
+OffersSidePanel.displayName = "OffersSidePanel";
+
 const offersStyles = StyleSheet.create({
   header: {
     flexDirection: "row",
@@ -1423,7 +944,11 @@ function UnclaimedProviderView({
         </TouchableOpacity>
       </View>
 
-      <View style={unclaimedStyles.content}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={unclaimedStyles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {provider.logoUrl ? (
           <Image
             source={{ uri: provider.logoUrl }}
@@ -1457,7 +982,7 @@ function UnclaimedProviderView({
             bookable — details here were imported and may be out of date.
           </Text>
         </View>
-      </View>
+      </ScrollView>
 
       <View style={[unclaimedStyles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.sep }]}>
         <TouchableOpacity
@@ -1483,7 +1008,7 @@ const unclaimedStyles = StyleSheet.create({
     justifyContent: "center",
   },
   backButtonText: { fontSize: 20, lineHeight: 22 },
-  content: { flex: 1, alignItems: "center", paddingHorizontal: 32, paddingTop: 24 },
+  content: { flexGrow: 1, alignItems: "center", paddingHorizontal: 32, paddingTop: 24, paddingBottom: 24 },
   logo: { width: 88, height: 88, borderRadius: 44 },
   name: {
     fontFamily: "BakbakOne-Regular",
@@ -1729,7 +1254,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Set only when getProviderBySlug comes back empty AND the id resolves to
   // an unclaimed (is_claimed = false) row instead. Renders a separate,
   // minimal read-only view further down — never mixed into `provider`,
-  // since ProviderData/mapDbProviderToProviderData assume a fully onboarded
+  // since ProviderData assumes a fully onboarded
   // provider with real services/availability that an unclaimed row has none
   // of.
   const [unclaimedProvider, setUnclaimedProvider] = useState<UnclaimedProviderDetail | null>(null);
@@ -1766,7 +1291,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;
         }
-        setProvider(mapDbProviderToProviderData(data));
+        setProvider(mapProviderProfileData(data));
         setProviderDbId(data.id);
 
         // Track profile view for personalization + analytics
@@ -2450,7 +1975,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
          
         const {
           DateTimePickerAndroid,
-        } = require("@react-native-community/datetimepicker");
+        } = require("@react-native-community/datetimepicker"); // eslint-disable-line @typescript-eslint/no-require-imports -- Android-only module
         DateTimePickerAndroid.open({
           value:
             (which === "from" ? waitlistDateFrom : waitlistDateTo) ??
@@ -2486,6 +2011,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const handleJoinWaitlist = useCallback(async () => {
     if (!provider || !providerDbId || !currentUserId || !waitlistModal.service)
       return;
+    Keyboard.dismiss();
     setWaitlistJoining(true);
     try {
       let preferredDates: string[] | undefined;
@@ -2565,6 +2091,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
+      // The stack's own screen options (HomeNavigator etc.) set a
+      // headerBackTitle, which otherwise renders its own native back
+      // control alongside/behind this custom headerLeft pill — explicitly
+      // hiding it here is what makes the custom button the only one drawn.
+      // Cast needed because this screen is typed with the older
+      // @react-navigation/stack's StackScreenProps even though every
+      // navigator that registers it actually uses createNativeStackNavigator
+      // — headerBackVisible is a real native-stack option, just missing from
+      // this mismatched type (pre-existing, not something to fix here).
+      ...({ headerBackVisible: false } as object),
       headerTitle:
         isScrolledRef.current && provider ? provider.displayName : "",
       headerTitleStyle: {
@@ -2575,12 +2111,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       headerLeft: () => (
         <TouchableOpacity
           style={styles.navBackButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            navigation.goBack();
+          }}
           activeOpacity={0.7}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <Text style={styles.navBackText}>←</Text>
+          <Ionicons name="chevron-back" size={26} color="#000" style={{ marginLeft: -2 }} />
         </TouchableOpacity>
       ),
       headerRight: () => (
@@ -3173,6 +2712,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           selectedTime: result.time,
           notes: result.notes || undefined,
           isDepositOnly: result.isDepositOnly,
+          policyAcceptedAt: result.policyAcceptedAt,
+          policySnapshot: result.policySnapshot,
         };
 
         // Add to cart context
@@ -3242,6 +2783,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             // singleton regardless of whether the sheet minted one for its
             // grouped siblings.
             bookingBatchId: isSeparate ? undefined : result.groupBatchId,
+            policyAcceptedAt: result.policyAcceptedAt,
+            policySnapshot: result.policySnapshot,
           });
         });
 
@@ -3579,9 +3122,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       onPress={() =>
                         setExpandedServices((prev) => {
                           const next = new Set(prev);
-                          next.has(service.id)
-                            ? next.delete(service.id)
-                            : next.add(service.id);
+                          if (next.has(service.id)) {
+                            next.delete(service.id);
+                          } else {
+                            next.add(service.id);
+                          }
                           return next;
                         })
                       }
@@ -3960,6 +3505,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           providerDisplayName={provider?.displayName ?? provider?.providerName ?? ""}
           providerKey={provider?.providerName ?? ""}
           providerServiceCategory={provider?.providerService}
+          bookingPolicies={provider?.bookingPolicies ?? null}
         />
 
         {/* Multi-service booking modal — for services picked via "Select" mode */}
@@ -3975,6 +3521,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             providerDbId ?? provider?.displayName ?? provider?.providerName ?? ""
           }
           providerDisplayName={provider?.displayName ?? provider?.providerName ?? ""}
+          bookingPolicies={provider?.bookingPolicies ?? null}
         />
 
         {/* Add-on popup — opens the instant a service with add-ons is
@@ -4106,7 +3653,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           animationType="fade"
           onRequestClose={closeWaitlistModal}
         >
-          <View style={styles.waitlistPopupBackdrop}>
+          <KeyboardDismissView style={styles.waitlistPopupBackdrop}>
             <TouchableOpacity
               style={StyleSheet.absoluteFill}
               activeOpacity={1}
@@ -4395,6 +3942,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 placeholderTextColor={OP.sub}
                 multiline
                 maxLength={280}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
               />
 
               {waitlistError && (
@@ -4437,7 +3986,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardDismissView>
         </Modal>
 
         {/* Waitlist Leave Confirmation Modal */}
@@ -4656,6 +4205,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   {provider.location
                     ? ` · ${provider.location.toUpperCase()}`
                     : ""}
+                  {provider.businessType
+                    ? ` · ${BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase()}`
+                    : ""}
                 </Text>
 
                 {/* Rating inline */}
@@ -4767,7 +4319,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   />
                   {/* Tab switcher — only show if there are policy rows */}
                   {(() => {
-                    if (!hasPolicyInfo(provider)) return null;
+                    if (!hasProviderPolicyInfo(provider)) return null;
                     return (
                       <View
                         style={[
@@ -4821,7 +4373,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                   {infoTab === "about" ? (
                     <>
-                      {!hasPolicyInfo(provider) && (
+                      {!hasProviderPolicyInfo(provider) && (
                         <Text style={[styles.sectionTitle, { color: OP.text }]}>
                           Relevant Information
                         </Text>
@@ -4844,85 +4396,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   ) : (
                     /* Policy tab content */
                     (() => {
-                      const bp = provider.bookingPolicies;
-                      const rows: {
-                        icon: keyof typeof Ionicons.glyphMap;
-                        label: string;
-                        value: string;
-                        /** Short badge shown next to the label — e.g. "ONLY"
-                         *  when the provider requires the deposit and won't
-                         *  accept payment in full. */
-                        tag?: string;
-                      }[] = [];
-                      if (bp?.depositRequired && bp.depositAmount) {
-                        rows.push({
-                          icon: "card-outline",
-                          label: "Deposit",
-                          value:
-                            bp.depositType === "percent"
-                              ? `${bp.depositAmount}% required`
-                              : `£${bp.depositAmount} required`,
-                          ...(bp.depositOnly ? { tag: "ONLY" } : {}),
-                        });
-                      }
-                      // Cancellation — the enforced window (Automations screen) wins over
-                      // the descriptive registration text, so clients see exactly what
-                      // the cancel flow will apply.
-                      const cancelPenaltyText =
-                        bp?.cancelPenalty && bp.cancelPenalty !== "none"
-                          ? ` · ${bp.cancelPenalty === "deposit" ? "deposit kept" : "full charge"}`
-                          : "";
-                      if (provider.cancellationNoticeHours > 0) {
-                        rows.push({
-                          icon: "time-outline",
-                          label: "Cancellation",
-                          value: `${provider.cancellationNoticeHours} hours' notice${cancelPenaltyText}`,
-                        });
-                      } else if (bp?.cancelNotice && bp.cancelNotice !== "none") {
-                        rows.push({
-                          icon: "time-outline",
-                          label: "Cancellation",
-                          value: `${bp.cancelNotice} notice${cancelPenaltyText}`,
-                        });
-                      }
-                      if (bp?.rescheduleNotice || bp?.maxReschedules) {
-                        const parts = [];
-                        if (
-                          bp.rescheduleNotice &&
-                          bp.rescheduleNotice !== "same_day"
-                        )
-                          parts.push(`${bp.rescheduleNotice} notice`);
-                        if (
-                          bp.maxReschedules &&
-                          bp.maxReschedules !== "unlimited"
-                        )
-                          parts.push(`max ${bp.maxReschedules}`);
-                        if (parts.length > 0)
-                          rows.push({
-                            icon: "calendar-outline",
-                            label: "Reschedule",
-                            value: parts.join(" · "),
-                          });
-                      }
-                      if (bp?.noShowAction && bp.noShowAction !== "none") {
-                        rows.push({
-                          icon: "close-circle-outline",
-                          label: "No-show",
-                          value:
-                            bp.noShowAction === "warn"
-                              ? "Warning issued"
-                              : bp.noShowAction === "charge_deposit"
-                                ? "Deposit charged"
-                                : "Full charge",
-                        });
-                      }
-                      if (bp?.cancelNote) {
-                        rows.push({
-                          icon: "information-circle-outline",
-                          label: "Note",
-                          value: bp.cancelNote,
-                        });
-                      }
+                      const rows = buildPolicyDisplayRows(
+                        provider.bookingPolicies,
+                        provider.cancellationNoticeHours,
+                      );
                       return (
                         <View style={{ paddingTop: 8 }}>
                           {rows.map((row, i) => (
@@ -5391,19 +4868,9 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: "center",
     alignItems: "center",
+    marginLeft: 8,
     backgroundColor: "rgba(255, 255, 255, 0.25)",
     borderRadius: 20,
-    marginLeft: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  navBackText: {
-    fontSize: 24,
-    fontFamily: "BakbakOne-Regular",
-    color: "#000",
   },
   navHeaderActions: {
     flexDirection: "row",

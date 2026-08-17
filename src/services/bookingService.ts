@@ -3,12 +3,12 @@ import { CartItem } from '../contexts/CartContext';
 import {
   AppointmentData,
   ConfirmedBooking,
-  BookingStatus,
   PaymentStatus,
   BookingCoordinates,
   ADDRESS_PENDING_PLACEHOLDER,
   PHONE_PENDING_PLACEHOLDER,
   AvailableDate,
+  mapDbBookingStatus,
 } from '../types/booking';
 import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../types/database';
 import type { ProviderLocationData } from './databaseService';
@@ -19,6 +19,7 @@ import {
 } from './databaseService';
 import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
+import { calculatePlatformFee } from '../features/cart/platformFee';
 
 
 export interface DepositPolicy {
@@ -41,17 +42,15 @@ export interface PaymentInfo {
   depositPercentage?: number;
 }
 
-// Service charge constants - SINGLE SOURCE OF TRUTH
-export const SERVICE_CHARGE_RATE = 0.05; // 5%
-export const SERVICE_CHARGE_MINIMUM = 2.00; // £2 minimum
 export const DEPOSIT_PERCENTAGE = 20; // 20% deposit
 
 /**
  * Calculate service charge for a given subtotal
- * Uses 5% of subtotal or £2 minimum, whichever is higher
+ * Uses the transparent fixed-tier platform fee. Deposits are deliberately
+ * excluded by the caller — that money belongs entirely to the provider.
  */
-export const calculateServiceCharge = (subtotal: number): number => {
-  return Math.max(subtotal * SERVICE_CHARGE_RATE, SERVICE_CHARGE_MINIMUM);
+export const calculateServiceCharge = (subtotal: number, isDepositOnlyCheckout = false): number => {
+  return calculatePlatformFee(subtotal, isDepositOnlyCheckout);
 };
 
 /**
@@ -135,8 +134,10 @@ export class BookingService {
   ): AppointmentData[] {
     logger.log('Creating appointment data for', items.length, 'items');
 
-    // Step 1: Calculate cart-level totals for service charge distribution
-    const cartSubtotal = items.reduce((total, item) => {
+    // Only services paid in full in-app contribute to a client platform fee.
+    // A provider's deposit remains exactly the provider-set amount.
+    const feeEligibleSubtotal = items.reduce((total, item) => {
+      if (bookings[item.id]?.isDepositOnly) return total;
       const basePrice = Number(item.price) || 0;
       const addOnsTotal = (item.addOns || []).reduce((sum: number, addOn: any) => {
         return sum + (Number(addOn.price) || 0);
@@ -144,11 +145,15 @@ export class BookingService {
       return total + basePrice + addOnsTotal;
     }, 0);
 
-    // Service charge calculated on entire cart (5% or £2 min)
-    const totalServiceCharge = calculateServiceCharge(cartSubtotal);
+    const isDepositOnlyCheckout = items.length > 0 && items.every(item => !!bookings[item.id]?.isDepositOnly);
+    const feeAllocationSubtotal = feeEligibleSubtotal > 0
+      ? feeEligibleSubtotal
+      : items.reduce((total, item) => total + (Number(item.price) || 0) + (item.addOns || []).reduce((sum: number, addOn: any) => sum + (Number(addOn.price) || 0), 0), 0);
+    const totalServiceCharge = calculateServiceCharge(feeEligibleSubtotal, isDepositOnlyCheckout);
 
     logger.log('Cart totals:', {
-      cartSubtotal,
+      feeEligibleSubtotal,
+      isDepositOnlyCheckout,
       totalServiceCharge,
       itemCount: items.length
     });
@@ -172,11 +177,9 @@ export class BookingService {
       const itemSubtotal = basePrice + addOnsTotal;
 
       // Proportional service charge for this item
-      const itemServiceCharge = calculatePerItemServiceCharge(
-        itemSubtotal,
-        cartSubtotal,
-        totalServiceCharge
-      );
+      const itemServiceCharge = (booking.isDepositOnly && !isDepositOnlyCheckout)
+        ? 0
+        : calculatePerItemServiceCharge(itemSubtotal, feeAllocationSubtotal, totalServiceCharge);
 
       const totalWithServiceCharge = itemSubtotal + itemServiceCharge;
 
@@ -190,9 +193,11 @@ export class BookingService {
         // Deposit payment — use provider's actual policy if available, otherwise default 20%
         paymentType = 'deposit';
         const policy: DepositPolicy | number = booking.depositPolicy ?? DEPOSIT_PERCENTAGE;
-        depositAmount = this.calculateDeposit(totalWithServiceCharge, policy);
-        amountPaid = depositAmount;
-        remainingBalance = Math.round((totalWithServiceCharge - depositAmount) * 100) / 100;
+        // Deposit is calculated from the provider's service price only. Any
+        // checkout platform fee is separate, never part of that deposit.
+        depositAmount = this.calculateDeposit(itemSubtotal, policy);
+        amountPaid = depositAmount + itemServiceCharge;
+        remainingBalance = Math.round((itemSubtotal - depositAmount) * 100) / 100;
       } else {
         // Full payment
         paymentType = 'full';
@@ -341,17 +346,6 @@ export class BookingService {
 export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking => {
   const toDisplayTime = (t: string): string => formatTime12(t);
 
-  const mapSt = (s: string): BookingStatus => {
-    switch (s) {
-      case 'pending':     return BookingStatus.PENDING;
-      case 'completed':   return BookingStatus.COMPLETED;
-      case 'cancelled':   return BookingStatus.CANCELLED;
-      case 'in_progress': return BookingStatus.IN_PROGRESS;
-      case 'no_show':     return BookingStatus.NO_SHOW;
-      default:            return BookingStatus.UPCOMING;
-    }
-  };
-
   const mapPay = (s: string): PaymentStatus => {
     switch (s) {
       case 'fully_paid':    return PaymentStatus.PAID_IN_FULL;
@@ -388,6 +382,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
   return {
     id: db.id,
     cartItemId: db.id,
+    serviceId: db.service_id ?? undefined,
     providerName: db.provider_name_snapshot,
     providerImage: db.provider_logo_snapshot ?? null,
     providerService: db.service_category_snapshot ?? '',
@@ -399,7 +394,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     bookingDate: db.booking_date,
     bookingTime: startTime,
     endTime,
-    status: mapSt(db.status),
+    status: mapDbBookingStatus(db.status),
     address: db.provider_address_snapshot ?? '',
     // provider_coordinates is stored as { lat, lng } (see createBooking), but the
     // whole app reads coordinates.latitude/.longitude — normalize both shapes so
@@ -420,6 +415,8 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     customerPhone: db.customer_phone ?? '',
     notes: db.notes ?? undefined,
     bookingInstructions: db.booking_instructions ?? undefined,
+    policyAcceptedAt: db.policy_accepted_at ?? undefined,
+    policySnapshot: (db.policy_snapshot as Record<string, unknown>) ?? undefined,
     clientAddress: (db as any).client_address ?? undefined,
     addressReleasedAt: db.address_released_at ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
@@ -437,6 +434,8 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     paymentStatus: mapPay(db.payment_status),
     paymentMethod: (db as any).payment_method ?? undefined,
     groupBookingId: db.group_booking_id ?? undefined,
+    isGroupBooking: db.is_group_booking ?? undefined,
+    groupBookingCount: db.group_booking_count ?? undefined,
     createdAt: db.created_at ?? new Date().toISOString(),
     updatedAt: db.updated_at ?? new Date().toISOString(),
   };
@@ -495,6 +494,7 @@ export function applyRescheduleRequestRow(
         : {}),
       rescheduleCount: row.reschedule_count,
       ...(lastRescheduledAt ? { lastRescheduledAt } : {}),
+      ...(row.group_reschedule_batch_id ? { groupRescheduleBatchId: row.group_reschedule_batch_id } : {}),
     },
   };
 }

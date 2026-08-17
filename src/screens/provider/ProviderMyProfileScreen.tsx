@@ -23,9 +23,11 @@ import type { ProviderRegistrationData } from '../../services/providerRegistrati
 import { getProviderPortfolio, getProviderReviews, getProviderIdForUserId } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../../constants/providerThemes';
+import { AvailabilityService } from '../../services/AvailabilityService';
+import type { AvailabilitySummary } from '../../services/AvailabilityService';
+import AvailabilityCard from '../../components/AvailabilityCard';
 import CategoryTabPill from '../../components/CategoryTabPill';
 import SlidingTabs from '../../components/SlidingTabs';
-import { BellIcon } from '../../components/IconLibrary';
 import AppBackground from '../../components/AppBackground';
 import { logger } from '../../utils/logger';
 
@@ -72,7 +74,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
-  const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
   const [reviews, setReviews] = useState<{ id: string; name: string; rating: number; comment: string; date: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +81,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<'about' | 'policy'>('about');
   const [showPolicyImage, setShowPolicyImage] = useState(false);
+  const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
 
   // Reload data every time screen comes into focus
   useFocusEffect(
@@ -100,8 +103,16 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             ]);
             parsed = loaded;
             if (providerId) {
-              setProviderDbId(providerId);
               getProviderPortfolio(providerId).then(setPortfolio).catch(() => {});
+              // Live availability for the header card. Fire-and-forget like the
+              // portfolio/reviews fetches above so the profile paints without
+              // waiting on it; a failure leaves the card hidden rather than
+              // showing a stale or invented schedule.
+              setAvailabilityLoading(true);
+              AvailabilityService.getAvailabilitySummary(providerId)
+                .then(setAvailability)
+                .catch(() => setAvailability(null))
+                .finally(() => setAvailabilityLoading(false));
               // Already have providerId from getProviderIdForUserId above —
               // call getProviderReviews directly instead of
               // getMyProviderReviews(), which would re-resolve the same
@@ -134,7 +145,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
       };
       load();
-    }, [user?.id])
+    }, [user?.id, selectedCategory])
   );
 
   const categoryNames = useMemo(() => {
@@ -154,11 +165,32 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       : providerData.providerService;
   }, [providerData]);
 
+  // This screen is the provider's home for their public presence, not only a
+  // mirror of what clients see. Keep the signal deliberately practical: these
+  // are the pieces that make a profile bookable and trustworthy.
+  const profileReadiness = useMemo(() => {
+    if (!providerData) return { complete: 0, total: 5, services: 0, missing: [] as string[] };
+    const services = Object.values(providerData.categories).reduce((count, category) => count + category.length, 0);
+    const items = [
+      { done: Boolean(providerData.logo), label: 'add a logo' },
+      { done: Boolean(providerData.aboutText.trim()), label: 'write an introduction' },
+      { done: Boolean(providerData.location.trim()), label: 'add your location' },
+      { done: services > 0, label: 'add services and prices' },
+      { done: portfolio.length > 0, label: 'add portfolio photos' },
+    ];
+    return {
+      complete: items.filter(item => item.done).length,
+      total: items.length,
+      services,
+      missing: items.filter(item => !item.done).map(item => item.label),
+    };
+  }, [providerData, portfolio.length]);
+
   // Pinterest-style two-column masonry — same "deal into whichever column is
   // shorter" layout as ProviderProfileScreen's portfolio grid.
   const PORTFOLIO_COL_W = (screenWidth - 40 - 12) / 2;
   const portfolioColumns = useMemo(() => {
-    const cols: Array<Array<DbPortfolioItem & { tileHeight: number }>> = [[], []];
+    const cols: (DbPortfolioItem & { tileHeight: number })[][] = [[], []];
     const colHeights = [0, 0];
     portfolio.forEach(item => {
       const ratio = item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
@@ -174,11 +206,15 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('EditProfile');
   }, [navigation]);
 
+  const handleEditSchedule = useCallback(() => {
+    navigation.navigate('ProviderSchedule');
+  }, [navigation]);
+
   const PP = useMemo(
     () => resolveProviderTheme(providerData?.profileTheme),
     [providerData?.profileTheme]
   );
-  const cardBg = withAlpha(PP.card, PP.isDark ? 0.5 : 0.9);
+  const cardBg = withAlpha(PP.card, PP.isDark ? 0.82 : 0.98);
   const cardBlurTint = PP.isDark ? ('dark' as const) : ('light' as const);
   const cardBlurIntensity = PP.isDark ? 35 : 25;
   const cardHighlightColors = (
@@ -264,7 +300,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       )}
 
       <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Edit Button (top right) */}
+        {/* Profile hub action — the public-profile editor is still one tap
+            away, but this screen now leads with the useful operational view. */}
         <View style={styles.topBar}>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
@@ -354,24 +391,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </Text>
               ) : null}
 
-              {providerData.slotsText ? (
-                <BlurView
-                  intensity={cardBlurIntensity}
-                  tint={cardBlurTint}
-                  style={[styles.slotsRow, { backgroundColor: cardBg, borderColor: PP.border }]}
-                >
-                  <LinearGradient
-                    colors={cardHighlightColors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.slotsCardHighlight}
-                  />
-                  <Text style={[styles.slotsText, { color: PP.sub }]}>{providerData.slotsText}</Text>
-                  <View style={styles.bellButtonInline}>
-                    <BellIcon size={16} color={PP.sub} />
-                  </View>
-                </BlurView>
-              ) : null}
             </View>
           </View>
 
@@ -379,7 +398,74 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               top corners — same floating-card-over-photo composition as
               ProviderProfileScreen. */}
           <View style={[styles.contentSheet, { backgroundColor: PP.bg }]}>
+            <View style={[styles.contentSheetClip, { backgroundColor: PP.bg }]}>
+            <View style={styles.profileHubCardShadow}>
+            <BlurView
+              intensity={cardBlurIntensity}
+              tint={cardBlurTint}
+              style={[styles.profileHubCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+            >
+              <LinearGradient
+                colors={cardHighlightColors}
+                start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+                style={styles.cardHighlight}
+              />
+              <View style={styles.profileHubHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.profileHubEyebrow, { color: PP.sub }]}>PROFILE HEALTH</Text>
+                  <Text style={[styles.profileHubTitle, { color: PP.text }]}>
+                    {profileReadiness.complete === profileReadiness.total ? 'Ready for clients' : 'Keep building your profile'}
+                  </Text>
+                </View>
+                <View style={[styles.readinessBadge, { backgroundColor: accentColor + '22' }]}>
+                  <Text style={[styles.readinessBadgeText, { color: accentColor }]}>
+                    {profileReadiness.complete}/{profileReadiness.total}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.profileHubSubtext, { color: PP.sub }]}>
+                {profileReadiness.services} service{profileReadiness.services === 1 ? '' : 's'} and {portfolio.length} portfolio photo{portfolio.length === 1 ? '' : 's'} live.
+                {profileReadiness.missing.length
+                  ? ` Next: ${profileReadiness.missing.slice(0, 2).join(' · ')}`
+                  : ''}
+              </Text>
+              <View style={[styles.profileHubActions, { borderTopColor: PP.border }]}>
+                <TouchableOpacity style={styles.profileHubAction} onPress={handleEditProfile} activeOpacity={0.7}>
+                  <View style={[styles.profileHubIcon, { backgroundColor: accentColor + '1C' }]}>
+                    <Ionicons name="create-outline" size={18} color={accentColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.profileHubActionTitle, { color: PP.text }]}>Public details</Text>
+                    <Text style={[styles.profileHubActionSub, { color: PP.sub }]}>Bio, contact, services and policies</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={PP.sub} />
+                </TouchableOpacity>
+              </View>
+            </BlurView>
+            </View>
+
+            <Text style={[styles.clientViewLabel, { color: PP.sub }]}>YOUR CLIENT-FACING PROFILE</Text>
+            {/* Live availability — replaces the old hand-typed slotsText pill.
+                Sits in the sheet rather than over the hero so the status
+                colours stay legible against any provider theme or cover
+                photo. Tapping goes to ProviderSchedule, which owns editing. */}
+            <View style={styles.availabilityWrap}>
+              <AvailabilityCard
+                summary={availability}
+                loading={availabilityLoading}
+                cardBg={cardBg}
+                blurIntensity={cardBlurIntensity}
+                blurTint={cardBlurTint}
+                borderColor={PP.border}
+                textColor={PP.text}
+                subTextColor={PP.sub}
+                accentColor={accentColor}
+                onEditSchedule={handleEditSchedule}
+              />
+            </View>
+
             {/* About / Policy tabbed card */}
+            <View style={styles.aboutCardShadow}>
             <BlurView
               intensity={cardBlurIntensity}
               tint={cardBlurTint}
@@ -510,6 +596,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </TouchableOpacity>
               ) : null}
             </BlurView>
+            </View>
 
             {providerData.bookingPolicies?.policyImageUrl ? (
               <Modal visible={showPolicyImage} transparent animationType="fade" onRequestClose={() => setShowPolicyImage(false)}>
@@ -565,8 +652,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 {/* Service Cards */}
                 <View style={styles.categoryServicesContainer}>
                   {currentServices.map((service) => (
+                    <View key={service.id} style={styles.serviceItemCardShadow}>
                     <BlurView
-                      key={service.id}
                       intensity={cardBlurIntensity}
                       tint={cardBlurTint}
                       style={[styles.serviceItemCard, { backgroundColor: cardBg, borderColor: PP.border }]}
@@ -623,6 +710,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         </View>
                       )}
                     </BlurView>
+                    </View>
                   ))}
                 </View>
               </View>
@@ -630,6 +718,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
             {/* Reviews — same card always shows (matching ProviderProfileScreen),
                 just with nothing under the title when there are none yet. */}
+            <View style={styles.reviewsCardShadow}>
             <BlurView
               intensity={cardBlurIntensity}
               tint={cardBlurTint}
@@ -664,8 +753,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   </View>
                 ))}
             </BlurView>
+            </View>
 
             {/* Contact Info */}
+            <View style={styles.contactCardShadow}>
             <BlurView
               intensity={cardBlurIntensity}
               tint={cardBlurTint}
@@ -715,6 +806,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </View>
               ) : null}
             </BlurView>
+            </View>
 
             {/* Portfolio — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
             {portfolio.length > 0 && (
@@ -726,7 +818,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   {portfolioColumns.map((column, colIdx) => (
                     <View key={`pcol-${colIdx}`} style={styles.portfolioColumn}>
                       {column.map(item => (
-                        <View key={item.id} style={styles.portfolioTile}>
+                        <View key={item.id} style={styles.portfolioTileShadow}>
+                        <View style={styles.portfolioTile}>
                           <Image
                             source={{ uri: item.image_url }}
                             style={{ width: '100%', height: item.tileHeight }}
@@ -740,12 +833,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                             </View>
                           ) : null}
                         </View>
+                        </View>
                       ))}
                     </View>
                   ))}
                 </View>
               </View>
             )}
+            </View>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -762,7 +857,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 340,
+    bottom: 0,
   },
   scrollView: {
     flex: 1,
@@ -831,10 +926,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   contentSheet: {
-    minHeight: screenHeight,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 130,
     borderTopLeftRadius: SHEET_LIP_RADIUS,
     borderTopRightRadius: SHEET_LIP_RADIUS,
     shadowColor: '#000',
@@ -842,6 +933,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
+  },
+  // Radius + overflow live on this INNER view, separate from contentSheet's
+  // shadow — iOS silently drops a view's shadow when overflow:'hidden' is
+  // set on that same view, so clip and shadow must be on different layers.
+  // This also guarantees the rounded top corners are clipped from the very
+  // first frame instead of only after a scroll-triggered relayout.
+  contentSheetClip: {
+    minHeight: screenHeight,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 130,
+    borderTopLeftRadius: SHEET_LIP_RADIUS,
+    borderTopRightRadius: SHEET_LIP_RADIUS,
+    overflow: 'hidden',
   },
 
   // Logo
@@ -923,44 +1028,113 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     letterSpacing: 0.4,
   },
-  slotsRow: {
+  availabilityWrap: {
+    marginBottom: 20,
+  },
+  // Provider-only profile hub. This sits above the client-facing preview so
+  // the tab earns its place as a working surface, while keeping the useful
+  // "what clients see" preview immediately below it.
+  profileHubCard: {
+    padding: 20,
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  // Shadow lives on this outer wrapper, separate from profileHubCard's
+  // overflow:'hidden' — iOS silently drops a view's shadow when
+  // overflow:'hidden' is set on that same view, so clip and shadow must be
+  // on different layers (same fix as contentSheet/contentSheetClip above).
+  profileHubCardShadow: {
+    marginBottom: 18,
+    borderRadius: 26,
+    shadowColor: '#B87E92',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  profileHubHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    gap: 12,
+  },
+  profileHubEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.1,
     marginBottom: 4,
   },
-  slotsCardHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
-  },
-  slotsText: {
+  profileHubTitle: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-    textAlign: 'center',
-    zIndex: 2,
+    fontSize: 18,
   },
-  bellButtonInline: {
-    padding: 4,
+  readinessBadge: {
+    minWidth: 46,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  readinessBadgeText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+  },
+  profileHubSubtext: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 12,
+  },
+  profileHubActions: {
+    marginTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  profileHubAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  profileHubIcon: {
+    width: 36,
+    height: 36,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileHubActionTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+  },
+  profileHubActionSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  clientViewLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.1,
+    marginBottom: 10,
+    marginLeft: 2,
   },
 
   // Generic frosted card
   aboutCard: {
     padding: 22,
     borderRadius: 26,
-    marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  // Shadow lives on this outer wrapper, separate from aboutCard's
+  // overflow:'hidden' — see profileHubCardShadow above for why.
+  aboutCardShadow: {
+    marginBottom: 20,
+    borderRadius: 26,
     shadowColor: '#B87E92',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -983,7 +1157,7 @@ const styles = StyleSheet.create({
   },
   aboutText: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
@@ -1079,9 +1253,14 @@ const styles = StyleSheet.create({
   reviewsCard: {
     padding: 22,
     borderRadius: 26,
-    marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  // Shadow lives on this outer wrapper, separate from reviewsCard's
+  // overflow:'hidden' — see profileHubCardShadow above for why.
+  reviewsCardShadow: {
+    marginBottom: 20,
+    borderRadius: 26,
     shadowColor: '#B87E92',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -1108,13 +1287,13 @@ const styles = StyleSheet.create({
   },
   reviewDate: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 10,
     marginLeft: 'auto',
   },
   reviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 8,
@@ -1157,6 +1336,13 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     padding: 15,
+  },
+  // Shadow lives on this outer wrapper, separate from serviceItemCard's
+  // overflow:'hidden' — see profileHubCardShadow above for why. No
+  // marginBottom to carry — card-to-card spacing here comes from
+  // categoryServicesContainer's gap, not a per-card margin.
+  serviceItemCardShadow: {
+    borderRadius: 26,
     shadowColor: '#B87E92',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -1191,7 +1377,7 @@ const styles = StyleSheet.create({
   },
   serviceDescription: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 12,
     marginBottom: 4,
   },
@@ -1202,7 +1388,7 @@ const styles = StyleSheet.create({
   },
   serviceDuration: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 11,
   },
   servicePrice: {
@@ -1240,9 +1426,14 @@ const styles = StyleSheet.create({
   contactCard: {
     padding: 22,
     borderRadius: 26,
-    marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  // Shadow lives on this outer wrapper, separate from contactCard's
+  // overflow:'hidden' — see profileHubCardShadow above for why.
+  contactCardShadow: {
+    marginBottom: 20,
+    borderRadius: 26,
     shadowColor: '#B87E92',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -1284,14 +1475,19 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 12,
   },
-  portfolioTile: {
+  // Shadow lives on this outer wrapper, separate from portfolioTileClip's
+  // overflow:'hidden' — see contentSheet/contentSheetClip above for why.
+  portfolioTileShadow: {
     borderRadius: 18,
-    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 3,
+  },
+  portfolioTile: {
+    borderRadius: 18,
+    overflow: 'hidden',
   },
   portfolioCaptionWrap: {
     position: 'absolute',

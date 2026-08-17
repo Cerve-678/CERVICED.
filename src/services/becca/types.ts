@@ -324,7 +324,16 @@ export interface ConversationContext {
   entities: EntityBag;
   /** What Becca answered last, so "the first one" knows what list it means. */
   lastCapabilityId?: string;
-  /** Providers Becca last showed, in display order — resolves "the first one". */
+  /**
+   * Providers Becca last showed, in display order — resolves "the first one".
+   *
+   * CLIENT HAT ONLY. Provider-hat capabilities list the provider's own
+   * clients, bookings and waitlist entries, none of which are providers, so
+   * this stays empty there and ordinal/pronoun references don't resolve.
+   * Supporting "the first one" over a client list would need its own
+   * `lastClients` field — deliberately not built, since every provider-hat
+   * answer currently names who it means rather than returning a bare list.
+   */
   lastProviders?: { slug: string; dbId?: string; displayName: string }[];
 }
 

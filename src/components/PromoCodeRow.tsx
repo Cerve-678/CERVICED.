@@ -21,7 +21,7 @@ interface PromoCodeRowProps {
 }
 
 export const PromoCodeRow: React.FC<PromoCodeRowProps> = memo(
-  ({ providerKey, appliedPromo, discount, onApply, onRemove, borderColor, surfaceColor, textColor, subColor, accentColor }) => {
+  function PromoCodeRow({ providerKey, appliedPromo, discount, onApply, onRemove, borderColor, surfaceColor, textColor, subColor, accentColor }) {
     const [promoInput, setPromoInput] = useState('');
     const [promoApplying, setPromoApplying] = useState(false);
     const [promoError, setPromoError] = useState<string | null>(null);

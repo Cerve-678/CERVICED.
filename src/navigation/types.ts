@@ -1,8 +1,7 @@
 // src/navigation/types.ts
-import { NavigatorScreenParams } from "@react-navigation/native";
+import { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
 import { StackScreenProps } from "@react-navigation/stack";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { CompositeScreenProps } from "@react-navigation/native";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 
 // ============================================================================
@@ -14,7 +13,10 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList>;
   Welcome: undefined;
   Login: undefined;
-  ClaimProvider: undefined;
+  // providerId — when present, jumps straight to the preview step for that
+  // specific unclaimed listing (from a profile's "Claim this business"
+  // button) instead of starting at the search step. See ClaimProviderScreen.
+  ClaimProvider: { providerId?: string } | undefined;
   SignUpStep1: undefined;
   SignUpStep2: undefined;
   SignUpStep3: undefined;
@@ -100,8 +102,32 @@ export type BeccaStackParamList = {
 export type ProviderBeccaStackParamList = {
   BeccaMain: { conversationId?: string };
   Notifications: undefined;
-  BookingDetail: { bookingId: string; booking?: any };
+  BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
   DevSettings: undefined;
+  // Becca's OWN copies of the provider screens her chips route to.
+  //
+  // Deliberately duplicated from ProviderHome/Profile/MyServices rather than
+  // reached by a cross-tab navigate: a cross-tab jump lands the screen at its
+  // tab root with an empty stack beneath it, so its close/back button fires an
+  // unhandled GO_BACK. Pushing within THIS stack always leaves BeccaMain
+  // underneath, so back returns to the conversation that sent you there.
+  // Mirrors how the client BeccaNavigator already owns its own destinations.
+  ProviderSchedule: undefined;
+  AddBooking: undefined;
+  Clientele: undefined;
+  ProviderInbox:
+    | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
+    | undefined;
+  ProviderConversation: {
+    conversationId: string;
+    clientUserId: string;
+    clientName: string;
+  };
+  Promotions: undefined;
+  InfoPacks: undefined;
+  Analytics: undefined;
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
+  Automations: undefined;
 };
 
 // Cart Stack
@@ -169,9 +195,19 @@ export type ProfileStackParamList = {
 
 // Provider Home Stack (Calendar/Scheduling)
 export type ProviderHomeStackParamList = {
-  ProviderHomeMain: undefined;
+  // jumpToDate: set after AddBookingScreen creates a booking outside "today",
+  // so the calendar opens straight to the day it was added on instead of
+  // silently leaving the provider on whatever day they already had selected.
+  ProviderHomeMain: { jumpToDate?: string } | undefined;
   ProviderSchedule: undefined;
-  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean };
+  AddBooking: undefined;
+  // Reachable from the Calendar tab's profile quick-actions. Registered here
+  // (as well as on the Profile stack) so those actions PUSH instead of jumping
+  // to the Profile tab root — a cross-tab jump left these at the root of a
+  // fresh stack, so their back/save button fired an unhandled GO_BACK.
+  EditProfile: { transferProviderId?: string } | undefined;
+  Branding: undefined;
+  BookingDetail: { bookingId: string; booking?: any; openReschedule?: boolean; groupSiblings?: any[] };
   ProviderIntakeForm:
     | {
         bookingId: string;
@@ -202,6 +238,10 @@ export type ProviderServicesStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
+  // Pushed from the availability card on the provider's own profile, so the
+  // schedule opens with that profile beneath it instead of at a bare tab root.
+  ProviderSchedule: undefined;
+  AddBooking: undefined;
   DevSettings: undefined;
 };
 
@@ -210,12 +250,14 @@ export type ProviderAccountStackParamList = {
   ProviderAccountMain: undefined;
   EditProfile: { transferProviderId?: string } | undefined;
   Notifications: undefined;
-  BookingHistory: undefined;
+  BookingHistory: { initialTab?: 'history' | 'todo' } | undefined;
   Analytics: undefined;
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
-  BookingDetail: { bookingId: string; booking?: any };
+  ProviderSchedule: undefined;
+  AddBooking: undefined;
+  BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
   ProviderIntakeForm: {
     bookingId: string;
     clientUserId: string;

@@ -4,6 +4,59 @@ Plain English explanations of features not yet built, what they mean, and exactl
 
 ---
 
+## Adding / Inviting Clients (Provider-Initiated Client Relationships)
+
+### What it means
+
+A provider wants an explicit "Add client" action on their Clientele screen — add someone as their client directly, rather than waiting for that person to find them and book.
+
+### What currently happens (why there's no Add button today)
+
+There is no such thing as a stored "client record" in the app. The Clientele list is **derived entirely from bookings**: `getProviderClientele()` reads the provider's own `completed`/`confirmed` bookings and aggregates them into unique people. A person becomes a "client" the moment they have a booking with you, and only then. There is no `provider_clients` / relationship table to insert a row into, and no way to represent a client who has never booked.
+
+On top of that, there is no way to add someone who isn't already a Cerviced user at all — manual bookings (`provider_create_manual_booking`) are deliberately limited to existing app accounts (consent boundary: a real booking creates records, notifications, and address-release against a real person who agreed to the platform). There is no client-invite mechanism in the app today (only `inviteFromWaitlist`, which is waitlist-specific).
+
+So an "Add client" button was removed from the Clientele screen on 2026-08-10 because it could only honestly do one of two things, both of which are their own feature:
+
+### What needs to exist (two separable pieces)
+
+**1. Add an EXISTING Cerviced user as a client without a booking**
+- Needs a real relationship table (e.g. `provider_clients: id, provider_id, user_id, added_at, source`) so a client can exist independent of any booking.
+- `getProviderClientele()` would union booking-derived clients with these explicitly-added ones (dedupe on `user_id`), and the ClienteleMember shape would need a `booking_count: 0` / "added, not yet booked" state the UI can show.
+- RLS: provider can only add/read their own rows; the added user should arguably get some notification/consent signal ("X added you as a client").
+
+**2. Invite a NON-user to Cerviced**
+- Net-new invite infrastructure: generate a share/signup link or send an invite (SMS/email), track pending invites, and convert to a real client relationship on signup.
+- Almost certainly needs a consent/legal review (unsolicited invites, storing a non-user's contact details) — see `LEGAL-COMPLIANCE-NOTES.md`.
+
+### Related
+
+- Manual booking already exists as its own standalone `AddBookingScreen` (reached from Home → Quick Access), and booking an existing client is the ONE way to make someone appear in Clientele today. The invite empty-state copy on `AddBookingScreen` ("ask them to sign up, then book them in here") is the current stopgap.
+
+---
+
+## Multi-Service Manual Booking (Provider Books Several Services at Once)
+
+### What it means
+
+On `AddBookingScreen`, a provider picks ONE service for the client. They may want to book several services for the same client in one appointment (e.g. "brows + lashes + tint" back-to-back), the provider-side equivalent of the client multi-service cart.
+
+### What currently happens
+
+`AddBookingScreen` is single-select by design: `serviceId` is a single string, and the underlying RPC `provider_create_manual_booking(p_client_user_id, p_service_id, p_booking_date, p_booking_time, p_notes)` takes exactly one service. Selecting a service collapses the list to that one.
+
+### Why it's a real feature, not a UI tweak
+
+- Client-side multi-service booking already exists but is **flagged OFF app-wide** (`MULTI_SERVICE_BOOKING_ENABLED` in `src/constants/featureFlags.ts` — see the Multi-Service section elsewhere in this doc). Bringing multi-service to the provider manual path should follow the same grouped-booking model (`group_booking_id`, all-or-nothing group RPCs), not invent a parallel one.
+- The RPC would need to accept multiple services (and their durations, for back-to-back slot math) and create grouped sibling bookings atomically — DB/RPC work plus booking-domain + security review.
+- The "When"/slots logic would need to reason about the **combined duration** of all chosen services, not a single service.
+
+### Tied to
+
+- The add-ons-not-persisted gap on `AddBookingScreen` (add-ons are collected in the UI but the RPC drops them) is the same shape of problem: the manual-booking RPC is minimal and needs extending before the UI can honestly persist richer bookings. Do both RPC extensions together if tackling either.
+
+---
+
 ## Multi-Staff (Salons with Multiple Team Members)
 
 ### What it means

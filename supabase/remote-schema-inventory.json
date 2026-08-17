@@ -1,0 +1,2095 @@
+{
+  "source": "linked Cerviced Supabase PostgreSQL catalogs",
+  "exportedAt": "2026-08-08T23:04:18.586Z",
+  "counts": {
+    "tables": 41,
+    "views": 1,
+    "functions": 285,
+    "triggers": 33,
+    "policies": 93,
+    "cronJobs": 23
+  },
+  "tables": [
+    {
+      "table_name": "account_deletion_log"
+    },
+    {
+      "table_name": "becca_chat_messages"
+    },
+    {
+      "table_name": "becca_chat_sessions"
+    },
+    {
+      "table_name": "booking_add_ons"
+    },
+    {
+      "table_name": "booking_info_packs"
+    },
+    {
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "table_name": "booking_messages"
+    },
+    {
+      "table_name": "booking_reschedule_requests"
+    },
+    {
+      "table_name": "bookings"
+    },
+    {
+      "table_name": "bookmarks"
+    },
+    {
+      "table_name": "event_checklist_items"
+    },
+    {
+      "table_name": "event_plans"
+    },
+    {
+      "table_name": "event_tasks"
+    },
+    {
+      "table_name": "info_packs"
+    },
+    {
+      "table_name": "notifications"
+    },
+    {
+      "table_name": "payment_methods"
+    },
+    {
+      "table_name": "portfolio_items"
+    },
+    {
+      "table_name": "promotions"
+    },
+    {
+      "table_name": "provider_availability"
+    },
+    {
+      "table_name": "provider_availability_overrides"
+    },
+    {
+      "table_name": "provider_availability_windows"
+    },
+    {
+      "table_name": "provider_blocked_dates"
+    },
+    {
+      "table_name": "provider_conversations"
+    },
+    {
+      "table_name": "provider_follows"
+    },
+    {
+      "table_name": "provider_form_library"
+    },
+    {
+      "table_name": "provider_messages"
+    },
+    {
+      "table_name": "provider_outreach_suppressions"
+    },
+    {
+      "table_name": "provider_private_details"
+    },
+    {
+      "table_name": "provider_scrape_jobs"
+    },
+    {
+      "table_name": "provider_scrape_sources"
+    },
+    {
+      "table_name": "provider_specialties"
+    },
+    {
+      "table_name": "provider_waitlist"
+    },
+    {
+      "table_name": "providers"
+    },
+    {
+      "table_name": "reviews"
+    },
+    {
+      "table_name": "search_events"
+    },
+    {
+      "table_name": "service_add_ons"
+    },
+    {
+      "table_name": "service_images"
+    },
+    {
+      "table_name": "services"
+    },
+    {
+      "table_name": "transactions"
+    },
+    {
+      "table_name": "user_interactions"
+    },
+    {
+      "table_name": "users"
+    }
+  ],
+  "views": [
+    {
+      "table_name": "client_bookings"
+    }
+  ],
+  "functions": [
+    {
+      "arguments": "p_user_id uuid, p_item_id text",
+      "name": "append_saved_portfolio_item"
+    },
+    {
+      "arguments": "",
+      "name": "apply_provider_booking_instructions"
+    },
+    {
+      "arguments": "",
+      "name": "assign_waitlist_position"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_info_pack_id uuid",
+      "name": "attach_info_pack_to_booking"
+    },
+    {
+      "arguments": "",
+      "name": "auto_release_address"
+    },
+    {
+      "arguments": "",
+      "name": "cancel_account_deletion"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "cancel_own_booking"
+    },
+    {
+      "arguments": "money, money",
+      "name": "cash_dist"
+    },
+    {
+      "arguments": "p_provider_id uuid",
+      "name": "check_and_set_provider_live"
+    },
+    {
+      "arguments": "p_hold_batch_id uuid, p_items jsonb",
+      "name": "claim_cart_booking_slots"
+    },
+    {
+      "arguments": "p_provider_id uuid, p_claim_token text",
+      "name": "claim_provider_profile"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "claim_waitlist_hold"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "close_orphaned_reschedule_request"
+    },
+    {
+      "arguments": "",
+      "name": "compute_booking_effective_range"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_new_date date, p_new_time time without time zone, p_new_end_time time without time zone",
+      "name": "confirm_reschedule_own_booking"
+    },
+    {
+      "arguments": "p_provider_id uuid, p_booking_date date, p_booking_time time without time zone, p_end_time time without time zone",
+      "name": "create_booking_atomic"
+    },
+    {
+      "arguments": "date, date",
+      "name": "date_dist"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "decline_reschedule_offer"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "decline_waitlist_hold"
+    },
+    {
+      "arguments": "",
+      "name": "delete_client_profile"
+    },
+    {
+      "arguments": "p_notification_id uuid",
+      "name": "delete_own_notification"
+    },
+    {
+      "arguments": "",
+      "name": "delete_provider_profile"
+    },
+    {
+      "arguments": "",
+      "name": "dev_reset_client"
+    },
+    {
+      "arguments": "",
+      "name": "dev_reset_provider"
+    },
+    {
+      "arguments": "",
+      "name": "dev_reset_provider_bookings_only"
+    },
+    {
+      "arguments": "",
+      "name": "enforce_booking_bookability"
+    },
+    {
+      "arguments": "",
+      "name": "expire_cart_holds"
+    },
+    {
+      "arguments": "",
+      "name": "expire_waitlist_holds"
+    },
+    {
+      "arguments": "real, real",
+      "name": "float4_dist"
+    },
+    {
+      "arguments": "double precision, double precision",
+      "name": "float8_dist"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_bit_compress"
+    },
+    {
+      "arguments": "internal, bit, smallint, oid, internal",
+      "name": "gbt_bit_consistent"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_bit_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_bit_picksplit"
+    },
+    {
+      "arguments": "gbtreekey_var, gbtreekey_var, internal",
+      "name": "gbt_bit_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_bit_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_bool_compress"
+    },
+    {
+      "arguments": "internal, boolean, smallint, oid, internal",
+      "name": "gbt_bool_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_bool_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_bool_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_bool_picksplit"
+    },
+    {
+      "arguments": "gbtreekey2, gbtreekey2, internal",
+      "name": "gbt_bool_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_bool_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_bpchar_compress"
+    },
+    {
+      "arguments": "internal, character, smallint, oid, internal",
+      "name": "gbt_bpchar_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_bytea_compress"
+    },
+    {
+      "arguments": "internal, bytea, smallint, oid, internal",
+      "name": "gbt_bytea_consistent"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_bytea_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_bytea_picksplit"
+    },
+    {
+      "arguments": "gbtreekey_var, gbtreekey_var, internal",
+      "name": "gbt_bytea_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_bytea_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_cash_compress"
+    },
+    {
+      "arguments": "internal, money, smallint, oid, internal",
+      "name": "gbt_cash_consistent"
+    },
+    {
+      "arguments": "internal, money, smallint, oid, internal",
+      "name": "gbt_cash_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_cash_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_cash_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_cash_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_cash_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_cash_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_date_compress"
+    },
+    {
+      "arguments": "internal, date, smallint, oid, internal",
+      "name": "gbt_date_consistent"
+    },
+    {
+      "arguments": "internal, date, smallint, oid, internal",
+      "name": "gbt_date_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_date_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_date_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_date_picksplit"
+    },
+    {
+      "arguments": "gbtreekey8, gbtreekey8, internal",
+      "name": "gbt_date_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_date_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_decompress"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_enum_compress"
+    },
+    {
+      "arguments": "internal, anyenum, smallint, oid, internal",
+      "name": "gbt_enum_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_enum_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_enum_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_enum_picksplit"
+    },
+    {
+      "arguments": "gbtreekey8, gbtreekey8, internal",
+      "name": "gbt_enum_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_enum_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_float4_compress"
+    },
+    {
+      "arguments": "internal, real, smallint, oid, internal",
+      "name": "gbt_float4_consistent"
+    },
+    {
+      "arguments": "internal, real, smallint, oid, internal",
+      "name": "gbt_float4_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_float4_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_float4_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_float4_picksplit"
+    },
+    {
+      "arguments": "gbtreekey8, gbtreekey8, internal",
+      "name": "gbt_float4_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_float4_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_float8_compress"
+    },
+    {
+      "arguments": "internal, double precision, smallint, oid, internal",
+      "name": "gbt_float8_consistent"
+    },
+    {
+      "arguments": "internal, double precision, smallint, oid, internal",
+      "name": "gbt_float8_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_float8_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_float8_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_float8_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_float8_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_float8_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_inet_compress"
+    },
+    {
+      "arguments": "internal, inet, smallint, oid, internal",
+      "name": "gbt_inet_consistent"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_inet_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_inet_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_inet_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_inet_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_int2_compress"
+    },
+    {
+      "arguments": "internal, smallint, smallint, oid, internal",
+      "name": "gbt_int2_consistent"
+    },
+    {
+      "arguments": "internal, smallint, smallint, oid, internal",
+      "name": "gbt_int2_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_int2_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_int2_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_int2_picksplit"
+    },
+    {
+      "arguments": "gbtreekey4, gbtreekey4, internal",
+      "name": "gbt_int2_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_int2_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_int4_compress"
+    },
+    {
+      "arguments": "internal, integer, smallint, oid, internal",
+      "name": "gbt_int4_consistent"
+    },
+    {
+      "arguments": "internal, integer, smallint, oid, internal",
+      "name": "gbt_int4_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_int4_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_int4_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_int4_picksplit"
+    },
+    {
+      "arguments": "gbtreekey8, gbtreekey8, internal",
+      "name": "gbt_int4_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_int4_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_int8_compress"
+    },
+    {
+      "arguments": "internal, bigint, smallint, oid, internal",
+      "name": "gbt_int8_consistent"
+    },
+    {
+      "arguments": "internal, bigint, smallint, oid, internal",
+      "name": "gbt_int8_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_int8_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_int8_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_int8_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_int8_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_int8_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_intv_compress"
+    },
+    {
+      "arguments": "internal, interval, smallint, oid, internal",
+      "name": "gbt_intv_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_intv_decompress"
+    },
+    {
+      "arguments": "internal, interval, smallint, oid, internal",
+      "name": "gbt_intv_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_intv_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_intv_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_intv_picksplit"
+    },
+    {
+      "arguments": "gbtreekey32, gbtreekey32, internal",
+      "name": "gbt_intv_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_intv_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_macad8_compress"
+    },
+    {
+      "arguments": "internal, macaddr8, smallint, oid, internal",
+      "name": "gbt_macad8_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_macad8_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_macad8_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_macad8_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_macad8_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_macad8_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_macad_compress"
+    },
+    {
+      "arguments": "internal, macaddr, smallint, oid, internal",
+      "name": "gbt_macad_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_macad_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_macad_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_macad_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_macad_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_macad_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_numeric_compress"
+    },
+    {
+      "arguments": "internal, numeric, smallint, oid, internal",
+      "name": "gbt_numeric_consistent"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_numeric_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_numeric_picksplit"
+    },
+    {
+      "arguments": "gbtreekey_var, gbtreekey_var, internal",
+      "name": "gbt_numeric_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_numeric_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_oid_compress"
+    },
+    {
+      "arguments": "internal, oid, smallint, oid, internal",
+      "name": "gbt_oid_consistent"
+    },
+    {
+      "arguments": "internal, oid, smallint, oid, internal",
+      "name": "gbt_oid_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_oid_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_oid_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_oid_picksplit"
+    },
+    {
+      "arguments": "gbtreekey8, gbtreekey8, internal",
+      "name": "gbt_oid_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_oid_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_text_compress"
+    },
+    {
+      "arguments": "internal, text, smallint, oid, internal",
+      "name": "gbt_text_consistent"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_text_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_text_picksplit"
+    },
+    {
+      "arguments": "gbtreekey_var, gbtreekey_var, internal",
+      "name": "gbt_text_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_text_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_time_compress"
+    },
+    {
+      "arguments": "internal, time without time zone, smallint, oid, internal",
+      "name": "gbt_time_consistent"
+    },
+    {
+      "arguments": "internal, time without time zone, smallint, oid, internal",
+      "name": "gbt_time_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_time_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_time_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_time_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_time_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_time_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_timetz_compress"
+    },
+    {
+      "arguments": "internal, time with time zone, smallint, oid, internal",
+      "name": "gbt_timetz_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_ts_compress"
+    },
+    {
+      "arguments": "internal, timestamp without time zone, smallint, oid, internal",
+      "name": "gbt_ts_consistent"
+    },
+    {
+      "arguments": "internal, timestamp without time zone, smallint, oid, internal",
+      "name": "gbt_ts_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_ts_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_ts_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_ts_picksplit"
+    },
+    {
+      "arguments": "gbtreekey16, gbtreekey16, internal",
+      "name": "gbt_ts_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_ts_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_tstz_compress"
+    },
+    {
+      "arguments": "internal, timestamp with time zone, smallint, oid, internal",
+      "name": "gbt_tstz_consistent"
+    },
+    {
+      "arguments": "internal, timestamp with time zone, smallint, oid, internal",
+      "name": "gbt_tstz_distance"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_uuid_compress"
+    },
+    {
+      "arguments": "internal, uuid, smallint, oid, internal",
+      "name": "gbt_uuid_consistent"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_uuid_fetch"
+    },
+    {
+      "arguments": "internal, internal, internal",
+      "name": "gbt_uuid_penalty"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_uuid_picksplit"
+    },
+    {
+      "arguments": "gbtreekey32, gbtreekey32, internal",
+      "name": "gbt_uuid_same"
+    },
+    {
+      "arguments": "internal, internal",
+      "name": "gbt_uuid_union"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_var_decompress"
+    },
+    {
+      "arguments": "internal",
+      "name": "gbt_var_fetch"
+    },
+    {
+      "arguments": "cstring",
+      "name": "gbtreekey16_in"
+    },
+    {
+      "arguments": "gbtreekey16",
+      "name": "gbtreekey16_out"
+    },
+    {
+      "arguments": "cstring",
+      "name": "gbtreekey2_in"
+    },
+    {
+      "arguments": "gbtreekey2",
+      "name": "gbtreekey2_out"
+    },
+    {
+      "arguments": "cstring",
+      "name": "gbtreekey32_in"
+    },
+    {
+      "arguments": "gbtreekey32",
+      "name": "gbtreekey32_out"
+    },
+    {
+      "arguments": "cstring",
+      "name": "gbtreekey4_in"
+    },
+    {
+      "arguments": "gbtreekey4",
+      "name": "gbtreekey4_out"
+    },
+    {
+      "arguments": "cstring",
+      "name": "gbtreekey8_in"
+    },
+    {
+      "arguments": "gbtreekey8",
+      "name": "gbtreekey8_out"
+    },
+    {
+      "arguments": "cstring",
+      "name": "gbtreekey_var_in"
+    },
+    {
+      "arguments": "gbtreekey_var",
+      "name": "gbtreekey_var_out"
+    },
+    {
+      "arguments": "p_client_user_id uuid",
+      "name": "get_client_beauty_profile_for_provider"
+    },
+    {
+      "arguments": "p_promotion_id uuid",
+      "name": "get_promotion_audience"
+    },
+    {
+      "arguments": "p_provider_id uuid, p_from_date date, p_to_date date",
+      "name": "get_provider_busy_spans"
+    },
+    {
+      "arguments": "p_limit integer",
+      "name": "get_trending_providers"
+    },
+    {
+      "arguments": "p_user_ids uuid[]",
+      "name": "get_user_public_profiles"
+    },
+    {
+      "arguments": "",
+      "name": "handle_attach_info_packs"
+    },
+    {
+      "arguments": "",
+      "name": "handle_auto_send_intake_form"
+    },
+    {
+      "arguments": "",
+      "name": "handle_availability_window_change"
+    },
+    {
+      "arguments": "",
+      "name": "handle_booking_status_change"
+    },
+    {
+      "arguments": "",
+      "name": "handle_booking_todo_notification"
+    },
+    {
+      "arguments": "",
+      "name": "handle_intake_form_completed"
+    },
+    {
+      "arguments": "",
+      "name": "handle_new_booking"
+    },
+    {
+      "arguments": "",
+      "name": "handle_new_info_pack"
+    },
+    {
+      "arguments": "",
+      "name": "handle_provider_address_change"
+    },
+    {
+      "arguments": "",
+      "name": "handle_provider_availability_change"
+    },
+    {
+      "arguments": "",
+      "name": "handle_provider_gone_live"
+    },
+    {
+      "arguments": "",
+      "name": "handle_provider_service_insert"
+    },
+    {
+      "arguments": "",
+      "name": "handle_reschedule_request_change"
+    },
+    {
+      "arguments": "",
+      "name": "handle_review_received"
+    },
+    {
+      "arguments": "",
+      "name": "handle_updated_at"
+    },
+    {
+      "arguments": "p_hold_batch_id uuid, p_items jsonb",
+      "name": "hold_cart_booking_slots"
+    },
+    {
+      "arguments": "smallint, smallint",
+      "name": "int2_dist"
+    },
+    {
+      "arguments": "integer, integer",
+      "name": "int4_dist"
+    },
+    {
+      "arguments": "bigint, bigint",
+      "name": "int8_dist"
+    },
+    {
+      "arguments": "interval, interval",
+      "name": "interval_dist"
+    },
+    {
+      "arguments": "p_provider_id uuid, p_service_id uuid, p_booking_date date, p_booking_time time without time zone, p_end_time time without time zone, p_base_price numeric, p_add_ons_total numeric, p_service_charge numeric, p_service_category_snapshot text",
+      "name": "invite_next_waitlist_entry"
+    },
+    {
+      "arguments": "p_status text, p_policy text, p_released_at timestamp with time zone, p_booking_date date, p_booking_time time without time zone",
+      "name": "is_address_released"
+    },
+    {
+      "arguments": "",
+      "name": "mark_all_notifications_read"
+    },
+    {
+      "arguments": "p_notification_id uuid",
+      "name": "mark_notification_read"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "notify_address_released"
+    },
+    {
+      "arguments": "",
+      "name": "notify_on_new_chat_message"
+    },
+    {
+      "arguments": "oid, oid",
+      "name": "oid_dist"
+    },
+    {
+      "arguments": "",
+      "name": "prevent_self_conversation"
+    },
+    {
+      "arguments": "",
+      "name": "process_address_release_notifications"
+    },
+    {
+      "arguments": "",
+      "name": "process_auto_complete_bookings"
+    },
+    {
+      "arguments": "",
+      "name": "process_birthday_greetings"
+    },
+    {
+      "arguments": "",
+      "name": "process_client_appointment_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_expire_stale_pending_bookings"
+    },
+    {
+      "arguments": "",
+      "name": "process_follow_availability_nudges"
+    },
+    {
+      "arguments": "",
+      "name": "process_follow_schedule_release_nudges"
+    },
+    {
+      "arguments": "",
+      "name": "process_pending_booking_warnings"
+    },
+    {
+      "arguments": "",
+      "name": "process_pending_scrape_jobs"
+    },
+    {
+      "arguments": "",
+      "name": "process_post_appt_check_ins"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_24hr_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_daily_recap"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_fully_booked_alerts"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_intake_form_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_not_started_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_stale_reschedule_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_unaccepted_booking_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_unpaid_deposit_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_provider_unread_message_reminders"
+    },
+    {
+      "arguments": "",
+      "name": "process_rebooking_nudges"
+    },
+    {
+      "arguments": "",
+      "name": "process_scheduled_account_deletions"
+    },
+    {
+      "arguments": "",
+      "name": "process_scheduled_promotion_notifications"
+    },
+    {
+      "arguments": "p_group_booking_id uuid",
+      "name": "provider_cancel_group_booking"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "provider_cancel_own_booking"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_proposed_slots jsonb",
+      "name": "provider_initiate_reschedule"
+    },
+    {
+      "arguments": "p_booking_id uuid",
+      "name": "provider_release_booking_address"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_status text",
+      "name": "provider_update_booking_status"
+    },
+    {
+      "arguments": "p_group_booking_id uuid, p_status text",
+      "name": "provider_update_group_booking_status"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_response_note text",
+      "name": "reject_reschedule_request"
+    },
+    {
+      "arguments": "p_hold_batch_id uuid",
+      "name": "release_cart_booking_slots"
+    },
+    {
+      "arguments": "p_user_id uuid, p_item_id text",
+      "name": "remove_saved_portfolio_item"
+    },
+    {
+      "arguments": "p_provider_id uuid, p_services jsonb",
+      "name": "replace_provider_services"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_preferred_dates text[]",
+      "name": "request_reschedule_own_booking"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_available_slots jsonb, p_response_note text",
+      "name": "respond_to_reschedule_request"
+    },
+    {
+      "arguments": "",
+      "name": "send_push_on_notification_insert"
+    },
+    {
+      "arguments": "p_booking_id uuid, p_address text",
+      "name": "set_booking_client_address"
+    },
+    {
+      "arguments": "",
+      "name": "stamp_booking_address_snapshot"
+    },
+    {
+      "arguments": "",
+      "name": "throttle_reminder_notifications"
+    },
+    {
+      "arguments": "time without time zone, time without time zone",
+      "name": "time_dist"
+    },
+    {
+      "arguments": "",
+      "name": "touch_conversation"
+    },
+    {
+      "arguments": "timestamp without time zone, timestamp without time zone",
+      "name": "ts_dist"
+    },
+    {
+      "arguments": "timestamp with time zone, timestamp with time zone",
+      "name": "tstz_dist"
+    },
+    {
+      "arguments": "conv_id uuid, msg_text text, p_sender_type text",
+      "name": "update_conversation_last_message"
+    },
+    {
+      "arguments": "",
+      "name": "update_provider_rating"
+    },
+    {
+      "arguments": "",
+      "name": "update_provider_search_vector"
+    },
+    {
+      "arguments": "",
+      "name": "update_service_search_vector"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "on_intake_form_completed",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "name": "on_reschedule_request_changed",
+      "table_name": "booking_reschedule_requests"
+    },
+    {
+      "name": "reschedule_updated_at",
+      "table_name": "booking_reschedule_requests"
+    },
+    {
+      "name": "before_booking_enforce_bookability",
+      "table_name": "bookings"
+    },
+    {
+      "name": "bookings_updated_at",
+      "table_name": "bookings"
+    },
+    {
+      "name": "on_booking_attach_info_packs",
+      "table_name": "bookings"
+    },
+    {
+      "name": "on_booking_auto_send_intake",
+      "table_name": "bookings"
+    },
+    {
+      "name": "on_booking_created",
+      "table_name": "bookings"
+    },
+    {
+      "name": "on_booking_set_instructions",
+      "table_name": "bookings"
+    },
+    {
+      "name": "on_booking_status_changed",
+      "table_name": "bookings"
+    },
+    {
+      "name": "on_booking_todo_notify",
+      "table_name": "bookings"
+    },
+    {
+      "name": "trg_auto_release_address",
+      "table_name": "bookings"
+    },
+    {
+      "name": "trg_compute_booking_effective_range",
+      "table_name": "bookings"
+    },
+    {
+      "name": "trg_stamp_booking_address_snapshot",
+      "table_name": "bookings"
+    },
+    {
+      "name": "event_plans_updated_at",
+      "table_name": "event_plans"
+    },
+    {
+      "name": "on_info_pack_created",
+      "table_name": "info_packs"
+    },
+    {
+      "name": "send_push_on_notification",
+      "table_name": "notifications"
+    },
+    {
+      "name": "trg_throttle_reminders",
+      "table_name": "notifications"
+    },
+    {
+      "name": "on_provider_availability_upsert",
+      "table_name": "provider_availability"
+    },
+    {
+      "name": "on_availability_window_change",
+      "table_name": "provider_availability_windows"
+    },
+    {
+      "name": "trg_prevent_self_conversation",
+      "table_name": "provider_conversations"
+    },
+    {
+      "name": "trg_notify_new_chat_message",
+      "table_name": "provider_messages"
+    },
+    {
+      "name": "trg_touch_conversation",
+      "table_name": "provider_messages"
+    },
+    {
+      "name": "on_provider_address_change",
+      "table_name": "provider_private_details"
+    },
+    {
+      "name": "trg_waitlist_position",
+      "table_name": "provider_waitlist"
+    },
+    {
+      "name": "providers_search_vector_update",
+      "table_name": "providers"
+    },
+    {
+      "name": "providers_updated_at",
+      "table_name": "providers"
+    },
+    {
+      "name": "trg_provider_gone_live",
+      "table_name": "providers"
+    },
+    {
+      "name": "on_review_change",
+      "table_name": "reviews"
+    },
+    {
+      "name": "on_review_received",
+      "table_name": "reviews"
+    },
+    {
+      "name": "on_provider_service_insert",
+      "table_name": "services"
+    },
+    {
+      "name": "services_search_vector_update",
+      "table_name": "services"
+    },
+    {
+      "name": "users_updated_at",
+      "table_name": "users"
+    }
+  ],
+  "policies": [
+    {
+      "command": "ALL",
+      "name": "Users manage own messages",
+      "roles": "{public}",
+      "table_name": "becca_chat_messages"
+    },
+    {
+      "command": "ALL",
+      "name": "Users manage own sessions",
+      "roles": "{public}",
+      "table_name": "becca_chat_sessions"
+    },
+    {
+      "command": "ALL",
+      "name": "booking_add_ons_owner_all",
+      "roles": "{public}",
+      "table_name": "booking_add_ons"
+    },
+    {
+      "command": "SELECT",
+      "name": "booking_add_ons_provider_read",
+      "roles": "{public}",
+      "table_name": "booking_add_ons"
+    },
+    {
+      "command": "INSERT",
+      "name": "booking_add_ons_user_insert",
+      "roles": "{public}",
+      "table_name": "booking_add_ons"
+    },
+    {
+      "command": "SELECT",
+      "name": "booking_add_ons_user_read",
+      "roles": "{public}",
+      "table_name": "booking_add_ons"
+    },
+    {
+      "command": "SELECT",
+      "name": "booking_info_packs_client_select",
+      "roles": "{public}",
+      "table_name": "booking_info_packs"
+    },
+    {
+      "command": "UPDATE",
+      "name": "booking_info_packs_client_update",
+      "roles": "{public}",
+      "table_name": "booking_info_packs"
+    },
+    {
+      "command": "ALL",
+      "name": "booking_info_packs_provider_all",
+      "roles": "{public}",
+      "table_name": "booking_info_packs"
+    },
+    {
+      "command": "SELECT",
+      "name": "Clients see their own forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "UPDATE",
+      "name": "Clients submit answers",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "ALL",
+      "name": "Providers see their intake forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "SELECT",
+      "name": "client_select_intake_forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "UPDATE",
+      "name": "client_submit_intake_forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "INSERT",
+      "name": "provider_insert_intake_forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "SELECT",
+      "name": "provider_select_intake_forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "UPDATE",
+      "name": "provider_update_intake_forms",
+      "roles": "{public}",
+      "table_name": "booking_intake_forms"
+    },
+    {
+      "command": "SELECT",
+      "name": "booking participants can read messages",
+      "roles": "{public}",
+      "table_name": "booking_messages"
+    },
+    {
+      "command": "INSERT",
+      "name": "participants can send messages",
+      "roles": "{public}",
+      "table_name": "booking_messages"
+    },
+    {
+      "command": "SELECT",
+      "name": "reschedule_provider_select",
+      "roles": "{public}",
+      "table_name": "booking_reschedule_requests"
+    },
+    {
+      "command": "SELECT",
+      "name": "reschedule_user_select",
+      "roles": "{public}",
+      "table_name": "booking_reschedule_requests"
+    },
+    {
+      "command": "INSERT",
+      "name": "bookings_provider_insert",
+      "roles": "{authenticated}",
+      "table_name": "bookings"
+    },
+    {
+      "command": "SELECT",
+      "name": "bookings_provider_read",
+      "roles": "{public}",
+      "table_name": "bookings"
+    },
+    {
+      "command": "INSERT",
+      "name": "bookings_user_insert",
+      "roles": "{public}",
+      "table_name": "bookings"
+    },
+    {
+      "command": "SELECT",
+      "name": "bookings_user_read",
+      "roles": "{public}",
+      "table_name": "bookings"
+    },
+    {
+      "command": "ALL",
+      "name": "bookmarks_own_all",
+      "roles": "{public}",
+      "table_name": "bookmarks"
+    },
+    {
+      "command": "ALL",
+      "name": "bookmarks_owner_all",
+      "roles": "{public}",
+      "table_name": "bookmarks"
+    },
+    {
+      "command": "ALL",
+      "name": "checklist_own_all",
+      "roles": "{public}",
+      "table_name": "event_checklist_items"
+    },
+    {
+      "command": "ALL",
+      "name": "event_checklist_owner_all",
+      "roles": "{public}",
+      "table_name": "event_checklist_items"
+    },
+    {
+      "command": "ALL",
+      "name": "event_plans_own_all",
+      "roles": "{public}",
+      "table_name": "event_plans"
+    },
+    {
+      "command": "ALL",
+      "name": "event_plans_owner_all",
+      "roles": "{public}",
+      "table_name": "event_plans"
+    },
+    {
+      "command": "ALL",
+      "name": "event_tasks_own_all",
+      "roles": "{public}",
+      "table_name": "event_tasks"
+    },
+    {
+      "command": "ALL",
+      "name": "event_tasks_owner_all",
+      "roles": "{public}",
+      "table_name": "event_tasks"
+    },
+    {
+      "command": "ALL",
+      "name": "Providers manage own info packs",
+      "roles": "{public}",
+      "table_name": "info_packs"
+    },
+    {
+      "command": "ALL",
+      "name": "info_packs_provider_all",
+      "roles": "{public}",
+      "table_name": "info_packs"
+    },
+    {
+      "command": "INSERT",
+      "name": "Providers can send notifications to clients",
+      "roles": "{authenticated}",
+      "table_name": "notifications"
+    },
+    {
+      "command": "SELECT",
+      "name": "notifications_own_read",
+      "roles": "{public}",
+      "table_name": "notifications"
+    },
+    {
+      "command": "INSERT",
+      "name": "notifications_participant_insert",
+      "roles": "{authenticated}",
+      "table_name": "notifications"
+    },
+    {
+      "command": "ALL",
+      "name": "payment_methods_own_all",
+      "roles": "{public}",
+      "table_name": "payment_methods"
+    },
+    {
+      "command": "ALL",
+      "name": "portfolio_owner_all",
+      "roles": "{public}",
+      "table_name": "portfolio_items"
+    },
+    {
+      "command": "ALL",
+      "name": "portfolio_owner_write",
+      "roles": "{public}",
+      "table_name": "portfolio_items"
+    },
+    {
+      "command": "SELECT",
+      "name": "portfolio_public_read",
+      "roles": "{public}",
+      "table_name": "portfolio_items"
+    },
+    {
+      "command": "ALL",
+      "name": "promotions_owner_all",
+      "roles": "{public}",
+      "table_name": "promotions"
+    },
+    {
+      "command": "ALL",
+      "name": "promotions_owner_write",
+      "roles": "{public}",
+      "table_name": "promotions"
+    },
+    {
+      "command": "SELECT",
+      "name": "promotions_public_read",
+      "roles": "{public}",
+      "table_name": "promotions"
+    },
+    {
+      "command": "ALL",
+      "name": "availability_owner_all",
+      "roles": "{public}",
+      "table_name": "provider_availability"
+    },
+    {
+      "command": "ALL",
+      "name": "availability_owner_write",
+      "roles": "{public}",
+      "table_name": "provider_availability"
+    },
+    {
+      "command": "SELECT",
+      "name": "availability_public_read",
+      "roles": "{public}",
+      "table_name": "provider_availability"
+    },
+    {
+      "command": "ALL",
+      "name": "availability_overrides_owner_write",
+      "roles": "{public}",
+      "table_name": "provider_availability_overrides"
+    },
+    {
+      "command": "SELECT",
+      "name": "availability_overrides_public_read",
+      "roles": "{public}",
+      "table_name": "provider_availability_overrides"
+    },
+    {
+      "command": "ALL",
+      "name": "availability_windows_owner_write",
+      "roles": "{public}",
+      "table_name": "provider_availability_windows"
+    },
+    {
+      "command": "SELECT",
+      "name": "availability_windows_public_read",
+      "roles": "{public}",
+      "table_name": "provider_availability_windows"
+    },
+    {
+      "command": "ALL",
+      "name": "Providers manage own blocked dates",
+      "roles": "{public}",
+      "table_name": "provider_blocked_dates"
+    },
+    {
+      "command": "ALL",
+      "name": "blocked_dates_owner_write",
+      "roles": "{public}",
+      "table_name": "provider_blocked_dates"
+    },
+    {
+      "command": "SELECT",
+      "name": "blocked_dates_public_read",
+      "roles": "{public}",
+      "table_name": "provider_blocked_dates"
+    },
+    {
+      "command": "ALL",
+      "name": "Users see own conversations",
+      "roles": "{public}",
+      "table_name": "provider_conversations"
+    },
+    {
+      "command": "SELECT",
+      "name": "Providers can read their follower rows",
+      "roles": "{authenticated}",
+      "table_name": "provider_follows"
+    },
+    {
+      "command": "ALL",
+      "name": "Users manage their own follows",
+      "roles": "{authenticated}",
+      "table_name": "provider_follows"
+    },
+    {
+      "command": "ALL",
+      "name": "Providers manage own form library",
+      "roles": "{public}",
+      "table_name": "provider_form_library"
+    },
+    {
+      "command": "ALL",
+      "name": "provider_form_library_all",
+      "roles": "{public}",
+      "table_name": "provider_form_library"
+    },
+    {
+      "command": "ALL",
+      "name": "Participants see conversation messages",
+      "roles": "{public}",
+      "table_name": "provider_messages"
+    },
+    {
+      "command": "ALL",
+      "name": "provider_private_details_owner_all",
+      "roles": "{public}",
+      "table_name": "provider_private_details"
+    },
+    {
+      "command": "ALL",
+      "name": "specialties_owner_write",
+      "roles": "{public}",
+      "table_name": "provider_specialties"
+    },
+    {
+      "command": "SELECT",
+      "name": "specialties_public_read",
+      "roles": "{public}",
+      "table_name": "provider_specialties"
+    },
+    {
+      "command": "ALL",
+      "name": "Waitlist participants can see and manage their entries",
+      "roles": "{public}",
+      "table_name": "provider_waitlist"
+    },
+    {
+      "command": "ALL",
+      "name": "providers_owner_all",
+      "roles": "{public}",
+      "table_name": "providers"
+    },
+    {
+      "command": "SELECT",
+      "name": "providers_public_read",
+      "roles": "{public}",
+      "table_name": "providers"
+    },
+    {
+      "command": "SELECT",
+      "name": "providers_unclaimed_read",
+      "roles": "{public}",
+      "table_name": "providers"
+    },
+    {
+      "command": "INSERT",
+      "name": "reviews_owner_insert",
+      "roles": "{public}",
+      "table_name": "reviews"
+    },
+    {
+      "command": "SELECT",
+      "name": "reviews_owner_read",
+      "roles": "{public}",
+      "table_name": "reviews"
+    },
+    {
+      "command": "SELECT",
+      "name": "reviews_public_read",
+      "roles": "{public}",
+      "table_name": "reviews"
+    },
+    {
+      "command": "INSERT",
+      "name": "reviews_user_insert",
+      "roles": "{public}",
+      "table_name": "reviews"
+    },
+    {
+      "command": "UPDATE",
+      "name": "reviews_user_update",
+      "roles": "{public}",
+      "table_name": "reviews"
+    },
+    {
+      "command": "INSERT",
+      "name": "anon can log searches",
+      "roles": "{anon}",
+      "table_name": "search_events"
+    },
+    {
+      "command": "INSERT",
+      "name": "users can log their own searches",
+      "roles": "{authenticated}",
+      "table_name": "search_events"
+    },
+    {
+      "command": "ALL",
+      "name": "add_ons_owner_write",
+      "roles": "{public}",
+      "table_name": "service_add_ons"
+    },
+    {
+      "command": "ALL",
+      "name": "service_add_ons_owner_all",
+      "roles": "{public}",
+      "table_name": "service_add_ons"
+    },
+    {
+      "command": "SELECT",
+      "name": "service_add_ons_public_read",
+      "roles": "{public}",
+      "table_name": "service_add_ons"
+    },
+    {
+      "command": "ALL",
+      "name": "service_images_owner_all",
+      "roles": "{public}",
+      "table_name": "service_images"
+    },
+    {
+      "command": "ALL",
+      "name": "service_images_owner_write",
+      "roles": "{public}",
+      "table_name": "service_images"
+    },
+    {
+      "command": "SELECT",
+      "name": "service_images_public_read",
+      "roles": "{public}",
+      "table_name": "service_images"
+    },
+    {
+      "command": "ALL",
+      "name": "services_owner_all",
+      "roles": "{public}",
+      "table_name": "services"
+    },
+    {
+      "command": "SELECT",
+      "name": "services_public_read",
+      "roles": "{public}",
+      "table_name": "services"
+    },
+    {
+      "command": "SELECT",
+      "name": "transactions_provider_read",
+      "roles": "{public}",
+      "table_name": "transactions"
+    },
+    {
+      "command": "SELECT",
+      "name": "transactions_user_read",
+      "roles": "{public}",
+      "table_name": "transactions"
+    },
+    {
+      "command": "ALL",
+      "name": "Users manage their own interactions",
+      "roles": "{authenticated}",
+      "table_name": "user_interactions"
+    },
+    {
+      "command": "INSERT",
+      "name": "Users can insert own profile",
+      "roles": "{public}",
+      "table_name": "users"
+    },
+    {
+      "command": "UPDATE",
+      "name": "Users can update own profile",
+      "roles": "{public}",
+      "table_name": "users"
+    },
+    {
+      "command": "SELECT",
+      "name": "Users can view own profile",
+      "roles": "{public}",
+      "table_name": "users"
+    },
+    {
+      "command": "UPDATE",
+      "name": "users_own_update",
+      "roles": "{public}",
+      "table_name": "users"
+    },
+    {
+      "command": "SELECT",
+      "name": "users_owner_select",
+      "roles": "{public}",
+      "table_name": "users"
+    },
+    {
+      "command": "UPDATE",
+      "name": "users_owner_update",
+      "roles": "{public}",
+      "table_name": "users"
+    },
+    {
+      "command": "INSERT",
+      "name": "users_service_insert",
+      "roles": "{public}",
+      "table_name": "users"
+    }
+  ],
+  "cronJobs": [
+    {
+      "command": " SELECT public.process_address_release_notifications(); ",
+      "jobname": "address-release-notifications",
+      "schedule": "0 * * * *"
+    },
+    {
+      "command": " SELECT public.process_auto_complete_bookings(); ",
+      "jobname": "auto-complete-bookings",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": " SELECT public.process_birthday_greetings(); ",
+      "jobname": "client-birthday-greetings",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "command": " SELECT public.process_post_appt_check_ins(); ",
+      "jobname": "client-post-appt-check-ins",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "command": " SELECT public.process_rebooking_nudges(); ",
+      "jobname": "client-rebooking-nudges",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "command": "SELECT public.expire_cart_holds();",
+      "jobname": "expire-cart-holds",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "command": " SELECT public.process_expire_stale_pending_bookings(); ",
+      "jobname": "expire-stale-pending-bookings",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": "SELECT public.expire_waitlist_holds();",
+      "jobname": "expire-waitlist-holds",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "command": " SELECT public.process_pending_booking_warnings(); ",
+      "jobname": "pending-booking-warnings",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "command": " SELECT public.process_pending_scrape_jobs(); ",
+      "jobname": "process-pending-scrape-jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "command": " SELECT public.process_scheduled_account_deletions(); ",
+      "jobname": "process-scheduled-account-deletions",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_24hr_reminders(); ",
+      "jobname": "provider-24hr-reminders",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_daily_recap(); ",
+      "jobname": "provider-daily-recap",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "command": " SELECT public.process_follow_schedule_release_nudges(); ",
+      "jobname": "provider-follow-schedule-release-nudges",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_fully_booked_alerts(); ",
+      "jobname": "provider-fully-booked-alerts",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_intake_form_reminders(); ",
+      "jobname": "provider-intake-form-reminders",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_not_started_reminders(); ",
+      "jobname": "provider-not-started-reminders",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_stale_reschedule_reminders(); ",
+      "jobname": "provider-stale-reschedule-reminders",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_unaccepted_booking_reminders(); ",
+      "jobname": "provider-unaccepted-booking-reminders",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_unpaid_deposit_reminders(); ",
+      "jobname": "provider-unpaid-deposit-reminders",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": " SELECT public.process_provider_unread_message_reminders(); ",
+      "jobname": "provider-unread-message-reminders",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "command": " SELECT public.process_scheduled_promotion_notifications(); ",
+      "jobname": "scheduled-promotion-notifications",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "command": " SELECT public.process_client_appointment_reminders(); ",
+      "jobname": "user-24hr-reminders",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

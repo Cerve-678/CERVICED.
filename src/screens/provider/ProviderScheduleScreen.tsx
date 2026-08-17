@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -32,10 +32,10 @@ import {
   removeProviderAvailabilityOverride,
 } from '../../services/databaseService';
 import type { DbProviderAvailability, DbProviderBlockedDate, DbProviderAvailabilityOverride } from '../../types/database';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import SlidingTabs from '../../components/SlidingTabs';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, dateToYMD as sharedDateToYMD } from '../../utils/dateUtils';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -300,7 +300,7 @@ export default function ProviderScheduleScreen() {
       );
       setDays(prev => prev.map(d => ({ ...d, dirty: false })));
       navigation.goBack();
-    } catch (e) {
+    } catch {
       showToast('Could not save hours. Please try again.', 'error');
     } finally {
       setSaving(false);
@@ -321,7 +321,7 @@ export default function ProviderScheduleScreen() {
       setBlockReason('');
       const updated = await getProviderBlockedDates(providerId);
       setBlockedDates(updated);
-    } catch (e) {
+    } catch {
       showToast('Could not block date. Please try again.', 'error');
     } finally {
       setAddingBlock(false);
@@ -332,7 +332,7 @@ export default function ProviderScheduleScreen() {
     try {
       await removeProviderBlockedDate(id);
       setBlockedDates(prev => prev.filter(b => b.id !== id));
-    } catch (e) {
+    } catch {
       showToast('Could not remove blocked date.', 'error');
     }
   }
@@ -366,7 +366,7 @@ export default function ProviderScheduleScreen() {
       const updated = await getProviderAvailabilityOverrides(providerId, dateToYMD(new Date()));
       setOverrides(updated);
       showToast('Custom hours saved.', 'success');
-    } catch (e) {
+    } catch {
       showToast('Could not save custom hours.', 'error');
     } finally {
       setAddingOverride(false);
@@ -377,7 +377,7 @@ export default function ProviderScheduleScreen() {
     try {
       await removeProviderAvailabilityOverride(id);
       setOverrides(prev => prev.filter(o => o.id !== id));
-    } catch (e) {
+    } catch {
       showToast('Could not remove custom hours.', 'error');
     }
   }
@@ -386,12 +386,15 @@ export default function ProviderScheduleScreen() {
   return (
     <View style={[s.root, { backgroundColor: P.bg }]}>
       <SafeAreaView style={[s.safe, { backgroundColor: P.bg }]} edges={['top']}>
+        <KeyboardDismissView style={s.keyboardView}>
         {/* Header */}
         <View style={s.header}>
           <Text style={[s.headerTitle, { color: P.text }]}>My Schedule</Text>
-          <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={22} color={P.sub} />
-          </TouchableOpacity>
+          <View style={s.headerActions}>
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel="Close schedule">
+              <Ionicons name="close" size={22} color={P.sub} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Segmented control */}
@@ -410,7 +413,13 @@ export default function ProviderScheduleScreen() {
         {/* ── Hours tab ───────────────────────────────────────────────────── */}
         {tab === 'hours' && (
           <>
-            <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={s.list}
+              contentContainerStyle={s.listContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+            >
               {days.map((day, idx) => (
                 <View key={day.dow} style={[s.dayRow, idx < days.length - 1 && [s.dayRowBorder, { borderBottomColor: P.border }]]}>
                   <View style={s.dayLeft}>
@@ -521,7 +530,13 @@ export default function ProviderScheduleScreen() {
 
         {/* ── Blocked Dates tab ────────────────────────────────────────────── */}
         {tab === 'blocked' && (
-          <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={s.list}
+            contentContainerStyle={s.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
             {/* Add new blocked date */}
             <View style={[s.blockAddCard, { backgroundColor: P.surface }]}>
               <Text style={[s.blockAddTitle, { color: P.text }]}>Block a Date</Text>
@@ -535,6 +550,8 @@ export default function ProviderScheduleScreen() {
                 placeholderTextColor={P.sub}
                 value={blockReason}
                 onChangeText={setBlockReason}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
               />
               <TouchableOpacity
                 style={[s.addBlockBtn, { backgroundColor: P.accent, borderColor: P.ice + '30' }, addingBlock && s.saveBtnDim]}
@@ -716,6 +733,8 @@ export default function ProviderScheduleScreen() {
             )}
           </ScrollView>
         )}
+
+        </KeyboardDismissView>
       </SafeAreaView>
       <DialogHost />
     </View>
@@ -729,11 +748,13 @@ const s = StyleSheet.create({
 
   header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   headerTitle: { flex: 1, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+  headerActions: { flexDirection: 'row', gap: 8 },
   closeBtn:    { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
 
   segWrap:      { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
 
   safe:        { flex: 1 },
+  keyboardView:{ flex: 1 },
   list:        { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
 

@@ -8,6 +8,7 @@ tags: [screen, provider]
 
 ## → Navigates to
 - [[DevSettingsScreen\|DevSettings]]
+- [[ProviderInboxScreen\|ProviderInbox]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map

@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Modal,
   Switch,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +18,6 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import {
-  createIntakeForm,
   getIntakeFormByBooking,
   getMyProviderProfile,
   getMyProviderServices,
@@ -33,6 +34,7 @@ import {
 import type { BookingWithAddOns } from '../../types/database';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { useProviderDialog } from '../../components/ProviderDialog';
+import { buildPolicyDisplayRows, PolicyDisplayRow } from '../../utils/policyDisplay';
 
 type Props = ProviderHomeScreenProps<'ProviderIntakeForm'>;
 
@@ -52,11 +54,38 @@ function makeId() { return Math.random().toString(36).slice(2, 9); }
 
 interface Template {
   id:        string;
-  kind:      'consultation' | 'patchTest' | 'medicalHistory';
+  kind:      'consultation' | 'patchTest' | 'medicalHistory' | 'policy';
   label:     string;
   subtitle:  string;
   keywords:  string[];
   questions: Omit<IntakeFormQuestion, 'id'>[];
+}
+
+/** Builds the one-off "Policy Agreement" template from the provider's own,
+ *  live booking_policies — unlike every other template above (static,
+ *  hardcoded question text), this one's content is per-provider and has to
+ *  be generated at request time. Not part of TEMPLATES (that array is a
+ *  module-level const, shared across all providers) — callers splice this in
+ *  alongside the keyword-matched templates. Returns null when the provider
+ *  hasn't set any policy yet — nothing to build a form from. */
+function buildPolicyTemplate(policyRows: PolicyDisplayRow[]): Template | null {
+  if (policyRows.length === 0) return null;
+  const body = policyRows.map(r => `${r.label}: ${r.value}`).join('\n');
+  return {
+    id: 'policy-agreement',
+    kind: 'policy',
+    label: 'Policy Agreement',
+    subtitle: 'Cancellation, deposit & no-show policy',
+    keywords: [],
+    questions: [
+      {
+        type: 'policy',
+        label: 'Cancellation & Booking Policy',
+        body,
+        required: true,
+      },
+    ],
+  };
 }
 
 const TEMPLATES: Template[] = [
@@ -242,6 +271,7 @@ const Q_TYPES: { type: IntakeFormQuestion['type']; label: string; icon: string }
   { type: 'text',   label: 'Text',     icon: 'create-outline' },
   { type: 'yesno',  label: 'Yes / No', icon: 'checkmark-circle-outline' },
   { type: 'choice', label: 'Choice',   icon: 'list-outline' },
+  { type: 'policy', label: 'Policy',   icon: 'document-text-outline' },
 ];
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -269,6 +299,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [libraryForms, setLibraryForms]         = useState<LibraryForm[]>([]);
   const [relevantTemplates, setRelevantTemplates] = useState<Template[]>(TEMPLATES);
   const [providerServiceNames, setProviderServiceNames] = useState<string[]>([]);
+  // Built fresh from the provider's live booking_policies on every screen
+  // load (not cached in TEMPLATES, which is a shared module-level const) —
+  // null until the provider has set a policy with at least one field filled in.
+  const [policyTemplate, setPolicyTemplate] = useState<Template | null>(null);
 
   // ── Builder state ─────────────────────────────────────────────────────────
   const [editingId, setEditingId]           = useState<string | null>(null); // library form being edited
@@ -278,6 +312,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [autoSend, setAutoSend]             = useState(false);
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [saving, setSaving]                 = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // ── Readonly state ────────────────────────────────────────────────────────
   const [existingForm, setExistingForm] = useState<IntakeForm | null>(null);
@@ -297,6 +332,20 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     navigation.setOptions({ gestureEnabled: mode !== 'builder' });
   }, [navigation, mode]);
 
+  // The floating provider tab bar is only relevant while the keyboard is
+  // closed. Keeping its clearance in the footer while typing made the action
+  // buttons float well above the keyboard and hid lower question inputs.
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
   // ── Init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     async function init() {
@@ -312,6 +361,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         const svcNames = services.map(s => s.name);
         setProviderServiceNames(svcNames);
         setRelevantTemplates(getRelevantTemplates(profile?.service_category ?? '', svcNames));
+        setPolicyTemplate(
+          buildPolicyTemplate(buildPolicyDisplayRows((profile as any)?.booking_policies ?? null)),
+        );
 
         if (existing) {
           setExistingForm(existing);
@@ -328,7 +380,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
       }
     }
     init();
-  }, []);
+  }, [bookingId, existingFormId]);
 
   // ── Builder helpers ───────────────────────────────────────────────────────
   const openBuilderBlank = useCallback(() => {
@@ -374,7 +426,10 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const addQuestion = useCallback((type: IntakeFormQuestion['type']) => {
     Haptics.selectionAsync().catch(() => {});
     setQuestions(prev => [...prev, {
-      id: makeId(), type, label: '', required: false,
+      id: makeId(),
+      type,
+      label: type === 'policy' ? 'Policy Agreement' : '',
+      required: type === 'policy' ? true : false,
       ...(type === 'choice' ? { options: ['', ''] } : {}),
     }]);
   }, []);
@@ -446,7 +501,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature]);
+  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, showToast]);
 
   // ── Send to client ────────────────────────────────────────────────────────
   // Opened from a booking: bookingId/clientUserId are already known — send
@@ -508,7 +563,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     } catch {
       showToast('Could not delete form.', 'error');
     }
-  }, []);
+  }, [showToast]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -671,6 +726,30 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {/* Every provider has a policy (or can set one in Public
+                      Profile), so this isn't scored/filtered by service
+                      category like the templates above — always offered,
+                      built fresh from live booking_policies each time. */}
+                  {policyTemplate && (
+                    <>
+                      <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>YOUR POLICIES</Text>
+                      <View style={styles.templateGrid}>
+                        <TouchableOpacity
+                          style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
+                          onPress={() => openBuilderFromTemplate(policyTemplate)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.templateCardLabel, { color: P.text }]}>{policyTemplate.label}</Text>
+                          <Text style={[styles.templateCardSub, { color: P.sub }]}>{policyTemplate.subtitle}</Text>
+                          <View style={styles.templateCardFoot}>
+                            <Text style={[styles.templateCardCount, { color: P.sub }]}>Pre-filled from your policy</Text>
+                            <Ionicons name="arrow-forward" size={13} color={P.sub} />
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
                 </>
               )}
             </ScrollView>
@@ -683,6 +762,8 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             style={{ flex: 1 }}
             contentContainerStyle={[styles.builderContent, { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom + 120 }]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
             showsVerticalScrollIndicator={false}
           >
             {/* Title */}
@@ -841,7 +922,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
         {mode === 'builder' && (
           <View style={[styles.footer, {
             backgroundColor: P.bg, borderTopColor: P.border,
-            paddingBottom: insets.bottom + TAB_BAR_CLEARANCE + 12,
+            paddingBottom: keyboardVisible ? 12 : insets.bottom + TAB_BAR_CLEARANCE + 12,
           }]}>
             <View style={styles.footerRow}>
               <TouchableOpacity
@@ -918,6 +999,11 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                         <Text style={[{ color: opt ? P.text : P.sub, fontSize: 14 }]}>{opt || `Option ${oi + 1}`}</Text>
                       </View>
                     ))}
+                  </View>
+                )}
+                {q.type === 'policy' && (
+                  <View style={[styles.previewInput, { borderColor: P.border, backgroundColor: P.bg, height: 'auto' }]}>
+                    <Text style={{ color: P.text, fontSize: 13, lineHeight: 19 }}>{q.body || '(no policy text)'}</Text>
                   </View>
                 )}
               </View>
@@ -1066,8 +1152,8 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
   onUpdateOption:   (qId: string, idx: number, value: string) => void;
   onRemoveOption:   (qId: string, idx: number) => void;
 }) {
-  const TYPE_ICON: Record<string, string>  = { text: 'create-outline', yesno: 'checkmark-circle-outline', choice: 'list-outline' };
-  const TYPE_LABEL: Record<string, string> = { text: 'Text', yesno: 'Yes / No', choice: 'Choice' };
+  const TYPE_ICON: Record<string, string>  = { text: 'create-outline', yesno: 'checkmark-circle-outline', choice: 'list-outline', policy: 'document-text-outline' };
+  const TYPE_LABEL: Record<string, string> = { text: 'Text', yesno: 'Yes / No', choice: 'Choice', policy: 'Policy' };
 
   return (
     <View style={[styles.qCard, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -1122,6 +1208,21 @@ function QuestionCard({ question, index, isReadOnly, existingAnswer, P, onUpdate
             <Text style={[styles.addOptionText, { color: P.accent }]}>+ Add option</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {question.type === 'policy' && !isReadOnly && (
+        <TextInput
+          style={[styles.qLabelInput, { color: P.text, borderColor: P.border, backgroundColor: P.bg, marginTop: 10, minHeight: 90 }]}
+          value={question.body ?? ''}
+          onChangeText={v => onUpdateQuestion(question.id, { body: v })}
+          placeholder="Policy text the client will read and acknowledge"
+          placeholderTextColor={P.sub}
+          multiline
+          textAlignVertical="top"
+        />
+      )}
+      {question.type === 'policy' && isReadOnly && (
+        <Text style={[styles.qLabelText, { color: P.sub, fontSize: 13, marginTop: 6 }]}>{question.body}</Text>
       )}
 
       {isReadOnly && existingAnswer !== null && (

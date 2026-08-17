@@ -22,7 +22,7 @@ const PLAN_FEATURES = [
 ];
 
 export default function SubscriptionScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -37,46 +37,46 @@ export default function SubscriptionScreen({ navigation }: any) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+          <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: theme.text }]}>Subscription</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+        <Text style={[styles.title, { color: P.text }]}>Subscription</Text>
+        <Text style={[styles.subtitle, { color: P.sub }]}>
           Your plan and billing information
         </Text>
 
         {/* Current plan */}
         <View style={[styles.planCard, {
-          backgroundColor: isDarkMode ? 'rgba(175,145,151,0.12)' : 'rgba(92,64,51,0.08)',
-          borderColor: (isDarkMode ? 'rgba(175,145,151,0.3)' : 'rgba(92,64,51,0.3)'),
+          backgroundColor: P.accentDim,
+          borderColor: P.border,
         }]}>
           <View style={styles.planTop}>
-            <Icon name="star" size={22} color={theme.accent} />
-            <Text style={[styles.planName, { color: theme.accent }]}>Free Plan</Text>
+            <Icon name="star" size={22} color={P.accentText} />
+            <Text style={[styles.planName, { color: P.accentText }]}>Free Plan</Text>
           </View>
-          <Text style={[styles.planDesc, { color: theme.secondaryText }]}>
+          <Text style={[styles.planDesc, { color: P.sub }]}>
             You're currently on the free plan. Upgrade to unlock premium features.
           </Text>
         </View>
 
         {/* Premium teaser */}
-        <Text style={[styles.sectionLabel, { color: theme.text }]}>CERVICED PREMIUM</Text>
-        <Text style={[styles.comingSoonBadge, { color: theme.accent }]}>Coming Soon</Text>
+        <Text style={[styles.sectionLabel, { color: P.text }]}>CERVICED PREMIUM</Text>
+        <Text style={[styles.comingSoonBadge, { color: P.accentText }]}>Coming Soon</Text>
         <View style={styles.featureList}>
           {PLAN_FEATURES.map(f => (
             <View key={f} style={styles.featureRow}>
-              <Icon name="shield-check" size={16} color={theme.accent} />
-              <Text style={[styles.featureText, { color: theme.secondaryText }]}>{f}</Text>
+              <Icon name="shield-check" size={16} color={P.accentText} />
+              <Text style={[styles.featureText, { color: P.sub }]}>{f}</Text>
             </View>
           ))}
         </View>
 
         <TouchableOpacity
-          style={[styles.notifyBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]}
+          style={[styles.notifyBtn, { backgroundColor: P.accent }]}
           onPress={() => Haptics.selectionAsync().catch(() => {})}
           activeOpacity={0.8}
         >
-          <Text style={styles.notifyText}>NOTIFY ME WHEN AVAILABLE</Text>
+          <Text style={[styles.notifyText, { color: P.onAccent }]}>NOTIFY ME WHEN AVAILABLE</Text>
         </TouchableOpacity>
       </ScrollView>
     </ThemedBackground>

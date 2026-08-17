@@ -9,7 +9,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Keyboard,
-  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,11 +17,14 @@ import { ProviderHomeStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { useProviderDialog } from '../../components/ProviderDialog';
 import { supabase } from '../../lib/supabase';
 import {
   markConversationReadByProvider,
   getConversationMessages,
+  getMyProviderMessageTemplates,
   sendProviderMessage,
+  updateConversationLastMessage,
   DbProviderMessage,
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
@@ -39,21 +41,13 @@ interface Message {
   read_at: string | null;
 }
 
-const OL = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  text: '#000000', sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  accent: '#5C4033',
-};
-const OD = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  text: '#F0ECE7', sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  accent: '#AF9197',
-};
-
 export default function ProviderConversationScreen({ navigation, route }: Props) {
   const { conversationId, clientName } = route.params;
-  const { isDarkMode } = useTheme();
-  const OP = isDarkMode ? OD : OL;
+  // Use the shared provider palette from the theme context so this screen obeys
+  // light/dark mode the same way every other provider surface does, instead of a
+  // hand-rolled OL/OD copy that could drift from the canonical palette.
+  const { palette: OP } = useTheme();
+  const { showToast, DialogHost } = useProviderDialog();
 
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -61,6 +55,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [providerUserId, setProviderUserId] = useState<string | null>(null);
+  const [savedTemplates, setSavedTemplates] = useState<{ label: string; content: string }[]>([]);
   const flatListRef = useRef<FlatList>(null);
   // The floating tab bar auto-hides while the keyboard is up (tabBarHideOnKeyboard),
   // so the input row only needs extra bottom clearance to clear the pill while
@@ -86,6 +81,12 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
     });
   }, []);
 
+  useEffect(() => {
+    getMyProviderMessageTemplates()
+      .then(templates => setSavedTemplates(templates))
+      .catch(() => {});
+  }, []);
+
   // Mark conversation as read by the provider on open
   useEffect(() => {
     if (!conversationId) return;
@@ -95,6 +96,8 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   // Load initial messages
   useEffect(() => {
     if (!conversationId) return;
+    setMessages([]);
+    setLoading(true);
     getConversationMessages(conversationId)
       .then(data => { setMessages(data as Message[]); setLoading(false); })
       .catch(() => { setLoading(false); });
@@ -157,18 +160,33 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
 
       // Non-fatal: the message itself is already delivered; this only updates
       // the inbox preview + the client's unread badge
-      supabase.rpc('update_conversation_last_message', {
-        conv_id: conversationId,
-        msg_text: text,
-        p_sender_type: 'provider',
-      }).then(() => {});
+      updateConversationLastMessage({
+        conversationId,
+        message: text,
+        senderType: 'provider',
+      }).catch(() => {});
     } catch {
       // Message never reached the client — put the text back so it isn't lost
       setInputText(text);
-      Alert.alert('Message not sent', 'Check your connection and try again.');
+      showToast('Message not sent. Check your connection and try again.', 'error');
     }
     setSending(false);
-  }, [inputText, conversationId, providerUserId, sending]);
+  }, [inputText, conversationId, providerUserId, sending, showToast]);
+
+  // Prompts fill the composer instead of sending automatically, so providers
+  // can edit every reply and client details are never copied into canned text.
+  const defaultPrompts = [
+    { label: 'Confirm address', text: 'Thanks — please confirm the address for your appointment.' },
+    { label: 'Booking details', text: 'Thanks for your message. I’ll check your booking details and come back to you shortly.' },
+    { label: 'Availability', text: 'Thanks for getting in touch. What date and time were you hoping for?' },
+  ];
+  const quickPrompts = savedTemplates.length > 0
+    ? savedTemplates.map(template => ({ label: template.label, text: template.content }))
+    : defaultPrompts;
+
+  // If navigation reuses this screen, prevent even a transient render of a
+  // previous client’s messages while the next thread loads.
+  const visibleMessages = messages.filter(message => message.conversation_id === conversationId);
 
   const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const isMine = item.sender_type === 'provider';
@@ -243,10 +261,10 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
       >
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={visibleMessages}
           keyExtractor={item => item.id}
           renderItem={renderMessage}
-          contentContainerStyle={[styles.listContent, messages.length === 0 && { flex: 1 }]}
+          contentContainerStyle={[styles.listContent, visibleMessages.length === 0 && { flex: 1 }]}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -255,6 +273,19 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             </View>
           }
         />
+
+        <View style={[styles.quickPromptRow, { borderTopColor: OP.border, backgroundColor: OP.bg }]}>
+          {quickPrompts.map(prompt => (
+            <TouchableOpacity
+              key={prompt.label}
+              style={[styles.quickPrompt, { backgroundColor: OP.surface, borderColor: OP.border }]}
+              onPress={() => setInputText(prompt.text)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.quickPromptText, { color: OP.accent }]}>{prompt.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* Input bar — clears the home indicator, and (while resting, keyboard
             down) the floating pill tab bar that overlays this screen */}
@@ -287,6 +318,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           </TouchableOpacity>
         </View>
       </KeyboardDismissView>
+      <DialogHost />
     </View>
   );
 }
@@ -331,12 +363,14 @@ const styles = StyleSheet.create({
   },
   emptyBody: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     fontSize: 14,
     textAlign: 'center',
     opacity: 0.7,
   },
   timeStamp: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     fontSize: 10,
     textAlign: 'center',
     marginVertical: 10,
@@ -350,7 +384,10 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '76%', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleUser: { borderBottomRightRadius: 4 },
   bubbleProvider: { borderBottomLeftRadius: 4, borderWidth: StyleSheet.hairlineWidth },
-  bubbleText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 14, lineHeight: 20 },
+  bubbleText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14, lineHeight: 20 },
+  quickPromptRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  quickPrompt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  quickPromptText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -365,6 +402,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
     fontSize: 14,
     maxHeight: 120,
   },

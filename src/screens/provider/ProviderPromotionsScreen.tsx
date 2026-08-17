@@ -875,14 +875,6 @@ function PromoFormModal({ visible, editing, initialForm, services, onClose, onSa
 
   const coverUri = form.imageUri ?? form.existingImageUrl;
 
-  // Group services by category
-  const serviceGroups = services.reduce<Record<string, DbService[]>>((acc, s) => {
-    const key = s.category_name || 'Other';
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(s);
-    return acc;
-  }, {});
-
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -1314,7 +1306,7 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
     } else {
       Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     }
-  }, [visible]);
+  }, [anim, visible]);
 
   return (
     <Animated.View
@@ -1434,12 +1426,12 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fadeAnim, showToast]);
 
   useFocusEffect(useCallback(() => {
     fadeAnim.setValue(0);
     load();
-  }, [load]));
+  }, [fadeAnim, load]));
 
   const livePromos = promos.filter(p => p.is_active && !isExpired(p.valid_until) && !isUpcoming(p.valid_from));
   const upcomingPromos = promos.filter(p => p.is_active && isUpcoming(p.valid_from));
@@ -1454,7 +1446,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
       showToast(e.message ?? 'Could not update promotion');
       setPromos(prev => prev.map(p => p.id === id ? { ...p, is_active: !active } : p));
     }
-  }, []);
+  }, [showToast]);
 
   const handleDelete = useCallback((id: string) => {
     showConfirm('Delete Promotion', 'This cannot be undone.', [
@@ -1467,7 +1459,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
         },
       },
     ]);
-  }, [load]);
+  }, [load, showConfirm, showToast]);
 
   const handleSave = useCallback(async (input: UpsertPromotionInput) => {
     await upsertPromotion(input);
@@ -1554,7 +1546,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
     } catch (e: any) {
       showToast(e.message ?? 'Could not send notification');
     }
-  }, [notifyPromo, showToast, load]);
+  }, [notifyPromo, showToast]);
 
   const counts = { live: livePromos.length, upcoming: upcomingPromos.length, past: pastPromos.length };
 

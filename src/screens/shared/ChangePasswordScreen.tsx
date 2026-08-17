@@ -18,9 +18,8 @@ import { supabase } from '../../lib/supabase';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 export default function ChangePasswordScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
-  const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -108,7 +107,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
           </View>
 
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]}
+            style={[styles.saveBtn, { backgroundColor: P.accent }]}
             onPress={handleSave}
             disabled={loading}
             activeOpacity={0.8}

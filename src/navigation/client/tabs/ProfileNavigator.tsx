@@ -23,7 +23,7 @@ import BookmarkedProvidersScreen from '../../../screens/client/BookmarkedProvide
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import CartScreen from '../../../screens/client/CartScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
-import InfoRegScreen from '../../../screens/shared/InfoRegScreen';
+import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import { ProfileStackParamList } from '../../types';
 import { useTheme } from '../../../contexts/ThemeContext';
 
@@ -158,13 +158,13 @@ export default function ProfileNavigator() {
       <ProfileStack.Screen
         name="BookingDetail"
         component={BookingDetailScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
 
       <ProfileStack.Screen
         name="Reschedule"
         component={RescheduleScreen}
-        options={{ headerShown: false, presentation: 'card' }}
+        options={{ headerShown: true, presentation: 'card' }}
       />
 
       <ProfileStack.Screen

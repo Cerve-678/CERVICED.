@@ -11,6 +11,24 @@ export enum BookingStatus {
   NO_SHOW = 'no_show',
 }
 
+// Map a raw DB bookings.status string → app BookingStatus enum. Single source
+// of truth — screens must never cast a raw DB status string directly, since
+// 'confirmed' (DB) has no identically-named BookingStatus member (it maps to
+// UPCOMING) and a raw cast silently produces an unmatched status. Lives here
+// (not in BookingContext.tsx or bookingService.ts) because both of those
+// files import from each other already — putting it in either would risk a
+// circular import.
+export function mapDbBookingStatus(s: string): BookingStatus {
+  switch (s) {
+    case 'pending': return BookingStatus.PENDING;
+    case 'completed': return BookingStatus.COMPLETED;
+    case 'cancelled': return BookingStatus.CANCELLED;
+    case 'in_progress': return BookingStatus.IN_PROGRESS;
+    case 'no_show': return BookingStatus.NO_SHOW;
+    default: return BookingStatus.UPCOMING;
+  }
+}
+
 export interface BookingCoordinates {
   latitude: number;
   longitude: number;
@@ -69,10 +87,10 @@ export interface PaymentBreakdown {
   depositAmount?: number | undefined;
   amountCharged: number;
   remainingBalance: number;
-  addOnItems?: Array<{
+  addOnItems?: {
     name: string;
     price: number;
-  }> | undefined;
+  }[] | undefined;
 }
 
 // AvailableDate is used by the reschedule flow (context + screens)
@@ -145,6 +163,15 @@ export interface ConfirmedBooking {
     providerRespondedAt?: string | undefined;
     rescheduleCount?: number | undefined;
     lastRescheduledAt?: string | undefined;
+    // Set when this booking's reschedule request is one sibling of a
+    // provider_initiate_group_reschedule() proposal (see
+    // supabase/fix_group_booking_reschedule.sql) — every sibling's request
+    // row carries the same batch id. Presence of this field (not just
+    // groupBookingId on the booking itself) is what RescheduleScreen uses
+    // to decide whether to show/confirm the whole group as one unit, since
+    // a booking can be part of a group without currently having an active
+    // reschedule request at all.
+    groupRescheduleBatchId?: string | undefined;
   } | undefined;
 
   // Real services.id from the services table (optional — absent on legacy bookings)
@@ -164,15 +191,22 @@ export interface ConfirmedBooking {
 
   // Metadata
   notes?: string | undefined;
-  addOns?: Array<{
+  addOns?: {
     id: string | number;
     name: string;
     price: number;
-  }> | undefined;
+  }[] | undefined;
   createdAt: string;
   updatedAt: string;
   confirmedAt?: string | undefined;
   bookingInstructions?: string | undefined;
+
+  // The provider's cancellation/booking policy as the client agreed to it at
+  // checkout (BookingSheet/MultiBookingSheet only — CartScreen's checkbox is
+  // the separate, deferred Cerviced-wide terms). Undefined for bookings made
+  // before this existed.
+  policyAcceptedAt?: string | undefined;
+  policySnapshot?: Record<string, unknown> | undefined;
 }
 
 export interface BookingsByDate {
@@ -181,10 +215,10 @@ export interface BookingsByDate {
 
 export interface BookingConflictResult {
   isValid: boolean;
-  conflicts: Array<{
+  conflicts: {
     cartItemId: string;
     message: string;
-  }>;
+  }[];
 }
 
 export interface AppointmentData {

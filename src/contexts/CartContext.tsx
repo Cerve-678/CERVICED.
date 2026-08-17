@@ -1,8 +1,10 @@
 // src/contexts/CartContext.tsx - COMPLETE UPDATED VERSION
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
+import { Alert } from 'react-native';
 import { logger } from '../utils/logger';
 import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { calculatePlatformFee } from '../features/cart/platformFee';
 
 // CartItem interface
 export interface CartItem {
@@ -27,11 +29,11 @@ export interface CartItem {
   instanceId?: string;
   addedAt: string;
   serviceInstanceIndex?: number;
-  addOns?: Array<{
+  addOns?: {
     id: string | number;
     name: string;
     price: number;
-  }>;
+  }[];
   /** Date/time picked on the provider profile before adding to cart. Absent
    *  for items added via other entry points (Explore "Book Now", rebook) —
    *  those still need scheduling in the cart. */
@@ -55,6 +57,14 @@ export interface CartItem {
    *  Purely a client-side/local grouping hint; createBookingsFromCart reads this
    *  to decide which provider-scoped bookings.group_booking_id each item gets. */
   bookingBatchId?: string;
+  /** Set when the client ticked "I agree" to the provider's cancellation/
+   *  booking policy in BookingSheet/MultiBookingSheet — createBookingsFromCart
+   *  writes these straight onto the resulting bookings row (policy_accepted_at/
+   *  policy_snapshot). Absent for items added any other way; both sheets gate
+   *  their onSubmit on this checkbox already, so a fresh item from either
+   *  should always carry it. */
+  policyAcceptedAt?: string;
+  policySnapshot?: Record<string, unknown>;
 }
 
 export interface CartState {
@@ -103,11 +113,11 @@ export interface AddToCartParams {
     duration: string;
     description: string;
     instanceId?: string | number;
-    addOns?: Array<{
+    addOns?: {
       id: string | number;
       name: string;
       price: number;
-    }>;
+    }[];
   };
   quantity?: number;
   selectedOptions?: Record<string, any>;
@@ -119,6 +129,9 @@ export interface AddToCartParams {
   isDepositOnly?: boolean | undefined;
   /** See CartItem.bookingBatchId. */
   bookingBatchId?: string | undefined;
+  /** See CartItem.policyAcceptedAt / .policySnapshot. */
+  policyAcceptedAt?: string | undefined;
+  policySnapshot?: Record<string, unknown> | undefined;
 }
 
 /** Fields a BookingSheet edit can change on an existing cart item. */
@@ -193,7 +206,7 @@ const safeGet = (obj: any, path: string, defaultValue: any = null): any => {
       current = current[key];
     }
     return current;
-  } catch (error) {
+  } catch {
     return defaultValue;
   }
 };
@@ -206,7 +219,7 @@ const generateItemId = (providerName: string, serviceId: string | number, instan
       .join('|');
     const instanceStr = instanceId ? `_inst_${instanceId}` : '';
     return `${providerName}_${serviceId}${instanceStr}_${optionsStr}`;
-  } catch (error) {
+  } catch {
     return `${providerName}_${serviceId}_${Date.now()}`;
   }
 };
@@ -249,7 +262,9 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
           selectedTime,
           notes,
           isDepositOnly,
-          bookingBatchId
+          bookingBatchId,
+          policyAcceptedAt,
+          policySnapshot
         } = action.payload;
 
         const instanceId = forceNewInstance || safeGet(service, 'instanceId') ? 
@@ -296,7 +311,9 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
             ...(selectedTime ? { selectedTime } : {}),
             ...(notes ? { notes } : {}),
             ...(isDepositOnly ? { isDepositOnly } : {}),
-            ...(bookingBatchId ? { bookingBatchId } : {})
+            ...(bookingBatchId ? { bookingBatchId } : {}),
+            ...(policyAcceptedAt ? { policyAcceptedAt } : {}),
+            ...(policySnapshot ? { policySnapshot } : {})
           };
           newItems = [...state.items, newItem];
         }
@@ -410,7 +427,6 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
   } catch (error) {
     logger.error('Cart reducer error:', error);
     // Return state unchanged but surface the error via Alert so users know something went wrong
-    const { Alert } = require('react-native');
     Alert.alert('Cart Error', 'Something went wrong updating your cart. Please try again.');
     return state;
   }
@@ -551,7 +567,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [state.items]);
 
   const getServiceFee = useCallback(() => {
-    return Math.max(memoizedTotals.totalPrice * 0.05, 2);
+    return calculatePlatformFee(memoizedTotals.totalPrice);
   }, [memoizedTotals.totalPrice]);
 
   const getFinalTotal = useCallback(() => {

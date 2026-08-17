@@ -1,38 +1,35 @@
-import React, { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  FlatList,
   Image,
-  StatusBar,
-  Animated,
   Dimensions,
   LayoutAnimation,
   Platform,
   UIManager,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 
 // NAVIGATION IMPORTS - CORRECTED PATH
-import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { HomeStackParamList } from '../../navigation/types';
 
 // Import your icons from IconLibrary
-import Icon, { BellIcon, SearchIcon } from '../../components/IconLibrary';
+import { BellIcon, SearchIcon } from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import { useBooking } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import userLearningService from '../../services/userLearningService';
 import { HairTypeSelector } from '../../components/HairTypeSelector';
+import { ProviderCard } from '../../features/home/ProviderCard';
+import { ServiceButton } from '../../features/home/ServiceButton';
+import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
@@ -42,6 +39,7 @@ import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm, formatDistance } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
+import { OFFERS_ENABLED } from '../../constants/featureFlags';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -51,50 +49,19 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // NAVIGATION TYPES
 type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'HomeMain'>;
 
-// ── Skeleton Loader ─────────────────────────────────────────────────────────
-function SkeletonSection({ isDarkMode, cardWidth, cardHeight, borderRadius = 16, count = 4 }: {
-  isDarkMode: boolean; cardWidth: number; cardHeight: number; borderRadius?: number; count?: number;
-}) {
-  const shimmer = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmer]);
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
-  return (
-    <View style={{ flexDirection: 'row', paddingLeft: 2 }}>
-      {Array.from({ length: count }).map((_, i) => (
-        <Animated.View
-          key={i}
-          style={{
-            width: cardWidth,
-            height: cardHeight,
-            borderRadius,
-            backgroundColor: base,
-            opacity,
-            marginRight: 16,
-          }}
-        />
-      ))}
-    </View>
-  );
-}
-
 // FILTER TYPES
+// serviceType values are the real business_type column values (see
+// DbProvider) — this used to collapse 'salon' and 'studio' into a single
+// vague "Store" option that didn't match what a provider actually picked at
+// registration (InfoRegScreen's own picker: Salon / Studio / Home Studio /
+// Mobile). Mirrors SearchScreen.tsx's FilterOptions.
 interface FilterOptions {
   sortBy: 'recommended' | 'nearest' | 'highest-rated' | 'available-now';
   availability: 'any' | 'today' | 'tomorrow' | 'this-week';
   priceRange?: { min: number; max: number };
   rating?: number;
   distance?: number;
-  serviceType?: 'all' | 'home-service' | 'store' | 'mobile';
+  serviceType?: 'all' | 'salon' | 'studio' | 'home_based' | 'mobile';
 }
 
 // Offer type definition
@@ -124,69 +91,9 @@ interface Provider {
   distanceKm?: number; // populated by nearbyProviders when the user's location is known
 }
 
-// Component prop types
-interface ProviderCardProps {
-  provider: Provider;
-  onPress: () => void;
-  style: any;
-  blurStyle: any;
-}
-
-interface ServiceButtonProps {
-  service: string;
-  isSelected: boolean;
-  onPress: () => void;
-  onBack?: () => void;
-  showBackArrow?: boolean;
-}
-
-const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style, blurStyle }) => {
-  const { isDarkMode, palette: P } = useTheme();
-
-  return (
-    <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.75}>
-      <View style={[blurStyle, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-        {provider.logo ? (
-          <Image
-            source={provider.logo}
-            style={styles.providerImage}
-            resizeMode="cover"
-            fadeDuration={0}
-          />
-        ) : (
-          <View style={[styles.placeholderCard, { backgroundColor: P.surface }]}>
-            <Text style={[styles.placeholderText, { color: P.sub }]}>{provider.service}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.providerCardName, { color: P.text }]} numberOfLines={1}>{provider.name}</Text>
-      <Text style={[styles.providerCardSub, { color: P.sub }]} numberOfLines={1}>{provider.service}</Text>
-    </TouchableOpacity>
-  );
-});
-
-const ServiceButton = memo<ServiceButtonProps>(({ service, isSelected, onPress }) => {
-  const { isDarkMode, palette: P } = useTheme();
-
-  return (
-    <TouchableOpacity style={styles.serviceButton} onPress={onPress} activeOpacity={0.7}>
-      <View style={[
-        styles.glassCard,
-        {
-          backgroundColor: isSelected ? P.accent : P.surface,
-          borderColor: P.border,
-          borderWidth: StyleSheet.hairlineWidth,
-        }
-      ]}>
-        <Text style={[styles.serviceText, { color: isSelected ? P.ice : P.text }]}>{service}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-});
-
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { theme, isDarkMode, palette: P } = useTheme();
+  const { palette: P } = useTheme();
   const { bookings } = useBooking();
   const { user } = useAuth();
   const { bookmarkedIds, loadBookmarks } = useBookmarkStore();
@@ -288,7 +195,6 @@ export default function HomeScreen() {
   const [locationRadius, setLocationRadius] = useState(10);
 
   const [selectedService, setSelectedService] = useState<string | null>(null);
-  const [showHairTypeSelector, setShowHairTypeSelector] = useState(false);
   const [selectedHairType, setSelectedHairType] = useState<any>(null);
   const [viewAllRecommended, setViewAllRecommended] = useState(false);
   const [viewAllProviders, setViewAllProviders] = useState(false);
@@ -458,16 +364,18 @@ export default function HomeScreen() {
       }
     })();
 
-    // Fetch active promotions
-    getActivePromotions().then(data => {
-      setRawPromotions(data);
-    }).catch(() => {
-      // Silent failure — keeps empty offers list
-    });
+    // Fetch active promotions (skipped while OFFERS_ENABLED is off, see FUTURE_LOGIC.md)
+    if (OFFERS_ENABLED) {
+      getActivePromotions().then(data => {
+        setRawPromotions(data);
+      }).catch(() => {
+        // Silent failure — keeps empty offers list
+      });
+    }
 
     getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
     getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
-  }, []); // Only run once on mount
+  }, [loadBookmarks, user]);
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
@@ -689,21 +597,17 @@ export default function HomeScreen() {
         return approx >= min && approx <= max;
       });
     }
+    // serviceType values are business_type's own values now — direct
+    // comparison, no collapsing map needed (see FilterOptions' comment).
     if (activeFilters.serviceType && activeFilters.serviceType !== 'all') {
-      const typeMap: Record<string, string[]> = {
-        'home-service': ['home_based'],
-        'store': ['salon', 'studio'],
-        'mobile': ['mobile'],
-      };
-      const allowed = typeMap[activeFilters.serviceType] ?? [];
-      providers = providers.filter(p => p.businessType && allowed.includes(p.businessType));
+      providers = providers.filter(p => p.businessType === activeFilters.serviceType);
     }
 
     return {
       left: providers.slice(0, 8),
       right: providers.slice(8, 15),
     };
-  }, [selectedService, providersData, activeFilters]);
+  }, [selectedService, providersData, activeFilters, liveProviders]);
 
   const handleServicePress = useCallback(async (service: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -727,7 +631,6 @@ export default function HomeScreen() {
   const handleBackPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedService(null);
-    setShowHairTypeSelector(false);
     setSelectedHairType(null);
   }, []);
 
@@ -871,7 +774,7 @@ export default function HomeScreen() {
               onPress={navigateToBookings}
               activeOpacity={0.7}
             >
-              <Text style={[styles.bookingsChipText, { color: P.ice }]}>Bookings</Text>
+              <Text style={[styles.bookingsChipText, { color: P.onAccent }]}>Bookings</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -963,7 +866,7 @@ export default function HomeScreen() {
                     accessibilityState={{ expanded: filtersExpanded }}
                   >
                     <View style={styles.filterButtonBlur}>
-                      <Text style={styles.filterButtonText}>
+                      <Text style={[styles.filterButtonText, { color: P.sub }]}>
                         FILTERS {filtersExpanded ? '▲' : '▼'}
                       </Text>
                     </View>
@@ -982,7 +885,7 @@ export default function HomeScreen() {
                         <View style={styles.filterDropdownHeader}>
                           <Text style={[styles.filterDropdownTitle, { color: P.text }]}>FILTER OPTIONS</Text>
                           <TouchableOpacity onPress={resetFilters}>
-                            <Text style={[styles.resetText, { color: P.accent }]}>RESET</Text>
+                            <Text style={[styles.resetText, { color: P.accentText }]}>RESET</Text>
                           </TouchableOpacity>
                         </View>
 
@@ -993,11 +896,9 @@ export default function HomeScreen() {
                             <HairTypeSelector
                               onSelect={(hairType) => {
                                 setSelectedHairType(hairType);
-                                setShowHairTypeSelector(true);
                               }}
                               onBack={() => {
                                 setSelectedService(null);
-                                setShowHairTypeSelector(false);
                               }}
                             />
                           </View>
@@ -1035,7 +936,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1080,7 +981,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1123,7 +1024,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1166,7 +1067,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1208,7 +1109,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1227,8 +1128,9 @@ export default function HomeScreen() {
                           <View style={styles.filterChipsRow}>
                             {[
                               { label: 'All', value: 'all' as const },
-                              { label: 'Home Service', value: 'home-service' as const },
-                              { label: 'Store', value: 'store' as const },
+                              { label: 'Salon', value: 'salon' as const },
+                              { label: 'Studio', value: 'studio' as const },
+                              { label: 'Home Studio', value: 'home_based' as const },
                               { label: 'Mobile', value: 'mobile' as const },
                             ].map((type) => {
                               const isActive = activeFilters.serviceType === type.value;
@@ -1251,7 +1153,7 @@ export default function HomeScreen() {
                                     style={[
                                       styles.filterChipText,
                                       {
-                                        color: isActive ? P.accent : P.text,
+                                        color: isActive ? P.accentText : P.text,
                                         fontWeight: isActive ? '700' : '500'
                                       }
                                     ]}
@@ -1360,7 +1262,7 @@ export default function HomeScreen() {
               </View>
 
               {providersLoading ? (
-                <SkeletonSection isDarkMode={isDarkMode} cardWidth={176} cardHeight={64} borderRadius={16} />
+                <SkeletonSection cardWidth={176} cardHeight={64} borderRadius={16} />
               ) : viewAllRecommended ? (
                 <View style={styles.expandedGrid}>
                   {recommendedProvidersList.map((provider) => (
@@ -1411,7 +1313,7 @@ export default function HomeScreen() {
               </View>
 
               {providersLoading ? (
-                <SkeletonSection isDarkMode={isDarkMode} cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
+                <SkeletonSection cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
               ) : viewAllProviders ? (
                 <View>
                   {Object.entries(allCategorizedProviders).map(([category, providers]) => {
@@ -1654,7 +1556,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
 
               {providersLoading ? (
-                <SkeletonSection isDarkMode={isDarkMode} cardWidth={100} cardHeight={100} borderRadius={50} count={5} />
+                <SkeletonSection cardWidth={100} cardHeight={100} borderRadius={50} count={5} />
               ) : !userCoords ? (
                 <TouchableOpacity
                   style={[styles.nearYouPrompt, { backgroundColor: P.surface, borderColor: P.border }]}
@@ -1766,8 +1668,9 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* Current Offers Section — only rendered when there are live promotions */}
-            {currentOffers.length > 0 && <View style={styles.section}>
+            {/* Current Offers Section — only rendered when there are live promotions.
+                Temporarily pulled entirely via OFFERS_ENABLED, see FUTURE_LOGIC.md. */}
+            {OFFERS_ENABLED && currentOffers.length > 0 && <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: P.text }]}>CURRENT OFFERS</Text>
                 <TouchableOpacity onPress={handleViewAllOffers}>
@@ -1796,7 +1699,7 @@ export default function HomeScreen() {
                             into discount_text, not just "20% OFF" — pushes
                             the title down instead of covering it. */}
                         <View style={[styles.offerDiscountBadge, { backgroundColor: P.accent, borderColor: P.accent }]}>
-                          <Text style={[styles.offerDiscountText, { color: P.ice }]} numberOfLines={1}>{offer.discount}</Text>
+                          <Text style={[styles.offerDiscountText, { color: P.onAccent }]} numberOfLines={1}>{offer.discount}</Text>
                         </View>
                         <Text style={[styles.offerTitle, { color: P.text }]} numberOfLines={2}>
                           {offer.title}
@@ -2019,21 +1922,6 @@ const styles = StyleSheet.create({
     height: 120,
     overflow: 'hidden',
   },
-  serviceButton: {
-    marginRight: 10,
-  },
-  glassCard: {
-    borderRadius: 14,
-    paddingHorizontal: Platform.OS === 'android' ? 18 : 22,
-    height: Platform.OS === 'android' ? 30 : 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  serviceText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
-  },
   serviceContainer: {
     minHeight: 50,
   },
@@ -2058,7 +1946,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#7E6667',
   },
   filteredProvidersSection: {
     flex: 1,
@@ -2074,36 +1961,6 @@ const styles = StyleSheet.create({
     width: 160,
     height: 70,
     overflow: 'hidden',
-  },
-  providerImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    borderRadius: 16,
-  },
-  placeholderCard: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  providerCardName: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 5,
-    letterSpacing: 0.1,
-  },
-  providerCardSub: {
-    fontSize: 11,
-    fontWeight: '400',
-    marginTop: 1,
-    opacity: 0.8,
   },
   categoryLabel: {
     fontFamily: 'BakbakOne-Regular',
@@ -2183,7 +2040,6 @@ const styles = StyleSheet.create({
   },
   resetText: {
     fontSize: 13,
-    color: '#AF9197',
     fontWeight: '600',
   },
   filterSection: {
@@ -2209,18 +2065,6 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: 13,
     fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: '#AF9197',
-    fontWeight: '700',
-  },
-  ViewAllButton: {
-    backgroundColor: '#AF9197',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   viewAllButtonText: {
     color: '#fff',
@@ -2390,10 +2234,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  serviceTypeChipTextActive: {
-    fontWeight: '700',
-    color: '#AF9197',
-  },
   // Offer tabs styles
   offerTabsScroll: {
     marginBottom: 15,
@@ -2421,10 +2261,6 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: '500',
-  },
-  offerTabTextActive: {
-    fontWeight: '700',
-    color: '#AF9197',
   },
   // Vertical offer grid styles - matching horizontal layout
   offerVerticalGrid: {

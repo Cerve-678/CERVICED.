@@ -13,5 +13,14 @@ module.exports = [
       '.expo/**',
       '.claude/**', // includes at least one leftover agent worktree with its own backups/ copy
     ],
+    rules: {
+      // React Native renders text natively, not as HTML. Apostrophes and quote
+      // marks in <Text> are safe and escaping them makes customer copy harder
+      // to read and maintain.
+      'react/no-unescaped-entities': 'off',
+      // Keep this visible during cleanup without blocking a release for the
+      // existing memoized leaf components.
+      'react/display-name': 'warn',
+    },
   },
 ];

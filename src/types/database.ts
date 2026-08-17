@@ -26,6 +26,7 @@ export type NotificationType =
   | 'booking_not_started'
   | 'no_show'            | 'payment_success'    | 'new_provider'
   | 'reschedule_request' | 'reschedule_provider_response' | 'reschedule_confirmed'
+  | 'reschedule_declined'
   | 'review_request'     | 'review_received'    | 'promotion'
   | 'provider_message'   | 'balance_reminder'
   | 'intake_form_reminder'
@@ -45,7 +46,7 @@ export type NotificationType =
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
 export type RescheduleStatus =
-  | 'pending' | 'provider_responded' | 'confirmed' | 'rejected';
+  | 'pending' | 'provider_responded' | 'confirmed' | 'rejected' | 'cancelled';
 
 export type EventTaskStatus = 'pending' | 'booked' | 'completed';
 
@@ -71,6 +72,16 @@ export interface DbUser {
   gender:     'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
   has_kids:   boolean | null;
   birth_year: number | null;
+  // Provider-signup-only fields — staged here until a `providers` row
+  // exists, then prefilled across by InfoRegScreen's first-save flow
+  // (see getUserSignupPrefillInfo).
+  team_size: 'solo' | 'small_team' | 'large_team' | null;
+  accessibility_notes: string | null;
+  languages_spoken: string[] | null;
+  specialties: string[] | null;
+  price_range: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  preferred_contact_methods: string[] | null;
+  preferred_payment_methods: string[] | null;
   is_verified: boolean;
   created_at: string;
   updated_at: string;
@@ -79,7 +90,10 @@ export interface DbUser {
 
 export interface DbProvider {
   id: string;
-  user_id: string;
+  // Nullable for unclaimed/scraped rows (see is_claimed below) — a provider
+  // has no owning auth user until claimed. providers_claim_state_check
+  // enforces is_claimed=true <=> user_id NOT NULL at the DB level.
+  user_id: string | null;
   slug: string;
   display_name: string;
   service_category: ServiceCategory;
@@ -111,6 +125,10 @@ export interface DbProvider {
   is_featured: boolean;
   is_verified: boolean;
   has_gone_live: boolean;
+  // Stamped once, the moment the provider first publishes their profile
+  // (InfoRegScreen's !isEditMode path) — never overwritten by later edits.
+  // Null for providers who published before this column existed.
+  terms_accepted_at: string | null;
   booking_policies: {
     cancelNotice?: string;
     cancelPenalty?: string;
@@ -144,6 +162,14 @@ export interface DbProvider {
   technique_tags: string[] | null;
   inclusive_flags: string[] | null;
   price_tier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  team_size: 'solo' | 'small_team' | 'large_team' | null;
+  accessibility_notes: string | null;
+  languages_spoken: string[] | null;
+  // Service-coverage cities (src/constants/ukCities.ts) — drives the client
+  // Search "City" filter. Distinct from location_text, which is a single
+  // geocodable business-address string, not a coverage list.
+  service_locations: string[] | null;
+  preferred_payment_methods: string[] | null;
   auto_accept_bookings: boolean;
   max_bookings_per_day: number;
   booking_window_days: number;
@@ -162,11 +188,22 @@ export interface DbProvider {
     waitlistEnabled?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
+    /** Day of month (1-31) this provider releases/redoes their schedule.
+     *  Read by process_follow_schedule_release_nudges() (provider_follow_
+     *  notify_cron.sql) to notify provider_follows rows with
+     *  notify_enabled = TRUE on that day each month. Unset = never fires. */
+    scheduleReleaseDay?: number;
   } | null;
   // Cooldown guard for process_provider_fully_booked_alerts() (provider_
   // fully_booked_alert.sql) — read-only from the app, written only by that
   // cron job. Fixed weekly check for now, not provider-configurable.
   fully_booked_alert_last_sent_at: string | null;
+  // Claimable-profile fields (supabase/claimable_provider_profiles.sql).
+  // is_claimed=false rows are imported placeholders with no owner yet —
+  // see searchUnclaimedProviders/getUnclaimedProviderDetail in
+  // databaseService.ts and the claim flow in ClaimProviderScreen.tsx.
+  is_claimed: boolean;
+  source: 'self_signup' | 'scraped' | null;
   created_at: string;
   updated_at: string;
 }
@@ -210,6 +247,9 @@ export interface DbService {
   // Context
   aftercare_notes: string | null;
   service_type: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | null;
+  // Only populated by queries that explicitly join service_add_ons (e.g.
+  // getMyProviderServices) — most service reads leave it undefined.
+  add_ons?: DbServiceAddOn[];
 }
 
 export interface DbServiceImage {
@@ -329,6 +369,13 @@ export interface DbBooking {
   occasion_type: 'wedding' | 'prom' | 'photoshoot' | 'date-night' | 'birthday' | 'festival' | 'everyday' | 'other' | null;
   style_request: string | null;
   reference_image_url: string | null;
+  // When the client agreed to the provider's cancellation/booking policy at
+  // checkout (BookingSheet/MultiBookingSheet), and a frozen copy of that
+  // policy as it stood then — never rewritten by later provider edits. Null
+  // for bookings made before this column existed, or via CartScreen (a
+  // separate, deferred Cerviced-wide terms checkbox, not a provider policy).
+  policy_accepted_at: string | null;
+  policy_snapshot: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -356,6 +403,13 @@ export interface DbBookingRescheduleRequest {
   provider_available_slots: { date: string; times: string[] }[] | null;
   status: RescheduleStatus;
   reschedule_count: number;
+  // Optional decline reason — set by reject_reschedule_request (provider
+  // decline) and surfaced to the client via the trigger-owned notification.
+  response_note?: string | null;
+  // Set on every sibling row a provider_initiate_group_reschedule() call
+  // wrote together — see supabase/fix_group_booking_reschedule.sql. Absent
+  // (null) for an ordinary single-booking reschedule request.
+  group_reschedule_batch_id?: string | null;
   created_at: string;
   updated_at: string;
 }

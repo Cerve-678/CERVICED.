@@ -6,20 +6,21 @@
 // ModernBeautyCalendar used everywhere else in the app — no automatic day
 // finder, the client always drives the calendar themselves, same as a
 // normal single-service booking. Once a day is picked, the group's times
-// are chain-fit back-to-back via AvailabilityService.findBackToBackSlots.
+// are chain-fit back-to-back via AvailabilityService.findAllBackToBackSlots,
+// with the client picking which of the fitting start times to use.
 // Any individual service can be pulled out of the group via its own
 // "Schedule separately" checkbox, which gives it its own independent
 // calendar (own date and time), exactly like BookingSheet's single-service
 // flow — for when the client wants one service on a different day.
-// Add-ons are asked inline per service, only for services that have them.
-// Deposit policy and the resulting notes/payment choice are shared across
+// Add-ons are first decided before this sheet ever opens — a popup on
+// ProviderProfileScreen shown the moment a service with add-ons gets
+// selected — but stay editable here too via the same popup (AddOnPickerModal),
+// opened from an "Edit"/"Add extras" link under each service on the "when"
+// step, so a client doesn't have to back out of the sheet to change their
+// mind. Deposit policy and the resulting notes/payment choice are shared across
 // the whole group — they're the same provider for every item.
-//
-// Deliberately does not handle a required first-booking consultation
-// (CartScreen's checkout-time gate already covers that generically for
-// whatever's in the cart, regardless of how it got there) or promo codes
-// (BookingSheet's promo entry is single-service, mode="add"-only logic not
-// part of this flow).
+// Deliberately does not handle promo codes (BookingSheet's promo entry is
+// single-service, mode="add"-only logic not part of this flow).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -30,9 +31,6 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
-  LayoutAnimation,
-  Platform,
-  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,124 +42,31 @@ import {
   getProviderDepositPoliciesByDisplayNames,
   ProviderDepositPolicy,
 } from '../services/databaseService';
-import { buildThemeTokens, withAlpha } from '../constants/providerThemes';
+import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
 import { logger } from '../utils/logger';
 import * as Haptics from 'expo-haptics';
-import type { BookingSheetAddOn, BookingSheetService } from './BookingSheet';
+import type { BookingSheetService } from './BookingSheet';
 import { StepProgress } from './BookingSheet';
+import { AddOnPickerModal } from './AddOnPickerModal';
 
-// LayoutAnimation is opt-in on old-architecture Android; same guard as the
-// other sheets so the extras blocks animate rather than snap there.
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-// Matches BookingSheet/ModernBeautyCalendar timing so every expand in the
-// booking flow feels like one behaviour.
-const EXTRAS_ANIM = LayoutAnimation.create(
-  220,
-  LayoutAnimation.Types.easeInEaseOut,
-  LayoutAnimation.Properties.opacity
-);
-
-/** Mirrors the single-service sheet: an optional extras screen first, then
- *  the three shared steps. "addons" drops out entirely when no service in
- *  the group offers any, so nobody is walked through an empty upsell page. */
-type MultiBookingStep = 'addons' | 'when' | 'pay' | 'confirm';
-
-/**
- * One service's add-ons on the extras step, collapsed by default.
- *
- * The reason this isn't just a flat list: with several services each having
- * several add-ons, an all-expanded step is a scroll of a dozen-plus cards
- * before the client reaches anything they came for. Collapsed, the step is
- * as long as the number of services, and opens only what's asked for.
- */
-const ServiceAddOnsBlock: React.FC<{
-  serviceName: string;
-  addOns: BookingSheetAddOn[];
-  selected: Array<{ id: string | number; name: string; price: number }>;
-  selectedTotal: number;
-  onToggle: (addOn: BookingSheetAddOn) => void;
-  tokens: { text: string; sub: string; border: string; surface: string };
-  accentColor: string;
-}> = ({ serviceName, addOns, selected, selectedTotal, onToggle, tokens, accentColor }) => {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <View style={styles.section}>
-      <TouchableOpacity
-        style={[styles.extrasHeader, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
-        onPress={() => {
-          Haptics.selectionAsync().catch(() => {});
-          LayoutAnimation.configureNext(EXTRAS_ANIM);
-          setOpen(v => !v);
-        }}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={`${serviceName} add-ons, ${selected.length} selected. Tap to ${open ? 'collapse' : 'expand'}.`}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.extrasServiceName, { color: tokens.text }]} numberOfLines={1}>{serviceName}</Text>
-          <Text style={[styles.extrasSummary, { color: selected.length > 0 ? accentColor : tokens.sub }]}>
-            {selected.length > 0
-              ? `${selected.length} selected · +£${selectedTotal.toFixed(2)}`
-              : `${addOns.length} available`}
-          </Text>
-        </View>
-        <Text style={[styles.extrasChevron, { color: tokens.sub }]}>{open ? '▲' : '▼'}</Text>
-      </TouchableOpacity>
-
-      {open && (
-        <View style={styles.addOnsWrap}>
-          {addOns.map(addOn => {
-            const isSelected = selected.some(a => a.id === addOn.id);
-            return (
-              <TouchableOpacity
-                key={addOn.id}
-                style={[
-                  styles.addOnCard,
-                  { borderColor: isSelected ? accentColor : tokens.border, backgroundColor: tokens.surface },
-                  isSelected && { borderWidth: 2 },
-                ]}
-                onPress={() => onToggle(addOn)}
-                activeOpacity={0.8}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.addOnName, { color: tokens.text }]}>{addOn.name}</Text>
-                  {!!addOn.description && (
-                    <Text style={[styles.addOnDescription, { color: tokens.sub }]}>{addOn.description}</Text>
-                  )}
-                </View>
-                <Text style={[styles.addOnPrice, { color: accentColor }]}>+£{addOn.price}</Text>
-                <View
-                  style={[
-                    styles.addOnCheckbox,
-                    { borderColor: tokens.border },
-                    isSelected && { backgroundColor: accentColor, borderColor: accentColor },
-                  ]}
-                >
-                  {isSelected && <Text style={styles.addOnCheckmark}>✓</Text>}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-    </View>
-  );
-};
+/** Mirrors the single-service sheet's three shared steps. Add-ons are no
+ *  longer a step here at all — they're decided per-service at selection
+ *  time (a popup shown the moment a service with add-ons gets checked, see
+ *  ProviderProfileScreen's toggleServiceSelected), so by the time this sheet
+ *  opens every choice is already made. `initialAddOnsByService` just carries
+ *  that decision in. */
+type MultiBookingStep = 'when' | 'pay' | 'confirm';
 
 export interface MultiBookingSheetResult {
-  items: Array<{
+  items: {
     service: BookingSheetService;
-    selectedAddOns: Array<{ id: string | number; name: string; price: number }>;
+    selectedAddOns: { id: string | number; name: string; price: number }[];
     date: string;
     time: string;
     /** True if this service was pulled into "Schedule Separately" — stays a
      *  standalone singleton booking, not part of the group. */
     isSeparate: boolean;
-  }>;
+  }[];
   /** Shared by every non-separate item in `items` from this one submission —
    *  undefined if every item ended up separate (nothing to group), or if the
    *  grouped bucket only ever contained a single service (a group of 1 isn't
@@ -169,16 +74,27 @@ export interface MultiBookingSheetResult {
   groupBatchId?: string | undefined;
   notes: string;
   isDepositOnly: boolean;
+  /** Stamped only when the policy checkbox was ticked — mirrors
+   *  BookingSheetResult's fields, see MultiBookingSheetProps.bookingPolicies. */
+  policyAcceptedAt?: string;
+  policySnapshot?: Record<string, unknown>;
 }
 
 interface MultiBookingSheetProps {
   isVisible: boolean;
   onClose: () => void;
   services: BookingSheetService[];
+  /** Add-ons already chosen per service (keyed by serviceKeyOf) before this
+   *  sheet ever opened — picked via the popup shown at selection time.
+   *  Seeds the sheet's internal state; omit/empty for "nothing chosen". */
+  initialAddOnsByService?: Record<string, SelectedAddOn[]>;
   /** Real provider UUID when known, else display name — for availability lookups. */
   providerIdentifier: string;
   /** Provider's display name — for deposit-policy lookups. */
   providerDisplayName: string;
+  /** The provider's live cancellation/booking policy (providers.booking_policies)
+   *  — same contract as BookingSheetProps.bookingPolicies. */
+  bookingPolicies?: Record<string, unknown> | null;
   adaptiveAccentColor: string;
   /** Sheet's background colour — same contract as BookingSheet: caller
    *  always supplies it, no light/dark fallback of its own. */
@@ -240,8 +156,10 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   isVisible,
   onClose,
   services,
+  initialAddOnsByService,
   providerIdentifier,
   providerDisplayName,
+  bookingPolicies,
   adaptiveAccentColor,
   backgroundColor,
   onSubmit,
@@ -251,9 +169,19 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     () => buildThemeTokens(sheetBackground, sheetBackground, adaptiveAccentColor, sheetBackground),
     [sheetBackground, adaptiveAccentColor]
   );
-  const isDark = tokens.isDark;
+  // See BookingSheet.tsx's identical onAccentColor — a pale accent (e.g. the
+  // client dark-mode blue-grey #E5ECF4) makes hardcoded white text on the
+  // close/submit buttons unreadable.
+  const onAccentColor = useMemo(
+    () => (isDarkColor(adaptiveAccentColor) ? '#fff' : '#1B2740'),
+    [adaptiveAccentColor]
+  );
 
   const [addOnsByService, setAddOnsByService] = useState<Record<string, SelectedAddOn[]>>({});
+  // Which service's add-ons are being edited via the popup right now — null
+  // when it's closed. Holding the service itself (not just its key) so the
+  // popup has a name/add-on list to render without a second lookup.
+  const [editingAddOnsService, setEditingAddOnsService] = useState<BookingSheetService | null>(null);
   const [notes, setNotes] = useState('');
   const [step, setStep] = useState<MultiBookingStep>('when');
   const [isDepositOnly, setIsDepositOnly] = useState(false);
@@ -273,7 +201,11 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const [groupDate, setGroupDate] = useState('');
   const [groupTime, setGroupTime] = useState('');
   const [groupChainStatus, setGroupChainStatus] = useState<ChainStatus>('idle');
-  const [groupSchedule, setGroupSchedule] = useState<BackToBackSlot[] | null>(null);
+  // Every chain that fits on the picked day, keyed by its start time, so the
+  // time the client taps resolves to that chain. Previously this held only the
+  // EARLIEST fitting chain and ignored groupTime entirely — so picking 1:00pm
+  // still booked (and summarised) the provider's first opening.
+  const [groupChains, setGroupChains] = useState<BackToBackSlot[][] | null>(null);
 
   // Per-separated-service scheduling — own date/time state per service key,
   // auto-resolved to the earliest slot once, same as BookingSheet does for
@@ -291,9 +223,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   // swapped while still visible, so this only needs to key on `isVisible`.
   useEffect(() => {
     if (!isVisible) return;
-    setAddOnsByService({});
+    setAddOnsByService(initialAddOnsByService ?? {});
     setNotes('');
-    setStep(services.some(s => (s.addOns?.length ?? 0) > 0) ? 'addons' : 'when');
+    setStep('when');
     setIsDepositOnly(false);
     setAgreedToPolicy(false);
     setSeparateServiceKeys(new Set());
@@ -301,13 +233,13 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     setGroupDate('');
     setGroupTime('');
     setGroupChainStatus('idle');
-    setGroupSchedule(null);
+    setGroupChains(null);
     setSeparateDates({});
     setSeparateTimes({});
     setResolvingSeparate({});
     separateResolvedRef.current = new Set();
     depositFetched.current = false;
-  }, [isVisible]);
+  }, [initialAddOnsByService, isVisible]);
 
   const toggleSeparate = useCallback((serviceKey: string) => {
     setSeparateServiceKeys(prev => {
@@ -335,7 +267,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     // Group membership just changed — the chain-fit result for the old
     // membership no longer applies; the effect below recomputes it against
     // the same groupDate (if one's already picked).
-    setGroupSchedule(null);
+    setGroupChains(null);
     setGroupChainStatus('idle');
   }, []);
 
@@ -352,37 +284,68 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   // picked it — never auto-searched) and whenever group membership changes.
   useEffect(() => {
     if (!groupDate || groupServices.length === 0) {
-      setGroupSchedule(null);
+      setGroupChains(null);
       setGroupChainStatus('idle');
       return;
     }
     let cancelled = false;
-    // Clear the previous date's resolved chain synchronously, before the new
+    // Clear the previous date's resolved chains synchronously, before the new
     // fetch even starts — otherwise the Booking Summary section below reads
-    // groupSchedule unconditionally and briefly shows the OLD date's time
+    // the chain unconditionally and briefly shows the OLD date's time
     // against the newly-picked date's label during this loading window.
-    setGroupSchedule(null);
+    setGroupChains(null);
     setGroupChainStatus('loading');
-    AvailabilityService.findBackToBackSlots(
+    AvailabilityService.findAllBackToBackSlots(
       providerIdentifier,
       groupServices.map(s => ({ serviceId: s.dbId || String(s.id), duration: s.duration })),
       groupDate,
     )
       .then(result => {
         if (cancelled) return;
-        setGroupSchedule(result);
-        setGroupChainStatus(result ? 'found' : 'not-found');
+        setGroupChains(result);
+        setGroupChainStatus(result && result.length > 0 ? 'found' : 'not-found');
       })
       .catch(error => {
         if (cancelled) return;
         logger.error('Error chain-fitting group schedule:', error);
-        setGroupSchedule(null);
+        setGroupChains(null);
         setGroupChainStatus('not-found');
       });
     return () => {
       cancelled = true;
     };
   }, [groupDate, groupServices, providerIdentifier]);
+
+  // The chain for the time the client actually picked. Falls back to the
+  // earliest only when no time is chosen yet, so the summary has something to
+  // show — but once they pick, their choice wins.
+  const groupSchedule = useMemo(() => {
+    if (!groupChains || groupChains.length === 0) return null;
+    if (!groupTime) return groupChains[0]!;
+    return groupChains.find(chain => chain[0]!.time === groupTime) ?? null;
+  }, [groupChains, groupTime]);
+
+  // What counts as a bookable time for this group: a start where the WHOLE
+  // chain fits. Feeding this to the calendar makes its day pills and time row
+  // agree with the chain-fit lookup above — otherwise it offers times (based
+  // on the first service's duration alone) that resolve to no chain at all.
+  const groupSlotResolver = useCallback(
+    async (date: string): Promise<string[]> => {
+      if (groupServices.length === 0) return [];
+      try {
+        const chains = await AvailabilityService.findAllBackToBackSlots(
+          providerIdentifier,
+          groupServices.map(s => ({ serviceId: s.dbId || String(s.id), duration: s.duration })),
+          date,
+        );
+        return chains ? chains.map(chain => chain[0]!.time) : [];
+      } catch (error) {
+        logger.error('Error resolving group slots:', error);
+        return [];
+      }
+    },
+    [groupServices, providerIdentifier]
+  );
 
   // Auto-resolve the earliest slot for each newly-separated service — same
   // convention BookingSheet uses for a single service, just applied per
@@ -420,17 +383,6 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     if (depositPolicy?.depositOnly) setIsDepositOnly(true);
   }, [depositPolicy]);
 
-  const toggleAddOn = useCallback((serviceKey: string, addOn: BookingSheetAddOn) => {
-    setAddOnsByService(prev => {
-      const existing = prev[serviceKey] ?? [];
-      const exists = existing.some(a => a.id === addOn.id);
-      const next = exists
-        ? existing.filter(a => a.id !== addOn.id)
-        : [...existing, { id: addOn.id, name: addOn.name, price: addOn.price }];
-      return { ...prev, [serviceKey]: next };
-    });
-  }, []);
-
   const servicesTotal = useMemo(() => services.reduce((sum, s) => sum + s.price, 0), [services]);
   const totalAddOnsPrice = useMemo(
     () => Object.values(addOnsByService).flat().reduce((sum, a) => sum + a.price, 0),
@@ -464,7 +416,12 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     s => !!separateDates[serviceKeyOf(s)] && !!separateTimes[serviceKeyOf(s)]
   );
   const scheduleReady = groupReady && separateReady;
-  const submitReady = scheduleReady && agreedToPolicy;
+  // The checkbox reads "...and this provider's cancellation policy" — with
+  // no policy on file there's nothing provider-specific to agree to, so it
+  // isn't shown and doesn't block booking. See BookingSheet.tsx's identical
+  // requiresPolicyAgreement for the single-service version of this.
+  const requiresPolicyAgreement = !!bookingPolicies;
+  const submitReady = scheduleReady && (!requiresPolicyAgreement || agreedToPolicy);
 
   // ── Guided flow ────────────────────────────────────────────────────────
   // Same three steps as the single-service BookingSheet, deliberately — the
@@ -472,27 +429,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   // they shouldn't feel like different parts of the app. Scheduling stays
   // one step regardless of how many services or whether they're scheduled
   // together or separately, so the step count never varies with cart size.
-  // Any service offering extras at all. When nothing does, the extras step is
-  // skipped rather than shown empty.
-  const anyAddOns = useMemo(
-    () => services.some(s => (s.addOns?.length ?? 0) > 0),
-    [services]
-  );
-
-  // Every selected add-on across every service — shown on the extras step's
-  // button so the client sees what they've added before moving on.
-  const allAddOnsTotal = useMemo(
-    () =>
-      Object.values(addOnsByService)
-        .flat()
-        .reduce((sum, a) => sum + a.price, 0),
-    [addOnsByService]
-  );
-
-  const stepOrder = useMemo<MultiBookingStep[]>(
-    () => (anyAddOns ? ['addons', 'when', 'pay', 'confirm'] : ['when', 'pay', 'confirm']),
-    [anyAddOns]
-  );
+  const stepOrder = useMemo<MultiBookingStep[]>(() => ['when', 'pay', 'confirm'], []);
 
   const stepBlocker = useMemo((): string | null => {
     // Checked on "when" (where it's fixable) AND "confirm" (where it's
@@ -500,9 +437,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     if (step === 'when' || step === 'confirm') {
       if (!scheduleReady) return 'Choose a date for each service';
     }
-    if (step === 'confirm' && !agreedToPolicy) return 'Agree to the terms to continue';
+    if (step === 'confirm' && requiresPolicyAgreement && !agreedToPolicy) return 'Agree to the terms to continue';
     return null;
-  }, [step, scheduleReady, agreedToPolicy]);
+  }, [step, scheduleReady, requiresPolicyAgreement, agreedToPolicy]);
 
   // A scheduling blocker on confirm keeps the button tappable and routes back
   // to "when" — what needs fixing lives on an earlier step, so disabling it
@@ -545,11 +482,20 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       const idx = groupServices.findIndex(s => serviceKeyOf(s) === key);
       return { service, selectedAddOns, date: groupDate, time: groupSchedule?.[idx]?.time ?? '', isSeparate };
     });
-    onSubmit({ items, groupBatchId, notes: notes.trim(), isDepositOnly });
+    onSubmit({
+      items,
+      groupBatchId,
+      notes: notes.trim(),
+      isDepositOnly,
+      // Only stamped when this provider actually has a policy to agree to —
+      // no checkbox is shown otherwise, so there's nothing to timestamp.
+      ...(requiresPolicyAgreement ? { policyAcceptedAt: new Date().toISOString() } : {}),
+      ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
+    });
     onClose();
   }, [
     submitReady, services, addOnsByService, separateServiceKeys, separateDates, separateTimes,
-    groupServices, groupDate, groupSchedule, notes, isDepositOnly, onSubmit, onClose,
+    groupServices, groupDate, groupSchedule, notes, isDepositOnly, requiresPolicyAgreement, bookingPolicies, onSubmit, onClose,
   ]);
 
   if (services.length === 0) return null;
@@ -584,7 +530,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 onPress={onClose}
                 activeOpacity={0.8}
               >
-                <Text style={styles.closeButtonText}>✕</Text>
+                <Text style={[styles.closeButtonText, { color: onAccentColor }]}>✕</Text>
               </TouchableOpacity>
             </View>
 
@@ -596,36 +542,6 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
             />
 
             <ScrollView ref={scrollRef} style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
-              {step === 'addons' && (
-              <>
-              <Text style={[styles.stepQuestion, { color: tokens.text }]}>Any extras?</Text>
-
-              {/* One collapsible block per service rather than every add-on
-                  for every service expanded at once — with several services
-                  that was the wall of upsells this step exists to tame. Each
-                  starts shut, showing what's picked, so the page length is
-                  the number of SERVICES, not the number of add-ons. */}
-              {services.map(service => {
-                const serviceKey = serviceKeyOf(service);
-                const addOns = service.addOns ?? [];
-                if (addOns.length === 0) return null;
-                const selected = addOnsByService[serviceKey] ?? [];
-                const selectedTotal = selected.reduce((sum, a) => sum + a.price, 0);
-                return (
-                  <ServiceAddOnsBlock
-                    key={serviceKey}
-                    serviceName={service.name}
-                    addOns={addOns}
-                    selected={selected}
-                    selectedTotal={selectedTotal}
-                    onToggle={addOn => toggleAddOn(serviceKey, addOn)}
-                    tokens={tokens}
-                    accentColor={adaptiveAccentColor}
-                  />
-                );
-              })}
-              </>
-              )}
 
               {step === 'when' && (
               <>
@@ -643,7 +559,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                           // checked — everyone reverts to one group booking
                           // unless the client re-enters and confirms again.
                           setSeparateServiceKeys(new Set());
-                          setGroupSchedule(null);
+                          setGroupChains(null);
                           setGroupChainStatus('idle');
                         }
                         setSeparateSelectMode(v => !v);
@@ -677,7 +593,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                               isSeparate && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
                             ]}
                           >
-                            {isSeparate && <Text style={styles.addOnCheckmark}>✓</Text>}
+                            {isSeparate && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
                           </TouchableOpacity>
                         )}
                         <View style={{ flex: 1 }}>
@@ -689,21 +605,37 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                         <Text style={[styles.servicePrice, { color: adaptiveAccentColor }]}>£{service.price}</Text>
                       </View>
 
-                      {/* Read-only here — picking happens on the extras step,
-                          which owns that decision. Showing it keeps the
-                          summary honest without re-opening the choice inside
-                          a step that's asking about timing. */}
-                      {selected.length > 0 && (
-                        <View style={styles.addOnsWrap}>
-                          {selected.map(a => (
-                            <View key={a.id} style={styles.addOnSummaryRow}>
-                              <Text style={[styles.addOnSummaryName, { color: tokens.sub }]} numberOfLines={1}>
-                                + {a.name}
-                              </Text>
-                              <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>+£{a.price}</Text>
+                      {/* Add-ons were first decided via the popup at
+                          selection time, before this sheet opened — this
+                          reopens the same popup to change that pick without
+                          backing out of the sheet. */}
+                      {(service.addOns?.length ?? 0) > 0 && (
+                        <>
+                          {selected.length > 0 && (
+                            <View style={styles.addOnsWrap}>
+                              {selected.map(a => (
+                                <View key={a.id} style={styles.addOnSummaryRow}>
+                                  <Text style={[styles.addOnSummaryName, { color: tokens.sub }]} numberOfLines={1}>
+                                    + {a.name}
+                                  </Text>
+                                  <Text style={[styles.addOnSummaryPrice, { color: tokens.sub }]}>+£{a.price}</Text>
+                                </View>
+                              ))}
                             </View>
-                          ))}
-                        </View>
+                          )}
+                          <TouchableOpacity
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              setEditingAddOnsService(service);
+                            }}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            style={styles.editAddOnsLink}
+                          >
+                            <Text style={[styles.changeLink, { color: adaptiveAccentColor }]}>
+                              {selected.length > 0 ? 'Edit add-ons' : 'Add extras'}
+                            </Text>
+                          </TouchableOpacity>
+                        </>
                       )}
                     </View>
                   );
@@ -717,18 +649,20 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       ? 'Date & Time'
                       : `Date & Time — ${groupServices.length} Service${groupServices.length > 1 ? 's' : ''} Together`}
                   </Text>
+                  {/* Chain-aware: the times offered are starts where EVERY
+                      grouped service still fits back-to-back, not where the
+                      first one alone fits. */}
                   <ModernBeautyCalendar
                     selectedDate={groupDate}
                     onDateSelect={setGroupDate}
                     onTimeSelect={setGroupTime}
                     selectedTime={groupTime}
                     providerName={providerIdentifier}
-                    serviceDuration={groupServices[0]!.duration}
+                    slotResolver={groupSlotResolver}
                     accentColor={adaptiveAccentColor}
                     textColor={tokens.text}
                     subColor={tokens.sub}
                     surfaceColor={tokens.surface}
-                    {...(uuidOf(groupServices[0]!) ? { serviceId: uuidOf(groupServices[0]!) } : {})}
                   />
                   {groupChainStatus === 'loading' && (
                     <View style={styles.resolvingRow}>
@@ -801,8 +735,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
-                {showFullPaymentOption ? (
-                  <View style={styles.paymentButtons}>
+                <View style={styles.paymentButtons}>
+                  {showFullPaymentOption && (
                     <TouchableOpacity
                       style={[
                         styles.paymentOptionButton,
@@ -815,39 +749,37 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                         Pay Full Amount
                       </Text>
                     </TouchableOpacity>
-                    {depositPolicy?.depositAvailable !== false && (
-                      <TouchableOpacity
-                        style={[
-                          styles.paymentOptionButton,
-                          { backgroundColor: tokens.surface },
-                          isDepositOnly && { backgroundColor: withAlpha(adaptiveAccentColor, 0.14), borderColor: adaptiveAccentColor },
-                        ]}
-                        onPress={() => setIsDepositOnly(true)}
-                      >
-                        <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
-                          {depositPolicy
-                            ? depositPolicy.depositType === 'fixed'
-                              ? `Pay Deposit (£${depositPolicy.depositAmount} flat)`
-                              : `Pay Deposit (${depositPolicy.depositAmount}%)`
-                            : 'Pay Deposit (20%)'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ) : (
+                  )}
+                  {(showFullPaymentOption ? depositPolicy?.depositAvailable !== false : true) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOptionButton,
+                        { backgroundColor: tokens.surface },
+                        isDepositOnly && { backgroundColor: withAlpha(adaptiveAccentColor, 0.14), borderColor: adaptiveAccentColor },
+                      ]}
+                      onPress={() => setIsDepositOnly(true)}
+                      activeOpacity={showFullPaymentOption ? 0.7 : 1}
+                      disabled={!showFullPaymentOption}
+                    >
+                      <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
+                        {depositPolicy
+                          ? depositPolicy.depositType === 'fixed'
+                            ? `Pay Deposit (£${depositPolicy.depositAmount} flat)`
+                            : `Pay Deposit (${depositPolicy.depositAmount}%)`
+                          : 'Pay Deposit (20%)'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {!showFullPaymentOption && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
                     This provider requires a deposit to book — paying in full isn't available for this service.
                   </Text>
                 )}
                 {isDepositOnly && (
-                  <View style={[styles.depositInfo, { backgroundColor: isDark ? 'rgba(76,175,80,0.16)' : 'rgba(76,175,80,0.1)' }]}>
-                    <Text style={[styles.depositInfoText, { color: isDark ? '#7BD989' : '#2E7D32' }]}>
-                      Deposit: £{BookingService.calculateDeposit(subtotal, depositPolicyArg).toFixed(2)}
-                    </Text>
-                    <Text style={[styles.depositRemainingText, { color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)' }]}>
-                      Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
-                    </Text>
-                  </View>
+                  <Text style={[styles.depositRemainingText, { color: tokens.sub }]}>
+                    Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
+                  </Text>
                 )}
               </View>
               </>
@@ -1011,22 +943,29 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     paying" figure in the sheet. */}
               </View>
 
-              <TouchableOpacity
-                style={styles.policyCheckboxRow}
-                onPress={() => setAgreedToPolicy(!agreedToPolicy)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.addOnCheckbox,
-                  { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
-                ]}>
-                  {agreedToPolicy && <Text style={styles.addOnCheckmark}>✓</Text>}
-                </View>
-                {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
-                <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
-                  I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
-                </Text>
-              </TouchableOpacity>
+              {/* Only shown when this provider actually has a cancellation
+                  policy on file — see BookingSheet.tsx's identical
+                  requiresPolicyAgreement comment. CERVICED's own Terms &
+                  Conditions checkbox on the cart's checkout screen is
+                  separate and unaffected. */}
+              {requiresPolicyAgreement && (
+                <TouchableOpacity
+                  style={styles.policyCheckboxRow}
+                  onPress={() => setAgreedToPolicy(!agreedToPolicy)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.addOnCheckbox,
+                    { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
+                  ]}>
+                    {agreedToPolicy && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
+                  </View>
+                  {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
+                  <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
+                    I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
+                  </Text>
+                </TouchableOpacity>
+              )}
               </>
               )}
             </ScrollView>
@@ -1053,20 +992,44 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 activeOpacity={0.8}
                 disabled={!!stepBlocker && !schedulingFixableElsewhere}
               >
-                <Text style={styles.submitButtonText}>
+                <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
                   {schedulingFixableElsewhere
                     ? 'Choose a date for each service'
                     : stepBlocker
                     ? stepBlocker
                     : step === 'confirm'
                     ? `Book All ${services.length} Service${services.length === 1 ? '' : 's'}`
-                    : step === 'addons' && allAddOnsTotal > 0
-                    ? `Continue • +£${allAddOnsTotal.toFixed(2)}`
                     : 'Continue'}
                 </Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
+
+          {/* Internal overlay, not a second <Modal> — this sheet is already
+              a Modal, and React Native doesn't reliably support stacking one
+              Modal on top of another (see AddOnPickerModal's file header). */}
+          {!!editingAddOnsService && (
+            <AddOnPickerModal
+              visible
+              asOverlay
+              serviceName={editingAddOnsService.name}
+              addOns={editingAddOnsService.addOns ?? []}
+              initialSelected={addOnsByService[serviceKeyOf(editingAddOnsService)] ?? []}
+              accentColor={adaptiveAccentColor}
+              tokens={{ text: tokens.text, sub: tokens.sub, border: tokens.border, surface: tokens.surface, bg: sheetBackground }}
+              onDone={selected => {
+                const key = serviceKeyOf(editingAddOnsService);
+                setAddOnsByService(prev => {
+                  if (selected.length > 0) return { ...prev, [key]: selected };
+                  if (!(key in prev)) return prev;
+                  const next = { ...prev };
+                  delete next[key];
+                  return next;
+                });
+                setEditingAddOnsService(null);
+              }}
+            />
+          )}
         </View>
       </KeyboardDismissView>
     </Modal>
@@ -1084,7 +1047,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   headerSubtitle: { fontSize: 13, marginTop: 4 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  closeButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  closeButtonText: { fontSize: 15, fontWeight: '700' },
   body: { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 40 },
   section: { marginBottom: 26 },
@@ -1115,15 +1078,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   separateToggleText: { fontSize: 11, fontWeight: '700' },
-  addOnCard: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth, padding: 14, marginTop: 10,
-  },
-  addOnName: { fontSize: 14, fontWeight: '600' },
-  addOnDescription: { fontSize: 12, marginTop: 2 },
-  addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  addOnCheckmark: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  addOnCheckmark: { fontSize: 12, fontWeight: '700' },
   policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 8 },
   policyCheckboxLabel: { flex: 1, fontSize: 13 },
   requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
@@ -1135,15 +1091,7 @@ const styles = StyleSheet.create({
   scheduleRowTime: { fontSize: 13, fontWeight: '600' },
   notFoundText: { fontSize: 13, lineHeight: 18, marginTop: 10 },
   changeLink:     { fontSize: 13, fontWeight: '700' },
-  // ── Extras step ─────────────────────────────────────────────────────
-  extrasHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
-    paddingVertical: 13, paddingHorizontal: 14,
-  },
-  extrasServiceName: { fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
-  extrasSummary:     { fontSize: 12, marginTop: 3 },
-  extrasChevron:     { fontSize: 10, marginLeft: 12 },
+  editAddOnsLink: { marginTop: 8 },
   addOnSummaryRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   addOnSummaryName:  { fontSize: 13, flex: 1, marginRight: 10 },
   addOnSummaryPrice: { fontSize: 13 },
@@ -1159,8 +1107,6 @@ const styles = StyleSheet.create({
   paymentOptionButton: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: 'transparent', paddingVertical: 12, alignItems: 'center' },
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
-  depositInfo: { borderRadius: 12, padding: 12, marginTop: 10 },
-  depositInfoText: { fontSize: 13, fontWeight: '700' },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
   summaryGroupBlock: { marginBottom: 4 },
   summaryGroupBlockBanded: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 10 },
@@ -1191,5 +1137,5 @@ const styles = StyleSheet.create({
   totalPrice: { fontFamily: 'BakbakOne-Regular', fontSize: 20, fontWeight: 'bold' },
   submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
   submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: '#fff', fontWeight: 'bold' },
+  submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: 'bold' },
 });

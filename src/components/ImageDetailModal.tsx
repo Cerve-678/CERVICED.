@@ -10,6 +10,7 @@ import {
   FlatList,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  PanResponder,
 } from 'react-native';
 // expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
 // masonry grid is unvirtualized, so caching matters more here than elsewhere).
@@ -28,12 +29,6 @@ import Icon from './IconLibrary';
 import { fonts, spacing } from '../constants/PlatformDimensions';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Same rationale as PortfolioCard's HIGHLIGHT_COLOR — the saved-heart color
-// should match between the grid tile and this modal for the same action.
-// Brightened from the original dusty-rose (#AF9197) to a more saturated
-// rose-red so the "saved" state reads clearly rather than muted.
-const HIGHLIGHT_COLOR = '#E0526A';
 
 interface ImageDetailModalProps {
   visible: boolean;
@@ -71,7 +66,7 @@ export const ImageDetailModal = ({
   similarItems,
   onSelectItem,
 }: ImageDetailModalProps) => {
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode, palette: P } = useTheme();
   const { isPortfolioSaved, savePortfolioItem, unsavePortfolioItem } =
     useBookmarkStore();
 
@@ -136,7 +131,7 @@ export const ImageDetailModal = ({
         (si) => si.id !== anchor.id && eligibleKind(si),
       );
       return { items: rank(anyCategory), isFallback: true };
-    }, [anchorItem, similarItems]);
+    }, [anchorItem, item, similarItems]);
 
   // Jumping to a different photo (via a "More Like This" tap) swaps `item`
   // in place without closing the modal — without this, the content
@@ -210,7 +205,7 @@ export const ImageDetailModal = ({
       <SafeAreaProvider>
         <ModalBody
           item={item}
-          theme={theme}
+          palette={P}
           isDarkMode={isDarkMode}
           hasProvider={hasProvider}
           isSaved={isSaved}
@@ -236,12 +231,17 @@ export const ImageDetailModal = ({
 // of scroll position. Resets to the first photo whenever `itemKey` changes
 // (i.e. the modal is now showing a different card) rather than preserving
 // whatever page a previously-viewed service was left on.
+interface CarouselController {
+  scrollToOffset: (offset: number, animated: boolean) => void;
+}
+
 const ImageCarousel: React.FC<{
   images: PortfolioItem['image'][];
   height: number;
   backgroundColor: string;
   itemKey: string;
   initialIndex: number;
+  controllerRef: React.MutableRefObject<CarouselController | null>;
   onIndexChange: (index: number) => void;
 }> = ({
   images,
@@ -249,11 +249,14 @@ const ImageCarousel: React.FC<{
   backgroundColor,
   itemKey,
   initialIndex,
+  controllerRef,
   onIndexChange,
 }) => {
   const listRef = useRef<FlatList<PortfolioItem['image']>>(null);
+  const activeIndexRef = useRef(initialIndex);
 
   useEffect(() => {
+    activeIndexRef.current = initialIndex;
     onIndexChange(initialIndex);
     listRef.current?.scrollToOffset({
       offset: initialIndex * SCREEN_WIDTH,
@@ -263,38 +266,51 @@ const ImageCarousel: React.FC<{
   }, [itemKey]);
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    onIndexChange(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH));
+    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    activeIndexRef.current = index;
+    onIndexChange(index);
   };
+
+  useEffect(() => {
+    controllerRef.current = {
+      scrollToOffset: (offset, animated) => {
+        listRef.current?.scrollToOffset({ offset, animated });
+      },
+    };
+    return () => {
+      controllerRef.current = null;
+    };
+  }, [controllerRef]);
 
   return (
     <FlatList
-      ref={listRef}
-      data={images}
-      horizontal
-      pagingEnabled
-      bounces={false}
-      showsHorizontalScrollIndicator={false}
-      scrollEventThrottle={16}
-      onMomentumScrollEnd={onMomentumScrollEnd}
-      keyExtractor={(_, i) => `${itemKey}-${i}`}
-      style={{ width: SCREEN_WIDTH, height }}
-      getItemLayout={(_, i) => ({
-        length: SCREEN_WIDTH,
-        offset: SCREEN_WIDTH * i,
-        index: i,
-      })}
+        ref={listRef}
+        data={images}
+        horizontal
+        pagingEnabled
+        bounces={false}
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        keyExtractor={(_, i) => `${itemKey}-${i}`}
+        style={{ width: SCREEN_WIDTH, height }}
+        getItemLayout={(_, i) => ({
+          length: SCREEN_WIDTH,
+          offset: SCREEN_WIDTH * i,
+          index: i,
+        })}
       // Opens on whichever photo was actually tapped (see initialImageIndex
       // in ModalBody), not always the first — needs getItemLayout above to
       // jump there without first measuring everything in between.
-      initialScrollIndex={initialIndex}
+        initialScrollIndex={initialIndex}
       // Without these, FlatList's defaults (initialNumToRender: 10) mount
       // and start loading every photo in a multi-photo service at once —
       // only the photo actually shown needs to load immediately; the rest
       // can load lazily as the user swipes.
-      initialNumToRender={1}
-      windowSize={3}
-      maxToRenderPerBatch={2}
-      renderItem={({ item: source }) => (
+        initialNumToRender={1}
+        windowSize={3}
+        maxToRenderPerBatch={2}
+        renderItem={({ item: source }) => (
         // source is PortfolioItem['image'] (RN's broad ImageSourcePropType)
         // but always constructed as { uri: string } — see PortfolioCard.tsx
         // for why this narrowing is needed for expo-image's stricter type.
@@ -304,14 +320,14 @@ const ImageCarousel: React.FC<{
           contentFit="cover"
           transition={0}
         />
-      )}
+        )}
     />
   );
 };
 
 interface ModalBodyProps {
   item: PortfolioItem;
-  theme: ReturnType<typeof useTheme>['theme'];
+  palette: ReturnType<typeof useTheme>['palette'];
   isDarkMode: boolean;
   hasProvider: boolean;
   isSaved: boolean;
@@ -328,7 +344,7 @@ interface ModalBodyProps {
 
 function ModalBody({
   item,
-  theme,
+  palette: P,
   isDarkMode,
   hasProvider,
   isSaved,
@@ -374,9 +390,66 @@ function ModalBody({
     return idx >= 0 && idx < images.length ? idx : 0;
   }, [item.id, images.length]);
   const [activeImageIndex, setActiveImageIndex] = useState(initialImageIndex);
+  const activeImageIndexRef = useRef(initialImageIndex);
+  const carouselRef = useRef<CarouselController | null>(null);
+  const panStartOffsetRef = useRef(0);
+
+  useEffect(() => {
+    activeImageIndexRef.current = initialImageIndex;
+  }, [initialImageIndex]);
+
+  const carouselPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        // This transparent surface covers only the exposed image, never the
+        // card, so it can own a gallery gesture without affecting card scroll.
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          panStartOffsetRef.current = activeImageIndexRef.current * SCREEN_WIDTH;
+        },
+        onPanResponderMove: (_, gesture) => {
+          const maxOffset = (images.length - 1) * SCREEN_WIDTH;
+          const offset = Math.max(
+            0,
+            Math.min(maxOffset, panStartOffsetRef.current - gesture.dx),
+          );
+          carouselRef.current?.scrollToOffset(offset, false);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const isTap = Math.abs(gesture.dx) < 8 && Math.abs(gesture.dy) < 8;
+          const maxIndex = images.length - 1;
+          // Match the native gallery feel: the image follows the whole drag,
+          // then a deliberate flick or a modest drag commits to the adjacent
+          // photo. A tiny accidental movement simply springs back.
+          const isDeliberateSwipe =
+            Math.abs(gesture.dx) > SCREEN_WIDTH * 0.1 ||
+            Math.abs(gesture.vx) > 0.2;
+          const rawIndex = isTap
+            ? activeImageIndexRef.current +
+              (gesture.x0 < SCREEN_WIDTH / 2 ? -1 : 1)
+            : isDeliberateSwipe
+              ? activeImageIndexRef.current + (gesture.dx < 0 ? 1 : -1)
+            : Math.round(
+                (panStartOffsetRef.current - gesture.dx) / SCREEN_WIDTH,
+              );
+          const nextIndex = Math.max(0, Math.min(maxIndex, rawIndex));
+          activeImageIndexRef.current = nextIndex;
+          setActiveImageIndex(nextIndex);
+          carouselRef.current?.scrollToOffset(nextIndex * SCREEN_WIDTH, true);
+        },
+        onPanResponderTerminate: () => {
+          carouselRef.current?.scrollToOffset(
+            activeImageIndexRef.current * SCREEN_WIDTH,
+            true,
+          );
+        },
+      }),
+    [images.length],
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: P.bg }]}>
       {/* Close button */}
       <TouchableOpacity
         style={[styles.closeButton, { top: insets.top + 12 }]}
@@ -393,7 +466,7 @@ function ModalBody({
           tint={isDarkMode ? 'dark' : 'light'}
           style={styles.iconBlur}
         >
-          <Text style={[styles.closeText, { color: theme.text }]}>✕</Text>
+          <Text style={[styles.closeText, { color: P.text }]}>✕</Text>
         </BlurView>
       </TouchableOpacity>
 
@@ -415,7 +488,9 @@ function ModalBody({
           <TabIcon
             name="heart"
             size={16}
-            color={isSaved ? HIGHLIGHT_COLOR : '#FFFFFF'}
+            // highlightColor (pale blue-grey) barely reads against the photo/
+            // blur — same fixed bright-pink "favourited" fix as PortfolioCard's heart.
+            color={isSaved ? '#FF2D78' : '#FFFFFF'}
           />
         </BlurView>
       </TouchableOpacity>
@@ -448,54 +523,55 @@ function ModalBody({
         </View>
       )}
 
-      {/* Image — pinned at a fixed position/size behind everything else, at
-          its own natural spot from the top of the sheet. It never moves;
-          the card scrolls as a layer painted in front of it (see the
-          ScrollView right after, which is position:absolute and therefore
-          stacks above this in paint order) rather than pushing the image
-          out of the way, so the card genuinely scrolls *over* the photo
-          instead of the photo scrolling under a card that starts below
-          it. */}
+      {/* Keep the original two-layer composition: the image stays fixed behind
+          the card, while the card scrolls over it. `box-none` is the key to
+          making the carousel usable without changing that visual overlap —
+          the empty photo area passes touches through to the FlatList below,
+          but the card remains a normal vertical ScrollView. */}
       <View style={[styles.imageLayer, { height: imageHeight }]}>
         <ImageCarousel
           images={images}
           height={imageHeight}
-          backgroundColor={theme.secondaryBackground}
+          backgroundColor={P.surface}
           itemKey={item.id}
           initialIndex={initialImageIndex}
-          onIndexChange={setActiveImageIndex}
+          controllerRef={carouselRef}
+          onIndexChange={(index) => {
+            activeImageIndexRef.current = index;
+            setActiveImageIndex(index);
+          }}
         />
       </View>
-
-      {/* Content card — the ONLY scrollable region, absolutely positioned
-          to fill the sheet so it paints in front of the pinned image above
-          rather than being pushed below it. A transparent spacer
-          (imageHeight - CARD_OVERLAP tall) opens the scroll content, so at
-          rest the card's visible top edge sits CARD_OVERLAP up from the
-          image's bottom — exactly like before — but now scrolling up
-          brings the card itself over the photo instead of merely
-          unmasking a card that was always behind it. Only needs to scroll
-          CARD_OVERLAP further to fully clear the image and reveal
-          overflow content (description, More Like This). */}
+      {images.length > 1 && (
+        <View
+          style={[
+            styles.carouselTapZones,
+            { height: imageHeight - CARD_OVERLAP },
+          ]}
+          {...carouselPanResponder.panHandlers}
+        >
+        </View>
+      )}
       <ScrollView
         ref={scrollRef}
         style={styles.cardScroll}
+        pointerEvents="box-none"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: imageHeight - CARD_OVERLAP },
+        ]}
         bounces
         alwaysBounceVertical
       >
-        <View style={{ height: imageHeight - CARD_OVERLAP }} />
         {/* paddingBottom lives on the card itself (not the ScrollView's
-            content container) so the card's own background — not the
-            modal's base background — extends all the way to the bottom of
-            the safe area instead of leaving a gap the base color shows
-            through. */}
+            content container) so the card's own background extends all the
+            way to the bottom of the safe area. */}
         <View
           style={[
             styles.infoCard,
             {
-              backgroundColor: theme.cardBackground,
+              backgroundColor: P.card,
               paddingBottom: insets.bottom + 24,
             },
           ]}
@@ -520,7 +596,7 @@ function ModalBody({
                   source={{ uri: item.providerLogoUri }}
                   style={[
                     styles.providerLogo,
-                    { backgroundColor: theme.secondaryBackground },
+                    { backgroundColor: P.surface },
                   ]}
                   contentFit="cover"
                   transition={0}
@@ -529,25 +605,25 @@ function ModalBody({
                 <View
                   style={[
                     styles.providerLogo,
-                    { backgroundColor: theme.secondaryBackground },
+                    { backgroundColor: P.surface },
                   ]}
                 />
               )}
               <View style={styles.providerInfo}>
-                <Text style={[styles.providerName, { color: theme.text }]}>
+                <Text style={[styles.providerName, { color: P.text }]}>
                   {item.providerName}
                 </Text>
                 {item.providerRating != null && (
                   <View style={styles.ratingRow}>
                     <TabIcon name="star" size={12} color="#FFD700" />
-                    <Text style={[styles.ratingText, { color: theme.text }]}>
+                    <Text style={[styles.ratingText, { color: P.text }]}>
                       {item.providerRating}
                     </Text>
                     {item.providerReviewCount != null && (
                       <Text
                         style={[
                           styles.reviewCount,
-                          { color: theme.secondaryText },
+                          { color: P.sub },
                         ]}
                       >
                         ({item.providerReviewCount})
@@ -559,21 +635,17 @@ function ModalBody({
               <View
                 style={[
                   styles.categoryChip,
-                  {
-                    backgroundColor: isDarkMode
-                      ? 'rgba(175,145,151,0.15)'
-                      : 'rgba(92,64,51,0.1)',
-                  },
+                  { backgroundColor: P.secondary },
                 ]}
               >
-                <Text style={[styles.categoryText, { color: theme.accent }]}>
+                <Text style={[styles.categoryText, { color: '#3F1E36' }]}>
                   {item.category}
                 </Text>
               </View>
               <Icon
                 name="chevron-right"
                 size={16}
-                color={theme.secondaryText}
+                color={P.sub}
                 style={styles.providerChevron}
               />
             </TouchableOpacity>
@@ -602,16 +674,20 @@ function ModalBody({
                 <View
                   style={[
                     styles.bookNowInner,
-                    { backgroundColor: theme.accent },
+                    { backgroundColor: P.accent },
                   ]}
                 >
                   <TabIcon
                     name={isBookableService ? 'basket-shopping' : 'user'}
                     size={14}
-                    color="#FFFFFF"
+                    color={P.onAccent}
                   />
-                  <Text style={styles.bookNowText}>
-                    {isBookableService ? 'Book Now' : 'View Profile'}
+                  <Text style={[styles.bookNowText, { color: P.onAccent }]}>
+                    {isBookableService
+                      ? 'Book Now'
+                      : item.isUnclaimed
+                        ? 'View & Claim'
+                        : 'View Profile'}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -619,7 +695,7 @@ function ModalBody({
           )}
 
           {(hasProvider || item.serviceName != null || item.price != null) && (
-            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <View style={[styles.divider, { backgroundColor: P.border }]} />
           )}
 
           {/* Service name and price share a row so price reads as directly
@@ -630,14 +706,14 @@ function ModalBody({
             <View style={styles.nameRow}>
               {item.serviceName && (
                 <Text
-                  style={[styles.serviceName, { color: theme.text }]}
+                  style={[styles.serviceName, { color: P.text }]}
                   numberOfLines={2}
                 >
                   {item.serviceName}
                 </Text>
               )}
               {item.price && (
-                <Text style={[styles.price, { color: theme.accent }]}>
+                <Text style={[styles.price, { color: P.accentText }]}>
                   {item.price}
                 </Text>
               )}
@@ -645,7 +721,7 @@ function ModalBody({
           )}
 
           {item.caption && (
-            <Text style={[styles.caption, { color: theme.text }]}>
+            <Text style={[styles.caption, { color: P.text }]}>
               {item.caption}
             </Text>
           )}
@@ -658,14 +734,10 @@ function ModalBody({
                   key={tag}
                   style={[
                     styles.tag,
-                    {
-                      backgroundColor: isDarkMode
-                        ? 'rgba(175,145,151,0.15)'
-                        : 'rgba(92,64,51,0.1)',
-                    },
+                    { backgroundColor: P.secondary },
                   ]}
                 >
-                  <Text style={[styles.tagText, { color: theme.accent }]}>
+                  <Text style={[styles.tagText, { color: '#3F1E36' }]}>
                     #{tag}
                   </Text>
                 </View>
@@ -684,7 +756,7 @@ function ModalBody({
               <Text
                 style={[
                   styles.sectionTitle,
-                  { color: theme.text, marginTop: spacing.md },
+                  { color: P.text, marginTop: spacing.md },
                 ]}
               >
                 {moreLikeThisIsFallback
@@ -712,7 +784,7 @@ function ModalBody({
                       source={{ uri: (si.image as { uri: string }).uri }}
                       style={[
                         styles.moreLikeThisImage,
-                        { backgroundColor: theme.secondaryBackground },
+                        { backgroundColor: P.surface },
                       ]}
                       contentFit="cover"
                       transition={0}
@@ -721,7 +793,7 @@ function ModalBody({
                       <Text
                         style={[
                           styles.moreLikeThisProvider,
-                          { color: theme.secondaryText },
+                          { color: P.sub },
                         ]}
                         numberOfLines={1}
                       >
@@ -779,29 +851,27 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  // Pinned behind the card ScrollView (see cardScroll) — position:absolute
-  // so it stacks beneath a later, also-absolute sibling regardless of
-  // scroll, instead of being pushed down as an in-flow box the card starts
-  // after.
   imageLayer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
   },
-  // Fills the whole sheet and paints in front of imageLayer (later sibling
-  // in an absolutely-positioned stack), so its scrollable content —
-  // starting with the transparent spacer in ModalBody — genuinely scrolls
-  // over the pinned image rather than starting below it.
-  cardScroll: {
+  // Invisible, dedicated hit areas above the exposed part of the image. They
+  // deliberately stop at the card overlap so the card's vertical scrolling
+  // and its original visual stacking remain untouched.
+  carouselTapZones: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    // Below closeButton (10) and carouselDotsWrap (20) so those stay
-    // tappable/visible once the card scrolls up underneath them.
+    flexDirection: 'row',
     zIndex: 5,
+  },
+  // This stays above the image visually, but box-none lets taps in its empty
+  // top padding fall through to the carousel's native FlatList.
+  cardScroll: {
+    ...StyleSheet.absoluteFillObject,
   },
   // flexGrow ensures the card's background fills the whole scrollable area
   // even when there's little content, instead of the sheet's white/dark

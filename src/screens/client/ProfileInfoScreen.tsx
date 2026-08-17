@@ -20,7 +20,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 export default function ProfileInfoScreen({ navigation }: any) {
   const { user, updateUser, deleteClientProfile } = useAuth();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [name, setName] = useState(user?.name ?? '');
@@ -31,9 +31,9 @@ export default function ProfileInfoScreen({ navigation }: any) {
   const inputStyle = [
     styles.input,
     {
-      color: theme.text,
+      color: P.text,
       backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-      borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
+      borderColor: P.border,
     },
   ];
 
@@ -96,49 +96,49 @@ export default function ProfileInfoScreen({ navigation }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: theme.text }]}>Profile Info</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Update your personal details</Text>
+          <Text style={[styles.title, { color: P.text }]}>Profile Info</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>Update your personal details</Text>
 
           {/* Email */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.secondaryText }]}>EMAIL</Text>
+            <Text style={[styles.label, { color: P.sub }]}>EMAIL</Text>
             <View
               style={[
                 inputStyle,
                 styles.lockedRow,
-                { borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)' },
+                { borderColor: P.border },
               ]}
             >
-              <Text style={[styles.lockedText, { color: theme.text }]}>{user?.email}</Text>
+              <Text style={[styles.lockedText, { color: P.text }]}>{user?.email}</Text>
             </View>
-            <Text style={[styles.emailHint, { color: theme.secondaryText }]}>Your account sign-in email. To change this, contact support.</Text>
+            <Text style={[styles.emailHint, { color: P.sub }]}>Your account sign-in email. To change this, contact support.</Text>
           </View>
 
           {/* Name */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.secondaryText }]}>YOUR NAME</Text>
+            <Text style={[styles.label, { color: P.sub }]}>YOUR NAME</Text>
             <TextInput
               style={inputStyle}
               value={name}
               onChangeText={setName}
               placeholder="Sarah Johnson"
-              placeholderTextColor={theme.secondaryText}
+              placeholderTextColor={P.sub}
               autoCapitalize="words"
             />
           </View>
 
           {/* Phone */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.secondaryText }]}>PHONE NUMBER</Text>
+            <Text style={[styles.label, { color: P.sub }]}>PHONE NUMBER</Text>
             <TextInput
               style={inputStyle}
               value={phone}
               onChangeText={setPhone}
               placeholder="+44 7700 900000"
-              placeholderTextColor={theme.secondaryText}
+              placeholderTextColor={P.sub}
               keyboardType="phone-pad"
               autoCapitalize="none"
             />
@@ -146,14 +146,14 @@ export default function ProfileInfoScreen({ navigation }: any) {
 
           {/* Save */}
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033') }]}
+            style={[styles.saveBtn, { backgroundColor: P.accent }]}
             onPress={handleSave}
             disabled={loading}
             activeOpacity={0.8}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.saveBtnText}>SAVE CHANGES</Text>
+              ? <ActivityIndicator color={P.onAccent} />
+              : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>SAVE CHANGES</Text>
             }
           </TouchableOpacity>
 

@@ -21,17 +21,12 @@ import {
   PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
-import { ThemedBackground } from '../../components/ThemedBackground';
 import {
-  useBooking,
   ConfirmedBooking,
-  BookingStatus,
 } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProviderHomeScreenProps } from '../../navigation/types';
@@ -51,6 +46,7 @@ import {
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { DbProviderAvailability, DbProviderBlockedDate } from '../../types/database';
 import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix } from '../../utils/dateUtils';
+import { OFFERS_ENABLED } from '../../constants/featureFlags';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -70,25 +66,13 @@ const STATUS_CFG: Record<string, { bg: string; dbg: string; color: string; label
   upcoming:    { bg: '#E8F5EE', dbg: '#1B3D2A', color: '#2E7D52', label: 'Confirmed'   },
 };
 
-const TL_STATUS_COLOR: Record<string, string> = {
-  pending:     '#B8730A',
-  confirmed:   '#0A84FF',
-  upcoming:    '#0A84FF',
-  in_progress: '#7B2FBE',
-  completed:   '#2E7D52',
-  cancelled:   '#C73535',
-  no_show:     '#B8730A',
-};
-
 function statusCfg(s: string) {
   return STATUS_CFG[s] ?? STATUS_CFG['completed']!;
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
-const DAY_HEADERS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_NAMES  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const DAY_ABBREV   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_FULL     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
 function formatDateString(date: Date): string {
@@ -108,9 +92,6 @@ function parseTimeToMinutes(t: string): number {
   return h * 60 + m;
 }
 
-function fmtTime12(t: string): string {
-  return formatTime12(t);
-}
 
 function countdownLabel(bookingDate: string, bookingTime: string): string | null {
   const [y, mo, d] = bookingDate.split('-').map(Number);
@@ -154,7 +135,7 @@ function getMonthDays(year: number, month: number) {
   let startDay   = firstDay.getDay() - 1;
   if (startDay < 0) startDay = 6;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: Array<{ date: Date; dateString: string } | null> = [];
+  const cells: ({ date: Date; dateString: string } | null)[] = [];
   for (let i = 0; i < startDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d);
@@ -202,21 +183,6 @@ const TODAY_IDX   = STRIP_DATES.indexOf(TODAY_STR);
 type ExpansionState = 0 | 1 | 2;
 
 // ─── Booking card ─────────────────────────────────────────────────────────────
-
-function generateDayTabs(): Array<{ label: string; dateString: string }> {
-  const tabs: Array<{ label: string; dateString: string }> = [];
-  const today = new Date();
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    let label: string;
-    if (i === 0)      label = 'Today';
-    else if (i === 1) label = 'Tomorrow';
-    else              label = DAY_FULL[date.getDay()] ?? '';
-    tabs.push({ label, dateString: formatDateString(date) });
-  }
-  return tabs;
-}
 
 interface BookingCardProps {
   booking: ConfirmedBooking;
@@ -676,12 +642,8 @@ type ListRow =
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ProviderHomeScreen({ navigation }: Props) {
+export default function ProviderHomeScreen({ navigation, route }: Props) {
   const { isDarkMode: dark, palette: P } = useTheme();
-  const banner = dark ? '#3A2E2F' : '#5C4033';
-  const bannerText = dark ? '#F0ECE7' : '#FFFFFF';
-  const todayLabel = dark ? 'rgba(240,236,231,0.50)' : 'rgba(0,0,0,0.45)';
-  useBooking();
 
   const todayStr = TODAY_STR;
 
@@ -884,7 +846,7 @@ export default function ProviderHomeScreen({ navigation }: Props) {
       Animated.timing(listOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
       Animated.spring(listSlide,   { toValue: 0, tension: 90, friction: 13, useNativeDriver: true }),
     ]).start();
-  }, [selectedDate]);
+  }, [listOpacity, listSlide, selectedDate]);
 
   // Auto-scroll strip to today on mount
   useEffect(() => {
@@ -893,6 +855,26 @@ export default function ProviderHomeScreen({ navigation }: Props) {
     }, 150);
     return () => clearTimeout(t);
   }, []);
+
+  // A booking just added outside "today" (e.g. a custom-time squeeze-in) jumps
+  // the calendar straight to that day, so the provider sees it land instead of
+  // it silently appearing on whatever day they already had selected. Cleared
+  // immediately after so re-focusing this screen later doesn't keep re-jumping.
+  useEffect(() => {
+    const jumpToDate = route.params?.jumpToDate;
+    if (!jumpToDate) return;
+    setSelectedDate(jumpToDate);
+    const idx = STRIP_DATES.indexOf(jumpToDate);
+    if (idx >= 0) {
+      const t = setTimeout(() => {
+        stripRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.4 });
+      }, 150);
+      navigation.setParams({ jumpToDate: undefined });
+      return () => clearTimeout(t);
+    }
+    navigation.setParams({ jumpToDate: undefined });
+    return undefined;
+  }, [route.params?.jumpToDate, navigation]);
 
   // Fetch bookings
   const loadBookings = useCallback(async (showLoad = false) => {
@@ -1160,20 +1142,24 @@ export default function ProviderHomeScreen({ navigation }: Props) {
                 label: 'Set your weekly schedule',
                 onPress: () => navigation.navigate('ProviderSchedule' as never),
               },
+              // Push within THIS stack rather than jumping to the Profile tab.
+              // The cross-tab jump landed these at the Profile stack's root, so
+              // their back/save button dispatched a GO_BACK no navigator could
+              // handle; pushing leaves ProviderHomeMain underneath to return to.
               {
                 done: setupStatus.servicesSet,
                 label: 'Add at least one service',
-                onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'EditProfile' }),
+                onPress: () => navigation.navigate('EditProfile' as never),
               },
               {
                 done: setupStatus.addressSet,
                 label: 'Add your business address',
-                onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'EditProfile' }),
+                onPress: () => navigation.navigate('EditProfile' as never),
               },
               {
                 done: setupStatus.brandingSet,
                 label: 'Add your logo',
-                onPress: () => (navigation.getParent() as any)?.navigate('Profile', { screen: 'Branding' }),
+                onPress: () => navigation.navigate('Branding' as never),
               },
             ]).map((step, i) => (
               <TouchableOpacity
@@ -1464,14 +1450,15 @@ export default function ProviderHomeScreen({ navigation }: Props) {
           <Text style={[s.sheetTitle, { color: P.sub }]}>Quick Access</Text>
 
           {([
-            { icon: 'calendar-outline',       title: 'Schedule',   sub: 'Set your hours & block dates',      route: 'ProviderSchedule' },
-            { icon: 'pricetag-outline',        title: 'Promotions', sub: 'Create & manage offers',            route: 'Promotions'       },
-            { icon: 'people-outline',          title: 'Clientele',  sub: 'View & manage your client list',    route: 'Clientele'        },
-            { icon: 'document-text-outline',   title: 'Info Pack',  sub: 'Share service details with clients',route: 'InfoPacks'        },
-            { icon: 'clipboard-outline',       title: 'Forms',      sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
-            { icon: 'chatbubble-outline',      title: 'Inbox',      sub: 'Messages with your clients',        route: 'ProviderInbox'    },
-          ] as const).map((item, idx, arr) => (
-            <React.Fragment key={item.route}>
+            { icon: 'add-circle-outline',      title: 'Add Booking', sub: 'Manually book a client in',        route: 'AddBooking'       },
+            { icon: 'calendar-outline',        title: 'Schedule',    sub: 'Set your hours & block dates',      route: 'ProviderSchedule' },
+            { icon: 'pricetag-outline',        title: 'Promotions',  sub: 'Create & manage offers',            route: 'Promotions'       },
+            { icon: 'people-outline',          title: 'Clientele',   sub: 'View & manage your client list',    route: 'Clientele'        },
+            { icon: 'document-text-outline',   title: 'Info Pack',   sub: 'Share service details with clients',route: 'InfoPacks'        },
+            { icon: 'clipboard-outline',       title: 'Forms',       sub: 'Create & manage your forms',        route: 'ProviderIntakeForm' },
+            { icon: 'chatbubble-outline',      title: 'Inbox',       sub: 'Messages with your clients',        route: 'ProviderInbox'    },
+          ] as const).filter(item => OFFERS_ENABLED || item.route !== 'Promotions').map((item, idx, arr) => (
+            <React.Fragment key={item.title}>
               <TouchableOpacity
                 style={s.sheetRow}
                 activeOpacity={0.72}

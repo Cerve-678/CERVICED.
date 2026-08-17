@@ -76,7 +76,7 @@ const GENDER_LABELS: Record<Gender, string> = {
 
 export default function BeautyProfileScreen({ navigation }: any) {
   const { user } = useAuth();
-  const { theme, isDarkMode } = useTheme();
+  const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const { showAlert, DialogHost } = useAppDialog();
 
@@ -187,13 +187,28 @@ export default function BeautyProfileScreen({ navigation }: any) {
     if (user?.id) {
       upsertUserBeautyProfile(user.id, {
         hair_type:           draft.hairType            || null,
+        scalp_condition:     draft.scalpCondition      || null,
+        hair_goals:          draft.hairGoals,
         skin_type:           draft.skinType            || null,
-        allergies:           draft.allergies,
+        skin_tone:           draft.skinTone            || null,
         skin_concerns:       draft.skinConcerns,
+        sensitive_areas:     draft.sensitiveAreas,
+        nail_length:         draft.nailLength          || null,
+        nail_shape:          draft.nailShape           || null,
+        lash_style:          draft.lashStyle           || null,
+        lash_status:         draft.lashStatus          || null,
+        brow_style:          draft.browStyle           || null,
+        brow_condition:      draft.browCondition       || null,
+        makeup_coverage:     draft.makeupCoverage      || null,
+        makeup_finish:       draft.makeupFinish        || null,
+        makeup_eyes:         draft.makeupEyes          || null,
+        makeup_lips:         draft.makeupLips          || null,
+        allergies:           draft.allergies,
         style_vibe:          draft.styleVibe           || null,
         medical_notes:       draft.medicalNotes        || null,
         photography_consent: draft.photographyConsent,
         treatment_history:   draft.treatmentHistory,
+        service_interests:   draft.serviceInterests,
         gender:              draft.gender              || null,
         has_kids:            draft.has_kids,
       }).then(() => {});
@@ -251,23 +266,12 @@ export default function BeautyProfileScreen({ navigation }: any) {
 
   // ── Palette ───────────────────────────────────────────────────────────────
 
-  const P = {
-    text:   theme.text,
-    sub:    theme.secondaryText,
-    accent: theme.accent,
-    card:   isDarkMode ? '#252220' : '#FFFFFF',
-    surface: isDarkMode ? '#201D1A' : '#EDE8E2',
-    border: isDarkMode ? 'rgba(126,102,103,0.18)' : 'rgba(126,102,103,0.14)',
-    sep:    isDarkMode ? 'rgba(126,102,103,0.10)' : 'rgba(126,102,103,0.08)',
-    chipOn: isDarkMode ? 'rgba(175,145,151,0.35)' : 'rgba(92,64,51,0.2)',
-    chipBorderOn: isDarkMode ? 'rgba(175,145,151,0.55)' : 'rgba(92,64,51,0.55)',
-  };
 
   const chipStyle = (on: boolean) => [
     styles.chip,
     {
-      backgroundColor: on ? P.chipOn : P.surface,
-      borderColor: on ? P.chipBorderOn : P.border,
+      backgroundColor: on ? P.accentDim : P.surface,
+      borderColor: on ? P.accent : P.border,
     },
   ];
   const chipTextStyle = (on: boolean) => [
@@ -281,7 +285,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
     return (
       <ThemedBackground style={styles.bg}>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={theme.accent} size="large" />
+          <ActivityIndicator color={P.accent} size="large" />
         </View>
       </ThemedBackground>
     );
@@ -501,7 +505,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
               <Switch
                 value={draft.has_kids}
                 onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, has_kids: v })); }}
-                trackColor={{ false: '#D1D1D6', true: theme.accent }}
+                trackColor={{ false: '#D1D1D6', true: P.accent }}
                 thumbColor={draft.has_kids ? '#fff' : '#f4f3f4'}
                 disabled={!editing}
               />
@@ -521,7 +525,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
             <Switch
               value={draft.photographyConsent}
               onValueChange={v => { if (!editing) return; Haptics.selectionAsync().catch(() => {}); setDraft(prev => ({ ...prev, photographyConsent: v })); }}
-              trackColor={{ false: '#D1D1D6', true: theme.accent }}
+              trackColor={{ false: '#D1D1D6', true: P.accent }}
               thumbColor={draft.photographyConsent ? '#fff' : '#f4f3f4'}
               disabled={!editing}
             />
@@ -546,19 +550,19 @@ export default function BeautyProfileScreen({ navigation }: any) {
         >
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={closeCategory} activeOpacity={0.5}>
-              <Text style={[styles.focusBack, { color: P.accent }]}>← ALL CATEGORIES</Text>
+              <Text style={[styles.focusBack, { color: P.accentText }]}>← ALL CATEGORIES</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))}
               activeOpacity={0.5}
             >
-              <Text style={[styles.editToggle, { color: P.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
+              <Text style={[styles.editToggle, { color: P.accentText }]}>{editing ? 'Cancel' : 'Edit'}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.focusTitleRow}>
             <Text style={[styles.focusTitle, { color: P.text }]}>{CATEGORY_LABELS[selectedCategory]}</Text>
-            <Text style={[styles.focusPct, { color: P.accent }]}>
+            <Text style={[styles.focusPct, { color: P.accentText }]}>
               {cat.complete ? '✓' : `${cat.percent}%`}
             </Text>
           </View>
@@ -583,16 +587,16 @@ export default function BeautyProfileScreen({ navigation }: any) {
           {editing && (
             <TouchableOpacity
               style={[styles.saveBtn, {
-                backgroundColor: isDarkMode ? theme.accent : 'rgba(92,64,51,0.25)',
-                borderColor: isDarkMode ? 'rgba(175,145,151,0.4)' : 'rgba(92,64,51,0.4)',
+                backgroundColor: P.accent,
+                borderColor: P.accent,
               }]}
               onPress={handleSave}
               disabled={saving}
               activeOpacity={0.75}
             >
               {saving
-                ? <ActivityIndicator color={isDarkMode ? '#1A1815' : theme.text} />
-                : <Text style={[styles.saveBtnText, { color: isDarkMode ? '#1A1815' : theme.text }]}>SAVE PROFILE</Text>}
+                ? <ActivityIndicator color={P.onAccent} />
+                : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>SAVE PROFILE</Text>}
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -628,14 +632,14 @@ export default function BeautyProfileScreen({ navigation }: any) {
             onPress={() => editing ? handleCancel() : (Haptics.selectionAsync().catch(() => {}), setEditing(true))}
             activeOpacity={0.5}
           >
-            <Text style={[styles.editToggle, { color: P.accent }]}>{editing ? 'Cancel' : 'Edit'}</Text>
+            <Text style={[styles.editToggle, { color: P.accentText }]}>{editing ? 'Cancel' : 'Edit'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ══ HERO ══════════════════════════════════════════════════════════ */}
         <View style={styles.heroTopRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.eyebrow, { color: P.accent }]}>PROFILE ANALYSIS</Text>
+            <Text style={[styles.eyebrow, { color: P.accentText }]}>PROFILE ANALYSIS</Text>
             {stats.isEmpty ? (
               <Text style={[styles.heroNumeralEmpty, { color: P.text }]}>NEW</Text>
             ) : (
@@ -644,7 +648,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
                 <Text style={[styles.heroDenominator, { color: P.sub }]}>/100</Text>
               </View>
             )}
-            <Text style={[styles.heroQualifier, { color: P.accent }]}>
+            <Text style={[styles.heroQualifier, { color: P.accentText }]}>
               {stats.isEmpty
                 ? "LET'S BEGIN"
                 : stats.overallPercent >= 80 ? 'LOOKING GREAT'
@@ -782,7 +786,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
                     <Text style={[styles.catTilePctSign, { color: cat.complete ? '#34C759' : cat.started ? P.text : P.sub }]}>%</Text>
                   </View>
                 )}
-                <Text style={[styles.catTileLabel, { color: P.accent }]} numberOfLines={2}>
+                <Text style={[styles.catTileLabel, { color: P.accentText }]} numberOfLines={2}>
                   {CATEGORY_LABELS[key]}
                 </Text>
                 {!isConsent && (

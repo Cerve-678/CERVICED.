@@ -13,7 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { getMyProviderProfile, updateProviderContactDetails } from '../../services/databaseService';
+import {
+  getMyProviderProfile,
+  getMyProviderMessageTemplates,
+  replaceMyProviderMessageTemplates,
+  updateProviderContactDetails,
+  ProviderMessageTemplate,
+} from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
@@ -93,6 +99,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
+  const [messageTemplates, setMessageTemplates] = useState<Pick<ProviderMessageTemplate, 'label' | 'content'>[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -106,6 +113,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         const methods: ContactMethod[] = (provider as any).preferred_contact_methods ?? ['in_app'];
         setEnabled(new Set(methods));
         setWhatsappNumber((provider as any).whatsapp_number ?? '');
+        const templates = await getMyProviderMessageTemplates();
+        setMessageTemplates(templates.map(({ label, content }) => ({ label, content })));
       } catch {
         flash('Could not load contact preferences', 'error');
       } finally {
@@ -154,6 +163,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
         preferred_contact_methods: Array.from(enabled),
         whatsapp_number: whatsappNumber.trim() || null,
       });
+      await replaceMyProviderMessageTemplates(messageTemplates);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
@@ -161,6 +171,17 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function updateTemplate(index: number, field: 'label' | 'content', value: string) {
+    setMessageTemplates(previous => previous.map((template, currentIndex) =>
+      currentIndex === index ? { ...template, [field]: value } : template
+    ));
+  }
+
+  function addTemplate() {
+    if (messageTemplates.length >= 12) return;
+    setMessageTemplates(previous => [...previous, { label: '', content: '' }]);
   }
 
   if (loading) {
@@ -190,7 +211,8 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
             style={s.scroll}
             contentContainerStyle={s.scrollContent}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="interactive"
           >
             {toast && <Toast message={toast.message} type={toast.type} />}
 
@@ -275,6 +297,50 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
               <Ionicons name="chevron-forward" size={14} color={C.sub} />
             </TouchableOpacity>
 
+            {/* Saved by the provider and used only to fill the in-app chat composer. */}
+            <View style={[s.card, { backgroundColor: C.surface, borderColor: C.border }]}>
+              <View style={s.templateHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.cardTitle, { color: C.text, marginBottom: 3 }]}>In-app Messaging Templates</Text>
+                  <Text style={[s.rowDesc, { color: C.sub }]}>Private to you. A template fills the in-app message box; you can always edit it before sending.</Text>
+                </View>
+                <TouchableOpacity style={[s.addTemplateBtn, { borderColor: C.accent }]} onPress={addTemplate} disabled={messageTemplates.length >= 12}>
+                  <Ionicons name="add" size={16} color={C.accent} />
+                  <Text style={[s.addTemplateText, { color: C.accent }]}>Add</Text>
+                </TouchableOpacity>
+              </View>
+              {messageTemplates.length === 0 ? (
+                <Text style={[s.templateEmpty, { color: C.sub }]}>Create reusable replies for confirming an address, availability, or booking details.</Text>
+              ) : messageTemplates.map((template, index) => (
+                <View key={index} style={[s.templateItem, { borderTopColor: C.border }]}>
+                  <View style={s.templateLabelRow}>
+                    <TextInput
+                      style={[s.templateLabelInput, { color: C.text, borderColor: C.border, backgroundColor: C.card }]}
+                      value={template.label}
+                      onChangeText={value => updateTemplate(index, 'label', value)}
+                      placeholder="Template name"
+                      placeholderTextColor={C.sub}
+                      maxLength={60}
+                    />
+                    <TouchableOpacity onPress={() => setMessageTemplates(previous => previous.filter((_, currentIndex) => currentIndex !== index))} hitSlop={10}>
+                      <Ionicons name="trash-outline" size={18} color={C.danger} />
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={[s.templateContentInput, { color: C.text, borderColor: C.border, backgroundColor: C.card }]}
+                    value={template.content}
+                    onChangeText={value => updateTemplate(index, 'content', value)}
+                    placeholder="Message text"
+                    placeholderTextColor={C.sub}
+                    maxLength={1000}
+                    multiline
+                    scrollEnabled
+                    textAlignVertical="top"
+                  />
+                </View>
+              ))}
+            </View>
+
             <TouchableOpacity
               style={[s.saveBtn, { backgroundColor: C.accent }, saving && s.saveBtnDim]}
               onPress={handleSave}
@@ -327,6 +393,14 @@ const s = StyleSheet.create({
   subInput:      { marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: CP.border },
   subInputLabel: { fontSize: 11, fontWeight: '600', color: CP.sub, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 },
   input:         { backgroundColor: CP.card, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: CP.text, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
+  templateHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  addTemplateBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7 },
+  addTemplateText: { fontSize: 12, fontWeight: '700' },
+  templateEmpty: { fontSize: 12, lineHeight: 17, marginTop: 14 },
+  templateItem: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 14 },
+  templateLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  templateLabelInput: { flex: 1, borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 9, fontSize: 13, fontWeight: '600' },
+  templateContentInput: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 10, marginTop: 8, minHeight: 68, fontSize: 13, textAlignVertical: 'top' },
 
   linkRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CP.surface, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13, marginBottom: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
   linkText: { flex: 1, fontSize: 14, color: CP.ice, fontWeight: '500' },

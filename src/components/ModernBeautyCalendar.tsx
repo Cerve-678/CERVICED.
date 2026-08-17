@@ -53,6 +53,13 @@ type ModernBeautyCalendarProps = {
   textColor: string;
   subColor: string;
   surfaceColor: string;
+  /** Overrides how a day's bookable times are resolved. Default (undefined) is
+   *  this-service slots via getAvailableSlots. The cart's group reschedule
+   *  passes a chain-fit resolver instead, so the day pills AND the time row
+   *  both reflect "every service in the group fits back-to-back", rather than
+   *  offering times only the first service could take. Must be stable
+   *  (useCallback) — it's a dependency of the weekly availability fetch. */
+  slotResolver?: (date: string) => Promise<string[]>;
 };
 
 // Local YYYY-MM-DD — date.toISOString() converts to UTC first, which shifts
@@ -90,6 +97,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   textColor,
   subColor,
   surfaceColor,
+  slotResolver,
 }) => {
   // Popup border — a low-alpha tint of the text colour, so it reads as a
   // hairline on either a light or dark backdrop without a separate flag.
@@ -102,6 +110,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
+  // A provider can go live with zero rows in provider_availability — nothing
+  // upstream (search, go-live gating) currently prevents it. Without this,
+  // that renders as every day showing 'closed', identical to a provider
+  // simply not working that day, and the client only learns the real reason
+  // from createBooking()'s rejection after picking a date AND time. Checked
+  // once per provider via the same getAvailabilitySummary state the
+  // provider's own profile already computes ('unpublished' vs 'closed').
+  const [providerUnpublished, setProviderUnpublished] = useState<boolean>(false);
   // Once the client has actively picked a time, the whole picker collapses to
   // a one-line summary — a week strip plus ~20 time chips is the single
   // largest block in the booking sheet, and it's pure noise once the choice
@@ -113,6 +129,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // Guards the auto-jump-to-next-availability below so it fires once per
   // provider/service, not on every manual week navigation.
   const autoJumpedRef = useRef(false);
+  // Effects are declared before the helpers below to keep related availability
+  // state together. Refs let those effects invoke the latest helper without
+  // recreating the availability fetch on every render.
+  const generateWeeklyAvailabilityRef = useRef<() => Promise<void>>(async () => {});
+  const getWeekDaysRef = useRef<() => WeekDay[]>(() => []);
 
   // Resolve the provider ONCE up front so a bad/stale name shows a clear
   // message instead of rendering as an indistinguishable "fully booked"
@@ -121,15 +142,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     let cancelled = false;
     if (!providerName) { setProviderFound(true); return; }
     setProviderFound(null);
+    setProviderUnpublished(false);
     AvailabilityService.resolveProvider(providerName).then(id => {
-      if (!cancelled) setProviderFound(!!id);
+      if (cancelled) return;
+      setProviderFound(!!id);
+      if (!id) return;
+      AvailabilityService.getAvailabilitySummary(providerName).then(summary => {
+        if (!cancelled && summary?.state === 'unpublished') setProviderUnpublished(true);
+      });
     });
     return () => { cancelled = true; };
   }, [providerName]);
 
   useEffect(() => {
-    generateWeeklyAvailability();
-  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate]);
+    generateWeeklyAvailabilityRef.current();
+  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate, slotResolver]);
 
   // A new provider/service is a genuinely different schedule to check —
   // allow one fresh auto-jump attempt for it.
@@ -142,21 +169,26 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // earliest date that has one. Runs once per provider/service; manual
   // navigation afterwards is left alone even if it lands on an empty week.
   useEffect(() => {
-    if (autoJumpedRef.current || isLoadingSlots || !providerName || providerFound !== true) return;
+    if (autoJumpedRef.current || isLoadingSlots || !providerName || providerFound !== true || providerUnpublished) return;
     if (Object.keys(availableSlots).length === 0) return;
 
-    const thisWeekHasOpening = getWeekDays().some(day => day.status === 'available');
+    const thisWeekHasOpening = getWeekDaysRef.current().some(day => day.status === 'available');
     if (thisWeekHasOpening) {
       autoJumpedRef.current = true;
       return;
     }
     autoJumpedRef.current = true;
+    // findNextAvailableDate only knows single-service availability, so under a
+    // custom resolver it would jump to a day this caller considers unbookable.
+    // Leave the client on the current week instead — the day pills already
+    // show, correctly, that nothing here fits.
+    if (slotResolver) return;
     AvailabilityService.findNextAvailableDate(providerName, serviceDuration, serviceId).then(nextDate => {
       if (!nextDate) return;
       setCurrentWeek(new Date(nextDate + 'T00:00:00'));
       onDateSelect(nextDate);
     });
-  }, [availableSlots, isLoadingSlots, providerName, providerFound, serviceDuration, serviceId, onDateSelect]);
+  }, [availableSlots, isLoadingSlots, providerName, providerFound, providerUnpublished, serviceDuration, serviceId, onDateSelect, slotResolver]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -210,25 +242,28 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         }
       }
 
-      // Use AvailabilityService to get slots filtered by existing bookings
+      // Use AvailabilityService to get slots filtered by existing bookings —
+      // or the caller's own rule, when what counts as "bookable" is more than
+      // one service fitting (see slotResolver).
       if (providerName) {
         try {
-          const availableTimeSlots = await AvailabilityService.getAvailableSlots(
-            providerName,
-            dateString,
-            serviceDuration,
-            serviceId
-          );
-          const openSlots = availableTimeSlots
-            .filter(slot => !slot.isBooked)
-            .map(slot => slot.time);
+          const openSlots = slotResolver
+            ? await slotResolver(dateString)
+            : (await AvailabilityService.getAvailableSlots(
+                providerName,
+                dateString,
+                serviceDuration,
+                serviceId
+              ))
+                .filter(slot => !slot.isBooked)
+                .map(slot => slot.time);
 
           slots[dateString] = {
             available: openSlots.length,
             status: openSlots.length > 0 ? 'available' : 'closed',
             times: openSlots
           };
-        } catch (error) {
+        } catch {
           // Fallback to base schedule without booking filter
           const dayOfWeek = date.getDay();
           const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
@@ -253,6 +288,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     setAvailableSlots(slots);
     setIsLoadingSlots(false);
   };
+  generateWeeklyAvailabilityRef.current = generateWeeklyAvailability;
 
   const getStartOfWeek = (date: Date): Date => {
     const d = new Date(date);
@@ -389,6 +425,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     
     return days;
   };
+  getWeekDaysRef.current = getWeekDays;
 
   const weekDays = getWeekDays();
 
@@ -577,12 +614,27 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         </View>
       )}
 
+      {/* ── No schedule published ────────────────────────────────────────
+          Distinct from providerFound === false (bad identifier) and from a
+          day simply being 'closed' — this provider exists but has never set
+          any hours, so createBooking would reject every date. The day pills
+          still render (dimmed, disabled) so the week strip's shape stays
+          recognisable instead of the section just vanishing; the time row
+          is skipped entirely since there is nothing to ever populate it. */}
+      {providerFound === true && providerUnpublished && (
+        <View style={styles.notFoundBanner}>
+          <Text style={[styles.notFoundText, { color: textColor }]}>
+            No current availability — please check back later.
+          </Text>
+        </View>
+      )}
+
       {/* ── Day pills ────────────────────────────────────────────────── */}
       {providerFound !== false && (
-      <View style={styles.daysRow}>
+      <View style={[styles.daysRow, providerUnpublished && styles.daysRowDimmed]}>
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
-          const isDisabled = day.status === 'past' || day.status === 'closed';
+          const isDisabled = providerUnpublished || day.status === 'past' || day.status === 'closed';
           return (
             <TouchableOpacity
               key={day.dateString}
@@ -616,7 +668,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       )}
 
       {/* ── Time slots ───────────────────────────────────────────────── */}
-      {providerFound !== false && showTimeSelection && selectedDate && (() => {
+      {providerFound !== false && !providerUnpublished && showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
         if (!currentSlots?.times || currentSlots.times.length === 0) return null;
         const chunkedTimes = chunkArray(currentSlots.times, Math.ceil(currentSlots.times.length / 3));
@@ -695,6 +747,7 @@ const styles = StyleSheet.create({
 
   // ── Day pills ───────────────────────────────────────────────────────
   daysRow:         { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 2, marginBottom: 4 },
+  daysRowDimmed:   { opacity: 0.45 },
   dayPill:         { flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 8, marginHorizontal: 2 },
   pastDayPill:     { opacity: 0.38 },
   dayText:         { fontSize: 10, fontWeight: '500', marginBottom: 3 },

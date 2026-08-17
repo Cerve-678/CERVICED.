@@ -15,23 +15,24 @@ import {
   Platform,
   Keyboard,
   ActivityIndicator,
-  NativeSyntheticEvent,
-  TextInputFocusEventData,
   Switch,
   Animated,
   PanResponder,
 } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
+import { useIsFocused } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 // Icon imports
 import { BellIcon } from '../../components/IconLibrary';
 import CategoryTabPill from '../../components/CategoryTabPill';
+import AddressPicker from '../../components/AddressPicker';
+import { CityMultiSelect } from '../../components/CityMultiSelect';
+import TermsScreen from '../shared/TermsScreen';
 import { Ionicons } from '@expo/vector-icons';
 
 // Theme imports
@@ -63,6 +64,14 @@ import {
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
+import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
+import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
+import { SectionHeader } from '../../features/provider-registration/SectionHeader';
+import { DurationPicker } from '../../features/provider-registration/DurationPicker';
+import { ChipSelect } from '../../features/provider-registration/ChipSelect';
+import { LocationPicker } from '../../features/provider-registration/LocationPicker';
+import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
+import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -80,7 +89,7 @@ const SERVICE_CATEGORIES = [
 const BUSINESS_TYPE_LABELS: Record<string, string> = {
   salon: 'Salon',
   studio: 'Studio',
-  home_based: 'Home Based',
+  home_based: 'Home Studio',
   mobile: 'Mobile',
 };
 
@@ -89,56 +98,26 @@ const INFO_TABS = [
   { key: 'policy' as const, label: 'Policy' },
 ];
 
-const PROFILE_TABS = [
-  { key: 'profile' as const,  label: 'Profile & services' },
-  { key: 'policies' as const, label: 'Booking rules' },
+/** The editor is a hub plus focused editors, not a linear wizard: the screen
+ *  opens on a summary of these five sections, and tapping one drills into just
+ *  that section's fields full-screen. There's no prescribed order — a provider
+ *  editing an existing profile usually wants one specific thing, not a tour.
+ *  The old "review" step isn't in this list because the hub *is* the review. */
+const EDITOR_SECTIONS = [
+  { key: 'identity' as const, label: 'About You', title: 'About You' },
+  { key: 'about' as const,    label: 'Portfolio', title: 'About & portfolio' },
+  { key: 'contact' as const,  label: 'Contact',   title: 'Contact details' },
+  { key: 'services' as const, label: 'Services',  title: 'Services & prices' },
+  { key: 'policies' as const, label: 'Policies',  title: 'Booking policies' },
 ];
 
-// Accent color options
-const ACCENT_COLORS = [
-  { name: 'Berry', color: '#C2185B' },
-  { name: 'Purple', color: '#7B1FA2' },
-  { name: 'Deep Purple', color: '#4A148C' },
-  { name: 'Indigo', color: '#303F9F' },
-  { name: 'Blue', color: '#1565C0' },
-  { name: 'Teal', color: '#00838F' },
-  { name: 'Green', color: '#2E7D32' },
-  { name: 'Orange', color: '#E65100' },
-  { name: 'Brown', color: '#4E342E' },
-  { name: 'Rose', color: '#AD1457' },
-  { name: 'Coral', color: '#FF5722' },
-  { name: 'Gold', color: '#FF8F00' },
-];
+type EditorSectionKey = (typeof EDITOR_SECTIONS)[number]['key'];
 
-// Predefined gradient options - expanded with more themes
-const GRADIENT_PRESETS: { name: string; colors: [string, string, ...string[]] }[] = [
-  { name: 'App Default', colors: ['#EDE8E2', '#C4A8AE', '#AF9197'] },
-  { name: 'Sunset', colors: ['#FF6B6B', '#4ECDC4', '#45B7D1'] },
-  { name: 'Rose Gold', colors: ['#FF69B4', '#FFB6C1', '#FFC1CC'] },
-  { name: 'Ocean', colors: ['#5fd5dcff', '#bd66ff9c', '#33CCCC'] },
-  { name: 'Purple Haze', colors: ['#8d59acff', '#c069c4ff', '#aba0a1ff'] },
-  { name: 'Forest', colors: ['#1B4332', '#2D5A3D', '#40916C'] },
-  { name: 'Warm Nude', colors: ['#FFE4B5', '#FFDAB9', '#FFB347'] },
-  { name: 'Deep Pink', colors: ['#830c53ff', '#f6bbe9ff', '#572862ff'] },
-  { name: 'Royal Blue', colors: ['#8ba4e9ff', '#073784ff', '#37106aff'] },
-  { name: 'Lavender', colors: ['#E6E6FA', '#DDA0DD', '#DA70D6'] },
-  { name: 'Mocha', colors: ['#8c5c0eff', '#311f00ff', '#6f430eff'] },
-  { name: 'Lash Bae', colors: ['#dc8fedb5', '#e0d3e0ff', '#2d2d2d'] },
-  // New themes
-  { name: 'Midnight', colors: ['#0f0c29', '#302b63', '#24243e'] },
-  { name: 'Cherry', colors: ['#EB3349', '#F45C43', '#FF6B6B'] },
-  { name: 'Peach', colors: ['#FFD89B', '#FFCC99', '#FF9966'] },
-  { name: 'Mint', colors: ['#00B09B', '#96C93D', '#A8E6CF'] },
-  { name: 'Blush', colors: ['#FFECD2', '#FCB69F', '#FF8A80'] },
-  { name: 'Cosmic', colors: ['#C33764', '#1D2671', '#0F0C29'] },
-  { name: 'Honey', colors: ['#F7971E', '#FFD200', '#FFE066'] },
-  { name: 'Grape', colors: ['#5B247A', '#1BCEDF', '#7B4397'] },
-  { name: 'Slate', colors: ['#4B6CB7', '#182848', '#2C3E50'] },
-  { name: 'Rosewood', colors: ['#D4145A', '#FBB03B', '#ED4264'] },
-  { name: 'Ice', colors: ['#74EBD5', '#ACB6E5', '#E0EAFC'] },
-  { name: 'Ember', colors: ['#FF416C', '#FF4B2B', '#F5AF19'] },
-  { name: 'Custom', colors: ['#FFFFFF', '#EEEEEE', '#DDDDDD'] },
-];
+/** The app's semantic warn colour — same amber used for pending/attention
+ *  states elsewhere (e.g. ProviderBookingDetailScreen's STATUS_COLORS).
+ *  Deliberately NOT the provider's accent: an accent-coloured warning would
+ *  read as branding on some profiles and as an error on others. */
+const REVIEW_WARN_COLOR = '#FF9500';
 
 // Provider data interface for registration
 // ProviderRegistrationData now comes from providerRegistrationService — kept
@@ -176,81 +155,6 @@ interface ProviderPolicies {
    *  profile view, on top of the structured fields above. */
   policyImageUrl: string;
 }
-
-/** A deliberately app-native day picker. The platform date spinner was easy
- * to miss beneath the full-screen edit modal, and a calendar implies a month
- * and year that do not matter here. This exposes the one real choice — a day
- * of the month — reliably on iOS and Android. */
-const ReleaseDayPicker = ({
-  visible,
-  value,
-  accentColor,
-  cardColor,
-  textColor,
-  subColor,
-  borderColor,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  value: number;
-  accentColor: string;
-  cardColor: string;
-  textColor: string;
-  subColor: string;
-  borderColor: string;
-  onSelect: (day: number) => void;
-  onClose: () => void;
-}) => {
-  const styles = useScreenStyles();
-  return (
-  <Modal
-    transparent
-    animationType="slide"
-    visible={visible}
-    onRequestClose={onClose}
-    presentationStyle="overFullScreen"
-  >
-    <View style={styles.releasePickerOverlay}>
-      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-      <View style={[styles.releasePickerSheet, { backgroundColor: cardColor, borderColor }]}>
-        <View style={styles.releasePickerHeader}>
-          <View>
-            <Text style={[styles.releasePickerEyebrow, { color: subColor }]}>BOOKING NOTIFICATIONS</Text>
-            <Text style={[styles.releasePickerTitle, { color: textColor }]}>Choose release day</Text>
-          </View>
-          <TouchableOpacity onPress={onClose} style={[styles.releasePickerClose, { borderColor }]} accessibilityLabel="Close release day picker">
-            <Ionicons name="close" size={20} color={textColor} />
-          </TouchableOpacity>
-        </View>
-        <Text style={[styles.releasePickerSubtext, { color: subColor }]}>
-          Followers will be reminded when your next month of slots opens.
-        </Text>
-        <View style={styles.releaseDayGrid}>
-          {Array.from({ length: 31 }, (_, index) => index + 1).map(day => {
-            const selected = value === day;
-            return (
-              <TouchableOpacity
-                key={day}
-                style={[styles.releaseDayOption, { borderColor }, selected && { backgroundColor: accentColor, borderColor: accentColor }]}
-                onPress={() => onSelect(day)}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-              >
-                <Text style={[styles.releaseDayOptionText, { color: textColor }, selected && styles.releaseDayOptionTextSelected]}>{day}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <TouchableOpacity style={[styles.releasePickerDoneButton, { backgroundColor: accentColor }]} onPress={onClose}>
-          <Text style={styles.releasePickerDoneText}>Done</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </Modal>
-  );
-};
 
 const DEFAULT_POLICIES: ProviderPolicies = {
   cancelNotice:     '24h',
@@ -440,8 +344,6 @@ const inferCategoryKind = (name: string, fallback: string = 'OTHER'): CategoryKi
   const fb = (fallback || '').trim().toUpperCase();
   return (CATEGORY_KINDS as string[]).includes(fb) ? (fb as CategoryKind) : 'OTHER';
 };
-
-const isAestheticsService = (cat: string, fallback?: string) => inferCategoryKind(cat, fallback) === 'AESTHETICS';
 
 // ─── Tag presets per context ─────────────────────────────────────────────────
 
@@ -764,248 +666,7 @@ const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
   'Lymphatic Drainage':     { templates: ['Facial Lymphatic Drainage Massage', 'Full Body Lymphatic Drainage Massage', 'Skin Consultation'], techniques: ['lymphatic-drainage'], outcomes: ['reduction', 'glow', 'firmness'] },
 };
 
-// Quick-pick durations — providers tap instead of typing "1 hour".
-const DURATION_PRESETS = ['15 min', '30 min', '45 min', '1 hr', '1 hr 30', '2 hr', '2 hr 30', '3 hr', '3 hr 30', '4 hr'];
-
-// A fresh, empty service — optionally seeded from a template so name + duration
-// (+ a sensible service type) arrive pre-filled.
-const makeServiceDraft = (template?: ServiceTemplate | null): ServiceData => ({
-  id: Date.now(),
-  name: template?.name ?? '',
-  price: 0,
-  duration: template?.duration ?? '',
-  bufferBeforeMins: null,
-  bufferAfterMins: null,
-  description: template?.description ?? '',
-  images: [],
-  addOns: [],
-  tags: template?.styleTags ?? [],
-  techniqueTags: template?.techniqueTags ?? [],
-  outcomeTags: template?.outcomeTags ?? [],
-  occasionTags: template?.occasionTags ?? [],
-  trendNames: template?.trendNames ?? [],
-  isPregnancySafe: false,
-  patchTestRequired: false,
-  minAge: null,
-  contraindications: [],
-  aftercareNotes: '',
-  serviceType: template?.serviceType ?? '',
-});
-
-// Service Image Carousel Component
-interface ServiceImageCarouselProps {
-  images: string[];
-  onAddImage: () => void;
-  onRemoveImage: (index: number) => void;
-  size?: number;
-}
-
-const ServiceImageCarousel: React.FC<ServiceImageCarouselProps> = ({
-  images,
-  onAddImage,
-  onRemoveImage,
-  size = 80,
-}) => {
-  const styles = useScreenStyles();
-  const [activeIndex, setActiveIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
-
-  const handleScroll = useCallback((event: any) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / size);
-    setActiveIndex(index);
-  }, [size]);
-
-  return (
-    <View style={styles.carouselContainer}>
-      <FlatList
-        ref={flatListRef}
-        data={[...images, 'add']}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        keyExtractor={(item, index) => `${item}-${index}`}
-        getItemLayout={(_data, index) => ({ length: size, offset: size * index, index })}
-        renderItem={({ item, index }) => {
-          if (item === 'add') {
-            return (
-              <TouchableOpacity
-                style={[styles.addImageButton, { width: size, height: size }]}
-                onPress={onAddImage}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.addImageIcon}>+</Text>
-                <Text style={styles.addImageText}>Add</Text>
-              </TouchableOpacity>
-            );
-          }
-          return (
-            <View style={[styles.carouselImageContainer, { width: size, height: size }]}>
-              <Image
-                source={{ uri: item }}
-                style={[styles.carouselImage, { width: size, height: size }]}
-                resizeMode="cover"
-              />
-              <TouchableOpacity
-                style={styles.removeImageButton}
-                onPress={() => onRemoveImage(index)}
-              >
-                <Text style={styles.removeImageIcon}>×</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        }}
-        contentContainerStyle={styles.carouselContent}
-      />
-      {images.length > 0 && (
-        <View style={styles.carouselDots}>
-          {images.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.carouselDot,
-                activeIndex === index && styles.carouselDotActive,
-              ]}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-};
-
-// Gradient Picker Modal
-interface GradientPickerModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onSelect: (colors: [string, string, ...string[]]) => void;
-  currentGradient: [string, string, ...string[]];
-}
-
-const GradientPickerModal: React.FC<GradientPickerModalProps> = ({
-  visible,
-  onClose,
-  onSelect,
-  currentGradient,
-}) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
-  return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.gradientPickerModal}>
-          <SafeAreaView style={styles.modalSafeArea}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Your Gradient</Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.gradientGrid}>
-                {GRADIENT_PRESETS.map((preset, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.gradientOption,
-                      JSON.stringify(preset.colors) === JSON.stringify(currentGradient) &&
-                        styles.gradientOptionSelected,
-                    ]}
-                    onPress={() => {
-                      onSelect(preset.colors);
-                      onClose();
-                    }}
-                  >
-                    <LinearGradient
-                      colors={preset.colors}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.gradientPreview}
-                    />
-                    <Text style={styles.gradientName}>{preset.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-};
-
 // ─── Reusable chip-select row ─────────────────────────────────────────────────
-interface ChipSelectProps {
-  options: string[];
-  selected: string[];
-  onToggle: (tag: string) => void;
-  accentColor?: string;
-}
-const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onToggle, accentColor = '#9C27B0' }) => {
-  const styles = useScreenStyles();
-  return (
-  <View style={styles.chipGrid}>
-    {options.map(opt => {
-      const active = selected.includes(opt);
-      return (
-        <TouchableOpacity
-          key={opt}
-          style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]}
-          onPress={() => onToggle(opt)}
-        >
-          <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt}</Text>
-        </TouchableOpacity>
-      );
-    })}
-  </View>
-  );
-};
-
-// ─── Label with a red required asterisk ───────────────────────────────────────
-const RequiredLabel: React.FC<{ children: React.ReactNode; required?: boolean }> = ({ children, required }) => {
-  const styles = useScreenStyles();
-  return (
-  <Text style={styles.inputLabel}>
-    {children}
-    {required && <Text style={styles.requiredStar}> *</Text>}
-  </Text>
-  );
-};
-
-// ─── Duration quick-picker ────────────────────────────────────────────────────
-// Providers tap a preset instead of typing "1 hour". A value that isn't a preset
-// (older data / imports) shows as its own selected chip so nothing is ever lost.
-interface DurationPickerProps {
-  value: string;
-  onChange: (v: string) => void;
-  accentColor?: string;
-}
-const DurationPicker: React.FC<DurationPickerProps> = ({ value, onChange, accentColor = '#AF9197' }) => {
-  const styles = useScreenStyles();
-  const presets = DURATION_PRESETS.includes(value) || !value
-    ? DURATION_PRESETS
-    : [value, ...DURATION_PRESETS];
-  return (
-    <View style={styles.chipGrid}>
-      {presets.map(opt => {
-        const active = value === opt;
-        return (
-          <TouchableOpacity
-            key={opt}
-            style={[styles.durationChip, active && { backgroundColor: accentColor, borderColor: accentColor }]}
-            onPress={() => onChange(active ? '' : opt)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.durationChipText, active && styles.durationChipTextActive]}>{opt}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-};
-
 // ─── Service template picker ──────────────────────────────────────────────────
 // Shown the moment a provider taps "Add Service" — pre-built options for the
 // category's kind, so most services are a single tap to pre-fill.
@@ -1354,13 +1015,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               {/* Service Images */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Service Images</Text>
-                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} size={100} />
+                <ServiceImageCarousel images={images} onAddImage={handleAddImage} onRemoveImage={handleRemoveImage} size={100} styles={styles} />
                 <Text style={styles.inputHint}>Add multiple images to showcase your service</Text>
               </View>
 
               {/* Service Name */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['name'] = e.nativeEvent.layout.y; }}>
-                <RequiredLabel required>Service Name</RequiredLabel>
+                <RequiredLabel required styles={styles}>Service Name</RequiredLabel>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
                   <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder="e.g., Classic Lash Extensions" placeholderTextColor={chrome.fg(0.4)} onFocus={() => handleInputFocus('name')} />
                 </BlurView>
@@ -1368,7 +1029,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
               {/* Price */}
               <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['price'] = e.nativeEvent.layout.y; }}>
-                <RequiredLabel required>Price (£)</RequiredLabel>
+                <RequiredLabel required styles={styles}>Price (£)</RequiredLabel>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { backgroundColor: inputTint }]}>
                   <TextInput style={styles.textInput} value={price} onChangeText={setPrice} placeholder="e.g., 55" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('price')} />
                 </BlurView>
@@ -1376,9 +1037,9 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
 
               {/* Duration — tap a preset instead of typing */}
               <View style={styles.inputGroup}>
-                <RequiredLabel required>Duration</RequiredLabel>
+                <RequiredLabel required styles={styles}>Duration</RequiredLabel>
                 <Text style={styles.inputHint}>Tap how long this service takes</Text>
-                <DurationPicker value={duration} onChange={setDuration} accentColor={accentColor} />
+                <DurationPicker value={duration} onChange={setDuration} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* Buffer time before/after — overrides the account-wide default from Automations */}
@@ -1514,14 +1175,14 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Style / Vibe</Text>
                 <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
-                <ChipSelect options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} accentColor={accentColor} />
+                <ChipSelect options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Occasion Tags ────────────────────────────────────── */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Best For (Occasion)</Text>
                 <Text style={styles.inputHint}>When would a client typically book this?</Text>
-                <ChipSelect options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} />
+                <ChipSelect options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} styles={styles} />
               </View>
 
               {/* ── Technique Tags ───────────────────────────────────── */}
@@ -1529,7 +1190,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Techniques Used</Text>
                   <Text style={styles.inputHint}>Select every technique this service involves</Text>
-                  <ChipSelect options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} />
+                  <ChipSelect options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
@@ -1538,7 +1199,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Results / Outcomes</Text>
                   <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
-                  <ChipSelect options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} />
+                  <ChipSelect options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} styles={styles} />
                 </View>
               )}
 
@@ -1877,63 +1538,6 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
   );
 };
 
-// Accent Color Picker Modal
-interface AccentColorPickerModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onSelect: (color: string) => void;
-  currentColor: string;
-}
-
-const AccentColorPickerModal: React.FC<AccentColorPickerModalProps> = ({
-  visible,
-  onClose,
-  onSelect,
-  currentColor,
-}) => {
-  const styles = useScreenStyles();
-  const chrome = useChrome();
-  return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={30} tint={chrome.blurTint} style={styles.accentPickerModal}>
-          <SafeAreaView style={styles.modalSafeArea}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Accent Color</Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <Text style={styles.accentPickerSubtitle}>
-                This color will be used for buttons and highlights
-              </Text>
-              <View style={styles.accentColorGrid}>
-                {ACCENT_COLORS.map((item, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.accentColorOption,
-                      currentColor === item.color && styles.accentColorOptionSelected,
-                    ]}
-                    onPress={() => {
-                      onSelect(item.color);
-                      onClose();
-                    }}
-                  >
-                    <View style={[styles.accentColorSwatch, { backgroundColor: item.color }]} />
-                    <Text style={styles.accentColorName}>{item.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </SafeAreaView>
-        </BlurView>
-      </View>
-    </Modal>
-  );
-};
-
 // Edit Category Modal
 interface EditCategoryModalProps {
   visible: boolean;
@@ -2036,6 +1640,11 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
+  const insets = useSafeAreaInsets();
+  // SafeAreaView top inset is unreliable inside an RN Modal, so pad the header
+  // by the real window inset directly to keep the PREVIEW badge clear of the
+  // translucent status bar rather than riding up into it.
+  const previewTopPad = insets.top > 0 ? insets.top : Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
   const categoryNames = Object.keys(providerData.categories);
   const [selectedPreviewCategory, setSelectedPreviewCategory] = useState<string>(
     categoryNames[0] || ''
@@ -2127,9 +1736,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
             style={styles.previewHeroImage}
           />
         )}
-        <SafeAreaView style={styles.previewSafeArea} edges={['top', 'bottom']}>
+        <SafeAreaView style={styles.previewSafeArea} edges={['bottom']}>
           {/* Preview Header with back button */}
-          <View style={styles.previewHeader}>
+          <View style={[styles.previewHeader, { paddingTop: previewTopPad + 8 }]}>
             <TouchableOpacity style={styles.previewBackButton} onPress={onClose}>
               <Text style={styles.previewBackText}>←</Text>
             </TouchableOpacity>
@@ -2424,6 +2033,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                               source={{ uri: service.images[0] }}
                               style={styles.previewServiceImage}
                               resizeMode="cover"
+                              fadeDuration={0}
                             />
                           ) : (
                             <View style={[styles.previewServiceImagePlaceholder, { backgroundColor: accentColor + '1C' }]}>
@@ -2566,6 +2176,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                               source={{ uri: item.image_url }}
                               style={{ width: '100%', height: item.tileHeight }}
                               resizeMode="cover"
+                              fadeDuration={0}
                             />
                             {item.caption ? (
                               <View style={styles.previewPortfolioCaptionWrap}>
@@ -2596,6 +2207,50 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // palette token the sheet above is built from.
   const chromeText = isDarkMode ? darkTheme.text : lightTheme.text;
   const { user } = useAuth();
+
+  // Read from the ROOT provider (App.tsx), deliberately not the nested
+  // <SafeAreaProvider> this screen renders further down: this hook call sits
+  // *above* that provider in the tree, so it still sees real window insets.
+  //
+  // Why the nested provider can't be trusted for the top inset here: it mounts
+  // a native RNCSafeAreaProvider view and reports *that view's* own
+  // safeAreaInsets, not the window's. Under `presentation: 'fullScreenModal'`
+  // the modal's UIViewController can have the status-bar area already consumed
+  // by the presentation container, so the nested view measures top ≈ 0 and
+  // SafeAreaView edges={['top']} adds no padding at all — which is exactly why
+  // the header's back/eye buttons rode up under the status bar. Same reason
+  // DevSettingsScreen (another fullScreenModal) pads manually.
+  const insets = useSafeAreaInsets();
+  const topInset =
+    insets.top > 0 ? insets.top : Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
+  // Bottom padding for both pinned bars. Only the home-indicator inset is
+  // needed (with a small floor on devices that report none) — NOT the pill's
+  // FLOATING_TAB_BAR_CLEARANCE, because the effect below hides the pill
+  // outright while this editor is open. Padding the bars for a pill that isn't
+  // there would just strand them above a band of empty space.
+  const pinnedBarBottomPad = Math.max(insets.bottom, 12);
+
+  // Hide the floating pill for as long as this editor is open. This is the
+  // real fix for the pinned bars being covered, not a zIndex bump: the pill is
+  // the Tab.Navigator's `tabBar`, rendered as a SIBLING of the tab screens and
+  // painted after them. `EditProfile` is registered inside ProviderHomeNavigator,
+  // a stack *nested within* one of those tab screens — so everything this screen
+  // renders, fullScreenModal included, is a descendant of the very view the pill
+  // is layered on top of. No zIndex/elevation set from in here can lift a child
+  // above its own ancestor's later-painted sibling, which is why the pinned bars
+  // stayed covered however high they were raised.
+  //
+  // Same mechanism ProviderProfileScreen uses (see its comment); IslandPillTabBar
+  // already reads this option off the focused tab's route. Cleanup restores the
+  // pill on blur so this screen's hidden state never leaks onto the next one.
+  const isFocused = useIsFocused();
+  useEffect(() => {
+    if (!isFocused) return;
+    navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
+    return () => {
+      navigation.getParent()?.setOptions({ tabBarStyle: undefined });
+    };
+  }, [isFocused, navigation]);
 
   // Ref for main scrollview to enable auto-scroll to focused inputs
   const mainScrollViewRef = useRef<ScrollView>(null);
@@ -2642,7 +2297,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     externalBookingUrl: '',
     yearsExperience: '',
     businessType: '',
+    teamSize: '',
+    accessibilityNotes: '',
+    languagesSpoken: [],
+    priceRange: '',
+    serviceLocations: [],
+    preferredPaymentMethods: [],
     fullAddress: '',
+    fullAddressCoordinates: null,
     addressReleasePolicy: 'on_confirmation',
     backgroundImage: null,
     isVerified: false,
@@ -2652,7 +2314,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   });
 
   const [isEditMode, setIsEditMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'policies'>('profile');
+  // null = the hub (the section summary list). A key = that section's fields
+  // shown full-screen. View-level state, not navigation routes, so the whole
+  // form stays mounted and unsaved edits survive moving between sections.
+  const [activeSection, setActiveSection] = useState<EditorSectionKey | null>(null);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
   const [policyImageUploading, setPolicyImageUploading] = useState(false);
@@ -2711,6 +2376,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 if (!prefill) return;
                 const validBusinessTypes: ProviderRegistrationData['businessType'][] = ['salon', 'studio', 'home_based', 'mobile'];
                 const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
+                const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
+                const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
+                const validPriceRanges: ProviderRegistrationData['priceRange'][] = ['budget', 'mid', 'premium', 'luxury'];
+                const prefilledPriceRange = validPriceRanges.find(v => v === prefill.price_range);
                 setProviderData(prev => ({
                   ...prev,
                   providerName: prev.providerName || prefill.business_name || prefill.name || '',
@@ -2719,6 +2388,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   instagram: prev.instagram || prefill.instagram || '',
                   website: prev.website || prefill.website || '',
                   businessType: prev.businessType || prefilledBusinessType || '',
+                  teamSize: prev.teamSize || prefilledTeamSize || '',
+                  accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
+                  languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
+                  priceRange: prev.priceRange || prefilledPriceRange || '',
+                  preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
+                    ? prev.preferredContactMethods
+                    : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
+                  serviceLocations: prev.serviceLocations.length ? prev.serviceLocations : (prefill.service_locations ?? []),
+                  preferredPaymentMethods: prev.preferredPaymentMethods.length ? prev.preferredPaymentMethods : (prefill.preferred_payment_methods ?? []),
                 }));
               })
               .catch(() => {});
@@ -2853,6 +2531,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   // Modal states
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Only required on first publish — an already-live provider has already
+  // accepted once (providers.terms_accepted_at), so re-showing this on every
+  // edit-save would be re-consent theatre, not a real gate.
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -2882,7 +2565,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // occasionally acting on a one-step-stale order and glitching the reorder.
   const categoryOrderRef = useRef<string[]>([]);
   const [draggingCategory, setDraggingCategory] = useState<string | null>(null);
+  // The just-dropped pill skips one layout-transition frame while it returns
+  // from absolute positioning to the flex row. Without this, Reanimated tries
+  // to animate that handoff in addition to the native drag animation, causing
+  // the tiny pre-landing flicker.
+  const [settlingCategory, setSettlingCategory] = useState<string | null>(null);
+  const settleCategoryFrameRef = useRef<number | null>(null);
   const dragX = useRef(new Animated.Value(0)).current;
+  // A small lift makes it clear the pill is being carried, not merely scrolled.
+  const dragLift = useRef(new Animated.Value(0)).current;
   // Per-pill PanResponder cache — PanResponder.create() must run exactly once
   // per pill and be reused across renders. Calling it fresh on every render
   // (as this used to) hands the actively-dragged pill a brand-new responder
@@ -2902,10 +2593,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragBaselineRef = useRef<Record<string, { x: number; y: number; width: number }>>({});
   const dragGrantXRef = useRef(0);
   const dragTargetRef = useRef(0);
-  // Tracks the dragged pill's effective position from the previous call, so
-  // applyDragPosition can tell which way it's currently travelling (see the
-  // hysteresis comment inside it).
-  const dragPrevEffectiveDxRef = useRef(0);
 
   // Auto-scroll while dragging near either edge of the category strip — without
   // this, a pill can never be dragged past whatever happens to already be
@@ -2916,6 +2603,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const categoryScrollXRef = useRef(0);
   const categoryViewportRef = useRef({ x: 0, width: 0 }); // screen-space frame of the ScrollView
   const categoryContentWidthRef = useRef(0);
+  // A dragged pill is temporarily position:absolute, which removes it from
+  // Yoga's horizontal measurement. Keep the strip at its pre-drag width so
+  // native ScrollView never clamps the offset or drops the far-end target
+  // while that pill is floating above the row.
+  const [dragContentWidth, setDragContentWidth] = useState<number | null>(null);
+  const isCategoryDraggingRef = useRef(false);
   const dragLatestPageXRef = useRef(0);
   const dragLatestDxRef = useRef(0);
   const dragAutoScrollDeltaRef = useRef(0); // accumulated scroll since this gesture's grant
@@ -3161,10 +2854,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Not Logged In', 'Please log in to save your profile.');
       return;
     }
+    if (!isEditMode && !termsAccepted) {
+      Alert.alert('Terms & Conditions', 'Please agree to the Terms & Conditions before publishing your profile.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      await saveProviderToSupabase(user.id, providerData);
+      await saveProviderToSupabase(user.id, providerData, !isEditMode && termsAccepted);
       await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
       Alert.alert(
         'Profile Saved!',
@@ -3179,7 +2876,50 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, navigation]);
+  }, [providerData, user, policies, navigation, isEditMode, termsAccepted]);
+
+  // ── Hub ⇄ section navigation ──────────────────────────────────────────
+  // Both directions reset the scroll: the hub and a section are different
+  // screens sharing one ScrollView, so without this you land mid-content
+  // carried over from wherever the other view was scrolled to.
+  const openSection = useCallback((next: EditorSectionKey) => {
+    Haptics.selectionAsync().catch(() => {});
+    setActiveSection(next);
+    mainScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  // Back from a section just returns to the hub — it deliberately does NOT
+  // save. Edits live in providerData/policies until the hub's Publish commits
+  // them, so a section has nothing of its own to persist.
+  const closeSection = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    setActiveSection(null);
+    mainScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
+
+  // Sequential movement between section editors, for working straight through
+  // the profile without bouncing off the hub each time. Distinct from the
+  // header's Back, which always returns to the hub — these two are deliberately
+  // different exits, not duplicates. Both route through openSection, so the
+  // scroll reset applies to section→section moves as well.
+  const sectionIndex = activeSection
+    ? EDITOR_SECTIONS.findIndex(s => s.key === activeSection)
+    : -1;
+  const isFirstSection = sectionIndex === 0;
+  const isLastSection = sectionIndex === EDITOR_SECTIONS.length - 1;
+
+  const goToPreviousSection = useCallback(() => {
+    const prev = EDITOR_SECTIONS[sectionIndex - 1];
+    if (prev) openSection(prev.key);
+  }, [sectionIndex, openSection]);
+
+  // On the last section this is "Finish", which returns to the hub. It
+  // deliberately does NOT publish — saving stays the hub's job alone.
+  const goToNextSection = useCallback(() => {
+    const next = EDITOR_SECTIONS[sectionIndex + 1];
+    if (next) openSection(next.key);
+    else closeSection();
+  }, [sectionIndex, openSection, closeSection]);
 
   // Get adaptive accent color - now uses user-selected accent color
   const adaptiveAccentColor = useMemo(() => {
@@ -3192,20 +2932,93 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     () => resolveProviderTheme(providerData.profileTheme),
     [providerData.profileTheme],
   );
-  const editCardBg = withAlpha(editTheme.card, editTheme.isDark ? 0.62 : 0.72);
-
-  const categoryNames = Object.keys(providerData.categories);
-  const serviceCount = Object.values(providerData.categories).reduce(
-    (total, services) => total + services.length,
-    0,
+  // Recomputed only when categories actually change, not on every keystroke
+  // elsewhere in this screen's single providerData state blob.
+  const categoryNames = useMemo(() => Object.keys(providerData.categories), [providerData.categories]);
+  const serviceCount = useMemo(
+    () => Object.values(providerData.categories).reduce((total, services) => total + services.length, 0),
+    [providerData.categories],
   );
-  const editorChecklist = [
-    { label: 'Business details', done: Boolean(providerData.providerName.trim() && providerData.location.trim()) },
-    { label: 'Introduction', done: Boolean(providerData.aboutText.trim()) },
-    { label: 'Services & prices', done: serviceCount > 0 },
-    { label: 'Portfolio', done: portfolioItems.length > 0 },
-  ];
-  const completedEditorSteps = editorChecklist.filter(item => item.done).length;
+  // The hub's content: one entry per section, each summarising what's filled
+  // in so the provider can see the whole profile at a glance and drill into
+  // whichever part needs work. `required` mirrors exactly what handleSubmit
+  // already refuses to save without — nothing here introduces a new validation
+  // rule, it just surfaces the existing ones before Publish rather than as an
+  // alert afterwards.
+  const sectionSummaries = useMemo(
+    (): {
+      section: EditorSectionKey;
+      title: string;
+      rows: { label: string; value: string; required?: boolean }[];
+    }[] => {
+      const filled = (v: string | null | undefined) => (v ?? '').trim();
+      const serviceTypeLabel =
+        providerData.providerService === 'OTHER'
+          ? filled(providerData.customServiceType)
+          : filled(providerData.providerService);
+      return [
+        {
+          section: 'identity',
+          title: 'Business identity',
+          rows: [
+            { label: 'Business name', value: filled(providerData.providerName), required: true },
+            { label: 'Service type', value: serviceTypeLabel },
+            { label: 'Location', value: filled(providerData.location), required: true },
+            { label: 'Logo', value: providerData.logo ? 'Added' : '' },
+          ],
+        },
+        {
+          section: 'about',
+          title: 'About & portfolio',
+          rows: [
+            { label: 'Introduction', value: filled(providerData.aboutText) ? 'Written' : '' },
+            {
+              label: 'Portfolio',
+              value: portfolioItems.length > 0 ? `${portfolioItems.length} photo${portfolioItems.length === 1 ? '' : 's'}` : '',
+            },
+          ],
+        },
+        {
+          section: 'contact',
+          title: 'Contact details',
+          rows: [
+            { label: 'Phone', value: filled(providerData.phone) },
+            { label: 'Email', value: filled(providerData.email) },
+            { label: 'Instagram', value: filled(providerData.instagram) },
+            { label: 'Website', value: filled(providerData.website) },
+          ],
+        },
+        {
+          section: 'services',
+          title: 'Services & prices',
+          rows: [
+            {
+              label: 'Services',
+              value: serviceCount > 0 ? `${serviceCount} across ${categoryNames.length} categor${categoryNames.length === 1 ? 'y' : 'ies'}` : '',
+            },
+          ],
+        },
+        {
+          section: 'policies',
+          title: 'Booking policies',
+          rows: [
+            { label: 'Business type', value: filled(providerData.businessType) ? (BUSINESS_TYPE_LABELS[providerData.businessType] ?? providerData.businessType) : '' },
+            { label: 'Full address', value: filled(providerData.fullAddress) ? 'Added (stays private)' : '', required: true },
+            { label: 'Cancellation notice', value: policies.cancelNotice === 'none' ? 'No notice required' : policies.cancelNotice },
+            { label: 'Deposit', value: policies.depositRequired ? 'Required' : 'Not required' },
+          ],
+        },
+      ];
+    },
+    [providerData, portfolioItems.length, serviceCount, categoryNames.length, policies],
+  );
+
+  // Only genuinely-required, genuinely-empty fields — this is what the hub
+  // warns about and what Publish would otherwise fail on.
+  const missingRequired = useMemo(
+    () => sectionSummaries.flatMap(g => g.rows.filter(r => r.required && !r.value).map(r => r.label)),
+    [sectionSummaries],
+  );
 
   // Keep the draggable order in sync with the real data — but never while a
   // drag is in progress, or the live reflow would get stomped mid-gesture.
@@ -3219,6 +3032,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Stop the auto-scroll RAF loop if the screen unmounts mid-drag.
   useEffect(() => () => {
     if (dragAutoScrollFrameRef.current != null) cancelAnimationFrame(dragAutoScrollFrameRef.current);
+    if (settleCategoryFrameRef.current != null) cancelAnimationFrame(settleCategoryFrameRef.current);
+    isCategoryDraggingRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -3253,18 +3068,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     dragX.setValue(effectiveDx);
     const draggedWidth = dragBaselineRef.current[name]?.width ?? 80;
     const draggedLeft = dragGrantXRef.current + effectiveDx;
-    // Direction of travel since the last call — used below to pick which edge
-    // of the dragged pill has to cross a neighbor's midpoint.
-    const movingRight = effectiveDx >= dragPrevEffectiveDxRef.current;
-    dragPrevEffectiveDxRef.current = effectiveDx;
-    // Comparing against the dragged pill's CENTRE made a neighbor jump out of
-    // the way the instant the two pills were roughly side by side — reads as
-    // premature, since the dragged pill hadn't actually moved past it yet.
-    // Using the edge FURTHEST BEHIND in the direction of travel (left edge
-    // while moving right, right edge while moving left) requires the dragged
-    // pill to have substantially overlapped/passed a neighbor before it
-    // yields its slot.
-    const referenceX = movingRight ? draggedLeft : draggedLeft + draggedWidth;
+    // This is the standard sortable-list threshold: a slot changes as soon as
+    // the carried item's centre crosses a neighbour's centre. The previous
+    // trailing-edge calculation made users drag almost a full pill width
+    // before anything moved, which felt sticky rather than like drag-and-drop.
+    const referenceX = draggedLeft + draggedWidth / 2;
     const others = categoryOrderRef.current.filter(n => n !== name);
     let target = others.length;
     for (let i = 0; i < others.length; i++) {
@@ -3360,11 +3168,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         dragTargetRef.current = categoryOrderRef.current.indexOf(name);
         dragAutoScrollDeltaRef.current = 0;
         dragAutoScrollHoldFramesRef.current = 0;
-        dragPrevEffectiveDxRef.current = 0;
         dragLatestDxRef.current = 0;
         dragLatestPageXRef.current = evt.nativeEvent.pageX;
         dragX.setValue(0);
+        dragLift.setValue(0);
         setDraggingCategory(name);
+        Animated.spring(dragLift, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 26,
+          bounciness: 5,
+        }).start();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         // onContentSizeChange (below, on the ScrollView) reports the real
         // native content width and is the authoritative source whenever it's
@@ -3382,6 +3196,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             .reduce((max, p) => Math.max(max, p.x + p.width), 0);
           categoryContentWidthRef.current = rightmost + CATEGORY_STRIP_TRAILING_PADDING;
         }
+        // Set this before the state update below. The re-render makes the
+        // active pill absolute; without the frozen minimum width, that layout
+        // pass shrinks the content and clamps horizontal scrolling mid-drag.
+        isCategoryDraggingRef.current = true;
+        setDragContentWidth(categoryContentWidthRef.current);
         // measureInWindow exists on the underlying native view via the
         // NativeMethods mixin, but isn't in ScrollView's TS surface.
         (categoryScrollRef.current as unknown as { measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void } | null)
@@ -3429,20 +3248,41 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           targetX += w + CATEGORY_STRIP_GAP;
         }
         const toValue = targetX - dragGrantXRef.current;
-        Animated.timing(dragX, { toValue, duration: 150, useNativeDriver: true }).start(() => {
+        Animated.parallel([
+          Animated.timing(dragX, { toValue, duration: 150, useNativeDriver: true }),
+          Animated.spring(dragLift, { toValue: 0, useNativeDriver: true, speed: 24, bounciness: 0 }),
+        ]).start(() => {
+          isCategoryDraggingRef.current = false;
+          setDragContentWidth(null);
+          setSettlingCategory(name);
           setDraggingCategory(null);
           dragX.setValue(0);
+          // Let Yoga commit the flex position first; enabling its layout
+          // transition again on the following frame is then a no-op.
+          settleCategoryFrameRef.current = requestAnimationFrame(() => {
+            setSettlingCategory(current => current === name ? null : current);
+            settleCategoryFrameRef.current = null;
+          });
         });
       },
       onPanResponderTerminate: () => {
         stopCategoryAutoScroll();
+        isCategoryDraggingRef.current = false;
+        setDragContentWidth(null);
+        if (settleCategoryFrameRef.current != null) {
+          cancelAnimationFrame(settleCategoryFrameRef.current);
+          settleCategoryFrameRef.current = null;
+        }
+        setSettlingCategory(null);
         setDraggingCategory(null);
         dragX.setValue(0);
+        dragLift.setValue(0);
       },
     });
     categoryDragRespondersRef.current[name] = responder;
     return responder;
-  }, [dragX, handleSetCategoryOrder, applyDragPosition, startCategoryAutoScroll, stopCategoryAutoScroll]);
+  }, [dragX, dragLift, handleSetCategoryOrder, applyDragPosition, startCategoryAutoScroll, stopCategoryAutoScroll]);
+
 
   if (isLoadingProvider) {
     return (
@@ -3492,7 +3332,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           onPick={(template) => {
             setShowTemplatePicker(false);
             setIsEditingService(false);
-            setEditingService(makeServiceDraft(template));
+            setEditingService(createServiceDraft(template));
             setShowServiceModal(true);
           }}
         />
@@ -3534,31 +3374,34 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           policies={policies}
         />
 
-        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-          {/* Header */}
-          <View style={styles.header}>
+        {/* No `edges` prop: under fullScreenModal the nested provider this sits
+            inside under-reports both insets (see topInset above), so relying on
+            edges={['top','bottom']} silently produced no padding at all. Top is
+            applied manually from the root provider's inset; bottom is handled
+            by each pinned bar's own paddingBottom. */}
+        <SafeAreaView style={styles.safeArea} edges={[]}>
+          {/* Header. Back either leaves the screen (from the hub) or returns
+              to the hub (from a section) — one control, whichever "back" means
+              where you are. Preview is available from both. Saving lives only
+              on the hub's Publish button, so there's exactly one save path. */}
+          <View style={[styles.header, { paddingTop: topInset + 6 }]}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation.goBack()}
+              onPress={activeSection ? closeSection : () => navigation.goBack()}
             >
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{isEditMode ? 'Public Profile' : 'Set Up Your Profile'}</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {activeSection
+                ? (EDITOR_SECTIONS.find(s => s.key === activeSection)?.title ?? '')
+                : (isEditMode ? 'Public Profile' : 'Set Up Your Profile')}
+            </Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.headerIconButton}
                 onPress={() => setShowPreviewModal(true)}
               >
                 <Ionicons name="eye-outline" size={20} color={chromeText} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.headerIconButton, isSubmitting && { opacity: 0.6 }]}
-                onPress={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting
-                  ? <ActivityIndicator size="small" color={chromeText} />
-                  : <Ionicons name="checkmark" size={22} color={chromeText} />}
               </TouchableOpacity>
             </View>
           </View>
@@ -3590,83 +3433,177 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // like the other pills weren't reacting to the drag at all.
               scrollEnabled={!draggingCategory}
             >
-            {/* Brand identity is now a compact, editable summary rather than
-                a large standalone avatar that pushes the useful fields down. */}
-            <View style={[styles.brandIdentityCard, { backgroundColor: editCardBg, borderColor: editTheme.border }]}>
+            {/* ── HUB ── The screen's home view: the whole profile at a
+                glance, one card per section, each tappable to drill in. This
+                replaces both the old wizard and its separate review step —
+                the summary IS the landing page now, not a final stop. */}
+            {activeSection === null && (
+              <>
+                {missingRequired.length > 0 && (
+                  <View style={styles.reviewWarningBanner}>
+                    <Ionicons name="alert-circle-outline" size={18} color={REVIEW_WARN_COLOR} />
+                    <Text style={styles.reviewWarningText}>
+                      {missingRequired.length === 1
+                        ? `${missingRequired[0]} is still needed before you can publish.`
+                        : `${missingRequired.join(', ')} are still needed before you can publish.`}
+                    </Text>
+                  </View>
+                )}
+
+                {sectionSummaries.map((group, groupIndex) => {
+                  const groupMissing = group.rows.filter(r => r.required && !r.value).length;
+                  const filledCount = group.rows.filter(r => r.value).length;
+                  const completionRatio = group.rows.length > 0 ? filledCount / group.rows.length : 0;
+                  return (
+                    <TouchableOpacity
+                      key={group.section}
+                      style={styles.cardShadowWrap}
+                      activeOpacity={0.85}
+                      onPress={() => openSection(group.section)}
+                    >
+                      <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
+                        <LinearGradient
+                          colors={[chrome.surf(0.3), 'transparent']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={styles.cardHighlight}
+                        />
+                        <View style={styles.reviewGroupHeader}>
+                          <View style={styles.reviewGroupHeaderTitle}>
+                            <SectionHeader index={groupIndex + 1} title={group.title} accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color={chrome.fg(0.4)} />
+                        </View>
+
+                        {/* Status line: what still blocks publishing, or how
+                            much of this section is filled in. */}
+                        <Text
+                          style={[
+                            styles.hubStatusText,
+                            groupMissing > 0 && styles.hubStatusTextMissing,
+                          ]}
+                        >
+                          {groupMissing > 0
+                            ? `${groupMissing} required field${groupMissing === 1 ? '' : 's'} missing`
+                            : `${filledCount} of ${group.rows.length} filled in`}
+                        </Text>
+
+                        {/* Slim completion fill — same warn/accent split as the
+                            status text above, so the two never disagree. */}
+                        <View style={styles.hubProgressTrack}>
+                          <View
+                            style={[
+                              styles.hubProgressFill,
+                              {
+                                width: `${Math.round(completionRatio * 100)}%`,
+                                backgroundColor: groupMissing > 0 ? REVIEW_WARN_COLOR : adaptiveAccentColor,
+                              },
+                            ]}
+                          />
+                        </View>
+
+                        {group.rows.map(row => {
+                          const isMissingRequired = Boolean(row.required) && !row.value;
+                          return (
+                            <View key={row.label} style={styles.reviewRow}>
+                              <Text style={styles.reviewRowLabel}>{row.label}</Text>
+                              <Text
+                                style={[
+                                  styles.reviewRowValue,
+                                  isMissingRequired && styles.reviewRowValueMissing,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {row.value || (isMissingRequired ? 'Required' : 'Not added')}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </BlurView>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {/* Only asked once, at first publish — an already-live
+                    provider has already accepted (providers.terms_accepted_at
+                    is stamped on that first insert) and edit-saves never
+                    re-ask. */}
+                {!isEditMode && (
+                  <TouchableOpacity
+                    style={styles.termsRow}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setTermsAccepted(prev => !prev);
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.termsCheckbox,
+                        termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                      ]}
+                    >
+                      {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
+                    </View>
+                    <Text style={styles.termsRowText}>
+                      I agree to the{' '}
+                      <Text
+                        style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
+                        onPress={() => setShowTermsModal(true)}
+                      >
+                        Terms &amp; Conditions
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <Text style={styles.reviewFootnote}>
+                  Publishing saves your profile and policies. You can come back and
+                  change any of this at any time.
+                </Text>
+              </>
+            )}
+
+            {activeSection === 'identity' && (<>
+
+            {/* Plain circular avatar picker — no card chrome around it. The
+                surrounding panel was doing nothing the circle doesn't already
+                communicate, and the standard avatar treatment (circle + corner
+                camera badge) reads as tappable on its own. Business name and
+                the rest of Step 1 continue below, unchanged. */}
+            <View style={styles.logoSection}>
               <TouchableOpacity
                 style={styles.logoContainer}
                 onPress={handleSelectLogo}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
               >
                 {providerData.logo ? (
                   <Image
                     source={{ uri: providerData.logo }}
                     style={styles.providerLogo}
                     resizeMode="cover"
+                    // Per the Scalability rules: without this any unrelated
+                    // re-render can retrigger the default fade-in as a flicker.
+                    fadeDuration={0}
                   />
                 ) : (
                   <View style={styles.logoPlaceholder}>
-                    <Ionicons name="camera-outline" size={28} color="#a342c3" />
-                    <Text style={styles.logoPlaceholderText}>Add Logo</Text>
+                    <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
                   </View>
                 )}
+                {/* Badge sits on the 45° diagonal of the circle rather than a
+                    square's corner, so it hugs the edge instead of floating
+                    off it — offset = r - (r/√2) - badgeR, rounded. */}
                 <View style={styles.logoEditBadge}>
-                  <Ionicons name="pencil-outline" size={14} color="#fff" />
+                  <Ionicons name="camera" size={14} color={chrome.onAccent} />
                 </View>
               </TouchableOpacity>
-              <View style={styles.brandIdentityCopy}>
-                <Text style={[styles.brandIdentityEyebrow, { color: editTheme.sub }]}>YOUR BUSINESS</Text>
-                <Text style={[styles.brandIdentityName, { color: editTheme.text }]} numberOfLines={1}>
-                  {providerData.providerName || 'Business name'}
-                </Text>
-                <Text style={[styles.brandIdentityHint, { color: editTheme.sub }]}>Tap the image to add or update your logo</Text>
-              </View>
-            </View>
-
-            {/* A small orientation card makes this editor feel like one focused
-                profile-building flow instead of a long, unprioritised form. */}
-            <View style={[styles.setupGuide, { backgroundColor: editCardBg, borderColor: editTheme.border }]}>
-              <View style={styles.setupGuideHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.setupGuideEyebrow, { color: editTheme.sub }]}>PUBLIC PROFILE</Text>
-                  <Text style={[styles.setupGuideTitle, { color: editTheme.text }]}>
-                    {completedEditorSteps === editorChecklist.length ? 'Looking good — ready for clients' : 'Build a profile clients can trust'}
-                  </Text>
-                </View>
-                <View style={[styles.setupGuideCount, { backgroundColor: adaptiveAccentColor }]}>
-                  <Text style={styles.setupGuideCountText}>{completedEditorSteps}/{editorChecklist.length}</Text>
-                </View>
-              </View>
-              <Text style={[styles.setupGuideSubtext, { color: editTheme.sub }]}>
-                Add the essentials first, then use the preview to check exactly what clients will see.
+              <Text style={styles.logoCaption}>
+                {providerData.logo ? 'Change Logo' : 'Add Logo'}
               </Text>
-              <View style={styles.setupGuideSteps}>
-                {editorChecklist.map(item => (
-                  <View key={item.label} style={styles.setupGuideStep}>
-                    <Ionicons
-                      name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={16}
-                      color={item.done ? adaptiveAccentColor : editTheme.sub}
-                    />
-                    <Text style={[styles.setupGuideStepText, { color: item.done ? editTheme.text : editTheme.sub }]}>{item.label}</Text>
-                  </View>
-                ))}
-              </View>
             </View>
-
-            {/* Tab switcher */}
-            <View style={styles.tabSwitcher}>
-              <SlidingTabs
-                tabs={PROFILE_TABS}
-                activeKey={activeTab}
-                onPress={setActiveTab}
-                accentColor={adaptiveAccentColor}
-                inactiveTextColor={chrome.fg(0.75)}
-                scrollable={false}
-              />
-            </View>
-
-            {activeTab === 'profile' && (<>
 
             {/* Business Name */}
             <View style={styles.cardShadowWrap}>
@@ -3677,11 +3614,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
+              <SectionHeader index={1} title="Business Details" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <View
                 style={styles.inputGroup}
                 onLayout={(e) => { inputPositions.current['businessName'] = e.nativeEvent.layout.y; }}
               >
-                <RequiredLabel required>Business Name</RequiredLabel>
+                <RequiredLabel required styles={styles}>Business Name</RequiredLabel>
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
@@ -3713,7 +3651,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   pools, templates) is scoped off this choice, so changing it
                   later would silently orphan existing categories/services. */}
               <View style={styles.inputGroup}>
-                <RequiredLabel required>Service Type</RequiredLabel>
+                <RequiredLabel required styles={styles}>Service Type</RequiredLabel>
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
@@ -3783,22 +3721,31 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 style={styles.inputGroup}
                 onLayout={(e) => { inputPositions.current['location'] = e.nativeEvent.layout.y + 200; }}
               >
-                <RequiredLabel required>Location</RequiredLabel>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={providerData.location}
-                    onChangeText={(text) =>
-                      setProviderData({ ...providerData, location: text })
-                    }
-                    placeholder="e.g., North West London"
-                    placeholderTextColor={chrome.fg(0.4)}
-                    onFocus={() => handleInputFocus('location')}
-                  />
-                </BlurView>
+                <RequiredLabel required styles={styles}>Location</RequiredLabel>
+                {/* Structured picker for the cities we have area data for, plain
+                    free text for everywhere else. Either way it writes the same
+                    plain string to `providerData.location` — the value
+                    providerRegistrationService geocodes and saves as
+                    location_text, so the data model is untouched. */}
+                <LocationPicker
+                  value={providerData.location}
+                  onChange={(location) =>
+                    setProviderData(prev => ({ ...prev, location }))
+                  }
+                  accentColor={adaptiveAccentColor}
+                  blurTint={chrome.blurTint}
+                  placeholderColor={chrome.fg(0.4)}
+                  iconColor={chrome.fg(0.5)}
+                  onFocus={() => handleInputFocus('location')}
+                  styles={styles}
+                />
               </View>
             </BlurView>
             </View>
+
+            </>)}
+
+            {activeSection === 'about' && (<>
 
             {/* About Section */}
             <View style={styles.cardShadowWrap}>
@@ -3809,7 +3756,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
-              <Text style={styles.sectionTitle}>About Your Business</Text>
+              <SectionHeader index={1} title="About Your Business" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <View
                 style={styles.inputGroup}
                 onLayout={(e) => { inputPositions.current['about'] = e.nativeEvent.layout.y + 500; }}
@@ -3898,7 +3845,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
-              <Text style={styles.sectionTitle}>Portfolio</Text>
+              <SectionHeader index={2} title="Portfolio" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <Text style={styles.sectionSubtitle}>
                 Photos of your work, shown on your public profile in a two-column gallery.
               </Text>
@@ -3911,7 +3858,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <View style={styles.portfolioGrid}>
                   {portfolioItems.map(item => (
                     <View key={item.id} style={styles.portfolioThumbWrap}>
-                      <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} />
+                      <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
                       <TouchableOpacity
                         style={styles.portfolioRemoveBtn}
                         onPress={() => handleRemovePortfolioItem(item)}
@@ -3946,6 +3893,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </BlurView>
             </View>
 
+            </>)}
+
+            {activeSection === 'contact' && (<>
+
             {/* Contact Information */}
             <View style={styles.cardShadowWrap}>
             <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
@@ -3955,7 +3906,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 end={{ x: 0, y: 1 }}
                 style={styles.cardHighlight}
               />
-              <Text style={styles.sectionTitle}>Contact Information</Text>
+              <SectionHeader index={1} title="Contact Information" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <Text style={styles.sectionSubtitle}>
                 What clients see on your public profile
               </Text>
@@ -4082,6 +4033,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </BlurView>
             </View>
 
+            </>)}
+
+            {activeSection === 'services' && (<>
+
             {/* Services Section */}
             <View style={styles.servicesSection}>
               <View style={styles.servicesSectionHeader}>
@@ -4113,15 +4068,27 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.categoryTabs}
-                    contentContainerStyle={styles.categoryTabsContent}
+                    contentContainerStyle={[
+                      styles.categoryTabsContent,
+                      dragContentWidth != null && { minWidth: dragContentWidth },
+                    ]}
                     scrollEnabled={!draggingCategory}
                     onScroll={(e) => { categoryScrollXRef.current = e.nativeEvent.contentOffset.x; }}
                     scrollEventThrottle={16}
-                    onContentSizeChange={(w) => { categoryContentWidthRef.current = w; }}
+                    onContentSizeChange={(w) => {
+                      // The temporary absolute-positioned pill is excluded
+                      // from this measurement; retaining the pre-drag width
+                      // avoids replacing a correct value with that smaller one.
+                      if (!isCategoryDraggingRef.current) categoryContentWidthRef.current = w;
+                    }}
                   >
                     {categoryOrder.map((item, index) => {
                       const isSel = selectedCategory === item;
                       const isDragging = draggingCategory === item;
+                      const isSettling = settlingCategory === item;
+                      const layoutTransition = isDragging || isSettling
+                        ? {}
+                        : { layout: LinearTransition.duration(220) };
                       const panResponder = getCategoryDragResponder(item);
                       // While dragging, the pill is pulled out of the flex flow and
                       // pinned (via `left`) to exactly where it was when the gesture
@@ -4156,7 +4123,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         // is known to silently no-op under the New Architecture.
                         <ReAnimated.View
                           key={item}
-                          layout={LinearTransition.duration(220)}
+                          // The dragged/just-dropped pill owns its position
+                          // directly. Every other pill keeps the normal
+                          // animated reflow that opens and closes the gap.
+                          {...layoutTransition}
                           onLayout={(e) => {
                             pillLayoutRef.current[item] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, width: e.nativeEvent.layout.width };
                           }}
@@ -4181,7 +4151,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               wrapper since the two animation systems don't share values. */}
                           <Animated.View
                             style={[
-                              { transform: [{ translateX: isDragging ? dragX : 0 }] },
+                              {
+                                transform: [
+                                  { translateX: isDragging ? dragX : 0 },
+                                  {
+                                    scale: isDragging
+                                      ? dragLift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] })
+                                      : 1,
+                                  },
+                                ],
+                              },
                               isOtherWhileDragging && styles.categoryTabDimmed,
                             ]}
                           >
@@ -4281,6 +4260,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                         source={{ uri: item }}
                                         style={styles.serviceImage}
                                         resizeMode="cover"
+                                        fadeDuration={0}
                                       />
                                     )}
                                   />
@@ -4365,7 +4345,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
             </>)}
 
-            {activeTab === 'policies' && (
+            {activeSection === 'policies' && (
               <BlurView intensity={50} tint={chrome.blurTint} style={styles.policiesCard}>
                 <LinearGradient
                   colors={[chrome.surf(0.3), 'transparent']}
@@ -4582,6 +4562,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         <Image
                           source={{ uri: policies.policyImageUrl }}
                           style={styles.portfolioThumb}
+                          fadeDuration={0}
                         />
                         {policyImageUploading && (
                           <View style={styles.portfolioThumbUploading}>
@@ -4650,7 +4631,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     {([
                       { v: 'salon'     as const, l: 'Salon' },
                       { v: 'studio'    as const, l: 'Studio' },
-                      { v: 'home_based'as const, l: 'Home Based' },
+                      { v: 'home_based'as const, l: 'Home Studio' },
                       { v: 'mobile'    as const, l: 'Mobile' },
                     ]).map(({ v, l }) => (
                       <TouchableOpacity
@@ -4678,13 +4659,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
                       : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
                   </Text>
-                  <TextInput
-                    style={styles.policyNote}
-                    placeholder="e.g. 42 Oak Street, London, N1 2AB"
-                    placeholderTextColor={chrome.fg(0.3)}
+                  <AddressPicker
                     value={providerData.fullAddress}
-                    onChangeText={v => setProviderData(prev => ({ ...prev, fullAddress: v }))}
-                    multiline
+                    onChange={({ address, coordinates }) => setProviderData(prev => ({
+                      ...prev,
+                      fullAddress: address,
+                      fullAddressCoordinates: coordinates,
+                    }))}
+                    accentColor={adaptiveAccentColor}
                   />
 
                   {providerData.businessType !== 'mobile' && (
@@ -4734,11 +4716,186 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ) : null}
                     </>
                   )}
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>WHERE YOU WORK</Text>
+                  <Text style={styles.addressHint}>Which cities do you cover? Shown to clients as a search filter.</Text>
+                  <CityMultiSelect
+                    selected={providerData.serviceLocations}
+                    onChange={(next) => setProviderData(prev => ({ ...prev, serviceLocations: next }))}
+                    palette={isDarkMode ? darkTheme : lightTheme}
+                    placeholder="Select the cities you cover"
+                  />
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>PRICE RANGE</Text>
+                  <Text style={styles.addressHint}>Where do most of your services sit? Shown to clients as a price filter.</Text>
+                  <View style={styles.pillRow}>
+                    {([
+                      { v: 'budget'  as const, l: '£15–£35' },
+                      { v: 'mid'     as const, l: '£35–£65' },
+                      { v: 'premium' as const, l: '£65–£100' },
+                      { v: 'luxury'  as const, l: '£100+' },
+                    ]).map(({ v, l }) => (
+                      <TouchableOpacity
+                        key={v}
+                        style={[styles.policyPill, providerData.priceRange === v && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => setProviderData(prev => ({ ...prev, priceRange: prev.priceRange === v ? '' : v }))}
+                      >
+                        <Text style={[styles.policyPillText, providerData.priceRange === v && { color: '#fff' }]}>{l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>WHO YOU WORK WITH</Text>
+                  <View style={styles.pillRow}>
+                    {([
+                      { v: 'solo'       as const, l: 'Just me' },
+                      { v: 'small_team' as const, l: '2–5 people' },
+                      { v: 'large_team' as const, l: '6+ people' },
+                    ]).map(({ v, l }) => (
+                      <TouchableOpacity
+                        key={v}
+                        style={[styles.policyPill, providerData.teamSize === v && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => setProviderData(prev => ({ ...prev, teamSize: prev.teamSize === v ? '' : v }))}
+                      >
+                        <Text style={[styles.policyPillText, providerData.teamSize === v && { color: '#fff' }]}>{l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>LANGUAGES SPOKEN</Text>
+                  <View style={styles.pillRow}>
+                    {['English', 'Urdu', 'Punjabi', 'Polish', 'Arabic', 'French', 'Spanish', 'BSL', 'Other'].map(lang => (
+                      <TouchableOpacity
+                        key={lang}
+                        style={[styles.policyPill, providerData.languagesSpoken.includes(lang) && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => setProviderData(prev => ({
+                          ...prev,
+                          languagesSpoken: prev.languagesSpoken.includes(lang)
+                            ? prev.languagesSpoken.filter(l => l !== lang)
+                            : [...prev.languagesSpoken, lang],
+                        }))}
+                      >
+                        <Text style={[styles.policyPillText, providerData.languagesSpoken.includes(lang) && { color: '#fff' }]}>{lang}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>ACCESSIBILITY</Text>
+                  <Text style={styles.addressHint}>Anything clients should know before booking (optional)</Text>
+                  <TextInput
+                    style={styles.policyNote}
+                    value={providerData.accessibilityNotes}
+                    onChangeText={(v) => setProviderData(prev => ({ ...prev, accessibilityNotes: v }))}
+                    placeholder="e.g. Step-free access, accessible parking..."
+                    placeholderTextColor={chrome.fg(0.3)}
+                    multiline
+                  />
+
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>PREFERRED PAYMENT TYPE</Text>
+                  <View style={styles.pillRow}>
+                    {([
+                      { v: 'card' as const, l: 'Card' },
+                      { v: 'cash' as const, l: 'Cash' },
+                      { v: 'bank_transfer' as const, l: 'Bank transfer' },
+                    ]).map(({ v, l }) => (
+                      <TouchableOpacity
+                        key={v}
+                        style={[styles.policyPill, providerData.preferredPaymentMethods.includes(v) && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => setProviderData(prev => ({
+                          ...prev,
+                          preferredPaymentMethods: prev.preferredPaymentMethods.includes(v)
+                            ? prev.preferredPaymentMethods.filter(m => m !== v)
+                            : [...prev.preferredPaymentMethods, v],
+                        }))}
+                      >
+                        <Text style={[styles.policyPillText, providerData.preferredPaymentMethods.includes(v) && { color: '#fff' }]}>{l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
                 </>
               </BlurView>
             )}
 
           </ScrollView>
+
+          {/* Publish — the hub's single commit action, and the only thing on
+              this screen that writes to the server. Pinned below the scroll
+              content as permanent bottom chrome, so it's always reachable
+              without scrolling to the end of the hub. Hidden inside a section
+              editor — a section's Back returns to the hub without saving, so
+              offering Publish there would imply the section saves on its own. */}
+          {activeSection === null && (
+            <View style={[styles.pinnedBar, { paddingBottom: pinnedBarBottomPad }]}>
+              <TouchableOpacity
+                style={[
+                  styles.pinnedBarButton,
+                  { backgroundColor: adaptiveAccentColor },
+                  isSubmitting && styles.pinnedBarButtonDisabled,
+                ]}
+                onPress={handleSubmit}
+                activeOpacity={0.85}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color={chrome.onAccent} />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark" size={18} color={chrome.onAccent} />
+                    <Text style={[styles.pinnedBarButtonText, { color: chrome.onAccent }]}>
+                      Save &amp; Publish
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Section editor footer — steps sequentially through the sections
+              for working straight through the profile. The header's Back is a
+              different exit (straight to the hub) and stays as it was. */}
+          {activeSection !== null && (
+            <View style={[styles.pinnedBar, { paddingBottom: pinnedBarBottomPad }]}>
+              {/* Slim position indicator — one dot per section. Deliberately
+                  lighter than the full progress track this replaced: it
+                  answers "where am I" without re-implying a forced order. */}
+              <View style={styles.sectionDots}>
+                {EDITOR_SECTIONS.map((s, i) => (
+                  <View
+                    key={s.key}
+                    style={[
+                      styles.sectionDot,
+                      i === sectionIndex
+                        ? { backgroundColor: adaptiveAccentColor, width: 16 }
+                        : { backgroundColor: chrome.fg(0.2) },
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <View style={styles.sectionFooterRow}>
+                {!isFirstSection && (
+                  <TouchableOpacity
+                    style={styles.sectionBackButton}
+                    onPress={goToPreviousSection}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.sectionBackButtonText}>Back</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.sectionNextButton, { backgroundColor: adaptiveAccentColor }]}
+                  onPress={goToNextSection}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.sectionNextButtonText, { color: chrome.onAccent }]}>
+                    {isLastSection ? 'Finish' : 'Next'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
@@ -4748,9 +4905,16 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             textColor={editTheme.text}
             subColor={editTheme.sub}
             borderColor={editTheme.border}
+            styles={styles}
             onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
             onClose={() => setReleaseDayPickerVisible(false)}
           />
+
+          {/* Reuses the same read-only Terms content shown from account
+              settings — no separate copy to keep in sync. */}
+          <Modal visible={showTermsModal} animationType="slide" transparent={false} onRequestClose={() => setShowTermsModal(false)}>
+            <TermsScreen navigation={{ goBack: () => setShowTermsModal(false) }} />
+          </Modal>
         </SafeAreaView>
       </ThemedBackground>
     </SafeAreaProvider>
@@ -4779,13 +4943,45 @@ const fgFor = (isDark: boolean) => (alpha: number) =>
   isDark ? withAlpha('#F0ECE7', alpha) : `rgba(0,0,0,${alpha})`;
 // Surface ramp — replaces the old rgba(255,255,255,α) frosted fills, which read
 // as bright glass over a light background but as glare over a dark one.
+//
+// The light-mode base is a warm off-white (#FDFBF8), not pure #FFFFFF: against
+// the app's warm cream backdrop a pure-white card reads as a cold rectangle
+// pasted on top rather than a surface belonging to the same palette. Dark mode
+// is unchanged — its ramp is a white overlay at low alpha, which is already a
+// tint of the backdrop rather than an opaque fill.
 const surfFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#FFFFFF', alpha * 0.34) : `rgba(255,255,255,${alpha})`;
+  isDark ? withAlpha('#FFFFFF', alpha * 0.34) : withAlpha('#FDFBF8', alpha);
+
+/** The rose tint-shadow used across the provider surfaces (confirmed in
+ *  ProviderMyProfileScreen). A flat black shadow greys the warm palette;
+ *  this keeps depth in the same colour family as everything else. */
+const CARD_SHADOW_COLOR = '#B87E92';
+
+/** One radius scale for the whole screen, so the header buttons, cards and
+ *  footer buttons read as one set rather than three separately-chosen values. */
+const RADIUS = { headerButton: 17, card: 16, footerButton: 14 } as const;
+
+/** Logo avatar picker geometry. The badge offset puts it on the circle's 45°
+ *  diagonal — for a circle of radius r, the edge point there is r/√2 in from
+ *  the bounding box on each axis, so centring a badge of radius br on it means
+ *  insetting by r − r/√2 − br. Negative would push it off the edge; this lands
+ *  it straddling the stroke, which is the standard avatar-picker look. */
+const LOGO_SIZE = 104;
+const LOGO_BADGE_SIZE = 32;
+const LOGO_BADGE_OFFSET = Math.round(
+  LOGO_SIZE / 2 - LOGO_SIZE / 2 / Math.SQRT2 - LOGO_BADGE_SIZE / 2,
+);
 
 const makeStyles = (isDark: boolean) => {
   const P = isDark ? darkTheme : lightTheme;
   const fg = fgFor(isDark);
   const surf = surfFor(isDark);
+  // Accent-tinted chrome for the cohesive button/card family. The provider's
+  // own accent varies per profile, so these are derived from the app palette's
+  // accent (the chrome accent) rather than the provider's — the provider's
+  // accent stays for the things that are genuinely theirs (primary actions,
+  // section chips), and the surrounding furniture stays neutral-warm.
+  const accentBorder = withAlpha(P.accent, isDark ? 0.22 : 0.16);
   return StyleSheet.create({
   loading: {
     flex: 1,
@@ -4809,15 +5005,22 @@ const makeStyles = (isDark: boolean) => {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    // paddingTop is supplied inline from the root provider's top inset —
+    // deliberately NOT paddingVertical here, which would sit at the same
+    // specificity as the inline override and make which one wins ambiguous.
+    paddingBottom: 15,
   },
+  // Header buttons, cards and footer buttons share one radius scale and the
+  // same accent-tinted border, so they read as one intentional set.
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: surf(0.25),
-    borderRadius: 20,
+    backgroundColor: surf(0.45),
+    borderRadius: RADIUS.headerButton,
+    borderWidth: 1,
+    borderColor: accentBorder,
   },
   backButtonText: {
     fontSize: 24,
@@ -4833,8 +5036,10 @@ const makeStyles = (isDark: boolean) => {
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: surf(0.25),
-    borderRadius: 20,
+    backgroundColor: surf(0.45),
+    borderRadius: RADIUS.headerButton,
+    borderWidth: 1,
+    borderColor: accentBorder,
   },
   headerTitle: {
     fontFamily: 'BakbakOne-Regular',
@@ -4857,6 +5062,7 @@ const makeStyles = (isDark: boolean) => {
   claimErrorText: {
     flex: 1,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     color: '#7A4B00',
@@ -4870,159 +5076,266 @@ const makeStyles = (isDark: boolean) => {
     paddingBottom: 40,
   },
 
-  // Logo Section
+  // ── Logo Section ──────────────────────────────────────────────────────
+  // A plain circular avatar picker, centred, with no card wrapper. Everything
+  // here is derived from LOGO_SIZE so the circle stays a true circle (and the
+  // badge stays on its edge) if the size is ever changed.
   logoSection: {
     alignItems: 'center',
-    marginBottom: 25,
-  },
-  brandIdentityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    padding: 16,
-    borderRadius: 24,
-    backgroundColor: surf(0.42),
-    borderWidth: 1,
-    borderColor: surf(0.65),
-    marginBottom: 18,
-  },
-  brandIdentityCopy: { flex: 1, minWidth: 0 },
-  brandIdentityEyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1.15,
-    color: fg(0.48),
-    marginBottom: 4,
-  },
-  brandIdentityName: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 19,
-    color: '#20191C',
-  },
-  brandIdentityHint: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 11,
-    lineHeight: 16,
-    color: fg(0.55),
-    marginTop: 4,
+    marginBottom: 22,
   },
   logoContainer: {
     position: 'relative',
   },
   providerLogo: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: LOGO_SIZE / 2,
     borderWidth: 3,
     borderColor: surf(0.8),
   },
   logoPlaceholder: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: LOGO_SIZE / 2,
     backgroundColor: surf(0.3),
-    borderWidth: 3,
-    borderColor: surf(0.5),
+    borderWidth: 2,
+    borderColor: accentBorder,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoPlaceholderIcon: {
-    fontSize: 24,
-    marginBottom: 2,
-  },
-  logoPlaceholderText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 10,
-    color: fg(0.6),
-  },
   logoEditBadge: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: surf(0.9),
+    // Placed on the circle's 45° diagonal, not a bounding-box corner, so it
+    // sits ON the edge rather than drifting away from it.
+    bottom: LOGO_BADGE_OFFSET,
+    right: LOGO_BADGE_OFFSET,
+    width: LOGO_BADGE_SIZE,
+    height: LOGO_BADGE_SIZE,
+    borderRadius: LOGO_BADGE_SIZE / 2,
+    backgroundColor: P.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    // Ring in the page background so the badge reads as lifted off the circle.
+    borderWidth: 2,
+    borderColor: isDark ? P.card : P.bg,
+    shadowColor: CARD_SHADOW_COLOR,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: isDark ? 0.3 : 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
-  logoEditIcon: {
-    fontSize: 16,
-  },
-
-  // Orientation at the top of the public-profile editor. The old screen
-  // dropped straight into fields, which made a first-time setup feel longer
-  // than it was and offered no indication of what was still useful to do.
-  setupGuide: {
-    padding: 18,
-    borderRadius: 22,
-    backgroundColor: surf(0.5),
-    borderWidth: 1,
-    borderColor: surf(0.62),
-    marginBottom: 20,
-  },
-  setupGuideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  setupGuideEyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1.2,
-    color: fg(0.52),
-    marginBottom: 4,
-  },
-  setupGuideTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 17,
-    color: P.text,
-  },
-  setupGuideCount: {
-    minWidth: 46,
-    paddingHorizontal: 9,
-    paddingVertical: 8,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  setupGuideCountText: {
+  logoCaption: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
-    color: '#fff',
-  },
-  setupGuideSubtext: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 18,
     color: fg(0.6),
-    marginTop: 12,
+    marginTop: 10,
   },
-  setupGuideSteps: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+
+  // ── Hub chrome ────────────────────────────────────────────────────────
+  // Per-section completion line on each hub card, and the pinned Publish bar.
+  hubStatusText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
+    color: fg(0.5),
+    marginBottom: 8,
+  },
+  hubStatusTextMissing: {
+    color: REVIEW_WARN_COLOR,
+  },
+  hubProgressTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: fg(0.1),
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  hubProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  // ── Pinned bottom bar ─────────────────────────────────────────────────
+  // Permanent bottom chrome sitting BELOW the ScrollView (not floating over
+  // it), so the primary action is always reachable without scrolling to the
+  // end. Same position in the tree the old step-wizard footer occupied.
+  pinnedBar: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: fg(0.12),
+    backgroundColor: isDark ? P.card : '#FDFBF8',
+  },
+  // Full-width, flat accent fill — the standard primary-action treatment.
+  pinnedBarButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: RADIUS.footerButton,
+    shadowColor: CARD_SHADOW_COLOR,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: isDark ? 0.30 : 0.22,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  pinnedBarButtonDisabled: {
+    opacity: 0.6,
+  },
+  pinnedBarButtonText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+
+  // ── Section editor footer ─────────────────────────────────────────────
+  // flex-end, not space-between: on the first section Back is hidden, and
+  // space-between would leave Next stranded on the left. This keeps Next
+  // pinned right in both cases, with Back sitting to its left when present.
+  sectionFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 10,
-    marginTop: 14,
   },
-  setupGuideStep: {
+  // Plainer secondary treatment — a surface fill with the shared accent-tinted
+  // border, matching the header icon buttons rather than the primary action.
+  sectionBackButton: {
+    paddingVertical: 13,
+    paddingHorizontal: 24,
+    borderRadius: RADIUS.footerButton,
+    backgroundColor: surf(0.45),
+    borderWidth: 1,
+    borderColor: accentBorder,
+  },
+  sectionBackButtonText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 14,
+    color: P.text,
+  },
+  sectionNextButton: {
+    paddingVertical: 13,
+    paddingHorizontal: 30,
+    borderRadius: RADIUS.footerButton,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionNextButtonText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  sectionDots: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  sectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+
+  // ── Review & publish step ─────────────────────────────────────────────
+  reviewWarningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 18,
+    backgroundColor: isDark ? 'rgba(255,149,0,0.12)' : 'rgba(255,149,0,0.10)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,149,0,0.30)' : 'rgba(255,149,0,0.24)',
   },
-  setupGuideStepText: {
+  reviewWarningText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+    color: P.text,
+  },
+  reviewGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  // The header row already carries its own bottom margin; this just lets the
+  // title take the free space so "Edit" stays pinned right.
+  reviewGroupHeaderTitle: {
+    flex: 1,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    paddingVertical: 7,
+  },
+  reviewRowLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '700',
+    color: fg(0.55),
+  },
+  reviewRowValue: {
+    flexShrink: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'right',
+    color: P.text,
+  },
+  // Only for a required field that's actually empty — an optional blank
+  // stays neutral, so the warn colour always means "this blocks publishing".
+  reviewRowValueMissing: {
+    color: REVIEW_WARN_COLOR,
+  },
+  reviewFootnote: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    fontWeight: '700',
-    color: fg(0.48),
+    fontWeight: '600',
+    lineHeight: 16,
+    color: fg(0.5),
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  termsCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: fg(0.3),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  termsRowText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
+    color: P.text,
+  },
+  termsRowLink: {
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
 
   // Cards
@@ -5039,21 +5352,23 @@ const makeStyles = (isDark: boolean) => {
   // (see cardHighlight below).
   card: {
     padding: 22,
-    borderRadius: 24,
+    borderRadius: RADIUS.card,
     backgroundColor: surf(0.1),
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: surf(0.28),
+    borderColor: accentBorder,
   },
   cardShadowWrap: {
-    borderRadius: 24,
+    borderRadius: RADIUS.card,
     // Bigger gap BETWEEN cards (spacing within them is tighter) so related
     // fields group into one thought instead of an even grey rhythm.
     marginBottom: 28,
-    shadowColor: '#000',
+    // Rose tint-shadow rather than flat black — black greys out the warm
+    // palette, this keeps the depth in the same colour family.
+    shadowColor: CARD_SHADOW_COLOR,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowOpacity: isDark ? 0.22 : 0.16,
+    shadowRadius: 12,
     elevation: 2,
   },
   // Zero-height: the 40px white gradient that sat on top of every card is
@@ -5131,23 +5446,40 @@ const makeStyles = (isDark: boolean) => {
   },
   portfolioAddText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 9,
     color: fg(0.5),
     marginTop: 2,
   },
 
-  // Section Titles — a section title (18) and a field label (14) were close
-  // enough in size that neither clearly outranked the other. The title now
-  // leads and the label steps back to a quiet uppercase eyebrow, so a card
-  // reads title → label → value instead of three near-equal lines.
-  sectionTitle: {
+  // ── Elevated section header: numbered accent chip + stronger title ──
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  sectionHeaderChip: {
+    width: 26,
+    height: 26,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionHeaderChipText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+  },
+  sectionHeaderTitle: {
+    flex: 1,
     fontFamily: 'BakbakOne-Regular',
     fontSize: 20,
     color: P.text,
-    marginBottom: 4,
   },
   sectionSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     lineHeight: 19,
     color: fg(0.55),
@@ -5214,15 +5546,20 @@ const makeStyles = (isDark: boolean) => {
   // field sits INSIDE its card instead of reading as a second raised surface
   // stacked on the first. The card carries the weight; the input just holds
   // the value.
+  // Fill brightened 0.16 → 0.28 so the fields read clearly against their card
+  // rather than nearly disappearing into it. Deliberately still short of the
+  // full inputBlur treatment: the border/shadow stay off, so this is a
+  // brighter quiet field, not a second raised surface on top of the card.
   profileInputBox: {
     borderRadius: 12,
-    backgroundColor: surf(0.16),
+    backgroundColor: surf(0.28),
     borderWidth: 0,
     shadowOpacity: 0,
     elevation: 0,
   },
   textInput: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 15,
     color: P.text,
     paddingHorizontal: 15,
@@ -5231,6 +5568,35 @@ const makeStyles = (isDark: boolean) => {
   textInputMultiline: {
     minHeight: 100,
     paddingTop: 12,
+  },
+
+  // ── Location picker ──
+  // The city trigger deliberately matches profileInputBox's quiet tonal fill
+  // rather than releaseDayBtn's bordered pill, so it reads as the Location
+  // field itself (which it replaces) and not as a button sitting beside one.
+  locationSelectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    backgroundColor: surf(0.28),
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+  },
+  locationSelectText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 15,
+    color: P.text,
+  },
+  locationStepLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: fg(0.55),
+    marginTop: 14,
   },
 
   // Service Categories
@@ -5271,6 +5637,7 @@ const makeStyles = (isDark: boolean) => {
   },
   gradientSelectorText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     color: fg(0.6),
   },
@@ -5308,6 +5675,7 @@ const makeStyles = (isDark: boolean) => {
   },
   emptyServicesText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     color: fg(0.6),
     textAlign: 'center',
@@ -5324,6 +5692,7 @@ const makeStyles = (isDark: boolean) => {
   },
   selectedCategoryDescription: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     color: fg(0.65),
@@ -5337,14 +5706,14 @@ const makeStyles = (isDark: boolean) => {
     paddingRight: 20,
     gap: 10,
   },
+  // Pills keep their capsule shape (they are pills, not cards) but pick up the
+  // accent-tinted border the rest of the screen's controls now share, so the
+  // restored strip sits inside the polished language rather than beside it.
   categoryTab: {
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: surf(0.25),
-  },
-  selectedCategoryTab: {
-    borderColor: surf(0.4),
+    borderColor: accentBorder,
   },
   categoryTabBlur: {
     flexDirection: 'row',
@@ -5356,8 +5725,17 @@ const makeStyles = (isDark: boolean) => {
     borderRadius: 20,
     overflow: 'hidden',
   },
+  // The selected pill is the one piece of the strip that's genuinely the
+  // provider's own state, so it takes the provider accent rather than another
+  // near-identical surface tint (which read as barely-selected before).
+  selectedCategoryTab: {
+    borderColor: withAlpha(P.accent, isDark ? 0.45 : 0.35),
+  },
   selectedCategoryTabBlur: {
-    backgroundColor: surf(0.16),
+    backgroundColor: withAlpha(P.accent, isDark ? 0.20 : 0.12),
+  },
+  selectedCategoryTabText: {
+    color: P.text,
   },
   draggingCategoryTabBlur: {
     backgroundColor: surf(0.9),
@@ -5367,185 +5745,28 @@ const makeStyles = (isDark: boolean) => {
     fontSize: 12,
     color: fg(0.7),
   },
-  selectedCategoryTabText: {
-    color: P.text,
-  },
-  categoryDragHandle: {
-    marginLeft: 6,
-    paddingHorizontal: 2,
-  },
   // Applied to every pill except the one actively being dragged, so it's
   // unambiguous which pill is moving instead of a row of equally-solid pills.
   categoryTabDimmed: {
     opacity: 0.45,
   },
-
-  // Required-field asterisk
-  requiredStar: {
-    // Scaled with inputLabel (14 → 11): at the old 13 it outweighed the label
-    // it was marking. Softened too — it's a marker, not a warning.
-    color: 'rgba(229,57,53,0.85)',
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 11,
+  categoryDragHandle: {
+    marginLeft: 6,
+    paddingHorizontal: 2,
   },
-
-  // Duration quick-picker chips
-  durationChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: fg(0.14),
-    backgroundColor: surf(0.45),
-  },
-  durationChipText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    color: fg(0.7),
-  },
-  durationChipTextActive: {
-    color: '#fff',
-  },
-
-  // Bottom-sheet modals (template picker, add category)
-  templateSheet: {
-    height: '82%',
-    marginTop: 'auto',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    overflow: 'hidden',
-    backgroundColor: surf(0.75),
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 42,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: fg(0.18),
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  templateSheetSub: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    color: fg(0.5),
-    marginTop: 3,
-  },
-  templateGroupLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    color: fg(0.6),
-    marginTop: 22,
-    marginBottom: 4,
-  },
-  templateScratchCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 16,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    backgroundColor: surf(0.4),
-  },
-  templateScratchIcon: {
-    fontSize: 22,
-  },
-  templateScratchTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    color: P.text,
-  },
-  templateScratchSub: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    color: fg(0.5),
-    marginTop: 2,
-  },
-  templateCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    borderRadius: 16,
-    marginTop: 10,
-    backgroundColor: surf(0.55),
-    borderWidth: 1,
-    borderColor: fg(0.06),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  templateName: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 15,
-    color: P.text,
-  },
-  templateDuration: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    color: fg(0.5),
-    marginTop: 3,
-  },
-  templateAdd: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-  },
-
-  // Category type picker cards
-  categoryTypeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 18,
-  },
-  categoryTypeCard: {
-    // Math.floor avoids a sub-pixel rounding overflow that can push the 3rd
-    // column onto its own row (3 fractional widths + 2 gaps summing to just
-    // over the available width).
-    width: Math.floor((screenWidth - 40 - 24) / 3),
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderRadius: 18,
-    alignItems: 'center',
-    backgroundColor: surf(0.55),
-    borderWidth: 1,
-    borderColor: fg(0.06),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  categoryTypeCardUsed: {
-    opacity: 0.45,
-  },
-  categoryTypeLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-    color: P.text,
-  },
-  categoryTypeBlurb: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 10,
-    color: fg(0.5),
-    textAlign: 'center',
-    marginTop: 3,
-    lineHeight: 13,
-  },
-
-  // Service Cards
-  categoryServicesContainer: {
-    gap: 12,
-  },
+  // Matches the section cards: same radius scale, same accent-tinted border,
+  // same rose tint-shadow, so a service card reads as the same material.
   serviceItemCard: {
-    borderRadius: 20,
+    borderRadius: RADIUS.card,
     overflow: 'hidden',
     backgroundColor: surf(0.1),
     borderWidth: 1,
-    borderColor: surf(0.2),
+    borderColor: accentBorder,
+    shadowColor: CARD_SHADOW_COLOR,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: isDark ? 0.18 : 0.12,
+    shadowRadius: 8,
+    elevation: 1,
   },
   serviceCardBlur: {
     flex: 1,
@@ -5663,6 +5884,172 @@ const makeStyles = (isDark: boolean) => {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
   },
+  // Service Cards
+  categoryServicesContainer: {
+    gap: 12,
+  },
+
+
+  // Required-field asterisk
+  requiredStar: {
+    // Scaled with inputLabel (14 → 11): at the old 13 it outweighed the label
+    // it was marking. Softened too — it's a marker, not a warning.
+    color: 'rgba(229,57,53,0.85)',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+
+  // Duration quick-picker chips
+  durationChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: fg(0.14),
+    backgroundColor: surf(0.45),
+  },
+  durationChipText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: fg(0.7),
+  },
+  durationChipTextActive: {
+    color: '#fff',
+  },
+
+  // Bottom-sheet modals (template picker, add category)
+  templateSheet: {
+    height: '82%',
+    marginTop: 'auto',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: surf(0.75),
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 42,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: fg(0.18),
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  templateSheetSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 12,
+    color: fg(0.5),
+    marginTop: 3,
+  },
+  templateGroupLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: fg(0.6),
+    marginTop: 22,
+    marginBottom: 4,
+  },
+  templateScratchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    backgroundColor: surf(0.4),
+  },
+  templateScratchIcon: {
+    fontSize: 22,
+  },
+  templateScratchTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    color: P.text,
+  },
+  templateScratchSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 12,
+    color: fg(0.5),
+    marginTop: 2,
+  },
+  templateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 16,
+    marginTop: 10,
+    backgroundColor: surf(0.55),
+    borderWidth: 1,
+    borderColor: fg(0.06),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  templateName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    color: P.text,
+  },
+  templateDuration: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 12,
+    color: fg(0.5),
+    marginTop: 3,
+  },
+  templateAdd: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+  },
+
+  // Category type picker cards
+  categoryTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 18,
+  },
+  categoryTypeCard: {
+    // Math.floor avoids a sub-pixel rounding overflow that can push the 3rd
+    // column onto its own row (3 fractional widths + 2 gaps summing to just
+    // over the available width).
+    width: Math.floor((screenWidth - 40 - 24) / 3),
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 18,
+    alignItems: 'center',
+    backgroundColor: surf(0.55),
+    borderWidth: 1,
+    borderColor: fg(0.06),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryTypeCardUsed: {
+    opacity: 0.45,
+  },
+  categoryTypeLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 13,
+    color: P.text,
+  },
+  categoryTypeBlurb: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 10,
+    color: fg(0.5),
+    textAlign: 'center',
+    marginTop: 3,
+    lineHeight: 13,
+  },
+
 
   // Modals
   modalOverlay: {
@@ -5814,6 +6201,7 @@ const makeStyles = (isDark: boolean) => {
   },
   transferSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     color: fg(0.7),
     textAlign: 'center',
@@ -5943,6 +6331,7 @@ const makeStyles = (isDark: boolean) => {
   },
   addImageText: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 10,
     color: fg(0.5),
   },
@@ -5971,6 +6360,7 @@ const makeStyles = (isDark: boolean) => {
   },
   accentPickerSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     color: fg(0.6),
     textAlign: 'center',
@@ -6008,6 +6398,7 @@ const makeStyles = (isDark: boolean) => {
   },
   accentColorName: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 10,
     color: P.text,
     textAlign: 'center',
@@ -6032,7 +6423,6 @@ const makeStyles = (isDark: boolean) => {
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 8,
   },
   previewBackButton: {
@@ -6345,6 +6735,7 @@ const makeStyles = (isDark: boolean) => {
   },
   previewSelectedCategoryDescription: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 14,
@@ -6437,6 +6828,7 @@ const makeStyles = (isDark: boolean) => {
   },
   previewAddOnsLabel: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 10,
     marginBottom: 4,
   },
@@ -6448,6 +6840,7 @@ const makeStyles = (isDark: boolean) => {
   },
   previewAddOnName: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
   },
   previewAddOnPrice: {
@@ -6583,6 +6976,7 @@ const makeStyles = (isDark: boolean) => {
   },
   addOnName: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 14,
     color: P.text,
     flex: 1,
@@ -6811,16 +7205,7 @@ const makeStyles = (isDark: boolean) => {
   },
 
   // ── Tab switcher ──
-  tabSwitcher: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: surf(0.18),
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
-  },
-  // ── Policies tab ──
+  // ── Policies step ──
   policiesCard: {
     marginHorizontal: 16,
     borderRadius: 24,

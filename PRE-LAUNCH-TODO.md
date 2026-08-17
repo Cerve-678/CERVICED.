@@ -7,36 +7,100 @@ standing gaps.
 
 ---
 
-## 1. Account deletion grace period is 1 DAY, not 30
+## 1. BLOCKING — enable and test secure Stripe checkout before launch
 
-`account_deletion_grace_period.sql` was deployed with the purge threshold set
-to 1 day instead of 30, for testing. Live right now:
+The secure checkout route is deployed: `prepare_checkout → create-payment-intent
+by checkout batch → finalize_checkout`, with server-owned availability, prices,
+deposit policy and platform fees. Direct client booking/add-on writes were
+revoked as part of that cutover.
 
-```sql
--- inside public.process_scheduled_account_deletions()
-AND deletion_requested_at <= NOW() - INTERVAL '1 day'
-```
+Stripe is deliberately **off** in app code until launch preparation:
+`EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED=true` is required in the native release
+environment. While it is off, the old mock checkout cannot create live bookings
+because its direct writes are intentionally blocked.
 
-**Before launch:** change `INTERVAL '1 day'` to `INTERVAL '30 days'` and
-redeploy the function (`cron.schedule` upserts by job name, so re-running
-just the function body is enough — no need to touch the cron job itself).
+**Before launch:** enable the flag in the release environment, build a native
+iOS/Android app, and complete a Stripe test payment end to end: reserve slot,
+authorise payment, finalise booking, capture payment, verify client/provider
+notifications and the PDF receipt. Verify cancellation releases an abandoned
+checkout hold. Do not restore legacy direct booking policies merely to use the
+mock payment UI in production.
 
-```sql
-CREATE OR REPLACE FUNCTION public.process_scheduled_account_deletions()
-...
-     WHERE deletion_requested_at IS NOT NULL
-       AND deletion_requested_at <= NOW() - INTERVAL '30 days'
-...
-```
+### Pending database hardening — do not batch-deploy with legacy checkout rollback
 
-Also worth an end-to-end test now while the window is short: request deletion
-on a test account, wait past 1 day, confirm the cron job
-(`process-scheduled-account-deletions`, runs 03:00 UTC daily) actually purges
-it and reactivation-on-login stops being offered.
+The local, untracked migration
+`20260810180952_restore_legacy_booking_writes_pending_stripe.sql` restores
+direct client inserts to `bookings` and `booking_add_ons`. It must not be
+deployed alongside security migrations: it reintroduces client-controlled
+booking/payment values and conflicts with the server-authoritative checkout
+cutover above.
+
+Two reviewed security migrations are intentionally local-only until that
+checkout decision is resolved:
+
+- `20260812114517_revoke_public_booking_bookability_trigger.sql` and
+  `20260812114619_harden_attach_info_pack_to_booking.sql` remove unauthorised
+  execution paths for booking/information-pack operations.
+- `20260815093855_harden_promotion_and_conversation_rpcs.sql` limits sensitive
+  beauty-profile, promotion-audience and conversation-preview RPCs to their
+  authenticated owners.
+- `20260815095318_revoke_public_waitlist_invite_function.sql` removes API
+  access to the trigger-only function that creates waitlist bookings and
+  notifications.
+- `20260815095405_revoke_public_scheduled_process_functions.sql` closes 21
+  public cron-job endpoints that can otherwise send reminders or mutate
+  booking/provider state on demand.
+- `20260815095854_revoke_public_trigger_function_execution_batch_two.sql`
+  removes public API access from 24 trigger-only state-management functions.
+
+Use a dry run and inspect the exact migration list before any next production
+push. Do not use a direct SQL workaround that would put the database schema
+ahead of migration history.
+
+### Notification-delivery authority — staged, pending deployment
+
+All public tables currently have RLS enabled. Migration
+`20260815100547_harden_notification_delivery_authority.sql` replaces the broad
+provider/client notification policies with two authenticated RPCs. They derive
+every recipient from an owned booking, conversation booking, follow, bookmark,
+or waitlist relationship, then the app routes promotions, announcements,
+rebooking, intake forms, waitlist invites, and address alerts through them.
+
+This migration must ship with its paired app release. Until then, do not deploy
+the policy replacement by itself because older app builds still use direct
+notification inserts.
+
+### Function privilege defaults — staged, pending deployment
+
+`20260815101017_restrict_future_public_function_execution.sql` changes the
+`postgres` role's public-schema defaults so future database functions are not
+automatically callable by `anon` or `authenticated`. Any migration that adds a
+client RPC must now explicitly grant only the intended role after implementing
+its ownership checks. This prevents the same public-function exposure class
+from reappearing as the schema evolves.
 
 ---
 
-## 2. Overlap-prevention constraint — DEPLOYED 2026-08-03, future-only scope
+## 2. RESOLVED — account deletion grace period is 30 days
+
+Migration `20260810152938_account_deletion_grace_period_30_days` was deployed
+and verified against the linked database on 2026-08-10. The purge threshold is
+now 30 days, and public execution of the cron-only function is revoked.
+
+```sql
+-- inside public.process_scheduled_account_deletions()
+AND deletion_requested_at <= NOW() - INTERVAL '30 days'
+```
+
+The cron schedule was not changed. An end-to-end deletion/reactivation journey
+is still worth verifying before release: request deletion on a test account,
+confirm reactivation is available during the window, then verify the cron job
+(`process-scheduled-account-deletions`, runs 03:00 UTC daily) actually purges
+an expired test account and reactivation-on-login stops being offered.
+
+---
+
+## 3. Overlap-prevention constraint — DEPLOYED 2026-08-03, future-only scope
 
 `prevent_overlapping_bookings.sql` Steps 0–4 are live (buffer-padded
 `effective_start`/`effective_end` columns + trigger, backfilled for all 91
@@ -91,7 +155,7 @@ provider.
 
 ---
 
-## 3. waitlist_holds.sql was patched before deploying — verify in-app
+## 4. waitlist_holds.sql was patched before deploying — verify in-app
 
 The source file's `handle_new_booking()` was written against a stale
 baseline (predates `recipient_role` tagging and the auto-accept dedup fix)
@@ -111,7 +175,36 @@ person who reads it.
 
 ---
 
-## 4. Carried over from existing notes (not new today)
+## 5. RESOLVED — `provider_busy_spans_rpc.sql` is deployed; verify the client journey
+
+**Verified in the linked database on 2026-08-10:**
+`public.get_provider_busy_spans` exists. The deployment blocker is resolved;
+the remaining release task is to verify the client booking journey against a
+known occupied provider slot.
+
+`supabase/provider_busy_spans_rpc.sql` adds `get_provider_busy_spans()`.
+`AvailabilityService` now routes all
+six of its booking-conflict reads through it.
+
+Why it exists: `bookings` has no public SELECT policy, so every client-side
+conflict check was reading **zero rows** for any provider the client wasn't
+already booked with — the slot picker showed already-taken slots as bookable,
+and the client only found out when checkout was rejected. Never a
+double-booking hole (the `bookings_no_overlap` constraint and
+`enforce_booking_bookability()` both enforce server-side), but a bad bug in
+the main booking path.
+
+`fetchBusySpans()` deliberately throws when the RPC is absent rather than
+silently reverting to always-empty booking reads. That still protects any
+environment where this migration has not been applied.
+
+Verify after deploying: as a CLIENT (not the provider), open a provider's
+booking calendar on a day you know has a booking, and confirm the taken slot
+is greyed out rather than offered.
+
+---
+
+## 6. Carried over from existing notes (not new today)
 
 - Stripe payment-intent integration (`stripeService.ts` + edge functions,
   landed 2026-08-02) still needs `cerviced-security-review` +
@@ -123,7 +216,7 @@ person who reads it.
 
 ---
 
-## 5. Fixed 2026-08-04 — reschedule-request forgery + cart checkout slot hold
+## 7. Fixed 2026-08-04 — reschedule-request forgery + cart checkout slot hold
 
 Two gaps flagged in earlier sessions were resolved this session:
 

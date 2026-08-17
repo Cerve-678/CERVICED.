@@ -15,6 +15,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "audit:migrations": "node scripts/audit-migration-manifest.mjs",
     "build:android": "eas build --platform android",
     "build:ios": "eas build --platform ios",
     "submit:android": "eas submit --platform android",
@@ -23,6 +24,19 @@
     "clean": "expo r -c",
     "vault": "node scripts/gen-vault.mjs",
     "vault:watch": "node scripts/gen-vault.mjs --watch",
+    "export:remote-migrations": "node scripts/export-remote-migrations.mjs",
+    "export:remote-schema": "node scripts/export-remote-schema-inventory.mjs",
+    "verify:live-contract": "node scripts/verify-live-critical-contract.mjs",
+    "audit:live-rpc-exposure": "node scripts/audit-live-rpc-exposure.mjs",
+    "audit:live-profile-privacy": "node scripts/audit-live-profile-privacy.mjs",
+    "audit:live-notification-authority": "node scripts/audit-live-notification-authority.mjs",
+    "audit:live-waitlist-authority": "node scripts/audit-live-waitlist-authority.mjs",
+    "audit:live-authority": "node scripts/audit-live-authority.mjs",
+    "audit:live-provider-lifecycle": "node scripts/audit-live-provider-lifecycle.mjs",
+    "audit:live-review-authority": "node scripts/audit-live-review-authority.mjs",
+    "audit:live-booking-authority": "node scripts/audit-live-booking-authority.mjs",
+    "audit:live-intake-form-authority": "node scripts/audit-live-intake-form-authority.mjs",
+    "lint:live-db": "supabase db lint --linked",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
@@ -101,6 +115,9 @@
       "/node_modules/",
       "<rootDir>/.claude/",
       "<rootDir>/backups/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/.claude/worktrees/"
     ]
   },
   "private": true

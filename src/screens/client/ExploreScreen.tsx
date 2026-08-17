@@ -4,7 +4,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   StatusBar,
   Animated,
@@ -33,8 +32,10 @@ import {
   getPortfolioItems,
   getDiscoverProviders,
   getDiscoverServices,
+  getDiscoverUnclaimedProviders,
   getSavedPortfolioDetails,
 } from '../../services/databaseService';
+import type { DiscoverUnclaimedProvider } from '../../services/databaseService';
 import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../../types/database';
 
 // Stores
@@ -72,7 +73,8 @@ function interleaveDiscoverFeed(
 }
 
 // ── Skeleton Masonry Grid ────────────────────────────────────────────────
-function SkeletonMasonryGrid({ isDarkMode }: { isDarkMode: boolean }) {
+function SkeletonMasonryGrid() {
+  const { palette: P } = useTheme();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -85,7 +87,7 @@ function SkeletonMasonryGrid({ isDarkMode }: { isDarkMode: boolean }) {
     return () => loop.stop();
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#2A2724' : '#EDE8E2';
+  const base = P.surface;
   const colWidth = (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
   const leftHeights = [200, 140, 180, 120, 160];
   const rightHeights = [160, 210, 130, 175, 150];
@@ -239,6 +241,29 @@ const ExploreScreen = memo(() => {
     ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
   }), []);
 
+  // Map an unclaimed/scraped provider row to a "ready to claim" card. No
+  // rating/review data exists for these (never onboarded), so those fields
+  // are simply omitted rather than faked as 0 — PortfolioCard already
+  // treats them as optional. providerId uses the real id, and providerSlug
+  // is deliberately omitted: ImageDetailModal navigates via
+  // `item.providerSlug ?? item.providerId`, and getProviderBySlug requires
+  // has_gone_live = true, which no unclaimed row ever has — so resolving by
+  // slug would 404. Leaving providerSlug unset makes that fallback resolve
+  // to the real id, which ProviderProfileScreen's unclaimed-fallback lookup
+  // (getUnclaimedProviderDetail) expects.
+  const mapDbUnclaimedProviderToCard = useCallback((p: DiscoverUnclaimedProvider): PortfolioItem => ({
+    id: `provider-${p.id}`,
+    image: { uri: p.logo_url ?? '' },
+    caption: p.about_text ?? '',
+    category: p.service_category as unknown as ServiceCategory,
+    aspectRatio: 0.8,
+    providerId: p.id,
+    providerName: p.display_name,
+    kind: 'provider',
+    isUnclaimed: true,
+    ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+  }), []);
+
   // Map a service to one card PER photo in its carousel (not just the cover
   // shot) — each carries the same serviceId/price/provider so tapping any of
   // them books the same service. Ids carry a `__<imageIndex>` suffix so each
@@ -271,7 +296,7 @@ const ExploreScreen = memo(() => {
   // Load stores on mount
   useEffect(() => {
     loadSavedPortfolio();
-  }, []);
+  }, [loadSavedPortfolio]);
 
   // Filters
   const filters = useMemo(() => ['All', 'Hair', 'Nails', 'Makeup', 'Aesthetics', 'Brows', 'Lashes'], []);
@@ -296,10 +321,11 @@ const ExploreScreen = memo(() => {
 
     const load = async () => {
       try {
-        const [portfolioData, providerData, serviceData] = await Promise.all([
+        const [portfolioData, providerData, serviceData, unclaimedData] = await Promise.all([
           getPortfolioItems(category),
           getDiscoverProviders(category),
           getDiscoverServices(category),
+          getDiscoverUnclaimedProviders(category),
         ]);
 
         if (!cancelled) {
@@ -307,7 +333,10 @@ const ExploreScreen = memo(() => {
             interleaveDiscoverFeed(
               portfolioData.map(mapDbPortfolioItem),
               serviceData.flatMap(mapDbServiceToCards),
-              providerData.map(mapDbProviderToCard)
+              [
+                ...providerData.map(mapDbProviderToCard),
+                ...unclaimedData.map(mapDbUnclaimedProviderToCard),
+              ]
             )
           );
         }
@@ -319,7 +348,7 @@ const ExploreScreen = memo(() => {
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedFilter, filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbServiceToCards]);
+  }, [selectedFilter, filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbUnclaimedProviderToCard, mapDbServiceToCards]);
 
   // Fetch favourites whenever the tab is opened or the saved-ids list changes
   // (e.g. hearting/unhearting something while already on this tab).
@@ -385,10 +414,12 @@ const ExploreScreen = memo(() => {
     // transition itself is suppressed by the `animation: 'none'` static
     // option on ExploreNavigator's Search screen, not by a per-navigate
     // override (navigate() has no such 3rd argument).
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     navigation.navigate('Search', { morph: true });
   }, [navigation]);
 
   const handleImagePress = useCallback((item: PortfolioItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setSelectedImage(item);
     setIsDetailVisible(true);
   }, []);
@@ -400,6 +431,7 @@ const ExploreScreen = memo(() => {
 
   const handleViewProfile = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       navigation.navigate('ProviderProfile', {
         providerId,
         source: 'explore',
@@ -413,10 +445,10 @@ const ExploreScreen = memo(() => {
   // just navigates, passing the real service id when this card is backed by
   // one (kind === 'service') — ProviderProfileScreen picks openServiceId up
   // on load and opens that exact service's booking modal automatically,
-  // ready for date/time (and the consultation flow if this provider
-  // requires one), instead of leaving a fake item sitting in the cart.
+  // ready for date/time, instead of leaving a fake item sitting in the cart.
   const handleBookNow = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any, serviceId?: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       navigation.navigate('ProviderProfile', {
         providerId,
         source: 'explore',
@@ -465,7 +497,10 @@ const ExploreScreen = memo(() => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.savedButton}
-                onPress={() => navigation.navigate('BookmarkedProviders' as any)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  navigation.navigate('BookmarkedProviders' as any);
+                }}
               >
                 <TabIcon name="bookmark" size={20} color={P.text} />
               </TouchableOpacity>
@@ -476,8 +511,12 @@ const ExploreScreen = memo(() => {
               <SlidingTabs
                 tabs={filterTabs}
                 activeKey={selectedFilter}
-                onPress={setSelectedFilter}
+                onPress={(key) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setSelectedFilter(key);
+                }}
                 accentColor={P.accent}
+                activeTextColor={P.onAccent}
                 inactiveTextColor={P.sub}
                 containerStyle={styles.filterScrollContent}
               />
@@ -485,7 +524,7 @@ const ExploreScreen = memo(() => {
 
             {/* Masonry Grid */}
             {portfolioLoading ? (
-              <SkeletonMasonryGrid isDarkMode={isDarkMode} />
+              <SkeletonMasonryGrid />
             ) : (
               <MasonryGrid
                 data={portfolioItems}
@@ -519,7 +558,7 @@ const ExploreScreen = memo(() => {
         {/* ============ FAVOURITES TAB ============ */}
         {activeTab === 'favourites' && (
           favouritesLoading ? (
-            <SkeletonMasonryGrid isDarkMode={isDarkMode} />
+            <SkeletonMasonryGrid />
           ) : (
             <MasonryGrid
               data={favouriteItems}

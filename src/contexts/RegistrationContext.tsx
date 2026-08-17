@@ -40,6 +40,19 @@ export interface RegistrationData {
   // Personalisation — affects home feed gating
   gender: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
   has_kids: boolean | null;
+  // Provider "About your business" (Step 4) — location/pricing/team/contact
+  // logistics needed for booking + the business profile. Mirrors columns
+  // added in supabase/provider_signup_business_fields.sql.
+  priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
+  teamSize: 'solo' | 'small_team' | 'large_team' | '';
+  preferredContactMethods: string[];
+  preferredPaymentMethods: string[];
+  // Provider "Tell me more" (Step 5) — accessibility/language/specialty
+  // detail, more descriptive than operational.
+  accessibilityNotes: string;
+  languagesSpoken: string[];
+  specialties: string[];
+  specialtiesOther: string;
   // Set when a logged-in client starts the provider upgrade flow
   fromProviderSwitch: boolean;
   // Set when a logged-in provider starts the client registration flow
@@ -88,6 +101,16 @@ const initialData: RegistrationData = {
   // Personalisation
   gender: null,
   has_kids: null,
+  // Provider "About your business"
+  priceRange: '',
+  teamSize: '',
+  preferredContactMethods: [],
+  preferredPaymentMethods: [],
+  // Provider "Tell me more"
+  accessibilityNotes: '',
+  languagesSpoken: [],
+  specialties: [],
+  specialtiesOther: '',
   fromProviderSwitch: false,
   fromClientSwitch: false,
 };
@@ -116,7 +139,7 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
     setData(prev => {
       const next = { ...prev, ...partial };
       // Persist draft excluding password (sensitive — never stored on device)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
       const { password: _pw, ...safeData } = next;
       AsyncStorage.setItem(
         STORAGE_KEYS.REGISTRATION_DRAFT,

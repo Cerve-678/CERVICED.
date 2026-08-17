@@ -105,7 +105,7 @@ export default function IslandPillTabBar({ state, descriptors, navigation }: Bot
       mass: 0.7,
       useNativeDriver: true,
     }).start();
-  }, [state.index]);
+  }, [indicatorX, state.index, tabWidth]);
 
   const goToTab = (index: number) => {
     const clamped = Math.max(0, Math.min(tabCountRef.current - 1, index));

@@ -2,11 +2,9 @@
 // Manages provider availability and prevents double-booking
 
 import { supabase } from '../lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../utils/storageKeys';
-const BOOKINGS_STORAGE_KEY = STORAGE_KEYS.BOOKINGS_STORE_LEGACY;
 import { logger } from '../utils/logger';
-import { formatTime12 } from '../utils/dateUtils';
+import { formatTime12, formatShortDate } from '../utils/dateUtils';
+import { getProviderBusySpans } from './databaseService';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,6 +22,55 @@ export interface BookingConflict {
   conflictingBookingId?: string;
   message?: string;
 }
+
+/** Per-day state for the 7-day availability strip. */
+export type AvailabilityDayState = 'open' | 'closed' | 'blocked' | 'full';
+
+/**
+ * Today's headline state. Mirrors AvailabilityDayState plus `unpublished`,
+ * which has no per-day equivalent: it describes the provider as a whole
+ * having no schedule at all rather than any one day being shut.
+ */
+export type AvailabilityState = AvailabilityDayState | 'unpublished';
+
+export interface AvailabilityDay {
+  date: string;      // 'YYYY-MM-DD'
+  dayOfWeek: number; // 0=Sun
+  label: string;     // single-letter strip label
+  state: AvailabilityDayState;
+  /** Last closing time that day, already 12h-formatted; null when not open. */
+  closesAt: string | null;
+}
+
+export interface AvailabilitySummary {
+  state: AvailabilityState;
+  /** Primary line, e.g. "Open today until 6pm". */
+  headline: string;
+  /** Secondary line, e.g. "Next free Thu 2pm"; null when nothing to add. */
+  detail: string | null;
+  /** Seven days starting today; empty when the provider has no schedule. */
+  days: AvailabilityDay[];
+  nextFree: { date: string; time: string } | null;
+}
+
+/** One row of a provider's recurring weekly opening-hours listing. */
+export interface WeeklyOpeningHoursDay {
+  dayOfWeek: number; // 0=Sun..6=Sat
+  label: string;      // full day name, e.g. "Monday"
+  isOpen: boolean;
+  /** 12h-formatted overall span, e.g. "9:00am - 6:00pm"; null when closed.
+   *  A day with a split shift (e.g. a lunch break) collapses to its earliest
+   *  start and latest end — this is an opening-hours listing, not a booking
+   *  picker, so the gap in between isn't shown as a "break". */
+  hours: string | null;
+}
+
+const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+// Sun-indexed full names + Mon→Sun reading order — same convention as
+// ProviderScheduleScreen's DAY_FULL/DISPLAY_ORDER, kept in sync deliberately
+// so the client-facing weekly listing and the provider's own editor agree.
+const DAY_FULL_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEK_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 // Parse time string to minutes for comparison
 const parseTimeToMinutes = (timeStr: string): number => {
@@ -48,17 +95,22 @@ const parseTimeToMinutes = (timeStr: string): number => {
 };
 
 // Parse duration string to minutes
-const parseDurationToMinutes = (duration: string): number => {
-  const match = duration.match(/(\d+(?:\.\d+)?)\s*(hour|hr|h|minute|min|m)/i);
-  if (!match) return 60; // Default 1 hour
+// Sums EVERY component, not just the first: formatDuration() emits "1h 30min"
+// for 90 minutes, and a first-match-only parse read that as 60 — silently
+// dropping the minutes off every compound duration, so chained services were
+// scheduled a flat hour apart regardless of how long they actually take.
+export const parseDurationToMinutes = (duration: string): number => {
+  const matches = [...duration.matchAll(/(\d+(?:\.\d+)?)\s*(hours|hour|hrs|hr|h|minutes|minute|mins|min|m)/gi)];
+  if (matches.length === 0) return 60; // Default 1 hour
 
-  const amount = parseFloat(match[1] || '1');
-  const unit = (match[2] || 'h').toLowerCase();
+  const total = matches.reduce((sum, match) => {
+    const amount = parseFloat(match[1] || '1');
+    if (Number.isNaN(amount)) return sum;
+    const unit = (match[2] || 'h').toLowerCase();
+    return sum + (unit.startsWith('h') ? amount * 60 : amount);
+  }, 0);
 
-  if (unit.startsWith('h')) {
-    return Math.round(amount * 60);
-  }
-  return Math.round(amount);
+  return total > 0 ? Math.round(total) : 60;
 };
 
 // Check if two time ranges overlap
@@ -113,6 +165,53 @@ const toLocalDateStr = (date: Date): string => {
 
 type WorkingWindow = { start_time: string; end_time: string };
 
+/** A taken interval, in minutes since midnight, already buffer-padded. */
+type BusySpan = { date: string; start: number; end: number };
+
+/**
+ * Every taken interval for a provider across a date range, buffer-padding
+ * included.
+ *
+ * Goes through the get_provider_busy_spans RPC rather than reading `bookings`
+ * directly. RLS grants SELECT on `bookings` only to the booking's own client
+ * and to the owning provider, so a direct read from a client session browsing
+ * someone else's provider returns ZERO rows — silently identical to "nothing
+ * is booked". That is what made the slot picker offer already-taken slots as
+ * free until checkout rejected them. The RPC is SECURITY DEFINER and returns
+ * only date/start/end — no booking id, client or service.
+ *
+ * The spans are pre-padded from each booking's own stored
+ * effective_start/effective_end, so callers must NOT re-apply a per-service
+ * buffer on top; doing so would double-count the gap.
+ *
+ * Throws if the RPC is missing (i.e. provider_busy_spans_rpc.sql hasn't been
+ * deployed) — callers decide whether to degrade. Failing loudly is deliberate:
+ * silently treating an error as "no bookings" is exactly the bug being fixed.
+ */
+const fetchBusySpans = async (
+  providerId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<BusySpan[]> => {
+  const rows = await getProviderBusySpans(providerId, fromDate, toDate);
+  return rows.map(r => ({
+    date: r.booking_date,
+    start: parse24HTimeToMinutes(r.busy_start),
+    end: parse24HTimeToMinutes(r.busy_end),
+  }));
+};
+
+/** Group busy spans by their date, for the multi-day callers. */
+const groupBusyByDate = (spans: BusySpan[]): Map<string, BusySpan[]> => {
+  const map = new Map<string, BusySpan[]>();
+  for (const s of spans) {
+    const list = map.get(s.date) ?? [];
+    list.push(s);
+    map.set(s.date, list);
+  }
+  return map;
+};
+
 /**
  * Date overrides replace the normal weekly hours. A closed override wins over
  * every other record; otherwise one or more override periods are the working
@@ -121,7 +220,7 @@ type WorkingWindow = { start_time: string; end_time: string };
  */
 const resolveWorkingWindows = (
   recurring: WorkingWindow[],
-  overrideRows: Array<{ is_closed: boolean; start_time: string | null; end_time: string | null }>,
+  overrideRows: { is_closed: boolean; start_time: string | null; end_time: string | null }[],
   legacy: { open_time: string; close_time: string; is_closed: boolean } | null,
 ): WorkingWindow[] => {
   if (overrideRows.some(row => row.is_closed)) return [];
@@ -258,19 +357,19 @@ export type BackToBackSlot = { serviceId: string; time: string; endTime: string 
 // at (for a picker), rather than returning at the first one.
 async function findBackToBackSlotsForDate(
   providerId: string,
-  services: Array<{ serviceId: string; duration?: string }>,
+  services: { serviceId: string; duration?: string }[],
   date: string,
   collectAll?: false,
 ): Promise<BackToBackSlot[] | null>;
 async function findBackToBackSlotsForDate(
   providerId: string,
-  services: Array<{ serviceId: string; duration?: string }>,
+  services: { serviceId: string; duration?: string }[],
   date: string,
   collectAll: true,
 ): Promise<BackToBackSlot[][] | null>;
 async function findBackToBackSlotsForDate(
   providerId: string,
-  services: Array<{ serviceId: string; duration?: string }>,
+  services: { serviceId: string; duration?: string }[],
   date: string,
   collectAll = false,
 ): Promise<BackToBackSlot[] | BackToBackSlot[][] | null> {
@@ -309,20 +408,18 @@ async function findBackToBackSlotsForDate(
 
   const windows = resolveWorkingWindows(
     (windowsResult.data ?? []) as WorkingWindow[],
-    (overridesResult.data ?? []) as Array<{ is_closed: boolean; start_time: string | null; end_time: string | null }>,
+    (overridesResult.data ?? []) as { is_closed: boolean; start_time: string | null; end_time: string | null }[],
     availResult.data,
   );
   if (windows.length === 0) return null;
 
-  const { data: existingBookings } = await supabase
-    .from('bookings')
-    .select('booking_time, end_time, service_id')
-    .eq('provider_id', providerId)
-    .eq('booking_date', date)
-    .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']);
+  // Taken intervals via the RPC (already buffer-padded per booking). The
+  // buffer lookup below is still needed, but only for the NEW chain's own
+  // services — the existing bookings' padding is baked into their spans.
+  const busySpans = await fetchBusySpans(providerId, date, date);
 
   const bufferByServiceId = await fetchBufferByServiceId(
-    [...services.map(s => s.serviceId), ...((existingBookings ?? []).map(b => b.service_id))],
+    services.map(s => s.serviceId),
     bufferMins
   );
 
@@ -335,7 +432,7 @@ async function findBackToBackSlotsForDate(
       .map(t => parseTimeToMinutes(t));
 
     for (const start0 of candidateStarts) {
-      const chain: Array<{ start: number; end: number }> = [];
+      const chain: { start: number; end: number }[] = [];
       let cursor = start0;
       let fits = true;
       for (let i = 0; i < services.length; i++) {
@@ -354,14 +451,9 @@ async function findBackToBackSlotsForDate(
       const envelopeStart = chain[0]!.start - chainBuffers[0]!.before;
       const envelopeEnd = chain[chain.length - 1]!.end + chainBuffers[chainBuffers.length - 1]!.after;
 
-      const conflict = (existingBookings ?? []).some(booked => {
-        const bookedStart = parse24HTimeToMinutes(booked.booking_time);
-        const bookedEnd = booked.end_time ? parse24HTimeToMinutes(booked.end_time) : bookedStart + 60;
-        const existBuffer = booked.service_id
-          ? bufferByServiceId.get(booked.service_id) ?? { before: 0, after: bufferMins }
-          : { before: 0, after: bufferMins };
-        return doTimesOverlap(envelopeStart, envelopeEnd, bookedStart - existBuffer.before, bookedEnd + existBuffer.after);
-      });
+      const conflict = busySpans.some(span =>
+        doTimesOverlap(envelopeStart, envelopeEnd, span.start, span.end),
+      );
       if (conflict) continue;
 
       const schedule = services.map((s, i) => ({
@@ -384,7 +476,7 @@ async function findBackToBackSlotsForDate(
  */
 const findAllBackToBackSlotsForDate = async (
   providerId: string,
-  services: Array<{ serviceId: string; duration?: string }>,
+  services: { serviceId: string; duration?: string }[],
   date: string,
 ): Promise<BackToBackSlot[][] | null> =>
   findBackToBackSlotsForDate(providerId, services, date, true) as Promise<BackToBackSlot[][] | null>;
@@ -400,45 +492,6 @@ export const AvailabilityService = {
    */
   async resolveProvider(providerIdOrName: string): Promise<string | null> {
     return resolveProviderId(providerIdOrName);
-  },
-
-  async getBookedSlots(providerName: string, date: string): Promise<Array<{
-    time: string;
-    endTime: string;
-    bookingId: string;
-    serviceName: string;
-    duration: string;
-  }>> {
-    try {
-      const stored = await AsyncStorage.getItem(BOOKINGS_STORAGE_KEY);
-      if (!stored) return [];
-
-      const bookings = JSON.parse(stored);
-
-      // Filter bookings for this provider on this date that are not cancelled
-      const providerBookings = bookings.filter((booking: any) => {
-        const nameMatch =
-          booking.providerName?.toLowerCase() === providerName.toLowerCase() ||
-          booking.providerName?.toLowerCase().includes(providerName.toLowerCase()) ||
-          providerName.toLowerCase().includes(booking.providerName?.toLowerCase() || '');
-
-        const dateMatch = booking.bookingDate === date;
-        const notCancelled = booking.status !== 'cancelled' && booking.status !== 'no_show';
-
-        return nameMatch && dateMatch && notCancelled;
-      });
-
-      return providerBookings.map((booking: any) => ({
-        time: booking.bookingTime,
-        endTime: booking.endTime,
-        bookingId: booking.id,
-        serviceName: booking.serviceName,
-        duration: booking.duration,
-      }));
-    } catch (error) {
-      logger.error('Error fetching booked slots:', error);
-      return [];
-    }
   },
 
   /**
@@ -537,7 +590,7 @@ export const AvailabilityService = {
 
         const windows = resolveWorkingWindows(
           (windowsResult.data ?? []) as WorkingWindow[],
-          (overridesResult.data ?? []) as Array<{ is_closed: boolean; start_time: string | null; end_time: string | null }>,
+          (overridesResult.data ?? []) as { is_closed: boolean; start_time: string | null; end_time: string | null }[],
           availResult.data,
         );
         if (windows.length === 0) return [];
@@ -554,21 +607,11 @@ export const AvailabilityService = {
 
         if (baseSlots.length === 0) return [];
 
-        // Fetch existing bookings
-        const { data: existingBookings } = await supabase
-          .from('bookings')
-          .select('booking_time, end_time, service_id')
-          .eq('provider_id', providerId)
-          .eq('booking_date', date)
-          .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']);
-
-        // Each existing booking's gap comes from ITS OWN service, not the
-        // one currently being booked — a 3-hour colour appointment's cleanup
-        // buffer still applies even if the new request is for a quick blowout.
-        const bufferByServiceId = await fetchBufferByServiceId(
-          (existingBookings ?? []).map(b => b.service_id),
-          bufferMins
-        );
+        // Taken intervals via the RPC — each already padded by ITS OWN
+        // service's buffer (a 3-hour colour's cleanup gap still applies even
+        // if the new request is a quick blowout), so no per-service buffer
+        // lookup is needed here and none must be re-applied.
+        const busySpans = await fetchBusySpans(providerId, date, date);
 
         return baseSlots.map(time => {
           const slotStart = parseTimeToMinutes(time);
@@ -576,16 +619,9 @@ export const AvailabilityService = {
           const newEffStart = slotStart - newBuffer.before;
           const newEffEnd = slotEnd + newBuffer.after;
 
-          const conflict = (existingBookings ?? []).find(booked => {
-            const bookedStart = parse24HTimeToMinutes(booked.booking_time);
-            const bookedEnd = booked.end_time
-              ? parse24HTimeToMinutes(booked.end_time)
-              : bookedStart + 60;
-            const existBuffer = booked.service_id
-              ? bufferByServiceId.get(booked.service_id) ?? { before: 0, after: bufferMins }
-              : { before: 0, after: bufferMins };
-            return doTimesOverlap(newEffStart, newEffEnd, bookedStart - existBuffer.before, bookedEnd + existBuffer.after);
-          });
+          const conflict = busySpans.find(span =>
+            doTimesOverlap(newEffStart, newEffEnd, span.start, span.end),
+          );
 
           return { time, isBooked: !!conflict };
         });
@@ -656,7 +692,7 @@ export const AvailabilityService = {
         ]);
         const windows = resolveWorkingWindows(
           (windowsResult.data ?? []) as WorkingWindow[],
-          (overridesResult.data ?? []) as Array<{ is_closed: boolean; start_time: string | null; end_time: string | null }>,
+          (overridesResult.data ?? []) as { is_closed: boolean; start_time: string | null; end_time: string | null }[],
           availResult.data,
         );
         const fitsWorkingPeriod = windows.some(window =>
@@ -684,29 +720,11 @@ export const AvailabilityService = {
         const newEffStart = newStartMinutes - newBuffer.before;
         const newEffEnd = newEndMinutes + newBuffer.after;
 
-        // Check existing Supabase bookings for overlap
-        const { data: existingBookings } = await supabase
-          .from('bookings')
-          .select('booking_time, end_time, service_id')
-          .eq('provider_id', providerId)
-          .eq('booking_date', date)
-          .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']);
-
-        const bufferByServiceId = await fetchBufferByServiceId(
-          (existingBookings ?? []).map(b => b.service_id),
-          providerBufferMins
+        // Taken intervals via the RPC — already buffer-padded per booking.
+        const busySpans = await fetchBusySpans(providerId, date, date);
+        const conflict = busySpans.find(span =>
+          doTimesOverlap(newEffStart, newEffEnd, span.start, span.end),
         );
-
-        const conflict = (existingBookings ?? []).find(booked => {
-          const bookedStart = parse24HTimeToMinutes(booked.booking_time);
-          const bookedEnd = booked.end_time
-            ? parse24HTimeToMinutes(booked.end_time)
-            : bookedStart + 60;
-          const existBuffer = booked.service_id
-            ? bufferByServiceId.get(booked.service_id) ?? { before: 0, after: providerBufferMins }
-            : { before: 0, after: providerBufferMins };
-          return doTimesOverlap(newEffStart, newEffEnd, bookedStart - existBuffer.before, bookedEnd + existBuffer.after);
-        });
 
         if (conflict) {
           return { hasConflict: true, message: 'This time slot is no longer available.' };
@@ -734,22 +752,22 @@ export const AvailabilityService = {
    * Used when checking out a cart with multiple items
    */
   async validateCartBookings(
-    bookings: Array<{
+    bookings: {
       providerName: string;
       date: string;
       time: string;
       duration: string;
       cartItemId: string;
       serviceId?: string | undefined;
-    }>
+    }[]
   ): Promise<{
     isValid: boolean;
-    conflicts: Array<{
+    conflicts: {
       cartItemId: string;
       message: string;
-    }>;
+    }[];
   }> {
-    const conflicts: Array<{ cartItemId: string; message: string }> = [];
+    const conflicts: { cartItemId: string; message: string }[] = [];
 
     for (const booking of bookings) {
       // Check against existing bookings in storage
@@ -817,7 +835,7 @@ export const AvailabilityService = {
    */
   async hasNearTermAvailabilityForServices(
     providerIdOrName: string,
-    services: Array<{ serviceId: string; duration?: string }>,
+    services: { serviceId: string; duration?: string }[],
     withinDays = 14,
     secondaryWithinDays?: number
   ): Promise<Map<string, boolean> & { secondary?: Map<string, boolean> }> {
@@ -884,7 +902,7 @@ export const AvailabilityService = {
       const startStr = toLocalDateStr(today);
       const endStr = toLocalDateStr(endDate);
 
-      const [blockedResult, overridesResult, bookingsResult] = await Promise.all([
+      const [blockedResult, overridesResult, busySpans] = await Promise.all([
         supabase
           .from('provider_blocked_dates')
           .select('blocked_date')
@@ -897,13 +915,7 @@ export const AvailabilityService = {
           .eq('provider_id', providerId)
           .gte('availability_date', startStr)
           .lte('availability_date', endStr),
-        supabase
-          .from('bookings')
-          .select('booking_date, booking_time, end_time, service_id')
-          .eq('provider_id', providerId)
-          .gte('booking_date', startStr)
-          .lte('booking_date', endStr)
-          .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']),
+        fetchBusySpans(providerId, startStr, endStr),
       ]);
 
       const blockedDates = new Set((blockedResult.data ?? []).map((b: any) => b.blocked_date as string));
@@ -915,7 +927,7 @@ export const AvailabilityService = {
         list.push(row);
         windowsByDow.set(row.day_of_week, list);
       }
-      const overridesByDate = new Map<string, Array<{ is_closed: boolean; start_time: string | null; end_time: string | null }>>();
+      const overridesByDate = new Map<string, { is_closed: boolean; start_time: string | null; end_time: string | null }[]>();
       for (const row of (overridesResult.data ?? []) as any[]) {
         const list = overridesByDate.get(row.availability_date) ?? [];
         list.push(row);
@@ -925,21 +937,12 @@ export const AvailabilityService = {
       const bufferMins = settings?.buffer_mins ?? 0;
       const intervalMins = settings?.slot_interval_mins ?? 60;
 
-      const bookingsByDate = new Map<string, any[]>();
-      for (const b of (bookingsResult.data ?? []) as any[]) {
-        const list = bookingsByDate.get(b.booking_date) ?? [];
-        list.push(b);
-        bookingsByDate.set(b.booking_date, list);
-      }
+      const busyByDate = groupBusyByDate(busySpans);
 
-      // One batched lookup covers buffer overrides for both the requested
-      // services and every service referenced by an existing booking in the
-      // window — a single query instead of one per service.
+      // One batched lookup for the requested services' own buffers. Existing
+      // bookings need no lookup — their spans arrive already padded.
       const bufferByServiceId = await fetchBufferByServiceId(
-        [
-          ...services.map(s => s.serviceId),
-          ...((bookingsResult.data ?? []) as any[]).map(b => b.service_id),
-        ],
+        services.map(s => s.serviceId),
         bufferMins
       );
 
@@ -975,21 +978,13 @@ export const AvailabilityService = {
           );
           if (daySlots.length === 0) continue;
 
-          const dayBookings = bookingsByDate.get(dateStr) ?? [];
+          const dayBusy = busyByDate.get(dateStr) ?? [];
           const hasOpenSlot = daySlots.some(t => {
             const slotStart = parseTimeToMinutes(t);
             const slotEnd = slotStart + durationMinutes;
             const newEffStart = slotStart - newBuffer.before;
             const newEffEnd = slotEnd + newBuffer.after;
-            const conflict = dayBookings.some(booked => {
-              const bookedStart = parse24HTimeToMinutes(booked.booking_time);
-              const bookedEnd = booked.end_time ? parse24HTimeToMinutes(booked.end_time) : bookedStart + 60;
-              const existBuffer = booked.service_id
-                ? bufferByServiceId.get(booked.service_id) ?? { before: 0, after: bufferMins }
-                : { before: 0, after: bufferMins };
-              return doTimesOverlap(newEffStart, newEffEnd, bookedStart - existBuffer.before, bookedEnd + existBuffer.after);
-            });
-            return !conflict;
+            return !dayBusy.some(span => doTimesOverlap(newEffStart, newEffEnd, span.start, span.end));
           });
           if (hasOpenSlot) {
             // Days are scanned in ascending order, so the first hit is
@@ -1067,7 +1062,7 @@ export const AvailabilityService = {
       const startStr = toLocalDateStr(today);
       const endStr = toLocalDateStr(endDate);
 
-      const [blockedResult, overridesResult, bookingsResult] = await Promise.all([
+      const [blockedResult, overridesResult, busySpans] = await Promise.all([
         supabase
           .from('provider_blocked_dates')
           .select('blocked_date')
@@ -1080,13 +1075,7 @@ export const AvailabilityService = {
           .eq('provider_id', providerId)
           .gte('availability_date', startStr)
           .lte('availability_date', endStr),
-        supabase
-          .from('bookings')
-          .select('booking_date, booking_time, end_time, service_id')
-          .eq('provider_id', providerId)
-          .gte('booking_date', startStr)
-          .lte('booking_date', endStr)
-          .in('status', ['pending', 'confirmed', 'in_progress', 'on_hold']),
+        fetchBusySpans(providerId, startStr, endStr),
       ]);
 
       const blockedDates = new Set((blockedResult.data ?? []).map((b: any) => b.blocked_date as string));
@@ -1098,28 +1087,21 @@ export const AvailabilityService = {
         list.push(row);
         windowsByDow.set(row.day_of_week, list);
       }
-      const overridesByDate = new Map<string, Array<{ is_closed: boolean; start_time: string | null; end_time: string | null }>>();
+      const overridesByDate = new Map<string, { is_closed: boolean; start_time: string | null; end_time: string | null }[]>();
       for (const row of (overridesResult.data ?? []) as any[]) {
         const list = overridesByDate.get(row.availability_date) ?? [];
         list.push(row);
         overridesByDate.set(row.availability_date, list);
       }
-      const bookingsByDate = new Map<string, any[]>();
-      for (const b of (bookingsResult.data ?? []) as any[]) {
-        const list = bookingsByDate.get(b.booking_date) ?? [];
-        list.push(b);
-        bookingsByDate.set(b.booking_date, list);
-      }
+      const busyByDate = groupBusyByDate(busySpans);
 
       const bufferMins = settings?.buffer_mins ?? 0;
       const intervalMins = settings?.slot_interval_mins ?? 60;
       const durationMinutes = serviceDuration ? parseDurationToMinutes(serviceDuration) : 60;
 
+      // Only the new service's own buffer — existing spans arrive padded.
       const bufferByServiceId = await fetchBufferByServiceId(
-        [
-          ...(serviceId ? [serviceId] : []),
-          ...((bookingsResult.data ?? []) as any[]).map(b => b.service_id),
-        ],
+        serviceId ? [serviceId] : [],
         bufferMins
       );
       const newBuffer = serviceId
@@ -1151,21 +1133,13 @@ export const AvailabilityService = {
         );
         if (daySlots.length === 0) continue;
 
-        const dayBookings = bookingsByDate.get(dateStr) ?? [];
+        const dayBusy = busyByDate.get(dateStr) ?? [];
         const hasOpenSlot = daySlots.some(t => {
           const slotStart = parseTimeToMinutes(t);
           const slotEnd = slotStart + durationMinutes;
           const newEffStart = slotStart - newBuffer.before;
           const newEffEnd = slotEnd + newBuffer.after;
-          const conflict = dayBookings.some(booked => {
-            const bookedStart = parse24HTimeToMinutes(booked.booking_time);
-            const bookedEnd = booked.end_time ? parse24HTimeToMinutes(booked.end_time) : bookedStart + 60;
-            const existBuffer = booked.service_id
-              ? bufferByServiceId.get(booked.service_id) ?? { before: 0, after: bufferMins }
-              : { before: 0, after: bufferMins };
-            return doTimesOverlap(newEffStart, newEffEnd, bookedStart - existBuffer.before, bookedEnd + existBuffer.after);
-          });
-          return !conflict;
+          return !dayBusy.some(span => doTimesOverlap(newEffStart, newEffEnd, span.start, span.end));
         });
         if (hasOpenSlot) return dateStr;
       }
@@ -1226,7 +1200,7 @@ export const AvailabilityService = {
    */
   async findBackToBackSlots(
     providerIdOrName: string,
-    services: Array<{ serviceId: string; duration?: string }>,
+    services: { serviceId: string; duration?: string }[],
     date: string,
   ): Promise<BackToBackSlot[] | null> {
     if (services.length === 0) return null;
@@ -1247,7 +1221,7 @@ export const AvailabilityService = {
    */
   async findAllBackToBackSlots(
     providerIdOrName: string,
-    services: Array<{ serviceId: string; duration?: string }>,
+    services: { serviceId: string; duration?: string }[],
     date: string,
   ): Promise<BackToBackSlot[][] | null> {
     if (services.length === 0) return null;
@@ -1272,7 +1246,7 @@ export const AvailabilityService = {
    */
   async findNextBackToBackDay(
     providerIdOrName: string,
-    services: Array<{ serviceId: string; duration?: string }>,
+    services: { serviceId: string; duration?: string }[],
     withinDays = 14,
   ): Promise<{ date: string; schedule: BackToBackSlot[] } | null> {
     if (services.length === 0) return null;
@@ -1300,6 +1274,306 @@ export const AvailabilityService = {
       return null;
     } catch (error) {
       logger.error('Error finding next back-to-back day:', error);
+      return null;
+    }
+  },
+
+  /**
+   * The live availability summary shown on both profile screens, replacing the
+   * hand-typed `slots_text` free-text field that never reflected reality.
+   *
+   * Everything here is derived from the same records that actually govern
+   * booking (weekly windows, date overrides, blocked dates, existing
+   * bookings), resolved through the same `resolveWorkingWindows` precedence
+   * createBooking enforces — so the line can't claim a provider is open on a
+   * day they'd be rejected for.
+   *
+   * `unpublished` is deliberately distinct from `closed`: a provider who has
+   * never set hours is not bookable at all (createBooking rejects them
+   * outright), which is a different message from one who is simply shut
+   * today. Callers must render the two differently.
+   *
+   * Booking density comes from the get_provider_busy_spans RPC, not a direct
+   * `bookings` read — RLS would hand a browsing client zero rows, which is
+   * indistinguishable from "nobody is booked" and would render a confidently
+   * wrong "open all week" strip. See fetchBusySpans.
+   *
+   * No has_gone_live/is_active gate here — both call sites are pre-gated
+   * (getProviderBySlug for clients, the provider's own id for their own
+   * profile). A new caller must do its own gating; this is not self-gating.
+   *
+   * One batched fetch for the whole 7-day strip, not a query per day.
+   * Returns null only on unexpected failure — a provider with no
+   * availability is a valid `unpublished` result, not an error.
+   */
+  async getAvailabilitySummary(
+    providerIdOrName: string,
+    options: { searchDays?: number } = {},
+  ): Promise<AvailabilitySummary | null> {
+    const { searchDays = 60 } = options;
+    try {
+      const providerId = await resolveProviderId(providerIdOrName);
+      if (!providerId) return null;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = toLocalDateStr(today);
+
+      const stripEnd = new Date(today);
+      stripEnd.setDate(stripEnd.getDate() + 6);
+      const stripEndStr = toLocalDateStr(stripEnd);
+
+      const [availResult, windowsResult, blockedResult, overridesResult, busySpans] = await Promise.all([
+        supabase
+          .from('provider_availability')
+          .select('day_of_week, open_time, close_time, is_closed')
+          .eq('provider_id', providerId),
+        supabase
+          .from('provider_availability_windows')
+          .select('day_of_week, start_time, end_time')
+          .eq('provider_id', providerId),
+        supabase
+          .from('provider_blocked_dates')
+          .select('blocked_date')
+          .eq('provider_id', providerId)
+          .gte('blocked_date', todayStr)
+          .lte('blocked_date', stripEndStr),
+        supabase
+          .from('provider_availability_overrides')
+          .select('availability_date, is_closed, start_time, end_time')
+          .eq('provider_id', providerId)
+          .gte('availability_date', todayStr)
+          .lte('availability_date', stripEndStr),
+        fetchBusySpans(providerId, todayStr, stripEndStr),
+      ]);
+
+      const availRows = (availResult.data ?? []) as { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
+      const windowRows = (windowsResult.data ?? []) as { day_of_week: number; start_time: string; end_time: string }[];
+
+      // No schedule of any kind published — createBooking would reject every
+      // booking, so this is "not bookable yet", not "closed today".
+      if (availRows.length === 0 && windowRows.length === 0) {
+        return {
+          state: 'unpublished',
+          headline: 'No schedule published',
+          detail: null,
+          days: [],
+          nextFree: null,
+        };
+      }
+
+      const availByDow = new Map<number, { open_time: string; close_time: string; is_closed: boolean }>();
+      for (const row of availRows) availByDow.set(row.day_of_week, row);
+      const windowsByDow = new Map<number, WorkingWindow[]>();
+      for (const row of windowRows) {
+        const list = windowsByDow.get(row.day_of_week) ?? [];
+        list.push({ start_time: row.start_time, end_time: row.end_time });
+        windowsByDow.set(row.day_of_week, list);
+      }
+      const overridesByDate = new Map<string, { is_closed: boolean; start_time: string | null; end_time: string | null }[]>();
+      for (const row of (overridesResult.data ?? []) as any[]) {
+        const list = overridesByDate.get(row.availability_date) ?? [];
+        list.push(row);
+        overridesByDate.set(row.availability_date, list);
+      }
+      const blockedDates = new Set((blockedResult.data ?? []).map((b: any) => b.blocked_date as string));
+      const bookedSpansByDate = groupBusyByDate(busySpans);
+      const bookedMinutesByDate = new Map<string, number>();
+      for (const [date, spans] of bookedSpansByDate) {
+        bookedMinutesByDate.set(
+          date,
+          spans.reduce((sum, s) => sum + Math.max(0, s.end - s.start), 0),
+        );
+      }
+
+      // Seven days starting today. A day counts as `full` only when its
+      // booked minutes cover its whole working span — an approximation used
+      // for the strip's at-a-glance dot, never to gate an actual booking.
+      const days: AvailabilityDay[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const dateStr = toLocalDateStr(d);
+        const windows = resolveWorkingWindows(
+          windowsByDow.get(d.getDay()) ?? [],
+          overridesByDate.get(dateStr) ?? [],
+          availByDow.get(d.getDay()) ?? null,
+        );
+
+        let state: AvailabilityDayState;
+        if (blockedDates.has(dateStr)) state = 'blocked';
+        else if (windows.length === 0) state = 'closed';
+        else {
+          const openMinutes = windows.reduce(
+            (sum, w) => sum + Math.max(0, parse24HTimeToMinutes(w.end_time) - parse24HTimeToMinutes(w.start_time)),
+            0,
+          );
+          state = (bookedMinutesByDate.get(dateStr) ?? 0) >= openMinutes ? 'full' : 'open';
+        }
+
+        days.push({
+          date: dateStr,
+          dayOfWeek: d.getDay(),
+          label: DAY_INITIALS[d.getDay()] ?? '',
+          state,
+          closesAt: windows.length > 0 ? formatTime12(windows[windows.length - 1]!.end_time) : null,
+        });
+      }
+
+      // "Next free" from the data already in hand — no extra queries. The
+      // authoritative resolver (resolveNextAvailableSlot) costs its own
+      // batched fetch plus a per-candidate-day slot check, which is far too
+      // much for one line of text on the client's hottest screen. It is used
+      // only as a fallback when nothing opens up inside the 7-day strip.
+      //
+      // Deliberately coarse: the earliest working-window start that isn't
+      // already covered by a known booking, in whole slot-interval steps.
+      // It can therefore differ slightly from the booking picker's own
+      // answer, so it is presented as guidance ("Next free …"), never used
+      // to gate a booking — createBooking remains the only authority.
+      const SLOT_STEP = 30;
+      let nextFree: { date: string; time: string } | null = null;
+      for (const day of days) {
+        if (day.state !== 'open') continue;
+        const windows = resolveWorkingWindows(
+          windowsByDow.get(day.dayOfWeek) ?? [],
+          overridesByDate.get(day.date) ?? [],
+          availByDow.get(day.dayOfWeek) ?? null,
+        );
+        const spans = bookedSpansByDate.get(day.date) ?? [];
+        const isToday = day.date === todayStr;
+        const nowMins = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : -1;
+
+        for (const w of windows) {
+          const openM = parse24HTimeToMinutes(w.start_time);
+          const closeM = parse24HTimeToMinutes(w.end_time);
+          for (let m = openM; m < closeM; m += SLOT_STEP) {
+            if (isToday && m <= nowMins) continue;
+            const taken = spans.some(s => m < s.end && s.start < m + SLOT_STEP);
+            if (!taken) {
+              nextFree = { date: day.date, time: formatMinutesTo12h(m) };
+              break;
+            }
+          }
+          if (nextFree) break;
+        }
+        if (nextFree) break;
+      }
+
+      // Nothing inside the strip — only now pay for the wider search.
+      if (!nextFree) {
+        nextFree = await this.resolveNextAvailableSlot(providerId, undefined, undefined, searchDays);
+      }
+
+      const todayDay = days[0]!;
+      let state: AvailabilityState;
+      let headline: string;
+      if (todayDay.state === 'open') {
+        state = 'open';
+        headline = todayDay.closesAt ? `Open today until ${todayDay.closesAt}` : 'Open today';
+      } else if (todayDay.state === 'full') {
+        state = 'full';
+        headline = 'Fully booked today';
+      } else if (todayDay.state === 'blocked') {
+        state = 'blocked';
+        headline = 'Away today';
+      } else {
+        state = 'closed';
+        headline = 'Closed today';
+      }
+
+      let detail: string | null;
+      if (nextFree) {
+        detail = nextFree.date === todayStr
+          ? `Next free ${nextFree.time}`
+          : `Next free ${formatShortDate(nextFree.date)} ${nextFree.time}`;
+      } else {
+        detail = 'No availability in the next few weeks';
+      }
+
+      return { state, headline, detail, days, nextFree };
+    } catch (error) {
+      logger.error('Error building availability summary:', error);
+      return null;
+    }
+  },
+
+  /**
+   * The provider's recurring weekly schedule, Monday → Sunday, for a plain
+   * "Opening Hours" listing — distinct from getAvailabilitySummary's rolling
+   * 7-day booking-status strip, which mixes in blocked/fully-booked state and
+   * isn't fixed to calendar weekdays. Not gated by has_gone_live here (see
+   * getAvailabilitySummary's doc comment) — callers query on an id already
+   * resolved through a gated path.
+   *
+   * Same source-of-truth precedence as ProviderScheduleScreen's own editor:
+   * provider_availability_windows (current schema, supports multiple periods
+   * per day) wins when present; provider_availability (legacy single
+   * open/close row) is the fallback for providers who haven't migrated.
+   * Date-specific overrides/blocked-dates are deliberately NOT applied here —
+   * those describe a single date, not the recurring week this listing shows.
+   */
+  async getWeeklyOpeningHours(providerIdOrName: string): Promise<WeeklyOpeningHoursDay[] | null> {
+    try {
+      const providerId = await resolveProviderId(providerIdOrName);
+      if (!providerId) return null;
+
+      const [windowsResult, legacyResult] = await Promise.all([
+        supabase
+          .from('provider_availability_windows')
+          .select('day_of_week, start_time, end_time')
+          .eq('provider_id', providerId)
+          .order('start_time'),
+        supabase
+          .from('provider_availability')
+          .select('day_of_week, open_time, close_time, is_closed')
+          .eq('provider_id', providerId),
+      ]);
+
+      const windowRows = (windowsResult.data ?? []) as { day_of_week: number; start_time: string; end_time: string }[];
+      const legacyRows = (legacyResult.data ?? []) as { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
+      if (windowRows.length === 0 && legacyRows.length === 0) return null;
+
+      const windowsByDow = new Map<number, { start_time: string; end_time: string }[]>();
+      for (const row of windowRows) {
+        const list = windowsByDow.get(row.day_of_week) ?? [];
+        list.push({ start_time: row.start_time, end_time: row.end_time });
+        windowsByDow.set(row.day_of_week, list);
+      }
+      const legacyByDow = new Map<number, { open_time: string; close_time: string; is_closed: boolean }>();
+      for (const row of legacyRows) legacyByDow.set(row.day_of_week, row);
+
+      return WEEK_DISPLAY_ORDER.map((dow) => {
+        const windows = windowsByDow.get(dow);
+        if (windows && windows.length > 0) {
+          // Collapse every period in the day to its earliest start / latest
+          // end — a split shift reads as one open span, not separate rows.
+          const earliest = windows.reduce((a, b) =>
+            parse24HTimeToMinutes(a.start_time) <= parse24HTimeToMinutes(b.start_time) ? a : b,
+          );
+          const latest = windows.reduce((a, b) =>
+            parse24HTimeToMinutes(a.end_time) >= parse24HTimeToMinutes(b.end_time) ? a : b,
+          );
+          return {
+            dayOfWeek: dow,
+            label: DAY_FULL_NAMES[dow] ?? '',
+            isOpen: true,
+            hours: `${formatTime12(earliest.start_time)} - ${formatTime12(latest.end_time)}`,
+          };
+        }
+        const legacy = legacyByDow.get(dow);
+        if (legacy && !legacy.is_closed) {
+          return {
+            dayOfWeek: dow,
+            label: DAY_FULL_NAMES[dow] ?? '',
+            isOpen: true,
+            hours: `${formatTime12(legacy.open_time)} - ${formatTime12(legacy.close_time)}`,
+          };
+        }
+        return { dayOfWeek: dow, label: DAY_FULL_NAMES[dow] ?? '', isOpen: false, hours: null };
+      });
+    } catch (error) {
+      logger.error('Error building weekly opening hours:', error);
       return null;
     }
   },

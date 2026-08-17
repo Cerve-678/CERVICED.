@@ -1,19 +1,13 @@
 // BookingDetailScreen.tsx
 // Full-screen booking detail view extracted from BookingsScreen modal.
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback,
   LayoutAnimation, UIManager,
 } from 'react-native';
-
-if (Platform.OS === 'android') {
-  UIManager.setLayoutAnimationEnabledExperimental?.(true);
-}
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -33,6 +27,7 @@ import {
   getProviderAddressPolicy,
   getProviderCancellationPolicyById,
   getProviderReschedulePolicyById,
+  getProviderBookingPoliciesById,
   ProviderAddressPolicy,
   getProviderCancellationPolicy,
   getInfoPacksByBooking, markInfoPackViewed, BookingInfoPack,
@@ -42,7 +37,22 @@ import {
   setBookingTip,
   getBookingTip,
 } from '../../services/databaseService';
-import { formatLongDate, formatShortDate, formatTime12 } from '../../utils/dateUtils';
+import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
+import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
+import {
+  calculateBookingPaymentBreakdown,
+  PAYMENT_METHOD_LABELS,
+} from '../../features/bookings/paymentPresentation';
+import {
+  formatNoticeWindow,
+  isLongBookingInfoPack,
+} from '../../features/bookings/clientBookingPresentation';
+import { buildClientReceiptHTML } from '../../features/bookings/receipt';
+import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
+
+if (Platform.OS === 'android') {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -50,73 +60,16 @@ type Props = {
   route: { params: { bookingId: string } };
 };
 
-const METHOD_LABELS: Record<string, string> = {
-  card: 'Credit/Debit Card', paypal: 'PayPal', apple: 'Apple Pay', google: 'Google Pay',
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function formatDisplayDate(dateStr: string): string {
-  return formatLongDate(dateStr);
-}
-
-function calculatePaymentBreakdown(booking: ConfirmedBooking) {
-  const servicePrice = booking.price || 0;
-  const addOnsTotal = booking.addOns?.reduce((s, a) => s + (a.price || 0), 0) || 0;
-  const subtotal = servicePrice + addOnsTotal;
-  const serviceCharge = booking.serviceCharge || 2.99;
-  const total = subtotal + serviceCharge;
-  const paymentType = booking.paymentType || 'full';
-  const amountPaidAtCheckout = booking.amountPaid;
-  const depositAmount = booking.depositAmount || 0;
-  const remainingBalance = total - amountPaidAtCheckout;
-  const totalPaidAtCheckout = paymentType === 'deposit'
-    ? depositAmount + serviceCharge
-    : amountPaidAtCheckout;
-  return { servicePrice, addOnsTotal, subtotal, serviceCharge, total, paymentType, depositAmount, amountPaidAtCheckout, remainingBalance, totalPaidAtCheckout };
-}
-
 async function shareReceipt(booking: ConfirmedBooking) {
-  const servicePrice = booking.price || 0;
-  const addOnsTotal = booking.addOns?.reduce((s, a) => s + (a.price || 0), 0) || 0;
-  const subtotal = servicePrice + addOnsTotal;
-  const serviceCharge = booking.serviceCharge || 2.99;
-  const total = subtotal + serviceCharge;
-  const paymentType = booking.paymentType || 'full';
-  const depositAmount = booking.depositAmount || 0;
-  const amountPaid = booking.amountPaid || 0;
-  const remainingBalance = total - amountPaid;
-  const addOnRows = (booking.addOns ?? []).map(a =>
-    `<tr><td style="padding:6px 0;color:#555;padding-left:16px">+ ${a.name}</td><td style="padding:6px 0;color:#555;text-align:right">£${Number(a.price).toFixed(2)}</td></tr>`
-  ).join('');
-  const dateStr = formatShortDate(new Date(booking.createdAt));
-  const ref = (booking.id ?? '').slice(0, 8).toUpperCase();
-  const m = (booking as any).paymentMethod as string | undefined;
-  const paymentMethodLabel = (m && METHOD_LABELS[m]) ? METHOD_LABELS[m]! : 'Card';
-  const paymentRows = paymentType === 'deposit'
-    ? `<tr><td style="padding:6px 0;color:#34C759;font-weight:600">Deposit Paid</td><td style="text-align:right">£${depositAmount.toFixed(2)}</td></tr>
-       <tr><td style="padding:6px 0;color:#34C759;font-weight:600">Total Paid</td><td style="text-align:right">£${(depositAmount + serviceCharge).toFixed(2)}</td></tr>
-       ${remainingBalance > 0 ? `<tr><td style="color:#FF9500;font-weight:600">Balance Due at Appointment</td><td style="text-align:right">£${remainingBalance.toFixed(2)}</td></tr>` : ''}
-       <tr><td style="color:#555">Payment Method</td><td style="text-align:right">${paymentMethodLabel}</td></tr>`
-    : `<tr><td style="color:#34C759;font-weight:600">Total Paid</td><td style="text-align:right">£${amountPaid.toFixed(2)}</td></tr>
-       <tr><td style="color:#555">Payment Method</td><td style="text-align:right">${paymentMethodLabel}</td></tr>`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,Helvetica,Arial,sans-serif;background:#fff;color:#111;padding:48px 40px;max-width:520px;margin:0 auto}.brand{font-size:38px;font-weight:900;letter-spacing:8px;text-align:center;margin-bottom:4px}.sub{font-size:13px;letter-spacing:3px;color:#888;text-align:center;margin-bottom:24px}.perf{border:none;border-top:2px dashed #ddd;margin:18px 0}table{width:100%;border-collapse:collapse}td{font-size:15px;vertical-align:middle;padding:6px 0}.bold td{font-weight:600}.total-block{margin-top:18px;padding-top:14px;border-top:2.5px solid #111;display:flex;justify-content:space-between}.total-value{font-size:28px;font-weight:900}.ref-block{margin-top:24px;text-align:center}.ref-value{font-size:18px;font-weight:700;letter-spacing:3px;color:#555}.date{font-size:12px;color:#aaa;margin-top:4px}</style></head><body><div class="brand">CERVICED</div><div class="sub">PAYMENT RECEIPT</div><hr class="perf"/><section><div>SERVICE</div><table><tr class="bold"><td>${booking.serviceName ?? '—'}</td><td style="text-align:right">£${servicePrice.toFixed(2)}</td></tr>${addOnRows}${addOnRows ? `<tr><td style="color:#888;font-size:13px">Subtotal</td><td style="color:#888;font-size:13px;text-align:right">£${subtotal.toFixed(2)}</td></tr>` : ''}</table></section><hr class="perf"/><section><div>BOOKING</div><table><tr><td style="color:#555">Provider</td><td style="text-align:right">${booking.providerName ?? '—'}</td></tr><tr><td style="color:#555">Date</td><td style="text-align:right">${booking.bookingDate ? formatDisplayDate(booking.bookingDate) : '—'}</td></tr><tr><td style="color:#555">Time</td><td style="text-align:right">${booking.bookingTime ?? '—'}</td></tr></table></section><hr class="perf"/><section><div>PAYMENT</div><table>${paymentRows}</table><div class="total-block"><span>TOTAL</span><span class="total-value">£${total.toFixed(2)}</span></div></section><hr class="perf"/><div class="ref-block"><div>REFERENCE</div><div class="ref-value">${ref}</div><div class="date">${dateStr}</div></div></body></html>`;
-  const { uri } = await Print.printToFileAsync({ html });
+  const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking) });
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
-}
-
-// Short info packs (a quick heads-up) read better as a small popup than a
-// full-screen takeover; longer ones (policies, prep instructions) still need
-// the dedicated reading screen.
-const INFO_PACK_POPUP_MAX_CHARS = 240;
-function isLongInfoPack(pack: BookingInfoPack): boolean {
-  return (pack.title?.length ?? 0) + (pack.content?.length ?? 0) > INFO_PACK_POPUP_MAX_CHARS;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
-  const { theme, isDarkMode } = useTheme();
+  const { isDarkMode, palette: C } = useTheme();
   const { user } = useAuth();
   const { addToCart } = useCart();
   const {
@@ -129,6 +82,23 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     [...(todayBookings ?? []), ...(upcomingBookings ?? []), ...(pastBookings ?? [])].find(b => b.id === bookingId)
   , [bookingId, todayBookings, upcomingBookings, pastBookings]);
 
+  // Native stack header (not a custom in-body top bar) — gives the real
+  // OS-provided back button and swipe-back gesture, same convention as
+  // SearchScreen/RescheduleScreen. No title text: the provider name already
+  // renders prominently as the screen's own in-content header just below,
+  // so a duplicate native title would be redundant.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,
+      headerTitle: '',
+      headerStyle: { backgroundColor: C.bg },
+      headerShadowVisible: false,
+      headerTintColor: C.accentText,
+      headerBackButtonDisplayMode: 'minimal',
+    });
+  }, [navigation, C]);
+
   // Async data loaded on mount
   const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
@@ -137,6 +107,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [addrSettings, setAddrSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
   const [cancellationNoticeHrs, setCancellationNoticeHrs] = useState(0);
+  // Fallback only — used when this booking predates policy_snapshot (or the
+  // client booked via a path that never captured one). booking.policySnapshot
+  // is preferred whenever present, since it's frozen to what the client
+  // actually agreed to, not whatever the provider's policy says today.
+  const [livePolicyFallback, setLivePolicyFallback] = useState<Record<string, unknown> | null>(null);
 
   // UI state
   const [showReceipt, setShowReceipt] = useState(false);
@@ -149,11 +124,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [ratedBookings, setRatedBookings] = useState<Set<string>>(new Set());
   const [showTipModal, setShowTipModal] = useState(false);
   const [tipAmount, setTipAmount] = useState(0);
-  const [hasTipped, setHasTipped] = useState(false);
   const [tippedBookings, setTippedBookings] = useState<Set<string>>(new Set());
   const [rebookBusy, setRebookBusy] = useState(false);
   const [showRebookAddOnsModal, setShowRebookAddOnsModal] = useState(false);
-  const [rebookSelection, setRebookSelection] = useState<'with' | 'without' | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [successIcon, setSuccessIcon] = useState('✓');
@@ -213,7 +186,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     getBookingTip(bookingId)
       .then(tip => {
         if (cancelled || tip == null || tip <= 0) return;
-        setHasTipped(true);
         setTippedBookings(prev => new Set(prev).add(bookingId));
       })
       .catch(() => {});
@@ -240,6 +212,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       : getProviderCancellationPolicy(booking.providerName)
     ).then(setCancellationNoticeHrs).catch(() => {});
 
+    // Only fetched when this booking has no frozen snapshot to show instead —
+    // most bookings from here on will, so this is a fallback for older rows,
+    // not a query every booking detail view pays for.
+    if (!booking.policySnapshot && pid) {
+      getProviderBookingPoliciesById(pid).then(setLivePolicyFallback).catch(() => {});
+    }
+
     if (!booking.clientAddress) {
       // Policy only. This screen needs the release policy to render the
       // countdown; a client must never be sent an address the policy hasn't
@@ -249,7 +228,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         : getProviderAddressPolicyByDisplayName(booking.providerName)
       ).then(setAddrSettings).catch(() => {});
     }
-  }, [booking?.id]);
+  }, [booking]);
 
   // Address countdown timer
   useEffect(() => {
@@ -277,17 +256,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [booking?.id, booking?.bookingDate, addrSettings]);
+  }, [booking, addrSettings]);
 
   const getStatusColor = useCallback((status: string, isPending?: boolean) => {
-    if (isPending) return (isDarkMode ? '#AF9197' : '#5C4033');
+    if (isPending) return C.accent;
     const map: Record<string, string> = {
       [BookingStatus.UPCOMING]: '#4CAF50', [BookingStatus.IN_PROGRESS]: '#2196F3',
       [BookingStatus.COMPLETED]: '#2196F3', [BookingStatus.CANCELLED]: '#F44336',
       [BookingStatus.NO_SHOW]: '#FF9800',
     };
     return map[status] || '#9E9E9E';
-  }, []);
+  }, [C.accent]);
 
   const openInMaps = useCallback(async (b: ConfirmedBooking) => {
     // coordinates is typed non-null but is null whenever the release view masks
@@ -326,16 +305,33 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     } finally { setContactSheetLoading(false); }
   }, []);
 
+  const noticeWindowText = useMemo(() => formatNoticeWindow(cancellationNoticeHrs), [cancellationNoticeHrs]);
+
+  // Prefer the frozen snapshot (what the client actually agreed to at
+  // booking time) over the live fallback (today's policy, for older bookings
+  // that predate policy_snapshot). No enforced-hours override here — that
+  // Automations-screen number is a live-only concept with no snapshot
+  // equivalent, so both branches read purely from the descriptive text.
+  const policyRows = useMemo(
+    () => buildPolicyDisplayRows(booking?.policySnapshot ?? livePolicyFallback),
+    [booking?.policySnapshot, livePolicyFallback],
+  );
+
+  // Whether cancelling right now would fall inside the provider's notice
+  // window — drives the cancel modal's copy/buttons directly (see the modal
+  // render below) instead of a separate blocking alert after the fact, so
+  // the client sees this before they even decide to cancel.
+  const isPastCancellationWindow = useMemo(() => {
+    if (!booking || booking.status === BookingStatus.PENDING || cancellationNoticeHrs <= 0) return false;
+    if (!booking.bookingDate || !booking.bookingTime) return false;
+    const apptMs = createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime();
+    const hoursUntil = (apptMs - Date.now()) / 3_600_000;
+    return hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs;
+  }, [booking, cancellationNoticeHrs]);
+
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
-    if (booking.status !== BookingStatus.PENDING && cancellationNoticeHrs > 0 && booking.bookingDate && booking.bookingTime) {
-      const apptMs = createBookingDateTime(booking.bookingDate, booking.bookingTime).getTime();
-      const hoursUntil = (apptMs - Date.now()) / 3_600_000;
-      if (hoursUntil >= 0 && hoursUntil < cancellationNoticeHrs) {
-        Alert.alert('Cancellation Not Allowed', `This provider requires ${cancellationNoticeHrs} hours' notice to cancel.`);
-        return;
-      }
-    }
+    if (isPastCancellationWindow) return;
     setIsLoading(true);
     try {
       await cancelBooking(booking.id);
@@ -345,7 +341,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setShowSuccessModal(true);
     } catch { Alert.alert('Error', 'Failed to cancel booking. Please try again.'); }
     finally { setIsLoading(false); }
-  }, [booking, cancelBooking, cancellationNoticeHrs]);
+  }, [booking, cancelBooking, isPastCancellationWindow]);
 
   const handleReschedulePress = useCallback(() => {
     if (!booking) return;
@@ -366,7 +362,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         const start = createBookingDateTime(booking.bookingDate, booking.bookingTime);
         const hoursUntil = (start.getTime() - Date.now()) / 3_600_000;
         if (hoursUntil >= 0 && hoursUntil < reschedulePolicy.rescheduleNoticeHours) {
-          setCooldownMessage(`${booking.providerName} requires ${reschedulePolicy.rescheduleNoticeHours} hours' notice to reschedule.`);
+          setCooldownMessage(`${booking.providerName} requires ${formatNoticeWindow(reschedulePolicy.rescheduleNoticeHours)} notice to reschedule.`);
           setShowCooldownModal(true);
           return;
         }
@@ -527,7 +523,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         return;
       }
       setTippedBookings(prev => new Set(prev).add(booking.id));
-      setHasTipped(true);
       setShowTipModal(false);
       // Deliberately does NOT say the tip was paid — no payment provider is
       // wired up for tips, so this records the amount for the provider only.
@@ -570,18 +565,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     });
   }, [navigation]);
 
-  const C = isDarkMode ? {
-    bg: '#1A1815', card: '#252220', text: '#F0ECE7', sub: '#7E6667',
-    border: 'rgba(126,102,103,0.18)', accent: (isDarkMode ? '#AF9197' : '#5C4033'),
-  } : {
-    bg: '#F5F1EC', card: '#FFFFFF', text: '#000000', sub: '#7E6667',
-    border: 'rgba(126,102,103,0.14)', accent: (isDarkMode ? '#AF9197' : '#5C4033'),
-  };
-
   if (!booking) {
     return (
       <ThemedBackground>
-        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} edges={['bottom', 'left', 'right']}>
           <Text style={{ color: C.sub, fontSize: 16 }}>Booking not found.</Text>
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
             <Text style={{ color: C.accent, fontSize: 16 }}>Go Back</Text>
@@ -591,7 +578,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     );
   }
 
-  const payment = calculatePaymentBreakdown(booking);
+  const payment = calculateBookingPaymentBreakdown(booking);
   const hasBeenRated = ratedBookings.has(booking.id);
   const hasBeenTipped = tippedBookings.has(booking.id);
   const isUpcoming = booking.status === BookingStatus.UPCOMING && !booking.isPendingReschedule;
@@ -600,15 +587,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom', 'left', 'right']}>
-        {/* Back button row */}
-        <View style={[st.topBar, { borderBottomColor: C.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={st.backBtn} activeOpacity={0.7}>
-            <Text style={[st.backArrow, { color: C.accent }]}>‹</Text>
-            <Text style={[st.backLabel, { color: C.sub }]}>Back</Text>
-          </TouchableOpacity>
-        </View>
-
+      <SafeAreaView style={{ flex: 1 }} edges={['bottom', 'left', 'right']}>
         <ScrollView
           contentContainerStyle={st.scroll}
           showsVerticalScrollIndicator={false}
@@ -619,8 +598,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {booking.providerImage ? (
               <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} resizeMode="cover" />
             ) : (
-              <View style={[st.providerImg, { backgroundColor: (isDarkMode ? '#AF9197' : '#5C4033'), alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800' }}>
+              <View style={[st.providerImg, { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }]}>
+                <Text style={{ color: C.onAccent, fontSize: 22, fontWeight: '800' }}>
                   {booking.providerName?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || 'P'}
                 </Text>
               </View>
@@ -637,7 +616,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
               {[
                 ['Service', booking.serviceName],
-                ['Date', formatDisplayDate(booking.bookingDate)],
+                ['Date', formatBookingDisplayDate(booking.bookingDate)],
                 ['Time', booking.bookingTime],
                 ['Duration', booking.duration],
               ].map(([label, value]) => (
@@ -698,7 +677,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                   <View style={[st.todoBadge, { backgroundColor: bookingIntakeForm.status === 'completed' ? '#34C759' : C.accent }]}>
-                    <Text style={st.todoBadgeText}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
+                    <Text style={[st.todoBadgeText, { color: bookingIntakeForm.status === 'completed' ? '#FFF' : C.onAccent }]}>{bookingIntakeForm.status === 'completed' ? 'Completed' : 'Required'}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -752,14 +731,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
-              <View style={[st.receiptContainer, { backgroundColor: isDarkMode ? '#3A3A3C' : '#F5F5F5' }]}>
-                <View style={[st.receiptPaper, { backgroundColor: C.card, borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : '#E0E0E0' }]}>
+              <View style={[st.receiptContainer, { backgroundColor: C.surface }]}>
+                <View style={[st.receiptPaper, { backgroundColor: C.card, borderColor: C.border }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, position: 'relative' }}>
                     <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>PAYMENT RECEIPT</Text>
                     <TouchableOpacity
                       onPress={async () => { try { await shareReceipt(booking); } catch { Alert.alert('Error', 'Could not generate receipt.'); } }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={{ position: 'absolute', right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ position: 'absolute', right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' }}
                     >
                       <Ionicons name="share-outline" size={16} color={C.text} />
                     </TouchableOpacity>
@@ -768,7 +747,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
                   {/* Booking */}
-                  {[['Service', booking.serviceName], ['Date', booking.bookingDate ? formatDisplayDate(booking.bookingDate) : booking.bookingDate], ['Time', booking.bookingTime]].map(([l, v]) => (
+                  {[['Service', booking.serviceName], ['Date', booking.bookingDate ? formatBookingDisplayDate(booking.bookingDate) : booking.bookingDate], ['Time', booking.bookingTime]].map(([l, v]) => (
                     <View key={l} style={st.rcptRow}>
                       <Text style={{ color: C.sub, fontSize: 13 }}>{l}</Text>
                       <Text style={{ color: C.text, fontSize: 13, flexShrink: 1, textAlign: 'right', marginLeft: 12 }} numberOfLines={2}>{v}</Text>
@@ -795,7 +774,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </View>
                   )}
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Service Charge</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee</Text>
                     <Text style={{ color: C.text, fontSize: 13 }}>£{payment.serviceCharge.toFixed(2)}</Text>
                   </View>
 
@@ -817,7 +796,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
-                      {(booking.paymentMethod && METHOD_LABELS[booking.paymentMethod]) || 'Card'}
+                      {(booking.paymentMethod && PAYMENT_METHOD_LABELS[booking.paymentMethod]) || 'Card'}
                     </Text>
                   </View>
 
@@ -858,6 +837,31 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             </View>
           )}
 
+          {/* Provider's cancellation/booking policy — the exact terms this
+              client agreed to at checkout (policySnapshot), or the
+              provider's current policy as a fallback for bookings made
+              before that was captured. */}
+          {policyRows.length > 0 && (
+            <View style={st.section}>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>
+                {booking.providerName}'S POLICY
+              </Text>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+                {policyRows.map((row, i) => (
+                  <View
+                    key={row.label}
+                    style={[st.row, i === policyRows.length - 1 && { borderBottomWidth: 0 }]}
+                  >
+                    <Text style={[st.rowLabel, { color: C.sub, flex: 0.35 }]}>{row.label}</Text>
+                    <Text style={[st.rowValue, { color: C.text, flex: 0.65 }]}>
+                      {row.value}{row.tag ? `  ·  ${row.tag}` : ''}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Contact & Location */}
           {booking.status !== BookingStatus.COMPLETED && booking.status !== BookingStatus.CANCELLED && (
             <View style={st.section}>
@@ -866,7 +870,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <View style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
                   <TouchableOpacity onPress={() => openContactSheet(booking)} style={[st.actionChip, { backgroundColor: C.accent }]} activeOpacity={0.7}>
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>Contact</Text>
+                    <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={[st.row, { borderBottomWidth: 0 }]}>
@@ -914,7 +918,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       const t = (booking as any).rescheduleRequest.requestedTimes?.[i];
                       return (
                         <Text key={`${d}-${i}`} style={{ fontSize: 12, color: C.text, fontWeight: '600', marginTop: 2 }}>
-                          You requested: {formatDisplayDate(d)}{t ? ` at ${t}` : ''}
+                          You requested: {formatBookingDisplayDate(d)}{t ? ` at ${t}` : ''}
                         </Text>
                       );
                     })}
@@ -937,7 +941,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={handleReschedulePress} activeOpacity={0.7}>
-                  <Text style={st.primaryBtnText}>Reschedule</Text>
+                  <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -948,7 +952,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
                 {(booking as any).rescheduleRequest?.providerAvailableDates && (
                   <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => navigation.navigate('Reschedule', { bookingId: booking.id })} activeOpacity={0.7}>
-                    <Text style={st.primaryBtnText}>Reschedule Now</Text>
+                    <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule Now</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -956,13 +960,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {isCompleted && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: hasBeenRated ? C.border : C.accent }]} disabled={hasBeenRated} onPress={() => setShowRatingModal(true)} activeOpacity={0.7}>
-                  <Text style={st.primaryBtnText}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
+                  <Text style={[st.primaryBtnText, { color: hasBeenRated ? C.text : C.onAccent }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: hasBeenTipped ? C.border : '#34C759' }]} disabled={hasBeenTipped} onPress={() => setShowTipModal(true)} activeOpacity={0.7}>
-                  <Text style={st.primaryBtnText}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
+                  <Text style={[st.primaryBtnText, { color: hasBeenTipped ? C.text : '#FFF' }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} disabled={rebookBusy} onPress={() => handleRebook(booking)} activeOpacity={0.7}>
-                  {rebookBusy ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={st.primaryBtnText}>Book Again</Text>}
+                  {rebookBusy ? <ActivityIndicator size="small" color={C.onAccent} /> : <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Book Again</Text>}
                 </TouchableOpacity>
               </View>
             )}
@@ -971,21 +975,48 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={{ height: 40 }} />
         </ScrollView>
 
-        {/* ─── Cancel Modal ─── */}
+        {/* ─── Cancel Modal ───────────────────────────────────────────────
+            Same modal handles both states: the normal "are you sure" ask,
+            and — when isPastCancellationWindow is true — a plain-language
+            explanation of why cancelling isn't allowed right now, with
+            "Message Provider" as the way forward instead of a dead end. */}
         <Modal visible={showCancelModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCancelModal(false)}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>
-              <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
-                <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cancel Booking</Text>
-                <Text style={[st.sheetSub, { color: C.sub }]}>Are you sure you want to cancel "{booking.serviceName}"? This cannot be undone.</Text>
-                <View style={st.sheetBtns}>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowCancelModal(false)} disabled={isLoading} activeOpacity={0.7}>
-                    <Text style={{ color: C.text, fontWeight: '600' }}>Keep Booking</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={handleCancelBooking} disabled={isLoading} activeOpacity={0.7}>
-                    {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Yes, Cancel</Text>}
-                  </TouchableOpacity>
-                </View>
+              <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+                {isPastCancellationWindow ? (
+                  <>
+                    <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
+                    <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cannot Cancel</Text>
+                    <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
+                      {booking.providerName} requires {noticeWindowText} notice to cancel.
+                      {'\n\n'}Message them directly if something's come up.
+                    </Text>
+                    <View style={[st.sheetBtns, { marginTop: 16 }]}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowCancelModal(false)} activeOpacity={0.7}>
+                        <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { setShowCancelModal(false); openContactSheet(booking); }} activeOpacity={0.7}>
+                        <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Message Provider</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>Cancel Booking</Text>
+                    <Text style={[st.sheetSub, { color: C.sub }]}>
+                      Cancel "{booking.serviceName}"? This can't be undone.
+                    </Text>
+                    <View style={st.sheetBtns}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowCancelModal(false)} disabled={isLoading} activeOpacity={0.7}>
+                        <Text style={{ color: C.text, fontWeight: '600' }}>Keep Booking</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={handleCancelBooking} disabled={isLoading} activeOpacity={0.7}>
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Yes, Cancel</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           </TouchableWithoutFeedback>
@@ -995,9 +1026,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         <Modal visible={showSuccessModal} animationType="fade" transparent statusBarTranslucent
           onRequestClose={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }}>
           <View style={st.overlay}>
-            <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>{successIcon}</Text>
-              <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>{successIcon === '✓' ? 'Success!' : 'Notice'}</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{successMessage}</Text>
               {/* sheetBtn is `flex:1`, meant to share a sheetBtns row with a
                   sibling — used alone (even with alignSelf:'stretch') it has
@@ -1007,7 +1038,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]}
                   onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
-                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1017,13 +1048,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Cooldown Modal ─── */}
         <Modal visible={showCooldownModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCooldownModal(false)}>
           <View style={st.overlay}>
-            <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
               <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-              <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Cannot Reschedule</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Cannot Reschedule</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{cooldownMessage}</Text>
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
-                  <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Got It</Text>
+                  <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1033,10 +1064,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Rating Modal ─── */}
         <Modal visible={showRatingModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
-              <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
+              <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
                 {!hasRated ? (
                   <>
-                    <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Rate Your Experience</Text>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>Rate Your Experience</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>How was your appointment with {booking.providerName}?</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 16 }}>
                       {[1,2,3,4,5].map(s => (
@@ -1046,7 +1077,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       ))}
                     </View>
                     <TextInput
-                      style={[st.reviewInput, { backgroundColor: isDarkMode ? '#2C2C2E' : '#F8F8F8', color: C.text, borderColor: C.border }]}
+                      style={[st.reviewInput, { backgroundColor: C.surface, color: C.text, borderColor: C.border }]}
                       multiline numberOfLines={3} placeholder="Share your experience (optional)"
                       placeholderTextColor={C.sub} value={reviewText} onChangeText={setReviewText} maxLength={500}
                     />
@@ -1055,14 +1086,14 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                         <Text style={{ color: C.text }}>Skip</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
-                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Submit</Text>}
+                        {isLoading ? <ActivityIndicator size="small" color={rating === 0 ? C.text : C.onAccent} /> : <Text style={{ color: rating === 0 ? C.text : C.onAccent, fontWeight: '600' }}>Submit</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
                 ) : (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>✓</Text>
-                    <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Thanks!</Text>
+                    <Text style={[st.sheetTitle, { color: C.text }]}>Thanks!</Text>
                     <Text style={[st.sheetSub, { color: C.sub }]}>Your feedback helps improve our services.</Text>
                   </>
                 )}
@@ -1073,17 +1104,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Tip Modal ─── */}
         <Modal visible={showTipModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowTipModal(false); setTipAmount(0); }}>
           <KeyboardDismissView style={st.overlay} dismissOnTap>
-              <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
-                <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Leave a Tip</Text>
+              <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+                <Text style={[st.sheetTitle, { color: C.text }]}>Leave a Tip</Text>
                 <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
                     <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => setTipAmount(amt)} activeOpacity={0.7}>
-                      <Text style={{ color: tipAmount === amt ? '#FFF' : C.text, fontWeight: '600' }}>£{amt}</Text>
+                      <Text style={{ color: tipAmount === amt ? C.onAccent : C.text, fontWeight: '600' }}>£{amt}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDarkMode ? '#2C2C2E' : '#F8F8F8', borderRadius: 10, paddingHorizontal: 12, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 10, paddingHorizontal: 12, marginBottom: 16 }}>
                   <Text style={{ color: C.text, fontSize: 16 }}>£</Text>
                   <TextInput style={{ flex: 1, color: C.text, fontSize: 16, paddingVertical: 10 }} keyboardType="decimal-pad" placeholder="Custom amount" placeholderTextColor={C.sub}
                     value={tipAmount > 0 ? tipAmount.toString() : ''} onChangeText={t => setTipAmount(isNaN(parseFloat(t)) ? 0 : parseFloat(t))} />
@@ -1093,7 +1124,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text }}>Skip</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[st.sheetBtn, { backgroundColor: tipAmount <= 0 ? C.border : C.accent }]} disabled={tipAmount <= 0} onPress={handleTipSubmit} activeOpacity={0.7}>
-                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Send Tip</Text>
+                    <Text style={{ color: tipAmount <= 0 ? C.text : C.onAccent, fontWeight: '600' }}>Send Tip</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1101,10 +1132,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         </Modal>
 
         {/* ─── Rebook Add-ons Modal ─── */}
-        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { setShowRebookAddOnsModal(false); setRebookSelection(null); }}>
+        <Modal visible={showRebookAddOnsModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowRebookAddOnsModal(false)}>
           <View style={st.overlay}>
-            <View style={[st.sheetContent, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]}>
-              <Text style={[st.sheetTitle, { color: isDarkMode ? '#F0ECE7' : '#111' }]}>Include Add-Ons?</Text>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Include Add-Ons?</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>Would you like to include the same add-ons from your previous booking?</Text>
               {booking.addOns?.map((a, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
@@ -1117,7 +1148,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={{ color: C.text }}>Without Add-Ons</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
-                  <Text style={{ color: '#FFF', fontWeight: '600' }}>With Add-Ons</Text>
+                  <Text style={{ color: C.onAccent, fontWeight: '600' }}>With Add-Ons</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1127,7 +1158,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} onPress={() => setContactSheetVisible(false)}>
-            <Pressable style={[st.contactSheet, { backgroundColor: isDarkMode ? '#201D1A' : '#FFF' }]} onPress={e => e.stopPropagation()}>
+            <Pressable style={[st.contactSheet, { backgroundColor: C.surfaceRaised }]} onPress={e => e.stopPropagation()}>
               <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: isDarkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', alignSelf: 'center', marginBottom: 16 }} />
               <Text style={[st.sheetTitle, { color: C.text }]}>Contact {booking.providerName}</Text>
               {contactSheetLoading ? <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} /> : (
@@ -1174,8 +1205,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Full-Screen Reader — long packs only. Short ones get
             the compact popup below instead of taking over the whole screen. */}
-        <Modal visible={!!viewingPack && isLongInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
-          <View style={{ flex: 1, backgroundColor: isDarkMode ? '#1A1815' : '#F5F1EC' }}>
+        <Modal visible={!!viewingPack && isLongBookingInfoPack(viewingPack)} animationType="fade" transparent={false} statusBarTranslucent onRequestClose={() => setViewingPack(null)}>
+          <View style={{ flex: 1, backgroundColor: C.bg }}>
             <SafeAreaView style={{ flex: 1 }}>
               {/* Header */}
               <View style={{
@@ -1212,7 +1243,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   {/* Title */}
                   <Text style={{
                     fontSize: 26, fontWeight: '800', letterSpacing: -0.5,
-                    color: isDarkMode ? '#F0ECE7' : '#1C1A18',
+                    color: C.text,
                     marginBottom: 24, lineHeight: 32,
                   }}>
                     {viewingPack.title}
@@ -1221,7 +1252,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginBottom: 24 }} />
 
                   {/* Body */}
-                  <Text style={{ fontSize: 16, lineHeight: 26, color: isDarkMode ? '#D8D2CB' : '#3A3733' }}>
+                  <Text style={{ fontSize: 16, lineHeight: 26, color: C.sub }}>
                     {viewingPack.content}
                   </Text>
                 </ScrollView>
@@ -1232,9 +1263,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Info Pack Popup — short packs, as a small sheet instead of a
             takeover screen ─── */}
-        <Modal visible={!!viewingPack && !isLongInfoPack(viewingPack)} animationType="fade" transparent onRequestClose={() => setViewingPack(null)}>
+        <Modal visible={!!viewingPack && !isLongBookingInfoPack(viewingPack)} animationType="fade" transparent onRequestClose={() => setViewingPack(null)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 28 }} onPress={() => setViewingPack(null)}>
-            <Pressable style={{ width: '100%', maxWidth: 420, borderRadius: 20, padding: 22, backgroundColor: isDarkMode ? '#252220' : '#FFF' }} onPress={e => e.stopPropagation()}>
+            <Pressable style={{ width: '100%', maxWidth: 420, borderRadius: 20, padding: 22, backgroundColor: C.surfaceRaised }} onPress={e => e.stopPropagation()}>
               {viewingPack && (
                 <>
                   <View style={{
@@ -1256,7 +1287,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     activeOpacity={0.8}
                     style={{ marginTop: 18, alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: C.accent }}
                   >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Got it</Text>
+                    <Text style={{ color: C.onAccent, fontWeight: '700', fontSize: 13 }}>Got it</Text>
                   </TouchableOpacity>
                 </>
               )}
@@ -1270,10 +1301,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 const st = StyleSheet.create({
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  backBtn: { flexDirection: 'row', alignItems: 'center' },
-  backArrow: { fontSize: 28, fontWeight: '300', marginRight: 4 },
-  backLabel: { fontSize: 16 },
   scroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   header: { alignItems: 'center', paddingVertical: 20 },
   providerImg: { width: 80, height: 80, borderRadius: 40, marginBottom: 12 },

@@ -25,11 +25,14 @@ import type {
   PersonalContext,
   Understanding,
 } from "./types";
+import { scoreToConfidence } from "./types";
 import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
-import { capabilitiesFor, getCapability } from "./registry";
+import { capabilitiesFor, getCapability, toToolSchema } from "./registry";
 import { askChip, chip } from "./capabilities/shared";
+import type { BeccaAIInterpreter } from "./aiInterpreter";
+import { isBeccaNavigationSuggestion } from "./navigationContract";
 
 export interface EngineInput {
   message: string;
@@ -45,6 +48,12 @@ export interface EngineInput {
    * came before.
    */
   conversation?: ConversationContext;
+  /**
+   * Optional future AI router. It can select a registered capability only;
+   * the deterministic matcher remains the fallback when it is absent, unsure
+   * or invalid. See aiInterpreter.ts for the safety boundary.
+   */
+  interpreter?: BeccaAIInterpreter;
 }
 
 /**
@@ -77,6 +86,9 @@ const pendingActions = new Map<
  * minutes and six questions ago is not what they meant.
  */
 const PENDING_ACTION_TTL_MS = 5 * 60 * 1000;
+
+/** An AI routing enhancement must never leave a chat message waiting forever. */
+const AI_INTERPRETER_TIMEOUT_MS = 3_500;
 
 /**
  * Only one write is ever pending at a time. Offering a new one supersedes the
@@ -119,9 +131,15 @@ const DISMISSAL_RE =
 function carryForward(
   current: EntityBag,
   prior: ConversationContext | undefined,
+  hat: BeccaHat,
 ): EntityBag {
   if (!prior) return current;
   const p = prior.entities;
+  // Provider hat carries nothing. Its capabilities are all about the
+  // provider's OWN business ("what's on today", "my clients") and none take
+  // a service/provider/money entity — carrying one only produces a spurious
+  // "Assuming you meant nails, today —" on an answer that never used it.
+  if (hat === "provider") return current;
   return {
     ...current,
     ...(current.service ? {} : p.service ? { service: p.service } : {}),
@@ -132,6 +150,9 @@ function carryForward(
     // silently about the first day mentioned.
   };
 }
+
+/** A pronoun standing in for the provider under discussion. */
+const PRONOUN_RE = /\b(they|them|their|theirs|she|her|hers|he|him|his|it)\b/i;
 
 /** "the first one", "that one", "the second", "number 2". */
 const ORDINALS: Record<string, number> = {
@@ -238,6 +259,12 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     );
   }
 
+  // A short social turn should feel like a conversation, not an intent that
+  // failed to parse. Keep this deliberately narrow: "hi, can you find nails?"
+  // is a real request and must continue through the capability matcher.
+  const socialReply = buildSocialReply(message, hat);
+  if (socialReply) return socialReply;
+
   let entities: EntityBag = {};
   try {
     entities = await resolveEntities(message, bookings, now);
@@ -251,7 +278,10 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // Carry forward what the last turn established. "What about Saturday?"
   // means nothing on its own — it only works because the previous turn was
   // about nails. Anything this message resolved for itself always wins.
-  entities = carryForward(entities, conversation);
+  // Snapshot before merging prior context: the difference is exactly what was
+  // carried, which is the only thing worth calling an assumption.
+  const fromMessage = entities;
+  entities = carryForward(entities, conversation, hat);
 
   // Seed the outgoing context from what we know NOW. Every early return below
   // (ambiguity, low confidence, a capability that threw) then still hands the
@@ -275,7 +305,64 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     entities = { ...entities, provider: referenced };
   }
 
-  const understanding = understand(message, entities, hat);
+  // "are THEY any good?", "how do i contact THEM?" — a pronoun standing in
+  // for the single provider just discussed. Only when exactly one was shown:
+  // with several, "they" is genuinely ambiguous and the capability's own
+  // missing-entity prompt is the better answer.
+  if (!entities.provider && PRONOUN_RE.test(message)) {
+    const shown = conversation?.lastProviders ?? [];
+    // Several shown: "they" is genuinely ambiguous. Ask which, rather than
+    // silently answering about one of them — the same rule as everywhere
+    // else in this engine. Without this the message falls through to a
+    // capability that doesn't need a provider and answers the wrong question.
+    if (shown.length > 1) {
+      entities = {
+        ...entities,
+        ambiguous: [
+          ...(entities.ambiguous ?? []),
+          {
+            kind: "provider",
+            sourceText: message,
+            candidates: shown.slice(0, 4).map((sp) => ({
+              kind: "provider" as const,
+              value: {
+                slug: sp.slug,
+                ...(sp.dbId ? { dbId: sp.dbId } : {}),
+                displayName: sp.displayName,
+              },
+              confidence: 0.5,
+              sourceText: message,
+              label: sp.displayName,
+            })),
+          },
+        ],
+      };
+    }
+    const only = shown;
+    if (only.length === 1 && only[0]) {
+      entities = {
+        ...entities,
+        provider: {
+          kind: "provider",
+          value: {
+            slug: only[0].slug,
+            ...(only[0].dbId ? { dbId: only[0].dbId } : {}),
+            displayName: only[0].displayName,
+          },
+          confidence: 0.8,
+          sourceText: message,
+          label: only[0].displayName,
+        },
+      };
+    }
+  }
+
+  const understanding = await understandWithFallback(
+    message,
+    entities,
+    hat,
+    input.interpreter,
+  );
 
   // Ambiguity outranks everything: if we don't know WHICH booking or provider
   // they meant, answering about the wrong one is worse than asking.
@@ -323,6 +410,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
           "I couldn't pull that up just now — something went wrong on my end. Try again in a moment?",
       },
       hat,
+      { title: "Unable to load that" },
     );
   }
 
@@ -350,13 +438,13 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
           display: "action",
         },
       ],
-    }, hat, { exactSuggestions: true });
+    }, hat, { exactSuggestions: true, title: capability.describe });
   }
 
   // Medium confidence: state the assumption rather than let it pass silently.
   const assumption =
     understanding.confidence === "medium"
-      ? result.assumption ?? buildAssumption(entities)
+      ? result.assumption ?? buildAssumption(entities, result.text, fromMessage)
       : undefined;
 
   // Every reply ends with somewhere to go next. Capabilities that supply
@@ -368,12 +456,19 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       ? result.suggestions
       : defaultFollowUps(hat);
 
+  // A capability must never produce a dead button. The shared contract is
+  // also covered by tests, but filtering here keeps a malformed future
+  // capability from reaching a user while development is in progress.
+  const routable = offered.filter((suggestion) =>
+    isBeccaNavigationSuggestion(hat, suggestion),
+  );
+
   // Don't offer back the thing the user just asked for. Chips send their
   // `message` verbatim, so a chip whose message matches what was just sent
   // is literally "ask me that again" — which is what made Becca look like
   // she was repeating herself even after an option had been selected.
   const justAsked = message.trim().toLowerCase();
-  const deduped = offered.filter(
+  const deduped = routable.filter(
     (s) => s.data?.message?.trim().toLowerCase() !== justAsked,
   );
   // If filtering removed everything (the capability's only suggestion was the
@@ -381,20 +476,25 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // the reply with no way forward.
   const suggestions = deduped.length > 0 ? deduped : defaultFollowUps(hat);
 
+  // Provider.id IS the slug (see providerFromDb); the card shape carries no
+  // UUID. Capabilities that need one re-resolve it from the display name, so
+  // a pronoun/ordinal reference still works for them.
+  const shownProviders =
+    result.providers && result.providers.length > 0
+      ? result.providers.map((p) => ({ slug: p.id, displayName: p.name }))
+      : (conversation?.lastProviders ?? []);
+
   // Hand the next turn everything it needs to resolve a follow-up: what was
   // being discussed, what was answered, and what was shown (so "the first
   // one" points at a real provider).
   lastContext = {
     entities,
     lastCapabilityId: capability.id,
-    ...(result.providers && result.providers.length > 0
-      ? {
-          lastProviders: result.providers.map((p) => ({
-            slug: p.id,
-            displayName: p.name,
-          })),
-        }
-      : {}),
+    // A turn that shows no providers must NOT erase the list the user is
+    // still looking at: "find nails" -> "any free Saturday?" -> "none" ->
+    // "the first one" still refers to what's on screen. Only a turn showing
+    // a NEW list replaces it.
+    ...(shownProviders.length > 0 ? { lastProviders: shownProviders } : {}),
   };
 
   return message_(
@@ -404,6 +504,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       ...(result.providers ? { providerRecommendations: result.providers } : {}),
     },
     hat,
+    { title: capability.describe },
   );
 }
 
@@ -425,6 +526,137 @@ function defaultFollowUps(hat: BeccaHat) {
     chip("d-find", "Find someone", "Show me all services"),
     chip("d-help", "What else can you do?", "What can you help with?"),
   ];
+}
+
+/**
+ * Gives a future model one narrow job: choose an already-registered tool.
+ *
+ * Entity resolution happens first and capability execution happens after this
+ * point, both locally. An unavailable or malformed model result therefore
+ * cannot block Becca or grant a client/provider access to the other hat.
+ */
+async function understandWithFallback(
+  message: string,
+  entities: EntityBag,
+  hat: BeccaHat,
+  interpreter?: BeccaAIInterpreter,
+): Promise<Understanding> {
+  const fallback = understand(message, entities, hat);
+  if (!interpreter) return fallback;
+
+  try {
+    const result = await interpretWithTimeout(interpreter, {
+      message,
+      hat,
+      tools: toToolSchema(hat),
+      resolvedEntityKinds: Object.entries(entities)
+        .filter(([key, value]) => key !== "ambiguous" && value != null)
+        .map(([key]) => key),
+    });
+    const selected = result?.capabilityId
+      ? getCapability(result.capabilityId, hat)
+      : undefined;
+    if (!result?.capabilityId || !selected) {
+      return fallback;
+    }
+    // A model cannot claim a missing required entity is present. If it picks
+    // a capability that local resolution cannot support, trust the existing
+    // deterministic ranking instead of steering the user to a dead end.
+    if (selected.needs?.some(
+      (need) => need.required && entities[need.kind as keyof EntityBag] == null,
+    )) return fallback;
+
+    // Clamp rather than trust a provider's schema adherence. A missing model
+    // confidence is intentionally medium: the engine will name any carried
+    // context assumption instead of silently pretending certainty.
+    const score = Number.isFinite(result.confidence)
+      ? Math.max(0, Math.min(1, result.confidence!))
+      : 0.35;
+    return {
+      ...fallback,
+      capabilityId: selected.id,
+      confidence: scoreToConfidence(score),
+      score,
+      alternatives: fallback.alternatives.filter(
+        (alternative) => alternative.capabilityId !== selected.id,
+      ),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+/** Resolves null on timeout so the deterministic matcher can respond immediately. */
+async function interpretWithTimeout(
+  interpreter: BeccaAIInterpreter,
+  request: Parameters<BeccaAIInterpreter["interpret"]>[0],
+) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      interpreter.interpret(request),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), AI_INTERPRETER_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+/**
+ * Handles complete, non-task social turns before intent matching.
+ *
+ * The registry's help capability intentionally recognises "hi" as a useful
+ * first touch, but its full feature list is an awkward answer to a simple
+ * greeting. Likewise, a "thanks" used to land in the generic uncertainty
+ * fallback. These are response-quality cases, not capabilities: no data is
+ * read and no app action is implied.
+ */
+function buildSocialReply(message: string, hat: BeccaHat): ChatMessage | null {
+  const plain = message
+    .trim()
+    .toLowerCase()
+    .replace(/[!?.]+$/g, "")
+    .replace(/\s+/g, " ");
+
+  if (/^(?:hi|hello|hey|hiya|morning|good morning|afternoon|good afternoon|evening|good evening|becca)$/.test(plain)) {
+    return message_(
+      {
+        content:
+          hat === "provider"
+            ? "Hi — I’m here to help you stay on top of your business. What would you like to check?"
+            : "Hi — what would you like help with today?",
+        suggestions: defaultStarters(hat),
+      },
+      hat,
+    );
+  }
+
+  if (/^(?:thanks|thank you|cheers|ta|perfect|great thanks)$/.test(plain)) {
+    return message_(
+      {
+        content:
+          hat === "provider"
+            ? "You’re welcome. I’m here whenever you need a hand with the business."
+            : "You’re welcome. I’m here whenever you need a hand.",
+        suggestions: defaultFollowUps(hat),
+      },
+      hat,
+    );
+  }
+
+  if (/^(?:bye|goodbye|see you|see ya|that'?s all)$/.test(plain)) {
+    return message_(
+      {
+        content: "Speak soon — I’ll be right here when you need me.",
+        suggestions: defaultStarters(hat),
+      },
+      hat,
+    );
+  }
+
+  return null;
 }
 
 /**
@@ -536,6 +768,7 @@ function buildAmbiguityReply(
       ],
     },
     hat,
+    { title: `Choose a ${noun}` },
   );
 }
 
@@ -567,7 +800,7 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
       content:
         "I didn't quite catch that. Here's what I can help with:",
       suggestions: defaultStarters(hat),
-    });
+    }, hat, { title: "Let’s find the right thing" });
   }
 
   return message_({
@@ -576,7 +809,7 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
       ...options.map((c, i) => askChip(`alt-${i}`, c.describe, c.describe)),
       askChip("help", "Something else", "What can you do?"),
     ],
-  });
+  }, hat, { title: "Let’s narrow it down" });
 }
 
 function buildMissingEntityReply(kind: string, hat: BeccaHat): ChatMessage {
@@ -591,29 +824,47 @@ function buildMissingEntityReply(kind: string, hat: BeccaHat): ChatMessage {
         chip("mua", "Makeup", "Find makeup"),
         chip("aesthetics", "Aesthetics", "Find aesthetics"),
       ],
-    });
+    }, hat, { title: "Choose a service" });
   }
   if (kind === "provider") {
     return message_({
       content: "Which provider did you mean?",
       suggestions: [askChip("saved", "My saved providers", "Show my saved providers")],
-    });
+    }, hat, { title: "Choose a provider" });
   }
   return message_({
     content: "I didn't quite catch that — can you give me a bit more?",
     suggestions: defaultStarters(hat),
-  });
+  }, hat, { title: "A little more detail" });
 }
 
 /** Names the assumption Becca acted on, so a medium-confidence answer is never silent. */
-function buildAssumption(entities: EntityBag): string | undefined {
+function buildAssumption(
+  entities: EntityBag,
+  answer: string,
+  resolvedFromMessage: EntityBag,
+): string | undefined {
+  // Only entities CARRIED from an earlier turn are assumptions. Something the
+  // user just typed is not an interpretation Becca made — saying "assuming
+  // you meant today" back at someone who wrote "today" reads as not listening.
+  const carried = <K extends keyof EntityBag>(k: K) =>
+    entities[k] != null && resolvedFromMessage[k] == null;
+
   const parts: string[] = [];
-  if (entities.booking) parts.push(entities.booking.label);
-  else if (entities.provider) parts.push(entities.provider.label);
-  if (entities.service && !entities.booking) parts.push(entities.service.label);
-  if (entities.date) parts.push(entities.date.value.label);
+  if (carried("booking")) parts.push(entities.booking!.label);
+  else if (carried("provider")) parts.push(entities.provider!.label);
+  if (carried("service") && !entities.booking) parts.push(entities.service!.label);
+  if (carried("date")) parts.push(entities.date!.value.label);
   if (parts.length === 0) return undefined;
-  return `Assuming you meant ${parts.join(", ")} —`;
+
+  // Don't restate what the answer already says. "Assuming you meant nails —
+  // I found 2 nails providers" is noise; the assumption is only worth voicing
+  // when the reply itself doesn't make the interpretation obvious.
+  const lower = answer.toLowerCase();
+  const unstated = parts.filter((p) => !lower.includes(p.toLowerCase()));
+  if (unstated.length === 0) return undefined;
+
+  return `Assuming you meant ${unstated.join(", ")} —`;
 }
 
 function defaultStarters(hat: BeccaHat) {
@@ -656,7 +907,7 @@ function message_(
   // Confirmation prompts opt out of padding: the only valid next steps are
   // confirm or don't, and an unrelated third chip beside a pending WRITE is
   // an invitation to mis-tap.
-  options?: { exactSuggestions?: boolean },
+  options?: { exactSuggestions?: boolean; title?: string },
 ): ChatMessage {
   const own = parts.suggestions ?? [];
   const suggestions =
@@ -668,8 +919,61 @@ function message_(
     role: "assistant",
     timestamp: new Date(),
     ...parts,
+    content: formatForChat(parts.content, options?.title),
     suggestions,
   };
+}
+
+/**
+ * Gives every capability result a visual takeaway before it reaches the UI.
+ * Individual capabilities can provide their own `##` heading when they have
+ * a more specific one (for example "Your next appointment"); otherwise the
+ * capability's human-readable description becomes the bold heading. This
+ * prevents a new or error-adjacent capability from quietly shipping as an
+ * unstructured wall of prose.
+ */
+function formatForChat(content: string, title?: string): string {
+  const trimmed = content.trim();
+  if (!title || /^##\s+/m.test(trimmed)) return trimmed;
+
+  // A plain, multi-sentence answer is difficult to scan in a chat bubble.
+  // Treat its first sentence as the takeaway and the remaining sentences as
+  // supporting points. This is intentionally conservative: authored lists,
+  // paragraphs and inline markdown stay exactly as their capability supplied
+  // them, so we never turn a booking's multi-line detail block into nonsense.
+  if (!/\n|^(?:[-•])\s/m.test(trimmed)) {
+    const sentences = splitChatSentences(trimmed);
+    if (sentences.length >= 2) {
+      const [takeaway, ...details] = sentences;
+      return `## ${title}\n**${takeaway}**\n\n${details.map((detail) => `- ${detail}`).join("\n")}`;
+    }
+  }
+
+  return `## ${title}\n${trimmed}`;
+}
+
+/** Splits prose without mistaking the decimal in a price such as £25.50 for a sentence break. */
+function splitChatSentences(content: string): string[] {
+  const sentences: string[] = [];
+  let start = 0;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index];
+    const previous = content[index - 1] ?? "";
+    const next = content[index + 1] ?? "";
+    const isDecimal = character === "." && /\d/.test(previous) && /\d/.test(next);
+    if ((character === "." || character === "!" || character === "?") && !isDecimal) {
+      // Consume an ellipsis or multiple exclamation marks as one ending.
+      while (content[index + 1] === character) index += 1;
+      const sentence = content.slice(start, index + 1).trim();
+      if (sentence) sentences.push(sentence);
+      start = index + 1;
+    }
+  }
+
+  const remainder = content.slice(start).trim();
+  if (remainder) sentences.push(remainder);
+  return sentences;
 }
 
 /**

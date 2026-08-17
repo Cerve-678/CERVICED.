@@ -1,0 +1,198 @@
+-- CERVICED — claim_cart_booking_slots() never notified anyone of a new
+-- booking. Currently-live gap, confirmed to affect 100% of confirmed/
+-- pending bookings in the database (8/8 checked, zero notifications).
+--
+-- Root cause: claim_cart_booking_slots() converts a held slot into a real
+-- booking via a bare UPDATE ... SET status = 'confirmed'/'pending'
+-- WHERE status = 'on_hold'. Two things are both true and combine into a
+-- total notification blackout for this path:
+--
+--   1. handle_new_booking() (trigger on_booking_created, AFTER INSERT)
+--      early-returns on NEW.status = 'on_hold' — it only ever sees the
+--      original hold row being CREATED, never this UPDATE.
+--   2. handle_booking_status_change() (trigger on_booking_status_changed,
+--      AFTER UPDATE OF status) has no branch matching
+--      OLD.status = 'on_hold' AND NEW.status IN ('pending','confirmed') —
+--      its branches were written assuming bookings start life as 'pending'
+--      (the pre-cart-hold-system shape), so this transition falls through
+--      every IF with no INSERT.
+--
+-- So a client can complete checkout, pay, and have a fully confirmed
+-- booking — and the provider (and often the client too, for the
+-- 'pending'/awaiting-confirmation case) gets literally nothing: no
+-- in-app notification row, no push, silence.
+--
+-- This exact bug shape was already found and fixed once before, for the
+-- WAITLIST hold path specifically — see claim_waitlist_hold() in
+-- waitlist_holds.sql:406-485, whose comment states the problem verbatim:
+-- "this transition skips that trigger entirely (it early-returns on
+-- status = 'on_hold' at INSERT time), so without this the provider never
+-- learns." That fix was never carried over to the cart-checkout hold path
+-- (claim_cart_booking_slots), which is structurally the same shape of
+-- function (RPC claims a hold via UPDATE) but for the now-standard
+-- cart-checkout flow rather than the waitlist flow.
+--
+-- FIX: mirror claim_waitlist_hold()'s pattern and handle_new_booking()'s
+-- exact message wording — after each successful per-item claim in the
+-- loop, insert the same two notifications a direct-INSERT booking would
+-- have gotten from handle_new_booking(): "Booking Request Sent"/"New
+-- Booking Request" to client/provider for the pending (manual-accept)
+-- case, or "Booking Confirmed! 🎉"/"New Booking" for the auto-accept case.
+-- Per-item (not deduped by group_booking_id) is deliberately consistent
+-- with fix_group_booking_notification_dedup.sql's stated rule that
+-- provider-facing "new booking" notices stay per-row since each is a
+-- distinct request to a distinct provider — and here each loop item can
+-- also be a different date/time for the SAME client, so per-item is
+-- correct for the client side too, not just the provider side.
+--
+-- No other logic changed. Rebuilt from the current live definition
+-- (fix_claim_cart_booking_slots_private_details_ambiguous.sql) so nothing
+-- else regresses.
+--
+-- Safe to re-run.
+
+CREATE OR REPLACE FUNCTION public.claim_cart_booking_slots(p_hold_batch_id uuid, p_items jsonb)
+RETURNS TABLE(provider_id uuid, booking_date date, booking_time time without time zone, booking_id uuid)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_item JSONB;
+  v_provider_id UUID;
+  v_booking_date DATE;
+  v_booking_time TIME;
+  v_claimed_id UUID;
+  v_auto_accept BOOLEAN;
+  v_full_address TEXT;
+  v_latitude NUMERIC(10,7);
+  v_longitude NUMERIC(10,7);
+  v_provider_user_id UUID;
+  v_claimed_status TEXT;
+  v_provider_name TEXT;
+  v_service_name TEXT;
+  v_customer_name TEXT;
+BEGIN
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_provider_id := (v_item->>'provider_id')::UUID;
+    v_booking_date := (v_item->>'booking_date')::DATE;
+    v_booking_time := (v_item->>'booking_time')::TIME;
+
+    SELECT COALESCE(auto_accept_bookings, FALSE), user_id INTO v_auto_accept, v_provider_user_id
+      FROM public.providers WHERE id = v_provider_id;
+
+    -- This table is owner-only to clients, but this controlled server function
+    -- may snapshot it for the booked client. Never use location_text here.
+    SELECT full_address, latitude, longitude
+      INTO v_full_address, v_latitude, v_longitude
+      FROM public.provider_private_details
+     WHERE public.provider_private_details.provider_id = v_provider_id;
+
+    UPDATE public.bookings SET
+      status = CASE WHEN v_auto_accept THEN 'confirmed' ELSE 'pending' END,
+      hold_expires_at = NULL,
+      hold_batch_id = NULL,
+      service_id = NULLIF(v_item->>'service_id', '')::UUID,
+      end_time = (v_item->>'end_time')::TIME,
+      notes = v_item->>'notes',
+      booking_instructions = NULL,
+      payment_type = v_item->>'payment_type',
+      base_price = (v_item->>'base_price')::NUMERIC,
+      add_ons_total = (v_item->>'add_ons_total')::NUMERIC,
+      service_charge = (v_item->>'service_charge')::NUMERIC,
+      deposit_amount = (v_item->>'deposit_amount')::NUMERIC,
+      amount_paid = (v_item->>'amount_paid')::NUMERIC,
+      remaining_balance = (v_item->>'remaining_balance')::NUMERIC,
+      payment_status = v_item->>'payment_status',
+      payment_method = v_item->>'payment_method',
+      payment_intent_id = v_item->>'payment_intent_id',
+      is_group_booking = COALESCE((v_item->>'is_group_booking')::BOOLEAN, FALSE),
+      group_booking_id = NULLIF(v_item->>'group_booking_id', '')::UUID,
+      group_booking_count = COALESCE((v_item->>'group_booking_count')::INTEGER, 1),
+      provider_name_snapshot = v_item->>'provider_name_snapshot',
+      service_name_snapshot = v_item->>'service_name_snapshot',
+      service_category_snapshot = v_item->>'service_category_snapshot',
+      provider_logo_snapshot = v_item->>'provider_logo_snapshot',
+      provider_address_snapshot = COALESCE(NULLIF(btrim(v_full_address), ''), v_item->>'provider_address_snapshot'),
+      provider_phone_snapshot = v_item->>'provider_phone_snapshot',
+      provider_coordinates = CASE
+        WHEN v_latitude IS NOT NULL AND v_longitude IS NOT NULL
+          THEN jsonb_build_object('lat', v_latitude, 'lng', v_longitude)
+        WHEN v_item ? 'provider_coordinates' THEN v_item->'provider_coordinates'
+        ELSE NULL
+      END,
+      customer_name = v_item->>'customer_name',
+      customer_email = v_item->>'customer_email',
+      customer_phone = v_item->>'customer_phone',
+      client_address = v_item->>'client_address',
+      confirmed_at = CASE WHEN v_auto_accept THEN NOW() ELSE NULL END,
+      policy_accepted_at = (v_item->>'policy_accepted_at')::TIMESTAMPTZ,
+      policy_snapshot = v_item->'policy_snapshot'
+    WHERE public.bookings.hold_batch_id = p_hold_batch_id
+      AND public.bookings.provider_id = v_provider_id
+      AND public.bookings.booking_date = v_booking_date
+      AND public.bookings.booking_time = v_booking_time
+      AND public.bookings.status = 'on_hold'
+      AND public.bookings.hold_expires_at > NOW()
+      AND public.bookings.user_id = auth.uid()
+    RETURNING id, status, provider_name_snapshot, service_name_snapshot, customer_name
+      INTO v_claimed_id, v_claimed_status, v_provider_name, v_service_name, v_customer_name;
+
+    IF v_claimed_id IS NOT NULL THEN
+      IF v_claimed_status = 'confirmed' THEN
+        INSERT INTO public.notifications
+          (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+        VALUES (
+          auth.uid(), 'booking_confirmed', 'Booking Confirmed! 🎉',
+          v_provider_name || ' confirmed your booking for ' || v_service_name ||
+            ' on ' || TO_CHAR(v_booking_date, 'DD Mon YYYY') ||
+            ' at ' || TO_CHAR(v_booking_time, 'HH12:MI AM') || '.',
+          'high', TRUE, v_claimed_id, v_provider_id, 'client'
+        );
+
+        IF v_provider_user_id IS NOT NULL THEN
+          INSERT INTO public.notifications
+            (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+          VALUES (
+            v_provider_user_id, 'booking_confirmed', 'New Booking',
+            COALESCE(v_customer_name, 'A client') || ' booked ' || v_service_name ||
+              ' on ' || TO_CHAR(v_booking_date, 'DD Mon YYYY') ||
+              ' at ' || TO_CHAR(v_booking_time, 'HH12:MI AM') || '.',
+            'high', FALSE, v_claimed_id, v_provider_id, 'provider'
+          );
+        END IF;
+      ELSE
+        INSERT INTO public.notifications
+          (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+        VALUES (
+          auth.uid(), 'booking_pending', 'Booking Request Sent',
+          'Your request with ' || v_provider_name ||
+            ' on ' || TO_CHAR(v_booking_date, 'DD Mon YYYY') ||
+            ' at ' || TO_CHAR(v_booking_time, 'HH12:MI AM') ||
+            ' is awaiting confirmation.',
+          'high', TRUE, v_claimed_id, v_provider_id, 'client'
+        );
+
+        IF v_provider_user_id IS NOT NULL THEN
+          INSERT INTO public.notifications
+            (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+          VALUES (
+            v_provider_user_id, 'booking_pending', 'New Booking Request',
+            COALESCE(v_customer_name, 'A client') || ' requested ' || v_service_name ||
+              ' on ' || TO_CHAR(v_booking_date, 'DD Mon YYYY') || '. Please confirm or decline.',
+            'high', TRUE, v_claimed_id, v_provider_id, 'provider'
+          );
+        END IF;
+      END IF;
+
+      provider_id := v_provider_id;
+      booking_date := v_booking_date;
+      booking_time := v_booking_time;
+      booking_id := v_claimed_id;
+      RETURN NEXT;
+      v_claimed_id := NULL;
+    END IF;
+  END LOOP;
+END;
+$function$;

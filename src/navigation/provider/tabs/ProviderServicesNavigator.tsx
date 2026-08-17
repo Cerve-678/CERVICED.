@@ -1,13 +1,14 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderMyProfileScreen from '../../../screens/provider/ProviderMyProfileScreen';
-import InfoRegScreen from '../../../screens/shared/InfoRegScreen';
+import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
+import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
+import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { ProviderServicesStackParamList } from '../../types';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProviderServicesStack = createNativeStackNavigator<ProviderServicesStackParamList>();
 
@@ -16,7 +17,6 @@ const ProviderServicesStack = createNativeStackNavigator<ProviderServicesStackPa
 const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 
 export default function ProviderServicesNavigator() {
-  const { theme } = useTheme();
 
   return (
     <ProviderServicesStack.Navigator>
@@ -49,6 +49,23 @@ export default function ProviderServicesNavigator() {
         name="InfoPacks"
         component={ProviderInfoPackScreen}
         options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      {/* Reached from the availability card on the provider's own profile.
+          Registered HERE (as well as on the Home/Becca stacks) so that tap
+          PUSHES within this stack — a cross-tab navigate would land the
+          schedule at a fresh tab root and its back button would fire an
+          unhandled GO_BACK, the same trap documented on the Home stack. */}
+      <ProviderServicesStack.Screen
+        name="ProviderSchedule"
+        component={ProviderScheduleScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      <ProviderServicesStack.Screen
+        name="AddBooking"
+        component={AddBookingScreen}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
 
       <ProviderServicesStack.Screen

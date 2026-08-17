@@ -16,7 +16,6 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
-  LayoutAnimation,
   Platform,
   UIManager,
 } from 'react-native';
@@ -32,7 +31,7 @@ import {
   validatePromoCode,
 } from '../services/databaseService';
 import { PromoCodeRow } from './PromoCodeRow';
-import { buildThemeTokens, withAlpha } from '../constants/providerThemes';
+import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
 import type { DbPromotion } from '../types/database';
 import { logger } from '../utils/logger';
 
@@ -45,14 +44,6 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-// Matches ModernBeautyCalendar's collapse timing so the two kinds of
-// expand/collapse in this sheet feel like one behaviour, not two.
-const OPTIONAL_ANIM = LayoutAnimation.create(
-  220,
-  LayoutAnimation.Types.easeInEaseOut,
-  LayoutAnimation.Properties.opacity
-);
 
 // Matches MultiBookingSheet's own formatShortDate — same "Wed, 12 Aug" style
 // used everywhere else a booked date is summarised.
@@ -119,70 +110,6 @@ export const StepProgress: React.FC<{
   );
 };
 
-/**
- * An optional section that stays shut until the client asks for it.
- *
- * Notes and Promo Code are the two things in this sheet nobody has to fill
- * in, but expanded they read as heavily as the required steps — a textarea
- * and a text input demanding attention before you can reach the button.
- * Collapsed to one line each, the default view shows only what's actually
- * needed to book, and the capability is one tap away rather than gone.
- *
- * `summary` is what the row shows once there's something to show, so a
- * filled-in section never hides its own content behind a generic label.
- */
-const OptionalSection: React.FC<{
-  label: string;
-  summary?: string | undefined;
-  tokens: { text: string; sub: string; border: string; surface: string };
-  accentColor: string;
-  children: React.ReactNode;
-}> = ({ label, summary, tokens, accentColor, children }) => {
-  const [open, setOpen] = useState(false);
-
-  if (open) {
-    return (
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.summaryHeaderRow}
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            LayoutAnimation.configureNext(OPTIONAL_ANIM);
-            setOpen(false);
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.sectionTitle, { color: tokens.text, marginBottom: 0 }]}>{label}</Text>
-          <Text style={[styles.changeLink, { color: accentColor }]}>Done</Text>
-        </TouchableOpacity>
-        <View style={{ marginTop: 12 }}>{children}</View>
-      </View>
-    );
-  }
-
-  return (
-    <TouchableOpacity
-      style={[styles.optionalRow, { borderColor: tokens.border, backgroundColor: tokens.surface }]}
-      onPress={() => {
-        Haptics.selectionAsync().catch(() => {});
-        LayoutAnimation.configureNext(OPTIONAL_ANIM);
-        setOpen(true);
-      }}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel={summary ? `${label}: ${summary}. Tap to edit.` : `${label}. Tap to add.`}
-    >
-      <Text
-        style={[styles.optionalRowText, { color: summary ? tokens.text : tokens.sub }]}
-        numberOfLines={1}
-      >
-        {summary ?? label}
-      </Text>
-      <Text style={[styles.optionalRowAction, { color: accentColor }]}>{summary ? 'Edit' : 'Add'}</Text>
-    </TouchableOpacity>
-  );
-};
-
 export interface BookingSheetAddOn {
   id: string | number;
   name: string;
@@ -201,7 +128,7 @@ export interface BookingSheetService {
 }
 
 export interface BookingSheetResult {
-  selectedAddOns: Array<{ id: string | number; name: string; price: number }>;
+  selectedAddOns: { id: string | number; name: string; price: number }[];
   date: string;
   time: string;
   notes: string;
@@ -212,6 +139,12 @@ export interface BookingSheetResult {
   /** Present when consultationRequired was passed in and the client picked
    *  a date/time for it in this same sheet. */
   consultationBooking?: { date: string; time: string };
+  /** Stamped only when the policy checkbox was ticked — the moment of
+   *  agreement, plus a frozen copy of the policy agreed to (see
+   *  BookingSheetProps.bookingPolicies). Absent if there was no policy to
+   *  agree to (provider hasn't set one). */
+  policyAcceptedAt?: string;
+  policySnapshot?: Record<string, unknown>;
 }
 
 interface BookingSheetProps {
@@ -230,19 +163,33 @@ interface BookingSheetProps {
   /** Provider's service category — narrows promo eligibility the same way
    *  CartScreen's itemPromoDiscounts does, so the add-mode preview matches. */
   providerServiceCategory?: string;
+  /** The provider's live cancellation/booking policy (providers.booking_policies)
+   *  — snapshotted into the result when the client agrees, so the eventual
+   *  booking row remembers what was actually agreed to even if the provider
+   *  edits their policy later. Caller already has this loaded (e.g.
+   *  ProviderProfileScreen's own Policy tab reads the same data). */
+  bookingPolicies?: Record<string, unknown> | null;
   adaptiveAccentColor: string;
   /** Sheet's background colour — always the caller's own content-backdrop
    *  colour (e.g. the provider's card colour, or the cart's card colour),
    *  never derived from system/app dark mode. The sheet has no light/dark
    *  fallback of its own; every caller must supply this. */
   backgroundColor: string;
-  initial?: {
-    selectedAddOns?: Array<{ id: string | number; name: string; price: number }> | undefined;
-    selectedDate?: string | undefined;
-    selectedTime?: string | undefined;
-    notes?: string | undefined;
-    isDepositOnly?: boolean | undefined;
-  };
+  initial?:
+    | {
+        selectedAddOns?: { id: string | number; name: string; price: number }[] | undefined;
+        selectedDate?: string | undefined;
+        selectedTime?: string | undefined;
+        notes?: string | undefined;
+        isDepositOnly?: boolean | undefined;
+        /** Whether this cart item already had terms/cancellation policy
+         *  agreed to (mode="edit" only — seeded from the item's own
+         *  policyAcceptedAt, not any cross-booking/device-wide memory).
+         *  Re-editing an already-agreed item shouldn't force re-ticking the
+         *  same box it was added with. */
+        agreedToPolicy?: boolean | undefined;
+      }
+    | undefined;
   /** When set, this provider requires a consultation before this client's
    *  first real booking — the sheet shows a second Date & Time picker for
    *  it, above the main service's, and both are scheduled together on
@@ -260,6 +207,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   providerDisplayName,
   providerKey,
   providerServiceCategory,
+  bookingPolicies,
   adaptiveAccentColor,
   backgroundColor,
   initial,
@@ -274,10 +222,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     () => buildThemeTokens(sheetBackground, sheetBackground, adaptiveAccentColor, sheetBackground),
     [sheetBackground, adaptiveAccentColor]
   );
-  const isDark = tokens.isDark;
+  // Text/icons drawn ON a solid adaptiveAccentColor fill (close button,
+  // submit button) can't assume white — a pale accent (e.g. the client
+  // dark-mode blue-grey #E5ECF4) makes white text unreadable. Pick black or
+  // white by the accent's own luminance instead of hardcoding either.
+  const onAccentColor = useMemo(
+    () => (isDarkColor(adaptiveAccentColor) ? '#fff' : '#1B2740'),
+    [adaptiveAccentColor]
+  );
 
   const [selectedAddOns, setSelectedAddOns] = useState<
-    Array<{ id: string | number; name: string; price: number }>
+    { id: string | number; name: string; price: number }[]
   >([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
@@ -318,7 +273,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setSelectedTime(initial?.selectedTime ?? '');
     setNotes(initial?.notes ?? '');
     setIsDepositOnly(initial?.isDepositOnly ?? false);
-    setAgreedToPolicy(false);
+    setAgreedToPolicy(initial?.agreedToPolicy ?? false);
     setLocalPromo(undefined);
     setConsultationDate('');
     setConsultationTime('');
@@ -468,6 +423,13 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     [service?.addOns?.length]
   );
 
+  // The checkbox reads "...and this provider's cancellation policy" — when
+  // the provider hasn't set one, there's nothing provider-specific to agree
+  // to, so it shouldn't be shown or block booking. (CERVICED's own Terms &
+  // Conditions agreement is separate and always required — that's the cart's
+  // own checkout checkbox, untouched by this.)
+  const requiresPolicyAgreement = !!bookingPolicies;
+
   // What's missing before this step can be left. null = good to continue.
   // Each step gates only its OWN requirements, so the client is told what's
   // wrong while they're still looking at it, instead of at the very end.
@@ -481,9 +443,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       if (!selectedDate || !selectedTime) return 'Choose a date and time';
       if (consultationScheduleMissing) return 'Choose a consultation time';
     }
-    if (step === 'confirm' && !agreedToPolicy) return 'Agree to the terms to continue';
+    if (step === 'confirm' && requiresPolicyAgreement && !agreedToPolicy) return 'Agree to the terms to continue';
     return null;
-  }, [step, selectedDate, selectedTime, consultationScheduleMissing, agreedToPolicy]);
+  }, [step, selectedDate, selectedTime, consultationScheduleMissing, requiresPolicyAgreement, agreedToPolicy]);
+
+  // Whether handleSubmit's own requirements are met right now, regardless of
+  // which step is showing — used by the edit-mode "Done" shortcut so a
+  // client fixing one field (e.g. just the date) isn't forced to click
+  // through every remaining step to save it, as long as terms were already
+  // agreed and scheduling is already valid from an earlier pass.
+  const canFinishNow =
+    !!selectedDate && !!selectedTime && !consultationScheduleMissing && (!requiresPolicyAgreement || agreedToPolicy);
 
   const goToStep = useCallback((next: BookingStep) => {
     Haptics.selectionAsync().catch(() => {});
@@ -517,7 +487,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const handleSubmit = useCallback(() => {
     if (!service) return;
     if (consultationScheduleMissing) return; // guarded by disabling the button too
-    if (!agreedToPolicy) return; // guarded by disabling the button too
+    if (requiresPolicyAgreement && !agreedToPolicy) return; // guarded by disabling the button too
     onSubmit({
       selectedAddOns,
       date: selectedDate,
@@ -528,9 +498,13 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       ...(consultationRequired && consultationDate && consultationTime
         ? { consultationBooking: { date: consultationDate, time: consultationTime } }
         : {}),
+      // Only stamped when this provider actually has a policy to agree to —
+      // no checkbox is shown otherwise, so there's nothing to timestamp.
+      ...(requiresPolicyAgreement ? { policyAcceptedAt: new Date().toISOString() } : {}),
+      ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, agreedToPolicy, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, requiresPolicyAgreement, agreedToPolicy, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -572,7 +546,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             onPress={onClose}
             activeOpacity={0.8}
           >
-            <Text style={styles.closeButtonText}>✕</Text>
+            <Text style={[styles.closeButtonText, { color: onAccentColor }]}>✕</Text>
           </TouchableOpacity>
         </View>
 
@@ -613,7 +587,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         isSelected && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
                       ]}
                     >
-                      {isSelected && <Text style={styles.addOnCheckmark}>✓</Text>}
+                      {isSelected && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
                     </View>
                   </TouchableOpacity>
                 );
@@ -703,8 +677,8 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: tokens.text }]}>Payment</Text>
-                {showFullPaymentOption ? (
-                  <View style={styles.paymentButtons}>
+                <View style={styles.paymentButtons}>
+                  {showFullPaymentOption && (
                     <TouchableOpacity
                       style={[
                         styles.paymentOptionButton,
@@ -717,39 +691,37 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                         Pay Full Amount
                       </Text>
                     </TouchableOpacity>
-                    {depositPolicy?.depositAvailable !== false && (
-                      <TouchableOpacity
-                        style={[
-                          styles.paymentOptionButton,
-                          { backgroundColor: tokens.surface },
-                          isDepositOnly && { backgroundColor: withAlpha(adaptiveAccentColor, 0.14), borderColor: adaptiveAccentColor },
-                        ]}
-                        onPress={() => setIsDepositOnly(true)}
-                      >
-                        <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
-                          {depositPolicy
-                            ? depositPolicy.depositType === 'fixed'
-                              ? `Pay Deposit (£${depositPolicy.depositAmount} flat)`
-                              : `Pay Deposit (${depositPolicy.depositAmount}%)`
-                            : 'Pay Deposit (20%)'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ) : (
+                  )}
+                  {(showFullPaymentOption ? depositPolicy?.depositAvailable !== false : true) && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOptionButton,
+                        { backgroundColor: tokens.surface },
+                        isDepositOnly && { backgroundColor: withAlpha(adaptiveAccentColor, 0.14), borderColor: adaptiveAccentColor },
+                      ]}
+                      onPress={() => setIsDepositOnly(true)}
+                      activeOpacity={showFullPaymentOption ? 0.7 : 1}
+                      disabled={!showFullPaymentOption}
+                    >
+                      <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
+                        {depositPolicy
+                          ? depositPolicy.depositType === 'fixed'
+                            ? `Pay Deposit (£${depositPolicy.depositAmount} flat)`
+                            : `Pay Deposit (${depositPolicy.depositAmount}%)`
+                          : 'Pay Deposit (20%)'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {!showFullPaymentOption && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
                     This provider requires a deposit to book — paying in full isn't available for this service.
                   </Text>
                 )}
                 {isDepositOnly && (
-                  <View style={[styles.depositInfo, { backgroundColor: isDark ? 'rgba(76,175,80,0.16)' : 'rgba(76,175,80,0.1)' }]}>
-                    <Text style={[styles.depositInfoText, { color: isDark ? '#7BD989' : '#2E7D32' }]}>
-                      Deposit: £{BookingService.calculateDeposit(subtotal, depositPolicyArg).toFixed(2)}
-                    </Text>
-                    <Text style={[styles.depositRemainingText, { color: isDark ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.7)' }]}>
-                      Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
-                    </Text>
-                  </View>
+                  <Text style={[styles.depositRemainingText, { color: tokens.sub }]}>
+                    Remaining: £{BookingService.calculateRemainingBalance(subtotal, depositPolicyArg).toFixed(2)} (pay at appointment)
+                  </Text>
                 )}
               </View>
 
@@ -757,12 +729,8 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   the cart itself has no promo code input; a code carried in
                   via CartItem.initialPromoCode still auto-applies there. */}
               {mode === 'add' && (
-                <OptionalSection
-                  label="Have a promo code?"
-                  summary={localPromo?.promo_code ? `Promo ${localPromo.promo_code} applied` : undefined}
-                  tokens={tokens}
-                  accentColor={adaptiveAccentColor}
-                >
+                <View style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: tokens.text }]}>Have a promo code?</Text>
                   <PromoCodeRow
                     providerKey={providerKey}
                     {...(localPromo !== undefined ? { appliedPromo: localPromo } : {})}
@@ -775,15 +743,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     subColor={tokens.sub}
                     accentColor={adaptiveAccentColor}
                   />
-                </OptionalSection>
+                </View>
               )}
 
-              <OptionalSection
-                label="Add notes"
-                summary={notes.trim() ? notes.trim() : undefined}
-                tokens={tokens}
-                accentColor={adaptiveAccentColor}
-              >
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: tokens.text }]}>Add notes</Text>
                 <TextInput
                   style={[styles.notesInput, { borderColor: tokens.border, color: tokens.text, backgroundColor: tokens.surface }]}
                   value={notes}
@@ -795,7 +759,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   maxLength={500}
                 />
                 <Text style={[styles.characterCount, { color: tokens.sub }]}>{notes.length}/500 characters</Text>
-              </OptionalSection>
+              </View>
             </>
           ) : (
             <>
@@ -864,22 +828,31 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </View>
               )}
 
-              <TouchableOpacity
-                style={styles.policyCheckboxRow}
-                onPress={() => setAgreedToPolicy(!agreedToPolicy)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.addOnCheckbox,
-                  { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
-                ]}>
-                  {agreedToPolicy && <Text style={styles.addOnCheckmark}>✓</Text>}
-                </View>
-                {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
-                <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
-                  I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
-                </Text>
-              </TouchableOpacity>
+              {/* Only shown when this provider actually has a cancellation
+                  policy on file — the checkbox text names "this provider's
+                  cancellation policy" specifically, so with no policy set
+                  there's nothing provider-specific to agree to and booking
+                  should proceed like normal. CERVICED's own Terms &
+                  Conditions agreement lives separately on the cart's own
+                  checkout screen and is unaffected by this. */}
+              {requiresPolicyAgreement && (
+                <TouchableOpacity
+                  style={styles.policyCheckboxRow}
+                  onPress={() => setAgreedToPolicy(!agreedToPolicy)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.addOnCheckbox,
+                    { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
+                  ]}>
+                    {agreedToPolicy && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
+                  </View>
+                  {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
+                  <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
+                    I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </ScrollView>
@@ -891,7 +864,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               onPress={() => goToStep('when')}
               activeOpacity={0.8}
             >
-              <Text style={styles.submitButtonText}>
+              <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
                 {`Next${totalAddOnsPrice > 0 ? ` • +£${totalAddOnsPrice.toFixed(2)}` : ''}`}
               </Text>
             </TouchableOpacity>
@@ -912,32 +885,52 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
               {/* On the last step this commits the booking; before that it
                   just advances. Either way the label says what will happen,
                   and a blocker replaces it with what's missing. */}
-              <TouchableOpacity
-                style={[
-                  styles.submitButton,
-                  { backgroundColor: adaptiveAccentColor },
-                  !!stepBlocker && styles.submitButtonDisabled,
-                ]}
-                onPress={
-                  schedulingFixableElsewhere
-                    ? () => goToStep('when')
-                    : step === 'confirm'
-                    ? handleSubmit
-                    : handleNext
-                }
-                activeOpacity={0.8}
-                disabled={!!stepBlocker && !schedulingFixableElsewhere}
-              >
-                <Text style={styles.submitButtonText}>
-                  {schedulingFixableElsewhere
-                    ? 'Choose a date and time'
-                    : stepBlocker
-                    ? stepBlocker
-                    : step === 'confirm'
-                    ? (mode === 'add' ? 'Add to Cart' : 'Save Changes')
-                    : 'Continue'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.footerButtonRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.submitButton,
+                    { backgroundColor: adaptiveAccentColor },
+                    !!stepBlocker && styles.submitButtonDisabled,
+                  ]}
+                  onPress={
+                    schedulingFixableElsewhere
+                      ? () => goToStep('when')
+                      : step === 'confirm'
+                      ? handleSubmit
+                      : handleNext
+                  }
+                  activeOpacity={0.8}
+                  disabled={!!stepBlocker && !schedulingFixableElsewhere}
+                >
+                  <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
+                    {schedulingFixableElsewhere
+                      ? 'Choose a date and time'
+                      : stepBlocker
+                      ? stepBlocker
+                      : step === 'confirm'
+                      ? (mode === 'add' ? 'Add to Cart' : 'Save Changes')
+                      : 'Continue'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Editing an existing cart item is a correction to one
+                    field, not a fresh multi-step booking — once whatever's
+                    already set is valid (date/time picked, terms already
+                    agreed from the original add-to-cart), the client should
+                    be able to bail out and save right here instead of being
+                    walked through "pay"/"confirm" again just to re-confirm
+                    choices they aren't changing. Not shown in "add" mode,
+                    where there's nothing yet to save until confirm. */}
+                {mode === 'edit' && step !== 'confirm' && canFinishNow && (
+                  <TouchableOpacity
+                    style={[styles.submitButton, styles.doneButton, { borderColor: adaptiveAccentColor }]}
+                    onPress={handleSubmit}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.submitButtonText, { color: adaptiveAccentColor }]}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </>
           )}
         </View>
@@ -964,7 +957,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18 },
   headerSubtitle: { fontSize: 13, marginTop: 4 },
   closeButton: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  closeButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  closeButtonText: { fontSize: 15, fontWeight: '700' },
   body: { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 40 },
   section: { marginBottom: 26 },
@@ -983,7 +976,7 @@ const styles = StyleSheet.create({
   addOnDescription: { fontSize: 12, marginTop: 2 },
   addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  addOnCheckmark: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  addOnCheckmark: { fontSize: 12, fontWeight: '700' },
   policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 },
   policyCheckboxLabel: { flex: 1, fontSize: 13 },
   requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
@@ -1008,24 +1001,12 @@ const styles = StyleSheet.create({
   // Sits level with the dots, not the labels below them.
   progressBar:   { height: 1.5, width: 34, marginHorizontal: 7, marginBottom: 15 },
 
-  // Collapsed optional section — deliberately lighter than a sectionTitle so
-  // the required steps stay visually dominant.
-  optionalRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: StyleSheet.hairlineWidth, borderRadius: 12,
-    paddingVertical: 13, paddingHorizontal: 14, marginBottom: 12,
-  },
-  optionalRowText:   { flex: 1, fontSize: 14, marginRight: 12 },
-  optionalRowAction: { fontSize: 13, fontWeight: '700' },
-
   notesInput: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, fontSize: 14, minHeight: 90, textAlignVertical: 'top' },
   characterCount: { fontSize: 11, textAlign: 'right', marginTop: 6 },
   paymentButtons: { flexDirection: 'row', gap: 10 },
   paymentOptionButton: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: 'transparent', paddingVertical: 12, alignItems: 'center' },
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
-  depositInfo: { borderRadius: 12, padding: 12, marginTop: 10 },
-  depositInfoText: { fontSize: 13, fontWeight: '700' },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
   footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 20 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
@@ -1039,7 +1020,9 @@ const styles = StyleSheet.create({
   summaryItemDateTime: { fontSize: 12, marginTop: 2 },
   summaryItemPrice: { fontSize: 14, fontWeight: '700' },
   summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
-  submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
+  footerButtonRow: { flexDirection: 'row', gap: 10 },
+  submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center', flex: 1 },
+  doneButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
   submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, color: '#fff', fontWeight: 'bold' },
+  submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: 'bold' },
 });

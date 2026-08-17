@@ -14,7 +14,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
 
 export default function PaymentMethodsScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -29,29 +29,29 @@ export default function PaymentMethodsScreen({ navigation }: any) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
           activeOpacity={0.7}
         >
-          <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+          <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, { color: theme.text }]}>Payment Methods</Text>
-        <Text style={[styles.subtitle, { color: theme.secondaryText }]}>
+        <Text style={[styles.title, { color: P.text }]}>Payment Methods</Text>
+        <Text style={[styles.subtitle, { color: P.sub }]}>
           Manage your cards and payment options
         </Text>
 
         {/* Coming soon card */}
         <View style={[styles.comingSoon, {
-          backgroundColor: isDarkMode ? 'rgba(175,145,151,0.08)' : 'rgba(92,64,51,0.06)',
+          backgroundColor: P.accentDim,
           borderColor: 'transparent',
         }]}>
-          <Icon name="payment" size={40} color={theme.accent} />
-          <Text style={[styles.comingSoonTitle, { color: theme.text }]}>Coming Soon</Text>
-          <Text style={[styles.comingSoonSub, { color: theme.secondaryText }]}>
+          <Icon name="payment" size={40} color={P.accentText} />
+          <Text style={[styles.comingSoonTitle, { color: P.text }]}>Coming Soon</Text>
+          <Text style={[styles.comingSoonSub, { color: P.sub }]}>
             Card payments, Apple Pay, and Google Pay will be available when online booking launches.
           </Text>
         </View>
 
-        <View style={[styles.infoRow, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-          <Icon name="lock" size={18} color={theme.accent} />
-          <Text style={[styles.infoText, { color: theme.secondaryText }]}>
+        <View style={[styles.infoRow, { backgroundColor: P.card, borderColor: P.border }]}>
+          <Icon name="lock" size={18} color={P.accentText} />
+          <Text style={[styles.infoText, { color: P.sub }]}>
             All payments are secured with 256-bit encryption
           </Text>
         </View>

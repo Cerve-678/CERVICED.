@@ -69,15 +69,26 @@ const todaySchedule: Capability = {
 
     const lines = rows
       .slice(0, 8)
-      .map((b) => `${formatTime12(b.booking_time)} — **${b.service_name_snapshot}** · ${b.customer_name ?? "Client"}`)
+      .map((b) => `- **${formatTime12(b.booking_time)}** · **${b.service_name_snapshot}**\n  ${b.customer_name ?? "Client"}`)
       .join("\n");
 
     // Deliberately counts bookings, not revenue: takings depend on how each
     // booking was actually paid, which isn't Becca's to assert.
     return {
-      text: `You've got ${rows.length} booked ${label}:\n\n${lines}`,
+      text: `## ${rows.length} booking${rows.length !== 1 ? "s" : ""} ${label}\nHere’s your schedule:\n\n${lines}`,
       suggestions: [
-        navChip("home", "Open today's bookings", "home"),
+        // Mirror the client experience: each schedule line Becca shows can
+        // be opened directly, rather than making a provider hunt through the
+        // whole day after choosing it in chat.
+        ...rows.slice(0, 6).map((booking) =>
+          navChip(
+            `booking-${booking.id}`,
+            `View: ${booking.service_name_snapshot} · ${formatTime12(booking.booking_time)}`,
+            "BookingDetail",
+            { bookingId: booking.id },
+          ),
+        ),
+        ...(rows.length > 6 ? [navChip("home", "Open all today’s bookings", "home")] : []),
         askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
       ],
     };
@@ -120,19 +131,28 @@ const weekAhead: Capability = {
     if (total === 0) {
       return {
         text: "Nothing booked over the next 7 days.",
-        suggestions: [askChip("waitlist", "Who's waiting?", "Who's on my waitlist?")],
+        suggestions: [
+          askChip("waitlist", "Who's waiting?", "Who's on my waitlist?"),
+          askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
+          askChip("promos", "Are my offers live?", "How are my promotions doing?"),
+        ],
       };
     }
 
     const busiest = [...counts].sort((a, b) => b.count - a.count)[0]!;
     const lines = counts
       .filter((c) => c.count > 0)
-      .map((c) => `${formatShortDate(c.ymd)} — ${c.count} booking${c.count !== 1 ? "s" : ""}`)
+      .map((c) => `- **${formatShortDate(c.ymd)}** · ${c.count} booking${c.count !== 1 ? "s" : ""}`)
       .join("\n");
 
     return {
-      text: `${total} booking${total !== 1 ? "s" : ""} over the next 7 days. Busiest is ${formatShortDate(busiest.ymd)}.\n\n${lines}`,
-      suggestions: [navChip("home", "Open bookings", "home")],
+      text: `## Your next 7 days\n**${total} booking${total !== 1 ? "s" : ""}** in total · busiest on **${formatShortDate(busiest.ymd)}**.\n\n${lines}`,
+      suggestions: [
+        navChip("home", "Open bookings", "home"),
+        askChip("today", "Just today?", "What's on today?"),
+        askChip("capacity", "Am I near my cap?", "Am I full today?"),
+        askChip("waitlist", "Who's waiting?", "Who's on my waitlist?"),
+      ],
     };
   },
 };
@@ -165,9 +185,9 @@ const waitlist: Capability = {
     // you have is worth offering to anyone.
     const lines = waiting
       .slice(0, 5)
-      .map((e, i) => {
+      .map((e) => {
         const name = e.user_name_snapshot ?? "A client";
-        return `${i + 1}. **${name}** — ${e.service_name_snapshot}`;
+        return `- **${name}** — ${e.service_name_snapshot}`;
       })
       .join("\n");
 
@@ -201,6 +221,11 @@ const clientele: Capability = {
     if (members.length === 0) {
       return {
         text: "You haven't got any clients on record yet — they'll appear here after their first booking.",
+        suggestions: [
+          askChip("promos", "Are my offers live?", "How are my promotions doing?"),
+          askChip("reach", "How's my reach?", "How many followers have I got?"),
+          navChip("services", "Check my services", "services"),
+        ],
       };
     }
     return {
@@ -228,12 +253,31 @@ const inbox: Capability = {
     if (unread.length === 0) {
       return {
         text: `No unread messages. You've got ${convos.length} conversation${convos.length !== 1 ? "s" : ""} in total.`,
-        suggestions: [navChip("messages", "Open Inbox", "messages")],
+        suggestions: [
+          navChip("messages", "Open Inbox", "messages"),
+          askChip("today", "What's on today?", "What's on today?"),
+          askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
+        ],
       };
     }
     return {
       text: `You've got ${unread.length} unread conversation${unread.length !== 1 ? "s" : ""}.`,
-      suggestions: [navChip("messages", "Open Inbox", "messages")],
+      suggestions: [
+        ...unread.slice(0, 5).flatMap((conversation) => {
+          const client = conversation.client;
+          if (!client) return [];
+          return [
+            navChip(`conversation-${conversation.id}`, `Reply to ${client.name}`, "conversation", {
+              conversationId: conversation.id,
+              clientUserId: client.id,
+              clientName: client.name,
+            }),
+          ];
+        }),
+        navChip("messages", "Open Inbox", "messages"),
+        askChip("waitlist", "Anyone on my waitlist?", "Who's on my waitlist?"),
+        askChip("today", "What's on today?", "What's on today?"),
+      ],
     };
   },
 };
@@ -251,11 +295,21 @@ const outstandingForms: Capability = {
     const forms = await getMyProviderIntakeForms();
     const pending = forms.filter((f) => f.status === "pending");
     if (pending.length === 0) {
-      return { text: "Every form you've sent has been filled in." };
+      return {
+        text: "Every form you've sent has been filled in.",
+        suggestions: [
+          askChip("today", "What's on today?", "What's on today?"),
+          navChip("infopacks", "Manage Info Packs", "infopacks"),
+        ],
+      };
     }
     return {
       text: `${pending.length} form${pending.length !== 1 ? "s haven't" : " hasn't"} been filled in yet.`,
-      suggestions: [navChip("home", "Open bookings", "home")],
+      suggestions: [
+        navChip("home", "Open bookings", "home"),
+        askChip("inbox", "Any unread messages?", "Any unread messages?"),
+        navChip("infopacks", "Manage Info Packs", "infopacks"),
+      ],
     };
   },
 };
@@ -277,7 +331,11 @@ const promotions: Capability = {
         active.length === 0
           ? "You haven't got any live promotions right now."
           : `You've got ${active.length} live promotion${active.length !== 1 ? "s" : ""}.`,
-      suggestions: [navChip("promotions", "Open Promotions", "promotions")],
+      suggestions: [
+        navChip("promotions", "Open Promotions", "promotions"),
+        askChip("lapsed", "Who could I win back?", "Who hasn't been back in a while?"),
+        askChip("reach", "How's my reach?", "How many followers have I got?"),
+      ],
     };
   },
 };
@@ -293,7 +351,13 @@ const lapsedClients: Capability = {
   async run({ now }): Promise<CapabilityResult> {
     const members = await getProviderClientele();
     if (members.length === 0) {
-      return { text: "You haven't got any clients on record yet." };
+      return {
+        text: "You haven't got any clients on record yet.",
+        suggestions: [
+          askChip("promos", "Are my offers live?", "How are my promotions doing?"),
+          navChip("services", "Check my services", "services"),
+        ],
+      };
     }
 
     // 8 weeks with no booking — long enough to be meaningful across most
@@ -309,20 +373,27 @@ const lapsedClients: Capability = {
     if (lapsed.length === 0) {
       return {
         text: "Nobody's drifted — every client on your books has been in within the last 8 weeks.",
-        suggestions: [navChip("clients", "Open Clientele", "clients")],
+        suggestions: [
+          navChip("clients", "Open Clientele", "clients"),
+          askChip("week", "How's my week?", "How busy am I this week?"),
+        ],
       };
     }
 
     const lines = lapsed
       .slice(0, 6)
-      .map((m) => `**${m.customer_name}** — last in ${formatShortDate(m.last_booking_date)}`)
+      .map((m) => `- **${m.customer_name}** — last in **${formatShortDate(m.last_booking_date)}**`)
       .join("\n");
 
     return {
       text:
         `${lapsed.length} client${lapsed.length !== 1 ? "s haven't" : " hasn't"} been back in over 8 weeks:\n\n${lines}` +
         `${lapsed.length > 6 ? `\n\n…and ${lapsed.length - 6} more.` : ""}`,
-      suggestions: [navChip("clients", "Open Clientele", "clients")],
+      suggestions: [
+        navChip("clients", "Open Clientele", "clients"),
+        askChip("promos", "Could an offer help?", "How are my promotions doing?"),
+        navChip("messages", "Open Inbox", "messages"),
+      ],
     };
   },
 };
@@ -347,7 +418,10 @@ const myServices: Capability = {
     if (active.length === 0) {
       return {
         text: "You haven't got any active services yet — add some so clients can book you.",
-        suggestions: [navChip("services", "Add a service", "services")],
+        suggestions: [
+          navChip("services", "Add a service", "services"),
+          navChip("schedule", "Set my hours", "schedule"),
+        ],
       };
     }
 
@@ -358,7 +432,7 @@ const myServices: Capability = {
           s.price_max && s.price_max > s.price
             ? `${money(s.price)}–${money(s.price_max)}`
             : money(s.price);
-        return `**${s.name}** — ${price} · ${s.duration_minutes} min`;
+        return `- **${s.name}** — **${price}** · ${s.duration_minutes} min`;
       })
       .join("\n");
 
@@ -366,7 +440,11 @@ const myServices: Capability = {
       text:
         `You've got ${active.length} active service${active.length !== 1 ? "s" : ""}:\n\n${lines}` +
         `${active.length > 8 ? `\n\n…and ${active.length - 8} more.` : ""}`,
-      suggestions: [navChip("services", "Edit My Services", "services")],
+      suggestions: [
+        navChip("services", "Edit My Services", "services"),
+        askChip("reviews", "How are my reviews?", "How are my reviews?"),
+        askChip("capacity", "How's my capacity?", "Am I full today?"),
+      ],
     };
   },
 };
@@ -386,16 +464,35 @@ const providerNotifications: Capability = {
     if (unread.length === 0) {
       return {
         text: "Nothing new — you're all caught up.",
-        suggestions: [askChip("today", "What's on today?", "What's on today?")],
+        suggestions: [
+          askChip("today", "What's on today?", "What's on today?"),
+          askChip("inbox", "Any unread messages?", "Any unread messages?"),
+          askChip("week", "How's my week?", "How busy am I this week?"),
+        ],
       };
     }
     const lines = unread
       .slice(0, 5)
-      .map((n) => `**${n.title}**\n${n.message}`)
+      .map((n) => `- **${n.title}**\n  ${n.message}`)
       .join("\n\n");
     return {
       text: `${unread.length} unread update${unread.length !== 1 ? "s" : ""}:\n\n${lines}`,
-      suggestions: [navChip("notifs", "Open Notifications", "Notifications")],
+      suggestions: [
+        ...unread
+          .filter((notification) => !!notification.booking_id)
+          .slice(0, 4)
+          .map((notification) =>
+            navChip(
+              `booking-${notification.id}`,
+              `View booking: ${notification.title}`,
+              "BookingDetail",
+              { bookingId: notification.booking_id! },
+            ),
+          ),
+        navChip("notifs", "Open Notifications", "Notifications"),
+        askChip("inbox", "Any unread messages?", "Any unread messages?"),
+        askChip("today", "What's on today?", "What's on today?"),
+      ],
     };
   },
 };
@@ -421,18 +518,26 @@ const timeOff: Capability = {
     if (upcoming.length === 0) {
       return {
         text: "You haven't blocked out any upcoming days.",
-        suggestions: [navChip("schedule", "Block out a day", "schedule")],
+        suggestions: [
+          navChip("schedule", "Block out a day", "schedule"),
+          askChip("hours", "What are my hours?", "What are my working hours?"),
+          askChip("week", "How's my week?", "How busy am I this week?"),
+        ],
       };
     }
 
     const lines = upcoming
       .slice(0, 6)
-      .map((b) => `${formatShortDate(b.blocked_date)}${b.reason ? ` — ${b.reason}` : ""}`)
+      .map((b) => `- **${formatShortDate(b.blocked_date)}**${b.reason ? ` — ${b.reason}` : ""}`)
       .join("\n");
 
     return {
       text: `You've got ${upcoming.length} day${upcoming.length !== 1 ? "s" : ""} blocked out:\n\n${lines}`,
-      suggestions: [navChip("schedule", "Open Schedule", "schedule")],
+      suggestions: [
+        navChip("schedule", "Open Schedule", "schedule"),
+        askChip("hours", "What are my hours?", "What are my working hours?"),
+        askChip("week", "How's my week?", "How busy am I this week?"),
+      ],
     };
   },
 };
@@ -450,6 +555,10 @@ const myReviews: Capability = {
     if (rows.length === 0) {
       return {
         text: "No reviews yet — they'll show up here once clients start leaving them.",
+        suggestions: [
+          askChip("clients", "How many clients have I got?", "How many clients have I got?"),
+          navChip("services", "Check my services", "services"),
+        ],
       };
     }
     const avg = rows.reduce((sum, r) => sum + (r.rating ?? 0), 0) / rows.length;
@@ -463,6 +572,11 @@ const myReviews: Capability = {
       text:
         `You're rated **${avg.toFixed(1)}★** from ${rows.length} review${rows.length !== 1 ? "s" : ""}.` +
         (recent ? `\n\nMost recent:\n\n${recent}` : ""),
+      suggestions: [
+        navChip("analytics", "Open Analytics", "analytics"),
+        askChip("clients", "How many clients?", "How many clients have I got?"),
+        askChip("reach", "How's my reach?", "How many followers have I got?"),
+      ],
     };
   },
 };
@@ -486,18 +600,25 @@ const myHours: Capability = {
     if (open.length === 0) {
       return {
         text: "You haven't set any working hours yet — clients can't book until you do.",
-        suggestions: [navChip("schedule", "Set my hours", "schedule")],
+        suggestions: [
+          navChip("schedule", "Set my hours", "schedule"),
+          navChip("services", "Check my services", "services"),
+        ],
       };
     }
 
     const lines = open
       .sort((a, b) => a.day_of_week - b.day_of_week)
-      .map((r) => `${DAY_NAMES_FULL[r.day_of_week]}: ${formatTime12(r.open_time)} – ${formatTime12(r.close_time)}`)
+      .map((r) => `- **${DAY_NAMES_FULL[r.day_of_week]}:** ${formatTime12(r.open_time)} – ${formatTime12(r.close_time)}`)
       .join("\n");
 
     return {
       text: `You're open ${open.length} day${open.length !== 1 ? "s" : ""} a week:\n\n${lines}`,
-      suggestions: [navChip("schedule", "Change my hours", "schedule")],
+      suggestions: [
+        navChip("schedule", "Change my hours", "schedule"),
+        askChip("timeoff", "When am I off?", "What days off have I got?"),
+        askChip("capacity", "What's my daily limit?", "Am I full today?"),
+      ],
     };
   },
 };
@@ -527,7 +648,11 @@ const myCapacity: Capability = {
     if (cap <= 0) {
       return {
         text: `You haven't set a daily limit — you'll take as many as fit your hours.\n\n${todayCount} booked today. ${acceptance}`,
-        suggestions: [navChip("automations", "Set a limit", "automations")],
+        suggestions: [
+          navChip("automations", "Set a limit", "automations"),
+          askChip("hours", "What are my hours?", "What are my working hours?"),
+          askChip("week", "How's my week?", "How busy am I this week?"),
+        ],
       };
     }
 
@@ -537,7 +662,11 @@ const myCapacity: Capability = {
         `Your limit is **${cap} a day**. You've got ${todayCount} today — ` +
         (left === 0 ? "you're full." : `room for ${left} more.`) +
         `\n\n${acceptance}`,
-      suggestions: [navChip("automations", "Change settings", "automations")],
+      suggestions: [
+        navChip("automations", "Change settings", "automations"),
+        askChip("today", "What's on today?", "What's on today?"),
+        askChip("waitlist", "Anyone waiting?", "Who's on my waitlist?"),
+      ],
     };
   },
 };
@@ -584,7 +713,10 @@ const myAddress: Capability = {
     if (!address) {
       return {
         text: "You haven't set a full address yet — clients only see your general area.",
-        suggestions: [navChip("services", "Set my address", "services")],
+        suggestions: [
+          navChip("services", "Set my address", "services"),
+          navChip("automations", "Address-release policy", "automations"),
+        ],
       };
     }
     // A provider reading their OWN address is the documented exception to the
@@ -595,7 +727,10 @@ const myAddress: Capability = {
       text:
         `Your full address is on file:\n\n${address}\n\n` +
         `Clients only see it once your address-release policy allows it — not at booking time by default.`,
-      suggestions: [navChip("services", "Change it", "services")],
+      suggestions: [
+        navChip("services", "Change it", "services"),
+        navChip("automations", "Address-release policy", "automations"),
+      ],
     };
   },
 };
@@ -612,7 +747,11 @@ const availability: Capability = {
   async run(): Promise<CapabilityResult> {
     return {
       text: "Set your working hours, days off and availability in your schedule.",
-      suggestions: [navChip("schedule", "Open Schedule", "schedule")],
+      suggestions: [
+        navChip("schedule", "Open Schedule", "schedule"),
+        askChip("hours", "What are my hours?", "What are my working hours?"),
+        askChip("timeoff", "When am I off?", "What days off have I got?"),
+      ],
     };
   },
 };
@@ -625,7 +764,11 @@ const services: Capability = {
   async run(): Promise<CapabilityResult> {
     return {
       text: "Your services, prices, photos and profile are all under My Services.",
-      suggestions: [navChip("services", "Edit My Services", "services")],
+      suggestions: [
+        navChip("services", "Edit My Services", "services"),
+        askChip("prices", "What do I charge?", "What do I charge?"),
+        askChip("reviews", "How are my reviews?", "How are my reviews?"),
+      ],
     };
   },
 };
@@ -644,6 +787,8 @@ const analytics: Capability = {
       suggestions: [
         navChip("analytics", "Open Analytics", "analytics"),
         navChip("history", "Booking History", "history"),
+        askChip("week", "How's my week?", "How busy am I this week?"),
+        askChip("capacity", "Am I near my cap?", "Am I full today?"),
       ],
     };
   },
@@ -657,7 +802,11 @@ const automations: Capability = {
   async run(): Promise<CapabilityResult> {
     return {
       text: "Reminders, auto-messages, deposits and booking policies are in Automations.",
-      suggestions: [navChip("automations", "Open Automations", "automations")],
+      suggestions: [
+        navChip("automations", "Open Automations", "automations"),
+        navChip("infopacks", "Info Packs", "infopacks"),
+        askChip("capacity", "What's my booking cap?", "Am I full today?"),
+      ],
     };
   },
 };
@@ -673,7 +822,11 @@ const infoPacks: Capability = {
   async run(): Promise<CapabilityResult> {
     return {
       text: "Manage the prep and aftercare packs you send clients from Info Packs.",
-      suggestions: [navChip("infopacks", "Open Info Packs", "infopacks")],
+      suggestions: [
+        navChip("infopacks", "Open Info Packs", "infopacks"),
+        askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
+        navChip("automations", "Automations", "automations"),
+      ],
     };
   },
 };
@@ -686,15 +839,20 @@ const help: Capability = {
   async run(): Promise<CapabilityResult> {
     return {
       text:
-        "I'm your business assistant. I can tell you:\n\n" +
-        "**What's on today** and how your week looks\n" +
-        "**Who's waiting** on a cancellation\n" +
-        "**Unread messages** and outstanding client forms\n" +
-        "**Your clients** and live promotions\n\n" +
-        "Or take you straight to your schedule, services or analytics.",
+        "## Your business assistant\n" +
+        "- **Diary & capacity** — today’s bookings, the next 7 days, working hours, days off and daily limits\n" +
+        "- **Clients** — client list, lapsed clients, waitlist and outstanding forms\n" +
+        "- **Communication** — unread messages and notifications\n" +
+        "- **Business setup** — services, prices, address, reviews, offers, automations and info packs\n" +
+        "- **Performance** — reach and a direct route to analytics\n\n" +
+        "Ask a question, or choose a shortcut below.",
       suggestions: [
         askChip("today", "What's on today?", "What's on today?"),
         askChip("week", "How's my week?", "How busy am I this week?"),
+        askChip("waitlist", "Who's on my waitlist?", "Who's on my waitlist?"),
+        askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
+        askChip("reviews", "How are my reviews?", "How are my reviews?"),
+        navChip("analytics", "Open Analytics", "analytics"),
       ],
     };
   },

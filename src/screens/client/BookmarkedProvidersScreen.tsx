@@ -62,7 +62,7 @@ function mapDbProvider(p: DbProvider): Provider {
 }
 
 // ── Skeleton (mirrors the 2-col gallery grid) ─────────────────────────────────
-function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
+function SkeletonProviderCard() {
   const { palette: P } = useTheme();
   const shimmer = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -76,7 +76,7 @@ function SkeletonProviderCard({ isDarkMode }: { isDarkMode: boolean }) {
     return () => loop.stop();
   }, [shimmer]);
   const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] });
-  const base = isDarkMode ? '#3A3A3C' : '#E5E5EA';
+  const base = P.surface;
   return (
     <View style={skeletonStyles.card}>
       <Animated.View style={[skeletonStyles.image, { backgroundColor: base, opacity }]} />
@@ -94,7 +94,7 @@ const skeletonStyles = StyleSheet.create({
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function BookmarkedProvidersScreen({ navigation }: Props) {
-  const { isDarkMode, theme, palette: P } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
 
@@ -140,15 +140,8 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           )}
         </View>
       ),
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.navBackButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.navBackText}>←</Text>
-        </TouchableOpacity>
-      ),
+      headerBackButtonDisplayMode: 'minimal',
+      headerTintColor: P.text,
       headerStyle: { backgroundColor: 'transparent' },
       headerBackground: () => null,
     });
@@ -197,7 +190,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         <SafeAreaView style={styles.container}>
           <View style={[styles.gridRow, { paddingTop: insets.top + 48, paddingHorizontal: 16 }]}>
             {[1, 2, 3, 4, 5, 6].map(k => (
-              <SkeletonProviderCard key={k} isDarkMode={isDarkMode} />
+              <SkeletonProviderCard key={k} />
             ))}
           </View>
         </SafeAreaView>
@@ -218,6 +211,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
               activeKey={selectedService}
               onPress={handleServicePress}
               accentColor={P.accent}
+              activeTextColor={P.onAccent}
               inactiveTextColor={P.sub}
               containerStyle={styles.tabsContent}
             />
@@ -257,7 +251,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
             <View style={styles.emptyState}>
               <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                 <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
-                  <Icon name="bookmark" size={26} color={P.accent} />
+                  <Icon name="bookmark" size={26} color={P.accentText} />
                 </View>
                 <Text style={[styles.emptyTitle, { color: P.text }]}>No Saved Providers</Text>
                 <Text style={[styles.emptySubtitle, { color: P.sub }]}>
@@ -268,7 +262,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
                   onPress={() => navigation.goBack()}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.exploreButtonText}>Explore Providers</Text>
+                  <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>Explore Providers</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -277,7 +271,7 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
             <View style={styles.emptyState}>
               <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
                 <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
-                  <Icon name="bookmark" size={26} color={P.accent} />
+                  <Icon name="bookmark" size={26} color={P.accentText} />
                 </View>
                 <Text style={[styles.emptyTitle, { color: P.text }]}>No {selectedService} providers saved</Text>
                 <Text style={[styles.emptySubtitle, { color: P.sub }]}>
@@ -313,7 +307,7 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
       Animated.timing(fadeAnim, { toValue: 1, duration: 560, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 560, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fadeAnim, index, slideAnim]);
 
   return (
     <Animated.View style={[styles.gridCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -344,7 +338,7 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
               </View>
               {hasOffer && (
                 <View style={[styles.offerChip, { backgroundColor: P.accent }]}>
-                  <Text style={styles.offerChipText}>OFFER</Text>
+                  <Text style={[styles.offerChipText, { color: P.onAccent }]}>OFFER</Text>
                 </View>
               )}
             </View>
@@ -392,28 +386,6 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
-  // Matches ProviderProfileScreen's nav back button exactly — circular glass
-  // button, fixed dark arrow, so it reads as one nav-bar language app-wide.
-  navBackButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 20,
-    marginLeft: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  navBackText: {
-    fontSize: 24,
-    fontFamily: 'BakbakOne-Regular',
-    color: '#000',
-  },
 
   headerTitleRow: {
     flexDirection: 'row',

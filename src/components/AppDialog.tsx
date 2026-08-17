@@ -35,7 +35,7 @@ function Toast({ message, type, visible, isDarkMode, accent, text }: ToastState 
       speed: 22,
       bounciness: 5,
     }).start();
-  }, [visible]);
+  }, [anim, visible]);
 
   const iconName: keyof typeof Ionicons.glyphMap =
     type === 'success' ? 'checkmark-circle'
@@ -108,11 +108,12 @@ interface ConfirmState {
 }
 
 function ConfirmDialog({
-  title, message, buttons, visible, onDismiss, isDarkMode, accent, text, secondaryText, cardBackground, border,
+  title, message, buttons, visible, onDismiss, isDarkMode, accent, onAccent, text, secondaryText, cardBackground, border,
 }: ConfirmState & {
   onDismiss: () => void;
   isDarkMode: boolean;
   accent: string;
+  onAccent: string;
   text: string;
   secondaryText: string;
   cardBackground: string;
@@ -127,7 +128,7 @@ function ConfirmDialog({
       speed: 18,
       bounciness: 4,
     }).start();
-  }, [visible]);
+  }, [anim, visible]);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
@@ -168,7 +169,7 @@ function ConfirmDialog({
                       dlgSt.btnText,
                       isCancel && [dlgSt.btnTextCancel, { color: secondaryText }],
                       isDestructive && dlgSt.btnTextDestructive,
-                      !isCancel && !isDestructive && { color: '#fff' },
+                      !isCancel && !isDestructive && { color: onAccent },
                     ]}
                   >
                     {btn.text}
@@ -257,7 +258,7 @@ const dlgSt = StyleSheet.create({
 // fixed palette, since clients shouldn't see provider branding.
 
 export function useAppDialog() {
-  const { theme, isDarkMode } = useTheme();
+  const { palette, isDarkMode } = useTheme();
   const [toast, setToast] = useState<ToastState>({ message: '', type: 'info', visible: false });
   const [confirm, setConfirm] = useState<ConfirmState>({ title: '', message: '', buttons: [], visible: false });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -287,15 +288,16 @@ export function useAppDialog() {
         {...confirm}
         onDismiss={dismissConfirm}
         isDarkMode={isDarkMode}
-        accent={theme.accent}
-        text={theme.text}
-        secondaryText={theme.secondaryText}
-        cardBackground={theme.cardBackground}
-        border={theme.border}
+        accent={palette.accent}
+        onAccent={palette.onAccent}
+        text={palette.text}
+        secondaryText={palette.secondaryText}
+        cardBackground={palette.card}
+        border={palette.border}
       />
-      <Toast {...toast} isDarkMode={isDarkMode} accent={theme.accent} text={theme.text} />
+      <Toast {...toast} isDarkMode={isDarkMode} accent={palette.accent} text={palette.text} />
     </>
-  ), [toast, confirm, dismissConfirm, isDarkMode, theme]);
+  ), [toast, confirm, dismissConfirm, isDarkMode, palette]);
 
   return { showToast, showAlert, showConfirm, DialogHost };
 }

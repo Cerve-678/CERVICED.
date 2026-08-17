@@ -2,13 +2,27 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
-import { AvailabilityService } from '../services/AvailabilityService';
+import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertProviderNotification, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, CartClaimResult } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem } from '../services/databaseService';
 import type { DbBookingRescheduleRequest } from '../types/database';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+
+import {
+  BookingStatus,
+  PaymentStatus,
+  type BookingCoordinates,
+  type ConfirmedBooking,
+  type BookingConflictResult,
+  type AppointmentData,
+  type AvailableDate,
+  type PaymentBreakdown,
+} from '../types/booking';
+import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
+import { logger } from '../utils/logger';
+import { formatTime12, formatLongDate } from '../utils/dateUtils';
 
 export class BookingError extends Error {
   succeededCartItemIds: string[];
@@ -42,20 +56,6 @@ export { BookingStatus, PaymentStatus } from '../types/booking';
 // Re-export the DB→local mapper so ProviderBookingHistoryScreen and others
 // can import it from here without changing their import paths.
 export { mapDbBookingToConfirmed };
-
-// Import types locally (for use within this file)
-import type {
-  BookingCoordinates,
-  ConfirmedBooking,
-  BookingsByDate,
-  BookingConflictResult,
-  AppointmentData,
-  AvailableDate,
-} from '../types/booking';
-import { BookingStatus, PaymentStatus, type PaymentBreakdown } from '../types/booking';
-import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
-import { logger } from '../utils/logger';
-import { formatTime12, formatLongDate } from '../utils/dateUtils';
 
 export interface BookingContextType {
   bookings: ConfirmedBooking[];
@@ -109,6 +109,19 @@ export interface BookingContextType {
   requestReschedule: (bookingId: string, preferredDates: string[]) => Promise<void>;
   providerRespondToReschedule: (bookingId: string, availableDates: AvailableDate[]) => Promise<void>;
   confirmReschedule: (bookingId: string, newDate: string, newTime: string) => Promise<void>;
+  declineReschedule: (bookingId: string) => Promise<void>;
+  // Group reschedule — confirm/decline every sibling booking sharing a
+  // group_booking_id at once, matching a provider's group-scoped proposal
+  // (see supabase/fix_group_booking_reschedule.sql). `siblings` and, for
+  // confirm, `chain` come from getBookingsByGroupId() + the picked chain
+  // out of the group's shared providerAvailableDates.
+  confirmGroupReschedule: (
+    groupBookingId: string,
+    siblings: ConfirmedBooking[],
+    newDate: string,
+    newTime: string
+  ) => Promise<void>;
+  declineGroupReschedule: (groupBookingId: string, siblings: ConfirmedBooking[]) => Promise<void>;
 }
 
 const STORAGE_KEY = STORAGE_KEYS.BOOKINGS;
@@ -207,25 +220,12 @@ const parseTimeToMinutes = (timeStr: string): number => {
 const calculateEndTime = (startTime: string, duration: string): string => {
   try {
     const startMinutes = parseTimeToMinutes(startTime);
-    const durationMatch = duration.match(/(\d+(?:\.\d+)?)\s*(hour|hr|h|minute|min|m)/i);
-    
-    if (!durationMatch) return startTime;
-    
-    const amountStr = durationMatch[1];
-    const unitStr = durationMatch[2];
-    
-    if (!amountStr || !unitStr) return startTime;
-    
-    const amount = parseFloat(amountStr);
-    const unit = unitStr.toLowerCase();
-    
-    let durationMinutes = 0;
-    if (unit.startsWith('h')) {
-      durationMinutes = Math.round(amount * 60);
-    } else {
-      durationMinutes = Math.round(amount);
-    }
-    
+    // Shared parser: the local first-match-only regex here read "1h 30min" as
+    // 60 minutes, so a booking's stored end time was an hour after its start
+    // no matter how long the service actually ran.
+    if (!/\d/.test(duration)) return startTime;
+    const durationMinutes = parseDurationToMinutes(duration);
+
     const totalMinutes = startMinutes + durationMinutes;
     const endHours = Math.floor(totalMinutes / 60) % 24;
     const endMinutes = totalMinutes % 60;
@@ -334,20 +334,11 @@ const sortBookingsByDateTime = (bookings: ConfirmedBooking[]): ConfirmedBooking[
 };
 
 
-// Map a raw DB bookings.status string → app BookingStatus enum. Single source
-// of truth — screens must never cast a raw DB status string directly, since
-// 'confirmed' (DB) has no identically-named BookingStatus member (it maps to
-// UPCOMING) and a raw cast silently produces an unmatched status.
-export const mapDbBookingStatus = (s: string): BookingStatus => {
-  switch (s) {
-    case 'pending': return BookingStatus.PENDING;
-    case 'completed': return BookingStatus.COMPLETED;
-    case 'cancelled': return BookingStatus.CANCELLED;
-    case 'in_progress': return BookingStatus.IN_PROGRESS;
-    case 'no_show': return BookingStatus.NO_SHOW;
-    default: return BookingStatus.UPCOMING;
-  }
-};
+// mapDbBookingStatus now lives in ../types/booking.ts (single source of
+// truth, shared by BookingContext and bookingService without a circular
+// import) and is re-exported here so existing importers of it from this
+// module keep working.
+export { mapDbBookingStatus } from '../types/booking';
 
 
 // ==================== PROVIDER COMPONENT ====================
@@ -500,7 +491,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               mergedBookings = [...mergedBookings, ...missingLocally];
             }
           }
-        } catch (_) {
+        } catch {
           // Offline or fetch failed — local copy stands
         }
 
@@ -520,7 +511,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           mergedBookings = mergedBookings.map((b: ConfirmedBooking) =>
             applyRescheduleRequestRow(b, rescheduleRows[b.id])
           );
-        } catch (_) {
+        } catch {
           // Offline — the catch-up sweep and realtime subscription still cover it
         }
 
@@ -564,7 +555,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           } else {
             setBookings([]);
           }
-        } catch (_) {
+        } catch {
           setBookings([]);
         }
       }
@@ -765,21 +756,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
-      // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
-      const rescheduleProviderId = booking.providerId
-        ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
-      if (rescheduleProviderId) {
-        const dateList = preferredDates.slice(0, 3).join(', ');
-        insertProviderNotification({
-          provider_id: rescheduleProviderId,
-          type: 'reschedule_request',
-          title: 'Reschedule Request',
-          message: `${booking.customerName || 'A client'} wants to reschedule their ${booking.serviceName} appointment. Preferred dates: ${dateList}.`,
-          priority: 'high',
-          is_actionable: true,
-          booking_id: bookingId,
-        }).catch(() => {});
-      }
+      // Provider notification is now trigger-owned (handle_reschedule_request_change()
+      // in supabase/fix_reschedule_flow_completion.sql fires on the INSERT
+      // that request_reschedule_own_booking() just performed) — no app-side
+      // insert needed here anymore.
 
       logger.log('Step 1 Complete: Status=PENDING, waiting for provider response');
     } catch (error) {
@@ -879,8 +859,40 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       if (!slots || slots.length === 0) return;
       try {
         await providerRespondToReschedule(bookingId, slots);
-      } catch (_) {
+      } catch {
         // Booking not on this device or already applied — safe to ignore
+      }
+    };
+
+    // Provider declined the client's request outright (reject_reschedule_request,
+    // see supabase/fix_reschedule_flow_completion.sql) — clear local pending
+    // state so RescheduleScreen/BookingDetailScreen stop showing "waiting on
+    // provider" for a request that's actually closed. The notification
+    // explaining WHY is trigger-owned and arrives separately; this just
+    // keeps the booking's local state from going stale.
+    const applyRejection = async (bookingId: string) => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!stored) return;
+        const current: ConfirmedBooking[] = JSON.parse(stored);
+        const booking = current.find(b => b.id === bookingId);
+        if (!booking || !booking.isPendingReschedule) return;
+        const updated: ConfirmedBooking = {
+          ...booking,
+          isPendingReschedule: false,
+          rescheduleRequest: {
+            ...(booking.rescheduleRequest?.rescheduleCount != null
+              ? { rescheduleCount: booking.rescheduleRequest.rescheduleCount }
+              : {}),
+            ...(booking.rescheduleRequest?.lastRescheduledAt
+              ? { lastRescheduledAt: booking.rescheduleRequest.lastRescheduledAt }
+              : {}),
+          },
+          updatedAt: new Date().toISOString(),
+        };
+        await saveBookings(current.map(b => b.id === bookingId ? updated : b));
+      } catch {
+        // Safe to ignore — worst case the banner clears next time bookings reload.
       }
     };
 
@@ -909,9 +921,15 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               b.id,
               req.provider_available_slots as AvailableDate[] | null
             );
+          } else if (!req && b.isPendingReschedule) {
+            // No active (pending/provider_responded) row remains for a
+            // booking this device still thinks is mid-reschedule — it was
+            // resolved elsewhere (rejected, cancelled, or confirmed on
+            // another device) while this app was closed. Clear local state.
+            await applyRejection(b.id);
           }
         }
-      } catch (_) {
+      } catch {
         // Offline — realtime subscription below still covers the live case
       }
     })();
@@ -933,9 +951,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             status?: string;
             provider_available_slots?: AvailableDate[] | null;
           } | null;
-          if (row?.status !== 'provider_responded' || !row.booking_id) return;
-          if (!bookingIdsRef.current.has(row.booking_id)) return;
-          applyProviderResponse(row.booking_id, row.provider_available_slots);
+          if (!row?.booking_id || !bookingIdsRef.current.has(row.booking_id)) return;
+          if (row.status === 'provider_responded') {
+            applyProviderResponse(row.booking_id, row.provider_available_slots);
+          } else if (row.status === 'rejected') {
+            applyRejection(row.booking_id);
+          }
         }
       )
       .subscribe();
@@ -944,7 +965,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [providerRespondToReschedule]);
+  }, [providerRespondToReschedule, saveBookings]);
 
   const confirmReschedule = useCallback(async (bookingId: string, newDate: string, newTime: string) => {
     try {
@@ -1028,24 +1049,175 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
       await saveBookings(updatedBookings);
 
-      // Notify provider in Supabase — prefer the stored UUID, fall back to name lookup
-      const confirmedProviderId = booking.providerId
-        ?? await getProviderIdByDisplayName(booking.providerName).catch(() => null);
-      if (confirmedProviderId) {
-        insertProviderNotification({
-          provider_id: confirmedProviderId,
-          type: 'reschedule_confirmed',
-          title: 'Reschedule Confirmed',
-          message: `${booking.customerName || 'A client'} confirmed their ${booking.serviceName} for ${newDate.split('-').reverse().join('/')} at ${newTime}.`,
-          priority: 'medium',
-          is_actionable: true,
-          booking_id: bookingId,
-        }).catch(() => {});
-      }
+      // Provider notification is now trigger-owned (handle_reschedule_request_change()
+      // in supabase/fix_reschedule_flow_completion.sql fires on the
+      // confirm_reschedule_own_booking() UPDATE above) — no app-side insert
+      // needed here anymore.
 
       logger.log('Step 3 Complete: Status=UPCOMING, 24hr cooldown active, total reschedules:', rescheduleCount);
     } catch (error) {
       logger.error('❌ Failed to confirm reschedule:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
+  // Client declines a provider's offered reschedule times. The booking
+  // itself is untouched server-side (decline_reschedule_offer only closes
+  // the request row) — clear the local pending flags to match, so the
+  // booking falls back to displaying its original, still-confirmed date/time.
+  const declineReschedule = useCallback(async (bookingId: string) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) throw new Error('No bookings found in storage');
+
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+      const booking = currentBookings.find(b => b.id === bookingId);
+      if (!booking) throw new Error('Booking not found');
+
+      await declineRescheduleOffer(bookingId);
+
+      const updatedBooking: ConfirmedBooking = {
+        ...booking,
+        isPendingReschedule: false,
+        rescheduleRequest: {
+          ...(booking.rescheduleRequest?.rescheduleCount != null
+            ? { rescheduleCount: booking.rescheduleRequest.rescheduleCount }
+            : {}),
+          ...(booking.rescheduleRequest?.lastRescheduledAt
+            ? { lastRescheduledAt: booking.rescheduleRequest.lastRescheduledAt }
+            : {}),
+        },
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedBookings = currentBookings.map(b => b.id === bookingId ? updatedBooking : b);
+      await saveBookings(updatedBookings);
+    } catch (error) {
+      logger.error('❌ Failed to decline reschedule offer:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
+  // Confirm ONE proposed day for a whole group reschedule at once — every
+  // sibling this client has with the provider (identified by a shared
+  // rescheduleRequest.groupRescheduleBatchId, see
+  // supabase/fix_group_booking_reschedule.sql) moves to its own shifted
+  // time from that chosen day, together. `chain` is the exact per-sibling
+  // date/time/endTime the client picked (index-aligned to `siblings`,
+  // sorted the same way the provider's proposal was built — earliest
+  // original appointment first) — this mirrors how confirmReschedule above
+  // trusts a single already-chosen newDate/newTime rather than
+  // re-deriving it. The double-booking guard (isSlotTaken) still runs per
+  // sibling, same as the single-booking path, since a slot can be taken by
+  // someone else between the provider proposing and the client confirming.
+  // newDate/newTime is the representative sibling's picked slot — same
+  // "already chosen, don't re-derive" trust model as the singular
+  // confirmReschedule above. Each OTHER sibling's own time for that same
+  // date is read straight off its own rescheduleRequest.providerAvailableDates
+  // (every sibling's request row was proposed for the same set of candidate
+  // days, just with each sibling's own shifted time per day — see
+  // provider_initiate_group_reschedule). endTime is recomputed from each
+  // sibling's own duration, same as the singular path — provider_available_
+  // slots only ever stores a start time, never an end time.
+  const confirmGroupReschedule = useCallback(async (
+    groupBookingId: string,
+    siblings: ConfirmedBooking[],
+    newDate: string,
+    newTime: string
+  ) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) throw new Error('No bookings found in storage');
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+
+      const perSiblingTime = new Map<string, string>();
+      for (const sib of siblings) {
+        const time = sib.rescheduleRequest?.providerAvailableDates?.find(d => d.date === newDate)?.times?.[0];
+        if (!time) throw new Error(`Could not determine ${sib.serviceName}'s time for this date.`);
+        perSiblingTime.set(sib.id, time);
+      }
+
+      for (const sib of siblings) {
+        const time = perSiblingTime.get(sib.id)!;
+        const slotProviderId =
+          sib.providerId ?? (await getProviderIdByDisplayName(sib.providerName).catch(() => null));
+        const time24 = timeTo24(time);
+        if (slotProviderId && time24 && (await isSlotTaken(slotProviderId, newDate, time24))) {
+          throw new Error(`That time for ${sib.serviceName} has just been taken. Please pick another day.`);
+        }
+      }
+
+      const selections = siblings.map(sib => {
+        const time = perSiblingTime.get(sib.id)!;
+        return {
+          booking_id: sib.id,
+          new_date: newDate,
+          new_time: time,
+          new_end_time: calculateEndTime(time, sib.duration),
+        };
+      });
+
+      await dbConfirmGroupReschedule(groupBookingId, selections);
+
+      const selectionById = new Map(selections.map(s => [s.booking_id, s]));
+      const updatedBookings = currentBookings.map(b => {
+        const sel = selectionById.get(b.id);
+        if (!sel) return b;
+        const originalDate = b.rescheduleRequest?.originalDate || b.bookingDate;
+        const originalTime = b.rescheduleRequest?.originalTime || b.bookingTime;
+        const rescheduleCount = (b.rescheduleRequest?.rescheduleCount || 0) + 1;
+        return {
+          ...b,
+          bookingDate: sel.new_date,
+          bookingTime: sel.new_time,
+          endTime: sel.new_end_time,
+          isPendingReschedule: false,
+          rescheduleRequest: {
+            originalDate,
+            originalTime,
+            rescheduleCount,
+            lastRescheduledAt: new Date().toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
+        } as ConfirmedBooking;
+      });
+
+      await saveBookings(updatedBookings);
+    } catch (error) {
+      logger.error('❌ Failed to confirm group reschedule:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
+  const declineGroupReschedule = useCallback(async (groupBookingId: string, siblings: ConfirmedBooking[]) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (!stored) throw new Error('No bookings found in storage');
+      const currentBookings: ConfirmedBooking[] = JSON.parse(stored);
+
+      await declineGroupRescheduleOffer(groupBookingId);
+
+      const siblingIds = new Set(siblings.map(s => s.id));
+      const updatedBookings = currentBookings.map(b => {
+        if (!siblingIds.has(b.id)) return b;
+        return {
+          ...b,
+          isPendingReschedule: false,
+          rescheduleRequest: {
+            ...(b.rescheduleRequest?.rescheduleCount != null
+              ? { rescheduleCount: b.rescheduleRequest.rescheduleCount }
+              : {}),
+            ...(b.rescheduleRequest?.lastRescheduledAt
+              ? { lastRescheduledAt: b.rescheduleRequest.lastRescheduledAt }
+              : {}),
+          },
+          updatedAt: new Date().toISOString(),
+        } as ConfirmedBooking;
+      });
+
+      await saveBookings(updatedBookings);
+    } catch (error) {
+      logger.error('❌ Failed to decline group reschedule offer:', error);
       throw error;
     }
   }, [saveBookings]);
@@ -1333,8 +1505,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const itemProviderId = providerIdCache[item.providerName];
         const groupInfo = groupInfoForItem(item);
         const endTime = calculateEndTime(appointment.time, item.duration);
-        const bookingDateTime = createBookingDateTime(appointment.date, appointment.time);
-        const now = new Date();
         const initialStatus = providerCapCache[item.providerName]?.auto_accept
           ? BookingStatus.UPCOMING
           : BookingStatus.PENDING;
@@ -1499,6 +1669,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     customer_email: apt.customerEmail,
                     customer_phone: apt.customerPhone,
                     client_address: clientAddress ?? null,
+                    policy_accepted_at: item.policyAcceptedAt ?? null,
+                    policy_snapshot: item.policySnapshot ?? null,
                   };
                 })
                 .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -1613,6 +1785,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 occasion_type: null,
                 style_request: null,
                 reference_image_url: null,
+                policy_accepted_at: item.policyAcceptedAt ?? null,
+                policy_snapshot: item.policySnapshot ?? null,
               },
               (item.addOns ?? []).map(a => ({
                 add_on_id: String(a.id),
@@ -1655,9 +1829,21 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 // caught a different-start-time overlap the app-side
                 // pre-check missed under concurrent requests. Same
                 // user-facing story either way: someone else got there first.
-                message = `That time slot with ${name} was just taken by another client. Please choose a different time.`;
-              } else if (itemError instanceof Error && !itemError.message.includes('Network') && !('code' in itemError)) {
-                // createBooking validation: closed day, blocked date, overlap…
+                message = `That time slot with ${name} is no longer available. Please choose a different time.`;
+              } else if (
+                typeof itemError?.message === 'string'
+                && itemError.message.length > 0
+                && !itemError.message.includes('Network')
+              ) {
+                // Any other error with a real message — createBooking()'s own
+                // `new Error(...)` validations (closed day, blocked date,
+                // overlap), or a raw Supabase/PostgrestError, which is a plain
+                // object with {message, code, details} and is NOT
+                // `instanceof Error`, so that check alone silently dropped
+                // every genuine Postgres-side message (e.g. a NOT NULL or
+                // check-constraint violation) into the generic connection
+                // fallback below even though Postgres had already said
+                // exactly what went wrong.
                 message = itemError.message;
               } else {
                 message = `Your booking with ${name} couldn't be placed. Please check your connection and try again.`;
@@ -1783,7 +1969,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       logger.error('❌ Failed to create bookings:', error);
       throw error;
     }
-  }, [bookings, saveBookings]);
+  }, [bookings, saveBookings, validateBookingsBeforeCheckout]);
 
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
   // right when the user commits to payment — closes the gap between
@@ -1835,7 +2021,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       await holdCartBookingSlots(batchId, holdItems);
     } catch (error: any) {
       if (error?.code === '23505' || error?.code === '23P01') {
-        throw new BookingError("That time slot was just taken by another client. Please choose a different time.");
+        throw new BookingError("That time slot is no longer available. Please choose a different time.");
       }
       throw error;
     }
@@ -1954,7 +2140,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       try {
         const bookingDateTime = createBookingDateTime(b.bookingDate, b.bookingTime);
         return bookingDateTime > now;
-      } catch (error) {
+      } catch {
         return b.status === BookingStatus.UPCOMING;
       }
     });
@@ -1979,7 +2165,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         try {
           const bookingDateTime = createBookingDateTime(b.bookingDate, b.bookingTime);
           return bookingDateTime <= now;
-        } catch (error) {
+        } catch {
           return false;
         }
       })
@@ -2055,6 +2241,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
+    declineReschedule,
+    confirmGroupReschedule,
+    declineGroupReschedule,
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,
@@ -2082,6 +2271,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     requestReschedule,
     providerRespondToReschedule,
     confirmReschedule,
+    declineReschedule,
+    confirmGroupReschedule,
+    declineGroupReschedule,
     hasMoreHistory,
     loadingMoreHistory,
     loadOlderBookings,

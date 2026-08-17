@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ProviderAccountScreen from '../../../screens/provider/ProviderAccountScreen';
-import InfoRegScreen from '../../../screens/shared/InfoRegScreen';
+import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import NotificationsScreen from '../../../screens/shared/NotificationsScreen';
 import ProviderBookingHistoryScreen from '../../../screens/provider/ProviderBookingHistoryScreen';
 import ProviderBookingDetailScreen from '../../../screens/provider/ProviderBookingDetailScreen';
@@ -16,6 +16,8 @@ import ReportProblemScreen from '../../../screens/shared/ReportProblemScreen';
 import ProviderAnalyticsScreen from '../../../screens/provider/ProviderAnalyticsScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
+import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
+import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import ProviderBusinessEmailScreen from '../../../screens/provider/ProviderBusinessEmailScreen';
 import ProviderCommunicationsScreen from '../../../screens/provider/ProviderCommunicationsScreen';
 import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
@@ -25,14 +27,12 @@ import ProviderAccountInfoScreen from '../../../screens/provider/ProviderAccount
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
 import { ProviderAccountStackParamList } from '../../types';
-import { useTheme } from '../../../contexts/ThemeContext';
 
 const ProviderAccountStack = createNativeStackNavigator<ProviderAccountStackParamList>();
 
 const InfoRegComponent = InfoRegScreen as React.ComponentType<any>;
 
 export default function ProviderAccountNavigator() {
-  const { theme } = useTheme();
 
   return (
     <ProviderAccountStack.Navigator>
@@ -106,6 +106,18 @@ export default function ProviderAccountNavigator() {
         name="Clientele"
         component={ProviderClienteleScreen}
         options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ProviderSchedule"
+        component={ProviderScheduleScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AddBooking"
+        component={AddBookingScreen}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
 
       <ProviderAccountStack.Screen

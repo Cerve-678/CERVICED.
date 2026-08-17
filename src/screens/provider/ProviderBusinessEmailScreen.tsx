@@ -292,7 +292,6 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
   const [dbsChecked, setDbsChecked]       = useState(false);
   const [patchTest, setPatchTest]         = useState('');
   const [onlineConsult, setOnlineConsult] = useState(false);
-  const [consultRequired, setConsultRequired] = useState(false);
   const [styleAesthetic, setStyleAesthetic] = useState<string[]>([]);
   const [productsUsed, setProductsUsed]   = useState('');
   const [isVegan, setIsVegan]             = useState(false);
@@ -328,7 +327,6 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           setPreferredContact((providerData as any).preferred_contact_methods ?? []);
           setServiceCategory((providerData as any).service_category ?? '');
           setOnlineConsult(providerData.online_consultations_available ?? false);
-          setConsultRequired(providerData.consultation_required_new_clients ?? false);
           setExternalBookingUrl(providerData.external_booking_url ?? '');
         }
 
@@ -400,7 +398,6 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
           whatsapp_number: whatsappNumber.trim() || null,
           preferred_contact_methods: preferredContact.length ? preferredContact : null,
           online_consultations_available: onlineConsult,
-          consultation_required_new_clients: consultRequired,
           external_booking_url: externalBookingUrl.trim() || null,
         }));
       }
@@ -524,7 +521,6 @@ export default function ProviderBusinessEmailScreen({ navigation }: any) {
               <ToggleRow label="Professionally insured" sub="You hold valid professional indemnity insurance" value={isInsured} onChange={setIsInsured} />
               <ToggleRow label="DBS checked" sub="Important if you work with children or vulnerable adults" value={dbsChecked} onChange={setDbsChecked} />
               <ToggleRow label="Online consultations available" sub="Clients can book a virtual consultation before their appointment" value={onlineConsult} onChange={setOnlineConsult} />
-              <ToggleRow label="Consultation required for new clients" sub="All new clients must complete a consultation first" value={consultRequired} onChange={setConsultRequired} />
 
               <SectionLabel text="Patch test policy" />
               <RadioGroup options={PATCH_OPTS} value={patchTest} onChange={setPatchTest} />

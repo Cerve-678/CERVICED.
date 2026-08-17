@@ -1,6 +1,7 @@
 // src/screens/auth/WelcomeScreen.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -9,8 +10,10 @@ import {
   StatusBar,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { supabase } from '../../lib/supabase';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -20,10 +23,42 @@ type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 export default function WelcomeScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const insets = useSafeAreaInsets();
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const handleSocialLogin = (provider: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     Alert.alert('Coming soon', `${provider} login will be available soon.`);
+  };
+
+  const handleAppleLogin = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        Alert.alert('Sign in failed', 'No identity token received from Apple.');
+        return;
+      }
+      setIsAppleLoading(true);
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      setIsAppleLoading(false);
+      if (error) {
+        Alert.alert('Sign in failed', error.message);
+        return;
+      }
+      // On success, AuthContext.onAuthStateChange handles navigation
+    } catch (e: any) {
+      if (e.code !== 'ERR_REQUEST_CANCELED') {
+        Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
+      }
+    }
   };
 
   return (
@@ -77,7 +112,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
           {/* Social Login */}
           <View style={styles.socialRow}>
-            {['Instagram', 'Google', 'Apple'].map(p => (
+            {(['Instagram', 'Google'] as const).map(p => (
               <TouchableOpacity
                 key={p}
                 style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
@@ -87,6 +122,18 @@ export default function WelcomeScreen({ navigation }: Props) {
                 <Text style={[styles.socialLabel, { color: t.text }]}>{p}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[styles.socialBtn, { backgroundColor: t.surface, borderColor: t.border }]}
+              onPress={handleAppleLogin}
+              activeOpacity={0.7}
+              disabled={isAppleLoading}
+            >
+              {isAppleLoading ? (
+                <ActivityIndicator color={t.text} />
+              ) : (
+                <Text style={[styles.socialLabel, { color: t.text }]}>Apple</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Terms */}

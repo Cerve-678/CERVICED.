@@ -1,0 +1,52 @@
+-- ============================================================
+-- CERVICED — Fix: two more SECURITY DEFINER functions anon-executable
+-- Run in the Supabase SQL editor. Safe to re-run.
+--
+-- FOUND WHILE: cerviced-migration-drift audit following the reschedule
+-- type-mismatch incident (2026-08-08) — a full get_advisors() security
+-- scan surfaced these two beyond the 5 already fixed in
+-- fix_anon_executable_security_definer_functions.sql, which had a narrower,
+-- explicitly-scoped list and never claimed to cover the whole app.
+--
+-- Same root cause as that file: on this Supabase project,
+-- "REVOKE ALL ... FROM public" does not block the named anon role — schema-
+-- level default privileges grant EXECUTE to anon/authenticated/service_role
+-- independently of the PUBLIC pseudo-role. An explicit
+-- "REVOKE EXECUTE ... FROM anon" is required.
+--
+-- AFFECTED FUNCTIONS
+-- ------------------------------------------------------------
+-- dev_reset_provider_bookings_only() — dev/testing utility (deletes all
+--   bookings + reviews for the CALLING user's own provider row). Confirmed
+--   via pg_get_functiondef: guards on `auth.uid() IS NULL` and returns
+--   {"ok": false, "error": "not authenticated"} rather than acting — same
+--   fail-safe shape as the 5 functions fix_anon_executable_security_
+--   definer_functions.sql already covers. Not exploitable as-is; this is
+--   the same "remove needless anon attack surface" hardening as that file,
+--   not a live-vulnerability patch.
+--
+-- process_provider_stale_reschedule_reminders() — cron-invoked sweep (see
+--   fix_reschedule_flow_completion.sql's history / RUN_ALL_MIGRATIONS.sql
+--   STEP 9) that nudges providers about stale pending reschedule requests.
+--   Confirmed via pg_get_functiondef: this one has NO auth.uid() check at
+--   all — it iterates every provider's pending reschedule requests
+--   unconditionally, since it's designed to only ever be invoked by
+--   pg_cron (which runs as the function owner, not through PostgREST).
+--   Unlike dev_reset_provider_bookings_only(), there is no internal guard
+--   making an anon call harmless — an anon caller could invoke this
+--   directly and force early reminder notifications (bounded by its own
+--   4-hour/8-hour dedup windows, so not spammable per-row, but still an
+--   unintended anon-reachable side effect with no ownership check backing
+--   it). REVOKE closes this at the permission layer, matching the
+--   function's actual intended reachability (cron only).
+--
+-- VERIFY
+--   SELECT proname, proacl FROM pg_proc
+--   WHERE pronamespace = 'public'::regnamespace
+--     AND proname IN ('dev_reset_provider_bookings_only',
+--                      'process_provider_stale_reschedule_reminders');
+--     → expect no "anon=X" entry in either proacl.
+-- ============================================================
+
+REVOKE EXECUTE ON FUNCTION public.dev_reset_provider_bookings_only() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.process_provider_stale_reschedule_reminders() FROM anon;

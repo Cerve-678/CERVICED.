@@ -15,20 +15,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
 import { getIntakeFormById, submitIntakeFormAnswers, IntakeForm, IntakeFormQuestion } from '../../services/databaseService';
 import { HomeScreenProps } from '../../navigation/types';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { ThemedBackground } from '../../components/ThemedBackground';
 
 type Props = HomeScreenProps<'ClientIntakeForm'>;
 
-const DARK  = { bg: '#1A1815', card: '#252220', tile: '#2E2B27', text: '#F0ECE7', sub: '#8A8580', border: 'rgba(255,255,255,0.12)', accent: '#AF9197' };
-const LIGHT = { bg: '#F5F1EC', card: '#FFFFFF', tile: '#E3DDD7', text: '#1C1A18', sub: '#8A8680', border: 'rgba(0,0,0,0.10)', accent: '#5C4033' };
-
 export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   const { formId, serviceName } = route.params;
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? DARK : LIGHT;
+  const { palette: P } = useTheme();
 
   const [form, setForm]         = useState<IntakeForm | null>(null);
   const [answers, setAnswers]   = useState<Record<string, string>>({});
@@ -101,32 +99,32 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
     } finally {
       setSubmitting(false);
     }
-  }, [form, formId, answers]);
+  }, [form, formId, answers, signature]);
 
   if (loading) {
     return (
-      <View style={[styles.root, { backgroundColor: P.bg, justifyContent: 'center', alignItems: 'center' }]}>
+      <ThemedBackground style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator color={P.accent} size="large" />
-      </View>
+      </ThemedBackground>
     );
   }
 
   if (!form) {
     return (
-      <View style={[styles.root, { backgroundColor: P.bg, justifyContent: 'center', alignItems: 'center' }]}>
+      <ThemedBackground style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: P.text, fontSize: 16 }}>Form not found.</Text>
-      </View>
+      </ThemedBackground>
     );
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: P.bg }]}>
-      <SafeAreaView edges={['top']} style={{ backgroundColor: P.bg }}>
+    <ThemedBackground style={styles.root}>
+      <SafeAreaView edges={['top']} style={{ backgroundColor: 'transparent' }}>
         <View style={[styles.header, { borderBottomColor: P.border }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={[styles.iconBtn, { backgroundColor: P.tile }]}
+            style={[styles.iconBtn, { backgroundColor: P.surface }]}
           >
             <Ionicons name="chevron-back" size={18} color={P.text} />
           </TouchableOpacity>
@@ -148,7 +146,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             onPress={() => navigation.goBack()}
             activeOpacity={0.8}
           >
-            <Text style={styles.doneBtnText}>Back to Booking</Text>
+            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>Back to Booking</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -171,7 +169,7 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
             {/* Form intro — leads with WHICH service this form is for */}
             <View style={[styles.introCard, { backgroundColor: P.accent + '14', borderColor: P.accent + '35' }]}>
               {!!serviceName && (
-                <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1, color: P.accent, marginBottom: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 1, color: P.accentText, marginBottom: 6 }}>
                   FOR: {serviceName.toUpperCase()}
                 </Text>
               )}
@@ -231,15 +229,15 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
                 activeOpacity={0.8}
               >
                 {submitting
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={styles.submitBtnText}>Submit Form</Text>
+                  ? <ActivityIndicator color={P.onAccent} size="small" />
+                  : <Text style={[styles.submitBtnText, { color: P.onAccent }]}>Submit Form</Text>
                 }
               </TouchableOpacity>
             </View>
           )}
         </KeyboardDismissView>
       )}
-    </View>
+    </ThemedBackground>
   );
 }
 
@@ -252,7 +250,7 @@ function QuestionInput({
   index:    number;
   value:    string;
   onChange: (v: string) => void;
-  P:        typeof DARK;
+  P:        AppTheme;
   readOnly?: boolean;
 }) {
   return (
@@ -288,7 +286,7 @@ function QuestionInput({
                 {
                   backgroundColor: value === opt
                     ? (opt === 'Yes' ? '#34C759' : '#FF3B30') + '22'
-                    : P.tile,
+                    : P.surface,
                   borderColor: value === opt
                     ? (opt === 'Yes' ? '#34C759' : '#FF3B30')
                     : P.border,
@@ -317,7 +315,7 @@ function QuestionInput({
               style={[
                 styles.choiceOption,
                 {
-                  backgroundColor: value === opt ? P.accent + '20' : P.tile,
+                  backgroundColor: value === opt ? P.accent + '20' : P.surface,
                   borderColor:     value === opt ? P.accent : P.border,
                 },
               ]}
@@ -331,10 +329,36 @@ function QuestionInput({
               ]}>
                 {value === opt && <View style={[styles.choiceRadioFill, { backgroundColor: P.accent }]} />}
               </View>
-              <Text style={[styles.choiceLabel, { color: value === opt ? P.accent : P.text }]}>{opt}</Text>
+              <Text style={[styles.choiceLabel, { color: value === opt ? P.accentText : P.text }]}>{opt}</Text>
             </TouchableOpacity>
           ))}
         </View>
+      )}
+
+      {question.type === 'policy' && (
+        <>
+          <View style={[styles.policyBody, { backgroundColor: P.bg, borderColor: P.border }]}>
+            <Text style={{ color: P.text, fontSize: 13, lineHeight: 20 }}>{question.body || 'No policy text provided.'}</Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.yesnoBtn,
+              {
+                alignSelf: 'flex-start',
+                paddingHorizontal: 16,
+                backgroundColor: value === 'Acknowledged' ? '#34C75922' : P.surface,
+                borderColor: value === 'Acknowledged' ? '#34C759' : P.border,
+              },
+            ]}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(value === 'Acknowledged' ? '' : 'Acknowledged'); }}
+            activeOpacity={0.7}
+            disabled={readOnly}
+          >
+            <Text style={[styles.yesnoText, { color: value === 'Acknowledged' ? '#34C759' : P.sub }]}>
+              {value === 'Acknowledged' ? '✓ Acknowledged' : 'I acknowledge this policy'}
+            </Text>
+          </TouchableOpacity>
+        </>
       )}
     </View>
   );
@@ -382,6 +406,11 @@ const styles = StyleSheet.create({
     paddingVertical: 13, alignItems: 'center',
   },
   yesnoText: { fontSize: 15, fontWeight: '700' },
+
+  policyBody: {
+    borderWidth: 1, borderRadius: 10,
+    padding: 12, marginBottom: 12,
+  },
 
   optionsList: { gap: 8 },
   choiceOption: {

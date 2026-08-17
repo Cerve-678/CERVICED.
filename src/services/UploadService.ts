@@ -161,7 +161,7 @@ class UploadService {
       }
 
       return { isValid: true };
-    } catch (error) {
+    } catch {
       return { isValid: false, error: 'Validation failed' };
     }
   }
@@ -294,7 +294,7 @@ class UploadService {
       let result: any;
       try {
         result = await response.json();
-      } catch (parseError) {
+      } catch {
         return {
           success: false,
           error: 'Invalid response from server',

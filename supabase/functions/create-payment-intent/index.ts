@@ -12,9 +12,7 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
 });
 
 interface RequestBody {
-  // Amount in pounds (e.g. 42.50) — converted to pence below. Stripe's API
-  // takes the smallest currency unit, the app works in £ everywhere else.
-  amount: number;
+  checkoutBatchId: string;
   currency?: string;
 }
 
@@ -49,23 +47,43 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    if (!body.amount || body.amount <= 0) {
+    if (!body.checkoutBatchId) {
+      return new Response(JSON.stringify({ error: 'Invalid checkout' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { data: batch, error: batchError } = await supabase
+      .from('checkout_batches')
+      .select('id, amount_due, currency, status, expires_at, payment_intent_id')
+      .eq('id', body.checkoutBatchId)
+      .eq('user_id', user.id)
+      .single();
+    if (batchError || !batch || batch.status !== 'prepared' || new Date(batch.expires_at) <= new Date()) {
+      return new Response(JSON.stringify({ error: 'Checkout has expired. Please review your booking and try again.' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (batch.payment_intent_id) {
+      return new Response(JSON.stringify({ error: 'Payment has already been started for this checkout.' }), {
+        status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Stripe only ever receives the database-calculated amount.
+    const amountInPence = Math.round(Number(batch.amount_due) * 100);
+    if (!Number.isSafeInteger(amountInPence) || amountInPence <= 0) {
       return new Response(JSON.stringify({ error: 'Invalid amount' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Note: amount is trusted from the client cart total here, same trust
-    // model the rest of checkout already uses (base price/add-ons are only
-    // revalidated on rebook, not at initial booking — see RUNBOOK-booking-audit.md).
-    // Not a new gap introduced by adding Stripe.
-    const amountInPence = Math.round(body.amount * 100);
-
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInPence,
-      currency: body.currency ?? 'gbp',
-      metadata: { user_id: user.id },
+      currency: batch.currency ?? body.currency ?? 'gbp',
+      metadata: { user_id: user.id, checkout_batch_id: batch.id },
       automatic_payment_methods: { enabled: true },
       // Manual capture: the Payment Sheet only authorises the card here —
       // funds aren't taken until finalize-payment-intent captures it, which
@@ -75,6 +93,19 @@ serve(async (req) => {
       // booking and nothing to refund it automatically.
       capture_method: 'manual',
     });
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const { error: bindError } = await admin.from('checkout_batches')
+      .update({ payment_intent_id: paymentIntent.id })
+      .eq('id', batch.id)
+      .is('payment_intent_id', null);
+    if (bindError) {
+      await stripe.paymentIntents.cancel(paymentIntent.id);
+      throw bindError;
+    }
 
     return new Response(
       JSON.stringify({

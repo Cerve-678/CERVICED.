@@ -5,7 +5,7 @@
 // prefilled. The actual claim_provider_profile() RPC call happens later,
 // once the account exists — see the pending-claim pickup in
 // InfoRegScreen.tsx's mount effect.
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
@@ -31,7 +31,6 @@ import {
   getUnclaimedProviderDetail,
   requestClaimVerification,
   savePendingClaim,
-  claimProviderProfile,
   type UnclaimedProviderSummary,
   type UnclaimedProviderDetail,
 } from '../../services/providerClaimService';
@@ -40,12 +39,17 @@ type Props = StackScreenProps<RootStackParamList, 'ClaimProvider'>;
 
 type Step = 'search' | 'preview' | 'code';
 
-export default function ClaimProviderScreen({ navigation }: Props) {
+export default function ClaimProviderScreen({ navigation, route }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const insets = useSafeAreaInsets();
   const { updateData, setCurrentStep } = useRegistration();
 
-  const [step, setStep] = useState<Step>('search');
+  // A known providerId (e.g. from ProviderProfileScreen's "Claim this
+  // business" button on an unclaimed listing) skips straight to the preview
+  // step instead of starting at search — see the mount effect below.
+  const knownProviderId = route.params?.providerId;
+
+  const [step, setStep] = useState<Step>(knownProviderId ? 'preview' : 'search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UnclaimedProviderSummary[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -53,6 +57,31 @@ export default function ClaimProviderScreen({ navigation }: Props) {
   const [maskedEmail, setMaskedEmail] = useState('');
   const [code, setCode] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [isLoadingKnown, setIsLoadingKnown] = useState(!!knownProviderId);
+
+  useEffect(() => {
+    if (!knownProviderId) return;
+    let cancelled = false;
+    getUnclaimedProviderDetail(knownProviderId)
+      .then(detail => {
+        if (cancelled) return;
+        if (!detail) {
+          Alert.alert('No longer available', 'This listing has already been claimed or removed.');
+          setStep('search');
+          return;
+        }
+        setSelected(detail);
+      })
+      .catch((e: any) => {
+        if (cancelled) return;
+        Alert.alert('Couldn\'t load listing', e?.message ?? 'Please try again.');
+        setStep('search');
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingKnown(false);
+      });
+    return () => { cancelled = true; };
+  }, [knownProviderId]);
 
   const runSearch = useCallback(async (text: string) => {
     setQuery(text);
@@ -136,9 +165,27 @@ export default function ClaimProviderScreen({ navigation }: Props) {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView>
         <View style={[styles.content, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
-          <TouchableOpacity onPress={() => (step === 'search' ? navigation.goBack() : setStep('search'))} style={styles.backBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              // Entered directly with a known listing (e.g. from
+              // ProviderProfileScreen's "Claim this business") — there was
+              // never a search step to fall back to, so back should leave
+              // this screen entirely rather than land on an empty search
+              // field the user never used.
+              if (knownProviderId || step === 'search') {
+                navigation.goBack();
+              } else {
+                setStep('search');
+              }
+            }}
+            style={styles.backBtn}
+          >
             <Text style={[styles.backText, { color: t.accent }]}>{'‹ Back'}</Text>
           </TouchableOpacity>
+
+          {step === 'preview' && isLoadingKnown && (
+            <ActivityIndicator style={{ marginTop: 40 }} color={t.accent} />
+          )}
 
           {step === 'search' && (
             <>

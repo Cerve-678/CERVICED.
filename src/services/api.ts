@@ -103,7 +103,7 @@ class ApiService {
           message: data.message,
         };
       }
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: 'Failed to parse response',

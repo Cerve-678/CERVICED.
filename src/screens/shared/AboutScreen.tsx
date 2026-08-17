@@ -30,7 +30,7 @@ function ExpandableSection({ title, children, theme }: { title: string; children
 }
 
 export default function AboutScreen({ navigation }: any) {
-  const { theme, isDarkMode } = useTheme();
+  const { theme, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
 
   return (
@@ -52,8 +52,8 @@ export default function AboutScreen({ navigation }: any) {
 
         {/* Mission */}
         <View style={[styles.card, {
-          backgroundColor: isDarkMode ? 'rgba(175,145,151,0.1)' : 'rgba(92,64,51,0.06)',
-          borderColor: (isDarkMode ? 'rgba(175,145,151,0.35)' : 'rgba(92,64,51,0.35)'),
+          backgroundColor: P.accentDim,
+          borderColor: P.border,
         }]}>
           <Text style={[styles.cardLabel, { color: theme.accent }]}>OUR MISSION</Text>
           <Text style={[styles.mission, { color: theme.text }]}>

@@ -85,7 +85,7 @@ function countSelections(value: FieldValue): number {
  * This is the single source of truth for every denominator on the screen — the
  * view must never hardcode "4 fields", it reads `fieldsTotal` from here.
  */
-const CATEGORY_FIELDS: Record<CategoryKey, ReadonlyArray<keyof BeautyData>> = {
+const CATEGORY_FIELDS: Record<CategoryKey, readonly (keyof BeautyData)[]> = {
   health:          ['allergies', 'medicalNotes'],
   skin:            ['skinType', 'skinTone', 'skinConcerns', 'sensitiveAreas'],
   hair:            ['hairType', 'scalpCondition', 'treatmentHistory', 'hairGoals'],

@@ -16,9 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { upsertVerifiedUserProfile } from '../../services/databaseService';
 import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
 import { isBiometricAvailable, getBiometricLabel, enableBiometric } from '../../services/biometricService';
-import { upsertUserAfterVerification } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -85,7 +85,7 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       const meta = session.user.user_metadata as Record<string, any>;
       const dob = meta['dob'] ?? '';
 
-      const { error: upsertError } = await supabase.from('users').upsert({
+      const profilePayload = {
         id: session.user.id,
         email: session.user.email ?? email,
         name: meta['name'] ?? '',
@@ -113,11 +113,36 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         maintenance_frequency: meta['maintenance_frequency'] ?? null,
         referral_source:       meta['referral_source']       ?? null,
         gender:                meta['gender']                ?? null,
-        has_kids:              meta['has_kids']              ?? false,
-      }, { onConflict: 'id' });
+        has_kids:              meta['has_kids']               ?? false,
+        team_size:             meta['team_size']               ?? null,
+        accessibility_notes:   meta['accessibility_notes']     ?? null,
+        languages_spoken:      meta['languages_spoken']        ?? [],
+        specialties:           meta['specialties']             ?? [],
+        price_range:               meta['price_range']               ?? null,
+        preferred_contact_methods: meta['preferred_contact_methods'] ?? [],
+        preferred_payment_methods: meta['preferred_payment_methods'] ?? [],
+      };
 
-      if (upsertError) {
-        logger.warn('Profile upsert error:', upsertError.message);
+      try {
+        await upsertVerifiedUserProfile(profilePayload);
+      } catch (upsertError) {
+        // This is the account's only chance to save its signup answers — the
+        // auth user already exists at this point regardless of outcome, and
+        // nothing later retries it. Silently swallowing this (as before,
+        // logger.warn only) left the user signed in with a blank profile and
+        // no indication anything went wrong. Retry once in place; only
+        // surface failure to the user if the retry also fails.
+        logger.error('Profile upsert failed, retrying once:', upsertError);
+        try {
+          await upsertVerifiedUserProfile(profilePayload);
+        } catch (retryError) {
+          logger.error('Profile upsert retry also failed:', retryError);
+          Alert.alert(
+            'Almost there',
+            "Your account was created, but we couldn't save some of your details just now. " +
+            'You can fill in anything missing from Settings.'
+          );
+        }
       }
 
       const toEmail = meta['role'] === 'provider'

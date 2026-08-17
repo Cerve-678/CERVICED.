@@ -7,20 +7,8 @@ import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatTime12 } from '../utils/dateUtils';
 
-// Accent is mode-specific in the real app (src/constants/theme.ts): chocolate
-// brown in light mode, dusty rose only in dark mode.
-const L = {
-  bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#5C4033', accentShadow: 'rgba(92,64,51,0.35)', text: '#000000',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.14)',
-  sep: 'rgba(126,102,103,0.08)', iconBg: 'rgba(92,64,51,0.12)',
-};
-const D = {
-  bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', accentShadow: 'rgba(175,145,151,0.35)', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(126,102,103,0.18)',
-  sep: 'rgba(126,102,103,0.10)', iconBg: 'rgba(175,145,151,0.10)',
-};
+// Colours come from useTheme().palette (hat-aware — client vs provider),
+// not a local literal copy. accentShadow mirrors the palette's accentDim.
 
 // ==================== MARK ====================
 // Plain rounded square — the single recurring identity shape. Static
@@ -32,8 +20,7 @@ interface MarkProps {
 }
 
 export function Mark({ size = 22 }: MarkProps) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
   return (
     <View
       style={{
@@ -54,8 +41,7 @@ interface AmbientMarkProps {
 }
 
 export function AmbientMark({ size = 68 }: AmbientMarkProps) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { isDarkMode, palette: P } = useTheme();
   const glow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -241,7 +227,7 @@ interface ChatBubbleProps {
 // bubbles here and the chat-history previews in BeccaScreen. Any new surface
 // that renders assistant copy must go through this, or the raw ** markers
 // show through exactly as they did before.
-export function renderRichText(content: string): React.ReactNode {
+function renderInlineRichText(content: string): React.ReactNode {
   const parts = content.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
@@ -256,17 +242,61 @@ export function renderRichText(content: string): React.ReactNode {
 }
 
 /**
+ * Renders Becca's lightweight response language.
+ *
+ * `## Heading` gives dynamic answers a clear takeaway, while `- item` turns
+ * result rows into proper, easy-to-scan lists. Both remain plain text when a
+ * message is saved or previewed, so chat history never depends on a renderer.
+ */
+export function renderRichText(content: string): React.ReactNode {
+  const lines = content.split("\n");
+  return lines.map((line, index) => {
+    const key = `line-${index}`;
+    const heading = line.match(/^##\s+(.+)$/);
+    const item = line.match(/^(?:[-•])\s+(.+)$/);
+
+    if (heading) {
+      return (
+        <React.Fragment key={key}>
+          <Text style={styles.bubbleHeading}>{renderInlineRichText(heading[1]!)}</Text>
+          {index < lines.length - 1 ? "\n" : null}
+        </React.Fragment>
+      );
+    }
+
+    if (item) {
+      return (
+        <React.Fragment key={key}>
+          <Text style={styles.bubbleBullet}>• </Text>
+          {renderInlineRichText(item[1]!)}
+          {index < lines.length - 1 ? "\n" : null}
+        </React.Fragment>
+      );
+    }
+
+    return (
+      <React.Fragment key={key}>
+        {renderInlineRichText(line)}
+        {index < lines.length - 1 ? "\n" : null}
+      </React.Fragment>
+    );
+  });
+}
+
+/**
  * Plain-text version for places that can't host nested <Text> spans (list
  * previews, session titles, notification copy). Strips the markers instead of
  * rendering them — never leaves a raw ** on screen.
  */
 export function stripRichText(content: string): string {
-  return content.replace(/\*\*([^*]+)\*\*/g, '$1');
+  return content
+    .replace(/^##\s+/gm, '')
+    .replace(/^[-•]\s+/gm, '• ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1');
 }
 
 export function ChatBubble({ message }: ChatBubbleProps) {
-  const { theme, isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
   const isUser = message.role === 'user';
 
   if (isUser) {
@@ -276,7 +306,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
           {message.imageUri && (
             <Image source={{ uri: message.imageUri }} style={styles.messageImage} resizeMode="cover" fadeDuration={0} />
           )}
-          <Text style={[styles.cardText, { color: '#FFFFFF' }]}>{renderRichText(message.content)}</Text>
+          <Text style={[styles.cardText, { color: P.onAccent }]}>{renderRichText(message.content)}</Text>
         </View>
       </View>
     );
@@ -295,7 +325,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
         {message.imageUri && (
           <Image source={{ uri: message.imageUri }} style={styles.messageImage} resizeMode="cover" fadeDuration={0} />
         )}
-        <Text style={[styles.cardText, { color: theme.text }]}>{renderRichText(message.content)}</Text>
+        <Text style={[styles.cardText, { color: P.text }]}>{renderRichText(message.content)}</Text>
         <Text style={[styles.cardTime, { color: P.sub }]}>{formatTime12(new Date(message.timestamp))}</Text>
       </View>
     </View>
@@ -322,8 +352,7 @@ function ActionCard({
   suggestion: ChatSuggestion;
   onPress: (suggestion: ChatSuggestion) => void;
 }) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
   const pressAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -370,9 +399,11 @@ function ActionCard({
         {suggestion.icon && (
           <Image source={suggestion.icon} style={styles.choiceIcon} resizeMode="contain" fadeDuration={0} />
         )}
-        <Text style={[styles.actionText, { color: isDarkMode ? D.text : L.text }]}>{suggestion.text}</Text>
+        <View style={styles.actionCopy}>
+          <Text style={[styles.actionText, { color: P.text }]}>{suggestion.text}</Text>
+        </View>
         <View style={[styles.actionArrowWrap, { backgroundColor: P.iconBg }]}>
-          <Text style={[styles.actionArrow, { color: P.accent }]}>→</Text>
+          <Text style={[styles.actionArrow, { color: P.accentText }]}>→</Text>
         </View>
       </Animated.View>
     </TouchableOpacity>
@@ -386,8 +417,7 @@ function PillChip({
   suggestion: ChatSuggestion;
   onPress: (suggestion: ChatSuggestion) => void;
 }) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
   const pressAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
@@ -417,15 +447,14 @@ function PillChip({
       pressRetentionOffset={{ top: 6, bottom: 6, left: 6, right: 6 }}
     >
       <Animated.View style={[styles.pillChip, animatedStyle, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-        <Text style={[styles.pillChipText, { color: P.accent }]}>{suggestion.text}</Text>
+        <Text style={[styles.pillChipText, { color: P.accentText }]}>{suggestion.text}</Text>
       </Animated.View>
     </TouchableOpacity>
   );
 }
 
 export function Suggestions({ suggestions, onSuggestionPress, indented = false, variant = 'list' }: SuggestionsProps) {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
 
   if (!suggestions || suggestions.length === 0) return null;
 
@@ -439,6 +468,7 @@ export function Suggestions({ suggestions, onSuggestionPress, indented = false, 
   if (useRowLayout) {
     return (
       <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
+        <Text style={[styles.sectionLabel, { color: P.sub }]}>CHOOSE ONE</Text>
         <View style={styles.pillRow}>
           {suggestions.map((suggestion) => (
             <PillChip key={suggestion.id} suggestion={suggestion} onPress={onSuggestionPress} />
@@ -450,7 +480,7 @@ export function Suggestions({ suggestions, onSuggestionPress, indented = false, 
 
   return (
     <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
-      <Text style={[styles.sectionLabel, { color: P.sub }]}>QUICK ACTIONS</Text>
+      <Text style={[styles.sectionLabel, { color: P.sub }]}>NEXT STEPS</Text>
       <View style={styles.actionsCol}>
         {suggestions.map((suggestion) => (
           <ActionCard key={suggestion.id} suggestion={suggestion} onPress={onSuggestionPress} />
@@ -469,8 +499,7 @@ interface ProviderRecommendationsProps {
 }
 
 export function ProviderRecommendations({ providers, onProviderPress, indented = true }: ProviderRecommendationsProps) {
-  const { theme, isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
 
   if (!providers || providers.length === 0) return null;
 
@@ -481,7 +510,7 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
 
   return (
     <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
-      <Text style={[styles.sectionLabel, { color: P.accent }]}>RECOMMENDED</Text>
+      <Text style={[styles.sectionLabel, { color: P.accentText }]}>RECOMMENDED</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recommendationsScroll}>
         {providers.map((provider) => (
           <TouchableOpacity
@@ -504,12 +533,12 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
                 // logo with bands of container colour inside the round crop.
                 <Image source={provider.logo} style={styles.providerLogo} resizeMode="cover" fadeDuration={0} />
               ) : (
-                <Text style={[styles.providerLogoFallback, { color: P.accent }]}>
+                <Text style={[styles.providerLogoFallback, { color: P.accentText }]}>
                   {provider.name?.trim().charAt(0).toUpperCase() || '?'}
                 </Text>
               )}
             </View>
-            <Text style={[styles.providerName, { color: theme.text }]} numberOfLines={1}>
+            <Text style={[styles.providerName, { color: P.text }]} numberOfLines={1}>
               {provider.name}
             </Text>
             <Text style={[styles.providerService, { color: P.sub }]} numberOfLines={1}>
@@ -524,14 +553,13 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
 
 // ==================== THINKING INDICATOR ====================
 
-export function ThinkingIndicator() {
-  const { isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+export function ThinkingIndicator({ label = "Thinking it through…" }: { label?: string }) {
+  const { palette: P } = useTheme();
   return (
     <View style={[styles.row, styles.assistantRow]}>
       <Mark size={22} />
       <View style={[styles.thinkingCard, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.accent }]}>
-        <Text style={[styles.thinkingLabel, { color: P.sub }]}>Becca is typing…</Text>
+        <Text style={[styles.thinkingLabel, { color: P.sub }]}>{label}</Text>
       </View>
     </View>
   );
@@ -556,8 +584,7 @@ export function ChatInput({
   placeholder = 'Ask me anything...',
   hasImage = false,
 }: ChatInputProps) {
-  const { theme, isDarkMode } = useTheme();
-  const P = isDarkMode ? D : L;
+  const { palette: P } = useTheme();
   const canSend = !!value.trim() || hasImage;
 
   const handleImagePick = () => {
@@ -587,7 +614,7 @@ export function ChatInput({
         </TouchableOpacity>
 
         <TextInput
-          style={[styles.input, { color: theme.text }]}
+          style={[styles.input, { color: P.text }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -602,7 +629,7 @@ export function ChatInput({
           disabled={!canSend}
           activeOpacity={0.7}
         >
-          <Text style={[styles.sendButtonText, { color: canSend ? '#FFFFFF' : P.sub }]}>↑</Text>
+          <Text style={[styles.sendButtonText, { color: canSend ? P.onAccent : P.sub }]}>↑</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -655,6 +682,19 @@ const styles = StyleSheet.create({
   bubbleBold: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
+  },
+  bubbleHeading: {
+    // A different display face gives the answer's title a clear visual tier
+    // above the body copy, so the user can scan a long thread by outcome.
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    lineHeight: 23,
+    letterSpacing: 0.15,
+  },
+  bubbleBullet: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 16,
   },
   cardTime: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -716,8 +756,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingLeft: 19,
     paddingRight: 7,
-    paddingVertical: 8,
-    minHeight: 49,
+    paddingVertical: 7,
+    minHeight: 55,
     gap: 9,
   },
   choiceIcon: {
@@ -725,10 +765,12 @@ const styles = StyleSheet.create({
     height: 18,
   },
   actionText: {
-    flex: 1,
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13.5,
     letterSpacing: 0.1,
+  },
+  actionCopy: {
+    flex: 1,
   },
   actionArrowWrap: {
     width: 30,

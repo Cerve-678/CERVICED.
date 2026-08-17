@@ -4063,8 +4063,99 @@ ALTER TABLE public.bookings
 --   supabase/fix_cart_checkout_slot_hold.sql
 --   supabase/fix_hold_cart_booking_slots_missing_snapshots.sql
 --   supabase/fix_claim_cart_booking_slots_ambiguous_column.sql
+--   supabase/provider_busy_spans_rpc.sql
+--   supabase/provider_follow_notify_cron.sql
+--   supabase/fix_group_booking_notification_dedup.sql
+--   supabase/fix_reschedule_flow_completion.sql
+--   supabase/fix_anon_executable_security_definer_functions.sql
+--   supabase/fix_auto_accept_provider_notification.sql
+--   supabase/fix_missing_notifications.sql
+--   supabase/fix_go_live_services_bypass.sql
+--   supabase/fix_provider_status_transition_guard.sql
+--   supabase/fix_reschedule_request_conflict.sql
+--   supabase/fix_dev_reset_and_reschedule_reminder_anon_grants.sql
+--   supabase/fix_group_booking_atomic_actions.sql
+--   supabase/fix_group_booking_reschedule.sql
+--   supabase/fix_group_reschedule_notification_dedup.sql
+--   supabase/fix_provider_terms_acceptance.sql
+--   supabase/add_providers_availability_rpc.sql
+--   supabase/fix_client_policy_acceptance.sql
+--   supabase/fix_claim_cart_booking_slots_policy_snapshot.sql
+--   supabase/fix_claim_cart_booking_slots_private_details_ambiguous.sql
+--   supabase/fix_handle_booking_status_change_on_hold_notification.sql
+--   supabase/fix_claim_cart_booking_slots_missing_notifications.sql
 --
--- All seven are idempotent/safe to re-run. NOTE: fix_cart_checkout_slot_hold.sql
+-- All twenty-eight are idempotent/safe to re-run.
+--
+-- The 26th: fixes a live-blocking regression in claim_cart_booking_slots() —
+-- every cart-checkout booking attempt failed with 42702 "column reference
+-- \"provider_id\" is ambiguous" (the new provider_private_details lookup
+-- added by fix_claim_cart_booking_slots_uses_real_address.sql used a bare
+-- provider_id, colliding with the function's own RETURNS TABLE OUT-parameter
+-- of the same name — the exact ambiguity class the 2026-08-04 fix already
+-- closed elsewhere in this function, reintroduced against a different
+-- table). App fell back to a direct insert that then lost the race against
+-- enforce_booking_bookability(), surfacing the misleading "That time is no
+-- longer available" P0001. Root-caused live via reproduced 42702 on
+-- 2026-08-10 and applied live same day.
+--
+-- NOTE: fix_claim_cart_booking_slots_uses_real_address.sql (2026-08-09) is
+-- itself missing from this required-follow-up list despite being applied
+-- live — another instance of the migration-tracking gap (see
+-- supabase-migration-tracking-gap in auto-memory). Its effect is already
+-- folded into the live function this 26th entry patches, so re-running it
+-- isn't required, but it should still be added here (or committed) so
+-- git/this file stop being blind to what's actually running.
+--
+-- The 27th: fixes handle_booking_status_change() firing a real
+-- "Booking Cancelled" notification when an unclaimed cart-checkout or
+-- waitlist hold (status 'on_hold') expires via the expire_cart_holds() /
+-- expire_waitlist_holds() crons and transitions to 'cancelled' — the
+-- trigger's cancellation-notification branch excluded 'pending' but not
+-- 'on_hold', so a routine hold expiry read as a genuine cancellation of a
+-- booking that was never actually confirmed. Added "AND OLD.status !=
+-- 'on_hold'" to that branch's condition. Applied live 2026-08-10, same
+-- session as the 26th entry above (both surfaced investigating the same
+-- user report: a booking attempt failed with a misleading "time no longer
+-- available" error AND produced a spurious cancellation notification —
+-- two independent bugs in the same cart-checkout hold lifecycle).
+--
+-- The 28th: fixes claim_cart_booking_slots() never notifying anyone
+-- (client OR provider, in-app or push) of a new booking. This function
+-- claims a held slot via a bare UPDATE, which handle_new_booking()
+-- (INSERT-only trigger) never sees and handle_booking_status_change() has
+-- no branch for (its transitions all assumed bookings start life as
+-- 'pending', the pre-cart-hold-system shape — OLD.status = 'on_hold' ->
+-- NEW.status IN ('pending','confirmed') matched nothing). Confirmed live:
+-- 8/8 confirmed/pending bookings in the database had zero notifications —
+-- a 100% blackout affecting every provider on the now-standard
+-- cart-checkout path, not a one-off. Same bug shape already fixed once
+-- for the WAITLIST hold path (claim_waitlist_hold() in
+-- waitlist_holds.sql:406-485) but never carried over to this
+-- structurally-identical cart-checkout path. Fix mirrors that function's
+-- pattern and handle_new_booking()'s exact message wording — explicit
+-- client + provider notification INSERTs added per claimed item,
+-- immediately after each successful claim in the loop. Applied live
+-- 2026-08-10, same session as the 26th/27th entries (all three surfaced
+-- investigating the same underlying incident).
+--
+-- The 23rd: adds providers.terms_accepted_at, stamped once on first publish
+-- (InfoRegScreen.tsx, !isEditMode path, gated on its own checkbox) — closes
+-- the gap where providers had no Terms & Conditions acceptance mechanism at
+-- all (see LEGAL-COMPLIANCE-NOTES.md).
+--
+-- The 24th and 25th: the client-side counterpart, scoped to a PROVIDER's own
+-- cancellation/booking policy (not the separate, still-deferred Cerviced-wide
+-- Terms & Conditions). Adds bookings.policy_accepted_at/policy_snapshot,
+-- written by BookingSheet/MultiBookingSheet checkout (NOT CartScreen, which
+-- stays untouched) via both createBookingsFromCart write paths — the direct
+-- INSERT (databaseService.createBooking, picks the new DbBooking fields up
+-- automatically) and the claim_cart_booking_slots() RPC UPDATE path, which
+-- (same reason as fix_claim_cart_booking_slots_uses_real_address.sql before
+-- it) needed its own explicit column added since it doesn't go through the
+-- insert. NOT YET APPLIED LIVE as of writing — the Supabase MCP connection
+-- was down this session; apply both before trusting this entry as done.
+-- Applied live 2026-08-09. NOTE: fix_cart_checkout_slot_hold.sql
 -- itself is not actually present in this repo as a standalone file — it was
 -- applied live 2026-08-04 without being committed (see the migration-drift
 -- pattern this repo already has; check supabase-migration-tracking-gap in
@@ -4081,6 +4172,7 @@ ALTER TABLE public.bookings
 -- provider's service_category — without it, pre-existing portfolio photos
 -- stay invisible to every Explore category-filter tab (NULL never matches
 -- a Postgres .eq()), even though the upload path itself is now fixed.
+-- Confirmed run live 2026-08-08 (0 NULL rows remained; ran as a no-op).
 --
 -- The fourth: booking_reschedule_requests' reschedule_user_all /
 -- reschedule_provider_all policies (defined earlier in this file, inside
@@ -4119,4 +4211,484 @@ ALTER TABLE public.bookings
 -- claim guarantee). Fix fully qualifies every WHERE-clause column with
 -- public.bookings. Found + deployed live 2026-08-04, same test session as
 -- the sixth entry above.
+--
+-- The eighth: get_provider_busy_spans() — clients could never see which of a
+-- provider's slots were already taken. `bookings` has no public-read policy
+-- (only bookings_user_read / bookings_provider_read), so every client-side
+-- conflict check in AvailabilityService read ZERO rows for a provider the
+-- client wasn't already booked with, and the slot picker offered taken slots
+-- as free; the client only found out when checkout was rejected. Never a
+-- double-booking hole — bookings_no_overlap and enforce_booking_bookability()
+-- both run server-side with full visibility — but a bad, confusing UX. The
+-- new SECURITY DEFINER function returns ONLY buffer-padded busy spans
+-- (date + start + end, no booking id / user_id / service / price) for live
+-- providers, so the picker can be accurate without granting SELECT on a
+-- table holding client PII. Confirmed deployed live (migration
+-- 20260806171711_provider_busy_spans_rpc, verified matching via Supabase MCP
+-- 2026-08-08) — this note was stale; it had already shipped.
+--
+-- The ninth: adds notify_enabled/last_notified_at to provider_follows plus
+-- process_follow_schedule_release_nudges() and a cron job
+-- (provider-follow-schedule-release-nudges, daily 09:00 UTC) — the bell on
+-- ProviderProfileScreen's hero pill now writes here (setProviderFollowNotify
+-- in databaseService.ts) instead of being purely local UI state. NOT a fixed
+-- monthly-since-last-sent cadence (an earlier design, briefly deployed as
+-- process_follow_availability_nudges()/provider-follow-availability-nudges,
+-- then superseded before it ever fired) — the PROVIDER sets a day of the
+-- month via ProviderAutomationsScreen's date picker
+-- (automation_settings.scheduleReleaseDay, 1-31, the day they typically
+-- redo/release their schedule), and every follow row with notify_enabled =
+-- TRUE gets one 'announcement' nudge on that day each month (clamped to a
+-- shorter month's last day). Confirmed deployed live 2026-08-08 (columns,
+-- function body, and cron job verified via Supabase MCP; old job
+-- unscheduled).
+--
+-- The tenth: notify_address_released() and handle_booking_status_change()'s
+-- booking_confirmed branch both fired strictly per bookings row, so a
+-- group booking (multiple providers sharing one checkout, one address,
+-- one confirmation moment — group_booking_id already stamped by
+-- BookingContext.tsx after checkout) sent one "Address Now Available" and
+-- one "Booking Confirmed" notification PER sibling row instead of one for
+-- the whole group. Fix makes both group_booking_id-aware: only the
+-- earliest-appointment sibling in a group sends, phrased for the group;
+-- ungrouped bookings are unchanged. payment_success was already correctly
+-- deduped app-side (BookingContext.tsx) and needed no fix. Applied live
+-- 2026-08-08 via Supabase MCP; confirmed both functions are group-aware.
+--
+-- The eleventh: fix_reschedule_flow_completion.sql — closes 3 reschedule
+-- gaps (orphaned requests on cancellation, no decline path for either
+-- party, ad-hoc app-side reschedule notifications instead of trigger-owned)
+-- plus a live-blocking bug (request_reschedule_own_booking's TEXT[]/DATE[]
+-- type mismatch, 42804 on every call). Deployed live 2026-08-08. NOTE: its
+-- Part 3 redeploys handle_booking_status_change() and — because that file
+-- was drafted before the tenth entry above — its first deploy silently
+-- REVERTED the tenth entry's group-aware booking_confirmed branch (two
+-- CREATE OR REPLACE of the same function; last one applied wins). Caught
+-- and fixed live the same session with a follow-up apply_migration merging
+-- both changes; the file on disk is now updated to match. If ever
+-- redeploying either of these two files standalone on a fresh environment,
+-- verify BOTH markers survive afterward: group_booking_id (tenth entry) AND
+-- close_orphaned_reschedule_request (eleventh entry) should both appear in
+-- pg_get_functiondef('public.handle_booking_status_change').
+--
+-- The twelfth through seventeenth were already deployed live before this
+-- note was written, but had never been added to this required-follow-up
+-- list — found via a cerviced-migration-drift audit run 2026-08-08
+-- (motivated by the eleventh entry's type-mismatch bug hitting production
+-- while unlisted here). Each confirmed matching live via pg_get_functiondef
+-- /pg_policies/proacl at audit time; none needed re-applying, only listing:
+--   12. fix_anon_executable_security_definer_functions.sql — REVOKEs anon
+--       EXECUTE from 5 SECURITY DEFINER functions (cancel_account_deletion,
+--       dev_reset_provider, delete_client_profile, delete_provider_profile,
+--       replace_provider_services). Confirmed none were exploitable (each
+--       independently guards on auth.uid()) — hardening, not a live-bug fix.
+--   13. fix_auto_accept_provider_notification.sql — handle_new_booking()'s
+--       on_hold early-return and recipient_role-aware notification inserts.
+--   14. fix_missing_notifications.sql — 6 functions (notify_on_new_chat_
+--       message, handle_intake_form_completed, handle_attach_info_packs,
+--       handle_new_info_pack, handle_provider_gone_live,
+--       attach_info_pack_to_booking) confirmed present live, matching.
+--   15. fix_go_live_services_bypass.sql — handle_availability_window_change()
+--       delegates to check_and_set_provider_live() (requires availability +
+--       services + address all present before flipping has_gone_live).
+--   16. fix_provider_status_transition_guard.sql — provider_update_booking_
+--       status()'s state-machine + timing guard (see its own header).
+--   17. fix_reschedule_request_conflict.sql — booking_reschedule_requests_
+--       booking_id_key UNIQUE(booking_id), the constraint every reschedule
+--       RPC's ON CONFLICT (booking_id) DO UPDATE depends on.
+--
+-- The eighteenth: fix_dev_reset_and_reschedule_reminder_anon_grants.sql —
+-- same audit surfaced 2 more anon-executable SECURITY DEFINER functions
+-- beyond the twelfth entry's scope: dev_reset_provider_bookings_only()
+-- (fails safe — guards on auth.uid() IS NULL, same as entry 12's functions)
+-- and process_provider_stale_reschedule_reminders() (NO internal auth
+-- guard at all — intended cron-only, was genuinely anon-reachable with no
+-- ownership check backing it, though bounded/non-destructive). REVOKEd
+-- live 2026-08-08 same session as this note.
+--
+-- The nineteenth: fix_group_booking_atomic_actions.sql — two new RPCs,
+-- provider_update_group_booking_status(group_booking_id, status) and
+-- provider_cancel_group_booking(group_booking_id), so confirming/declining/
+-- cancelling one service in a group booking applies to ALL of that
+-- provider's own sibling rows in the group atomically (lock-validate-write,
+-- all-or-nothing — no torn state where some siblings confirm and others
+-- don't). Scoped to (group_booking_id, provider_id) so a cross-provider
+-- group's other providers' rows are never touched. Also extends
+-- handle_booking_status_change()'s cancellation branches (provider-decline
+-- and cancel-after-confirm) with the same group-representative-row
+-- notification dedup the tenth entry already gave booking_confirmed — a
+-- group cancel now sends exactly one notification per group per side, not
+-- one per sibling row. Deployed live 2026-08-08; confirmed via
+-- pg_get_functiondef both new RPCs exist and handle_booking_status_change
+-- carries all four markers (group_booking_id confirm branch,
+-- close_orphaned_reschedule_request, group-aware decline, group-aware
+-- cancel). App-side wiring (ProviderBookingDetailScreen.tsx action buttons,
+-- BookingHistory list) NOT done by this file — SQL only. (App-side wiring
+-- for confirm/decline/cancel WAS completed same session, see the twentieth
+-- entry's app-side note.)
+--
+-- The twentieth: fix_group_booking_reschedule.sql — group-aware reschedule.
+-- Provider proposes new days for a WHOLE group at once (every sibling
+-- service shifts together, back-to-back order preserved) via
+-- provider_initiate_group_reschedule(); client confirms/declines the whole
+-- group via confirm_group_reschedule()/decline_group_reschedule_offer().
+-- booking_reschedule_requests stays UNIQUE(booking_id) (no schema
+-- redesign) — a group proposal writes ONE row per sibling, same shape as
+-- today, all sharing a new group_reschedule_batch_id column so the client
+-- can fetch/confirm/decline them as one unit (same "N rows, one shared id"
+-- pattern group_booking_id already uses on bookings itself). The RPCs do
+-- NOT compute availability/chain-fitting server-side — that reuses the
+-- existing client-side AvailabilityService.findAllBackToBackSlots, same
+-- division of labor the single-booking provider_initiate_reschedule
+-- already has. Deployed live 2026-08-09; confirmed via
+-- pg_get_function_identity_arguments (all 3 RPCs) and
+-- information_schema.columns (group_reschedule_batch_id).
+--
+-- App-side (same session, tsc clean): ProviderBookingDetailScreen.tsx got a
+-- new group-reschedule-initiate modal reusing ModernBeautyCalendar with a
+-- chain-aware slotResolver (mirrors CartScreen.tsx's existing client-side
+-- group-reschedule UX); BookingContext.tsx gained confirmGroupReschedule/
+-- declineGroupReschedule; RescheduleScreen.tsx detects
+-- rescheduleRequest.groupRescheduleBatchId and shows/confirms the whole
+-- group. Also fixed two real bugs found while building this:
+-- mapDbBookingToConfirmed() never mapped serviceId (silently broke
+-- chain-fitting for any ConfirmedBooking, and a "rebook" flow in
+-- BookingsScreen.tsx) or isGroupBooking/groupBookingCount from the DB row —
+-- both fixed in src/services/bookingService.ts.
+--
+-- (The reschedule-notification-per-sibling gap flagged here originally is
+-- now CLOSED by the twenty-first entry below.)
+--
+-- The twenty-first: fix_group_reschedule_notification_dedup.sql — closes
+-- the gap the twentieth entry flagged. handle_reschedule_request_change()
+-- fired per-ROW on booking_reschedule_requests, so a group reschedule
+-- proposal/confirm/decline sent N notifications (one per sibling). Fix
+-- applies the same representative-row dedup the booking-status trigger
+-- already uses, but keyed on group_reschedule_batch_id (NOT
+-- group_booking_id — a fresh batch id per proposal round means a stale
+-- prior round's siblings are never mistaken for the current representative
+-- set), tie-broken by the request row's own original_date/original_time
+-- (stable across a reschedule, unlike booking_date/time which the
+-- reschedule is changing). Group notifications now read "N service(s)"
+-- instead of one service name. Ungrouped reschedule requests
+-- (group_reschedule_batch_id IS NULL) are completely unchanged. The
+-- client-requests-a-reschedule path (status='pending') is not grouped —
+-- group reschedule is provider-initiated only — so that branch is
+-- untouched. Deployed live 2026-08-09 via apply_migration (returned
+-- success); live pg_get_functiondef re-verify was PENDING at write time
+-- (Supabase MCP disconnected right after the deploy) — re-confirm
+-- group_reschedule_batch_id appears in the live function body before
+-- trusting.
 -- ════════════════════════════════════════════════════
+
+-- The twenty-second (twenty-third file overall — the twenty-second slot
+-- above is fix_provider_terms_acceptance.sql): add_providers_availability_rpc.sql
+-- — adds get_providers_availability(text[]), a batched RPC returning a
+-- coarse 'available'/'limited'/'none' status per provider slug for
+-- SearchScreen's result grid, replacing a hardcoded-true fake availability
+-- badge. One query for the whole result set (up to 200 providers), not a
+-- per-card call — avoids the N+1 the per-provider
+-- AvailabilityService.getAvailabilitySummary() would be at that scale.
+-- has_gone_live/is_active gated in its base CTE; EXECUTE granted to
+-- authenticated only (no anon/PUBLIC). Deployed live 2026-08-10 via
+-- apply_migration (migration name get_providers_availability_batch,
+-- returned success) and spot-checked against real provider rows on project
+-- ztrfpfvvejzaysrelmfm — confirmed via execute_sql.
+-- ════════════════════════════════════════════════════
+
+
+-- ════════════════════════════════════════════════════
+-- claimable_provider_profiles.sql
+-- ════════════════════════════════════════════════════
+-- ============================================================
+-- CERVICED — Claimable (scraped) Provider Profiles
+-- Run this entire script in the Supabase SQL Editor.
+--
+-- Lets a provider row exist with no owner yet (source = 'scraped',
+-- is_claimed = FALSE), created by a batch import pipeline, and adds a
+-- SECURITY DEFINER RPC that lets the real business owner attach their
+-- new auth account to that row via a one-time claim token.
+--
+-- IMPORTANT — scope of this migration:
+--   Only the schema + claim_provider_profile() RPC ship here. The
+--   scraping pipeline (Edge Functions) and outreach email are separate,
+--   later pieces — this file alone does not scrape or email anyone.
+-- ============================================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ───────────────────────────────────────────────────────────
+-- STEP 1: providers — allow unowned rows, track provenance + claim state
+-- ───────────────────────────────────────────────────────────
+
+-- Unclaimed scraped listings have no auth account yet.
+ALTER TABLE public.providers ALTER COLUMN user_id DROP NOT NULL;
+-- providers_user_id_key (UNIQUE) already tolerates any number of NULLs —
+-- no change needed there.
+
+ALTER TABLE public.providers
+  ADD COLUMN IF NOT EXISTS is_claimed            BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS source                TEXT NOT NULL DEFAULT 'self_signup',
+  ADD COLUMN IF NOT EXISTS source_site           TEXT,
+  ADD COLUMN IF NOT EXISTS source_url            TEXT,
+  ADD COLUMN IF NOT EXISTS scraped_at            TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS claimed_at            TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS claim_token           TEXT UNIQUE,
+  ADD COLUMN IF NOT EXISTS claim_token_expires_at TIMESTAMPTZ,
+  -- Failed claim_provider_profile() attempts against THIS row's current
+  -- claim_token, since it was last (re)issued. Locked out at 5 — see the
+  -- RPC below. Reset to 0 whenever a fresh code is generated/sent.
+  ADD COLUMN IF NOT EXISTS claim_attempts        INT NOT NULL DEFAULT 0,
+  -- Last time a verification code was sent for this listing — used to
+  -- rate-limit request-claim-verification so it can't be used to spam a
+  -- scraped business's real inbox.
+  ADD COLUMN IF NOT EXISTS claim_token_last_sent_at TIMESTAMPTZ,
+  -- Which columns came from scraping and haven't been confirmed by the
+  -- owner yet — the claim UI uses this to flag fields as "please verify"
+  -- instead of presenting scraped data as already-trustworthy.
+  ADD COLUMN IF NOT EXISTS scraped_fields        TEXT[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE public.providers DROP CONSTRAINT IF EXISTS providers_source_check;
+ALTER TABLE public.providers
+  ADD CONSTRAINT providers_source_check CHECK (source IN ('self_signup', 'scraped'));
+
+-- A claimed row must have an owner, and an unclaimed row must not —
+-- keeps the two concepts from drifting apart under a bad update.
+ALTER TABLE public.providers DROP CONSTRAINT IF EXISTS providers_claim_state_check;
+ALTER TABLE public.providers
+  ADD CONSTRAINT providers_claim_state_check CHECK (
+    (is_claimed = TRUE  AND user_id IS NOT NULL) OR
+    (is_claimed = FALSE AND user_id IS NULL)
+  );
+
+CREATE INDEX IF NOT EXISTS idx_providers_is_claimed  ON public.providers(is_claimed);
+CREATE INDEX IF NOT EXISTS idx_providers_claim_token ON public.providers(claim_token);
+
+-- Existing RLS on `providers` only grants public SELECT via
+-- providers_public_read (has_gone_live = true AND is_active = true) — every
+-- unclaimed/scraped row is has_gone_live = false by construction, so without
+-- this policy no client session can ever read one, regardless of what
+-- app-side queries ask for (searchUnclaimedProviders, getUnclaimedProviderDetail,
+-- getDiscoverUnclaimedProviders in databaseService.ts all silently return
+-- zero rows). Narrowly scoped to is_claimed = false only — additive
+-- alongside providers_public_read (multiple PERMISSIVE policies OR
+-- together), so it can never widen access to a claimed provider's row.
+DROP POLICY IF EXISTS providers_unclaimed_read ON public.providers;
+CREATE POLICY providers_unclaimed_read
+  ON public.providers
+  FOR SELECT
+  TO public
+  USING (is_claimed = false);
+
+-- ───────────────────────────────────────────────────────────
+-- STEP 2: provider_scrape_jobs / provider_scrape_sources
+--   Batch-run tracking for the (separate, not-yet-built) scraping
+--   pipeline — mirrors the job-table style already used in
+--   automation_jobs.sql / client_automation_jobs.sql.
+-- ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.provider_scrape_jobs (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_site    TEXT NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
+  total_sources  INT NOT NULL DEFAULT 0,
+  processed      INT NOT NULL DEFAULT 0,
+  created_count  INT NOT NULL DEFAULT 0,
+  skipped_dupes  INT NOT NULL DEFAULT 0,
+  failed_count   INT NOT NULL DEFAULT 0,
+  started_at     TIMESTAMPTZ,
+  finished_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.provider_scrape_sources (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id       UUID NOT NULL REFERENCES public.provider_scrape_jobs(id) ON DELETE CASCADE,
+  source_url   TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'failed')),
+  error        TEXT,
+  provider_id  UUID REFERENCES public.providers(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scrape_sources_job_status
+  ON public.provider_scrape_sources(job_id, status);
+
+-- Both tables are written only by Edge Functions using the service-role
+-- key, which bypasses RLS entirely — enable RLS with no policies so no
+-- anon/authenticated client can read or write job internals directly.
+ALTER TABLE public.provider_scrape_jobs    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.provider_scrape_sources ENABLE ROW LEVEL SECURITY;
+
+-- ───────────────────────────────────────────────────────────
+-- STEP 3: provider_outreach_suppressions
+--   Schema only, for the (also separate, not-yet-built and NOT
+--   currently enabled) outreach step — every future send must check
+--   this table first, and the unsubscribe link writes to it.
+-- ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.provider_outreach_suppressions (
+  email          TEXT PRIMARY KEY,
+  suppressed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.provider_outreach_suppressions ENABLE ROW LEVEL SECURITY;
+
+-- ───────────────────────────────────────────────────────────
+-- STEP 4: claim_provider_profile(p_provider_id, p_claim_token)
+--   Lets the currently authenticated user attach their account to an
+--   unclaimed provider row. SECURITY DEFINER because it must update a
+--   providers row the caller does not yet own (providers_owner_all only
+--   allows user_id = auth.uid(), which is by definition not yet true).
+--
+--   Takes the listing's id explicitly (the caller already knows it from
+--   the earlier search/preview step) rather than looking the row up by
+--   token alone — a wrong-code guess can't be matched to a row via
+--   `WHERE claim_token = ...` (it doesn't match anything), so there'd be
+--   nowhere to record a failed attempt. Keying off p_provider_id lets us
+--   count failed attempts *against that specific listing* and lock it out
+--   after 5, which is the realistic brute-force shape here: an attacker
+--   who found a listing via search, guessing its 6-digit code.
+--
+--   claim_attempts resets to 0 whenever request-claim-verification issues
+--   a fresh code, so a real owner who mistypes isn't punished across
+--   separate attempts at getting the email.
+-- ───────────────────────────────────────────────────────────
+
+DROP FUNCTION IF EXISTS public.claim_provider_profile(TEXT);
+
+CREATE OR REPLACE FUNCTION public.claim_provider_profile(p_provider_id UUID, p_claim_token TEXT)
+RETURNS UUID AS $$
+DECLARE
+  v_caller_id   UUID := auth.uid();
+  v_claim_token TEXT;
+  v_expires_at  TIMESTAMPTZ;
+  v_attempts    INT;
+  v_is_claimed  BOOLEAN;
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RAISE EXCEPTION 'Must be signed in to claim a profile.';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.providers WHERE user_id = v_caller_id) THEN
+    RAISE EXCEPTION 'This account already has a provider profile.';
+  END IF;
+
+  -- Lock this specific listing for the duration of the check — serializes
+  -- concurrent claim attempts against it (both the attempt-counter bumps
+  -- and the eventual successful claim).
+  SELECT claim_token, claim_token_expires_at, claim_attempts, is_claimed
+    INTO v_claim_token, v_expires_at, v_attempts, v_is_claimed
+  FROM public.providers
+  WHERE id = p_provider_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR v_is_claimed THEN
+    RAISE EXCEPTION 'This claim link is invalid or has expired.';
+  END IF;
+
+  -- Already burned through 5 wrong guesses on this listing's current code —
+  -- null out the token so it can't be tried again, and give the same
+  -- generic error a genuinely-expired code would give (no signal to an
+  -- attacker about *why* it failed).
+  IF v_attempts >= 5 THEN
+    UPDATE public.providers
+       SET claim_token = NULL, claim_token_expires_at = NULL
+     WHERE id = p_provider_id;
+    RAISE EXCEPTION 'This claim link is invalid or has expired.';
+  END IF;
+
+  IF v_claim_token IS NULL
+     OR v_claim_token != p_claim_token
+     OR v_expires_at IS NULL
+     OR v_expires_at <= NOW() THEN
+    UPDATE public.providers
+       SET claim_attempts = claim_attempts + 1
+     WHERE id = p_provider_id;
+    RAISE EXCEPTION 'This claim link is invalid or has expired.';
+  END IF;
+
+  UPDATE public.providers
+     SET user_id                = v_caller_id,
+         is_claimed              = TRUE,
+         claimed_at               = NOW(),
+         claim_token              = NULL,
+         claim_token_expires_at   = NULL,
+         claim_attempts           = 0
+   WHERE id = p_provider_id;
+
+  UPDATE public.users SET role = 'provider' WHERE id = v_caller_id;
+
+  RETURN p_provider_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- ───────────────────────────────────────────────────────────
+-- VERIFY — run after executing this script:
+--
+--   -- schema landed
+--   SELECT column_name FROM information_schema.columns
+--    WHERE table_name = 'providers' AND column_name IN
+--          ('is_claimed','source','claim_token','scraped_fields','claim_attempts','claim_token_last_sent_at');
+--
+--   -- seed one fake unclaimed row, then claim it as a signed-in test user
+--   INSERT INTO public.providers
+--     (slug, display_name, service_category, is_claimed, source,
+--      claim_token, claim_token_expires_at, scraped_fields)
+--   VALUES
+--     ('test-claim-me', 'Test Claim Me', 'NAILS', FALSE, 'scraped',
+--      'test-token-123', NOW() + INTERVAL '7 days', ARRAY['display_name']);
+--
+--   SELECT public.claim_provider_profile(
+--     (SELECT id FROM public.providers WHERE slug = 'test-claim-me'),
+--     'test-token-123'
+--   );
+--
+--   -- brute-force lockout: 5 wrong codes against the same listing should
+--   -- exhaust claim_attempts and null out its token/expiry
+--   SELECT public.claim_provider_profile(
+--     (SELECT id FROM public.providers WHERE slug = 'test-claim-me'),
+--     'wrong-guess'
+--   ); -- repeat 5x, then confirm claim_token IS NULL on that row
+-- ───────────────────────────────────────────────────────────
+
+-- ============================================================
+-- DONE — claimable provider profile schema + claim RPC created.
+-- Scraping pipeline and outreach email are separate follow-up pieces.
+-- ============================================================
+
+-- ============================================================
+-- provider_signup_business_fields.sql — new provider-signup Step 4/5
+-- questions (team size, accessibility, languages, specialties, price range,
+-- contact preferences, preferred payment type). See that file for the full
+-- rationale on staging price_range/preferred_contact_methods on `users`
+-- even though their permanent home is `providers` (price_tier /
+-- preferred_contact_methods) — a brand-new signup has no providers row yet
+-- to write into.
+-- ============================================================
+
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS team_size TEXT
+    CHECK (team_size IN ('solo','small_team','large_team')),
+  ADD COLUMN IF NOT EXISTS accessibility_notes TEXT,
+  ADD COLUMN IF NOT EXISTS languages_spoken TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS specialties TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS price_range TEXT
+    CHECK (price_range IN ('budget','mid','premium','luxury')),
+  ADD COLUMN IF NOT EXISTS preferred_contact_methods TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS preferred_payment_methods TEXT[] DEFAULT '{}';
+
+ALTER TABLE public.providers
+  ADD COLUMN IF NOT EXISTS team_size TEXT
+    CHECK (team_size IN ('solo','small_team','large_team')),
+  ADD COLUMN IF NOT EXISTS accessibility_notes TEXT,
+  ADD COLUMN IF NOT EXISTS languages_spoken TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS service_locations TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS preferred_payment_methods TEXT[] DEFAULT '{}';
+
+CREATE INDEX IF NOT EXISTS idx_providers_service_locations
+  ON public.providers USING GIN (service_locations);
+
+-- ============================================================
+-- DONE — provider_signup_business_fields.sql applied.
+-- ============================================================

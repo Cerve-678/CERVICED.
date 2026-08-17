@@ -18,8 +18,18 @@ Nothing server-side validates the amounts. A modified client could insert `base_
 - BEFORE INSERT trigger (or a `create_booking` RPC) that **recomputes** price from the real `services.price` + selected add-ons and **ignores** client-supplied money fields.
 - A BEFORE UPDATE trigger constraining `payment_status` / `status` transitions so a client can't self-mark paid/completed.
 
-## Stripe?
-Payment-method screens exist (`DbPaymentMethod`, `stripe_payment_method_id`) and `DbTransaction` has `stripe_payment_intent_id`. Actual charge flow / edge function integration is **unverified here** — trace `checkoutService.ts`. #needs-verification
+## Stripe status
+
+The Stripe Payment Sheet path is implemented but deliberately disabled in
+`CartScreen` (`USE_STRIPE_PAYMENTS` is hard-coded to `false`). It uses
+`create-payment-intent` and `finalize-payment-intent` Edge Functions with
+manual capture: the card is authorised first, bookings are created, then the
+payment is captured (or cancelled if booking creation fails).
+
+**Do not enable it yet.** `create-payment-intent` currently accepts the total
+amount supplied by the client. Before live activation, checkout must calculate
+the charge from server-authoritative service, add-on, promotion, and deposit
+data; the client must not be the source of truth for money.
 
 ## Connections
 [[Booking Flow]] · [[Client vs Server Authority]] · [[Services]] · [[Data Layer — Supabase]] · [[Cancellations]]

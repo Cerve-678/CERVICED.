@@ -36,6 +36,7 @@ Curated overview: [[Screens & Navigation]].
 - `ExploreMain`
 - `BeccaMain`
 - `ProviderSchedule`
+- `AddBooking`
 - `Clientele`
 - `ProviderInbox`
 - `ProviderConversation`

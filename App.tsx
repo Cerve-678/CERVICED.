@@ -155,8 +155,8 @@ export default Sentry.wrap(function App() {
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider>
-          <ThemeProvider>
-            <AuthProvider>
+          <AuthProvider>
+            <ThemeProvider>
               <RegistrationProvider>
                 <FontProvider customFontsLoaded={fontsLoaded && !fontError}>
                   <StripeProvider
@@ -179,8 +179,8 @@ export default Sentry.wrap(function App() {
                   </StripeProvider>
                 </FontProvider>
               </RegistrationProvider>
-            </AuthProvider>
-          </ThemeProvider>
+            </ThemeProvider>
+          </AuthProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

@@ -6,6 +6,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import { logger } from '../utils/logger';
 import { setMyProviderFullAddress } from './databaseService';
+import type { DbProvider } from '../types/database';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
 
@@ -46,6 +47,13 @@ export interface ProviderRegistrationData {
   location: string;
   aboutText: string;
   slotsText: string;
+  /** Day of month (1-31) clients who've turned on the profile bell get
+   *  notified — set alongside slotsText so the message and its cadence stay
+   *  in one place rather than split across two screens. Stored in
+   *  providers.automation_settings.scheduleReleaseDay (merged in, not
+   *  overwritten — that JSONB blob also holds unrelated settings owned by
+   *  ProviderAutomationsScreen). null = notifications off. */
+  scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
   // computed BEFORE the `gradient` field above gets its hardcoded fallback
@@ -79,7 +87,23 @@ export interface ProviderRegistrationData {
   yearsExperience: string;
   // Address privacy
   businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
+  // Collected at signup (Step 4's "Who you work with" / "Tell me more" —
+  // see supabase/provider_signup_business_fields.sql), editable here too.
+  teamSize: 'solo' | 'small_team' | 'large_team' | '';
+  accessibilityNotes: string;
+  languagesSpoken: string[];
+  preferredPaymentMethods: string[];
+  // Drives providers.price_tier — the client-facing price filter/badge
+  // (SearchScreen/HomeScreen) already reads this column, this form is its
+  // first writer.
+  priceRange: 'budget' | 'mid' | 'premium' | 'luxury' | '';
+  // Service-coverage cities — drives providers.service_locations, read by
+  // the client Search "City" filter. See src/constants/ukCities.ts.
+  serviceLocations: string[];
   fullAddress: string;
+  /** Coordinates returned by the address picker for this exact address.
+   *  Kept in form state only and written atomically with fullAddress. */
+  fullAddressCoordinates: { latitude: number; longitude: number } | null;
   addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
   // Cover photo set via Branding & Style (providers.background_image_url) —
   // not editable from this form, but the client-facing hero uses it as the
@@ -209,7 +233,8 @@ const UK_POSTCODE_PATTERN = /[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}/;
  * it propagate rather than catch-and-swallow.
  */
 export async function geocodeAndValidateUkAddress(
-  address: string
+  address: string,
+  selectedCoordinates?: { latitude: number; longitude: number } | null,
 ): Promise<{ latitude: number; longitude: number }> {
   const trimmed = address.trim();
   if (!trimmed) {
@@ -219,17 +244,24 @@ export async function geocodeAndValidateUkAddress(
     throw new Error('Please include a valid UK postcode in your address.');
   }
 
-  let match: Location.LocationGeocodedLocation | undefined;
-  try {
-    [match] = await Location.geocodeAsync(trimmed);
-  } catch {
-    match = undefined;
+  // A picker selection gives us the exact coordinates that produced the
+  // formatted address. Re-use them instead of geocoding the text again — a
+  // second lookup can yield a vague area or fail despite a valid selection.
+  let latitude = selectedCoordinates?.latitude;
+  let longitude = selectedCoordinates?.longitude;
+  if (latitude == null || longitude == null) {
+    let match: Location.LocationGeocodedLocation | undefined;
+    try {
+      [match] = await Location.geocodeAsync(trimmed);
+    } catch {
+      match = undefined;
+    }
+    if (!match) {
+      throw new Error("We couldn't find that address — please check it and try again.");
+    }
+    latitude = match.latitude;
+    longitude = match.longitude;
   }
-  if (!match) {
-    throw new Error("We couldn't find that address — please check it and try again.");
-  }
-
-  const { latitude, longitude } = match;
   if (
     latitude < UK_BOUNDS.minLat || latitude > UK_BOUNDS.maxLat ||
     longitude < UK_BOUNDS.minLng || longitude > UK_BOUNDS.maxLng
@@ -246,13 +278,21 @@ export async function geocodeAndValidateUkAddress(
 
 export async function saveProviderToSupabase(
   userId: string,
-  data: ProviderRegistrationData
+  data: ProviderRegistrationData,
+  // True only on first publish (InfoRegScreen's !isEditMode submit, gated on
+  // its own terms checkbox) — stamps terms_accepted_at once on insert. Later
+  // edit-saves never pass this, so an existing acceptance timestamp is never
+  // overwritten or cleared.
+  acceptedTerms?: boolean
 ): Promise<void> {
   // 0. Validate the real business address before anything else happens —
   // required for every business_type now, including 'mobile' (a private base
   // address, never shown to clients). Fails fast, before any upload or DB
   // write, so a bad address never leaves partial state behind.
-  const addressCoords = await geocodeAndValidateUkAddress(data.fullAddress || '');
+  const addressCoords = await geocodeAndValidateUkAddress(
+    data.fullAddress || '',
+    data.fullAddressCoordinates,
+  );
 
   // 1. Upload logo if it's a local file
   let logoUrl: string | null = data.logo;
@@ -292,7 +332,7 @@ export async function saveProviderToSupabase(
   // 2. Upsert provider row
   const { data: existingProvider, error: existingProviderError } = await supabase
     .from('providers')
-    .select('id')
+    .select('id, automation_settings')
     .eq('user_id', userId)
     .maybeSingle();
   // maybeSingle() errors (rather than returning null) if more than one row
@@ -304,6 +344,21 @@ export async function saveProviderToSupabase(
   }
 
   let providerId: string;
+
+  // Merged in, never overwritten whole — automation_settings also holds
+  // unrelated keys (rebookingNudgeWeeks, clientReminderTiming, etc.) owned
+  // by ProviderAutomationsScreen, which reads/writes the exact same
+  // scheduleReleaseDay key so the two screens stay in sync automatically
+  // (both fetch fresh from this one column on their own mount — no separate
+  // sync step needed, just don't let either screen clobber the other's keys).
+  const mergedAutomationSettings: NonNullable<DbProvider['automation_settings']> = {
+    ...(existingProvider?.automation_settings ?? {}),
+  };
+  if (data.scheduleReleaseDay != null) {
+    mergedAutomationSettings.scheduleReleaseDay = data.scheduleReleaseDay;
+  } else {
+    delete mergedAutomationSettings.scheduleReleaseDay;
+  }
 
   if (existingProvider) {
     const { error } = await supabase
@@ -328,7 +383,15 @@ export async function saveProviderToSupabase(
         external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
+        team_size: data.teamSize || null,
+        accessibility_notes: data.accessibilityNotes?.trim() || null,
+        languages_spoken: data.languagesSpoken,
+        price_tier: data.priceRange || null,
+        preferred_contact_methods: data.preferredContactMethods,
+        service_locations: data.serviceLocations,
+        preferred_payment_methods: data.preferredPaymentMethods,
         address_release_policy: data.addressReleasePolicy || 'on_confirmation',
+        automation_settings: mergedAutomationSettings,
         is_active: true,
       })
       .eq('id', existingProvider.id);
@@ -368,8 +431,17 @@ export async function saveProviderToSupabase(
         external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
+        team_size: data.teamSize || null,
+        accessibility_notes: data.accessibilityNotes?.trim() || null,
+        languages_spoken: data.languagesSpoken,
+        price_tier: data.priceRange || null,
+        preferred_contact_methods: data.preferredContactMethods,
+        service_locations: data.serviceLocations,
+        preferred_payment_methods: data.preferredPaymentMethods,
         address_release_policy: data.addressReleasePolicy || 'on_confirmation',
+        automation_settings: mergedAutomationSettings,
         is_active: true,
+        terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
       })
       .select('id')
       .single();
@@ -579,6 +651,7 @@ export async function loadProviderFromSupabase(
     location: provider.location_text || '',
     aboutText: provider.about_text || '',
     slotsText: provider.slots_text || '',
+    scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
     hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
     accentColor: provider.accent_color || '#7B1FA2',
@@ -593,7 +666,16 @@ export async function loadProviderFromSupabase(
     externalBookingUrl: provider.external_booking_url || '',
     yearsExperience: provider.years_experience ? String(provider.years_experience) : '',
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
+    teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
+    accessibilityNotes: provider.accessibility_notes || '',
+    languagesSpoken: provider.languages_spoken || [],
+    priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
+    serviceLocations: provider.service_locations || [],
+    preferredPaymentMethods: provider.preferred_payment_methods || [],
     fullAddress,
+    // Existing profiles may predate the picker. A later save falls back to a
+    // one-time geocode, while every new picker selection supplies these.
+    fullAddressCoordinates: null,
     addressReleasePolicy: (provider.address_release_policy as ProviderRegistrationData['addressReleasePolicy']) || 'on_confirmation',
     backgroundImage: provider.background_image_url ?? null,
     isVerified: provider.is_verified ?? false,

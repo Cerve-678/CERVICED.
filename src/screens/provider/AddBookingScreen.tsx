@@ -1,0 +1,784 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useNavigation } from '@react-navigation/native';
+import { useProviderDialog } from '../../components/ProviderDialog';
+import { useTheme } from '../../contexts/ThemeContext';
+import {
+  getMyProviderProfile,
+  getMyProviderServices,
+  getProviderClientele,
+  getAvailableSlots,
+  getProviderBookings,
+  getProviderBlockedDates,
+  getProviderAvailabilityWindows,
+  getProviderAvailabilityOverrides,
+  providerCreateManualBooking,
+} from '../../services/databaseService';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
+import type {
+  ClienteleMember,
+  DbService,
+  BookingWithAddOns,
+  DbProviderBlockedDate,
+  DbProviderAvailabilityWindow,
+  DbProviderAvailabilityOverride,
+} from '../../types/database';
+import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { formatTime12, formatShortDate, dateToYMD } from '../../utils/dateUtils';
+import SlidingTabs from '../../components/SlidingTabs';
+
+const WARN = '#E8A13A';
+
+// ─── Brand palette ────────────────────────────────────────────────────────────
+const LIGHT = {
+  bg:      '#F5F1EC',
+  surface: '#EDE8E2',
+  card:    '#FFFFFF',
+  accent:  '#5C4033',
+  ice:     '#FFFFFF',
+  text:    '#000000',
+  sub:     '#7E6667',
+  border:  'rgba(126,102,103,0.14)',
+};
+const DARK = {
+  bg:      '#1A1815',
+  surface: '#201D1A',
+  card:    '#252220',
+  accent:  '#AF9197',
+  ice:     '#FFFFFF',
+  text:    '#F0ECE7',
+  sub:     '#7E6667',
+  border:  'rgba(126,102,103,0.18)',
+};
+
+function hhmmss(date: Date): string {
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${h}:${m}:00`;
+}
+
+export default function AddBookingScreen() {
+  const navigation = useNavigation();
+  const { showToast, DialogHost } = useProviderDialog();
+  const { isDarkMode } = useTheme();
+  const P = isDarkMode ? DARK : LIGHT;
+  const insets = useSafeAreaInsets();
+
+  const [loading, setLoading] = useState(true);
+  // Provider-added appointment — intentionally limited to existing app
+  // clients. External/walk-in contacts need their own consent-aware model;
+  // never fabricate a user id just to force a booking through this route.
+  const [clients, setClients] = useState<ClienteleMember[]>([]);
+  const [services, setServices] = useState<DbService[]>([]);
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  const [serviceSearch, setServiceSearch] = useState('');
+  // Add-ons the provider ticked for the chosen service — sent as ids only;
+  // provider_create_manual_booking resolves name/price server-side from
+  // service_add_ons rather than trusting anything the client sends.
+  const [selectedAddOnIds, setSelectedAddOnIds] = useState<string[]>([]);
+  // Required when the selected service has patch_test_required or
+  // is_pregnancy_safe=false — provider_create_manual_booking rejects the
+  // insert without it. Resets whenever the service changes (see pickService).
+  const [safetyAcknowledged, setSafetyAcknowledged] = useState(false);
+  const [date, setDate] = useState(new Date());
+  const [time, setTime] = useState(() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d; });
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  // 'details' = pick client/service/when; 'confirm' = review contact details
+  // and add notes before creating. Time picked in 'details' is what unlocks
+  // Continue into 'confirm' — the transition the provider triggers explicitly.
+  const [phase, setPhase] = useState<'details' | 'confirm'>('details');
+  // 'slots' = pick from real availability; 'custom' = free time picker (can
+  // land on an already-booked time, flagged as a conflict below).
+  const [whenMode, setWhenMode] = useState<'slots' | 'custom'>('slots');
+  // The provider's own active bookings, used to detect whether a custom time
+  // collides with an existing appointment (busy-span RPC hides booking ids, so
+  // we read our own bookings directly to know WHICH booking to offer to move).
+  const [myBookings, setMyBookings] = useState<BookingWithAddOns[]>([]);
+  // Schedule data for Custom time's own inline blocked/outside-hours check —
+  // Custom time deliberately bypasses the Available list (which is already
+  // schedule-filtered), so it needs its own read of the raw schedule to warn
+  // BEFORE submit instead of only learning from the DB's rejection after.
+  const [blockedDates, setBlockedDates] = useState<DbProviderBlockedDate[]>([]);
+  const [availabilityWindows, setAvailabilityWindows] = useState<DbProviderAvailabilityWindow[]>([]);
+  const [availabilityOverrides, setAvailabilityOverrides] = useState<DbProviderAvailabilityOverride[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [c, s, profile, bookings] = await Promise.all([
+        getProviderClientele(),
+        getMyProviderServices(),
+        getMyProviderProfile(),
+        getProviderBookings(),
+      ]);
+      setClients(c);
+      setServices(s);
+      setProviderId(profile?.id ?? null);
+      setMyBookings(bookings);
+      if (profile?.id) {
+        const [blocked, windows, overrides] = await Promise.all([
+          getProviderBlockedDates(profile.id),
+          getProviderAvailabilityWindows(profile.id),
+          getProviderAvailabilityOverrides(profile.id),
+        ]);
+        setBlockedDates(blocked);
+        setAvailabilityWindows(windows);
+        setAvailabilityOverrides(overrides);
+      }
+    } catch {
+      showToast('Could not load your clients and services.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Available slots for the chosen date — an additive convenience on top of the
+  // free time picker (which stays, so a squeeze-in on a fully-booked day is
+  // always possible). Re-fetches whenever the date OR the chosen service
+  // changes — a slot list generated for a generic 60-min duration can offer a
+  // start time that doesn't actually fit a longer service.
+  const dateYMD = dateToYMD(date);
+  const selectedServiceDuration = services.find(sv => sv.id === serviceId)?.duration_minutes;
+  useEffect(() => {
+    if (!providerId) return;
+    let cancelled = false;
+    setSlotsLoading(true);
+    getAvailableSlots(providerId, dateYMD, selectedServiceDuration, serviceId ?? undefined)
+      .then(res => { if (!cancelled) setSlots(res); })
+      .catch(() => { if (!cancelled) setSlots([]); })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
+    return () => { cancelled = true; };
+  }, [providerId, dateYMD, serviceId, selectedServiceDuration]);
+
+  function pickSlot(hhmmss24: string) {
+    const [h, m] = hhmmss24.split(':').map(Number);
+    const d = new Date(date);
+    d.setHours(h ?? 0, m ?? 0, 0, 0);
+    setTime(d);
+  }
+
+  const selectedClient = clients.find(c => c.user_id === clientId) ?? null;
+  const selectedService = services.find(s => s.id === serviceId) ?? null;
+  const serviceAddOns = selectedService?.add_ons ?? [];
+
+  // ClienteleMember has no phone field (it's aggregated from booking history,
+  // not the users table). customer_phone IS on bookings as a snapshot column
+  // though, so the client's own most recent booking with this provider
+  // carries it — reuse that instead of a fresh users query or RLS change.
+  const clientPhone = clientId
+    ? myBookings
+        .filter(b => b.user_id === clientId && b.customer_phone)
+        .sort((a, b) => (a.booking_date < b.booking_date ? 1 : -1))[0]?.customer_phone ?? null
+    : null;
+
+  // Conflict detection for the custom-time path: does the chosen start (+ the
+  // selected service's duration) overlap an existing booking on the same day?
+  // Returns the first colliding booking so we can offer to move it. Only
+  // meaningful once a service is chosen (we need its duration).
+  //
+  // Mirrors the live bookings_no_overlap DB constraint as closely as the client
+  // can: exclude ONLY 'cancelled'/'no_show' (the exact set the constraint
+  // ignores — a completed same-day booking still blocks the slot), and fall
+  // back to a 60-min duration for a null end_time (the constraint's
+  // COALESCE(end_time, booking_time + 60min)). We can't see buffer_before/after
+  // here, so a buffered booking the DB rejects may not flag — treat this as a
+  // best-effort warning, not a guarantee; the DB is the real gate.
+  const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
+  const chosenStart = time.getHours() * 60 + time.getMinutes();
+  const chosenEnd = chosenStart + (selectedService?.duration_minutes ?? 0);
+  const conflictBooking = selectedService
+    ? myBookings.find(b => {
+        if (b.booking_date !== dateYMD) return false;
+        const st = mapDbBookingStatus(b.status);
+        if (st === BookingStatus.CANCELLED || st === BookingStatus.NO_SHOW) return false;
+        const bStart = toMinutes(b.booking_time);
+        const bEnd = b.end_time ? toMinutes(b.end_time) : bStart + 60;
+        return chosenStart < bEnd && chosenEnd > bStart; // interval overlap
+      }) ?? null
+    : null;
+
+  // Custom time's own inline blocked/outside-hours read — Available never
+  // needs this (getAvailableSlots already filters through the same data),
+  // but Custom time deliberately bypasses that list, so without this check
+  // the only feedback was the DB's rejection AFTER tapping Add Booking.
+  // Mirrors enforce_booking_bookability()'s own precedence: an explicit
+  // override for the date wins over the weekly window entirely (open or
+  // closed), and only falls back to the recurring weekly window when no
+  // override exists for that date.
+  const dayOverride = availabilityOverrides.find(o => o.availability_date === dateYMD) ?? null;
+  const isBlockedDate = blockedDates.some(b => b.blocked_date === dateYMD)
+    || (dayOverride?.is_closed ?? false);
+  const dayOfWeek = date.getDay();
+  const fitsWorkingHours = isBlockedDate
+    ? false
+    : dayOverride
+      ? (!dayOverride.is_closed
+          && dayOverride.start_time != null && dayOverride.end_time != null
+          && chosenStart >= toMinutes(dayOverride.start_time) && chosenEnd <= toMinutes(dayOverride.end_time))
+      : availabilityWindows
+          .filter(w => w.day_of_week === dayOfWeek)
+          .some(w => chosenStart >= toMinutes(w.start_time) && chosenEnd <= toMinutes(w.end_time));
+  // Only surfaced for Custom time — outside hours is exactly what that tab
+  // is FOR (the server-side squeeze-in bypass), so this is informational
+  // ("you're going outside their usual hours"), not a hard block like the
+  // blocked-date/conflict cases below.
+  const isOutsideWorkingHours = selectedService && !isBlockedDate && !fitsWorkingHours;
+
+  const filteredClients = clientSearch.trim()
+    ? clients.filter(c =>
+        c.customer_name.toLowerCase().includes(clientSearch.trim().toLowerCase()) ||
+        (c.customer_email ?? '').toLowerCase().includes(clientSearch.trim().toLowerCase()))
+    : clients;
+
+  // Only worth a search box past a handful of services — most providers have
+  // few, so the field would just be noise.
+  const SERVICE_SEARCH_THRESHOLD = 6;
+  const filteredServices = serviceSearch.trim()
+    ? services.filter(sv => sv.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
+    : services;
+
+  function pickService(id: string) {
+    setServiceId(id);
+    setServiceSearch('');
+    setSelectedAddOnIds([]); // add-ons belong to a service; reset on change
+    setSafetyAcknowledged(false); // acknowledgement is per-service, not carried over
+  }
+
+  function toggleAddOn(id: string) {
+    setSelectedAddOnIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  // Mirrors the server-side check in provider_create_manual_booking /
+  // prepare_checkout — required whenever the service demands a patch test
+  // or is flagged unsafe in pregnancy. Client-side gate is a UX nicety; the
+  // RPC rejects the insert regardless if this is somehow bypassed.
+  const safetyRequired = !!selectedService
+    && (!!selectedService.patch_test_required || selectedService.is_pregnancy_safe === false);
+
+  const canContinue = !!clientId && !!serviceId && !conflictBooking && !isBlockedDate
+    && (!safetyRequired || safetyAcknowledged);
+
+  function handleContinue() {
+    if (!clientId || !serviceId) {
+      showToast('Choose a client and service first.', 'info');
+      return;
+    }
+    if (isBlockedDate) {
+      showToast('This day is blocked. Pick a different date.', 'info');
+      return;
+    }
+    if (conflictBooking) {
+      showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      return;
+    }
+    setPhase('confirm');
+  }
+
+  async function handleCreate() {
+    if (!clientId || !serviceId) {
+      showToast('Choose a client and service first.', 'info');
+      return;
+    }
+    if (isBlockedDate) {
+      showToast('This day is blocked. Pick a different date.', 'info');
+      return;
+    }
+    if (conflictBooking) {
+      showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      return;
+    }
+    setCreating(true);
+    try {
+      await providerCreateManualBooking({
+        clientUserId: clientId,
+        serviceId,
+        bookingDate: dateToYMD(date),
+        bookingTime: hhmmss(time),
+        notes,
+        addOnIds: selectedAddOnIds,
+        safetyAck: safetyAcknowledged,
+      });
+      showToast('Booking added and the client has been notified.', 'success');
+      // Jump the calendar to the booked day so a squeeze-in (often not
+      // "today") visibly lands instead of the provider having to go find it.
+      // Navigating to the Home tab's own screen (rather than pushing) also
+      // pops this screen off whatever stack it was opened from.
+      (navigation as any).navigate('ProviderHome', {
+        screen: 'ProviderHomeMain',
+        params: { jumpToDate: dateToYMD(date) },
+      });
+    } catch (error) {
+      const message = (error instanceof Error ? error.message : 'Could not add this booking.').replace(/^Error:\s*/, '');
+      showToast(message, 'error');
+      // The DB is the final authority and can reject for reasons the
+      // client-side conflictBooking check never saw — most likely someone
+      // else booked this exact slot between this screen loading and Continue
+      // being tapped. Re-sync myBookings so that conflict check is current,
+      // and send the provider back to Details (where the conflict banner —
+      // and a chance to pick a different time — actually renders) instead of
+      // leaving them on Confirm where retrying Add Booking would just fail
+      // the same way against stale data.
+      if (/no longer available|already booked|outside the provider|blocked|minimum notice|booking window/i.test(message)) {
+        setPhase('details');
+        getProviderBookings().then(setMyBookings).catch(() => {});
+      }
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <View style={[s.root, { backgroundColor: P.bg }]}>
+      <SafeAreaView style={s.safe} edges={['top']}>
+        <KeyboardDismissView style={s.keyboardView}>
+          <View style={[s.header, { borderBottomColor: P.border }]}>
+            {phase === 'confirm' && (
+              <TouchableOpacity style={[s.backBtn, { backgroundColor: P.surface }]} onPress={() => setPhase('details')} accessibilityLabel="Back">
+                <Ionicons name="chevron-back" size={20} color={P.sub} />
+              </TouchableOpacity>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={[s.title, { color: P.text }]}>{phase === 'details' ? 'Add Booking' : 'Confirm Details'}</Text>
+              <Text style={[s.subtitle, { color: P.sub }]}>{phase === 'details' ? 'For an existing Cerviced client' : 'Review contact info and add notes'}</Text>
+            </View>
+            <TouchableOpacity style={[s.closeBtn, { backgroundColor: P.surface }]} onPress={() => navigation.goBack()} accessibilityLabel="Close">
+              <Ionicons name="close" size={22} color={P.sub} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={s.stepRow}>
+            {(['details', 'confirm'] as const).map((key, i) => {
+              const active = phase === key;
+              const done = phase === 'confirm' && key === 'details';
+              return (
+                <React.Fragment key={key}>
+                  {i > 0 && <View style={[s.stepBar, { backgroundColor: done || active ? P.accent : P.border }]} />}
+                  <View style={s.stepDotWrap}>
+                    <View style={[s.stepDot, { borderColor: done || active ? P.accent : P.border }, (done || active) && { backgroundColor: P.accent }]} />
+                    <Text style={[s.stepLabel, { color: active ? P.accent : P.sub }, active && { fontWeight: '700' }]}>
+                      {key === 'details' ? 'Details' : 'Confirm'}
+                    </Text>
+                  </View>
+                </React.Fragment>
+              );
+            })}
+          </View>
+
+          {loading ? (
+            <View style={s.center}><ActivityIndicator color={P.accent} size="large" /></View>
+          ) : phase === 'details' ? (
+            <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+              {/* ── Client ── collapses to just the picked row once chosen, so a
+                  long client list doesn't dominate the screen. Search filters
+                  the list while picking. ── */}
+              <View style={s.sectionHead}>
+                <Text style={[s.label, { color: P.text }]}>Client</Text>
+                {selectedClient && (
+                  <TouchableOpacity onPress={() => setClientId(null)}><Text style={[s.changeLink, { color: P.accent }]}>Change</Text></TouchableOpacity>
+                )}
+              </View>
+              {clients.length === 0 ? (
+                <Text style={[s.empty, { color: P.sub }]}>No existing clients yet. Manual bookings are only for clients with a Cerviced account — ask them to sign up, then book them in here.</Text>
+              ) : selectedClient ? (
+                <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.accent }]}>
+                  <View><Text style={[s.choiceTitle, { color: P.text }]}>{selectedClient.customer_name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>{selectedClient.customer_email || 'Cerviced client'}</Text></View>
+                  <Ionicons name="checkmark-circle" size={21} color={P.accent} />
+                </View>
+              ) : (
+                <>
+                  <View style={[s.searchRow, { backgroundColor: P.surface, borderColor: P.border }]}>
+                    <Ionicons name="search" size={15} color={P.sub} />
+                    <TextInput value={clientSearch} onChangeText={setClientSearch} placeholder="Search clients" placeholderTextColor={P.sub} style={[s.searchInput, { color: P.text }]} autoCorrect={false} />
+                    {clientSearch.length > 0 && (
+                      <TouchableOpacity onPress={() => setClientSearch('')}><Ionicons name="close-circle" size={16} color={P.sub} /></TouchableOpacity>
+                    )}
+                  </View>
+                  {filteredClients.length === 0 ? (
+                    <Text style={[s.empty, { color: P.sub }]}>No clients match “{clientSearch.trim()}”.</Text>
+                  ) : filteredClients.map(client => (
+                    <TouchableOpacity key={client.user_id} onPress={() => { setClientId(client.user_id); setClientSearch(''); }} style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                      <View><Text style={[s.choiceTitle, { color: P.text }]}>{client.customer_name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>{client.customer_email || 'Cerviced client'}</Text></View>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {/* ── Service ── gated on a client being picked first (sequential
+                  flow, not just visual order): the available-slots list is
+                  duration-aware and depends on which service is chosen, so
+                  there's no useful "When" step to show before this exists.
+                  Collapses to the picked service once chosen so its add-ons
+                  take focus rather than the full service list. ── */}
+              {clientId && (
+              <>
+              <View style={s.sectionHead}>
+                <Text style={[s.label, { color: P.text }]}>Service</Text>
+                {selectedService && (
+                  <TouchableOpacity onPress={() => pickService('')}><Text style={[s.changeLink, { color: P.accent }]}>Change</Text></TouchableOpacity>
+                )}
+              </View>
+              {selectedService ? (
+                <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.accent }]}>
+                  <View><Text style={[s.choiceTitle, { color: P.text }]}>{selectedService.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>£{Number(selectedService.price).toFixed(2)} · {selectedService.duration_minutes} min</Text></View>
+                  <Ionicons name="checkmark-circle" size={21} color={P.accent} />
+                </View>
+              ) : (
+                <>
+                  {services.length > SERVICE_SEARCH_THRESHOLD && (
+                    <View style={[s.searchRow, { backgroundColor: P.surface, borderColor: P.border }]}>
+                      <Ionicons name="search" size={15} color={P.sub} />
+                      <TextInput value={serviceSearch} onChangeText={setServiceSearch} placeholder="Search services" placeholderTextColor={P.sub} style={[s.searchInput, { color: P.text }]} autoCorrect={false} />
+                      {serviceSearch.length > 0 && (
+                        <TouchableOpacity onPress={() => setServiceSearch('')}><Ionicons name="close-circle" size={16} color={P.sub} /></TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                  {filteredServices.length === 0 ? (
+                    <Text style={[s.empty, { color: P.sub }]}>No services match “{serviceSearch.trim()}”.</Text>
+                  ) : filteredServices.map(service => (
+                    <TouchableOpacity key={service.id} onPress={() => pickService(service.id)} style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                      <View><Text style={[s.choiceTitle, { color: P.text }]}>{service.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>£{Number(service.price).toFixed(2)} · {service.duration_minutes} min</Text></View>
+                      {(service.add_ons?.length ?? 0) > 0 && <Text style={[s.choiceMeta, { color: P.sub }]}>{service.add_ons!.length} add-on{service.add_ons!.length !== 1 ? 's' : ''}</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+
+              {/* Add-ons appear only once a service is chosen — the collapse
+                  above is what makes room for them without overloading. */}
+              {selectedService && serviceAddOns.length > 0 && (
+                <>
+                  <Text style={[s.label, { color: P.text }]}>Add-ons</Text>
+                  {serviceAddOns.map(addOn => {
+                    const on = selectedAddOnIds.includes(addOn.id);
+                    return (
+                      <TouchableOpacity key={addOn.id} onPress={() => toggleAddOn(addOn.id)} style={[s.choice, { backgroundColor: P.surface, borderColor: on ? P.accent : P.border }]}>
+                        <View style={{ flex: 1 }}><Text style={[s.choiceTitle, { color: P.text }]}>{addOn.name}</Text><Text style={[s.choiceMeta, { color: P.sub }]}>+£{Number(addOn.price).toFixed(2)}</Text></View>
+                        <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={on ? P.accent : P.sub} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+              </>
+              )}
+
+              {/* ── When ── gated on a service being chosen: the slots list
+                  below is generated from that service's real duration, so
+                  showing this before a service exists would either be
+                  meaningless or (as it silently did before) fall back to a
+                  generic 60-min guess that doesn't match the eventual
+                  service, offering a slot that later turns out to conflict. */}
+              {selectedService && (
+              <>
+              <Text style={[s.label, { color: P.text }]}>When</Text>
+              {/* Date is always chosen up top — both the slots list and the
+                  custom-time picker operate on this date. */}
+              <TouchableOpacity onPress={() => setDatePickerVisible(true)} style={[s.whenBtn, { backgroundColor: P.surface }]}>
+                <Ionicons name="calendar-outline" size={16} color={P.accent}/>
+                <Text style={[s.whenText, { color: P.text }]}>{formatShortDate(dateToYMD(date))}</Text>
+              </TouchableOpacity>
+
+              {/* Slots vs Custom time. Slots = pick a real free slot; Custom =
+                  any time (even one that overlaps an existing booking, flagged
+                  below with an offer to move that booking). */}
+              <View style={[s.whenTabs, { backgroundColor: P.surface }]}>
+                <SlidingTabs
+                  tabs={[{ key: 'slots', label: 'Available' }, { key: 'custom', label: 'Custom time' }]}
+                  activeKey={whenMode}
+                  onPress={k => setWhenMode(k as 'slots' | 'custom')}
+                  accentColor={P.accent}
+                  activeTextColor={P.ice}
+                  inactiveTextColor={P.sub}
+                  scrollable={false}
+                  height={34}
+                />
+              </View>
+
+              {whenMode === 'slots' ? (
+                slotsLoading ? (
+                  <View style={s.slotsLoading}><ActivityIndicator size="small" color={P.accent} /></View>
+                ) : slots.length > 0 ? (
+                  <View style={s.slotsWrap}>
+                    {slots.map(slot => {
+                      const on = hhmmss(time) === slot;
+                      return (
+                        <TouchableOpacity key={slot} onPress={() => pickSlot(slot)} style={[s.slotChip, on && s.slotChipOn, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}>
+                          {on && <Ionicons name="checkmark" size={13} color={P.ice} style={s.slotCheckIcon} />}
+                          <Text style={[s.slotText, { color: on ? P.ice : P.text }, on && s.slotTextOn]}>{formatTime12(slot)}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <Text style={[s.slotsEmpty, { color: P.sub }]}>No free slots that day — use “Custom time” to squeeze one in.</Text>
+                )
+              ) : (
+                <>
+                  <TouchableOpacity onPress={() => setTimePickerVisible(true)} style={[s.whenBtn, { backgroundColor: P.surface }]}>
+                    <Ionicons name="time-outline" size={16} color={P.accent}/>
+                    <Text style={[s.whenText, { color: P.text }]}>{formatTime12(hhmmss(time))}</Text>
+                  </TouchableOpacity>
+
+                  {/* Hard stop: Custom time deliberately bypasses the
+                      Available list's own schedule filtering, so this is the
+                      only place a blocked date gets caught before the DB
+                      rejects it on submit. */}
+                  {isBlockedDate && (
+                    <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
+                      <Ionicons name="close-circle-outline" size={16} color={WARN} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.conflictTitle, { color: P.text }]}>This day is blocked</Text>
+                        <Text style={[s.conflictSub, { color: P.sub }]}>
+                          {blockedDates.find(b => b.blocked_date === dateYMD)?.reason
+                            || dayOverride?.reason
+                            || 'You’ve marked this date unavailable. Pick a different day.'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Informational, not a hard stop — going outside the
+                      provider's usual hours is exactly what Custom time is
+                      for (the squeeze-in case). Just makes it visible that
+                      it's happening rather than a silent, surprising choice. */}
+                  {!isBlockedDate && isOutsideWorkingHours && (
+                    <View style={[s.conflict, { borderColor: P.accent + '55', backgroundColor: P.accent + '14' }]}>
+                      <Ionicons name="information-circle-outline" size={16} color={P.accent} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.conflictTitle, { color: P.text }]}>Outside usual working hours</Text>
+                        <Text style={[s.conflictSub, { color: P.sub }]}>
+                          This time is outside your normal schedule for this day — the booking will still go through as a squeeze-in.
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Shown in BOTH modes: a listed "available" slot is duration-
+                  aware (see the effect above) so this should be rare, but
+                  Custom time can still land on a taken slot — this stays the
+                  visible reason Continue is blocked rather than a silent
+                  dead button. */}
+              {conflictBooking && (
+                <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
+                  <Ionicons name="warning-outline" size={16} color={WARN} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.conflictTitle, { color: P.text }]}>This time is already booked</Text>
+                    <Text style={[s.conflictSub, { color: P.sub }]}>
+                      {conflictBooking.service_name_snapshot} at {formatTime12(conflictBooking.booking_time)}. You can't double-book a slot — move that appointment first, or pick another time.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => (navigation as any).navigate('BookingDetail', { bookingId: conflictBooking.id, booking: mapDbBookingToConfirmed(conflictBooking), openReschedule: true })}
+                      style={[s.conflictBtn, { borderColor: P.accent }]}
+                    >
+                      <Ionicons name="calendar-outline" size={13} color={P.accent} />
+                      <Text style={[s.conflictBtnText, { color: P.accent }]}>Reschedule that booking</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              </>
+              )}
+
+              <TouchableOpacity onPress={handleContinue} disabled={!canContinue} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, !canContinue && s.saveBtnDim]}>
+                <Text style={[s.saveTxt, { color: P.ice }]}>Continue</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          ) : (
+            <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+              {/* ── Confirm ── the transition target once client/service/when are
+                  locked in: review who's being booked and what for, then add
+                  any notes before actually creating the booking. ── */}
+              <Text style={[s.label, { color: P.text, marginTop: 0 }]}>Client</Text>
+              <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.choiceTitle, { color: P.text }]}>{selectedClient?.customer_name}</Text>
+                  <Text style={[s.choiceMeta, { color: P.sub }]}>{selectedClient?.customer_email || 'Cerviced client'}</Text>
+                  <Text style={[s.choiceMeta, { color: P.sub }]}>{clientPhone || 'No phone number on file'}</Text>
+                </View>
+              </View>
+
+              <Text style={[s.label, { color: P.text }]}>Appointment</Text>
+              <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.choiceTitle, { color: P.text }]}>{selectedService?.name}</Text>
+                  <Text style={[s.choiceMeta, { color: P.sub }]}>
+                    {formatShortDate(dateToYMD(date))} · {formatTime12(hhmmss(time))}
+                  </Text>
+                  {selectedAddOnIds.length > 0 && (
+                    <Text style={[s.choiceMeta, { color: P.sub }]}>
+                      {selectedAddOnIds.length} add-on{selectedAddOnIds.length !== 1 ? 's' : ''}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {safetyRequired && (
+                <>
+                  <Text style={[s.label, { color: P.text }]}>Safety information</Text>
+                  <View style={[s.safetyBox, { backgroundColor: P.surface, borderColor: P.border }]}>
+                    {!!selectedService?.patch_test_required && (
+                      <Text style={[s.safetyLine, { color: P.sub }]}>• The provider requires a patch test before this treatment</Text>
+                    )}
+                    {selectedService?.is_pregnancy_safe === false && (
+                      <Text style={[s.safetyLine, { color: P.sub }]}>• The provider has flagged this treatment as not recommended during pregnancy</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setSafetyAcknowledged(v => !v)}
+                    style={[s.ackRow, { backgroundColor: P.surface, borderColor: safetyAcknowledged ? P.accent : P.border }]}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name={safetyAcknowledged ? 'checkbox' : 'square-outline'} size={20} color={safetyAcknowledged ? P.accent : P.sub} />
+                    <Text style={[s.ackText, { color: P.text }]}>I've told the client this treatment's safety information above</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <Text style={[s.label, { color: P.text }]}>Notes</Text>
+              <TextInput value={notes} onChangeText={setNotes} placeholder="Notes (optional)" placeholderTextColor={P.sub} style={[s.notesInput, { backgroundColor: P.surface, color: P.text }]} multiline />
+
+              <TouchableOpacity onPress={handleCreate} disabled={creating || !canContinue} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, (!canContinue || creating) && s.saveBtnDim]}>
+                {creating ? <ActivityIndicator color={P.ice} /> : <Text style={[s.saveTxt, { color: P.ice }]}>Add Booking</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+
+          {datePickerVisible && (
+            Platform.OS === 'ios' ? (
+              <Modal transparent animationType="fade" visible={datePickerVisible}>
+                <View style={s.pickerModalWrap}>
+                  <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setDatePickerVisible(false)} />
+                  <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
+                    <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
+                      <Text style={[s.pickerLabel, { color: P.text }]}>Select Date</Text>
+                      <TouchableOpacity onPress={() => setDatePickerVisible(false)}>
+                        <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker mode="date" value={date} onChange={(_, d) => { if (d) setDate(d); }} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} minimumDate={new Date()} style={{ width: '100%' }} />
+                    <View style={{ height: Math.max(24, insets.bottom), backgroundColor: P.surface }} />
+                  </View>
+                </View>
+              </Modal>
+            ) : (
+              <DateTimePicker mode="date" value={date} onChange={(_, d) => { setDatePickerVisible(false); if (d) setDate(d); }} display="default" minimumDate={new Date()} />
+            )
+          )}
+
+          {timePickerVisible && (
+            Platform.OS === 'ios' ? (
+              <Modal transparent animationType="fade" visible={timePickerVisible}>
+                <View style={s.pickerModalWrap}>
+                  <TouchableOpacity style={s.pickerDismiss} activeOpacity={1} onPress={() => setTimePickerVisible(false)} />
+                  <View style={[s.pickerSheet, { backgroundColor: P.surface }]}>
+                    <View style={[s.pickerHeader, { borderBottomColor: P.border }]}>
+                      <Text style={[s.pickerLabel, { color: P.text }]}>Select Time</Text>
+                      <TouchableOpacity onPress={() => setTimePickerVisible(false)}>
+                        <Text style={[s.pickerDone, { color: P.accent }]}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <DateTimePicker mode="time" value={time} onChange={(_, d) => { if (d) setTime(d); }} display="spinner" themeVariant={isDarkMode ? 'dark' : 'light'} textColor={P.text} style={{ width: '100%' }} />
+                    <View style={{ height: Math.max(24, insets.bottom), backgroundColor: P.surface }} />
+                  </View>
+                </View>
+              </Modal>
+            ) : (
+              <DateTimePicker mode="time" value={time} onChange={(_, d) => { setTimePickerVisible(false); if (d) setTime(d); }} display="default" />
+            )
+          )}
+        </KeyboardDismissView>
+      </SafeAreaView>
+      <DialogHost />
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  root:        { flex: 1 },
+  safe:        { flex: 1 },
+  keyboardView:{ flex: 1 },
+  center:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  header:      { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: StyleSheet.hairlineWidth },
+  title:       { fontSize: 20, fontWeight: '700' },
+  subtitle:    { fontSize: 12, marginTop: 2 },
+  closeBtn:    { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  backBtn:     { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+
+  stepRow:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 14 },
+  stepBar:     { flex: 1, height: 2, marginHorizontal: 6 },
+  stepDotWrap: { alignItems: 'center', gap: 4 },
+  stepDot:     { width: 9, height: 9, borderRadius: 4.5, borderWidth: 2 },
+  stepLabel:   { fontSize: 11, fontWeight: '600' },
+
+  content:     { padding: 20, gap: 9, paddingBottom: 34 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  changeLink:  { fontSize: 13, fontWeight: '700' },
+  label:       { fontSize: 14, fontWeight: '700', marginTop: 8 },
+  empty:       { fontSize: 13, lineHeight: 19, paddingVertical: 8 },
+  searchRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
+  choice:      { minHeight: 54, paddingHorizontal: 13, paddingVertical: 10, borderWidth: 1, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  choiceTitle: { fontSize: 14, fontWeight: '600' },
+  choiceMeta:  { fontSize: 12, marginTop: 2 },
+  whenBtn:     { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11, paddingVertical: 12, borderRadius: 10 },
+  whenText:    { fontSize: 13, fontWeight: '600' },
+  whenTabs:    { flexDirection: 'row', height: 42, borderRadius: 10, padding: 4, marginTop: 4 },
+  slotsWrap:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  slotChip:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1 },
+  slotChipOn:  { borderWidth: 1.5 },
+  slotCheckIcon:{ marginRight: 4 },
+  slotText:    { fontSize: 13, fontWeight: '600' },
+  slotTextOn:  { fontWeight: '700' },
+  slotsLoading:{ paddingVertical: 12, alignItems: 'flex-start' },
+  slotsEmpty:  { fontSize: 12, lineHeight: 17, marginTop: 4 },
+  conflict:    { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 8 },
+  conflictTitle:{ fontSize: 13, fontWeight: '700' },
+  conflictSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  conflictBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5, borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6, marginTop: 8 },
+  conflictBtnText:{ fontSize: 12, fontWeight: '700' },
+  safetyBox:   { borderWidth: 1, borderRadius: 10, padding: 12, gap: 4 },
+  safetyLine:  { fontSize: 12, lineHeight: 17 },
+  ackRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 8 },
+  ackText:     { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  notesInput:  { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, minHeight: 44 },
+  saveBtn:     { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  saveBtnDim:  { opacity: 0.6 },
+  saveTxt:     { fontSize: 15, fontWeight: '700' },
+
+  // Native time/date picker bottom sheet (iOS). Overlay and sheet are siblings
+  // so the overlay colour never bleeds through the sheet's own background.
+  pickerModalWrap: { flex: 1, flexDirection: 'column' },
+  pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickerLabel:     { fontSize: 15, fontWeight: '600' },
+  pickerDone:      { fontSize: 15, fontWeight: '700' },
+});

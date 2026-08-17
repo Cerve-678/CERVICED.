@@ -15,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Icon from '../../components/IconLibrary';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { AppTheme } from '../../constants/theme';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { supabase } from '../../lib/supabase';
@@ -38,7 +40,7 @@ interface SettingsOptionProps {
   title: string;
   subtitle: string;
   onPress: () => void;
-  palette: { card: string; border: string; accent: string; sub: string; text: string };
+  palette: AppTheme;
   danger?: boolean;
 }
 
@@ -49,15 +51,16 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, palette: P,
     activeOpacity={0.7}
   >
     <View style={styles.optionLeft}>
-      <Icon name={icon} size={20} color={danger ? P.accent : P.sub} style={{ marginRight: 12 }} />
+      <Icon name={icon} size={20} color={danger ? P.accentText : P.sub} style={{ marginRight: 12 }} />
       <View style={{ flex: 1 }}>
-        <Text style={[styles.optionText, { color: danger ? P.accent : P.text }]}>{title}</Text>
+        <Text style={[styles.optionText, { color: danger ? P.accentText : P.text }]}>{title}</Text>
         <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
     <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
   </TouchableOpacity>
 ));
+SettingsOption.displayName = 'SettingsOption';
 
 // ── Main screen ─────────────────────────────────────────────────────────────
 
@@ -142,7 +145,7 @@ export default function UserProfileScreen({ navigation }: any) {
                 <Text style={[styles.heroName, { color: P.text }]}>{firstName || 'You'}.</Text>
               </View>
               <View style={[styles.avatar, { backgroundColor: P.iconBg, borderColor: P.border }]}>
-                <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
+                <Text style={[styles.avatarText, { color: P.accentText }]}>{initials}</Text>
               </View>
             </View>
           </View>
@@ -160,7 +163,7 @@ export default function UserProfileScreen({ navigation }: any) {
                 onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
                 activeOpacity={0.7}
               >
-                <Icon name={icon} size={24} color={P.accent} />
+                <Icon name={icon} size={24} color={P.accentText} />
                 <Text style={[styles.cardTitle, { color: P.text }]}>{label}</Text>
                 <Text style={[styles.cardSub, { color: P.sub }]}>{sub}</Text>
               </TouchableOpacity>
@@ -310,7 +313,7 @@ export default function UserProfileScreen({ navigation }: any) {
       {/* ── Become a Provider modal ─────────────────────────────────────── */}
       <Modal visible={showProviderModal} transparent animationType="fade" onRequestClose={() => setShowProviderModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlayCenter}>
-          <View style={[styles.modalCard, { backgroundColor: isDarkMode ? '#252220' : '#FFFFFF', borderColor: P.border }]}>
+          <View style={[styles.modalCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Become a Provider</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
               We'll add a provider profile to your current account — same login, same details.
@@ -327,7 +330,7 @@ export default function UserProfileScreen({ navigation }: any) {
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalBtnText}>Set up my provider profile</Text>
+              <Text style={[styles.modalBtnText, { color: P.onAccent }]}>Set up my provider profile</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.modalCancel} onPress={() => setShowProviderModal(false)} activeOpacity={0.6}>
@@ -340,7 +343,7 @@ export default function UserProfileScreen({ navigation }: any) {
       {/* ── Log out confirmation modal ──────────────────────────────────── */}
       <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: isDarkMode ? '#252220' : '#FFFFFF', borderColor: P.border }]}>
+          <View style={[styles.modalCard, { backgroundColor: P.surfaceRaised, borderColor: P.border }]}>
             <Text style={[styles.modalTitle, { color: P.text }]}>Log Out</Text>
             <Text style={[styles.modalBody, { color: P.sub }]}>
               Are you sure you want to log out?
@@ -368,7 +371,11 @@ const styles = StyleSheet.create({
   background: { flex: 1 },
   container: { flex: 1, paddingHorizontal: 20 },
   content: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  // 40 of base padding + clearance for the floating IslandPillTabBar pill,
+  // which overlays screen content rather than docking/reserving space for
+  // itself — without this, the footer text sits behind it at the bottom of
+  // the scroll. Mirrors the same fix in ProviderAccountScreen.tsx.
+  scrollContent: { paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE },
 
   // Hero
   heroSection: {

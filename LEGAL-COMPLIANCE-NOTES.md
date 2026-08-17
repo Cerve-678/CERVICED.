@@ -36,6 +36,24 @@ needed for ordinary personal data. Worth confirming with counsel whether the
 current intake-form consent flow meets that bar, and whether it needs its own
 explicit opt-in separate from general Terms acceptance.
 
+**2026-08-17 update**: added a checkout-time acknowledgement for
+`patch_test_required`/`is_pregnancy_safe` (see
+`supabase/migrations/20260817085443_safety_acknowledgement_checkout.sql` —
+`bookings.safety_ack_required`/`safety_ack_at`, enforced server-side in
+`prepare_checkout` and `provider_create_manual_booking`, surfaced client-side
+folded into `CartScreen.tsx`'s existing Terms checkbox and as its own
+checkbox on the provider's `AddBookingScreen.tsx`). Deliberately framed as
+relaying the *provider's* stated requirement, not a CERVICED safety
+determination — not a hard block on booking. This makes the gap above
+*more* pressing, not less: there is now a new client-identity-linked record
+(timestamp + which flags were active) with **no corresponding Terms/Privacy
+language describing it exists yet** — same missing-Privacy-Policy problem as
+item 1, now with a concretely-shipped feature sitting on top of it. `min_age`
+was deliberately excluded from this pass (see the migration's own comment) —
+it can be a statutory minimum (item 5) and needs a DOB-verified mechanism,
+not a soft acknowledgement checkbox; folding it into this same pattern would
+be the wrong legal posture.
+
 ## 3. Payment flow is not production-ready
 
 `CartScreen.tsx`'s `PaymentModal` collects raw card number/expiry/CVC directly
@@ -102,7 +120,44 @@ pseudonymised. This is a reasonable pattern for GDPR "right to erasure" vs.
 legitimate record-keeping (tax/accounting) — flag to counsel for sign-off
 rather than re-litigating, since the mechanism already exists.
 
-## 10. Accessibility
+## 10. Provider Terms acceptance has no versioning/re-consent
+
+As of 2026-08-10, providers must check "I agree to the Terms & Conditions"
+during first-time profile setup (`InfoRegScreen.tsx`) before they can publish
+— `providers.terms_accepted_at` records when. This closes the previous gap
+where nothing recorded a provider ever having seen/agreed to the Terms. Two
+things worth flagging to counsel: (a) it's a single undifferentiated checkbox
+covering every clause in `TermsScreen.tsx`, including the deposit/remaining-
+balance liability language in item 4 above and the age-related questions in
+item 5 — no separate opt-in for those; (b) it's asked once, at first publish,
+and never again — if the Terms content is later revised, existing providers'
+`terms_accepted_at` still points at whatever version they originally saw,
+with no re-prompt and no record of *which* version they accepted. Fine for a
+v1, but not durable evidence of "accepted the current Terms" once the
+document changes.
+
+As of 2026-08-10, clients now have a persisted counterpart too, but scoped
+narrower: `bookings.policy_accepted_at`/`policy_snapshot` record when a
+client agreed to the specific PROVIDER's cancellation/booking policy at
+checkout (`BookingSheet.tsx`/`MultiBookingSheet.tsx` — the general Cerviced
+Terms & Conditions checkbox on `CartScreen.tsx`'s cart summary is a separate,
+still-deferred item, deliberately left untouched; that one remains local UI
+state only, never persisted). Same versioning caveat as the provider side:
+the snapshot freezes the policy text at booking time (by design — so a
+provider can't retroactively change what a client agreed to), but there's no
+equivalent record for the general Terms & Conditions on either side. A
+`policy`-type intake-form question (`ProviderIntakeFormScreen.tsx`) also now
+lets a provider send a client the same policy as a document to read and
+sign via the existing typed-name-signature flow — this is a second,
+independent acceptance record (a signed intake-form answer/signature) for
+providers who want a more explicit paper trail than the checkout checkbox
+alone; it wasn't reconciled or deduplicated against `policy_accepted_at`,
+since they serve different purposes (implicit checkout consent vs. an
+explicit, provider-initiated signed document) — worth flagging to counsel
+whether both are needed or whether that's confusing to have two records of
+"agreed to the policy" that don't reference each other.
+
+## 11. Accessibility
 
 No specific findings, but a consumer-facing app taking payments should be
 checked against WCAG-equivalent accessibility expectations (and the European

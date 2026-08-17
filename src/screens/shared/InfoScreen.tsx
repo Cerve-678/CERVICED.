@@ -4,9 +4,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFont } from '../../contexts/FontContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { useTheme } from '../../contexts/ThemeContext';
 import LiquidGlassCard from '../../components/LiquidGlassCard';
-import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
+import { dimensions, spacing } from '../../constants/PlatformDimensions';
 
 // For stack screens, add navigation props:
 // import { StackNavigationProp } from '@react-navigation/stack';
@@ -16,7 +15,6 @@ import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 
 export default function ScreenNameHere(/* { navigation }: Props for stack screens */) {
   const { textStyles } = useFont();
-  const { theme } = useTheme();
 
   return (
     <ThemedBackground>

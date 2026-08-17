@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
+import { FLOATING_TAB_BAR_CLEARANCE } from './IslandPillTabBar';
 
 const C = {
   bg:      '#2A1820',
@@ -32,7 +33,7 @@ interface ToastState {
   visible: boolean;
 }
 
-interface ToastProps extends ToastState {}
+type ToastProps = ToastState;
 
 function Toast({ message, type, visible }: ToastProps) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -44,7 +45,7 @@ function Toast({ message, type, visible }: ToastProps) {
       speed: 22,
       bounciness: 5,
     }).start();
-  }, [visible]);
+  }, [anim, visible]);
 
   const iconName: keyof typeof Ionicons.glyphMap =
     type === 'success' ? 'checkmark-circle'
@@ -81,7 +82,11 @@ function Toast({ message, type, visible }: ToastProps) {
 const toastSt = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    bottom: 36,
+    // FLOATING_TAB_BAR_CLEARANCE, not a plain safe-area inset — every screen
+    // using this toast sits under IslandPillTabBar's floating pill (it's the
+    // Tab.Navigator's `tabBar`, rendered over every nested stack screen), so
+    // a bare 36px let the pill overlap/obscure the confirmation.
+    bottom: FLOATING_TAB_BAR_CLEARANCE,
     left: 20,
     right: 20,
     zIndex: 9999,
@@ -131,7 +136,7 @@ function ConfirmDialog({ title, message, buttons, visible, onDismiss }: ConfirmS
       speed: 18,
       bounciness: 4,
     }).start();
-  }, [visible]);
+  }, [anim, visible]);
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>

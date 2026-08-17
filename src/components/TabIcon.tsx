@@ -68,12 +68,12 @@ export default function TabIcon({
       tension: 300,
       friction: 10,
     }).start();
-  }, [focused]);
+  }, [animatedScale, focused]);
 
   const renderIcon = () => {
     switch (name) {
       case 'chat-dots':
-        const chatData = iconPaths['chat-dots'] as { bubble: string; dots: Array<{cx: number, cy: number, r: number}> };
+        const chatData = iconPaths['chat-dots'] as { bubble: string; dots: {cx: number, cy: number, r: number}[] };
         return (
           <>
             <Path d={chatData.bubble} fill={iconColor} fillRule="evenodd" />

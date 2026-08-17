@@ -62,6 +62,22 @@ ALTER TABLE public.providers
 CREATE INDEX IF NOT EXISTS idx_providers_is_claimed  ON public.providers(is_claimed);
 CREATE INDEX IF NOT EXISTS idx_providers_claim_token ON public.providers(claim_token);
 
+-- Existing RLS on `providers` only grants public SELECT via
+-- providers_public_read (has_gone_live = true AND is_active = true) — every
+-- unclaimed/scraped row is has_gone_live = false by construction, so without
+-- this policy no client session can ever read one, regardless of what
+-- app-side queries ask for (searchUnclaimedProviders, getUnclaimedProviderDetail,
+-- getDiscoverUnclaimedProviders in databaseService.ts all silently return
+-- zero rows). Narrowly scoped to is_claimed = false only — additive
+-- alongside providers_public_read (multiple PERMISSIVE policies OR
+-- together), so it can never widen access to a claimed provider's row.
+DROP POLICY IF EXISTS providers_unclaimed_read ON public.providers;
+CREATE POLICY providers_unclaimed_read
+  ON public.providers
+  FOR SELECT
+  TO public
+  USING (is_claimed = false);
+
 -- ───────────────────────────────────────────────────────────
 -- STEP 2: provider_scrape_jobs / provider_scrape_sources
 --   Batch-run tracking for the (separate, not-yet-built) scraping

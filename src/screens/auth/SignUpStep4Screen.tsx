@@ -19,6 +19,8 @@ import StepProgressIndicator from '../../components/StepProgressIndicator';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { CityMultiSelect } from '../../components/CityMultiSelect';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep4'>;
 
@@ -28,6 +30,41 @@ const SKIN_CONCERNS     = ['Acne', 'Redness', 'Dry patches', 'Oiliness', 'Hyperp
 const STYLE_VIBES       = ['Natural', 'Glam', 'Minimal', 'Bold', 'Classic', 'Edgy', 'Soft', 'Trendy'];
 const ALLERGENS         = ['Latex', 'Fragrances', 'Dyes / PPD', 'Nuts', 'Nickel', 'Sulfates', 'Parabens', 'Lanolin', 'Shellfish', 'Gluten', 'None known'];
 const TREATMENT_HISTORY = ['Facials', 'Lash extensions', 'Brow tinting', 'Hair colour', 'Nails', 'Waxing', 'Dermaplaning', 'Microneedling', 'Chemical peels', 'None'];
+
+// Provider "About your business" — logistics needed for booking + the
+// business profile (see supabase/provider_signup_business_fields.sql for
+// where each of these lands: price range reuses providers.price_tier,
+// team size/contact prefs are staged on `users` then copied across by
+// InfoRegScreen's first-save prefill).
+const BUSINESS_TYPES: { v: 'salon' | 'studio' | 'home_based' | 'mobile'; l: string }[] = [
+  { v: 'salon', l: 'Salon' },
+  { v: 'studio', l: 'Studio' },
+  { v: 'home_based', l: 'Home Studio' },
+  { v: 'mobile', l: 'Mobile' },
+];
+const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
+const PRICE_RANGES: { v: 'budget' | 'mid' | 'premium' | 'luxury'; l: string }[] = [
+  { v: 'budget',  l: '£15–£35' },
+  { v: 'mid',     l: '£35–£65' },
+  { v: 'premium', l: '£65–£100' },
+  { v: 'luxury',  l: '£100+' },
+];
+const TEAM_SIZES: { v: 'solo' | 'small_team' | 'large_team'; l: string }[] = [
+  { v: 'solo',        l: 'Just me' },
+  { v: 'small_team',  l: '2–5 people' },
+  { v: 'large_team',  l: '6+ people' },
+];
+const CONTACT_METHODS: { v: string; l: string }[] = [
+  { v: 'in_app',   l: 'In-app messages' },
+  { v: 'phone',    l: 'Phone' },
+  { v: 'whatsapp', l: 'WhatsApp' },
+  { v: 'email',    l: 'Email' },
+];
+const PAYMENT_METHODS: { v: string; l: string }[] = [
+  { v: 'card',        l: 'Card' },
+  { v: 'cash',        l: 'Cash' },
+  { v: 'bank_transfer', l: 'Bank transfer' },
+];
 
 
 export default function SignUpStep4Screen({ navigation }: Props) {
@@ -44,6 +81,13 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const treatmentY      = React.useRef(0);
   const medicalY        = React.useRef(0);
   const consentY        = React.useRef(0);
+  const businessTypeY     = React.useRef(0);
+  const servicesY         = React.useRef(0);
+  const locationY        = React.useRef(0);
+  const priceRangeY      = React.useRef(0);
+  const teamSizeY        = React.useRef(0);
+  const contactMethodsY  = React.useRef(0);
+  const paymentMethodsY   = React.useRef(0);
 
   const [selectedHairType,   setSelectedHairType]   = useState<string>(data.hairType);
   const [selectedSkinType,   setSelectedSkinType]   = useState<string>(data.skinType);
@@ -55,7 +99,19 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const [photoConsent,       setPhotoConsent]       = useState<boolean>(data.photographyConsent);
   const [showErrors,         setShowErrors]         = useState(false);
 
+  // Provider "About your business"
+  const [selectedBusinessType, setSelectedBusinessType] = useState<typeof data.businessType>(data.businessType);
+  const [selectedServices, setSelectedServices] = useState<string[]>(data.serviceInterests);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>(data.serviceLocations);
+  const [selectedPriceRange, setSelectedPriceRange] = useState<typeof data.priceRange>(data.priceRange);
+  const [selectedTeamSize, setSelectedTeamSize] = useState<typeof data.teamSize>(data.teamSize);
+  const [selectedContactMethods, setSelectedContactMethods] = useState<string[]>(
+    data.preferredContactMethods.length ? data.preferredContactMethods : ['in_app']
+  );
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>(data.preferredPaymentMethods);
+
   const isUser = data.accountType === 'user';
+  const isProvider = data.accountType === 'provider';
 
   const scrollTo = (yRef: React.MutableRefObject<number>) =>
     scrollRef.current?.scrollTo({ y: Math.max(0, yRef.current - 24), animated: true });
@@ -130,23 +186,84 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     });
   };
 
+  const pickBusinessType = (type: NonNullable<typeof data.businessType> | '') => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedBusinessType(type);
+  };
+
+  const toggleService = (category: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedServices(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
+  };
+
+  const pickPriceRange = (range: NonNullable<typeof data.priceRange> | '') => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedPriceRange(prev => prev === range ? '' : range);
+  };
+
+  const pickTeamSize = (size: NonNullable<typeof data.teamSize> | '') => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedTeamSize(prev => prev === size ? '' : size);
+  };
+
+  const toggleContactMethod = (method: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedContactMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+  };
+
+  const togglePaymentMethod = (method: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedPaymentMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+  };
+
   const saveAndProceed = () => {
-    updateData({
-      hairType: selectedHairType,
-      skinType: selectedSkinType,
-      skinConcerns: selectedConcerns,
-      styleVibe: selectedStyleVibe,
-      allergies: selectedAllergens,
-      treatmentHistory: selectedTreatments,
-      medicalNotes,
-      photographyConsent: photoConsent,
-    });
+    if (isProvider) {
+      updateData({
+        businessType: selectedBusinessType,
+        serviceInterests: selectedServices,
+        serviceLocations: selectedLocations,
+        priceRange: selectedPriceRange,
+        teamSize: selectedTeamSize,
+        preferredContactMethods: selectedContactMethods,
+        preferredPaymentMethods: selectedPaymentMethods,
+      });
+    } else {
+      updateData({
+        hairType: selectedHairType,
+        skinType: selectedSkinType,
+        skinConcerns: selectedConcerns,
+        styleVibe: selectedStyleVibe,
+        allergies: selectedAllergens,
+        treatmentHistory: selectedTreatments,
+        medicalNotes,
+        photographyConsent: photoConsent,
+      });
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     navigation.navigate('SignUpStep5');
   };
 
   const handleContinue = () => {
-    if (!isUser) { saveAndProceed(); return; }
+    if (isProvider) {
+      const firstEmptyY =
+        !selectedBusinessType          ? businessTypeY :
+        !selectedServices.length      ? servicesY :
+        !selectedLocations.length     ? locationY :
+        !selectedPriceRange           ? priceRangeY :
+        !selectedTeamSize             ? teamSizeY :
+        !selectedContactMethods.length ? contactMethodsY :
+        !selectedPaymentMethods.length ? paymentMethodsY :
+        null;
+      if (firstEmptyY) {
+        setShowErrors(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        scrollTo(firstEmptyY);
+        return;
+      }
+      saveAndProceed();
+      return;
+    }
+
     const firstEmptyY =
       !selectedHairType         ? hairY :
       !selectedSkinType         ? skinY :
@@ -169,11 +286,14 @@ export default function SignUpStep4Screen({ navigation }: Props) {
     <ThemedBackground style={{ flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}
-      >
+      <KeyboardDismissView style={{ flex: 1 }}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         {/* Back */}
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: t.surface, borderColor: t.border }]}
@@ -183,14 +303,14 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
         </TouchableOpacity>
 
-        <StepProgressIndicator currentStep={4} totalSteps={totalSteps} />
+        <StepProgressIndicator currentStep={4} totalSteps={totalSteps} stepLabel={isProvider ? 'About Your Business' : 'Beauty Profile'} />
 
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: t.text }]}>Beauty Profile</Text>
+          <Text style={[styles.headerTitle, { color: t.text }]}>{isProvider ? 'About Your Business' : 'Beauty Profile'}</Text>
           <Text style={[styles.headerSubtitle, { color: t.sub }]}>
-            {isUser
-              ? 'Help us match you with the right professionals'
-              : 'You can set up your full profile later in the app'}
+            {isProvider
+              ? "The essentials clients and bookings need — you can refine the rest later in the app"
+              : 'Help us match you with the right professionals'}
           </Text>
         </View>
 
@@ -338,18 +458,115 @@ export default function SignUpStep4Screen({ navigation }: Props) {
             </View>
           </>
         ) : (
-          <View style={[styles.summaryCard, { backgroundColor: t.card, borderColor: t.border }]}>
-            {[
-              { label: 'Name', value: data.name },
-              { label: 'Business', value: data.businessName },
-              { label: 'Email', value: data.businessEmail },
-            ].map((row, i) => (
-              <View key={row.label} style={[styles.summaryRow, i < 2 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border }]}>
-                <Text style={[styles.summaryLabel, { color: t.sub }]}>{row.label}</Text>
-                <Text style={[styles.summaryValue, { color: t.text }]}>{row.value}</Text>
+          <>
+            {/* Business type */}
+            <View onLayout={(e: LayoutChangeEvent) => { businessTypeY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedBusinessType ? '#DC2626' : t.text }]}>
+                BUSINESS TYPE{showErrors && !selectedBusinessType ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>How do you run your business?</Text>
+              <View style={styles.chipsContainer}>
+                {BUSINESS_TYPES.map(({ v, l }) => (
+                  <TouchableOpacity key={v} style={chipStyle(selectedBusinessType === v)} onPress={() => pickBusinessType(v)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedBusinessType === v)}>{l}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            ))}
-          </View>
+            </View>
+
+            {/* Services you offer */}
+            <View onLayout={(e: LayoutChangeEvent) => { servicesY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedServices.length ? '#DC2626' : t.text }]}>
+                SERVICES YOU OFFER{showErrors && !selectedServices.length ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Select all categories that apply to your business</Text>
+              <View style={styles.chipsContainer}>
+                {SERVICE_CATEGORIES.map(category => (
+                  <TouchableOpacity key={category} style={chipStyle(selectedServices.includes(category))} onPress={() => toggleService(category)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedServices.includes(category))}>{category}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Where you work */}
+            <View
+              onLayout={(e: LayoutChangeEvent) => { locationY.current = e.nativeEvent.layout.y; }}
+              style={{ marginBottom: 32 }}
+            >
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLocations.length ? '#DC2626' : t.text }]}>
+                WHERE YOU WORK{showErrors && !selectedLocations.length ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Which cities do you cover?</Text>
+              <CityMultiSelect
+                selected={selectedLocations}
+                onChange={setSelectedLocations}
+                palette={t}
+                placeholder="Select the cities you cover"
+              />
+            </View>
+
+            {/* Price range */}
+            <View onLayout={(e: LayoutChangeEvent) => { priceRangeY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPriceRange ? '#DC2626' : t.text }]}>
+                PRICE RANGE{showErrors && !selectedPriceRange ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Where do most of your services sit?</Text>
+              <View style={styles.chipsContainer}>
+                {PRICE_RANGES.map(({ v, l }) => (
+                  <TouchableOpacity key={v} style={chipStyle(selectedPriceRange === v)} onPress={() => pickPriceRange(v)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedPriceRange === v)}>{l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Who you work with */}
+            <View onLayout={(e: LayoutChangeEvent) => { teamSizeY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedTeamSize ? '#DC2626' : t.text }]}>
+                WHO YOU WORK WITH{showErrors && !selectedTeamSize ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Are you solo or part of a team?</Text>
+              <View style={styles.chipsContainer}>
+                {TEAM_SIZES.map(({ v, l }) => (
+                  <TouchableOpacity key={v} style={chipStyle(selectedTeamSize === v)} onPress={() => pickTeamSize(v)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedTeamSize === v)}>{l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Contact preferences */}
+            <View onLayout={(e: LayoutChangeEvent) => { contactMethodsY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedContactMethods.length ? '#DC2626' : t.text }]}>
+                CONTACT PREFERENCES{showErrors && !selectedContactMethods.length ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>How should clients reach you?</Text>
+              <View style={styles.chipsContainer}>
+                {CONTACT_METHODS.map(({ v, l }) => (
+                  <TouchableOpacity key={v} style={chipStyle(selectedContactMethods.includes(v))} onPress={() => toggleContactMethod(v)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedContactMethods.includes(v))}>{l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Preferred payment type */}
+            <View onLayout={(e: LayoutChangeEvent) => { paymentMethodsY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedPaymentMethods.length ? '#DC2626' : t.text }]}>
+                PREFERRED PAYMENT TYPE{showErrors && !selectedPaymentMethods.length ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>How do you take payment for off-app services?</Text>
+              <View style={styles.chipsContainer}>
+                {PAYMENT_METHODS.map(({ v, l }) => (
+                  <TouchableOpacity key={v} style={chipStyle(selectedPaymentMethods.includes(v))} onPress={() => togglePaymentMethod(v)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedPaymentMethods.includes(v))}>{l}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+          </>
         )}
 
         {/* Continue */}
@@ -367,7 +584,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
             </TouchableOpacity>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardDismissView>
     </ThemedBackground>
   );
 }
@@ -415,10 +633,6 @@ const styles = StyleSheet.create({
   },
   consentTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 14, letterSpacing: 0.3, marginBottom: 4 },
   consentSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17 },
-  summaryCard: { borderRadius: 20, borderWidth: 1, padding: 20, marginBottom: 32 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
-  summaryLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 12, letterSpacing: 1 },
-  summaryValue: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, fontWeight: '600' },
   actionsSection: { alignItems: 'center' },
   continueBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', width: '100%' },
   continueBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },

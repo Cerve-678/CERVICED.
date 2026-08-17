@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   Alert,
   View,
@@ -12,10 +12,12 @@ import {
   Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import Icon from '../../components/IconLibrary';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -29,9 +31,9 @@ import {
   authenticateWithBiometrics,
 } from '../../services/biometricService';
 import { getUnreadNotificationCount } from '../../services/databaseService';
-import { ThemedBackground } from '../../components/ThemedBackground';
+import { OFFERS_ENABLED } from '../../constants/featureFlags';
 
-// ─── Brand palette ────────────────────────────────────────────────────────────
+// ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
 const LIGHT = {
   bg:        '#F5F1EC',
   surface:   '#EDE8E2',
@@ -43,6 +45,7 @@ const LIGHT = {
   border:    'rgba(126,102,103,0.14)',
   sep:       'rgba(126,102,103,0.08)',
   iconBg:    'rgba(92,64,51,0.12)',
+  shadow:    'rgba(92,64,51,0.16)',
 };
 const DARK = {
   bg:        '#1A1815',
@@ -55,9 +58,11 @@ const DARK = {
   border:    'rgba(126,102,103,0.18)',
   sep:       'rgba(126,102,103,0.10)',
   iconBg:    'rgba(175,145,151,0.10)',
+  shadow:    'rgba(0,0,0,0.30)',
 };
 
-// ── Settings row (identical to client) ──────────────────────────────────────
+// ── Simple settings row (My Business dropped — see MyBusinessCarousel below;
+//    used by Account / Accessibility & Support / App Info & Legal) ──────────
 
 interface SettingsOptionProps {
   icon: string;
@@ -70,20 +75,48 @@ interface SettingsOptionProps {
 
 const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }: SettingsOptionProps) => (
   <TouchableOpacity
-    style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}
+    style={styles.row}
     onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
     activeOpacity={0.7}
   >
-    <View style={styles.optionLeft}>
-      <Icon name={icon} size={20} color={danger ? P.accent : P.sub} style={{ marginRight: 12 }} />
+    <View style={styles.rowLeft}>
+      <View style={styles.rowIcon}>
+        <Icon name={icon} size={17} color={danger ? P.accent : P.sub} />
+      </View>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.optionText, { color: danger ? P.accent : P.text }]}>{title}</Text>
-        <Text style={[styles.optionSubText, { color: P.sub }]}>{subtitle}</Text>
+        <Text style={[styles.rowTitle, { color: danger ? P.accent : P.text }]}>{title}</Text>
+        <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
-    <Icon name="chevron-right" size={18} color={P.sub} style={{ opacity: 0.4 }} />
+    <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.4 }} />
   </TouchableOpacity>
 ));
+SettingsOption.displayName = 'SettingsOption';
+
+// ── My Business carousel card ───────────────────────────────────────────────
+
+interface CarouselCardProps {
+  icon: string;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  P: typeof LIGHT;
+}
+
+const CarouselCard = React.memo(({ icon, title, subtitle, onPress, P }: CarouselCardProps) => (
+  <TouchableOpacity
+    style={[styles.carouselCard, { backgroundColor: P.card, borderColor: P.border }]}
+    onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
+    activeOpacity={0.7}
+  >
+    <View style={[styles.ccIcon, { backgroundColor: P.iconBg }]}>
+      <Icon name={icon} size={16} color={P.accent} />
+    </View>
+    <Text style={[styles.ccTitle, { color: P.text }]} numberOfLines={1}>{title}</Text>
+    <Text style={[styles.ccSub, { color: P.sub }]} numberOfLines={2}>{subtitle}</Text>
+  </TouchableOpacity>
+));
+CarouselCard.displayName = 'CarouselCard';
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 
@@ -92,6 +125,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
   const { resetData, updateData } = useRegistration();
   const { isDarkMode, toggleTheme } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
+  const insets = useSafeAreaInsets();
   const [showClientModal, setShowClientModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -179,17 +213,30 @@ export default function ProviderAccountScreen({ navigation }: any) {
   };
 
   const displayName = providerDisplayName || user?.businessName || user?.name || 'My Business';
-  const firstName = displayName.split(' ')[0];
-  const initials = displayName
-    .split(' ')
-    .map((w: string) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = useMemo(
+    () =>
+      displayName
+        .split(' ')
+        .map((w: string) => w[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase(),
+    [displayName]
+  );
+
+  // Ring badge geometry — mirrors the mockup's SVG exactly: 40x40 viewBox,
+  // r=16, strokeWidth=5, circumference 2*pi*16 ≈ 100.5, dashoffset 30 (~70%
+  // arc). Kept per explicit user confirmation ("keep it") after the D/F/G
+  // dominant-ring family was otherwise rejected — this is deliberately the
+  // small demoted badge, not a hero element.
+  const RING_SIZE = 40;
+  const RING_RADIUS = 16;
+  const RING_STROKE = 5;
+  const RING_CIRC = 2 * Math.PI * RING_RADIUS;
 
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right']}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
 
         <ScrollView
@@ -197,247 +244,249 @@ export default function ProviderAccountScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Hero */}
-          <View style={styles.heroSection}>
-            <View style={styles.heroLeft}>
-              <View style={styles.heroTextBlock}>
-                <Text style={[styles.heroSub, { color: P.sub }]}>Hello,</Text>
-                <Text
-                  style={[styles.heroName, { color: P.text }]}
-                  numberOfLines={2}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.6}
-                >
-                  {displayName}
-                </Text>
-                <View style={[styles.badge, { backgroundColor: P.iconBg }]}>
-                  <Text style={[styles.badgeText, { color: P.accent }]}>Provider</Text>
-                </View>
+          {/* ── Hero card — the very FIRST thing seen (Concept E: Preview
+              First). Leads with business identity rather than the client
+              version's stat strip, since an invented "analysis" panel
+              wouldn't correspond to anything real for a provider. A contained
+              rounded card resting on the background (rounded bottom corners +
+              side insets + lifted shadow) so it reads clearly as a hero, not
+              a colour strip. Follows the active theme (dark card in dark mode,
+              light card in light mode). Top stays square and bleeds up under
+              the status bar (SafeAreaView excludes 'top'; panel adds
+              insets.top) so it tucks under the notch cleanly. ───────────── */}
+          <View style={[styles.previewShadow, { shadowColor: P.shadow }]}>
+            <View
+              style={[
+                styles.previewPanel,
+                {
+                  paddingTop: insets.top + 22,
+                  backgroundColor: isDarkMode ? '#16130F' : P.surface,
+                },
+              ]}
+            >
+            <View style={[styles.previewGlow1, { backgroundColor: P.accent, opacity: isDarkMode ? 0.16 : 0.10 }]} />
+            <View style={[styles.previewGlow2, { backgroundColor: P.accent, opacity: isDarkMode ? 0.08 : 0.06 }]} />
+            <View style={styles.previewTop}>
+              <View style={[styles.previewBadge, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.10)' : P.iconBg }]}>
+                <Text style={[styles.previewBadgeText, { color: isDarkMode ? '#FFFFFF' : P.accent }]}>PROVIDER</Text>
               </View>
-              <View style={[styles.avatar, {
-                backgroundColor: P.iconBg,
-                borderColor: P.border,
-              }]}>
-                <Text style={[styles.avatarText, { color: P.accent }]}>{initials}</Text>
+              <View style={[styles.previewAvatar, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : P.iconBg }]}>
+                <Text style={[styles.previewAvatarText, { color: isDarkMode ? '#FFFFFF' : P.accent }]}>{initials}</Text>
               </View>
             </View>
-          </View>
-
-          {/* Quick cards */}
-          <View style={[styles.quickRow, { backgroundColor: P.surface, borderColor: P.border }]}>
-            {[
-              { icon: 'bar-chart',   label: 'Analytics',  sub: 'Revenue & Stats', onPress: () => navigation.navigate('Analytics') },
-              { icon: 'local-offer', label: 'Promotions', sub: 'Offers & Deals',  onPress: () => navigation.navigate('Promotions') },
-              { icon: 'people',      label: 'Clientele',  sub: 'Loyal Clients',   onPress: () => navigation.navigate('Clientele') },
-            ].map(({ icon, label, sub, onPress }) => (
+            <Text
+              style={[styles.previewTitle, { color: P.text }]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {displayName}
+            </Text>
+            <Text style={[styles.previewSub, { color: P.sub }]}>
+              Your business, bookings and how Cerviced looks &amp; feels — all in one place.
+            </Text>
+            <View style={styles.previewStats}>
               <TouchableOpacity
-                key={label}
-                style={[styles.card, { backgroundColor: P.card, borderColor: P.border }]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); onPress(); }}
-                activeOpacity={0.7}
+                style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Analytics'); }}
+                activeOpacity={0.75}
               >
-                <Icon name={icon} size={24} color={P.accent} />
-                <Text style={[styles.cardTitle, { color: P.text }]}>{label}</Text>
-                <Text style={[styles.cardSub, { color: P.sub }]}>{sub}</Text>
+                <Text style={[styles.previewStatNum, { color: P.text }]}>Analytics</Text>
+                <Text style={[styles.previewStatLbl, { color: P.sub }]}>Revenue &amp; Stats</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* My Business */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>My Business</Text>
-            <SettingsOption
-              icon="storefront"
-              title="Business Profile"
-              subtitle="Profile, details & communications"
-              onPress={() => navigation.navigate('BusinessProfile')}
-              P={P}
-            />
-            <SettingsOption
-              icon="bar-chart"
-              title="Analytics"
-              subtitle="Revenue, trends & insights"
-              onPress={() => navigation.navigate('Analytics')}
-              P={P}
-            />
-            <SettingsOption
-              icon="local-offer"
-              title="Promotions"
-              subtitle="Offers & deals for clients"
-              onPress={() => navigation.navigate('Promotions')}
-              P={P}
-            />
-            <SettingsOption
-              icon="people"
-              title="My Clientele"
-              subtitle="Repeat bookers & loyal clients"
-              onPress={() => navigation.navigate('Clientele')}
-              P={P}
-            />
-            <SettingsOption
-              icon="calendar-today"
-              title="Booking History"
-              subtitle="View all past bookings"
-              onPress={() => navigation.navigate('BookingHistory')}
-              P={P}
-            />
-          </View>
-
-          {/* Account */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Account</Text>
-            <SettingsOption
-              icon="lock"
-              title="Change Password"
-              subtitle="Update credentials"
-              onPress={() => navigation.navigate('ChangePassword')}
-              P={P}
-            />
-            <SettingsOption
-              icon="badge"
-              title="Account Info"
-              subtitle="Name, phone, DOB & login email"
-              onPress={() => navigation.navigate('AccountInfo')}
-              P={P}
-            />
-            <SettingsOption
-              icon="notifications"
-              title="Notifications"
-              subtitle="Bookings, messages, reminders"
-              onPress={() => navigation.navigate('Notifications')}
-              P={P}
-            />
-            {/* Dark mode toggle */}
-            <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
-              <View style={styles.optionLeft}>
-                <Icon name="brightness-6" size={20} color={P.sub} style={{ marginRight: 12 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionText, { color: P.text }]}>Dark Mode</Text>
-                  <Text style={[styles.optionSubText, { color: P.sub }]}>Appearance</Text>
-                </View>
-              </View>
-              <Switch
-                value={isDarkMode}
-                onValueChange={() => { Haptics.selectionAsync().catch(() => {}); toggleTheme(); }}
-                trackColor={{ false: '#D1D1D6', true: P.accent }}
-                thumbColor={isDarkMode ? '#fff' : '#f4f3f4'}
-              />
+              {OFFERS_ENABLED && (
+                <TouchableOpacity
+                  style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Promotions'); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.previewStatNum, { color: P.text }]}>Promotions</Text>
+                  <Text style={[styles.previewStatLbl, { color: P.sub }]}>Offers &amp; Deals</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.previewStat, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : P.card }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('Clientele'); }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.previewStatNum, { color: P.text }]}>Clientele</Text>
+                <Text style={[styles.previewStatLbl, { color: P.sub }]}>Loyal Clients</Text>
+              </TouchableOpacity>
             </View>
-            {/* Face ID / Touch ID toggle */}
-            <View style={[styles.option, { backgroundColor: P.card, borderColor: P.border }]}>
-              <View style={styles.optionLeft}>
-                <Icon name="shield-check" size={20} color={P.sub} style={{ marginRight: 12 }} />
+            </View>
+          </View>
+
+          <View style={styles.body}>
+
+            {/* ── Small persistent ring badge — demoted, NOT a hero. Kept per
+                explicit confirmation; sized/positioned to match the mockup. ── */}
+            <TouchableOpacity
+              style={[styles.ringInline, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.shadow }]}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('BusinessProfile'); }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.ringBadge}>
+                <Svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
+                  <SvgCircle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RING_RADIUS}
+                    fill="none"
+                    stroke={P.iconBg}
+                    strokeWidth={RING_STROKE}
+                  />
+                  <SvgCircle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RING_RADIUS}
+                    fill="none"
+                    stroke={P.accent}
+                    strokeWidth={RING_STROKE}
+                    strokeDasharray={`${RING_CIRC} ${RING_CIRC}`}
+                    strokeDashoffset={RING_CIRC * 0.3}
+                    strokeLinecap="round"
+                    rotation={-90}
+                    originX={RING_SIZE / 2}
+                    originY={RING_SIZE / 2}
+                  />
+                </Svg>
+                <Text style={[styles.ringBadgeText, { color: P.accent }]}>{initials}</Text>
+              </View>
+              <View style={styles.ringInlineText}>
+                <Text style={[styles.ringInlineTitle, { color: P.text }]}>Business Profile</Text>
+                <Text style={[styles.ringInlineSub, { color: P.sub }]}>Profile, details &amp; communications</Text>
+              </View>
+              <Icon name="chevron-right" size={14} color={P.sub} style={{ opacity: 0.35 }} />
+            </TouchableOpacity>
+
+            {/* ── My Business: horizontal card carousel, replacing a vertical
+                list — matches Concept E's mechanism exactly. ────────────── */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>MY BUSINESS</Text>
+              <View style={styles.carousel}>
+                <CarouselCard key="schedule" icon="calendar-today" title="Schedule" subtitle="Set your hours & block dates" onPress={() => navigation.navigate('ProviderSchedule')} P={P} />
+                <CarouselCard key="inbox" icon="chat-dots" title="Inbox" subtitle="Messages with your clients" onPress={() => navigation.navigate('ProviderInbox')} P={P} />
+                <CarouselCard key="booking-history" icon="calendar-today" title="Booking History" subtitle="View past bookings" onPress={() => navigation.navigate('BookingHistory')} P={P} />
+              </View>
+            </View>
+
+            {/* ── Account: twin toggle cards + plain rows ────────────────── */}
+            <View style={styles.twinRow}>
+              <View style={[styles.twinCard, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.shadow }]}>
+                <View style={styles.twinLeft}>
+                  <View style={[styles.twinIcon, { backgroundColor: P.iconBg }]}>
+                    <Icon name="brightness-6" size={14} color={P.accent} />
+                  </View>
+                  <Text style={[styles.twinTitle, { color: P.text }]}>Dark Mode</Text>
+                </View>
+                <Switch
+                  value={isDarkMode}
+                  onValueChange={() => { Haptics.selectionAsync().catch(() => {}); toggleTheme(); }}
+                  trackColor={{ false: '#D1D1D6', true: P.accent }}
+                  thumbColor={isDarkMode ? '#fff' : '#f4f3f4'}
+                />
+              </View>
+              <View style={[styles.twinCard, { backgroundColor: P.card, borderColor: P.border, shadowColor: P.shadow }]}>
+                <View style={styles.twinLeft}>
+                  <View style={[styles.twinIcon, { backgroundColor: P.iconBg }]}>
+                    <Icon name="shield-check" size={14} color={P.accent} />
+                  </View>
+                  <Text style={[styles.twinTitle, { color: P.text }]}>{biometricLabel}</Text>
+                </View>
+                <Switch
+                  value={biometricEnabled}
+                  onValueChange={handleBiometricToggle}
+                  disabled={!biometricAvailable}
+                  trackColor={{ false: '#D1D1D6', true: P.accent }}
+                  thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
+                />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>ACCOUNT</Text>
+              <SettingsOption icon="lock" title="Change Password" subtitle="Update credentials" onPress={() => navigation.navigate('ChangePassword')} P={P} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="badge" title="Account Info" subtitle="Name, phone, DOB & login email" onPress={() => navigation.navigate('AccountInfo')} P={P} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="notifications" title="Notifications" subtitle="Bookings, messages, reminders" onPress={() => navigation.navigate('Notifications')} P={P} />
+            </View>
+
+            {/* ── Accessibility & Support ─────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>ACCESSIBILITY & SUPPORT</Text>
+              <SettingsOption
+                icon="format-size"
+                title="Text Size & Font"
+                subtitle="Open phone display settings"
+                onPress={() => Linking.openURL('App-prefs:root=ACCESSIBILITY')}
+                P={P}
+              />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption
+                icon="language"
+                title="Language & Region"
+                subtitle="Open phone language settings"
+                onPress={() => Linking.openURL('App-prefs:root=General&path=LANGUAGE_AND_REGION')}
+                P={P}
+              />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="help" title="Help Centre" subtitle="FAQs, contact support" onPress={() => navigation.navigate('HelpCentre')} P={P} />
+            </View>
+
+            {/* ── For Clients: contained accent-filled card, in its usual
+                position — not merged into the opening panel. ───────────── */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>FOR CLIENTS</Text>
+              <TouchableOpacity
+                style={[styles.providerCard, { backgroundColor: P.accent, shadowColor: P.shadow }]}
+                onPress={handleSwitchToClient}
+                activeOpacity={0.85}
+              >
+                <View style={styles.providerCardIcon}>
+                  <Icon name="swap-horiz" size={18} color="#FFFFFF" />
+                </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionText, { color: P.text }]}>{biometricLabel}</Text>
-                  <Text style={[styles.optionSubText, { color: P.sub }]}>
-                    {biometricAvailable ? 'Quick sign-in' : 'Not available on this device'}
+                  <Text style={styles.providerCardTitle}>
+                    {user?.hasClientProfile ? 'Switch to Client Mode' : 'Create Client Account'}
+                  </Text>
+                  <Text style={styles.providerCardSub}>
+                    {user?.hasClientProfile ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
                   </Text>
                 </View>
-              </View>
-              <Switch
-                value={biometricEnabled}
-                onValueChange={handleBiometricToggle}
-                disabled={!biometricAvailable}
-                trackColor={{ false: '#D1D1D6', true: P.accent }}
-                thumbColor={biometricEnabled ? '#fff' : '#f4f3f4'}
-              />
+                {clientUnread > 0 && (
+                  <View style={styles.providerCardBadge}>
+                    <Text style={styles.providerCardBadgeText}>{clientUnread > 99 ? '99+' : clientUnread}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
-          </View>
 
-          {/* Accessibility & Support */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>Accessibility & Support</Text>
-            <SettingsOption
-              icon="format-size"
-              title="Text Size & Font"
-              subtitle="Open phone display settings"
-              onPress={() => Linking.openURL('App-prefs:root=ACCESSIBILITY')}
-              P={P}
-            />
-            <SettingsOption
-              icon="language"
-              title="Language & Region"
-              subtitle="Open phone language settings"
-              onPress={() => Linking.openURL('App-prefs:root=General&path=LANGUAGE_AND_REGION')}
-              P={P}
-            />
-            <SettingsOption
-              icon="help"
-              title="Help Centre"
-              subtitle="FAQs, contact support"
-              onPress={() => navigation.navigate('HelpCentre')}
-              P={P}
-            />
-          </View>
+            {/* ── App Info & Legal ────────────────────────────────────────── */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionLabel, { color: P.sub }]}>APP INFO & LEGAL</Text>
+              <SettingsOption icon="info" title="About Cerviced" subtitle="Mission, version" onPress={() => navigation.navigate('About')} P={P} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="gavel" title="Terms & Conditions" subtitle="Legal info" onPress={() => navigation.navigate('Terms')} P={P} />
+              <View style={[styles.sep, { backgroundColor: P.sep }]} />
+              <SettingsOption icon="bug-report" title="Report a Problem" subtitle="Bugs, feedback" onPress={() => navigation.navigate('ReportProblem')} P={P} />
+            </View>
 
-          {/* For Clients */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>For Clients</Text>
             <TouchableOpacity
-              style={[styles.modeBtn, {
-                backgroundColor: P.iconBg,
-                borderColor: P.accent,
-              }]}
-              onPress={handleSwitchToClient}
-              activeOpacity={0.8}
+              style={[styles.logoutBtn, { borderColor: P.border }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); setShowLogoutModal(true); }}
+              activeOpacity={0.7}
             >
-              <Icon name="swap-horiz" size={22} color={P.text} />
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={[styles.modeBtnTitle, { color: P.text }]}>
-                  {user?.hasClientProfile ? 'Switch to Client Mode' : 'Create Client Account'}
-                </Text>
-                <Text style={[styles.modeBtnSub, { color: P.sub }]}>
-                  {user?.hasClientProfile ? 'Browse Cerviced as a client' : 'Set up your client profile to browse'}
-                </Text>
-              </View>
-              {clientUnread > 0 && (
-                <View style={styles.modeBtnBadge}>
-                  <Text style={styles.modeBtnBadgeText}>{clientUnread > 99 ? '99+' : clientUnread}</Text>
-                </View>
-              )}
+              <Icon name="logout" size={14} color={P.text} />
+              <Text style={[styles.logoutText, { color: P.text }]}>Log Out</Text>
             </TouchableOpacity>
+
+            <Text style={[styles.footerText, { color: P.sub }]}>Cerviced v1.0.0</Text>
           </View>
-
-          {/* App Info & Legal */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: P.text }]}>App Info & Legal</Text>
-            <SettingsOption
-              icon="info"
-              title="About Cerviced"
-              subtitle="Mission, version"
-              onPress={() => navigation.navigate('About')}
-              P={P}
-            />
-            <SettingsOption
-              icon="gavel"
-              title="Terms & Conditions"
-              subtitle="Legal info"
-              onPress={() => navigation.navigate('Terms')}
-              P={P}
-            />
-            <SettingsOption
-              icon="bug-report"
-              title="Report a Problem"
-              subtitle="Bugs, feedback"
-              onPress={() => navigation.navigate('ReportProblem')}
-              P={P}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); setShowLogoutModal(true); }}
-            activeOpacity={0.7}
-          >
-            <Icon name="logout" size={16} color="#fff" />
-            <Text style={styles.logoutText}>Log Out</Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.footerText, { color: P.sub }]}>Cerviced v1.0.0</Text>
         </ScrollView>
       </SafeAreaView>
 
-      {/* ── Create Client Account modal ─────────────────────────────────── */}
+      {/* ── Create Client Account modal (unchanged) ─────────────────────── */}
       <Modal visible={showClientModal} transparent animationType="fade" onRequestClose={() => setShowClientModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -485,7 +534,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
         </BlurView>
       </Modal>
 
-      {/* ── Log out confirmation modal ──────────────────────────────────── */}
+      {/* ── Log out confirmation modal (unchanged) ──────────────────────── */}
       <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
         <BlurView intensity={60} tint={isDarkMode ? 'dark' : 'light'} style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: P.card, borderColor: P.border }]}>
@@ -513,122 +562,308 @@ export default function ProviderAccountScreen({ navigation }: any) {
   );
 }
 
-// ── Styles (mirrors UserProfileScreen exactly) ───────────────────────────────
+// ── Styles — translated directly from Concept E-Provider's mockup CSS ───────
+// (see settings_redesign_v2.html, .ep-* classes). Values below are the
+// mockup's px/opacity/radius numbers as-is, with CSS box-shadow converted to
+// RN shadowColor/shadowOffset/shadowOpacity/shadowRadius+elevation.
 
 const styles = StyleSheet.create({
   background: { flex: 1 },
-  container: { flex: 1, paddingHorizontal: 20 },
+  container: { flex: 1 },
   content: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  // 40 of base padding + clearance for the floating IslandPillTabBar pill,
+  // which overlays screen content rather than docking/reserving space for
+  // itself — without this, the logout button/footer text sit behind it at
+  // the bottom of the scroll.
+  scrollContent: { paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE },
 
-  // Hero
-  heroSection: {
-    marginBottom: 20,
-    marginTop: 12,
-    paddingHorizontal: 4,
+  // ---- Hero card (.ep-preview-panel) ----
+  // Full-width hero with rounded bottom corners + a heavy lifted shadow so it
+  // reads as a distinct hero, not a colour strip. The top bleeds up under the
+  // status bar (square top corners + inline paddingTop of insets.top) so it
+  // tucks under the notch cleanly rather than floating a rounded top edge into
+  // the safe area.
+  //
+  // Two layers on purpose: previewShadow carries the shadow (can't be clipped
+  // or it wouldn't render), previewPanel carries overflow:hidden so the
+  // accent glows are clipped to the rounded corners.
+  previewShadow: {
+    marginBottom: 16,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 1,
+    shadowRadius: 32,
+    elevation: 12,
   },
-  heroLeft: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
+  previewPanel: {
+    position: 'relative',
+    minHeight: 250,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingHorizontal: 18,
+    paddingBottom: 24,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  // .ep-preview-glow1: top -60px left -40px, 220x220, radius 110, accent radial @ 0.4 opacity.
+  // RN has no radial-gradient primitive without an extra dependency (expo-linear-gradient
+  // only does linear) — approximated as a large soft-edged translucent circle instead of a
+  // true radial falloff. Flagged explicitly below in the report as the one place the mockup's
+  // CSS didn't translate 1:1. Color/opacity now supplied inline per-theme.
+  previewGlow1: {
+    position: 'absolute',
+    top: -60,
+    left: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+  },
+  previewGlow2: {
+    position: 'absolute',
+    bottom: -80,
+    right: -60,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+  },
+  previewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  // .ep-preview-badge: padding 5px 12px, radius 100, bg rgba(255,255,255,0.10).
+  previewBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 100,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  previewBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    opacity: 0.85,
+  },
+  // .ep-preview-avatar: 32x32, radius 12, bg rgba(255,255,255,0.12).
+  previewAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 16, fontWeight: '700' },
-  heroTextBlock: { flex: 1, gap: 4 },
-  heroSub: { fontSize: 14, fontWeight: '500', letterSpacing: 0.2 },
-  heroName: { fontSize: 40, fontWeight: '800', letterSpacing: -0.5 },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 20,
+  previewAvatarText: { fontSize: 10, fontWeight: '800' },
+  // .ep-preview-title: font-size 26, line-height 1.08*26≈28, margin 20px 0 6px.
+  previewTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 28,
+    marginTop: 20,
+    marginBottom: 6,
   },
-  badgeText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
-
-  // Quick cards
-  quickRow: {
+  // .ep-preview-sub: font-size 12.5, max-width 260, line-height 1.4*12.5≈18.
+  previewSub: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginBottom: 18,
+    maxWidth: 260,
+  },
+  previewStats: {
     flexDirection: 'row',
-    borderRadius: 20,
-    padding: 10,
-    marginBottom: 20,
-    borderWidth: 0.5,
-    gap: 8,
+    gap: 10,
+    marginTop: 'auto',
   },
-  card: {
+  // .ep-preview-stat: flex 1, bg rgba(255,255,255,0.07), radius 14, padding 10px 8px, center.
+  previewStat: {
     flex: 1,
     borderRadius: 14,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    borderWidth: 0.5,
-    gap: 4,
   },
-  cardTitle: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
-  cardSub: { fontSize: 10, fontWeight: '400', textAlign: 'center' },
+  previewStatNum: { fontSize: 15, fontWeight: '800', lineHeight: 17 },
+  previewStatLbl: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginTop: 3,
+    textAlign: 'center',
+  },
 
-  // Section
-  section: {
-    marginBottom: 18,
-    borderRadius: 16,
-    padding: 12,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  sectionTitle: {
+  // ---- Body (.ep-body: padding 20px 16px 0) ----
+  body: { paddingTop: 20, paddingHorizontal: 16 },
+
+  section: { marginBottom: 20 },
+  // .ep-section-label: font-size 11, letter-spacing 1.2, opacity 0.75.
+  sectionLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1.5,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    opacity: 0.75,
     marginBottom: 10,
     marginLeft: 2,
-    textTransform: 'uppercase',
-    opacity: 0.55,
   },
 
-  // Option row
-  option: {
-    padding: 13,
-    borderRadius: 12,
-    marginBottom: 6,
+  // ---- Horizontal card carousel (.ep-carousel / .ep-carousel-card) ----
+  // CSS carousel: gap 10px, margin 0 -16px, padding-left/right 16px (bleeds to
+  // the screen edge). card: width 130, radius 18, border 0.5px, padding 14,
+  // shadow 0 8px 20px var(--pv-shadow).
+  carousel: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 10,
+  },
+  carouselCard: {
+    flex: 1,
+    borderRadius: 18,
     borderWidth: 0.5,
+    padding: 14,
+    gap: 8,
   },
-  optionLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  optionText: { fontSize: 15, fontWeight: '600' },
-  optionSubText: { fontSize: 12, fontWeight: '400', marginTop: 1 },
+  // .ep-cc-icon: 32x32, radius 11.
+  ccIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ccTitle: { fontSize: 12.5, fontWeight: '700', lineHeight: 16 },
+  ccSub: { fontSize: 10, lineHeight: 13 },
 
-  // Mode switcher button
-  modeBtn: {
+  // ---- Small persistent ring badge (.ep-ring-inline / .ep-ring-badge) ----
+  // CSS: padding 10px 14px, radius 16, border 0.5px, shadow 0 6px 16px, margin-bottom 20.
+  ringInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    gap: 10,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0.5,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 3,
   },
-  modeBtnTitle: { fontSize: 15, fontWeight: '700' },
-  modeBtnSub: { fontSize: 12, fontWeight: '400' },
-  modeBtnBadge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#FF1744', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, marginLeft: 8 },
-  modeBtnBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+  // .ep-ring-badge: 40x40, initials text centered on top of the SVG ring.
+  ringBadge: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringBadgeText: {
+    position: 'absolute',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  ringInlineText: { flex: 1, minWidth: 0 },
+  ringInlineTitle: { fontSize: 12.5, fontWeight: '700' },
+  ringInlineSub: { fontSize: 10.5, marginTop: 1 },
 
-  // Logout
+  // ---- Twin toggle cards (.ep-twinrow / .ep-twincard) ----
+  // CSS: gap 10, margin-bottom 20; card: flex 1, radius 16, padding 12, border 0.5px, shadow 0 6px 16px.
+  twinRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  twinCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  twinLeft: { flexDirection: 'row', alignItems: 'center', gap: 9, flexShrink: 1, minWidth: 0 },
+  // .ep-twin-icon: 28x28, radius 10.
+  twinIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twinTitle: { fontSize: 11.5, fontWeight: '700' },
+
+  // ---- Plain quiet rows (.ep-row) ----
+  // CSS: padding 11px 4px.
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+    paddingHorizontal: 4,
+  },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 11, flex: 1 },
+  rowIcon: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  rowTitle: { fontSize: 13.5, fontWeight: '600' },
+  rowSub: { fontSize: 10.5, marginTop: 1 },
+  sep: { height: 1 },
+
+  // ---- For Clients contained accent card (.ep-provider-card) ----
+  // CSS: radius 20, padding 16, shadow 0 10px 24px.
+  providerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 20,
+    padding: 16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  // .ep-provider-card .ep-row-icon: bg rgba(255,255,255,0.16), 34x34, radius 12.
+  providerCardIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerCardTitle: { fontSize: 13.5, fontWeight: '600', color: '#FFFFFF' },
+  providerCardSub: { fontSize: 10.5, marginTop: 1, color: 'rgba(255,255,255,0.72)' },
+  // .ep-provider-badge: 22x22 min, radius 11, bg #FF1744.
+  providerCardBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FF1744',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  providerCardBadgeText: { color: '#fff', fontSize: 10.5, fontWeight: '700' },
+
+  // ---- Logout (.ep-logout) ----
+  // CSS: padding 10px 22px, radius 100, border 1.5px.
   logoutBtn: {
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    gap: 7,
+    marginTop: 14,
     paddingVertical: 10,
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     borderRadius: 100,
-    backgroundColor: '#3A3A3C',
-    gap: 8,
+    borderWidth: 1.5,
   },
-  logoutText: { fontSize: 14, fontWeight: '600', color: '#fff' },
-  footerText: { fontSize: 11, fontWeight: '400', textAlign: 'center', marginTop: 24 },
+  logoutText: { fontSize: 12.5, fontWeight: '600' },
+  footerText: { fontSize: 10, fontWeight: '400', textAlign: 'center', marginTop: 14, opacity: 0.6 },
 
-  // Modal
+  // ---- Modal (unchanged) ----
   modalOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   modalCard: {
     borderRadius: 24,

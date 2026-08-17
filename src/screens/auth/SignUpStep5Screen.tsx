@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -32,26 +33,70 @@ const LOCATIONS = ['Birmingham', 'Manchester', 'London'];
 const FREQUENCIES = ['Every week', 'Bi-weekly', 'Monthly', '3 months', 'Occasionally'];
 const REFERRAL_SOURCES = ['Instagram', 'TikTok', 'Snapchat', 'X', 'Referral', 'Google', 'YouTube', 'Friend', 'Other'];
 
+// Provider "Tell me more" — more descriptive/personal detail than Step 4's
+// operational logistics. Specialties mirror InfoRegScreen's per-service
+// techniqueTags vocabulary so signup's answer is a familiar starting point,
+// not a competing taxonomy.
+const ACCESSIBILITY_OPTIONS = [
+  'Step-free access', 'Accessible parking', 'Accessible bathroom',
+  'Wheelchair accessible', 'Guide dog friendly', 'Sensory-friendly space', 'None of these',
+];
+const LANGUAGE_OPTIONS = ['English', 'Urdu', 'Punjabi', 'Polish', 'Arabic', 'French', 'Spanish', 'BSL', 'Other'];
+
+// Specialty chip options, tailored per service category selected in Step 4
+// (data.serviceInterests) — a provider who picked NAILS sees nail-relevant
+// options, not hair techniques. 'Other' always trails each list and reveals
+// a free-text input rather than being just another chip (see
+// specialtiesOther state below).
+const SPECIALTY_OPTIONS_BY_CATEGORY: Record<string, string[]> = {
+  HAIR: ['Balayage', 'Colour correction', 'Curly/coily hair', 'Braids & extensions', 'Bridal styling', 'Other'],
+  NAILS: ['Gel', 'Acrylics', 'Nail art', 'BIAB', 'Sculpted nails', 'Other'],
+  LASHES: ['Classic', 'Volume', 'Hybrid', 'Lash lift', 'Lash tint', 'Other'],
+  BROWS: ['Microblading', 'Brow lamination', 'Threading', 'Henna brows', 'Tinting', 'Other'],
+  MUA: ['Bridal', 'Editorial', 'Glam', 'Special occasion', 'Airbrush', 'Other'],
+  AESTHETICS: ['Facials', 'Chemical peels', 'Microneedling', 'Dermaplaning', 'Sensitive skin', 'Mature skin', 'Other'],
+  OTHER: ['Other'],
+};
+
 
 export default function SignUpStep5Screen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
   const { data, updateData, resetData, totalSteps } = useRegistration();
-  const { user, activeMode, updateUser, switchMode, upgradeToProvider, addClientProfile } = useAuth();
+  const { user, upgradeToProvider, addClientProfile } = useAuth();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const servicesY  = useRef(0);
   const locationY  = useRef(0);
   const frequencyY = useRef(0);
   const referralY  = useRef(0);
+  const accessibilityY = useRef(0);
+  const languagesY     = useRef(0);
+  const specialtiesY   = useRef(0);
   const [isLoading,  setIsLoading]  = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
   const isProvider = data.accountType === 'provider';
 
+  // Client-only (services/location moved to Step 4 for providers)
   const [selectedInterests, setSelectedInterests] = useState<string[]>(data.serviceInterests);
   const [selectedLocations, setSelectedLocations] = useState<string[]>(data.serviceLocations);
   const [selectedFrequency, setSelectedFrequency] = useState<string>(data.maintenanceFrequency);
   const [selectedReferral,  setSelectedReferral]  = useState<string>(data.referralSource);
+  // Provider-only "Tell me more"
+  const [selectedAccessibility, setSelectedAccessibility] = useState<string[]>(data.accessibilityNotes ? data.accessibilityNotes.split(', ').filter(Boolean) : []);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(data.languagesSpoken);
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>(data.specialties);
+  const [specialtiesOther, setSpecialtiesOther] = useState<string>(data.specialtiesOther);
+  // Category-aware options: union of every selected service category's list
+  // (a provider offering both HAIR and NAILS sees both lists combined), deduped,
+  // 'Other' always trailing regardless of category order.
+  const specialtyOptions = React.useMemo(() => {
+    const categories = data.serviceInterests.length ? data.serviceInterests : ['OTHER'];
+    const combined = categories.flatMap(cat => SPECIALTY_OPTIONS_BY_CATEGORY[cat] ?? []);
+    const withoutOther = combined.filter(o => o !== 'Other');
+    const deduped = withoutOther.filter((o, i) => withoutOther.indexOf(o) === i);
+    return [...deduped, 'Other'];
+  }, [data.serviceInterests]);
   // Personalisation — optional, affects home feed section gating
   const [selectedGender,    setSelectedGender]    = useState<'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null>(data.gender);
   const [hasKids,           setHasKids]           = useState<boolean>(data.has_kids ?? false);
@@ -105,6 +150,25 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     setSelectedReferral(source);
   };
 
+  const toggleAccessibility = (item: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedAccessibility(prev => {
+      if (item === 'None of these') return prev.includes('None of these') ? [] : ['None of these'];
+      const without = prev.filter(a => a !== 'None of these');
+      return without.includes(item) ? without.filter(a => a !== item) : [...without, item];
+    });
+  };
+
+  const toggleLanguage = (item: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedLanguages(prev => prev.includes(item) ? prev.filter(l => l !== item) : [...prev, item]);
+  };
+
+  const toggleSpecialty = (item: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedSpecialties(prev => prev.includes(item) ? prev.filter(s => s !== item) : [...prev, item]);
+  };
+
   const getFriendlyError = (message: string): string => {
     const msg = message.toLowerCase();
     if (msg.includes('user already registered') || msg.includes('already been registered') || msg.includes('already exists'))
@@ -122,8 +186,22 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     return 'Something went wrong. Please try again.';
   };
 
+  // 'Other' plus its free-text value is folded into one flat list to store —
+  // e.g. ['Balayage', 'Other'] + "Colour matching for grey coverage" becomes
+  // ['Balayage', 'Colour matching for grey coverage'], never the literal
+  // string 'Other' itself.
+  const finalSpecialties = selectedSpecialties.includes('Other') && specialtiesOther.trim()
+    ? [...selectedSpecialties.filter(s => s !== 'Other'), specialtiesOther.trim()]
+    : selectedSpecialties.filter(s => s !== 'Other');
+
   const submitSignUp = async () => {
-    updateData({
+    updateData(isProvider ? {
+      accessibilityNotes: selectedAccessibility.join(', '),
+      languagesSpoken: selectedLanguages,
+      specialties: finalSpecialties,
+      specialtiesOther,
+      referralSource: selectedReferral,
+    } : {
       serviceInterests: selectedInterests,
       serviceLocations: selectedLocations,
       maintenanceFrequency: selectedFrequency,
@@ -166,6 +244,14 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         await upgradeToProvider(data.businessName.trim(), data.businessEmail.trim(), {
           businessPhone: data.businessPhone, instagram: data.instagram, tiktok: data.tiktok, website: data.website,
           businessType: data.businessType,
+          dobDay: data.dobDay, dobMonth: data.dobMonth, dobYear: data.dobYear,
+          serviceInterests: data.serviceInterests, serviceLocations: data.serviceLocations,
+          priceRange: data.priceRange, teamSize: data.teamSize,
+          preferredContactMethods: data.preferredContactMethods,
+          preferredPaymentMethods: data.preferredPaymentMethods,
+          accessibilityNotes: selectedAccessibility.join(', '),
+          languagesSpoken: selectedLanguages, specialties: finalSpecialties,
+          referralSource: selectedReferral,
         });
         if (user?.email) {
           const { subject, html } = providerWelcomeEmail({ name: data.name || user.name, businessName: data.businessName.trim() });
@@ -183,7 +269,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     }
 
     const personalEmail = data.email.trim();
-    const dob = data.accountType === 'user'
+    // DOB is collected for both account types now (client: Step 3, provider:
+    // Step 2) — this used to be gated to accountType === 'user' only, which
+    // silently discarded every provider's DOB even after they'd entered it.
+    const dob = data.dobDay && data.dobMonth && data.dobYear
       ? `${data.dobYear}-${data.dobMonth.padStart(2, '0')}-${data.dobDay.padStart(2, '0')}`
       : '';
 
@@ -202,9 +291,17 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             allergies: data.allergies, skin_concerns: data.skinConcerns,
             style_vibe: data.styleVibe || null, treatment_history: data.treatmentHistory,
             medical_notes: data.medicalNotes || null, photography_consent: data.photographyConsent,
-            service_interests: selectedInterests, service_locations: selectedLocations,
+            service_interests: isProvider ? data.serviceInterests : selectedInterests,
+            service_locations: isProvider ? data.serviceLocations : selectedLocations,
             maintenance_frequency: selectedFrequency, referral_source: selectedReferral,
             gender: selectedGender || null, has_kids: hasKids,
+            price_range: isProvider ? (data.priceRange || null) : null,
+            team_size: isProvider ? (data.teamSize || null) : null,
+            preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
+            accessibility_notes: isProvider ? (selectedAccessibility.join(', ') || null) : null,
+            languages_spoken: isProvider ? selectedLanguages : null,
+            specialties: isProvider ? finalSpecialties : null,
+            preferred_payment_methods: isProvider ? data.preferredPaymentMethods : null,
           },
         },
       });
@@ -238,7 +335,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     // Every flow — fresh signup AND provider/client switches — must complete
     // Step 5's required fields before submitting. (Switches used to skip this.)
     const firstEmptyY = isProvider
-      ? (!selectedInterests.length ? servicesY : !selectedLocations.length ? locationY : !selectedReferral ? referralY : null)
+      ? (!selectedAccessibility.length ? accessibilityY : !selectedLanguages.length ? languagesY : !selectedSpecialties.length ? specialtiesY : !selectedReferral ? referralY : null)
       : (!selectedInterests.length ? servicesY : !selectedLocations.length ? locationY : !selectedFrequency ? frequencyY : !selectedReferral ? referralY : null);
 
     if (firstEmptyY) {
@@ -292,21 +389,52 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
         </TouchableOpacity>
 
-        <StepProgressIndicator currentStep={5} totalSteps={totalSteps} />
+        <StepProgressIndicator currentStep={5} totalSteps={totalSteps} stepLabel="Tell Me More" />
 
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: t.text }]}>Tell me more</Text>
           <Text style={[styles.headerSubtitle, { color: t.sub }]}>
             {isProvider
-              ? 'Help us set up your provider profile'
+              ? 'A few finishing touches for your provider profile'
               : "Personalise your experience — skip anything you'd like"}
           </Text>
         </View>
 
         {isProvider ? (
           <>
-            {renderSection(servicesY, 'SERVICES YOU OFFER', 'Select all categories that apply to your business', SERVICE_CATEGORIES, item => selectedInterests.includes(item), toggleInterest, true)}
-            {renderSection(locationY, "WHERE YOU'RE BASED", 'Which cities do you work in?', LOCATIONS, item => selectedLocations.includes(item), toggleLocation, true)}
+            {renderSection(accessibilityY, 'ACCESSIBILITY', "Does your space have any of these? Select all that apply", ACCESSIBILITY_OPTIONS, item => selectedAccessibility.includes(item), toggleAccessibility, true)}
+            {renderSection(languagesY, 'LANGUAGES SPOKEN', 'Which languages can you offer appointments in?', LANGUAGE_OPTIONS, item => selectedLanguages.includes(item), toggleLanguage, true)}
+
+            {/* Specialties — options depend on the service categories picked in Step 4 */}
+            <View onLayout={(e: LayoutChangeEvent) => { specialtiesY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedSpecialties.length ? '#DC2626' : t.text }]}>
+                SPECIALTIES{showErrors && !selectedSpecialties.length ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>
+                {data.serviceInterests.some(c => c === 'HAIR' || c === 'AESTHETICS')
+                  ? 'What client needs or hair/skin types do you specialise in?'
+                  : 'What do you specialise in? You can add more later'}
+              </Text>
+              <View style={styles.chipsContainer}>
+                {specialtyOptions.map(item => (
+                  <TouchableOpacity key={item} style={chipStyle(selectedSpecialties.includes(item))} onPress={() => toggleSpecialty(item)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedSpecialties.includes(item))}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {selectedSpecialties.includes('Other') && (
+                <View style={[styles.otherInputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                  <TextInput
+                    style={[styles.otherInput, { color: t.text }]}
+                    value={specialtiesOther}
+                    onChangeText={setSpecialtiesOther}
+                    placeholder="Tell us more..."
+                    placeholderTextColor={t.sub}
+                  />
+                </View>
+              )}
+            </View>
+
             {renderSection(referralY, 'REFERRAL', 'Where did you hear about us?', REFERRAL_SOURCES, item => selectedReferral === item, selectReferral, true)}
           </>
         ) : (
@@ -391,6 +519,15 @@ const styles = StyleSheet.create({
   sectionLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 13, letterSpacing: 2, marginBottom: 4 },
   sectionSub: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, marginBottom: 14, lineHeight: 18 },
   chipsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 32 },
+  otherInputWrap: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginTop: -22,
+    marginBottom: 32,
+  },
+  otherInput: { fontFamily: 'Jura-VariableFont_wght', fontSize: 15, letterSpacing: 0.3, padding: 0 },
   actionsSection: { alignItems: 'center' },
   completeBtn: { borderRadius: 100, paddingVertical: 15, alignItems: 'center', width: '100%' },
   completeBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 1, color: '#FFFFFF' },

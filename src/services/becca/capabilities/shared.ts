@@ -7,6 +7,7 @@
 import type { ChatSuggestion } from "../types";
 import type { Provider } from "../../ProviderDataService";
 import type { DbProvider } from "../../../types/database";
+import { getProviderIdByDisplayName } from "../../databaseService";
 
 /** GBP. This app is £ — never format money any other way. */
 export function money(amount: number): string {
@@ -22,31 +23,14 @@ export function money(amount: number): string {
 // when she hasn't. Kept as small openers rather than rewritten sentences so
 // each capability keeps owning its own facts; the helper only sets the tone.
 //
-// Rotation is deterministic per call (a rotating index, not Math.random) so
-// the same question in the same session doesn't reshuffle its phrasing on a
-// re-render — but repeated asks across a conversation still vary rather than
-// sounding like a stuck recording.
-
-let toneCursor = 0;
-function pick(options: string[]): string {
-  const choice = options[toneCursor % options.length] ?? options[0]!;
-  toneCursor += 1;
-  return choice;
-}
-
 /**
  * Opener for a genuinely good result — she found something worth showing.
- * Enthusiastic but never gushing; this is a helpful professional, not a
- * cheerleader. Health-adjacent product, so the register stays grounded.
+ * Keep it direct. Phrases such as "Good timing" suggest Becca knows why the
+ * user asked now, which she doesn't; the response should only claim the
+ * result she actually found.
  */
 export function goodNews(): string {
-  return pick([
-    "Great news —",
-    "Good timing —",
-    "Perfect —",
-    "Lovely —",
-    "Nice —",
-  ]);
+  return "Great —";
 }
 
 /**
@@ -55,12 +39,7 @@ export function goodNews(): string {
  * next line is almost always a suggestion for what to try instead.
  */
 export function softMiss(): string {
-  return pick([
-    "Hmm,",
-    "Ah,",
-    "Right —",
-    "Okay,",
-  ]);
+  return "Hmm,";
 }
 
 /**
@@ -111,4 +90,33 @@ export function providerFromDb(p: DbProvider): Provider {
     logo: p.logo_url ? { uri: p.logo_url } : null,
     ...(p.location_text != null ? { location: p.location_text } : {}),
   };
+}
+
+/**
+ * A provider's UUID, resolving it from the display name when the reference
+ * didn't carry one.
+ *
+ * A provider resolved from a pronoun ("are they any good?") or an ordinal
+ * ("the first one") comes from the card list, which carries slug + name but
+ * no UUID. Without this, every capability keyed on `dbId` silently failed on
+ * exactly the phrasings conversation context was built to support.
+ *
+ * ONLY pass a display name that came from an already-gated source: the
+ * conversation's `lastProviders` (populated exclusively from has_gone_live-
+ * filtered queries) or the user's own bookings. `getProviderIdByDisplayName`
+ * deliberately does NOT filter `has_gone_live` — it must still resolve a
+ * provider who went un-live after you booked with them, so rebooking and
+ * reviews keep working. Feeding it free-text user input would therefore let a
+ * client probe for providers who were never published.
+ */
+export async function resolveProviderDbId(provider: {
+  dbId?: string;
+  displayName: string;
+}): Promise<string | null> {
+  if (provider.dbId) return provider.dbId;
+  try {
+    return await getProviderIdByDisplayName(provider.displayName);
+  } catch {
+    return null;
+  }
 }

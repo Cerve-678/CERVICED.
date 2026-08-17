@@ -10,6 +10,19 @@ The app has an enterprise theme system (`src/theme/tokens.ts` + `useEnterpriseTh
 
 When building a new screen, follow the pattern every other screen uses.
 
+**There are two separate palettes, not one** — `src/constants/theme.ts` exports
+`lightTheme`/`darkTheme` (provider hat) **and** `clientLightTheme`/
+`clientDarkTheme` (client hat). They are different colour systems, not the
+same values reformatted. `useTheme()`'s `palette` field already resolves to
+the correct one for the active hat (`activeMode` from `AuthContext`) — always
+read colour through `palette` (commonly destructured as `P` or `C`) rather
+than importing `lightTheme`/`darkTheme` directly, or a client screen will
+render provider branding (this exact bug shipped in `AppDialog.tsx`'s
+`useAppDialog()`, which read the always-provider `theme` field instead of the
+hat-aware `palette` — see Dialogs below). The rest of this doc's "Actual
+Colour Palette" section (`L`/`D`) is the **provider-hat** palette; see
+"Client-Hat Palette" further down for the client one.
+
 ---
 
 ## The Actual Colour Palette
@@ -63,6 +76,98 @@ const P = isDarkMode ? D : L;
 </View>
 ```
 
+This `L`/`D` pattern above is a **provider-hat** convention some older
+screens hand-roll locally instead of reading `useTheme().palette`. Prefer
+`palette` (see the note above) — it already resolves the right hat and mode,
+so a screen never has to redeclare `L`/`D` itself.
+
+---
+
+## Client-Hat Palette
+
+`clientLightTheme` / `clientDarkTheme` in `src/constants/theme.ts` — used
+whenever `activeMode === 'client'` (`useTheme().palette` resolves to these
+automatically; every client screen under `src/screens/client/` should be
+reading colour through `palette`, not the provider `L`/`D` above).
+
+```ts
+const clientLightTheme = {
+  bg:            '#FBF7F8',                    // soft warm pink-tinted off-white
+  surface:       '#F3EEF0',
+  surfaceRaised: '#FFFFFF',
+  card:          '#FFFFFF',
+  accent:        '#4A2340',                    // plum — primary accent, light mode
+  accentText:    '#4A2340',                    // plum reads fine as TEXT on light bg
+  accentDim:     'rgba(74,35,64,0.12)',         // translucent accent — badge/pill fills, disabled states
+  onAccent:      '#FFFFFF',                     // text/icon drawn ON TOP of a solid accent fill
+  secondary:     '#E5ECF4',                     // blue-grey — secondary fill (heart button, category tags)
+  secondaryText: '#4A6B8F',                     // readable blue for TEXT/ICON — #E5ECF4 itself is too pale to read as text
+  ice:           '#FFFFFF',
+  text:          '#000000',
+  sub:           'rgba(74,35,64,0.62)',
+  border:        'rgba(74,35,64,0.14)',
+  sep:           'rgba(74,35,64,0.08)',
+  iconBg:        'rgba(74,35,64,0.12)',
+};
+
+const clientDarkTheme = {
+  bg:            '#17151A',                    // neutral near-black
+  surface:       '#1E1B21',
+  surfaceRaised: '#26222A',
+  card:          '#26222A',
+  accent:        '#E5ECF4',                     // blue-grey — primary accent, dark mode (plum drops out)
+  accentText:    '#E5ECF4',                     // 13–15:1 against the dark bg/card — fine as TEXT
+  accentDim:     'rgba(229,236,244,0.14)',
+  onAccent:      '#1B2740',                     // dark navy — accent itself is PALE, so text/icons drawn on top of a solid accent fill need a dark colour, not white
+  secondary:     '#E5ECF4',                     // same blue-grey — secondary and accent converge in dark mode
+  secondaryText: '#E5ECF4',
+  ice:           '#FFFFFF',
+  text:          '#F0ECE7',
+  sub:           'rgba(240,236,231,0.65)',
+  border:        'rgba(240,236,231,0.16)',
+  sep:           'rgba(240,236,231,0.10)',
+  iconBg:        'rgba(229,236,244,0.14)',
+};
+```
+
+### The rule that actually matters: `accent` vs `accentText`/`onAccent`
+
+`accent` is not one colour with one job — it has two completely different
+jobs depending on *how* it's applied, and dark mode's pale blue-grey
+(`#E5ECF4`) makes the two jobs genuinely incompatible:
+
+- **`accent` as a *background fill*** (a solid button, a filled badge) →
+  whatever sits on top of it must be **`onAccent`**, never a hardcoded
+  `'#fff'`/`P.ice`/white. In light mode `onAccent` is white (accent is dark
+  plum, white reads fine). In dark mode `onAccent` is `#1B2740` (dark navy) —
+  **white text on `#E5ECF4` is ~1.1:1 contrast, effectively invisible.** This
+  exact bug shipped repeatedly in August 2026 (`SearchScreen`, `BookingsScreen`,
+  `BookingDetailScreen`, `CartScreen`, `RescheduleScreen`, `SlidingTabs`'
+  active-tab pill, `AppDialog`'s confirm button) before `onAccent` existed as
+  a token — always use it now instead of re-deriving a fix per screen.
+- **`accent` (or `secondary`) as a *foreground* colour** (icon fill, text
+  color, an icon drawn directly over a photo) → in dark mode this is fine as
+  **text** (13–15:1 against the dark bg, see `accentText`), but a *pale fill
+  colour used as a small icon over a busy background* (a heart over a photo,
+  a checkmark over an image) can still read as washed-out even at "legal"
+  contrast, because it's competing with photo content, not a flat backdrop.
+  `PortfolioCard`'s saved-heart and `ImageDetailModal`'s saved-heart both hit
+  this — fixed with a **fixed bright pink (`#FF2D78`)**, the conventional
+  "favourited" colour, instead of the theme's pale `secondary` token
+  directly; deliberately theme-independent (not `accent`, not `secondary`,
+  not a light/dark split) since a saved-heart should read as the same
+  colour everywhere regardless of hat or mode. When a token is described as
+  "pale, both modes" (see `secondary`'s own comment in `theme.ts`), don't use
+  it directly as an icon/text colour without checking it actually reads
+  against what it's drawn over — reach for a fixed counterpart instead, the
+  same way `secondaryText` (`#4A6B8F`) already exists as the fixed
+  text-legible counterpart to `secondary` for exactly this reason.
+
+**When adding a new colour token or changing an existing one:** grep for
+every place the old value is used as both a background AND a foreground
+before assuming one fix covers all of them — the two uses need different
+replacement colours, not the same one.
+
 ---
 
 ## Background
@@ -112,7 +217,11 @@ export default function MyScreen() {
 
 ---
 
-## Accent Colour
+## Accent Colour (Provider Hat)
+
+This section is the **provider-hat** accent. The client hat has its own,
+different accent — see "Client-Hat Palette" above, including the
+`accent`-as-fill-vs-foreground contrast rule that applies to both hats.
 
 The accent is **mode-specific**, per the app's real shared theme
 (`src/constants/theme.ts`), confirmed against how `BookingsScreen.tsx` and
@@ -120,6 +229,11 @@ other recently-built screens actually render:
 
 - **Light mode: `#5C4033`** — dark chocolate brown.
 - **Dark mode: `#AF9197`** — muted dusty rose/mauve.
+
+Unlike the client hat's dark-mode accent, `#AF9197` is dark enough that plain
+white text/icons on top of a solid fill are fine here — the provider hat has
+never needed an `onAccent`-style split. If you're porting a provider-hat
+pattern to a client screen, don't assume white-on-accent carries over.
 
 (This doc previously stated `#AF9197` for both modes — that was inaccurate;
 `#AF9197` is dark-mode-only in the app as it actually ships. If you're
@@ -167,17 +281,22 @@ Used for booking status badges, alerts, and indicators.
 
 ## Analytics Chart Colours
 
-Used in `ProviderAnalyticsScreen` for charts and data visualisation.
+Used in `ProviderAnalyticsScreen` for multi-series chart data (bars, per-
+service lines, status dots) — a single accent color can't visually separate
+5+ simultaneous series, so this screen keeps a distinct qualitative set
+alongside (not instead of) the real theme accent. Chrome — backgrounds,
+headers, the completion ring — uses `theme.accent` (`#5C4033` light /
+`#AF9197` dark) like every other provider screen; it previously used this
+same violet/purple set standalone, which was off-brand and has been fixed.
 
 ```ts
-const P = {
-  violet: '#BF5AF2',
-  purple: '#9B59D0',
-  pink:   '#FF375F',
-  teal:   '#5AC8FA',
-  green:  '#30D158',
-  amber:  '#FF9F0A',
-  blue:   '#0A84FF',
+const CHART = {
+  pink:  '#FF375F',
+  teal:  '#5AC8FA',
+  green: '#30D158',
+  amber: '#FF9F0A',
+  blue:  '#0A84FF',
+  plum:  '#9B59D0',
 };
 ```
 
@@ -572,8 +691,14 @@ system popup can't be themed and breaks the screen's visual language.
 - Render `<DialogHost />` **last** in the screen's tree so dialogs and toasts
   layer above any bottom sheet.
 
-The provider side has its own `useProviderDialog()` with a fixed palette —
-clients shouldn't see provider branding.
+The provider side has its own `useProviderDialog()` (`src/components/
+ProviderDialog.tsx`) with a fixed provider palette. `useAppDialog()` is the
+client-hat equivalent and must read colour through `useTheme().palette`
+(hat-aware), never the raw `theme` field (always provider) — it did the
+latter until August 2026, which made every client-side confirm dialog
+("Are you sure you want to discard?" etc.) render in provider-brown
+regardless of hat or dark mode. Same rule as the palette note at the top of
+this doc: read `palette`, not `theme`.
 
 ### Bottom sheets
 
@@ -590,6 +715,62 @@ clients shouldn't see provider branding.
   non-zero opacity with nothing left to drive it back down.
 - Mount the sheet itself at all times with `index={-1}`; its open/close is a
   driven animation on an always-present component, not a `visible` prop.
+
+### Navigation back button — two valid patterns, pick by header background
+
+Two genuinely different implementations coexist in this app on purpose —
+which one to use is decided by whether the header has a solid background or
+sits transparently over content, not by preference.
+
+**Plain native (use when `headerStyle.backgroundColor` is solid/opaque)** —
+no custom component at all. Set these in `navigation.setOptions()` and let
+React Navigation draw the platform's own back button:
+
+```ts
+headerBackButtonDisplayMode: 'minimal',
+headerTintColor: P.text, // or P.accentText
+```
+
+This is the real OS-native back affordance (the same system-drawn chevron
+every native app uses on iOS, just recoloured via tint) — zero custom code,
+automatically correct edge-swipe-back behaviour, and it always matches
+platform conventions. It has no background of its own, only an icon colour.
+`RescheduleScreen.tsx` and `SearchScreen.tsx` are the reference examples.
+
+**Custom glass-pill (use when the header is `headerTransparent: true`,
+floating over a photo or arbitrary content)** — a hand-built circular
+button via `headerLeft`, not a native element:
+
+```tsx
+headerLeft: () => (
+  <TouchableOpacity
+    style={styles.navBackButton} // ~40x40, borderRadius 20,
+                                  // backgroundColor 'rgba(255,255,255,0.25)',
+                                  // drop shadow
+    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
+    accessibilityLabel="Go back"
+    accessibilityRole="button"
+  >
+    <Ionicons name="chevron-back" size={22} color="#000" />
+  </TouchableOpacity>
+),
+```
+
+The translucent white circle plus shadow is **not** iOS's real blur material
+(no `UIVisualEffectView`/frosted glass) — it's a flat semi-transparent fill
+that reads as "glassy" sitting on top of a photo, fully app-drawn and
+app-owned. This exists specifically because a plain tinted chevron with no
+backing shape can visually disappear against light image content once the
+header has nothing solid behind it. `ProviderProfileScreen.tsx` is the
+reference example; its icon colour is a **fixed** `#000` (not theme-aware —
+matches "always a dark icon on a light glass circle" regardless of dark
+mode), so copy that exact choice rather than swapping in a theme token,
+unless asked to make the pill itself theme-aware as a deliberate change.
+
+Don't mix the two on the same screen, and don't invent a third variant —
+if a screen's header background changes (e.g. transparent → solid), migrate
+its back button to the pattern that now matches, rather than leaving a glass
+pill on an opaque header or a bare chevron floating over a photo.
 
 ---
 
@@ -633,7 +814,7 @@ Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}
 
 ---
 
-## Dark vs Light at a glance
+## Dark vs Light at a glance (Provider Hat)
 
 | Element | Light | Dark |
 |---|---|---|
@@ -643,5 +824,21 @@ Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {}
 | Primary text | `#000000` | `#F0ECE7` |
 | Secondary text | `#7E6667` | `#7E6667` |
 | Accent | `#5C4033` | `#AF9197` |
+| Text/icon on a solid accent fill | `#FFFFFF` | `#FFFFFF` |
 | Borders | `rgba(126,102,103,0.14)` | `rgba(126,102,103,0.18)` |
+| Status bar | dark-content | light-content |
+
+## Dark vs Light at a glance (Client Hat)
+
+| Element | Light | Dark |
+|---|---|---|
+| Screen background | `#FBF7F8` | `#17151A` |
+| Surfaces / inputs | `#F3EEF0` | `#1E1B21` |
+| Cards | `#FFFFFF` | `#26222A` |
+| Primary text | `#000000` | `#F0ECE7` |
+| Secondary text | `rgba(74,35,64,0.62)` | `rgba(240,236,231,0.65)` |
+| Accent | `#4A2340` (plum) | `#E5ECF4` (blue-grey) |
+| Text/icon on a solid accent fill (`onAccent`) | `#FFFFFF` | `#1B2740` — **not white, accent is pale here** |
+| Secondary as icon/text (`secondaryText`) | `#4A6B8F` | `#E5ECF4` |
+| Borders | `rgba(74,35,64,0.14)` | `rgba(240,236,231,0.16)` |
 | Status bar | dark-content | light-content |

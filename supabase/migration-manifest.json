@@ -1,0 +1,128 @@
+{
+  "$schema": "./migration-manifest.schema.json",
+  "description": "Repository-level inventory of SQL required for a fresh CERVICED deployment to match the intended production behaviour. This is an audit gate, not a migration runner.",
+  "requiredBeforeFreshDeployment": [
+    {
+      "file": "supabase/fix_users_table_pii_leak.sql",
+      "area": "privacy",
+      "bundled": false
+    },
+    {
+      "file": "supabase/security_audit_2026-08-02_rls_and_hardening.sql",
+      "area": "security and provider visibility",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_portfolio_items_category.sql",
+      "area": "portfolio discovery",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_reschedule_request_rls_forgery_gap.sql",
+      "area": "reschedule authorization",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_cart_checkout_slot_hold.sql",
+      "area": "cart slot holds",
+      "bundled": false,
+      "status": "recovered_from_active_schema",
+      "note": "Recovered from the linked active project on 2026-08-08 using pg_get_functiondef(), pg_constraint, information_schema.columns and cron.job. The original deployment is not represented in Supabase migration history."
+    },
+    {
+      "file": "supabase/fix_hold_cart_booking_slots_missing_snapshots.sql",
+      "area": "cart slot holds",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_claim_cart_booking_slots_ambiguous_column.sql",
+      "area": "cart slot holds",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_claim_cart_booking_slots_uses_real_address.sql",
+      "area": "address release",
+      "bundled": false,
+      "note": "Ensures cart-hold checkout snapshots provider_private_details.full_address rather than public location_text."
+    },
+    {
+      "file": "supabase/provider_busy_spans_rpc.sql",
+      "area": "availability visibility",
+      "bundled": false
+    },
+    {
+      "file": "supabase/provider_follow_notify_cron.sql",
+      "area": "provider follows",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_group_booking_notification_dedup.sql",
+      "area": "group booking notifications",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_reschedule_flow_completion.sql",
+      "area": "reschedule lifecycle",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_anon_executable_security_definer_functions.sql",
+      "area": "RPC security",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_auto_accept_provider_notification.sql",
+      "area": "booking notifications",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_missing_notifications.sql",
+      "area": "notification completeness",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_go_live_services_bypass.sql",
+      "area": "provider go-live",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_provider_status_transition_guard.sql",
+      "area": "booking state transitions",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_reschedule_request_conflict.sql",
+      "area": "reschedule concurrency",
+      "bundled": false
+    },
+    {
+      "file": "supabase/fix_dev_reset_and_reschedule_reminder_anon_grants.sql",
+      "area": "RPC security",
+      "bundled": false
+    },
+    {
+      "file": "supabase/provider_schedule_gating.sql",
+      "area": "provider go-live",
+      "bundled": false,
+      "note": "Required by the provider go-live flow but not included in RUN_ALL_MIGRATIONS.sql."
+    },
+    {
+      "file": "supabase/require_services_for_go_live.sql",
+      "area": "provider go-live",
+      "bundled": false,
+      "note": "Required by the provider go-live flow but not included in RUN_ALL_MIGRATIONS.sql."
+    },
+    {
+      "file": "supabase/require_provider_address.sql",
+      "area": "provider address and go-live",
+      "bundled": "partial",
+      "note": "The runner includes address columns/snapshot changes but intentionally omits the complete go-live gate."
+    },
+    {
+      "file": "supabase/waitlist_holds.sql",
+      "area": "waitlist reservation",
+      "bundled": false,
+      "note": "Required for exclusive waitlist holds; not included in RUN_ALL_MIGRATIONS.sql."
+    }
+  ]
+}

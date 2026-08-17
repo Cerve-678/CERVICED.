@@ -7,11 +7,13 @@ interface ThemedBackgroundProps extends ViewProps {
 }
 
 export function ThemedBackground({ children, style, ...props }: ThemedBackgroundProps) {
-  const { isDarkMode } = useTheme();
-  const bg = isDarkMode ? '#1A1815' : '#F5F1EC';
+  // palette already branches on the active hat (client vs provider) inside
+  // ThemeContext, so the root background follows whichever theme is in force
+  // instead of hardcoding the provider-hat values.
+  const { palette } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: bg }, style]} {...props}>
+    <View style={[styles.container, { backgroundColor: palette.bg }, style]} {...props}>
       {children}
     </View>
   );
