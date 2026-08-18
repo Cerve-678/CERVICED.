@@ -912,12 +912,16 @@ const pickFromList: Capability = {
     const provider = entities.provider!.value;
     const dbId = await resolveProviderDbId(provider);
 
-    // Price and reviews are independent reads — fetch together.
-    const [rangeRes, reviewRes] = await Promise.allSettled([
+    // The named result itself should be the navigation affordance. Fetch the
+    // same live, gated provider shape used by discovery cards so the user can
+    // tap the profile directly instead of going through a redundant action.
+    const [profileRes, rangeRes, reviewRes] = await Promise.allSettled([
+      getProviderBySlug(provider.slug),
       dbId ? getProviderPriceRanges([dbId]) : Promise.resolve(new Map()),
       dbId ? getProviderReviews(dbId) : Promise.resolve([]),
     ]);
 
+    const profile = profileRes.status === "fulfilled" ? profileRes.value : null;
     const range =
       rangeRes.status === "fulfilled" && dbId ? rangeRes.value.get(dbId) : undefined;
     const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
@@ -931,11 +935,8 @@ const pickFromList: Capability = {
 
     return {
       text: `**${provider.displayName}**` + (bits.length > 0 ? `\n\n${bits.join(" \u00b7 ")}` : ""),
+      ...(profile ? { providers: [providerFromDb(profile)] } : {}),
       suggestions: [
-        navChip("profile", "View profile", "ProviderProfile", {
-          providerId: provider.slug,
-          source: "becca",
-        }),
         askChip("free", "When are they free?", `When is ${provider.displayName} next free?`),
       ],
     };
