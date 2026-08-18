@@ -897,10 +897,11 @@ const pickFromList: Capability = {
   id: "discover.pick",
   hat: "client",
   describe: "Tell me about the one you just showed me",
-  // Pointing at a result Becca just displayed. Requires a resolved provider,
-  // which for these phrasings only ever comes from the engine's ordinal/
-  // pronoun resolution against the last shown list — so it can't fire cold.
+  // A named provider or a result Becca just displayed. This always requires
+  // a provider resolved from the live database (or carried shown-results
+  // context), so a generic "looking for nails" cannot fire it cold.
   phrases: [
+    "looking for", "searching for",
     "the first one", "the second one", "the third one", "the last one",
     "that one", "this one", "first one", "second one", "number one",
     "tell me about", "more about", "what about them", "who are they",

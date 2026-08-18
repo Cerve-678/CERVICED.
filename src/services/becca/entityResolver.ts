@@ -412,6 +412,7 @@ export function resolveBooking(
 export async function resolveProvider(
   message: string,
   bookings: ConfirmedBooking[],
+  service?: ResolvedEntity<"service", ServiceRef>,
 ): Promise<{
   resolved?: ResolvedEntity<"provider", ProviderRef>;
   ambiguous?: AmbiguousEntity<"provider">;
@@ -466,12 +467,38 @@ export async function resolveProvider(
     }
   }
 
-  // Otherwise try a name search on capitalised words, skipping the sentence
-  // opener so "Find Lola" doesn't search for "Find".
+  // Otherwise try likely names. Capitalised words remain useful, but people
+  // do not reliably capitalise names in chat ("i'm looking for lola studio").
+  // Pull the object of an explicit provider-search phrase as a second,
+  // multi-word candidate so natural lowercase requests reach the same live,
+  // has_gone_live-gated database lookup.
   const candidates = (message.match(/\b[A-Z][a-zA-Z'’&]{2,}\b/g) ?? []).filter(
     (w) => !SENTENCE_OPENERS.has(w.toLowerCase()),
   );
-  for (const cand of candidates) {
+  const namedSearch = message.match(
+    /\b(?:looking for|search(?:ing)? for|find(?: me)?|show me)\s+([^?!.,]{2,80})/i,
+  )?.[1]
+    ?.trim()
+    .replace(/^(?:a|an|the)\s+/i, "")
+    .replace(/^(?:provider\s+)?(?:called|named)\s+/i, "")
+    .replace(/^(?:provider|beautician|stylist|salon)\s+/i, "")
+    .replace(/\s+(?:provider|beautician|stylist|salon)$/i, "")
+    .trim();
+  const genericSearchTerms = new Set([
+    "someone", "anyone", "provider", "beautician", "stylist", "salon",
+    "nail", "nails", "hair", "makeup", "lashes", "brows", "aesthetics",
+  ]);
+  if (
+    namedSearch &&
+    namedSearch.split(/\s+/).length <= 6 &&
+    !genericSearchTerms.has(namedSearch.toLowerCase()) &&
+    namedSearch.toLowerCase() !== service?.sourceText.toLowerCase()
+  ) {
+    candidates.push(namedSearch);
+  }
+
+  const uniqueCandidates = [...new Set(candidates.map((value) => value.trim()).filter(Boolean))];
+  for (const cand of uniqueCandidates) {
     try {
       const rows = await searchProviders(cand);
       if (rows.length === 1 && rows[0]) {
@@ -550,7 +577,7 @@ export async function resolveEntities(
 
   // Provider hits the network; everything above is pure. Run it once and
   // reuse the result for booking disambiguation.
-  const providerResult = await resolveProvider(message, bookings);
+  const providerResult = await resolveProvider(message, bookings, service);
 
   const bookingResult = resolveBooking(message, bookings, now, {
     ...(service ? { service: service.value } : {}),
