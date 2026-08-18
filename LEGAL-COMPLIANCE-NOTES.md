@@ -54,6 +54,35 @@ it can be a statutory minimum (item 5) and needs a DOB-verified mechanism,
 not a soft acknowledgement checkbox; folding it into this same pattern would
 be the wrong legal posture.
 
+**2026-08-18 update — three non-agreeing definitions of "unset"**: Becca can
+now report these flags conversationally (`provider.safety` in
+`src/services/becca/capabilities/client.ts`). Building it surfaced that the
+codebase has **three different conventions for what an unset
+`is_pregnancy_safe` means**, with no single source of truth:
+
+| Where | Test | Unset (`null`) treated as |
+|---|---|---|
+| `ProviderProfileScreen.tsx` (display) | `!service.isPregnancySafe` | **Not safe** — renders the warning |
+| `databaseService.ts` (checkout gate) | `is_pregnancy_safe !== false` | **Safe** — no acknowledgement required |
+| Becca `provider.safety` | `=== false` / `== null` handled separately | **Unknown** — states it as not recorded |
+
+These disagree on the most common real-world state, since the field is opt-in
+and a provider may simply never touch it. The checkout gate is the one worth
+scrutiny: it treats "never filled in" as safe and collects no acknowledgement,
+which is the most permissive of the three and the only one attached to a
+booking record. Becca's posture (a blank is neither a yes nor a no — ask the
+provider) was chosen deliberately after a legal-flagger review flagged that
+omitting an unset field from an otherwise-populated safety answer reads as
+reassurance-by-silence. **Worth deciding one convention and applying it in all
+three places** — not something to resolve unilaterally, since "unset = safe"
+vs "unset = unknown" is a liability posture, not a coding-style choice.
+
+Also from that review: Becca relays provider-authored `contraindications` free
+text verbatim, exactly as `ProviderProfileScreen.tsx` already does. Not a new
+exposure channel, but an AI assistant answering a direct question carries
+different implied authority than a profile page a user reads passively — worth
+raising with counsel if the assistant's framing is ever questioned.
+
 ## 3. Payment flow is not production-ready
 
 `CartScreen.tsx`'s `PaymentModal` collects raw card number/expiry/CVC directly

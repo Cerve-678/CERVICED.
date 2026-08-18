@@ -7,6 +7,7 @@
 
 import { BookingStatus, type ConfirmedBooking } from "../../../types/booking";
 import {
+  dateToYMD,
   formatShortDate,
   formatTime12,
   relativeDayLabel,
@@ -19,6 +20,7 @@ import {
   getClientBeautyProfile,
   getMyEventPlans,
   getNotificationPreferences,
+  getOlderBookings,
   getProviderConsultationService,
   getProviderContactByDisplayName,
   getProviderReschedulePolicyByDisplayName,
@@ -726,6 +728,91 @@ const bookingRoutine: Capability = {
   },
 };
 
+/**
+ * Bookings older than the 90-day window BookingContext holds.
+ *
+ * Distinct from `booking.routine`, which reads the already-loaded `bookings`
+ * array and so can only ever see the last 90 days (see getMyBookings' default
+ * `sinceDaysAgo = 90`). "What did I book last year?" was genuinely
+ * unanswerable — not because the data was missing, but because nothing
+ * fetched past the window.
+ */
+const bookingHistory: Capability = {
+  id: "booking.history",
+  hat: "client",
+  describe: "My older appointments, further back than the last few months",
+  phrases: [
+    "my history", "booking history", "my past appointments", "past bookings",
+    "older bookings", "previous appointments", "appointments last year",
+    "what did i book last year", "what have i booked before",
+    "everything i've booked", "everything ive booked", "all time",
+    "how many appointments have i had", "how much have i booked",
+    "my old bookings", "further back", "before that",
+  ],
+  async run({ bookings, now }): Promise<CapabilityResult> {
+    // Anchor at the oldest booking already in context, so this genuinely
+    // continues the window rather than re-reporting what other capabilities
+    // already cover.
+    const loaded = [...bookings].sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
+    const oldestLoaded = loaded[0]?.bookingDate ?? dateToYMD(now);
+
+    const older = await getOlderBookings(oldestLoaded, 50);
+
+    if (older.length === 0) {
+      const completedRecent = bookings.filter(
+        (b) => b.status === BookingStatus.COMPLETED,
+      ).length;
+      return {
+        text: completedRecent > 0
+          ? `Nothing further back than what I've already got — **${completedRecent}** completed appointment${completedRecent !== 1 ? "s" : ""} is your full history with CERVICED.`
+          : "You haven't completed any appointments through CERVICED yet.",
+        suggestions: [
+          askChip("bookings", "Show my bookings", "Show all my bookings"),
+          askChip("find", "Find someone", "Show me all services"),
+        ],
+      };
+    }
+
+    // Group by provider — "who have I actually been going to" is the question
+    // behind almost every version of this ask.
+    const byProvider = new Map<string, { count: number; last: string }>();
+    for (const b of older) {
+      const key = b.provider_name_snapshot;
+      const existing = byProvider.get(key);
+      if (!existing || b.booking_date > existing.last) {
+        byProvider.set(key, { count: (existing?.count ?? 0) + 1, last: b.booking_date });
+      } else {
+        existing.count += 1;
+      }
+    }
+
+    const ranked = [...byProvider.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5)
+      .map(
+        ([name, info]) =>
+          `- **${name}** — ${info.count} visit${info.count !== 1 ? "s" : ""}, last ${formatShortDate(info.last)}`,
+      )
+      .join("\n");
+
+    const completed = older.filter((b) => b.status === "completed").length;
+
+    return {
+      text:
+        `## Further back\n` +
+        `**${older.length}** appointment${older.length !== 1 ? "s" : ""} before ${formatShortDate(oldestLoaded)}` +
+        (completed !== older.length ? `, **${completed}** of them completed` : "") +
+        `:\n\n${ranked}` +
+        (byProvider.size > 5 ? `\n\n…and ${byProvider.size - 5} more provider${byProvider.size - 5 !== 1 ? "s" : ""}.` : ""),
+      suggestions: [
+        askChip("routine", "What do I usually book?", "What do I normally get?"),
+        askChip("rebook", "Book something again", "Rebook my last appointment"),
+        navChip("all", "Open Bookings", "Bookings"),
+      ],
+    };
+  },
+};
+
 // ==================== DISCOVERY ====================
 
 const findProviders: Capability = {
@@ -1138,6 +1225,170 @@ const providerServices: Capability = {
         navChip("book", `Book with ${provider.displayName}`, "ProviderProfile", { providerId: provider.slug, source: "becca" }),
         askChip("free", "When are they free?", `When is ${provider.displayName} free?`),
         askChip("reviews", "What do people say?", `Reviews for ${provider.displayName}`),
+      ],
+    };
+  },
+};
+
+/**
+ * Treatment-safety requirements a provider has stated on their own services.
+ *
+ * HEALTH-ADJACENT — read the framing before changing anything here.
+ *
+ * This capability REPORTS what a provider has recorded against a service
+ * (patch test required, not recommended during pregnancy, minimum age,
+ * contraindications). It does not assess, advise, reassure, or infer. Three
+ * rules follow from that and must hold:
+ *
+ *  1. Wording mirrors ProviderProfileScreen's existing "Treatment Safety"
+ *     block verbatim ("Patch test required before this treatment", "Not
+ *     recommended during pregnancy") so Becca and the profile can never
+ *     state the same fact differently.
+ *  2. Silence is never reported as safety. A service with no flags set means
+ *     the provider hasn't recorded anything — NOT that the treatment is safe
+ *     for this person — so the empty case says exactly that and points at the
+ *     provider, mirroring how `provider.consultation` handles the same gap.
+ *  3. It never reads the user's own health profile (allergies, medical
+ *     notes) to cross-reference against a treatment. Matching a stated
+ *     allergy to a contraindication would be Becca forming a medical
+ *     opinion, which engine.ts's MEDICAL_OR_DERMATOLOGY_RE guard exists to
+ *     prevent her doing anywhere else.
+ */
+const treatmentSafety: Capability = {
+  id: "provider.safety",
+  hat: "client",
+  describe: "Safety requirements for a provider's treatments",
+  // Deliberately avoids words caught by MEDICAL_OR_DERMATOLOGY_RE (allergy,
+  // skin condition, reaction, treatment-as-verb...) — those are intercepted
+  // before routing and can never reach any capability.
+  // NOTE: "treatment safety" is deliberately absent despite being the app's
+  // own heading for this content — MEDICAL_OR_DERMATOLOGY_RE matches `treat`,
+  // so the phrase is intercepted before routing and could never reach here.
+  // Listing it would advertise coverage that doesn't exist.
+  phrases: [
+    "safety info", "safety requirements", "safety notes",
+    "is it safe", "safe for pregnancy", "pregnancy safe", "pregnant",
+    "expecting", "age limit", "minimum age", "how old do you have to be",
+    "any restrictions", "restrictions", "contraindications",
+    "anything i should know before", "who can't have",
+    "who cant have", "am i able to have",
+  ],
+  needs: [{ kind: "provider", required: true }],
+  async run({ entities, rawMessage }): Promise<CapabilityResult> {
+    const provider = entities.provider!.value;
+    // getProviderBySlug is has_gone_live + is_active gated.
+    const full = provider.slug ? await getProviderBySlug(provider.slug) : null;
+    if (!full) {
+      return {
+        text: `I couldn't pull up ${provider.displayName}'s services just now — their profile has the current details.`,
+        suggestions: [
+          navChip("profile", "View profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    const services = full.services ?? [];
+    // Narrow to one service when the user named it, so "is the peel safe in
+    // pregnancy" answers about the peel rather than listing everything.
+    const wanted = entities.service?.value.specific?.toLowerCase();
+    const scoped = wanted
+      ? services.filter((s) => s.name?.toLowerCase().includes(wanted))
+      : services;
+    const pool = scoped.length > 0 ? scoped : services;
+
+    // Did the user actually ask about pregnancy? Checked here as well as in
+    // the notes builder, because it widens what counts as "has something to
+    // say": a service the provider explicitly marked pregnancy-SAFE carries
+    // no restriction, so it isn't "flagged" in the normal sense — but when
+    // someone asks directly, that recorded answer is exactly what they want,
+    // and dropping it to the generic empty state would bury it.
+    const askedPregnancy = /\b(?:pregnan|expecting|breastfeed|nursing)/i.test(rawMessage);
+
+    const flagged = pool.filter(
+      (s) =>
+        s.patch_test_required ||
+        s.is_pregnancy_safe === false ||
+        s.min_age != null ||
+        (s.contraindications?.length ?? 0) > 0 ||
+        (askedPregnancy && s.is_pregnancy_safe === true),
+    );
+
+    if (flagged.length === 0) {
+      // NOT "it's safe" — an empty set means nothing was recorded. Saying
+      // otherwise would turn missing data into a reassurance Becca has no
+      // basis for.
+      return {
+        text:
+          `${provider.displayName} hasn't recorded any safety requirements against ` +
+          `${wanted ? `**${wanted}**` : "their services"}. ` +
+          `That isn't the same as there being none — if you've got something specific in mind, ask them directly before booking.`,
+        suggestions: [
+          navChip("chat", `Ask ${provider.displayName}`, "ProviderChat", {
+            providerId: provider.slug,
+            ...(full.id ? { providerDbId: full.id } : {}),
+            providerName: provider.displayName,
+          }),
+          navChip("profile", "View profile", "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+          }),
+        ],
+      };
+    }
+
+    // Wording below is copied from ProviderProfileScreen's Treatment Safety
+    // block on purpose — see rule 1 above.
+    const blocks = flagged
+      .slice(0, 5)
+      .map((s) => {
+        const notes: string[] = [];
+        if (s.patch_test_required) notes.push("Patch test required before this treatment");
+        if (s.is_pregnancy_safe === false) notes.push("Not recommended during pregnancy");
+        // PER-FIELD SILENCE (rule 2, one level down). `is_pregnancy_safe` is
+        // an opt-in flag, so `undefined` means "never filled in" — NOT "safe".
+        // Omitting it from an otherwise-populated, confident-looking block let
+        // a user asking "is it safe when pregnant?" read the absence as a no.
+        // That's reassurance-by-silence buried inside a positive answer, which
+        // is worse than the all-empty case because no caveat attaches to it.
+        // Only surfaced when they actually asked, so unrelated queries don't
+        // get noise about a field nobody mentioned.
+        else if (askedPregnancy && s.is_pregnancy_safe == null) {
+          notes.push("Pregnancy suitability not recorded — check with them");
+        }
+        // Provider explicitly marked it suitable. Attributed to THEM, never
+        // asserted by Becca — she has no basis to judge an individual case,
+        // and a direct question deserves the recorded answer rather than a
+        // silence the user would read as an implied "no".
+        else if (askedPregnancy && s.is_pregnancy_safe === true) {
+          notes.push(`${provider.displayName} has marked this suitable during pregnancy`);
+        }
+        if (s.min_age != null) notes.push(`Minimum age ${s.min_age}`);
+        for (const c of (s.contraindications ?? []).slice(0, 3)) notes.push(c);
+        return `- **${s.name}**\n${notes.map((n) => `  - ${n}`).join("\n")}`;
+      })
+      .join("\n");
+
+    return {
+      text:
+        `## Treatment safety\n` +
+        `${provider.displayName} has recorded requirements on ` +
+        `**${flagged.length}** service${flagged.length !== 1 ? "s" : ""}:\n\n${blocks}` +
+        (flagged.length > 5 ? `\n\n…and ${flagged.length - 5} more on their profile.` : "") +
+        `\n\nThis is only what ${provider.displayName} has filled in — a blank isn't a "no". Anything health-related beyond it is a question for them or a professional.`,
+      suggestions: [
+        navChip("chat", `Ask ${provider.displayName}`, "ProviderChat", {
+          providerId: provider.slug,
+          ...(full.id ? { providerDbId: full.id } : {}),
+          providerName: provider.displayName,
+        }),
+        askChip("consult", "Do I need a consultation?", `Do I need a consultation with ${provider.displayName}?`),
+        navChip("profile", "View profile", "ProviderProfile", {
+          providerId: provider.slug,
+          source: "becca",
+        }),
       ],
     };
   },
@@ -2683,6 +2934,10 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   bookingPrep,
   bookingLocation,
   bookingRoutine,
+  // After `bookingRoutine`: "what do I usually book" is answerable from the
+  // already-loaded window, so it shouldn't pay for an extra query. This one
+  // only earns its place when the user explicitly asks to go further back.
+  bookingHistory,
   rebook,
   // Follow-ups first: both REQUIRE entities that usually arrive via carried
   // context, so they only score mid-conversation and can't win cold.
@@ -2703,6 +2958,9 @@ export const CLIENT_CAPABILITIES: Capability[] = [
   findProviders,
   // Before `reviews`: both need a provider, and "what do they do" should
   // resolve to their service list rather than falling through to feedback.
+  // Before `providerServices`: "is the peel safe in pregnancy" is a safety
+  // question, not a request for their price list, and both need a provider.
+  treatmentSafety,
   providerServices,
   providerLocation,
   providerDeposit,

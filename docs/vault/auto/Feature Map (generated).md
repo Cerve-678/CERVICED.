@@ -112,9 +112,9 @@ Curated: [[Booking Flow]] · **217 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(837)_
 - `src/contexts/BookingContext.tsx` _(688)_
 - `src/services/databaseService.ts` _(528)_
+- `src/services/becca/capabilities/client.ts` _(496)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(471)_
-- `src/services/becca/capabilities/client.ts` _(468)_
-- `src/screens/client/CartScreen.tsx` _(373)_
+- `src/screens/client/CartScreen.tsx` _(374)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingDetailScreen.tsx` _(291)_
 - `src/screens/client/BookingsScreen.tsx` _(267)_
@@ -176,7 +176,7 @@ Curated: [[Notifications]] · **139 files**
 - … +109 more
 
 ## Provider onboarding
-Curated: [[Provider Onboarding & Go-Live]] · **62 files**
+Curated: [[Provider Onboarding & Go-Live]] · **63 files**
 - `src/services/databaseService.ts` _(44)_
 - `src/contexts/RegistrationContext.tsx` _(24)_
 - `src/screens/provider/InfoRegScreen.tsx` _(24)_
@@ -191,9 +191,9 @@ Curated: [[Provider Onboarding & Go-Live]] · **62 files**
 - `src/screens/provider/ProviderMyProfileScreen.tsx` _(6)_
 - `supabase/require_services_for_go_live.sql` _(6)_
 - `src/services/acuityTransferService.ts` _(5)_
+- `src/services/becca/capabilities/client.ts` _(5)_
 - `supabase/fix_go_live_services_bypass.sql` _(5)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(4)_
-- `src/services/becca/capabilities/client.ts` _(4)_
 - `src/contexts/AuthContext.tsx` _(3)_
 - `src/screens/auth/ClaimProviderScreen.tsx` _(3)_
 - `src/screens/auth/SignUpStep1Screen.tsx` _(3)_
@@ -207,7 +207,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **62 files**
 - `supabase/add_providers_availability_rpc.sql` _(3)_
 - `supabase/availability_v2.sql` _(3)_
 - `supabase/dev_reset_provider_bookings_only.sql` _(3)_
-- … +32 more
+- … +33 more
 
 ## Waitlist
 Curated: [[Booking Flow]] · **50 files**
@@ -314,8 +314,8 @@ Curated: [[Contexts]] · **150 files**
 ## Becca / AI
 Curated: [[Services]] · **37 files**
 - `src/screens/shared/BeccaScreen.tsx` _(82)_
+- `src/services/becca/capabilities/client.ts` _(46)_
 - `src/services/becca/engine.ts` _(46)_
-- `src/services/becca/capabilities/client.ts` _(39)_
 - `src/services/databaseService.ts` _(35)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_
 - `src/services/becca/types.ts` _(32)_
@@ -347,7 +347,7 @@ Curated: [[Services]] · **37 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **54 files**
-- `src/screens/client/CartScreen.tsx` _(168)_
+- `src/screens/client/CartScreen.tsx` _(169)_
 - `src/contexts/BookingContext.tsx` _(58)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(54)_
 - `src/services/databaseService.ts` _(51)_
