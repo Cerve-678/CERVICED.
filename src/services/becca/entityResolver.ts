@@ -25,10 +25,32 @@ import { SERVICE_CATALOGUE } from "./serviceCatalogue";
 // ==================== SERVICE ====================
 
 /**
+ * Words naming WHO a service is for, rather than what it is.
+ *
+ * These override longest-keyword matching because they reframe the entire
+ * request: "my son needs a haircut" is a KIDS booking, but "haircut" (7 chars)
+ * is longer than "my son" (6), so pure longest-match resolved it to HAIR and
+ * sent a parent to adult salon stylists. Audience is a different axis from
+ * service type, so it can't be settled by comparing keyword lengths on one
+ * scale — it has to win outright.
+ *
+ * Deliberately narrow: only unambiguous audience phrases. A bare "kid" or
+ * "men" is already in the catalogue as an ordinary keyword and still resolves
+ * normally when nothing else matches.
+ */
+const AUDIENCE_OVERRIDES: { pattern: RegExp; category: string }[] = [
+  { pattern: /\b(?:my (?:son|daughter|kid|child|little one)|for (?:my )?(?:kids?|children|a child)|toddler|childrens?|children's)\b/i, category: "KIDS" },
+  { pattern: /\b(?:my (?:husband|boyfriend|partner|son)'?s? (?:hair|cut|beard)|for (?:my )?(?:husband|boyfriend)|mens?|men's|for men)\b/i, category: "MALE" },
+];
+
+/**
  * Longest keyword wins, so "gel manicure" beats a bare "manicure" and
  * resolves to the specific service rather than only the category. The old
  * implementation returned on first match in object order, which made results
  * depend on declaration order rather than specificity.
+ *
+ * An audience phrase (see above) overrides the category that longest-match
+ * picked, while keeping the specific service when it belongs to that audience.
  */
 export function resolveService(
   message: string,
@@ -45,6 +67,19 @@ export function resolveService(
         }
       }
     }
+  }
+
+  // "my son needs a haircut" — the audience decides the category, not the
+  // longest service word. Applied after matching so a message with no service
+  // word at all ("something for my son") still resolves to the category.
+  const audience = AUDIENCE_OVERRIDES.find((a) => a.pattern.test(lower));
+  if (audience && best?.cat !== audience.category) {
+    // The specific service was matched under a DIFFERENT category ("haircut"
+    // under HAIR), so it doesn't describe anything in the audience's own list.
+    // Keep the category only — "kids haircut" is the honest resolution, and
+    // claiming a specific that isn't in that category would search for a
+    // service row that can't exist.
+    best = { kw: audience.category.toLowerCase(), cat: audience.category };
   }
 
   if (!best) return undefined;
@@ -254,7 +289,13 @@ export function resolveBooking(
   ambiguous?: AmbiguousEntity<"booking">;
 } {
   const lower = message.toLowerCase();
-  const upcoming = bookings.filter((b) => b.status === BookingStatus.UPCOMING);
+  const upcoming = bookings
+    .filter((b) => b.status === BookingStatus.UPCOMING)
+    .sort((a, b) =>
+      a.bookingDate === b.bookingDate
+        ? a.bookingTime.localeCompare(b.bookingTime)
+        : a.bookingDate.localeCompare(b.bookingDate),
+    );
   if (upcoming.length === 0) return {};
 
   const scored = upcoming
@@ -280,11 +321,24 @@ export function resolveBooking(
   const label = (b: ConfirmedBooking) =>
     `${b.serviceName} with ${b.providerName}, ${formatShortDate(b.bookingDate)}`;
 
-  // A generic reference ("my booking", "my appointment") with no
-  // distinguishing detail: unambiguous with exactly one upcoming, but a real
-  // ambiguity with several — ask which, rather than silently falling through
-  // to a capability that would then pick the soonest by default.
+  // "Next" is a real distinguishing instruction: the upcoming list is
+  // chronological, so "my next appointment" always means its first record.
+  // Only genuinely generic booking references need a chooser with several.
   if (scored.length === 0) {
+    const next = /\bnext\b.*\b(booking|appointment|appt)\b|\b(booking|appointment|appt)\b.*\bnext\b/.test(lower);
+    if (next) {
+      const first = upcoming[0]!;
+      return {
+        resolved: {
+          kind: "booking",
+          value: first,
+          confidence: 0.95,
+          sourceText: "your next appointment",
+          label: label(first),
+        },
+      };
+    }
+
     const generic = /\b(my|next|upcoming|the)\b.*\b(booking|appointment|appt)\b/.test(lower);
     if (!generic) return {};
 

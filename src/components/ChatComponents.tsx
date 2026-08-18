@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, TextInput, Platform, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { ChatMessage, ChatSuggestion } from '../services/becca/types';
+import { BeccaInspiration, ChatMessage, ChatSuggestion } from '../services/becca/types';
 import { Provider } from '../services/ProviderDataService';
 import { useTheme } from '../contexts/ThemeContext';
 import { formatTime12 } from '../utils/dateUtils';
@@ -268,7 +268,7 @@ export function renderRichText(content: string): React.ReactNode {
       return (
         <React.Fragment key={key}>
           <Text style={styles.bubbleBullet}>• </Text>
-          {renderInlineRichText(item[1]!)}
+          <Text style={styles.bubbleListText}>{renderInlineRichText(item[1]!)}</Text>
           {index < lines.length - 1 ? "\n" : null}
         </React.Fragment>
       );
@@ -298,6 +298,11 @@ export function stripRichText(content: string): string {
 export function ChatBubble({ message }: ChatBubbleProps) {
   const { palette: P } = useTheme();
   const isUser = message.role === 'user';
+  // Not every acknowledgement needs the full editorial treatment. Longer
+  // answers (and answers that arrive with a clear `##` takeaway) become a
+  // small feature card; quick conversational turns stay light and direct.
+  const isEditorial = message.content.length > 130 || /^##\s+/m.test(message.content);
+  const editorialCopy = isEditorial ? splitEditorialCopy(message.content) : null;
 
   if (isUser) {
     return (
@@ -317,19 +322,49 @@ export function ChatBubble({ message }: ChatBubbleProps) {
       <Mark size={22} />
       <View
         style={[
-          styles.card,
-          styles.assistantCard,
-          { backgroundColor: P.card, borderColor: P.border, shadowColor: P.accent },
+          styles.assistantMessage,
+          isEditorial && styles.editorialCard,
+          { backgroundColor: P.card, borderColor: P.border },
         ]}
       >
         {message.imageUri && (
           <Image source={{ uri: message.imageUri }} style={styles.messageImage} resizeMode="cover" fadeDuration={0} />
         )}
-        <Text style={[styles.cardText, { color: P.text }]}>{renderRichText(message.content)}</Text>
+        {editorialCopy?.takeaway ? (
+          <>
+            <Text style={[styles.editorialTakeaway, { color: P.text }]}>{renderInlineRichText(editorialCopy.takeaway)}</Text>
+            {!!editorialCopy.supportingCopy && (
+              <Text style={[styles.cardText, styles.assistantText, styles.editorialSupportingCopy, { color: P.text }]}>
+                {renderRichText(editorialCopy.supportingCopy)}
+              </Text>
+            )}
+          </>
+        ) : (
+          <Text style={[styles.cardText, styles.assistantText, { color: P.text }]}>{renderRichText(message.content)}</Text>
+        )}
         <Text style={[styles.cardTime, { color: P.sub }]}>{formatTime12(new Date(message.timestamp))}</Text>
       </View>
     </View>
   );
+}
+
+/** Pull the opening thought forward as an editorial headline, without
+ * changing persisted message text or the response language used by Becca. */
+function splitEditorialCopy(content: string) {
+  const lines = content.split('\n');
+  const firstLine = lines.findIndex((line) => line.trim().length > 0);
+  if (firstLine === -1) return null;
+
+  const opening = lines[firstLine]!.replace(/^##\s+/, '').trim();
+  const sentenceBreak = opening.match(/^(.{18,110}?[.!?])(?:\s+|$)/);
+  const takeaway = sentenceBreak?.[1] ?? opening;
+  const remainderOfOpening = sentenceBreak ? opening.slice(takeaway.length).trim() : '';
+  const supportingCopy = [remainderOfOpening, ...lines.slice(firstLine + 1)]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+
+  return { takeaway, supportingCopy };
 }
 
 // ==================== QUICK ACTIONS (vertical pill cards) ====================
@@ -341,6 +376,8 @@ export function ChatBubble({ message }: ChatBubbleProps) {
 interface SuggestionsProps {
   suggestions: ChatSuggestion[];
   onSuggestionPress: (suggestion: ChatSuggestion) => void;
+  /** The action used on this turn; it is omitted because the user turn records it. */
+  activeSuggestionId?: string | null;
   indented?: boolean;
   variant?: 'list' | 'row';
 }
@@ -453,24 +490,25 @@ function PillChip({
   );
 }
 
-export function Suggestions({ suggestions, onSuggestionPress, indented = false, variant = 'list' }: SuggestionsProps) {
+export function Suggestions({ suggestions, onSuggestionPress, activeSuggestionId, indented = false, variant = 'list' }: SuggestionsProps) {
   const { palette: P } = useTheme();
 
-  if (!suggestions || suggestions.length === 0) return null;
+  const visibleSuggestions = suggestions?.filter((suggestion) => suggestion.id !== activeSuggestionId) ?? [];
+  if (visibleSuggestions.length === 0) return null;
 
   // Row/chip layout is driven either by the caller's explicit `variant`
   // prop, or by the suggestions themselves being marked `display: "chip"`
   // (e.g. the browse-services category list) — whichever fires first, so
   // callers that just forward whatever suggestions the AI service returned
   // (both BeccaScreen call sites) still get the compact row automatically.
-  const useRowLayout = variant === 'row' || suggestions.every((s) => s.display === 'chip');
+  const useRowLayout = variant === 'row' || visibleSuggestions.every((s) => s.display === 'chip');
 
   if (useRowLayout) {
     return (
       <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
         <Text style={[styles.sectionLabel, { color: P.sub }]}>CHOOSE ONE</Text>
         <View style={styles.pillRow}>
-          {suggestions.map((suggestion) => (
+          {visibleSuggestions.map((suggestion) => (
             <PillChip key={suggestion.id} suggestion={suggestion} onPress={onSuggestionPress} />
           ))}
         </View>
@@ -482,7 +520,7 @@ export function Suggestions({ suggestions, onSuggestionPress, indented = false, 
     <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
       <Text style={[styles.sectionLabel, { color: P.sub }]}>NEXT STEPS</Text>
       <View style={styles.actionsCol}>
-        {suggestions.map((suggestion) => (
+        {visibleSuggestions.map((suggestion) => (
           <ActionCard key={suggestion.id} suggestion={suggestion} onPress={onSuggestionPress} />
         ))}
       </View>
@@ -550,6 +588,83 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
     </View>
   );
 }
+
+// ==================== EXPLORE INSPIRATION ====================
+
+interface InspirationGalleryProps {
+  items: BeccaInspiration[];
+  onInspirationPress: (item: BeccaInspiration) => void;
+  indented?: boolean;
+}
+
+/** Real portfolio images, using the same live Explore source as the feed. */
+export function InspirationGallery({
+  items,
+  onInspirationPress,
+  indented = true,
+}: InspirationGalleryProps) {
+  const { palette: P } = useTheme();
+  if (items.length === 0) return null;
+
+  return (
+    <View style={[styles.sectionWrap, indented && styles.sectionWrapIndented]}>
+      <Text style={[styles.sectionLabel, { color: P.accentText }]}>LOOKS TO EXPLORE</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recommendationsScroll}>
+        {items.map((item, index) => {
+          const layout = MOODBOARD_LAYOUT[index % MOODBOARD_LAYOUT.length]!;
+          return (
+          <TouchableOpacity
+            key={item.id}
+            style={[
+              styles.inspirationCard,
+              // shadowColor is set here rather than in the stylesheet to match
+              // providerCard's pattern. Neutral black, never the accent — a
+              // coloured drop shadow reads as a glow rather than depth.
+              { width: layout.width, marginTop: layout.offset, backgroundColor: P.card, borderColor: P.border, shadowColor: '#000' },
+            ]}
+            // Same interaction as ProviderRecommendations directly above it in
+            // the thread — a scrolling card that opens a provider — so it fires
+            // the same Light impact and uses the same 0.7. Without the haptic
+            // this was the one tappable surface in the file that stayed silent,
+            // and 0.78 matched no documented activeOpacity tier at all.
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              onInspirationPress(item);
+            }}
+            activeOpacity={0.7}
+          >
+            {/* fadeDuration={0} is mandatory (CLAUDE.md / DESIGN_SYSTEM.md):
+                without it ANY re-render — not just a new URI — retriggers the
+                default fade-in, which reads as a flicker across a grid that
+                re-renders every time a new message lands in the thread. */}
+            <Image source={{ uri: item.imageUrl }} style={[styles.inspirationImage, { height: layout.imageHeight }]} resizeMode="cover" fadeDuration={0} />
+            <Text style={[styles.inspirationProvider, { color: P.text }]} numberOfLines={1}>
+              {item.providerName}
+            </Text>
+            <View style={[styles.inspirationFit, { backgroundColor: P.iconBg }]}>
+              <Ionicons name="sparkles" size={10} color={P.accentText} />
+              <Text style={[styles.inspirationFitText, { color: P.accentText }]} numberOfLines={2}>
+                {item.whyItFits ?? 'A considered reference for your moodboard'}
+              </Text>
+            </View>
+            {!!item.caption && (
+              <Text style={[styles.inspirationCaption, { color: P.sub }]} numberOfLines={2}>
+                {item.caption}
+              </Text>
+            )}
+          </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const MOODBOARD_LAYOUT = [
+  { width: 178, imageHeight: 232, offset: 0 },
+  { width: 138, imageHeight: 180, offset: 26 },
+  { width: 158, imageHeight: 208, offset: 10 },
+] as const;
 
 // ==================== THINKING INDICATOR ====================
 
@@ -658,15 +773,41 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   userCard: {
+    // User turns are usually short; a tighter cap keeps them visually
+    // distinct from Becca's wider, structured answers.
+    maxWidth: '66%',
     borderBottomRightRadius: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  assistantCard: {
-    borderWidth: 1,
-    borderBottomLeftRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.16,
-    shadowRadius: 8,
-    elevation: 2,
+  // Becca's copy is deliberately unboxed: the mark, typography and attached
+  // actions already identify the speaker, while a white card made every
+  // answer feel like a heavy system notice rather than a conversation.
+  assistantMessage: {
+    maxWidth: '78%',
+    borderRadius: 18,
+    borderBottomLeftRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 13,
+    paddingTop: 11,
+    paddingBottom: 9,
+  },
+  editorialCard: {
+    maxWidth: '82%',
+    paddingHorizontal: 15,
+    paddingTop: 14,
+    paddingBottom: 11,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  editorialTakeaway: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 16,
+    lineHeight: 21,
+    letterSpacing: 0.1,
+  },
+  editorialSupportingCopy: {
+    marginTop: 9,
   },
   cardText: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -687,14 +828,24 @@ const styles = StyleSheet.create({
     // A different display face gives the answer's title a clear visual tier
     // above the body copy, so the user can scan a long thread by outcome.
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: 15,
+    lineHeight: 21,
     letterSpacing: 0.15,
   },
   bubbleBullet: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
     fontSize: 16,
+  },
+  bubbleListText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+  },
+  // User text remains lighter and conversational. Becca's factual answers
+  // need more presence across the full sentence, not only in the first
+  // bolded phrase, so the assistant gets the heavier Jura axis throughout.
+  assistantText: {
+    fontWeight: '600',
   },
   cardTime: {
     fontFamily: 'Jura-VariableFont_wght',
@@ -754,10 +905,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderWidth: 1,
     borderRadius: 999,
-    paddingLeft: 19,
-    paddingRight: 7,
-    paddingVertical: 7,
-    minHeight: 55,
+    paddingLeft: 15,
+    paddingRight: 6,
+    paddingVertical: 5,
+    minHeight: 46,
     gap: 9,
   },
   choiceIcon: {
@@ -766,16 +917,16 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 13.5,
+    fontSize: 12,
     letterSpacing: 0.1,
   },
   actionCopy: {
     flex: 1,
   },
   actionArrowWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -864,6 +1015,58 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 9.5,
     textAlign: 'center',
+  },
+
+  // Explore inspiration cards inside Becca — deliberately visual first,
+  // then a concise provider/caption label so a tap has a clear destination.
+  inspirationCard: {
+    marginRight: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    paddingBottom: 9,
+    // Matches providerCard's lift exactly. These two card types scroll
+    // directly above/below each other in the same thread, and one sitting
+    // flat while the other lifted read as two different elevation systems in
+    // a single conversation. Same reasoning as providerCard: deliberately
+    // light, and never accent-tinted — the mark is the only pronounced light.
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  inspirationImage: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  inspirationProvider: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 10.5,
+    paddingHorizontal: 9,
+  },
+  inspirationCaption: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 9.5,
+    lineHeight: 13,
+    paddingHorizontal: 9,
+    marginTop: 3,
+  },
+  inspirationFit: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    marginHorizontal: 8,
+    marginTop: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  inspirationFitText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 9,
+    lineHeight: 12,
   },
 
   // Chat Input

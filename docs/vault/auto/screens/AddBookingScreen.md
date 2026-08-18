@@ -8,7 +8,6 @@ tags: [screen, provider]
 
 ## → Navigates to
 - `ProviderHome` _(navigator / dynamic)_
-- [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

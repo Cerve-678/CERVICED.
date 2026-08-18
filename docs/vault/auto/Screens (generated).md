@@ -5,22 +5,26 @@
 
 #generated
 
-**66 screens.** Curated overview: [[Screens & Navigation]].
+**72 screens.** Curated overview: [[Screens & Navigation]].
 
-## Provider (23)
+## Provider (29)
 - `src/screens/client/ProviderChatScreen.tsx`
 - `src/screens/client/ProviderProfileScreen.tsx`
+- `src/screens/provider/AboutYouScreen.tsx`
 - `src/screens/provider/AddBookingScreen.tsx`
 - `src/screens/provider/BrandingScreen.tsx`
+- `src/screens/provider/BusinessDetailsScreen.tsx`
+- `src/screens/provider/BusinessInfoScreen.tsx`
 - `src/screens/provider/BusinessProfileScreen.tsx`
 - `src/screens/provider/InfoRegScreen.tsx`
+- `src/screens/provider/PaymentsScreen.tsx`
+- `src/screens/provider/PoliciesScreen.tsx`
 - `src/screens/provider/ProviderAccountInfoScreen.tsx`
 - `src/screens/provider/ProviderAccountScreen.tsx`
 - `src/screens/provider/ProviderAnalyticsScreen.tsx`
 - `src/screens/provider/ProviderAutomationsScreen.tsx`
 - `src/screens/provider/ProviderBookingDetailScreen.tsx`
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx`
-- `src/screens/provider/ProviderBusinessEmailScreen.tsx`
 - `src/screens/provider/ProviderClienteleScreen.tsx`
 - `src/screens/provider/ProviderCommunicationsScreen.tsx`
 - `src/screens/provider/ProviderConversationScreen.tsx`
@@ -31,6 +35,8 @@
 - `src/screens/provider/ProviderMyProfileScreen.tsx`
 - `src/screens/provider/ProviderPromotionsScreen.tsx`
 - `src/screens/provider/ProviderScheduleScreen.tsx`
+- `src/screens/provider/SchedulingScreen.tsx`
+- `src/screens/provider/ServicesPricingScreen.tsx`
 
 ## Client / shared (43)
 - `src/screens/auth/AuthScreen.tsx`

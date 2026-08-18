@@ -322,6 +322,8 @@ No decision made on the request/approval flow's exact screens, whether emergency
 
 Offers/Promotions are temporarily pulled from BOTH sides of the app as of 2026-08-09: the "CURRENT OFFERS" carousel on the client Home screen (and the full-browse `OffersScreen` it links to), and every provider-side entry point into `ProviderPromotionsScreen` (creating/editing/managing promotions). Nobody — client or provider — can currently reach promotions through the UI. This is a UI-visibility decision, not a data/backend change.
 
+Becca follows the same boundary: she must not query, summarise, recommend, or link to offers/promotions while this feature is disabled. Deal/promotion capabilities and their suggestion chips were removed on 2026-08-18; keep promo-code validation at checkout, which remains a separate available feature.
+
 ### What was done
 
 A single flag, `OFFERS_ENABLED` in `src/constants/featureFlags.ts`, gates:
@@ -338,7 +340,7 @@ Left untouched (so re-enabling is a one-line flip, not a rebuild):
 
 ### To bring it back
 
-Flip `OFFERS_ENABLED` to `true` in `src/constants/featureFlags.ts`. No other changes needed unless the underlying screens/data have drifted in the meantime.
+Flip `OFFERS_ENABLED` to `true` in `src/constants/featureFlags.ts`, then deliberately restore and test Becca's client deal lookup and provider promotion-management capabilities before exposing them. No other changes needed unless the underlying screens/data have drifted in the meantime.
 
 ---
 
@@ -373,4 +375,62 @@ Flip `MULTI_SERVICE_BOOKING_ENABLED` to `true` in `src/constants/featureFlags.ts
 
 ---
 
-*Last updated: 2026-08-09*
+## Provider Deactivation / Pause Bookings (No Such Toggle Exists Today)
+
+### What it means
+
+A provider wants to temporarily stop appearing to clients and stop taking new bookings — without deleting their account. "I'm on holiday for two weeks, pause my listing" or "I'm overwhelmed, hide me for now."
+
+### What currently happens (why there's no toggle today)
+
+`has_gone_live` is the flag every client-facing query gates on (see `CLAUDE.md`'s Security section). Today it is **write-once from the provider's own actions**: it flips `true` exactly once, when onboarding requirements are satisfied (`provider_schedule_gating.sql`, `require_provider_address.sql`, `require_services_for_go_live.sql`, `availability_v2.sql` — all `SET has_gone_live = TRUE`). There is no app code anywhere that flips it back to `false` except:
+- `delete_account.sql` (account deletion)
+- `dev_reset_provider.sql` (dev/testing reset RPC, not provider-facing)
+
+No screen — not `InfoRegScreen.tsx`, not anywhere in `src/screens/provider/` — has a toggle, switch, or button that calls anything to set `has_gone_live = false`. A provider's only way to stop being visible today is to delete their account entirely, which is a much bigger and more destructive action (see `account-deletion-architecture` in memory — grace period, per-hat delete RPCs) than "I want a break."
+
+### What needs to exist
+
+- A real "Pause bookings" / "Go offline" control, most likely in `InfoRegScreen.tsx` near the business-profile settings, calling a new RPC (e.g. `provider_set_availability_status(p_paused boolean)`) rather than a raw `.update()` on `has_gone_live` — consistent with the rest of this app's RPC-only mutation pattern for security-sensitive provider-state columns.
+- **Must warn about upcoming bookings before pausing**, same shape as the blocked-date warning added to `ProviderScheduleScreen.tsx` (2026-08-17): check `getProviderBookingsByDate`-style active bookings across the provider's upcoming window before allowing the toggle, since — per the deactivation gap findings this session — flipping `has_gone_live` to `false` today touches zero existing bookings. Decide product-side whether pausing should be blocked outright while upcoming bookings exist, or just warned-and-allowed (existing bookings stay valid, only new bookings stop).
+- Decide whether "paused" should notify clients with upcoming bookings at all, and whether a paused provider can still be found via direct link (e.g. an existing bookmark) vs. fully hidden from all discovery.
+- Needs a `cerviced-security-review` pass since this is a mutation on the exact column every client-facing query boundary depends on.
+
+### Related
+
+Found during the 2026-08-17 provider-definable-policy audit alongside the no-show/cancellation-policy gaps — this one was scoped out of that fix pass because it's net-new feature surface (a toggle that doesn't exist yet), not a fix to something already there.
+
+---
+
+## Event Plans — table and Becca capability exist, nothing writes to them
+
+### What it means
+
+A client plans a set of appointments around an occasion — a wedding, a holiday, a birthday — and wants them tracked together: "what have I got booked for the wedding?"
+
+### What currently exists
+
+More than you'd expect, which is why this is a "finish it" item rather than a "build it from scratch" one:
+
+- An `event_plans` table, live in the database.
+- `getMyEventPlans()` and `getEventPlanDetails()` in `databaseService.ts`.
+- A working Becca capability, `account.events` (`src/services/becca/capabilities/client.ts`), matching "my event plans", "my wedding", "what have I got for the holiday".
+- Becca's own help text advertises event plans as one of the things she can tell you about.
+
+### What's missing
+
+**Nothing in the app can create an event plan.** There is no writer function and no screen — `getMyEventPlans` is the only code path that touches the table at all, and it only reads. So `account.events` correctly reports "you haven't set up any event plans yet" to every user, permanently, while the help text implies the feature works.
+
+### What needs to exist
+
+- A way to create an event plan and attach bookings to it (a dedicated screen, or a step in the booking flow).
+- A writer in `databaseService.ts`, plus RLS confirmed on `event_plans` — the table has never been exercised by a write path, so its policies are effectively untested.
+- Once rows can exist, `account.events`'s success path needs per-item nav chips so a listed plan can be opened. Every other list-style Becca capability (`booking.list`, `inbox.notifications`, `discover.saved`) provides these; this one returns no suggestions at all, because it has never been possible to reach that branch with real data.
+
+### Related
+
+Found during the 2026-08-18 Becca capability audit. Flagged rather than removed — the read side is deliberate groundwork for a planned feature, not dead code to delete.
+
+---
+
+*Last updated: 2026-08-18*

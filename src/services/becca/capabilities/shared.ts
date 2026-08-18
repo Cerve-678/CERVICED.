@@ -17,30 +17,15 @@ export function money(amount: number): string {
 // ──────────────────────────────────────────────────────────────────────────
 // Voice
 //
-// Becca's replies were uniformly flat — every answer a bare statement of
-// fact, whether it was good news or a dead end. These helpers give her
-// dynamic range: warmth when she's found something, honesty without gloom
-// when she hasn't. Kept as small openers rather than rewritten sentences so
-// each capability keeps owning its own facts; the helper only sets the tone.
+// The deterministic path leads with the answer, not a canned opener.
 //
-/**
- * Opener for a genuinely good result — she found something worth showing.
- * Keep it direct. Phrases such as "Good timing" suggest Becca knows why the
- * user asked now, which she doesn't; the response should only claim the
- * result she actually found.
- */
-export function goodNews(): string {
-  return "Great —";
-}
-
-/**
- * Opener for an empty/negative result. Warm and matter-of-fact: acknowledges
- * the miss without apologising excessively or sounding defeated, because the
- * next line is almost always a suggestion for what to try instead.
- */
-export function softMiss(): string {
-  return "Hmm,";
-}
+// `goodNews()` and `softMiss()` used to live here and were called at 35 sites
+// across client.ts, but both had been reduced to `return ""` — so every
+// template began with an empty interpolation and a stray space, and the code
+// read as though a voice system existed when none did. They were deleted
+// 2026-08-18 and their call sites inlined to lead with the real first word.
+// Conversational warmth belongs to the AI presentation layer, not to a
+// constant prefix on every reply.
 
 /**
  * A small pill in a wrapped row — short, category-style choices.
@@ -51,8 +36,19 @@ export function chip(id: string, text: string, message: string): ChatSuggestion 
 }
 
 /** A full-width action card that asks Becca a follow-up question. */
-export function askChip(id: string, text: string, message: string): ChatSuggestion {
-  return { id, text, action: "message", data: { message }, display: "action" };
+export function askChip(
+  id: string,
+  text: string,
+  message: string,
+  selection?: { bookingId?: string },
+): ChatSuggestion {
+  return {
+    id,
+    text,
+    action: "message",
+    data: { message, ...(selection?.bookingId ? { bookingId: selection.bookingId } : {}) },
+    display: "action",
+  };
 }
 
 /**

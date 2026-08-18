@@ -25,12 +25,12 @@ import type {
   PersonalContext,
   Understanding,
 } from "./types";
-import { scoreToConfidence } from "./types";
+import { scoreToConfidence, SUGGESTION_MEMORY } from "./types";
 import userLearningService from "../userLearningService";
 import { resolveEntities } from "./entityResolver";
 import { understand } from "./matcher";
 import { capabilitiesFor, getCapability, toToolSchema } from "./registry";
-import { askChip, chip } from "./capabilities/shared";
+import { askChip, chip, navChip } from "./capabilities/shared";
 import type { BeccaAIInterpreter } from "./aiInterpreter";
 import { isBeccaNavigationSuggestion } from "./navigationContract";
 
@@ -48,6 +48,8 @@ export interface EngineInput {
    * came before.
    */
   conversation?: ConversationContext;
+  /** Exact booking selected from a Becca action card, never free text. */
+  selectedBookingId?: string;
   /**
    * Optional future AI router. It can select a registered capability only;
    * the deterministic matcher remains the fallback when it is absent, unsure
@@ -79,6 +81,30 @@ const pendingActions = new Map<
   string,
   { action: PendingAction; at: number; hat: BeccaHat; userId?: string }
 >();
+
+// Everyday standalone questions must not inherit the previous booking or
+// discovery topic. This guard also bypasses optional AI routing, so a simple
+// clock question is always instant and deterministic.
+const CURRENT_TIME_RE = /^(?:what(?:'s| is)|whats)\s+(?:the\s+)?time(?:\s+is\s+it)?[?!.]*$/i;
+const BOOKING_DETAILS_RE = /\b(?:tell me more|more about|details?|break\s+down|what(?:'s| is).*(?:about|with))\b.*\b(?:booking|appointment|appt)\b/i;
+// Natural follow-ups to an appointment answer. Unlike broad topic carry-over,
+// these are explicitly booking-bound requests, so using the booking just
+// discussed is clearer and safer than giving an account-wide generic answer.
+const BOOKING_PREP_FOLLOW_UP_RE = /\b(?:prep|prepare|preparation|form|forms|intake|patch\s*test|aftercare|instructions?|what\s+(?:do|should|need).*(?:bring|do|know|fill))\b/i;
+
+// Becca can help with beauty and booking context, but she is not a clinician.
+// Keep this ahead of routing so a model, matcher, or future capability can
+// never turn a symptom or diagnosis request into advice.
+const MEDICAL_OR_DERMATOLOGY_RE = /\b(?:diagnos(?:e|is|ed|ing)|medical|dermatolog(?:y|ist|ical)|skin\s+(?:condition|rash|infection|reaction|disease)|eczema|psoriasis|acne|rosacea|fung(?:al|us)|allerg(?:y|ic)|swelling|burn(?:ing|ed)?|bleed(?:ing)?|hives|infection|medication|prescription|antibiotic|treat(?:ment|ing)|cure)\b/i;
+
+// A provider often replies with the verb from the immediately preceding
+// capacity answer — e.g. “set”, “set it”, or “yes, set that”. It is only
+// meaningful in that one context, so route it there rather than sending a
+// one-word message through the broad matcher and surfacing unrelated ideas.
+const SET_DAILY_LIMIT_FOLLOW_UP_RE = /^(?:set(?:\s+(?:it|that|the\s+limit|limit|limt|lmit|mit))?|yes(?:\s+please)?|do\s+it)$/i;
+// Unlike a bare “set”, this carries enough meaning to work after a restored
+// chat too, where ephemeral capability context is intentionally unavailable.
+const SET_DAILY_LIMIT_DIRECT_RE = /^set\s+(?:the\s+)?(?:limit|limt|lmit|mit)$/i;
 
 /**
  * A confirmation is only valid for the exchange it was offered in. Beyond
@@ -240,7 +266,7 @@ let lastContext: ConversationContext = { entities: {} };
 
 export async function respond(input: EngineInput): Promise<ChatMessage> {
   const now = input.now ?? new Date();
-  const { message, hat, bookings, userId, conversation } = input;
+  const { message, hat, bookings, userId, conversation, interpreter } = input;
 
   // A confirmation short-circuits everything: it's not natural language and
   // must never be re-parsed as an intent.
@@ -256,6 +282,42 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     return message_(
       { content: "No problem — left as it is." },
       hat,
+    );
+  }
+
+  // This is a boundary, not a generic "out of scope" redirect: Becca remains
+  // free to be conversational and helpful beyond booking tasks. She simply
+  // must not present medical or dermatology guidance as an expert answer.
+  if (MEDICAL_OR_DERMATOLOGY_RE.test(message)) {
+    return message_(
+      {
+        content:
+          "I can’t give medical or dermatology advice, or diagnose a skin concern. A qualified healthcare professional or dermatologist can give you the right guidance.",
+      },
+      hat,
+    );
+  }
+
+  if (
+    hat === "provider" &&
+    (
+      SET_DAILY_LIMIT_DIRECT_RE.test(message.trim()) ||
+      (
+        conversation?.lastCapabilityId === "pv.capacity" &&
+        SET_DAILY_LIMIT_FOLLOW_UP_RE.test(message.trim())
+      )
+    )
+  ) {
+    // Preserve the active thread: the provider may use Back after changing
+    // the setting and should land in the same capacity conversation.
+    lastContext = conversation ?? { entities: {} };
+    return message_(
+      {
+        content: "You can set it under Booking Rules — choose the maximum bookings per day.",
+        suggestions: [navChip("booking-rules", "Set a daily limit", "bookingRules")],
+      },
+      hat,
+      { title: "Set daily limit" },
     );
   }
 
@@ -275,6 +337,28 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
     entities = {};
   }
 
+  // A booking action card already names one real record. Preserve that exact
+  // selection instead of asking the resolver to infer it again from the
+  // chip's human-readable message (which can be ambiguous for repeat visits).
+  if (input.selectedBookingId) {
+    const selected = bookings.find((booking) => booking.id === input.selectedBookingId);
+    if (selected) {
+      entities = {
+        ...entities,
+        booking: {
+          kind: "booking",
+          value: selected,
+          confidence: 1,
+          sourceText: "selected booking",
+          label: `${selected.serviceName} with ${selected.providerName}`,
+        },
+        ...(entities.ambiguous
+          ? { ambiguous: entities.ambiguous.filter((entry) => entry.kind !== "booking") }
+          : {}),
+      };
+    }
+  }
+
   // Carry forward what the last turn established. "What about Saturday?"
   // means nothing on its own — it only works because the previous turn was
   // about nails. Anything this message resolved for itself always wins.
@@ -282,6 +366,29 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   // carried, which is the only thing worth calling an assumption.
   const fromMessage = entities;
   entities = carryForward(entities, conversation, hat);
+
+  // Booking references are not carried by default (a stale appointment would
+  // be dangerous), but an explicit "tell me more about that booking" is a
+  // safe, unambiguous request to continue the booking just discussed.
+  if (!entities.booking && hat === "client" && BOOKING_DETAILS_RE.test(message) && conversation?.lastBooking) {
+    entities = {
+      ...entities,
+      booking: conversation.lastBooking,
+      ...(entities.ambiguous
+        ? { ambiguous: entities.ambiguous.filter((entry) => entry.kind !== "booking") }
+        : {}),
+    };
+  }
+
+  if (!entities.booking && hat === "client" && BOOKING_PREP_FOLLOW_UP_RE.test(message) && conversation?.lastBooking) {
+    entities = {
+      ...entities,
+      booking: conversation.lastBooking,
+      ...(entities.ambiguous
+        ? { ambiguous: entities.ambiguous.filter((entry) => entry.kind !== "booking") }
+        : {}),
+    };
+  }
 
   // Seed the outgoing context from what we know NOW. Every early return below
   // (ambiguity, low confidence, a capability that threw) then still hands the
@@ -294,6 +401,13 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       : {}),
     ...(conversation?.lastProviders
       ? { lastProviders: conversation.lastProviders }
+      : {}),
+    ...(entities.booking ? { lastBooking: entities.booking } : conversation?.lastBooking ? { lastBooking: conversation.lastBooking } : {}),
+    // Carried, not dropped: an ambiguity or fallback turn that reset this
+    // would let every previously-offered chip come straight back on the next
+    // reply — exactly the circling this memory exists to stop.
+    ...(conversation?.offeredSuggestions
+      ? { offeredSuggestions: conversation.offeredSuggestions }
       : {}),
   };
 
@@ -471,10 +585,42 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   const deduped = routable.filter(
     (s) => s.data?.message?.trim().toLowerCase() !== justAsked,
   );
-  // If filtering removed everything (the capability's only suggestion was the
-  // question just asked), fall back to the generic set rather than leaving
-  // the reply with no way forward.
-  const suggestions = deduped.length > 0 ? deduped : defaultFollowUps(hat);
+
+  // …and don't re-offer a question already put to the user EARLIER in this
+  // conversation. Comparing only against the message just sent (above) still
+  // let "What's on today?" reappear on turn 1, 3 and 5, so the pills visibly
+  // circled and a question already asked and answered kept coming back.
+  //
+  // Navigation chips are deliberately exempt: "View booking" is a destination,
+  // not a question, and it should stay available on every answer where it's
+  // relevant. Only `message` chips — the ones that put words in the user's
+  // mouth — are suppressed.
+  const alreadyOffered = new Set(conversation?.offeredSuggestions ?? []);
+  const isFresh = (s: ChatSuggestion) => {
+    const msg = s.data?.message?.trim().toLowerCase();
+    // Navigation chips carry no message and are never suppressed.
+    return !msg || !alreadyOffered.has(msg);
+  };
+  const fresh = deduped.filter(isFresh);
+
+  // When everything a capability offered has already been seen, TOP UP with
+  // unseen alternatives rather than falling back to the stale set.
+  //
+  // Falling back to `deduped` here was the flaw in the first version of this:
+  // it re-showed exactly the chips the memory had just rejected, so the
+  // circling survived precisely in the case the memory existed to fix. A
+  // capability typically offers only two or three follow-ups, so "all of them
+  // seen" happens quickly in a real conversation.
+  const suggestions =
+    fresh.length > 0
+      ? fresh
+      : (() => {
+        const unseen = discoveryChips(hat).filter(isFresh);
+        // Last resort: everything worth suggesting has been offered recently.
+        // Show the capability's own options rather than an empty reply — a
+        // dead end is worse than a repeat.
+        return unseen.length > 0 ? unseen.slice(0, 3) : deduped.length > 0 ? deduped : defaultFollowUps(hat);
+      })();
 
   // Provider.id IS the slug (see providerFromDb); the card shape carries no
   // UUID. Capabilities that need one re-resolve it from the display name, so
@@ -490,22 +636,106 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
   lastContext = {
     entities,
     lastCapabilityId: capability.id,
+    ...(entities.booking ? { lastBooking: entities.booking } : conversation?.lastBooking ? { lastBooking: conversation.lastBooking } : {}),
     // A turn that shows no providers must NOT erase the list the user is
     // still looking at: "find nails" -> "any free Saturday?" -> "none" ->
     // "the first one" still refers to what's on screen. Only a turn showing
     // a NEW list replaces it.
     ...(shownProviders.length > 0 ? { lastProviders: shownProviders } : {}),
+    offeredSuggestions: rememberOffered(
+      conversation?.offeredSuggestions,
+      suggestions,
+    ),
   };
+
+  const factualContent = assumption ? `${assumption}\n\n${result.text}` : result.text;
+  const content = await composeWithFallback(interpreter, {
+    message,
+    hat,
+    capabilityId: capability.id,
+    factualContent,
+  });
 
   return message_(
     {
-      content: assumption ? `${assumption}\n\n${result.text}` : result.text,
+      content,
       suggestions,
       ...(result.providers ? { providerRecommendations: result.providers } : {}),
+      ...(result.inspiration ? { inspiration: result.inspiration } : {}),
     },
     hat,
     { title: capability.describe },
   );
+}
+
+/**
+ * A wider pool of genuinely useful questions, drawn from when a capability's
+ * own follow-ups have all been offered recently.
+ *
+ * This is what stops the "top up" path from being a token gesture: without a
+ * pool bigger than any one capability's two or three chips, a conversation
+ * runs out of unseen options within a few turns and starts repeating again.
+ * Ordered roughly by how often someone actually wants each one, since the
+ * top-up takes the first few that haven't been seen.
+ *
+ * Every message here must match a real capability above the matcher's medium
+ * threshold — a chip that lands in the "didn't catch that" fallback is worse
+ * than no chip at all.
+ */
+function discoveryChips(hat: BeccaHat): ChatSuggestion[] {
+  if (hat === "provider") {
+    return [
+      askChip("p-today", "What's on today?", "What's on today?"),
+      askChip("p-week", "How's my week?", "How busy am I this week?"),
+      askChip("p-gaps", "Where are my gaps?", "Where are my gaps this week?"),
+      askChip("p-waitlist", "Who's on my waitlist?", "Who's on my waitlist?"),
+      askChip("p-lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
+      askChip("p-forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
+      askChip("p-inbox", "Any unread messages?", "Any unread messages?"),
+      askChip("p-reviews", "How are my reviews?", "How are my reviews?"),
+      askChip("p-prices", "What do I charge?", "What do I charge?"),
+      askChip("p-policies", "What are my policies?", "What's my cancellation policy?"),
+      askChip("p-hours", "What are my hours?", "What are my working hours?"),
+      askChip("p-capacity", "Am I near my cap?", "Am I full today?"),
+    ];
+  }
+  return [
+    askChip("c-next", "My next appointment", "When's my next appointment?"),
+    askChip("c-bookings", "All my bookings", "Show all my bookings"),
+    askChip("c-find", "Find someone", "Show me all services"),
+    askChip("c-saved", "My saved providers", "Show my saved providers"),
+    askChip("c-inspo", "Show me some looks", "Show me some inspiration"),
+    askChip("c-top", "Who's best rated?", "Who are the best rated providers?"),
+    askChip("c-offers", "Any offers on?", "Any offers on?"),
+    askChip("c-prep", "How should I prep?", "How do I prepare for my appointment?"),
+    askChip("c-rebook", "Rebook my last one", "Rebook my last appointment"),
+    askChip("c-looks", "My saved looks", "Show my saved looks"),
+    askChip("c-notifs", "Anything I've missed?", "Any notifications?"),
+    askChip("c-profile", "My beauty profile", "Show my beauty profile"),
+    askChip("c-help", "What else can you do?", "What can you help with?"),
+  ];
+}
+
+/**
+ * Adds this turn's question-chips to the rolling memory of what's been
+ * offered, newest last, capped at SUGGESTION_MEMORY.
+ *
+ * Only `message` chips are recorded — navigation chips are never suppressed,
+ * so remembering them would just crowd real entries out of the window.
+ */
+function rememberOffered(
+  prior: string[] | undefined,
+  offered: { data?: { message?: string } }[],
+): string[] {
+  const next = [...(prior ?? [])];
+  for (const suggestion of offered) {
+    const msg = suggestion.data?.message?.trim().toLowerCase();
+    // Confirmation tokens are single-use plumbing, not questions the user
+    // could be re-asked, so they'd only ever waste a slot in the window.
+    if (!msg || msg.startsWith(CONFIRM_PREFIX)) continue;
+    if (!next.includes(msg)) next.push(msg);
+  }
+  return next.slice(-SUGGESTION_MEMORY);
 }
 
 /**
@@ -542,6 +772,30 @@ async function understandWithFallback(
   interpreter?: BeccaAIInterpreter,
 ): Promise<Understanding> {
   const fallback = understand(message, entities, hat);
+  if (hat === "client" && CURRENT_TIME_RE.test(message.trim())) {
+    return {
+      ...fallback,
+      capabilityId: "meta.current_time",
+      confidence: "high",
+      score: 1,
+      alternatives: [],
+    };
+  }
+  if (hat === "client" && entities.booking && BOOKING_DETAILS_RE.test(message)) {
+    return {
+      ...fallback,
+      capabilityId: "booking.details",
+      confidence: "high",
+      score: 1,
+      alternatives: [],
+    };
+  }
+  // A clear local match is already the safest, most precise answer. Letting
+  // an external router replace it caused obvious requests such as "my next
+  // appointment" to occasionally drift into an unrelated tool. AI is an
+  // understanding assist for ambiguous language, not an override for known
+  // app commands.
+  if (fallback.confidence === "high" && fallback.capabilityId) return fallback;
   if (!interpreter) return fallback;
 
   try {
@@ -602,6 +856,42 @@ async function interpretWithTimeout(
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+/**
+ * Lets an AI add warmth without giving it authority over facts or actions.
+ * A lead-in is deliberately constrained to a short, single, non-numeric line;
+ * anything richer falls back to the verified deterministic response.
+ */
+async function composeWithFallback(
+  interpreter: BeccaAIInterpreter | undefined,
+  request: {
+    message: string;
+    hat: BeccaHat;
+    capabilityId: string;
+    factualContent: string;
+  },
+): Promise<string> {
+  if (!interpreter?.compose) return request.factualContent;
+  try {
+    const result = await Promise.race([
+      interpreter.compose(request),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), AI_INTERPRETER_TIMEOUT_MS)),
+    ]);
+    const leadIn = result?.leadIn?.trim();
+    if (!leadIn || !isSafeLeadIn(leadIn)) return request.factualContent;
+    return `${leadIn}\n\n${request.factualContent}`;
+  } catch {
+    return request.factualContent;
+  }
+}
+
+function isSafeLeadIn(value: string): boolean {
+  // Prevent a model-generated lead-in from smuggling new figures, prices,
+  // markdown lists or a second answer into Becca's verified response.
+  return value.length <= 140
+    && !/[\r\n£\d*•#]/.test(value)
+    && value.split(/\s+/).filter(Boolean).length <= 22;
 }
 
 /**
@@ -798,7 +1088,7 @@ function buildFallback(u: Understanding, hat: BeccaHat): ChatMessage {
   if (options.length === 0) {
     return message_({
       content:
-        "I didn't quite catch that. Here's what I can help with:",
+        "I’m not sure what you mean yet — could you tell me a little more?",
       suggestions: defaultStarters(hat),
     }, hat, { title: "Let’s find the right thing" });
   }
@@ -893,14 +1183,10 @@ function defaultStarters(hat: BeccaHat) {
  * function, a dead end is now structurally impossible rather than something
  * each new capability has to remember.
  *
- * A single option is treated as barely better than none — "Browse everything"
- * on its own is a dead end wearing a button. So the capability's own
- * suggestions are topped up from the generic starters until there are at
- * least MIN_SUGGESTIONS, skipping any whose message duplicates one already
- * offered.
+ * Capability-owned actions are deliberately not padded with generic starters.
+ * A short, precise action set is more useful than three loosely related cards
+ * that restart the conversation or make a completed choice look unfinished.
  */
-const MIN_SUGGESTIONS = 3;
-
 function message_(
   parts: Omit<ChatMessage, "id" | "role" | "timestamp">,
   hat: BeccaHat = "client",
@@ -910,10 +1196,9 @@ function message_(
   options?: { exactSuggestions?: boolean; title?: string },
 ): ChatMessage {
   const own = parts.suggestions ?? [];
-  const suggestions =
-    options?.exactSuggestions || own.length >= MIN_SUGGESTIONS
-      ? own
-      : topUp(own, hat);
+  const suggestions = options?.exactSuggestions || own.length > 0
+    ? own
+    : defaultFollowUps(hat);
   return {
     id: `becca-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     role: "assistant",
@@ -928,73 +1213,18 @@ function message_(
  * Gives every capability result a visual takeaway before it reaches the UI.
  * Individual capabilities can provide their own `##` heading when they have
  * a more specific one (for example "Your next appointment"); otherwise the
- * capability's human-readable description becomes the bold heading. This
- * prevents a new or error-adjacent capability from quietly shipping as an
- * unstructured wall of prose.
+ * capability's human-readable description becomes the heading. It does not
+ * rewrite the first sentence as a bold "takeaway": that made Becca echo the
+ * user's request before progressing to the actual answer.
  */
 function formatForChat(content: string, title?: string): string {
-  const trimmed = content.trim();
+  const trimmed = capitaliseLeadingLetter(content.trim());
   if (!title || /^##\s+/m.test(trimmed)) return trimmed;
-
-  // A plain, multi-sentence answer is difficult to scan in a chat bubble.
-  // Treat its first sentence as the takeaway and the remaining sentences as
-  // supporting points. This is intentionally conservative: authored lists,
-  // paragraphs and inline markdown stay exactly as their capability supplied
-  // them, so we never turn a booking's multi-line detail block into nonsense.
-  if (!/\n|^(?:[-•])\s/m.test(trimmed)) {
-    const sentences = splitChatSentences(trimmed);
-    if (sentences.length >= 2) {
-      const [takeaway, ...details] = sentences;
-      return `## ${title}\n**${takeaway}**\n\n${details.map((detail) => `- ${detail}`).join("\n")}`;
-    }
-  }
 
   return `## ${title}\n${trimmed}`;
 }
 
-/** Splits prose without mistaking the decimal in a price such as £25.50 for a sentence break. */
-function splitChatSentences(content: string): string[] {
-  const sentences: string[] = [];
-  let start = 0;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const character = content[index];
-    const previous = content[index - 1] ?? "";
-    const next = content[index + 1] ?? "";
-    const isDecimal = character === "." && /\d/.test(previous) && /\d/.test(next);
-    if ((character === "." || character === "!" || character === "?") && !isDecimal) {
-      // Consume an ellipsis or multiple exclamation marks as one ending.
-      while (content[index + 1] === character) index += 1;
-      const sentence = content.slice(start, index + 1).trim();
-      if (sentence) sentences.push(sentence);
-      start = index + 1;
-    }
-  }
-
-  const remainder = content.slice(start).trim();
-  if (remainder) sentences.push(remainder);
-  return sentences;
-}
-
-/**
- * Pads a short suggestion list out to MIN_SUGGESTIONS using the generic
- * starters, preserving the capability's own (more specific) options first so
- * the most relevant action stays the most prominent. De-duplicates on the
- * chip's `message`, since that — not the label — is what actually gets sent;
- * two chips worded differently but sending the same thing would look like a
- * choice and behave like a repeat.
- */
-function topUp(own: ChatSuggestion[], hat: BeccaHat): ChatSuggestion[] {
-  const seen = new Set(
-    own.map((s) => s.data?.message?.trim().toLowerCase()).filter(Boolean),
-  );
-  const result = [...own];
-  for (const candidate of defaultStarters(hat)) {
-    if (result.length >= MIN_SUGGESTIONS) break;
-    const key = candidate.data?.message?.trim().toLowerCase();
-    if (key && seen.has(key)) continue;
-    if (key) seen.add(key);
-    result.push(candidate);
-  }
-  return result;
+/** Capitalise fallback templates after their optional voice prefix is removed. */
+function capitaliseLeadingLetter(content: string): string {
+  return content.replace(/^([a-z])/, (letter) => letter.toUpperCase());
 }

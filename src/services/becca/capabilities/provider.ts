@@ -15,18 +15,23 @@ import {
   countProviderServices,
   getMyFollowerCount,
   getMyNotifications,
-  getMyPromotions,
   getMyProviderFullAddress,
   getMyProviderIntakeForms,
+  getMyProviderMessageTemplates,
   getMyProviderReviews,
   getMyProviderServices,
   getProviderAvailability,
   getProviderBlockedDates,
   getProviderBookingCapSettings,
+  getProviderBookingPoliciesById,
+  getProviderBookings,
   getProviderBookingsByDate,
   getProviderBookingsByDateRange,
   getProviderClientele,
   getProviderConversations,
+  getProviderFormLibrary,
+  getProviderPortfolio,
+  getProviderSpecialties,
   getProviderWaitlist,
   getMyProviderProfile,
 } from "../../databaseService";
@@ -134,7 +139,7 @@ const weekAhead: Capability = {
         suggestions: [
           askChip("waitlist", "Who's waiting?", "Who's on my waitlist?"),
           askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
-          askChip("promos", "Are my offers live?", "How are my promotions doing?"),
+          askChip("reach", "How's my reach?", "How many followers have I got?"),
         ],
       };
     }
@@ -152,6 +157,62 @@ const weekAhead: Capability = {
         askChip("today", "Just today?", "What's on today?"),
         askChip("capacity", "Am I near my cap?", "Am I full today?"),
         askChip("waitlist", "Who's waiting?", "Who's on my waitlist?"),
+      ],
+    };
+  },
+};
+
+/** A practical schedule insight: identifies quieter days, never imaginary slots. */
+const scheduleGaps: Capability = {
+  id: "pv.gaps",
+  hat: "provider",
+  describe: "Which upcoming days are quiet or have booking gaps",
+  phrases: [
+    "where are my gaps", "where are the gaps", "my gaps", "quiet days",
+    "quiet day", "empty days", "free days", "slow days", "days with space",
+    "when am i quiet", "where can i fit someone in", "fill my diary",
+  ],
+  async run({ now }): Promise<CapabilityResult> {
+    const profile = await getMyProviderProfile();
+    if (!profile) return { text: "I couldn't load your provider profile just now." };
+
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(now);
+      day.setDate(day.getDate() + index);
+      return dateToYMD(day);
+    });
+    const rows = await getProviderBookingsByDateRange(profile.id, days[0]!, days[days.length - 1]!);
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.booking_date, (counts.get(row.booking_date) ?? 0) + 1);
+
+    // A booking count is a dependable signal. We deliberately avoid calling a
+    // day "free" at a particular time because hours, blocks and service
+    // duration still decide that on the schedule screen.
+    const quiet = days
+      .map((ymd) => ({ ymd, count: counts.get(ymd) ?? 0 }))
+      .filter((day) => day.count <= 1);
+
+    if (quiet.length === 0) {
+      return {
+        text: "## Your next 7 days\nEvery day already has at least 2 bookings — your diary is looking healthy.",
+        suggestions: [
+          askChip("capacity", "Am I near my cap?", "Am I full today?"),
+          navChip("schedule", "Open schedule", "schedule"),
+        ],
+      };
+    }
+
+    const lines = quiet
+      .map((day) => `- **${formatShortDate(day.ymd)}** — ${day.count === 0 ? "no bookings yet" : "1 booking"}`)
+      .join("\n");
+    return {
+      text:
+        `## Quieter days ahead\nThese days have the most room in your next 7 days:\n\n${lines}\n\n` +
+        "Open your schedule to confirm the actual slots before offering one.",
+      suggestions: [
+        navChip("schedule", "Open schedule", "schedule"),
+        askChip("waitlist", "Who’s on my waitlist?", "Who's on my waitlist?"),
+        askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
       ],
     };
   },
@@ -222,7 +283,7 @@ const clientele: Capability = {
       return {
         text: "You haven't got any clients on record yet — they'll appear here after their first booking.",
         suggestions: [
-          askChip("promos", "Are my offers live?", "How are my promotions doing?"),
+          askChip("reach", "How's my reach?", "How many followers have I got?"),
           askChip("reach", "How's my reach?", "How many followers have I got?"),
           navChip("services", "Check my services", "services"),
         ],
@@ -314,32 +375,6 @@ const outstandingForms: Capability = {
   },
 };
 
-const promotions: Capability = {
-  id: "pv.promos",
-  hat: "provider",
-  describe: "How are my promotions doing",
-  phrases: [
-    "my promos", "my promotions", "my offers", "discounts", "campaigns",
-    "marketing", "my discounts", "my deals", "live offers", "running offers",
-    "any promos on", "my campaigns",
-  ],
-  async run(): Promise<CapabilityResult> {
-    const promos = await getMyPromotions();
-    const active = promos.filter((p) => p.is_active);
-    return {
-      text:
-        active.length === 0
-          ? "You haven't got any live promotions right now."
-          : `You've got ${active.length} live promotion${active.length !== 1 ? "s" : ""}.`,
-      suggestions: [
-        navChip("promotions", "Open Promotions", "promotions"),
-        askChip("lapsed", "Who could I win back?", "Who hasn't been back in a while?"),
-        askChip("reach", "How's my reach?", "How many followers have I got?"),
-      ],
-    };
-  },
-};
-
 const lapsedClients: Capability = {
   id: "pv.lapsed",
   hat: "provider",
@@ -354,7 +389,7 @@ const lapsedClients: Capability = {
       return {
         text: "You haven't got any clients on record yet.",
         suggestions: [
-          askChip("promos", "Are my offers live?", "How are my promotions doing?"),
+          askChip("reach", "How's my reach?", "How many followers have I got?"),
           navChip("services", "Check my services", "services"),
         ],
       };
@@ -391,7 +426,7 @@ const lapsedClients: Capability = {
         `${lapsed.length > 6 ? `\n\n…and ${lapsed.length - 6} more.` : ""}`,
       suggestions: [
         navChip("clients", "Open Clientele", "clients"),
-        askChip("promos", "Could an offer help?", "How are my promotions doing?"),
+        askChip("reach", "How's my reach?", "How many followers have I got?"),
         navChip("messages", "Open Inbox", "messages"),
       ],
     };
@@ -649,7 +684,10 @@ const myCapacity: Capability = {
       return {
         text: `You haven't set a daily limit — you'll take as many as fit your hours.\n\n${todayCount} booked today. ${acceptance}`,
         suggestions: [
-          navChip("automations", "Set a limit", "automations"),
+          // The cap is enforced in Scheduling → Booking Rules, not
+          // Automations. Sending providers there made this otherwise useful
+          // action look broken because no daily-limit control exists there.
+          navChip("booking-rules", "Set a daily limit", "bookingRules"),
           askChip("hours", "What are my hours?", "What are my working hours?"),
           askChip("week", "How's my week?", "How busy am I this week?"),
         ],
@@ -663,7 +701,7 @@ const myCapacity: Capability = {
         (left === 0 ? "you're full." : `room for ${left} more.`) +
         `\n\n${acceptance}`,
       suggestions: [
-        navChip("automations", "Change settings", "automations"),
+        navChip("booking-rules", "Change daily limit", "bookingRules"),
         askChip("today", "What's on today?", "What's on today?"),
         askChip("waitlist", "Anyone waiting?", "Who's on my waitlist?"),
       ],
@@ -678,6 +716,8 @@ const myReach: Capability = {
   phrases: [
     "my followers", "how many followers", "how many people follow me",
     "how many services do i have", "my reach", "my audience",
+    "who follows me", "my following", "how visible am i",
+    "how many people see me", "my profile reach", "am i getting seen",
   ],
   async run(): Promise<CapabilityResult> {
     const profile = await getMyProviderProfile();
@@ -760,14 +800,62 @@ const services: Capability = {
   id: "pv.services",
   hat: "provider",
   describe: "Edit my services, prices, portfolio",
-  phrases: ["my services", "my prices", "price list", "menu", "portfolio", "add a service", "edit profile"],
+  phrases: [
+    "my services", "my prices", "price list", "menu", "portfolio",
+    "add a service", "edit profile", "my profile", "my listing",
+    "my photos", "my portfolio", "my specialties", "my specialisms",
+    "edit my services", "change my prices", "update my profile",
+    "how does my profile look", "what do clients see",
+  ],
+  // Reads the shape of the provider's own listing before routing, so "edit my
+  // services" answers with what there IS to edit rather than only where the
+  // button lives. Everything here is the caller's own record.
   async run(): Promise<CapabilityResult> {
+    const profile = await getMyProviderProfile();
+    if (!profile) {
+      return {
+        text: "I couldn't load your provider profile just now.",
+        suggestions: [navChip("services", "Open My Services", "services")],
+      };
+    }
+
+    // Independent reads — run together rather than in sequence.
+    const [rows, portfolio, specialties] = await Promise.all([
+      getMyProviderServices(),
+      getProviderPortfolio(profile.id),
+      getProviderSpecialties(profile.id),
+    ]);
+    const active = rows.filter((s) => s.is_active);
+    const inactive = rows.length - active.length;
+
+    const lines = [
+      `- **${active.length}** active service${active.length !== 1 ? "s" : ""}` +
+        (inactive > 0 ? ` (**${inactive}** hidden)` : ""),
+      `- **${portfolio.length}** portfolio photo${portfolio.length !== 1 ? "s" : ""}`,
+      ...(specialties.length > 0
+        ? [`- **${specialties.length}** specialit${specialties.length !== 1 ? "ies" : "y"} — ${specialties.slice(0, 4).join(", ")}`]
+        : []),
+    ].join("\n");
+
+    // The gaps are what a provider actually wants flagged: an empty portfolio
+    // or no services is why a listing underperforms, and neither is obvious
+    // from inside the editor.
+    const gaps: string[] = [];
+    if (active.length === 0) gaps.push("You've got no active services, so clients can't book you yet.");
+    if (portfolio.length === 0) gaps.push("You haven't added any portfolio photos — listings with work shown get browsed far more.");
+    if (specialties.length === 0) gaps.push("No specialities set, so you won't surface in those searches.");
+
     return {
-      text: "Your services, prices, photos and profile are all under My Services.",
+      text:
+        `## Your listing\n${lines}` +
+        (gaps.length > 0 ? `\n\n${gaps.map((g) => `- ${g}`).join("\n")}` : ""),
       suggestions: [
         navChip("services", "Edit My Services", "services"),
-        askChip("prices", "What do I charge?", "What do I charge?"),
+        ...(active.length > 0
+          ? [askChip("prices", "What do I charge?", "What do I charge?")]
+          : []),
         askChip("reviews", "How are my reviews?", "How are my reviews?"),
+        askChip("reach", "What's my reach?", "How many followers have I got?"),
       ],
     };
   },
@@ -776,19 +864,92 @@ const services: Capability = {
 const analytics: Capability = {
   id: "pv.analytics",
   hat: "provider",
-  describe: "Earnings and performance",
-  phrases: ["earnings", "revenue", "income", "analytics", "stats", "performance", "insights", "how am i doing"],
-  async run(): Promise<CapabilityResult> {
-    // Deliberately routes rather than quoting figures in chat: earnings are
-    // limited to what the app's processor handled, and Analytics is where that
-    // distinction is presented properly.
+  describe: "How my business is doing — booking volume and patterns",
+  phrases: [
+    "earnings", "revenue", "income", "analytics", "stats", "performance",
+    "insights", "how am i doing", "how's business", "hows business",
+    "how many bookings", "booking trends", "busiest day", "my numbers",
+    "how was last month", "how many clients this month", "am i growing",
+    "my busiest", "how many appointments",
+  ],
+  async run({ now }): Promise<CapabilityResult> {
+    // MONEY BOUNDARY: this answers booking VOLUME and patterns only, and
+    // never totals prices into an earnings figure. The app can only see what
+    // its own processor handled — anything settled directly with the provider
+    // is invisible here — so a "you've earned £X" answer would be wrong in a
+    // way the provider couldn't detect. Analytics presents that distinction
+    // properly, so anything about money routes there instead.
+    // See BECCA_CAPABILITIES.md §2.2 and CLAUDE.md's payment rules.
+    const rows = await getProviderBookings(90);
+
+    if (rows.length === 0) {
+      return {
+        text:
+          "You've had no bookings in the last 90 days, so there's no pattern to read yet. " +
+          "Analytics has the full picture as it builds up.",
+        suggestions: [
+          navChip("analytics", "Open Analytics", "analytics"),
+          askChip("services", "How's my listing?", "How does my profile look?"),
+        ],
+      };
+    }
+
+    const ymd = dateToYMD(now);
+    const dayMs = 86_400_000;
+    const cutoff = (days: number) => dateToYMD(new Date(now.getTime() - days * dayMs));
+    const last30 = cutoff(30);
+    const prev30 = cutoff(60);
+
+    const inRange = (from: string, to: string) =>
+      rows.filter((b) => b.booking_date >= from && b.booking_date < to).length;
+
+    const recent = inRange(last30, ymd);
+    const previous = inRange(prev30, last30);
+    const completed = rows.filter((b) => b.status === "completed").length;
+    const cancelled = rows.filter((b) => b.status === "cancelled").length;
+    const noShows = rows.filter((b) => b.status === "no_show").length;
+
+    // Distinct clients, not bookings — a repeat client shouldn't inflate this.
+    const distinctClients = new Set(rows.map((b) => b.user_id).filter(Boolean)).size;
+
+    // Busiest weekday across the whole window.
+    const byDay = new Map<number, number>();
+    for (const b of rows) {
+      const day = new Date(`${b.booking_date}T00:00:00`).getDay();
+      byDay.set(day, (byDay.get(day) ?? 0) + 1);
+    }
+    const busiest = [...byDay.entries()].sort((a, b) => b[1] - a[1])[0];
+
+    const trend =
+      previous === 0
+        ? undefined
+        : recent > previous
+          ? `up from **${previous}** the month before`
+          : recent < previous
+            ? `down from **${previous}** the month before`
+            : `level with the month before`;
+
+    const lines = [
+      `- **${recent}** booking${recent !== 1 ? "s" : ""} in the last 30 days` +
+        (trend ? ` — ${trend}` : ""),
+      `- **${rows.length}** in the last 90 days, from **${distinctClients}** client${distinctClients !== 1 ? "s" : ""}`,
+      `- **${completed}** completed` +
+        (cancelled > 0 ? `, **${cancelled}** cancelled` : "") +
+        (noShows > 0 ? `, **${noShows}** no-show${noShows !== 1 ? "s" : ""}` : ""),
+      ...(busiest
+        ? [`- Busiest day: **${DAY_NAMES_FULL[busiest[0]]}** (**${busiest[1]}** bookings)`]
+        : []),
+    ].join("\n");
+
     return {
-      text: "Your earnings, booking trends and performance breakdowns are in Analytics.",
+      text:
+        `## Your last 90 days\n${lines}\n\n` +
+        "Earnings and payment breakdowns are in Analytics — I only count bookings here.",
       suggestions: [
         navChip("analytics", "Open Analytics", "analytics"),
         navChip("history", "Booking History", "history"),
         askChip("week", "How's my week?", "How busy am I this week?"),
-        askChip("capacity", "Am I near my cap?", "Am I full today?"),
+        askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
       ],
     };
   },
@@ -797,13 +958,93 @@ const analytics: Capability = {
 const automations: Capability = {
   id: "pv.automations",
   hat: "provider",
-  describe: "Reminders, deposits, booking policies",
-  phrases: ["automation", "reminders", "deposit", "policy", "policies", "auto message", "settings"],
+  describe: "My deposit, cancellation and reschedule policies",
+  phrases: [
+    "automation", "automations", "reminders", "deposit", "my deposit",
+    "policy", "policies", "my policies", "auto message", "settings",
+    "cancellation policy", "my cancellation policy", "reschedule policy",
+    "do i take a deposit", "how much notice do i need", "notice period",
+    "what's my policy", "whats my policy", "no show policy", "my terms",
+  ],
   async run(): Promise<CapabilityResult> {
+    const profile = await getMyProviderProfile();
+    if (!profile) {
+      return {
+        text: "I couldn't load your provider profile just now.",
+        suggestions: [navChip("automations", "Open Automations", "automations")],
+      };
+    }
+
+    const policies = await getProviderBookingPoliciesById(profile.id);
+
+    if (!policies) {
+      return {
+        text:
+          "You haven't set any booking policies yet — no deposit, and no notice period for cancellations or reschedules. " +
+          "Setting these protects you against late drop-outs.",
+        suggestions: [
+          navChip("automations", "Set my policies", "automations"),
+          navChip("infopacks", "Info Packs", "infopacks"),
+        ],
+      };
+    }
+
+    // booking_policies is an untyped JSON blob, so every read is narrowed
+    // rather than cast. A malformed/absent value must read as "not set"
+    // instead of rendering "undefined" at a provider.
+    const num = (key: string): number | undefined => {
+      const raw = policies[key];
+      const parsed = typeof raw === "string" ? parseInt(raw, 10) : raw;
+      return typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0
+        ? parsed
+        : undefined;
+    };
+    const str = (key: string): string | undefined => {
+      const raw = policies[key];
+      return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+    };
+
+    const depositRequired = policies["depositRequired"] === true;
+    const depositAmount = num("depositAmount");
+    const depositType = str("depositType");
+    const cancelNotice = num("cancelNotice");
+    const rescheduleNotice = num("rescheduleNotice");
+    const maxReschedules = num("maxReschedules");
+    const noShowGrace = num("noShowGraceMinutes");
+
+    const lines: string[] = [];
+    if (depositRequired && depositAmount != null) {
+      // depositType distinguishes a flat fee from a percentage of the service
+      // price — quoting "£20" when it's actually 20% would misstate the
+      // provider's own terms back at them.
+      const shown = depositType === "percentage" ? `${depositAmount}%` : money(depositAmount);
+      lines.push(`- **Deposit** — **${shown}** to book`);
+    } else {
+      lines.push("- **Deposit** — not required");
+    }
+    lines.push(
+      cancelNotice != null
+        ? `- **Cancellations** — **${cancelNotice}h** notice`
+        : "- **Cancellations** — no notice period set",
+    );
+    lines.push(
+      rescheduleNotice != null
+        ? `- **Reschedules** — **${rescheduleNotice}h** notice` +
+            (maxReschedules != null ? `, up to **${maxReschedules}** per booking` : "")
+        : "- **Reschedules** — no notice period set",
+    );
+    if (noShowGrace != null) {
+      lines.push(`- **No-shows** — marked after **${noShowGrace} min**`);
+    }
+
+    const note = str("depositNote") ?? str("cancelNote");
+
     return {
-      text: "Reminders, auto-messages, deposits and booking policies are in Automations.",
+      text:
+        `## Your booking policies\n${lines.join("\n")}` +
+        (note ? `\n\nYou tell clients: "${note}"` : ""),
       suggestions: [
-        navChip("automations", "Open Automations", "automations"),
+        navChip("automations", "Edit my policies", "automations"),
         navChip("infopacks", "Info Packs", "infopacks"),
         askChip("capacity", "What's my booking cap?", "Am I full today?"),
       ],
@@ -814,14 +1055,51 @@ const automations: Capability = {
 const infoPacks: Capability = {
   id: "pv.infopacks",
   hat: "provider",
-  describe: "Info packs, aftercare, prep notes",
+  describe: "Info packs, forms and message templates I send clients",
   phrases: [
     "info pack", "info packs", "aftercare", "prep notes", "instructions",
     "prep info", "care instructions", "what i send clients", "my packs",
+    "my forms", "my form library", "intake forms", "consent forms",
+    "message templates", "my templates", "canned replies", "quick replies",
+    "saved replies", "what forms do i have",
   ],
   async run(): Promise<CapabilityResult> {
+    // Both are self-scoped (own provider id resolved inside), and independent.
+    const [forms, templates] = await Promise.all([
+      getProviderFormLibrary(),
+      getMyProviderMessageTemplates(),
+    ]);
+
+    if (forms.length === 0 && templates.length === 0) {
+      return {
+        text:
+          "You haven't set up any forms or message templates yet. " +
+          "Templates save you retyping the same replies, and forms collect what you need before a client arrives.",
+        suggestions: [
+          navChip("infopacks", "Open Info Packs", "infopacks"),
+          navChip("automations", "Automations", "automations"),
+        ],
+      };
+    }
+
+    const lines: string[] = [];
+    if (forms.length > 0) {
+      // autoSend is the detail worth surfacing: a form that isn't auto-sent
+      // only goes out if the provider remembers to send it manually.
+      const auto = forms.filter((f) => f.autoSend).length;
+      lines.push(
+        `- **${forms.length}** form${forms.length !== 1 ? "s" : ""} in your library` +
+          (auto > 0 ? ` (**${auto}** sent automatically)` : " — none sent automatically"),
+      );
+      lines.push(...forms.slice(0, 4).map((f) => `  - ${f.title}`));
+    }
+    if (templates.length > 0) {
+      lines.push(`- **${templates.length}** message template${templates.length !== 1 ? "s" : ""}`);
+      lines.push(...templates.slice(0, 4).map((t) => `  - ${t.label}`));
+    }
+
     return {
-      text: "Manage the prep and aftercare packs you send clients from Info Packs.",
+      text: `## What you send clients\n${lines.join("\n")}`,
       suggestions: [
         navChip("infopacks", "Open Info Packs", "infopacks"),
         askChip("forms", "Anyone missing a form?", "Who hasn't filled their form in?"),
@@ -840,15 +1118,16 @@ const help: Capability = {
     return {
       text:
         "## Your business assistant\n" +
-        "- **Diary & capacity** — today’s bookings, the next 7 days, working hours, days off and daily limits\n" +
+        "- **Diary & capacity** — today’s bookings, quieter days, working hours, days off and daily limits\n" +
         "- **Clients** — client list, lapsed clients, waitlist and outstanding forms\n" +
         "- **Communication** — unread messages and notifications\n" +
-        "- **Business setup** — services, prices, address, reviews, offers, automations and info packs\n" +
+        "- **Business setup** — services, prices, address, reviews, automations and info packs\n" +
         "- **Performance** — reach and a direct route to analytics\n\n" +
         "Ask a question, or choose a shortcut below.",
       suggestions: [
         askChip("today", "What's on today?", "What's on today?"),
         askChip("week", "How's my week?", "How busy am I this week?"),
+        askChip("gaps", "Where are my gaps?", "Where are my gaps this week?"),
         askChip("waitlist", "Who's on my waitlist?", "Who's on my waitlist?"),
         askChip("lapsed", "Who hasn't been back?", "Who hasn't been back in a while?"),
         askChip("reviews", "How are my reviews?", "How are my reviews?"),
@@ -861,6 +1140,7 @@ const help: Capability = {
 export const PROVIDER_CAPABILITIES: Capability[] = [
   todaySchedule,
   weekAhead,
+  scheduleGaps,
   waitlist,
   // Before `clientele`: "who hasn't been back" is a specific question that
   // would otherwise fall through to the generic client-count answer.
@@ -869,7 +1149,6 @@ export const PROVIDER_CAPABILITIES: Capability[] = [
   inbox,
   providerNotifications,
   outstandingForms,
-  promotions,
   // Before `availability`: "am I off Friday" is answerable from real blocked
   // dates, whereas `availability` only routes to the schedule screen.
   timeOff,

@@ -9,7 +9,7 @@ tags: [screen, provider]
 ## → Navigates to
 - [[InfoRegScreen\|EditProfile]]
 - [[BrandingScreen\|Branding]]
-- [[ProviderBusinessEmailScreen\|BusinessDetails]]
+- [[BusinessDetailsScreen\|BusinessDetails]]
 - [[ProviderCommunicationsScreen\|Communications]]
 - [[ProviderAutomationsScreen\|Automations]]
 

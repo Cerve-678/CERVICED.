@@ -36,6 +36,7 @@ Curated overview: [[Screens & Navigation]].
 - `ExploreMain`
 - `BeccaMain`
 - `ProviderSchedule`
+- `Scheduling`
 - `AddBooking`
 - `Clientele`
 - `ProviderInbox`
@@ -67,6 +68,11 @@ Curated overview: [[Screens & Navigation]].
 - `ProviderAccountMain`
 - `AccountInfo`
 - `BusinessDetails`
+- `BusinessInfo`
+- `ServicesPricing`
+- `AboutYou`
+- `Payments`
+- `Policies`
 - `Communications`
 - `BusinessProfile`
 - `Becca`
