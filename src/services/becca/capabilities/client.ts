@@ -830,6 +830,16 @@ const findProviders: Capability = {
     "show me someone", "find someone", "i need my", "need my", "get my",
     "want my", "sort my", "book me in", "who can do",
   ],
+  // "looking for" and "find" are neutral about WHAT is being sought — the
+  // noun decides. "Looking for soft glam looks" is a request for images, but
+  // this capability's required-service bonus (+0.3) made it score 0.82
+  // against inspiration's 0.47, so it answered with a provider list instead.
+  // When the message names looks/inspiration/photos outright, that is the
+  // stated object of the search and inspiration owns it.
+  // Style-name phrases ("soft glam", "bridal look") are included for the same
+  // reason: they name a LOOK, not a person, so "looking for soft glam" is a
+  // request for images even without the word "looks" in it.
+  excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b/i,
   needs: [{ kind: "service", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const service = entities.service!.value;
