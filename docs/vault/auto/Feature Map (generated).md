@@ -314,7 +314,7 @@ Curated: [[Contexts]] · **150 files**
 ## Becca / AI
 Curated: [[Services]] · **37 files**
 - `src/screens/shared/BeccaScreen.tsx` _(82)_
-- `src/services/becca/capabilities/client.ts` _(49)_
+- `src/services/becca/capabilities/client.ts` _(50)_
 - `src/services/becca/engine.ts` _(46)_
 - `src/services/databaseService.ts` _(35)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_

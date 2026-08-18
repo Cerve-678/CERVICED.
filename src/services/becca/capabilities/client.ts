@@ -18,6 +18,7 @@ import {
   getActiveRescheduleRequest,
   getBookmarkedProviders,
   getClientBeautyProfile,
+  getDiscoverServices,
   getMyEventPlans,
   getNotificationPreferences,
   getOlderBookings,
@@ -1901,27 +1902,89 @@ const inspiration: Capability = {
   async run({ entities, rawMessage }): Promise<CapabilityResult> {
     const category = entities.service?.value.category;
     const specific = entities.service?.value.specific;
-    // Style phrases are Explore search terms, not service categories. Keep
-    // them intact so “show me soft glam” returns actual soft-glam work rather
-    // than an unrelated all-category gallery.
+    // Style phrases are search terms, not service categories. Keep them intact
+    // so "show me soft glam" searches for soft-glam work rather than falling
+    // back to an unrelated all-category gallery.
     const styleQuery = rawMessage.match(/\b(?:soft glam|glam look|makeup look|bridal look)\b/i)?.[0];
+    const term = styleQuery ?? specific;
 
-    // A specific service ("balayage") is a better search term than its
-    // category; fall back to the category feed when there isn't one.
-    const items = styleQuery
-      ? await searchPortfolio(styleQuery)
-      : specific
-      ? await searchPortfolio(specific)
-      : await getPortfolioItems(category);
+    // TWO sources, because portfolio alone silently misses most of the app's
+    // images. `portfolio_items` is provider-uploaded gallery work;
+    // `service_images` are the photos attached to a bookable service, and
+    // Explore's feed mixes both. Becca previously read portfolio only, so a
+    // category whose photos live on services (makeup, for one) returned
+    // "I couldn't find any work to show you" while Explore displayed plenty.
+    //
+    // searchPortfolio is also a literal caption/tag match, and captions are
+    // frequently empty — so a text search alone can return nothing even when
+    // matching images exist. Service NAMES are reliably populated, which is
+    // what makes the service-image side able to match a style term at all.
+    const [portfolioResult, serviceResult] = await Promise.allSettled([
+      term ? searchPortfolio(term) : getPortfolioItems(category),
+      getDiscoverServices(category),
+    ]);
+
+    const portfolioItems = portfolioResult.status === "fulfilled" ? portfolioResult.value : [];
+    const discoverServices = serviceResult.status === "fulfilled" ? serviceResult.value : [];
+
+    // When the user named a style, keep only services whose name/description
+    // actually mentions it. Without this "soft glam" would return the whole
+    // category feed and quietly pretend it had matched.
+    const needle = term?.toLowerCase();
+    const matchedServices = needle
+      ? discoverServices.filter(
+          (svc) =>
+            svc.name?.toLowerCase().includes(needle) ||
+            svc.description?.toLowerCase().includes(needle),
+        )
+      : discoverServices;
+
+    // Flatten service images into the same shape as portfolio items so both
+    // sources render through one path.
+    type Shot = { id: string; imageUrl: string; caption?: string; provider: { id: string; slug: string; display_name: string; service_category: string; logo_url: string | null } };
+    const shots: Shot[] = [
+      ...portfolioItems
+        .filter((item) => !!item.image_url && !!item.provider)
+        .map((item) => ({
+          id: item.id,
+          imageUrl: item.image_url,
+          ...(item.caption ? { caption: item.caption } : {}),
+          provider: item.provider!,
+        })),
+      ...matchedServices.flatMap((svc) => {
+        const first = [...(svc.service_images ?? [])].sort(
+          (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+        )[0];
+        if (!first?.url || !svc.provider) return [];
+        return [{
+          id: `svc-${svc.id}`,
+          imageUrl: first.url,
+          caption: svc.name,
+          provider: svc.provider,
+        }];
+      }),
+    ];
 
     const label = styleQuery ?? specific ?? (category ? CATEGORY_LABELS[category] : undefined);
 
-    if (items.length === 0) {
+    if (shots.length === 0) {
+      // Only claim "nothing to show" when BOTH sources came back empty, and
+      // say what was actually searched so it doesn't read as a flat no.
       return {
-        text: `I couldn't find any ${label ?? ""} work to show you yet.`.replace(/\s+/g, " "),
-        suggestions: [navChip("explore", "Browse Explore", "Explore")],
+        text:
+          `I couldn't find any ${label ?? ""} work to show you yet.`.replace(/\s+/g, " ") +
+          (label ? ` Explore has the full gallery — it's worth a look for ${label}.` : ""),
+        suggestions: [
+          navChip("explore", "Browse Explore", "Explore"),
+          ...(label ? [askChip("providers", `Find ${label} providers`, `Find ${label}`)] : []),
+        ],
       };
     }
+
+    // Keep `items` as the downstream name so the rest of this capability is
+    // unchanged, and dedupe by image so a photo present in both sources
+    // doesn't render twice.
+    const items = [...new Map(shots.map((shot) => [shot.imageUrl, shot])).values()];
 
     // De-duplicate: one provider often has several portfolio items, and the
     // cards should show distinct people rather than the same name repeated.
@@ -1953,14 +2016,13 @@ const inspiration: Capability = {
         logo: p.logo_url ? { uri: p.logo_url } : null,
       })),
       inspiration: items
-        .filter((item) => !!item.image_url && !!item.provider)
         .slice(0, 8)
         .map((item) => ({
           id: item.id,
-          imageUrl: item.image_url,
+          imageUrl: item.imageUrl,
           ...(item.caption ? { caption: item.caption } : {}),
-          providerName: item.provider!.display_name,
-          providerSlug: item.provider!.slug,
+          providerName: item.provider.display_name,
+          providerSlug: item.provider.slug,
           // Be explicit about why a look is present. This is intentionally
           // tied to the user's search term rather than pretending Becca has
           // inferred a personal preference she does not yet know.
@@ -2087,14 +2149,52 @@ const topRated: Capability = {
   async run({ rawMessage }): Promise<CapabilityResult> {
     const wantsNew = /\b(new|newest|just joined|recently joined)\b/i.test(rawMessage);
     const rows = wantsNew ? await getNewProviders(12) : await getTopRatedProviders(12);
-    if (rows.length === 0) {
-      return { text: `I couldn't find any to show right now.` };
+
+    if (rows.length > 0) {
+      return {
+        text: wantsNew
+          ? `**${rows.length}** provider${rows.length !== 1 ? "s" : ""} recently joined:`
+          : `Here are the top-rated providers right now:`,
+        providers: rows.map(providerFromDb),
+        suggestions: [
+          askChip("free", "Who's free this week?", "Who's free this week?"),
+          askChip("offers", "Any offers on?", "Any offers on?"),
+        ],
+      };
     }
+
+    // getTopRatedProviders requires 3+ reviews AND a 4.0+ rating — a sensible
+    // bar for a mature marketplace, but on a young one it excludes everyone,
+    // including a genuinely 5-star provider with a single review. Returning
+    // "I couldn't find any to show right now" then reads as "there are no good
+    // providers", which is both discouraging and false.
+    //
+    // Fall back to showing who IS here, and say plainly why ratings aren't
+    // the sort — rather than dead-ending on an empty, chipless reply.
+    if (!wantsNew) {
+      const anyone = await getProviders();
+      if (anyone.length > 0) {
+        return {
+          text:
+            "No one's built up enough reviews yet for a top-rated list — it takes a few before that means anything. " +
+            `Here ${anyone.length !== 1 ? "are" : "is"} **${anyone.length}** provider${anyone.length !== 1 ? "s" : ""} on CERVICED right now:`,
+          providers: anyone.slice(0, 12).map(providerFromDb),
+          suggestions: [
+            askChip("free", "Who's free this week?", "Who's free this week?"),
+            askChip("inspo", "Show me some looks", "Show me some inspiration"),
+          ],
+        };
+      }
+    }
+
     return {
       text: wantsNew
-        ? `${rows.length} provider${rows.length !== 1 ? "s" : ""} recently joined:`
-        : `Here are the top-rated providers right now:`,
-      providers: rows.map(providerFromDb),
+        ? "No one's joined recently — but there are still providers to browse."
+        : "I couldn't find anyone to show right now.",
+      suggestions: [
+        askChip("browse", "Show me everything", "Show me all services"),
+        navChip("explore", "Browse Explore", "Explore"),
+      ],
     };
   },
 };

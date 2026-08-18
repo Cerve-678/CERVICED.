@@ -552,7 +552,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
           display: "action",
         },
       ],
-    }, hat, { exactSuggestions: true, title: capability.describe });
+    }, hat, { exactSuggestions: true });
   }
 
   // Medium confidence: state the assumption rather than let it pass silently.
@@ -664,7 +664,7 @@ export async function respond(input: EngineInput): Promise<ChatMessage> {
       ...(result.inspiration ? { inspiration: result.inspiration } : {}),
     },
     hat,
-    { title: capability.describe },
+    undefined,
   );
 }
 
@@ -1315,6 +1315,15 @@ function formatForChat(content: string, title?: string): string {
   const trimmed = capitaliseLeadingLetter(content.trim());
   if (!title || /^##\s+/m.test(trimmed)) return trimmed;
 
+  // A title is only ever a deliberate, human-written one (see the literals at
+  // the call sites: "Choose a service", "Set daily limit").
+  //
+  // It is NOT a capability's `describe`. That field is the tool-schema
+  // description handed to the routing model — an internal label phrased as the
+  // question it answers ("Who's best rated, newest or trending") — so
+  // prepending it restated the user's own question back at them as a heading
+  // before every answer. That is the "it repeats before giving answers"
+  // problem, and it applied to all 73 capabilities.
   return `## ${title}\n${trimmed}`;
 }
 
