@@ -118,14 +118,27 @@ serve(async (req) => {
             { role: "system", content: composeSystem },
             { role: "user", content: `They asked: ${userMessage}\n\nSource answer:\n${factual}` },
           ],
-          temperature: 0.7,
+          // Nemotron 3 Super's hosted endpoint documents temperature 1 with
+          // top_p 0.95 for every mode. `reasoning_effort: "none"` is the
+          // current public API field for disabling reasoning; the older
+          // chat_template_kwargs payload was returning HTTP 400.
+          temperature: 1,
           top_p: 0.95,
           max_tokens: 700,
+          reasoning_effort: "none",
           stream: false,
-          extra_body: { chat_template_kwargs: { enable_thinking: false } },
         }),
       });
-      if (!composeResponse.ok) return json({ error: "Becca AI is temporarily unavailable." }, 502);
+      if (!composeResponse.ok) {
+        // Status-only diagnostics distinguish credentials, quota and
+        // request-shape failures without recording prompts or factual data.
+        console.error("[becca-ai] NVIDIA request failed", {
+          mode: "compose",
+          status: composeResponse.status,
+          statusText: composeResponse.statusText,
+        });
+        return json({ error: "Becca AI is temporarily unavailable." }, 502);
+      }
 
       const composePayload = await composeResponse.json();
       const raw = composePayload?.choices?.[0]?.message?.content;
@@ -183,11 +196,19 @@ serve(async (req) => {
         temperature: 1,
         top_p: 0.95,
         max_tokens: 120,
+        reasoning_effort: "none",
         stream: false,
-        extra_body: { chat_template_kwargs: { enable_thinking: false } },
       }),
     });
-    if (!nvidiaResponse.ok) return json({ error: "Becca AI is temporarily unavailable." }, 502);
+    if (!nvidiaResponse.ok) {
+      // Status only — never log the user's message or tool payload.
+      console.error("[becca-ai] NVIDIA request failed", {
+        mode: "route",
+        status: nvidiaResponse.status,
+        statusText: nvidiaResponse.statusText,
+      });
+      return json({ error: "Becca AI is temporarily unavailable." }, 502);
+    }
 
     const payload = await nvidiaResponse.json();
     const result = parseModelJson(payload?.choices?.[0]?.message?.content);
