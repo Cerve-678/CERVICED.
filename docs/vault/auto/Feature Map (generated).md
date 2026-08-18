@@ -49,7 +49,7 @@ Curated: [[Availability & Slots]] · **134 files**
 - `src/screens/client/SearchScreen.tsx` _(92)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(88)_
 - `src/contexts/BookingContext.tsx` _(79)_
-- `src/services/becca/capabilities/client.ts` _(69)_
+- `src/services/becca/capabilities/client.ts` _(70)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(62)_
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/client/RescheduleScreen.tsx` _(52)_
@@ -112,7 +112,7 @@ Curated: [[Booking Flow]] · **218 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(837)_
 - `src/contexts/BookingContext.tsx` _(688)_
 - `src/services/databaseService.ts` _(528)_
-- `src/services/becca/capabilities/client.ts` _(496)_
+- `src/services/becca/capabilities/client.ts` _(500)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(471)_
 - `src/screens/client/CartScreen.tsx` _(374)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
@@ -314,7 +314,7 @@ Curated: [[Contexts]] · **150 files**
 ## Becca / AI
 Curated: [[Services]] · **37 files**
 - `src/screens/shared/BeccaScreen.tsx` _(82)_
-- `src/services/becca/capabilities/client.ts` _(46)_
+- `src/services/becca/capabilities/client.ts` _(49)_
 - `src/services/becca/engine.ts` _(46)_
 - `src/services/databaseService.ts` _(35)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_

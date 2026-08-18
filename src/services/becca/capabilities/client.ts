@@ -1244,10 +1244,33 @@ const providerServices: Capability = {
       .join("\n");
     const more = sorted.length > 6 ? `\n\n…and ${sorted.length - 6} more on their profile.` : "";
 
+    // STAGING, not booking. `openServiceId` opens that exact service's
+    // BookingSheet on the provider's profile — the user still picks their own
+    // slot and confirms. Becca prepares the step; she never completes it.
+    // Same route Explore's "Book Now" uses, so there's one booking entry
+    // point rather than a second Becca-specific path.
+    //
+    // Only offered when the user named a specific service, or the provider
+    // has few enough that a chip per service is a menu rather than a wall.
+    const wantedService = entities.service?.value.specific?.toLowerCase();
+    const named = wantedService
+      ? sorted.filter((s) => s.name?.toLowerCase().includes(wantedService))
+      : [];
+    const stageable = named.length > 0 ? named : sorted.length <= 3 ? sorted : [];
+
     return {
       text: `${provider.displayName} offers **${services.length} service${services.length !== 1 ? "s" : ""}**:\n\n${lines}${more}`,
       suggestions: [
-        navChip("book", `Book with ${provider.displayName}`, "ProviderProfile", { providerId: provider.slug, source: "becca" }),
+        ...stageable.slice(0, 3).map((s) =>
+          navChip(`stage-${s.id}`, `Book ${s.name} — ${money(s.price ?? 0)}`, "ProviderProfile", {
+            providerId: provider.slug,
+            source: "becca",
+            openServiceId: s.id,
+          }),
+        ),
+        ...(stageable.length === 0
+          ? [navChip("book", `Book with ${provider.displayName}`, "ProviderProfile", { providerId: provider.slug, source: "becca" })]
+          : []),
         askChip("free", "When are they free?", `When is ${provider.displayName} free?`),
         askChip("reviews", "What do people say?", `Reviews for ${provider.displayName}`),
       ],
