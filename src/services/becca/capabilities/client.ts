@@ -956,11 +956,26 @@ const followUpPrice: Capability = {
   id: "discover.followup_price",
   hat: "client",
   describe: "How much are they / what do they charge",
+  // Every phrase here used to assume a pronoun ("how much are THEY"), so a
+  // direct category question — "how much are nails", the most natural way to
+  // ask this — matched nothing at all and fell to the generic fallback. The
+  // bare "how much"/"cost of" forms are what catch it, since phrase matching
+  // is contiguous and the service word sits mid-sentence.
   phrases: [
     "how much are they", "how much do they charge", "what do they charge",
     "how much is that", "what's the price", "whats the price", "price range",
     "how much roughly", "are they expensive", "how pricey",
+    "how much", "how much is", "how much are", "how much does",
+    "average price", "typical price", "going rate", "cost of",
+    "what does it cost", "what do they usually cost", "rough price",
   ],
+  // A pronoun means a specific provider is being asked about, and their real
+  // price list beats a category average — discover.provider_services owns
+  // that. Both capabilities score identically when a provider AND a service
+  // are resolved ("how much do they charge for nails"), so registration order
+  // alone decided it, and this one is registered first. An explicit veto is
+  // the mechanism built for exactly this, rather than relying on file order.
+  excludeWhen: /\b(they|them|their|theirs|she|her|hers|he|him|his)\b/i,
   needs: [{ kind: "service", required: true }],
   async run({ entities }): Promise<CapabilityResult> {
     const service = entities.service!.value;
@@ -1177,10 +1192,20 @@ const providerServices: Capability = {
   id: "discover.provider_services",
   hat: "client",
   describe: "What a specific provider offers, and what it costs",
+  // Carries the provider-scoped PRICE phrasings as well as the service-list
+  // ones. discover.followup_price owns the same vocabulary but requires a
+  // service entity, so with a provider resolved and no service named it takes
+  // a -0.35 penalty and lands at 0.25 — under the matcher's 0.3 medium
+  // threshold, i.e. straight into the "didn't catch that" fallback. "What do
+  // they charge?" about a named provider therefore answered nothing at all
+  // until these were listed here.
   phrases: [
     "what do they offer", "what does she do", "what does he do",
     "their services", "what services", "what can i book with",
     "what do they do", "their prices", "how much do they charge",
+    "what do they charge", "how much are they", "how much is it with",
+    "what are their prices", "how much would it be", "are they expensive",
+    "their rates", "what do they cost", "how much do they cost",
     "price list", "menu",
   ],
   needs: [{ kind: "provider", required: true }],
