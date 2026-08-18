@@ -35,6 +35,38 @@ export interface BeccaAIInterpretation {
   confidence?: number;
 }
 
+export interface BeccaAICompositionRequest {
+  message: string;
+  hat: BeccaHat;
+  capabilityId: string;
+  /** The complete, deterministic answer Becca is about to show. */
+  factualContent: string;
+}
+
+export interface BeccaAIComposition {
+  /**
+   * A full rewrite of the answer's PRESENTATION.
+   *
+   * The model owns sentence shape, tone, ordering, and where headings, bold
+   * and bullets go. It does NOT own facts: every number, price, date and name
+   * in what it returns must already appear in `factualContent`, and the engine
+   * verifies that before showing a word of it (see `verifyComposition`). A
+   * rewrite that introduces a figure which isn't in the source is discarded
+   * whole and the deterministic text renders instead.
+   *
+   * This is the difference between "the model writes the answer" and "the
+   * model writes the sentence around the answer". Only the second is safe in
+   * an app where the next tap books an appointment and takes money.
+   */
+  content?: string;
+  /**
+   * Legacy single-line bridge, kept so an interpreter that only implements
+   * the old contract still works. `content` supersedes it when both are
+   * present.
+   */
+  leadIn?: string;
+}
+
 /**
  * Implement this at the app boundary when an AI provider is introduced.
  *
@@ -44,4 +76,5 @@ export interface BeccaAIInterpretation {
  */
 export interface BeccaAIInterpreter {
   interpret(request: BeccaAIInterpretationRequest): Promise<BeccaAIInterpretation | null>;
+  compose?(request: BeccaAICompositionRequest): Promise<BeccaAIComposition | null>;
 }

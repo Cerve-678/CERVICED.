@@ -859,9 +859,19 @@ async function interpretWithTimeout(
 }
 
 /**
- * Lets an AI add warmth without giving it authority over facts or actions.
- * A lead-in is deliberately constrained to a short, single, non-numeric line;
- * anything richer falls back to the verified deterministic response.
+ * Lets a model own how an answer READS without giving it authority over what
+ * the answer SAYS.
+ *
+ * The model may restructure freely — headings, bullets, bold, sentence order,
+ * tone. What it may not do is introduce a fact. Every number, price, date and
+ * capitalised name in its rewrite must already appear in the deterministic
+ * text; `verifyComposition` checks that token by token and discards the whole
+ * rewrite on any mismatch.
+ *
+ * That's the guarantee worth having: a bad rewrite costs formatting, never
+ * correctness. In an app where the next tap books an appointment and takes
+ * money, "the model occasionally writes £45 when the row says £40" is not a
+ * trade worth making for nicer prose.
  */
 async function composeWithFallback(
   interpreter: BeccaAIInterpreter | undefined,
@@ -878,17 +888,101 @@ async function composeWithFallback(
       interpreter.compose(request),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), AI_INTERPRETER_TIMEOUT_MS)),
     ]);
+
+    // Full rewrite: allowed to be richer than the source, but never to assert
+    // anything the source didn't.
+    const rewritten = result?.content?.trim();
+    if (rewritten && verifyComposition(rewritten, request.factualContent)) {
+      return rewritten;
+    }
+
+    // Legacy lead-in path, for an interpreter that only implements the old
+    // contract. Still deliberately narrow — it prepends to untouched facts.
     const leadIn = result?.leadIn?.trim();
-    if (!leadIn || !isSafeLeadIn(leadIn)) return request.factualContent;
-    return `${leadIn}\n\n${request.factualContent}`;
+    if (leadIn && isSafeLeadIn(leadIn)) {
+      return `${leadIn}\n\n${request.factualContent}`;
+    }
+    return request.factualContent;
   } catch {
     return request.factualContent;
   }
 }
 
+/**
+ * Digits, money and percentages — the tokens a wrong value would hide in.
+ *
+ * The trailing `(?<![.,])` matters: without it a sentence-final "£40." tokenises
+ * as `£40.` and fails to match the source's `£40`, so a perfectly correct
+ * rewrite gets thrown away for having punctuation. Internal separators are
+ * still kept, so "1,200" and "2.30" stay whole.
+ */
+const NUMERIC_TOKEN_RE = /£?\d[\d,.]*(?<![.,])%?/g;
+
+/**
+ * True when every fact in `rewritten` is present in `source`.
+ *
+ * Two classes are checked, because they fail differently:
+ *
+ *  - NUMERIC tokens (prices, counts, times, dates, percentages) must match
+ *    exactly. This is the class that costs money when wrong, and there is no
+ *    such thing as an acceptable approximation of a price.
+ *  - CAPITALISED words (provider names, service names, weekdays) must also
+ *    appear in the source, so the model can't attribute a booking to the
+ *    wrong person or move it to the wrong day. Sentence-initial words and a
+ *    small set of ordinary openers are exempt, since a rewrite legitimately
+ *    starts sentences in new places.
+ *
+ * Deliberately one-directional: the rewrite may OMIT source facts (a good
+ * rewrite is often shorter) but may never ADD one.
+ */
+function verifyComposition(rewritten: string, source: string): boolean {
+  // A rewrite that balloons is a sign the model started explaining rather
+  // than presenting. Cheap structural guard before the token work.
+  if (rewritten.length > source.length * 2 + 200) return false;
+
+  const sourceNumbers = new Set(source.match(NUMERIC_TOKEN_RE) ?? []);
+  for (const token of rewritten.match(NUMERIC_TOKEN_RE) ?? []) {
+    if (!sourceNumbers.has(token)) return false;
+  }
+
+  const plain = (value: string) => value.replace(/[*_`#>-]/g, " ");
+  const sourceWords = new Set(
+    (plain(source).match(/[A-Za-z][A-Za-z'’-]*/g) ?? []).map((w) => w.toLowerCase()),
+  );
+
+  // Blank the first word of every sentence, heading and list item BEFORE
+  // stripping markdown. Two things matter here and both were bugs:
+  //  - ORDER: strip markdown first and `## Coming up` becomes `   Coming up`,
+  //    so "Coming" stops looking sentence-initial and an ordinary heading gets
+  //    rejected as an invented name.
+  //  - The `m` flag plus an explicit `\n` branch: markdown is line-oriented,
+  //    so every new line is a sentence start. Without it only the very first
+  //    line was exempt and every subsequent heading/bullet opener was treated
+  //    as a factual claim.
+  const midSentence = plain(
+    rewritten.replace(/(^|[.!?:]\s*|\n)\s*(?:[#>*+-]+\s*)?(?:\*\*)?[A-Z][A-Za-z'’-]*/gm, " "),
+  );
+  for (const word of midSentence.match(/\b[A-Z][A-Za-z'’-]{1,}/g) ?? []) {
+    if (COMMON_CAPITALS.has(word.toLowerCase())) continue;
+    if (!sourceWords.has(word.toLowerCase())) return false;
+  }
+  return true;
+}
+
+/**
+ * Capitalised words that carry no factual claim, so a rewrite may use them
+ * even when the deterministic text didn't. Anything naming a person, service,
+ * place or day is deliberately absent — those must come from the source.
+ */
+const COMMON_CAPITALS = new Set([
+  "i", "i'm", "i've", "i'll", "you", "your", "we", "it", "that", "this",
+  "here", "there", "becca", "ok", "okay", "yes", "no", "and", "but", "so",
+]);
+
 function isSafeLeadIn(value: string): boolean {
-  // Prevent a model-generated lead-in from smuggling new figures, prices,
-  // markdown lists or a second answer into Becca's verified response.
+  // The legacy bridge prepends to untouched facts, so it stays narrow: no
+  // digits or currency (facts), and no structure (it isn't the answer).
+  // The full-rewrite path above is where bold, bullets and headings live now.
   return value.length <= 140
     && !/[\r\n£\d*•#]/.test(value)
     && value.split(/\s+/).filter(Boolean).length <= 22;

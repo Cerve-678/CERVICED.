@@ -5,7 +5,7 @@
 
 #generated
 
-**1667 functions** across **232 files**.
+**1679 functions** across **233 files**.
 
 ### `src/components/` (34)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -21,7 +21,7 @@
 - `CoachMarkTour.tsx` — advance · **CoachMarkTour** · goToStep · skip
 - `HairTypeSelector.tsx` — **HairTypeSelector**
 - `IconLibrary.tsx` — **AutoAwesomeIcon** · **BarsIcon** · **BasketIcon** · **BellIcon** · **BookmarkIcon** · **Brightness6Icon** · **BugReportIcon** · **CalendarIcon** · **ChatDotsIcon** · **ContrastIcon** · **CopyrightIcon** · **DevicesIcon** · **EarthIcon** · **EmailIcon** · **ExperimentIcon** · **FormatSizeIcon** · **GavelIcon** · **GridLayoutIcon** · **HeartIcon** · **HelpIcon** · **HouseIcon** · Icon · **InfoIcon** · **KeyIcon** · **LanguageIcon** · **LockIcon** · **LogoutIcon** · **MessageIcon** · **NotificationsIcon** · **PaymentIcon** · **PhoneIcon** · **PrivacyTipIcon** · **ReceiptIcon** · **SearchIcon** · **SecurityIcon** · **SettingsApplicationsIcon** · **ShareIcon** · **ShieldCheckIcon** · **SlidersIcon** · **StarIcon** · **UserIcon**
-- `ImageDetailModal.tsx` — carouselPanResponder · eligibleKind · handleBookmark · handleBookNow · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · onMomentumScrollEnd · rank
+- `ImageDetailModal.tsx` — carouselPanResponder · effectiveRatio · eligibleKind · handleBookmark · handleBookNow · handleViewProfile · **ImageDetailModal** · initialImageIndex · ModalBody · modalUris · onMomentumScrollEnd · rank
 - `IslandPillTabBar.tsx` — goToTab · IslandPillTabBar
 - `KeyboardDismissView.tsx` — **KeyboardDismissView**
 - `LiquidGlassCard.tsx` — LiquidGlassCard
@@ -141,7 +141,7 @@
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · SkeletonProviderCard
 - `CartScreen.tsx` — addOnsSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartScreen · checkoutRenderUnits · depositPolicyArg · dynamicStyles · effectiveCartItems · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · formatCardNumber · formatExpiry · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveOne · handleReviewConfirm · hasDeposit · hasDepositItem · hasUnscheduledItems · itemPromoDiscounts · itemsByProvider · navigateToProvider · onRefresh · platformFee · priceOf · promoSavingsShown · renderAddOns · timestamp · toggleProviderCollapsed · totalPrice
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
-- `ExploreScreen.tsx` — columnWidth · filters · filterTabs · getItemHeight · handleBookNow · handleCloseDetail · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleViewProfile · interleaveDiscoverFeed · load · loadDiscoverFeed · mapDbPortfolioItem · mapDbProviderToCard · mapDbServiceToCards · mapDbUnclaimedProviderToCard · prefetchRemaining · renderPortfolioCard · SkeletonMasonryGrid
+- `ExploreScreen.tsx` — columnWidth · dedupeByImageUri · filters · filterTabs · getItemHeight · handleBookNow · handleCloseDetail · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleViewProfile · interleaveDiscoverFeed · load · loadDiscoverFeed · mapDbPortfolioItem · mapDbProviderToCard · mapDbServiceToCards · mapDbUnclaimedProviderToCard · measuredUris · prefetchRemaining · renderPortfolioCard · SkeletonMasonryGrid
 - `HomeScreen.tsx` — allCategorizedProviders · currentOffers · finishTour · handleBackPress · handleSelectRegion · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · loadUnreadCount · maleProvidersDisplay · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · previouslyBookedProviders · recommendedProvidersList · resetFilters · serviceProviders · showKidsSection · showMaleSection · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData
 - `MessagesScreen.tsx` — fetchConversations · initials · MessagesScreen · onRefresh · openChat · renderItem · timeAgo
 - `NotificationsSettingsScreen.tsx` — NotificationsSettingsScreen · toggle · ToggleRow
@@ -208,17 +208,17 @@
 - `ImageLoader.ts` — **useImageLoader**
 - `notificationTapHandler.ts` — **handleNotificationTap** · navigateNested · openNotifications
 - `providerClaimService.ts` — **claimProviderProfile** · **clearPendingClaim** · **getPendingClaim** · **getUnclaimedProviderDetail** · **requestClaimVerification** · **savePendingClaim** · **searchUnclaimedProviders**
-- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · **uploadToStorage**
+- `providerRegistrationService.ts` — generateSlug · **geocodeAndValidateUkAddress** · **getCachedProviderData** · isLocalUri · **loadProviderFromSupabase** · **loadProviderPolicies** · measureAspectRatio · minutesToDuration · parseDurationToMinutes · **saveProviderPolicies** · **saveProviderToSupabase** · **uploadToStorage**
 - `pushNotificationService.ts` — **registerForPushNotifications** · **startExpoGoNotificationBridge** · **unregisterPushToken**
 - `stripeService.ts` — **cancelPaymentIntent** · **capturePaymentIntent** · **createPaymentIntent** · finalizePaymentIntent
 
 ### `src/services/becca/` (8)
 - `aiRuntime.ts` — **configureBeccaAI** · **getBeccaAIInterpreter**
-- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isSafeLeadIn · loadPersonalContext · message_ · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · understandWithFallback
+- `engine.ts` — buildAmbiguityReply · buildAssumption · buildFallback · buildMissingEntityReply · buildSocialReply · capitaliseLeadingLetter · carryForward · composeWithFallback · **confirmToken** · **converse** · defaultFollowUps · defaultStarters · discoveryChips · formatForChat · interpretWithTimeout · isFresh · isSafeLeadIn · loadPersonalContext · message_ · plain · rememberOffered · resolveOrdinalReference · **respond** · runPendingAction · setPendingAction · understandWithFallback · verifyComposition
 - `entityResolver.ts` — **containsPhrase** · dateEntity · day · label · lookupProviderByName · money · **resolveBooking** · **resolveDate** · **resolveEntities** · **resolveMoney** · **resolveProvider** · **resolveService** · **resolveTimeOfDay** · single
 - `matcher.ts` — scoreEntities · scorePhrases · **understand**
 - `navigationContract.ts` — **isBeccaNavigationSuggestion**
-- `nvidiaInterpreter.ts` — validInterpretation
+- `nvidiaInterpreter.ts` — validComposition · validInterpretation
 - `registry.ts` — **capabilitiesFor** · **getCapability** · **toToolSchema**
 - `types.ts` — **hasUsefulHistory** · **scoreToConfidence**
 
@@ -233,7 +233,7 @@
 ### `src/types/` (1)
 - `booking.ts` — **hasMapDestination** · **isAddressPending** · **mapDbBookingStatus**
 
-### `src/utils/` (14)
+### `src/utils/` (15)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
@@ -247,4 +247,5 @@
 - `policyDisplay.ts` — **buildPolicyDisplayRows**
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
 - `shuffle.ts` — **shuffle**
+- `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
 - `validation.ts` — **getPasswordStrength**
