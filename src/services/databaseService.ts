@@ -3413,11 +3413,16 @@ export interface LibraryForm {
 export async function getProviderFormLibrary(): Promise<LibraryForm[]> {
   const provider = await getMyProviderProfile();
   if (!provider) return [];
-  const { data } = await supabase
+  // Throws rather than swallowing: an empty array means "no saved forms", so
+  // returning one on a failed query made the two indistinguishable. Becca's
+  // pv.infopacks reads this and would tell a provider "you haven't set up any
+  // forms yet" when the query had actually errored.
+  const { data, error } = await supabase
     .from("provider_form_library")
     .select("*")
     .eq("provider_id", provider.id)
     .order("created_at", { ascending: false });
+  if (error) throw error;
   return (data ?? []).map(mapLibraryForm);
 }
 
@@ -3868,11 +3873,17 @@ export async function getProviderReschedulePolicyById(
 export async function getProviderBookingPoliciesById(
   providerId: string,
 ): Promise<Record<string, unknown> | null> {
-  const { data } = await supabase
+  // Throws rather than swallowing: a null return means "no policy set", and a
+  // failed query returning null too made those indistinguishable. Becca's
+  // pv.automations reads this to tell a provider their own deposit and
+  // cancellation terms, so a swallowed error became "you haven't set any
+  // booking policies yet" — a confident false statement about their business.
+  const { data, error } = await supabase
     .from("providers")
     .select("booking_policies")
     .eq("id", providerId)
     .maybeSingle();
+  if (error) throw error;
   return (data as any)?.booking_policies ?? null;
 }
 
