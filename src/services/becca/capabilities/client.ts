@@ -1910,8 +1910,18 @@ const inspiration: Capability = {
   // exactly the case where inspiration is most likely what was meant.
   needs: [{ kind: "service", required: false }],
   async run({ entities, rawMessage }): Promise<CapabilityResult> {
-    const category = entities.service?.value.category;
-    const specific = entities.service?.value.specific;
+    // A generic ask ("show me some inspiration") must NOT inherit the service
+    // from an earlier turn. carryForward fills gaps from the previous
+    // message, so tapping the generic "Show me some looks" chip after talking
+    // about makeup silently searched for natural makeup and then reported
+    // "I couldn't find any natural makeup work" — an answer to a question the
+    // user never asked. When the message itself names nothing, search
+    // everything.
+    const namesService = !!rawMessage.match(
+      /\b(?:nail|nails|hair|lash|lashes|brow|brows|makeup|mua|glam|facial|skin|wax|tan|massage|barber|beard|braid|balayage|manicure|pedicure|gel|acrylic|bridal|lamination|microblading)\w*\b/i,
+    );
+    const category = namesService ? entities.service?.value.category : undefined;
+    const specific = namesService ? entities.service?.value.specific : undefined;
     // Style phrases are search terms, not service categories. Keep them intact
     // so "show me soft glam" searches for soft-glam work rather than falling
     // back to an unrelated all-category gallery.
@@ -1951,7 +1961,15 @@ const inspiration: Capability = {
 
     // Flatten service images into the same shape as portfolio items so both
     // sources render through one path.
-    type Shot = { id: string; imageUrl: string; caption?: string; provider: { id: string; slug: string; display_name: string; service_category: string; logo_url: string | null } };
+    type Shot = {
+      id: string;
+      imageUrl: string;
+      caption?: string;
+      /** Present for service images: the bookable service this photo is of. */
+      serviceName?: string;
+      servicePrice?: number;
+      provider: { id: string; slug: string; display_name: string; service_category: string; logo_url: string | null };
+    };
     const shots: Shot[] = [
       ...portfolioItems
         .filter((item) => !!item.image_url && !!item.provider)
@@ -1970,6 +1988,8 @@ const inspiration: Capability = {
           id: `svc-${svc.id}`,
           imageUrl: first.url,
           caption: svc.name,
+          serviceName: svc.name,
+          ...(typeof svc.price === "number" ? { servicePrice: svc.price } : {}),
           provider: svc.provider,
         }];
       }),
@@ -2008,39 +2028,75 @@ const inspiration: Capability = {
     ];
 
     const shown = Math.min(items.length, 8);
+    const shownItems = items.slice(0, shown);
+
+    // Name what's actually on screen rather than counting it. "1 look from 1
+    // provider" is technically true and tells the user nothing — who made it,
+    // what it is, and what it costs are the things they'd act on.
+    const named = shownItems.filter((item) => !!item.serviceName);
+    const detailLines = [
+      ...new Map(
+        named.map((item) => [
+          `${item.provider.display_name}|${item.serviceName}`,
+          `- **${item.serviceName}** — ${item.provider.display_name}` +
+            (item.servicePrice != null ? ` · **${money(item.servicePrice)}**` : ""),
+        ]),
+      ).values(),
+    ].slice(0, 5);
+
+    const heading = label
+      ? `${label[0]!.toUpperCase()}${label.slice(1)}`
+      : "Inspiration";
+
+    // One result deserves a sentence, not a tally.
+    const lead =
+      shown === 1 && shownItems[0]
+        ? `**${shownItems[0].provider.display_name}** has ` +
+          (shownItems[0].serviceName ? `**${shownItems[0].serviceName}**` : "work") +
+          (shownItems[0].servicePrice != null ? ` at **${money(shownItems[0].servicePrice)}**` : "") +
+          "."
+        : `**${shown}** look${shown !== 1 ? "s" : ""} from **${unique.length}** provider${unique.length !== 1 ? "s" : ""}` +
+          (items.length > shown ? `, out of ${items.length} I found` : "") +
+          ".";
+
     return {
-      // Describes what's actually on screen. This previously said "the full
-      // gallery is in Explore" while the photos were being rendered inline
-      // right underneath — the copy undersold what Becca had just done and
-      // pushed the user away from an answer she'd already given them.
       text:
-        `## ${label ? `${label[0]!.toUpperCase()}${label.slice(1)}` : "Inspiration"}\n` +
-        `Here ${shown !== 1 ? "are" : "is"} **${shown}** look${shown !== 1 ? "s" : ""} ` +
-        `from **${unique.length}** provider${unique.length !== 1 ? "s" : ""}` +
-        (items.length > shown ? `, out of ${items.length} I found` : "") +
-        ". Tap any one to see the full piece.",
+        `## ${heading}\n${lead}` +
+        (detailLines.length > 0 && shown > 1 ? `\n\n${detailLines.join("\n")}` : "") +
+        "\n\nTap a photo to see it full size.",
       providers: unique.slice(0, 12).map((p) => ({
         id: p.slug,
         name: p.display_name,
         service: p.service_category,
         logo: p.logo_url ? { uri: p.logo_url } : null,
       })),
-      inspiration: items
-        .slice(0, 8)
-        .map((item) => ({
-          id: item.id,
-          imageUrl: item.imageUrl,
-          ...(item.caption ? { caption: item.caption } : {}),
-          providerName: item.provider.display_name,
-          providerSlug: item.provider.slug,
-          // Be explicit about why a look is present. This is intentionally
-          // tied to the user's search term rather than pretending Becca has
-          // inferred a personal preference she does not yet know.
-          whyItFits: label
-            ? `A ${label.toLowerCase()} reference for your moodboard`
-            : 'A fresh reference for your moodboard',
-        })),
-      suggestions: [navChip("explore", "Open Explore", "Explore")],
+      inspiration: shownItems.map((item) => ({
+        id: item.id,
+        imageUrl: item.imageUrl,
+        ...(item.caption ? { caption: item.caption } : {}),
+        providerName: item.provider.display_name,
+        providerSlug: item.provider.slug,
+        // Say what the photo IS when it's a real bookable service, rather
+        // than the same generic moodboard line on every card.
+        whyItFits: item.serviceName
+          ? `${item.serviceName}${item.servicePrice != null ? ` · ${money(item.servicePrice)}` : ""}`
+          : label
+            ? `A ${label.toLowerCase()} reference`
+            : "A fresh reference for your moodboard",
+      })),
+      suggestions: [
+        // Book what they're looking at, when there's exactly one provider.
+        ...(unique.length === 1 && unique[0]
+          ? [navChip("book", `See ${unique[0].display_name}`, "ProviderProfile", {
+              providerId: unique[0].slug,
+              source: "becca",
+            })]
+          : []),
+        ...(label
+          ? [askChip("who", `Who does ${label}?`, `Find ${label}`)]
+          : []),
+        navChip("explore", "Open Explore", "Explore"),
+      ],
     };
   },
 };
@@ -2184,14 +2240,28 @@ const topRated: Capability = {
     if (!wantsNew) {
       const anyone = await getProviders();
       if (anyone.length > 0) {
+        // Offer a way to narrow rather than dumping everyone. "Best rated" with
+        // no category is a vague ask, and the useful reply is "in what?" —
+        // built from the categories that actually have providers, so every
+        // option leads somewhere real rather than to an empty result.
+        const categories = [
+          ...new Set(anyone.map((p) => p.service_category).filter(Boolean)),
+        ].slice(0, 4);
+
         return {
           text:
-            "No one's built up enough reviews yet for a top-rated list — it takes a few before that means anything. " +
-            `Here ${anyone.length !== 1 ? "are" : "is"} **${anyone.length}** provider${anyone.length !== 1 ? "s" : ""} on CERVICED right now:`,
+            "No one's built up enough reviews yet for a top-rated list — it takes a few before that means anything.\n\n" +
+            `There ${anyone.length !== 1 ? "are" : "is"} **${anyone.length}** provider${anyone.length !== 1 ? "s" : ""} on CERVICED. ` +
+            (categories.length > 1
+              ? "Narrow it down and I can be more useful:"
+              : "Here's who's here:"),
           providers: anyone.slice(0, 12).map(providerFromDb),
           suggestions: [
+            ...categories.map((cat) => {
+              const catLabel = CATEGORY_LABELS[cat] ?? cat.toLowerCase();
+              return askChip(`cat-${cat}`, catLabel[0]!.toUpperCase() + catLabel.slice(1), `Find ${catLabel}`);
+            }),
             askChip("free", "Who's free this week?", "Who's free this week?"),
-            askChip("inspo", "Show me some looks", "Show me some inspiration"),
           ],
         };
       }
