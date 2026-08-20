@@ -51,3 +51,18 @@ backups/
 supabase/.temp/
 
 .env.local
+
+# iCloud Drive sync collisions. This repo lives under ~/Desktop, and iCloud
+# resolves a conflicting write by forking a numbered copy — "shuffle 2.ts"
+# alongside "shuffle.ts". They are never intentional content; 33 of them had
+# been committed by an auto-commit hook before this was noticed (2026-08-20).
+#
+# Deliberately limited to source extensions. Numbered ASSET files ARE
+# legitimate here (assets/logos/"iPhone 14 & 15 Pro Max - 3.png"), and
+# supabase/migrations/ is too load-bearing to ignore by glob — a real
+# migration must never be silently untracked.
+* [0-9].ts
+* [0-9].tsx
+* [0-9].js
+* [0-9].jsx
+* [0-9].json
