@@ -59,6 +59,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  // Set when the thread genuinely cannot be opened, so the screen says why
+  // instead of showing an empty conversation that silently swallows sends.
+  const [conversationError, setConversationError] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -134,12 +137,22 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     async function initConversation() {
       setLoading(true);
       setConversationId(null);
+      setConversationError(null);
       setMessages([]);
       try {
         const id = await getOrCreateConversation(providerDbId, userId!);
         setConversationId(id);
       } catch (err) {
         logger.error('[ProviderChat] failed to get/create conversation:', err);
+        // The RPC raises self_conversation_not_allowed when a provider opens
+        // a thread with their own profile. Never let a raw Postgres message
+        // reach the client — name the two cases plainly instead.
+        const raw = err instanceof Error ? err.message : String(err);
+        setConversationError(
+          raw.includes('self_conversation_not_allowed')
+            ? "This is your own provider profile, so there's no one on the other end of this thread."
+            : "We couldn't open this conversation. Please try again in a moment.",
+        );
       }
       setLoading(false);
     }
@@ -489,7 +502,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
                 {providerName}
               </Text>
               <Text style={[styles.emptyBody, { color: OP.sub }]}>
-                Send a message to start a conversation
+                {conversationError ?? "Send a message to start a conversation"}
               </Text>
             </View>
           }

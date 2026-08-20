@@ -5,7 +5,7 @@
 
 #generated
 
-**1749 functions** across **261 files**.
+**1752 functions** across **261 files**.
 
 ### `src/components/` (36)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -160,7 +160,7 @@
 - `PointsScreen.tsx` — PointsScreen
 - `ProfileInfoScreen.tsx` — handleDeleteAccount · handleSave · ProfileInfoScreen
 - `ProviderChatScreen.tsx` — closeAddressModal · handleSendAddress · initConversation · openAddressModal · postMessage · ProviderChatScreen · renderMessage · selectAddressBooking · sendMessage
-- `ProviderProfileScreen.tsx` — adaptiveAccentColor · averageRating · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · formatDate · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleCopyCode · handleGetInTouch · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openImageViewer · openOffersPanel · portfolioColumns · portfolioImages · ProviderProfileScreen · ProviderProfileSkeleton · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · selectedServicesFlat · selectedTotal · showRightNotification · showSuccessMessageWithAnimation · slideStyle · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView
+- `ProviderProfileScreen.tsx` — adaptiveAccentColor · averageRating · bookingSheetInitial · closeImageViewer · closeOffersPanel · closeWaitlistModal · formatDate · handleAddOnPickerDone · handleBook · handleBookingSheetSubmit · handleBookmarkToggle · handleBookOffer · handleBookSelected · handleConfirmLeave · handleCopyCode · handleGetInTouch · handleJoinWaitlist · handleLeaveWaitlist · handleMultiBookingSheetSubmit · handleNotificationToggle · handleOpenDatePicker · handleQuickBook · handleScroll · handleShare · handleViewCart · hideSuccessMessage · notificationColors · notificationMessage · openImageViewer · openOffersPanel · portfolioColumns · portfolioImages · ProviderProfileScreen · ProviderProfileSkeleton · renderImageViewerOverlay · renderSelectionBar · renderServiceCategoryBlock · scaleStyle · selectedServicesFlat · selectedTotal · showRightNotification · showSuccessMessageWithAnimation · slideStyle · StarIcon · toggleSelectMode · toggleServiceSelected · tryOpenExternalBooking · UnclaimedProviderView · venueImages · venuePortfolio · workPortfolio
 - `RescheduleScreen.tsx` — booking · dateToTimeHHMM · fetchRealRescheduleDates · formatDisplayDate · groupSiblings · handleCustomDateChange · handleCustomTimeChange · handleDateSelect · handleDecline · handleSubmit · handleTimeSelect · hoursUntilBooking · minPickerDate · openCustomDatePicker · providerRespondedDates · RescheduleScreen
 - `SearchScreen.tsx` — activeFilterChips · clearFilter · filteredProviders · formatPriceRange · handleFilterPress · handleProviderPress · handleRefresh · handleSearchChange · mapDbToCardData · providersWithAvailability · providersWithDistance · providersWithPriceRange · renderHeader · resetFilters · run · SearchScreen · specialtiesFor · updateCityFilter · updateFilter
 - `SubscriptionScreen.tsx` — SubscriptionScreen

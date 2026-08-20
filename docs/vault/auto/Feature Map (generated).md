@@ -6,7 +6,7 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **86 files**
+Curated: [[Address Release]] · **87 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(88)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **86 files**
 - `src/tests/addressReleasePolicy.test 2.ts` _(16)_
 - `src/types/database.ts` _(16)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
-- … +56 more
+- … +57 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **151 files**
@@ -47,7 +47,7 @@ Curated: [[Availability & Slots]] · **151 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/client/SearchScreen.tsx` _(104)_
 - `src/components/ModernBeautyCalendar.tsx` _(102)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(90)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(93)_
 - `src/contexts/BookingContext.tsx` _(82)_
 - `src/services/becca/capabilities/client.ts` _(71)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(60)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **241 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(107)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(105)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(106)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
@@ -148,7 +148,7 @@ Curated: [[Notifications]] · **148 files**
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/databaseService.ts` _(120)_
 - `supabase/notification_recipient_role.sql` _(91)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(88)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(89)_
 - `supabase/provider_reminder_jobs.sql` _(86)_
 - `src/screens/provider/ProviderPromotionsScreen.tsx` _(73)_
 - `supabase/fix_reschedule_flow_completion.sql` _(61)_

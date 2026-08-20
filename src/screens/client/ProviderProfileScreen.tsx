@@ -75,6 +75,7 @@ import {
   type WaitlistEntry,
   getProviderProfileViewerContext,
   setProviderFollowNotify,
+  VENUE_PORTFOLIO_CATEGORY,
 } from "../../services/databaseService";
 import userLearningService from "../../services/userLearningService";
 import { getUnclaimedProviderDetail, type UnclaimedProviderDetail } from "../../services/providerClaimService";
@@ -1369,6 +1370,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           // out of booking. The server-side guard in hold_cart_booking_slots
           // is the actual enforcement — this is the honest UI on top of it.
           setIsOwnProvider(viewer?.isOwnProvider ?? false);
+          setViewerChecked(true);
         }
       })
       .catch(() => {
@@ -1463,6 +1465,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // (hold_cart_booking_slots / claim_cart_booking_slots both raise), so an
   // enabled button could only ever lead to an error alert.
   const [isOwnProvider, setIsOwnProvider] = useState(false);
+  // Whether the owner check has actually come back yet. Explore's "Book Now"
+  // auto-opens BookingSheet on a timer as soon as services load, which can
+  // beat the check — without this gate it would fire on a stale
+  // isOwnProvider=false closure and open the sheet on your own profile.
+  const [viewerChecked, setViewerChecked] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string>("");
   const [userWaitlistMap, setUserWaitlistMap] = useState<
     Record<string, WaitlistEntry>
@@ -1567,6 +1574,24 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       : ["rgba(255,255,255,0.3)", "transparent"]
   ) as [string, string];
 
+  // Venue/workspace shots are stamped with their own category by
+  // InfoRegScreen's "Address & venue photos" uploader. They're a picture of
+  // the room, not of the provider's work, so they get their own section on
+  // the profile rather than sitting in the Portfolio grid between finished
+  // results. Explore already excludes them from the discovery feed.
+  const venuePortfolio = useMemo(
+    () => portfolio.filter((item) => item.category === VENUE_PORTFOLIO_CATEGORY),
+    [portfolio],
+  );
+  const workPortfolio = useMemo(
+    () => portfolio.filter((item) => item.category !== VENUE_PORTFOLIO_CATEGORY),
+    [portfolio],
+  );
+  const venueImages = useMemo(
+    () => venuePortfolio.map((item) => ({ uri: item.image_url })),
+    [venuePortfolio],
+  );
+
   // ── Pinterest-style two-column portfolio ────────────────────────────────────
   // Items are dealt into whichever column is currently shorter, with tile height
   // from the item's aspect ratio, giving the staggered masonry look.
@@ -1574,7 +1599,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const portfolioColumns = useMemo(() => {
     const cols: (DbPortfolioItem & { tileHeight: number; globalIndex: number })[][] = [[], []];
     const colHeights = [0, 0];
-    portfolio.forEach((item, i) => {
+    workPortfolio.forEach((item, i) => {
       const ratio =
         item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
       const tileHeight = Math.min(Math.max(PORTFOLIO_COL_W / ratio, 140), 300);
@@ -1583,11 +1608,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       colHeights[target]! += tileHeight + 12;
     });
     return cols;
-  }, [portfolio, PORTFOLIO_COL_W]);
+  }, [workPortfolio, PORTFOLIO_COL_W]);
 
   const portfolioImages = useMemo(
-    () => portfolio.map((item) => ({ uri: item.image_url })),
-    [portfolio],
+    () => workPortfolio.map((item) => ({ uri: item.image_url })),
+    [workPortfolio],
   );
 
   // Hero info floats over the photo/gradient. Every theme always carries a
@@ -2095,12 +2120,24 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Alert.alert("Not available", "Provider details are still loading.");
       return;
     }
+    // get_or_create_provider_conversation raises self_conversation_not_allowed
+    // for this, and ProviderChatScreen had no handling for it — the client
+    // landed on a permanently empty thread with the raw Postgres message in
+    // the logs and nothing on screen. Stop before navigating and point at the
+    // contact details, which is all you actually need on your own profile.
+    if (isOwnProvider) {
+      Alert.alert(
+        "That's your profile",
+        "You can't message yourself. Your contact options are in the Contact section below.",
+      );
+      return;
+    }
     navigation.navigate("ProviderChat", {
       providerId: provider.id,
       providerDbId,
       providerName: provider.displayName,
     });
-  }, [provider, providerDbId, navigation]);
+  }, [provider, providerDbId, navigation, isOwnProvider]);
 
   // Configure the navigation header with your gradient and icons
   React.useLayoutEffect(() => {
@@ -2697,6 +2734,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // silently launch Linking.openURL the moment this screen mounts, before
     // the client has even seen the profile. Let them tap Book themselves.
     if (!targetId || !provider || provider.externalBookingUrl) return;
+    // Wait for the owner check before auto-opening anything (see viewerChecked).
+    if (!viewerChecked) return;
     const allServices = Object.values(provider.categories).flat();
     const match = allServices.find((s) => s.dbId === targetId);
     if (match) {
@@ -2719,7 +2758,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     // else: provider.categories may still be loading — leave the ref unset
     // so this effect re-checks on the next provider update.
-  }, [route.params?.openServiceId, provider, handleBook]);
+  }, [route.params?.openServiceId, provider, handleBook, viewerChecked]);
 
   const handleBookingSheetSubmit = useCallback(
     (service: ServiceData, result: BookingSheetResult) => {
@@ -2878,9 +2917,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const notificationMessage = useMemo(() => {
     if (notificationMessageType === "bell") {
       const fullName = provider?.providerName ?? "this provider";
-      return isNotificationsEnabled
-        ? `Notifications enabled for\n${fullName}`
-        : `Notifications disabled for\n${fullName}`;
+      // Name what the client actually signed up to receive. "Notifications
+      // enabled" says nothing about WHEN anything arrives — for a provider
+      // who drops their diary on a fixed day, that day IS the notification.
+      const releaseDay = provider?.scheduleReleaseDay;
+      if (!isNotificationsEnabled) {
+        return `You'll no longer be notified about\n${fullName}`;
+      }
+      return releaseDay != null
+        ? `We'll tell you when ${fullName}\nreleases new slots on the ${ordinalSuffix(releaseDay)}`
+        : `We'll tell you when ${fullName}\nreleases new slots`;
     } else {
       return providerIsBookmarked
         ? `Added to your\nproviders list`
@@ -4307,18 +4353,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     availability && availability.state !== "unpublished"
                       ? `${availability.headline}${availability.detail ? ` · ${availability.detail}` : ""}`
                       : "";
-                  // The bell subscribes to this provider's monthly slot
-                  // RELEASE (providers.automation_settings.scheduleReleaseDay
-                  // — see ProviderAutomationsScreen), which is a completely
-                  // separate fact from whether there's an availability
-                  // headline to print today. It used to share this block's
-                  // early return, so a provider with a release day set but no
-                  // current availability line lost the bell entirely — the
-                  // exact case the release notification exists for. The row
-                  // now renders when EITHER has something to say.
-                  const showBell = provider.scheduleReleaseDay != null;
+                  // A provider who publishes slots on a fixed day of the
+                  // month leads with THAT, not with today's open/closed
+                  // headline — "Open today until 6pm" is the less useful
+                  // half of the sentence for someone waiting on next
+                  // month's diary to drop. Availability stays on as the
+                  // secondary clause when there's one to add.
+                  const releaseText =
+                    provider.scheduleReleaseDay != null
+                      ? `New slots drop on the ${ordinalSuffix(provider.scheduleReleaseDay)}`
+                      : "";
+                  const rowText = releaseText
+                    ? `${releaseText}${pillText ? ` · ${pillText}` : ""}`
+                    : pillText;
+                  // The bell subscribes to this provider's release
+                  // notification, but it is also the general "tell me when
+                  // this provider opens up" control, so it renders for every
+                  // provider — not only the ones with a release day set. It
+                  // used to sit inside this block's early return and vanished
+                  // whenever there was no availability headline to print.
+                  const showInstagram = !!provider.instagram;
                   if (availabilityLoading) return null;
-                  if (!pillText && !showBell) return null;
                   return (
                   <BlurView
                     intensity={cardBlurIntensity}
@@ -4334,11 +4389,37 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       end={{ x: 0, y: 1 }}
                       style={styles.slotsCardHighlight}
                     />
-                    <Text style={[styles.slotsText, { color: OP.sub }]}>
-                      {pillText ||
-                        `New slots released on the ${ordinalSuffix(provider.scheduleReleaseDay!)} of each month`}
+                    <Text
+                      style={[styles.slotsText, { color: OP.sub }]}
+                      numberOfLines={1}
+                    >
+                      {rowText || "Availability on request"}
                     </Text>
-                    {showBell ? (
+                    {showInstagram ? (
+                      <TouchableOpacity
+                        style={styles.bellButtonInline}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          Linking.openURL(
+                            `https://instagram.com/${provider.instagram}`,
+                          ).catch(() => {
+                            Alert.alert(
+                              "Couldn't open Instagram",
+                              "Please try again in a moment.",
+                            );
+                          });
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityLabel={`Open @${provider.instagram} on Instagram`}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name="logo-instagram"
+                          size={16}
+                          color={OP.sub}
+                        />
+                      </TouchableOpacity>
+                    ) : null}
                     <TouchableOpacity
                       style={styles.bellButtonInline}
                       onPress={handleNotificationToggle}
@@ -4352,7 +4433,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
                       />
                     </TouchableOpacity>
-                    ) : null}
                   </BlurView>
                   );
                 })()}
@@ -4843,7 +4923,45 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               ) : null}
 
               {/* Portfolio — Pinterest-style two-column masonry of client work */}
-              {portfolio.length > 0 && (
+              {venuePortfolio.length > 0 && (
+                <View style={styles.portfolioSection}>
+                  <Text
+                    style={[
+                      styles.sectionTitleNoCard,
+                      { color: OP.text, paddingHorizontal: 0 },
+                    ]}
+                  >
+                    The Space
+                  </Text>
+                  {/* A horizontal strip, not the masonry grid — these are a
+                      handful of shots of one room, and stacking them in two
+                      ragged columns reads as portfolio work, which is exactly
+                      the confusion this section exists to remove. */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.venueStrip}
+                  >
+                    {venuePortfolio.map((item, index) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => openImageViewer(venueImages, index)}
+                        style={styles.venueTile}
+                        activeOpacity={0.9}
+                      >
+                        <Image
+                          source={{ uri: item.image_url }}
+                          style={styles.venueImage}
+                          contentFit="cover"
+                          transition={0}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {workPortfolio.length > 0 && (
                 <View style={styles.portfolioSection}>
                   <Text
                     style={[
@@ -4902,6 +5020,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 const styles = StyleSheet.create({
   background: {
     flex: 1,
+  },
+  venueStrip: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  venueTile: {
+    width: 190,
+    height: 140,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  venueImage: {
+    width: "100%",
+    height: "100%",
   },
   heroImage: {
     position: "absolute",
@@ -5253,6 +5385,7 @@ const styles = StyleSheet.create({
   },
 
   slotsText: {
+    flex: 1,
     fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     textAlign: "center",

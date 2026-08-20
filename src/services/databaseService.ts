@@ -799,7 +799,7 @@ export async function deletePortfolioItem(id: string): Promise<void> {
  *  studio wants to see the room — but not in a browse/inspiration feed,
  *  where a picture of an empty treatment room sits oddly among photos of
  *  actual results. Stored lowercase, unlike every real service category. */
-const VENUE_PORTFOLIO_CATEGORY = "venue";
+export const VENUE_PORTFOLIO_CATEGORY = "venue";
 
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
