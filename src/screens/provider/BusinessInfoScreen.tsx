@@ -249,7 +249,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
               activeOpacity={0.75}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[s.cardTitle, { color: C.text }]}>Terms &amp; Conditions</Text>
+                <Text style={[s.cardTitle, { color: C.text }]}>Set up your Terms &amp; Conditions</Text>
                 <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>
                   Your own terms are set up as a form clients agree to before their appointment — build or edit one in Forms.
                 </Text>

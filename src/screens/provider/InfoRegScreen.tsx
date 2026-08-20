@@ -78,6 +78,25 @@ import { createServiceDraft } from '../../features/provider-registration/service
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+/**
+ * Tap feedback. This screen is the longest form in the app and had haptics on
+ * only 8 of its ~50 controls, so a chip tap felt dead while the section "Next"
+ * button beside it didn't — inconsistent feedback reads as an unresponsive
+ * control, not as restraint. One helper per intent, so each control's feedback
+ * is a decision rather than whatever the nearest line happened to use:
+ *   tapSelect — picking or toggling something (chips, pills, tabs, suggestions)
+ *   tapLight  — navigational chrome (close, cancel, back, skip)
+ *   tapMedium — a committing action (save, submit, add, publish)
+ *   tapWarn   — removing something
+ * All .catch()ed: haptics reject on simulators and unsupported hardware, and a
+ * failed buzz must never take the form action down with it.
+ */
+const tapSelect = () => { Haptics.selectionAsync().catch(() => {}); };
+const tapLight  = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); };
+const tapMedium = () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); };
+const tapWarn   = () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}); };
+
 // Hero → content transition, copied from ProviderProfileScreen: the logo/name/
 // rating/slots float directly over the hero photo/gradient, then the content
 // sheet rises over it with a rounded lip. Keep this in sync with that screen.
@@ -777,7 +796,7 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
             <TouchableOpacity
               key={option}
               style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
-              onPress={() => onToggle(option)}
+              onPress={() => { tapSelect(); onToggle(option); }}
             >
               <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
             </TouchableOpacity>
@@ -785,7 +804,7 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
         })}
         <TouchableOpacity
           style={[styles.chip, showOtherInput && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
-          onPress={() => setShowOtherInput(v => !v)}
+          onPress={() => { tapSelect(); setShowOtherInput(v => !v); }}
         >
           <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>Other</Text>
         </TouchableOpacity>
@@ -804,7 +823,7 @@ const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, select
               autoFocus
             />
           </BlurView>
-          <TouchableOpacity style={styles.addAddOnButton} onPress={submitOther}>
+          <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); submitOther(); }}>
             <Text style={styles.addAddOnButtonText}>+</Text>
           </TouchableOpacity>
         </View>
@@ -853,12 +872,12 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                 <Text style={styles.modalTitle}>Add a {categoryName || meta.label} Service</Text>
                 <Text style={styles.templateSheetSub}>Pick a starting point or build your own</Text>
               </View>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { tapLight(); onClose(); }}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-              <TouchableOpacity style={[styles.templateScratchCard, { borderColor: accentColor }]} onPress={() => onPick(null)} activeOpacity={0.85}>
+              <TouchableOpacity style={[styles.templateScratchCard, { borderColor: accentColor }]} onPress={() => { tapSelect(); onPick(null); }} activeOpacity={0.85}>
                 <Ionicons name="create-outline" size={20} color={accentColor} style={styles.templateScratchIcon} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.templateScratchTitle}>Start from scratch</Text>
@@ -870,7 +889,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                 <Text style={styles.templateGroupLabel}>Popular {groupLabel} services</Text>
               )}
               {templates.map((t, i) => (
-                <TouchableOpacity key={`${t.name}-${i}`} style={styles.templateCard} onPress={() => onPick(t)} activeOpacity={0.85}>
+                <TouchableOpacity key={`${t.name}-${i}`} style={styles.templateCard} onPress={() => { tapSelect(); onPick(t); }} activeOpacity={0.85}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.templateName}>{t.name}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -891,7 +910,7 @@ const ServiceTemplatePicker: React.FC<ServiceTemplatePickerProps> = ({
                     <TouchableOpacity
                       key={opt}
                       style={styles.templateCard}
-                      onPress={() => onPick(buildVariantTemplate(categoryName.trim(), group, opt, scope))}
+                      onPress={() => { tapSelect(); onPick(buildVariantTemplate(categoryName.trim(), group, opt, scope)); }}
                       activeOpacity={0.85}
                     >
                       <View style={{ flex: 1 }}>
@@ -1150,7 +1169,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
               <Text style={styles.modalTitle}>
                 {isEditing ? 'Edit Service' : `New ${categoryName} Service`}
               </Text>
-              <TouchableOpacity style={[styles.modalCloseButton, { backgroundColor: `${accentColor}22` }]} onPress={onClose}>
+              <TouchableOpacity style={[styles.modalCloseButton, { backgroundColor: `${accentColor}22` }]} onPress={() => { tapLight(); onClose(); }}>
                 <Text style={[styles.modalCloseText, { color: accentColor }]}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -1234,7 +1253,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   {SERVICE_TYPES.map(({ value, label }) => {
                     const active = serviceType === value;
                     return (
-                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setServiceType(active ? '' : value)}>
+                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setServiceType(active ? '' : value); }}>
                         <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
                       </TouchableOpacity>
                     );
@@ -1281,7 +1300,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 {trendNames.length > 0 && (
                   <View style={styles.chipGrid}>
                     {trendNames.map(t => (
-                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setTrendNames(trendNames.filter(x => x !== t))}>
+                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => { tapSelect(); setTrendNames(trendNames.filter(x => x !== t)); }}>
                         <Text style={styles.chipTextActive}>{t} ×</Text>
                       </TouchableOpacity>
                     ))}
@@ -1291,13 +1310,13 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
                     <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
                   </BlurView>
-                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
+                  <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddTrend(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
                 </View>
                 <View style={styles.chipGrid}>
                   {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
-                    <TouchableOpacity key={t} style={styles.chip} onPress={() => setTrendNames([...trendNames, t])}>
+                    <TouchableOpacity key={t} style={styles.chip} onPress={() => { tapSelect(); setTrendNames([...trendNames, t]); }}>
                       <Text style={styles.chipText}>{t}</Text>
                     </TouchableOpacity>
                   ))}
@@ -1352,7 +1371,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                     {contraindications.length > 0 && (
                       <View style={styles.chipGrid}>
                         {contraindications.map(c => (
-                          <TouchableOpacity key={c} style={[styles.chip, styles.chipWarning]} onPress={() => setContraindications(contraindications.filter(x => x !== c))}>
+                          <TouchableOpacity key={c} style={[styles.chip, styles.chipWarning]} onPress={() => { tapSelect(); setContraindications(contraindications.filter(x => x !== c)); }}>
                             <Text style={styles.chipTextActive}>{c} ×</Text>
                           </TouchableOpacity>
                         ))}
@@ -1362,7 +1381,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
                         <TextInput style={styles.textInput} value={contraindicationInput} onChangeText={setContraindicationInput} placeholder="e.g. active eczema" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddContraindication} returnKeyType="done" onFocus={() => handleInputFocus('contraindicationInput')} />
                       </BlurView>
-                      <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddContraindication}>
+                      <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddContraindication(); }}>
                         <Text style={styles.addAddOnButtonText}>+</Text>
                       </TouchableOpacity>
                     </View>
@@ -1417,7 +1436,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                           <Text style={styles.addOnName}>{addOn.name}</Text>
                           <Text style={styles.addOnPrice}>+£{addOn.price}</Text>
                         </View>
-                        <TouchableOpacity style={styles.removeAddOnButton} onPress={() => handleRemoveAddOn(addOn.id)}>
+                        <TouchableOpacity style={styles.removeAddOnButton} onPress={() => { tapWarn(); handleRemoveAddOn(addOn.id); }}>
                           <Text style={styles.removeAddOnText}>×</Text>
                         </TouchableOpacity>
                       </View>
@@ -1431,7 +1450,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                   <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.addOnPriceInput, { backgroundColor: inputTint }]}>
                     <TextInput style={styles.textInput} value={newAddOnPrice} onChangeText={setNewAddOnPrice} placeholder="£" placeholderTextColor={chrome.fg(0.4)} keyboardType="numeric" onFocus={() => handleInputFocus('newAddOnPrice')} />
                   </BlurView>
-                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddAddOn}>
+                  <TouchableOpacity style={styles.addAddOnButton} onPress={() => { tapMedium(); handleAddAddOn(); }}>
                     <Text style={styles.addAddOnButtonText}>+</Text>
                   </TouchableOpacity>
                 </View>
@@ -1439,10 +1458,10 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
             </ScrollView>
 
             <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => { tapLight(); onClose(); }}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveButton, { backgroundColor: accentColor }]} onPress={handleSave}>
+              <TouchableOpacity style={[styles.saveButton, { backgroundColor: accentColor }]} onPress={() => { tapMedium(); handleSave(); }}>
                 <Text style={styles.saveButtonText}>{isEditing ? 'Save Changes' : 'Add Service'}</Text>
               </TouchableOpacity>
             </View>
@@ -1523,7 +1542,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                     : "Pick a type — we'll suggest matching services & tags"}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => { tapLight(); onClose(); }}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -1542,7 +1561,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                     returnKeyType="done"
                   />
                 </BlurView>
-                <TouchableOpacity style={[styles.addAddOnButton, { backgroundColor: accentColor }]} onPress={() => addCategory(categoryName, categoryDescription)}>
+                <TouchableOpacity style={[styles.addAddOnButton, { backgroundColor: accentColor }]} onPress={() => { tapMedium(); addCategory(categoryName, categoryDescription); }}>
                   <Text style={styles.addAddOnButtonText}>+</Text>
                 </TouchableOpacity>
               </View>
@@ -1570,7 +1589,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                       <TouchableOpacity
                         key={sub.name}
                         style={[styles.categoryTypeCard, used && styles.categoryTypeCardUsed]}
-                        onPress={() => !used && pickSuggestion(sub.name, sub.description)}
+                        onPress={() => { tapSelect(); !used && pickSuggestion(sub.name, sub.description); }}
                         activeOpacity={used ? 1 : 0.85}
                         disabled={used}
                       >
@@ -1589,7 +1608,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({ visible, onClose, o
                       <TouchableOpacity
                         key={kind}
                         style={[styles.categoryTypeCard, used && styles.categoryTypeCardUsed]}
-                        onPress={() => !used && pickSuggestion(meta.label, meta.description)}
+                        onPress={() => { tapSelect(); !used && pickSuggestion(meta.label, meta.description); }}
                         activeOpacity={used ? 1 : 0.85}
                         disabled={used}
                       >
@@ -1693,14 +1712,14 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
           <View style={styles.transferButtons}>
             <TouchableOpacity
               style={[styles.transferButton, isLoading && { opacity: 0.5 }]}
-              onPress={handleTransferPress}
+              onPress={() => { tapSelect(); handleTransferPress(); }}
               disabled={isLoading}
             >
               <Text style={styles.transferButtonText}>
                 {isLoading ? 'Importing…' : 'Import My Profile'}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.skipButton} onPress={onSkip} disabled={isLoading}>
+            <TouchableOpacity style={styles.skipButton} onPress={() => { tapLight(); onSkip(); }} disabled={isLoading}>
               <Text style={styles.skipButtonText}>Start Fresh Instead</Text>
             </TouchableOpacity>
           </View>
@@ -1774,10 +1793,10 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
             />
           </BlurView>
           <View style={styles.smallModalButtons}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => { tapLight(); onClose(); }}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <TouchableOpacity style={styles.saveButton} onPress={() => { tapMedium(); handleSave(); }}>
               <Text style={styles.saveButtonText}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -1895,7 +1914,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         <SafeAreaView style={styles.previewSafeArea} edges={['bottom']}>
           {/* Preview Header with back button */}
           <View style={[styles.previewHeader, { paddingTop: previewTopPad + 8 }]}>
-            <TouchableOpacity style={styles.previewBackButton} onPress={onClose}>
+            <TouchableOpacity style={styles.previewBackButton} onPress={() => { tapLight(); onClose(); }}>
               <Text style={styles.previewBackText}>←</Text>
             </TouchableOpacity>
             <View style={styles.previewBadge}>
@@ -2021,7 +2040,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setShowFullAbout(!showFullAbout)}
+                  onPress={() => { tapSelect(); setShowFullAbout(!showFullAbout); }}
                   style={styles.previewMoreButton}
                 >
                   <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
@@ -2046,7 +2065,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                       <CategoryTabPill
                         category={item}
                         isSelected={selectedPreviewCategory === item}
-                        onPress={() => setSelectedPreviewCategory(item)}
+                        onPress={() => { tapSelect(); setSelectedPreviewCategory(item); }}
                         cardBg={selectedPreviewCategory === item ? accentColor : cardBg}
                         blurIntensity={cardBlurIntensity}
                         blurTint={cardBlurTint}
@@ -3538,7 +3557,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               style={styles.backButton}
               activeOpacity={0.5}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                tapLight();
                 navigation.goBack();
               }}
             >
@@ -3550,7 +3569,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.headerIconButton}
-                onPress={() => setShowPreviewModal(true)}
+                onPress={() => { tapSelect(); setShowPreviewModal(true); }}
               >
                 <Ionicons name="eye-outline" size={20} color={chromeText} />
               </TouchableOpacity>
@@ -3560,7 +3579,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           {claimError && (
             <View style={styles.claimErrorBanner}>
               <Text style={styles.claimErrorText}>{claimError}</Text>
-              <TouchableOpacity onPress={() => setClaimError(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity onPress={() => { tapSelect(); setClaimError(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={16} color="#7A4B00" />
               </TouchableOpacity>
             </View>
@@ -3628,7 +3647,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.docNextButton}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  tapSelect();
                   goToSection('about');
                 }}
                 activeOpacity={0.55}
@@ -3645,7 +3664,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <View style={styles.logoSection}>
                 <TouchableOpacity
                   style={styles.logoContainer}
-                  onPress={handleSelectLogo}
+                  onPress={() => { tapSelect(); handleSelectLogo(); }}
                   activeOpacity={0.8}
                   accessibilityRole="button"
                   accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
@@ -3739,8 +3758,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                             styles.serviceCategoryChipSelected,
                         ]}
                         onPress={() =>
-                          setProviderData({ ...providerData, providerService: category })
-                        }
+                          { tapSelect(); setProviderData({ ...providerData, providerService: category }); }}
                       >
                         <Text
                           style={[
@@ -3825,7 +3843,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.docNextButton}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  tapSelect();
                   goToSection('contact');
                 }}
                 activeOpacity={0.55}
@@ -3891,7 +3909,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {providerData.scheduleReleaseDay != null && (
                   <TouchableOpacity
                     style={styles.releaseDayBtn}
-                    onPress={() => setReleaseDayPickerVisible(true)}
+                    onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
                   >
                     <Text style={styles.releaseDayBtnText}>
                       Day {providerData.scheduleReleaseDay} of every month
@@ -3916,7 +3934,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
                       <TouchableOpacity
                         style={styles.portfolioRemoveBtn}
-                        onPress={() => handleRemovePortfolioItem(item)}
+                        onPress={() => { tapWarn(); handleRemovePortfolioItem(item); }}
                         activeOpacity={0.8}
                       >
                         <Text style={styles.portfolioRemoveText}>✕</Text>
@@ -3926,7 +3944,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
                   <TouchableOpacity
                     style={styles.portfolioAddTile}
-                    onPress={() => handleAddPortfolioImages()}
+                    onPress={() => { tapMedium(); handleAddPortfolioImages(); }}
                     activeOpacity={0.8}
                     disabled={portfolioUploading || !providerDbId}
                   >
@@ -3960,7 +3978,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.docNextButton}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  tapSelect();
                   goToSection('services');
                 }}
                 activeOpacity={0.55}
@@ -4097,7 +4115,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <TouchableOpacity
                 style={styles.docNextButton}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  tapSelect();
                   goToSection('policies');
                 }}
                 activeOpacity={0.55}
@@ -4115,7 +4133,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Text style={styles.sectionTitleNoCard}>Your Services</Text>
                   <TouchableOpacity
                     style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
-                    onPress={() => setShowCategoryModal(true)}
+                    onPress={() => { tapLight(); setShowCategoryModal(true); }}
                   >
                     <Text style={styles.addCategoryText}>+ Add Category</Text>
                   </TouchableOpacity>
@@ -4242,7 +4260,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 isSel && styles.selectedCategoryTab,
                               ]}
                               activeOpacity={0.8}
-                              onPress={() => setSelectedCategory(item)}
+                              onPress={() => { tapSelect(); setSelectedCategory(item); }}
                               onLongPress={() => {
                                 Alert.alert(
                                   `“${item}”`,
@@ -4371,7 +4389,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                 <View style={styles.serviceActions}>
                                   <TouchableOpacity
                                     style={styles.editServiceButton}
-                                    onPress={() => {
+                                    onPress={() => { tapSelect();
                                       setCurrentCategory(selectedCategory);
                                       setEditingService(service);
                                       setIsEditingService(true);
@@ -4383,8 +4401,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                                   <TouchableOpacity
                                     style={styles.deleteServiceButton}
                                     onPress={() =>
-                                      handleDeleteService(selectedCategory, service.id)
-                                    }
+                                      { tapWarn(); handleDeleteService(selectedCategory, service.id); }}
                                   >
                                     <Text style={styles.deleteServiceText}>×</Text>
                                   </TouchableOpacity>
@@ -4397,7 +4414,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         {/* Add Service Button — opens the template picker first */}
                         <TouchableOpacity
                           style={styles.addServiceButton}
-                          onPress={() => {
+                          onPress={() => { tapSelect();
                             setCurrentCategory(selectedCategory);
                             setShowTemplatePicker(true);
                           }}
@@ -4464,7 +4481,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       <TouchableOpacity
                         key={v}
                         style={[styles.policyPill, providerData.businessType === v && { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => setProviderData(prev => ({ ...prev, businessType: v }))}
+                        onPress={() => { tapSelect(); setProviderData(prev => ({ ...prev, businessType: v })); }}
                       >
                         <Text style={[styles.policyPillText, providerData.businessType === v && { color: '#fff' }]}>{l}</Text>
                       </TouchableOpacity>
@@ -4519,7 +4536,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
                     <TouchableOpacity
                       style={styles.portfolioRemoveBtn}
-                      onPress={() => handleRemovePortfolioItem(item)}
+                      onPress={() => { tapWarn(); handleRemovePortfolioItem(item); }}
                       activeOpacity={0.8}
                     >
                       <Text style={styles.portfolioRemoveText}>✕</Text>
@@ -4528,7 +4545,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 ))}
                 <TouchableOpacity
                   style={styles.portfolioAddTile}
-                  onPress={async () => {
+                  onPress={async () => { tapMedium();
                     setVenuePhotoUploading(true);
                     try {
                       await handleAddPortfolioImages('venue');
@@ -4570,7 +4587,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           <TouchableOpacity
                             key={v}
                             style={[styles.policyPill, providerData.addressReleasePolicy === v && { backgroundColor: adaptiveAccentColor }]}
-                            onPress={() => setProviderData(prev => ({ ...prev, addressReleasePolicy: v }))}
+                            onPress={() => { tapSelect(); setProviderData(prev => ({ ...prev, addressReleasePolicy: v })); }}
                           >
                             <Text style={[styles.policyPillText, providerData.addressReleasePolicy === v && { color: '#fff' }]}>{l}</Text>
                           </TouchableOpacity>
@@ -4664,7 +4681,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   style={styles.termsRow}
                   activeOpacity={0.75}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    tapSelect();
                     setTermsAccepted(prev => !prev);
                   }}
                 >
@@ -4680,7 +4697,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     I agree to the{' '}
                     <Text
                       style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                      onPress={() => setShowTermsModal(true)}
+                      onPress={() => { tapSelect(); setShowTermsModal(true); }}
                     >
                       Terms &amp; Conditions
                     </Text>
@@ -4701,7 +4718,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     profile can still reach CERVICED's Terms & Conditions
                     from this screen, not just at signup. */}
                 <TouchableOpacity
-                  onPress={() => setShowTermsModal(true)}
+                  onPress={() => { tapSelect(); setShowTermsModal(true); }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   style={{ marginTop: 14 }}
                 >
@@ -4739,7 +4756,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 { backgroundColor: adaptiveAccentColor },
                 isSubmitting && styles.pinnedBarButtonDisabled,
               ]}
-              onPress={handleSubmit}
+              onPress={() => { tapMedium(); handleSubmit(); }}
               activeOpacity={0.85}
               disabled={isSubmitting}
             >

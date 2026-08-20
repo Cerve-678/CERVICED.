@@ -260,7 +260,7 @@ Curated: [[Booking Flow]] · **141 files**
 - `supabase/fix_group_booking_per_service_actions.sql` _(69)_
 - `supabase/fix_client_reliability_tracking.sql` _(56)_
 - `supabase/fix_group_booking_reschedule.sql` _(56)_
-- `src/screens/provider/InfoRegScreen.tsx` _(53)_
+- `src/screens/provider/InfoRegScreen.tsx` _(54)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/PoliciesScreen.tsx` _(46)_
 - `src/screens/client/BookingsScreen.tsx` _(45)_

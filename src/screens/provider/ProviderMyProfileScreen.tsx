@@ -16,11 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { loadProviderFromSupabase } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../../services/providerRegistrationService';
-import { getProviderPortfolio, getProviderReviews, getProviderIdForUserId } from '../../services/databaseService';
+import { getProviderPortfolio, getProviderReviews, getProviderIdForUserId, getProviderFormLibrary } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
@@ -84,6 +85,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [showPolicyImage, setShowPolicyImage] = useState(false);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
+  // A provider's own T&Cs are a form with a 'policy' question in it — that's
+  // the only shape in the app that captures a client actually agreeing to
+  // something, so it's what "has terms" means here. See BusinessInfoScreen.
+  const [hasTermsForm, setHasTermsForm] = useState<boolean | null>(null);
 
   // Reload data every time screen comes into focus
   useFocusEffect(
@@ -129,6 +134,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   }),
                 }))))
                 .catch(() => {});
+              // Fire-and-forget alongside the others. Left as null on failure
+              // so the readiness list omits the item entirely rather than
+              // telling a provider to write terms they may already have.
+              getProviderFormLibrary()
+                .then(forms => setHasTermsForm(forms.some(f => f.questions.some(q => q.type === 'policy'))))
+                .catch(() => setHasTermsForm(null));
             }
           }
 
@@ -173,9 +184,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // five, Business Details' sub-screens for the rest) so the missing-items
   // list can navigate there directly instead of just naming the gap.
   const profileReadiness = useMemo(() => {
-    if (!providerData) return { complete: 0, total: 6, services: 0, missing: [] as { label: string; screen: string }[] };
+    type ReadinessItem = { done: boolean; label: string; screen: string; tab?: string };
+    if (!providerData) return { complete: 0, total: 6, services: 0, missing: [] as ReadinessItem[] };
     const services = Object.values(providerData.categories).reduce((count, category) => count + category.length, 0);
-    const items = [
+    const items: ReadinessItem[] = [
       { done: Boolean(providerData.logo), label: 'add a logo', screen: 'EditProfile' },
       { done: Boolean(providerData.aboutText.trim()), label: 'write an introduction', screen: 'EditProfile' },
       { done: Boolean(providerData.location.trim()), label: 'add your location', screen: 'EditProfile' },
@@ -183,15 +195,28 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       { done: portfolio.length > 0, label: 'add portfolio photos', screen: 'EditProfile' },
       // Booking policies live in Business Details, not InfoReg's editor —
       // see hasPolicyInfo above (mirrors ProviderProfileScreen's own check).
-      { done: hasPolicyInfo(providerData), label: 'set your booking policies', screen: 'Policies' },
+      // `tab` because these sit on the Profile tab's stack, not this one:
+      // a bare navigate() for a screen this navigator doesn't own throws an
+      // unhandled-action error rather than going anywhere.
+      { done: hasPolicyInfo(providerData), label: 'set your booking policies', screen: 'Policies', tab: 'Profile' },
     ];
+    // Only counted once the library query has actually answered — a failed
+    // fetch must not tell a provider to write terms they already have.
+    if (hasTermsForm !== null) {
+      items.push({
+        done: hasTermsForm,
+        label: 'set up your terms & conditions',
+        screen: 'ProviderIntakeForm',
+        tab: 'Profile',
+      });
+    }
     return {
       complete: items.filter(item => item.done).length,
       total: items.length,
       services,
-      missing: items.filter(item => !item.done).map(item => ({ label: item.label, screen: item.screen })),
+      missing: items.filter(item => !item.done),
     };
-  }, [providerData, portfolio.length]);
+  }, [providerData, portfolio.length, hasTermsForm]);
 
   // Pinterest-style two-column masonry — same "deal into whichever column is
   // shorter" layout as ProviderProfileScreen's portfolio grid.
@@ -468,7 +493,14 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                     <TouchableOpacity
                       key={item.label}
                       style={styles.readinessChecklistRow}
-                      onPress={() => navigation.navigate(item.screen)}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        if (item.tab) {
+                          navigation.getParent()?.navigate(item.tab, { screen: item.screen, initial: false });
+                        } else {
+                          navigation.navigate(item.screen);
+                        }
+                      }}
                       activeOpacity={0.65}
                     >
                       <Ionicons name="ellipse-outline" size={14} color={accentColor} />
