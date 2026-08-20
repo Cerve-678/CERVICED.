@@ -5662,3 +5662,28 @@ COMMENT ON COLUMN public.providers.hair_types_catered IS
 -- ============================================================
 -- DONE — provider_hair_types_catered.sql applied.
 -- ============================================================
+
+-- ============================================================
+-- client_default_address_on_users — gives a client somewhere to keep the
+-- address the cart's "Confirm Your Details" step collects for mobile
+-- bookings, so "Set as default for future bookings" covers the address and
+-- not just name/phone.
+--
+-- PII, and safe on `users` only because that table is owner-only: every
+-- SELECT policy on it is (auth.uid() = id), with no anon/public read path.
+-- Providers never read it — they see bookings.client_address, governed by
+-- the address-release policy.
+--
+-- APPLIED LIVE 2026-08-20 (migration 20260820104517).
+-- See supabase/migrations/20260820104517_client_default_address_on_users.sql.
+-- ============================================================
+
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS client_address text;
+
+COMMENT ON COLUMN public.users.client_address IS
+  'Client''s saved default address for mobile bookings. Owner-readable only; providers see the per-booking snapshot in bookings.client_address, not this column.';
+
+-- ============================================================
+-- DONE — client_default_address_on_users applied.
+-- ============================================================
