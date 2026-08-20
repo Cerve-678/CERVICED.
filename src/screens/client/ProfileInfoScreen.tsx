@@ -31,7 +31,7 @@ const MAX_DOB = new Date();
 MAX_DOB.setFullYear(MAX_DOB.getFullYear() - 16);
 const MIN_DOB = new Date(1900, 0, 1);
 
-export default function ProfileInfoScreen({ navigation }: any) {
+export default function ProfileInfoScreen({ navigation, route }: any) {
   const { user, updateUser, deleteClientProfile } = useAuth();
   const { theme, isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
@@ -76,7 +76,14 @@ export default function ProfileInfoScreen({ navigation }: any) {
     }
     setLoading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    navigation.goBack();
+    // Checkout sends the client here to set an address mid-booking, and
+    // passes the tab it came from. Saving hops straight back to it, where the
+    // cart is still mounted and reopens Confirm Your Details — goBack() would
+    // land on ProfileMain and strand them a tab away from the checkout they
+    // were in the middle of.
+    const returnToTab: string | undefined = route?.params?.returnToTab;
+    if (returnToTab) navigation.getParent()?.navigate(returnToTab);
+    else navigation.goBack();
   };
 
   const handleDeleteAccount = () => {

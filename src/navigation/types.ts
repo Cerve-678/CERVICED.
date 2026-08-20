@@ -158,7 +158,11 @@ export type CartStackParamList = {
 // Profile Stack
 export type ProfileStackParamList = {
   ProfileMain: undefined;
-  ProfileInfo: undefined;
+  /** `returnToTab` is set when checkout sends the client here to set their
+   *  address — saving returns to that tab (where the cart, and its in-flight
+   *  Confirm Your Details state, is still mounted) instead of falling back to
+   *  ProfileMain. */
+  ProfileInfo: { returnToTab?: string } | undefined;
   BeautyProfile: undefined;
   ChangePassword: undefined;
   NotificationsSettings: undefined;

@@ -82,11 +82,13 @@ interface ServiceBooking {
   isDepositOnly?: boolean;
 }
 
-// One card in a provider's section: either a standalone service, or several
-// services scheduled together (shared bookingBatchId) shown as one card.
-// At or above this many appointments the checkout summary is presented as a
-// full screen rather than a centred card — see the Booking Summary <Modal>.
+// The checkout summary goes full screen once it stops being a glance: at or
+// above this many services, OR above this many providers. Each extra
+// provider costs a whole card of chrome (header, logo, subtotal) on top of
+// its own appointments, so provider count runs out of room independently of
+// service count. See the Booking Summary <Modal>.
 const FULL_SCREEN_SUMMARY_THRESHOLD = 5;
+const FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD = 3;
 
 // How recently a cart item must have been added for the cart to treat it as
 // "just added" and leave its provider section expanded on first mount. Wide
@@ -181,6 +183,8 @@ function SummaryShell({
   );
 }
 
+// One card in a provider's section: either a standalone service, or several
+// services scheduled together (shared bookingBatchId) shown as one card.
 type CartRenderUnit =
   | { kind: 'single'; item: CartItem }
   | { kind: 'group'; batchId: string; items: CartItem[] };
@@ -1510,9 +1514,12 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     name: string; email: string; phone: string;
   } | null>(null);
   const [showBookingSummaryModal, setShowBookingSummaryModal] = useState(false);
-  // Below this many appointments the summary stays a centred card; at or
-  // above it, it takes the whole screen. See the <Modal> below.
-  const useFullScreenSummary = checkoutSnapshot.items.length >= FULL_SCREEN_SUMMARY_THRESHOLD;
+  // A small cart stays a centred card; anything bigger takes the whole
+  // screen. See FULL_SCREEN_SUMMARY_THRESHOLD.
+  const useFullScreenSummary =
+    checkoutSnapshot.items.length >= FULL_SCREEN_SUMMARY_THRESHOLD
+    || new Set(checkoutSnapshot.items.map(i => i.providerName)).size
+       > FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD;
   // Summary → back to the customer-details review step. Shared by the
   // header chevron, the Back button and the Android hardware back gesture,
   // so all three land in the same place.
@@ -1541,9 +1548,40 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // Send the client to their account to set an address with the real
   // geocoded picker. Profile is a sibling tab, so this hops stacks via the
   // tab navigator — same shape as handleContinueShopping's jump to Home.
+  //
+  // Confirm Your Details is a modal over this screen, so it has to close to
+  // get there. The trip is recorded and the sheet is reopened the moment the
+  // cart is focused again — otherwise setting an address dropped the user
+  // back on the cart list with no trace of the checkout they were halfway
+  // through, and they'd have to find Checkout and re-confirm from scratch.
+  const returnToReviewOnFocusRef = useRef(false);
   const openAddressSettings = useCallback(() => {
+    returnToReviewOnFocusRef.current = true;
     setShowReviewModal(false);
-    navigation.getParent()?.navigate('Profile', { screen: 'ProfileInfo' });
+    // Which tab this cart is actually mounted in. CartScreen is registered in
+    // the Cart, Explore and Home stacks, so "go back to the cart" has to mean
+    // *this* instance — the other two hold none of the checkout state, and
+    // landing on one of them would look like the checkout had been discarded.
+    const parent = navigation.getParent();
+    const parentState = parent?.getState();
+    const originTab = parentState?.routes[parentState.index]?.name;
+    parent?.navigate('Profile', {
+      screen: 'ProfileInfo',
+      params: { returnToTab: originTab },
+    });
+  }, [navigation]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!returnToReviewOnFocusRef.current) return;
+      // Cleared on the first return whether or not an address was actually
+      // saved — coming back is the signal, not succeeding. The review state
+      // (name/phone/email, the checkout snapshot) is untouched by the trip,
+      // since switching tabs doesn't unmount this screen.
+      returnToReviewOnFocusRef.current = false;
+      setShowReviewModal(true);
+    });
+    return unsubscribe;
   }, [navigation]);
 
   // Memoize expensive calculations properly
