@@ -113,6 +113,7 @@ export type ProviderBeccaStackParamList = {
   // underneath, so back returns to the conversation that sent you there.
   // Mirrors how the client BeccaNavigator already owns its own destinations.
   ProviderSchedule: undefined;
+  Scheduling: undefined;
   AddBooking: undefined;
   Clientele: undefined;
   ProviderInbox:
@@ -274,7 +275,14 @@ export type ProviderAccountStackParamList = {
   };
   ChangePassword: undefined;
   AccountInfo: undefined;
+  // Business Details is a hub over these sub-screens.
   BusinessDetails: undefined;
+  BusinessInfo: undefined;
+  ServicesPricing: undefined;
+  AboutYou: undefined;
+  Scheduling: undefined;
+  Payments: undefined;
+  Policies: undefined;
   Communications: undefined;
   Automations: undefined;
   BusinessProfile: undefined;

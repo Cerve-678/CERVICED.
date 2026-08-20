@@ -22,11 +22,17 @@ import { dimensions } from '../constants/PlatformDimensions';
 interface PortfolioCardProps {
   item: PortfolioItem;
   columnWidth: number;
+  // The exact pixel height MasonryGrid reserved for this card. Supplied by
+  // the screen rather than recomputed here, because the reserved slot and
+  // the rendered box must be identical (see masonryHeight.ts) and only the
+  // screen has the measured-ratio cache that resolves a real ratio for
+  // service/provider photos.
+  imageHeight: number;
   onPress: (item: PortfolioItem) => void;
   index: number;
 }
 
-const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCardProps) => {
+const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index }: PortfolioCardProps) => {
   const { theme, palette: P } = useTheme();
   // Blue-grey secondary — the highlight for the saved-heart and category chip
   // over photos. Hat-aware via palette; on the client hat this is the blue-grey
@@ -38,7 +44,6 @@ const PortfolioCardInner = ({ item, columnWidth, onPress, index }: PortfolioCard
 
   const isSaved = isPortfolioSaved(item.id);
   // aspectRatio is stored as width/height, so height = width / ratio.
-  const imageHeight = columnWidth / item.aspectRatio;
 
   useEffect(() => {
     Animated.parallel([
@@ -180,6 +185,11 @@ export const PortfolioCard = React.memo(PortfolioCardInner, (prev, next) => {
   return (
     prev.item.id === next.item.id &&
     prev.columnWidth === next.columnWidth &&
+    // Must be compared: imageHeight changes when the photo's true ratio is
+    // measured (see useMeasuredAspectRatios), and without this the card
+    // would keep rendering at its initial placeholder height while the
+    // grid's packer had already re-laid-out around the corrected one.
+    prev.imageHeight === next.imageHeight &&
     prev.index === next.index
   );
 });

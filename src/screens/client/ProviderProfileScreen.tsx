@@ -4239,25 +4239,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </Text>
                 ) : null}
 
-                {/* Slots + bell — the provider's own free-text pill message
-                    (set on InfoRegScreen, e.g. "Slots out every 15th of the
-                    month"), NOT the computed live-availability headline —
-                    the provider's own words win here. Falls back to the
-                    live headline/detail only for a provider who hasn't
-                    filled in the text box yet, so the pill doesn't just
-                    disappear for everyone mid-migration. Still hidden
-                    entirely for a provider with no schedule published at
-                    all (state === 'unpublished') AND no slots text either —
-                    createBooking rejects every booking for them, so neither
-                    text nor a "notify me when slots open" bell would be
-                    true. The bell/notify-on-release-day logic is unchanged
-                    either way — it isn't tied to this text. */}
+                {/* Slots + bell — the computed live-availability
+                    headline/detail. The provider's old hand-typed slotsText
+                    field used to take precedence here; that field is gone and
+                    the pill is now always derived from the real schedule, so
+                    there's nothing for a provider to keep in sync by hand.
+                    Hidden entirely for a provider with no schedule published
+                    at all (state === 'unpublished') — createBooking rejects
+                    every booking for them, so a "notify me when slots open"
+                    bell wouldn't be true. The bell/notify-on-release-day
+                    logic is unchanged — it was never tied to this text. */}
                 {(() => {
-                  const pillText = provider.slotsText || (
+                  const pillText =
                     availability && availability.state !== "unpublished"
                       ? `${availability.headline}${availability.detail ? ` · ${availability.detail}` : ""}`
-                      : ""
-                  );
+                      : "";
                   if (availabilityLoading || !pillText) return null;
                   return (
                   <BlurView

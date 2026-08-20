@@ -21,7 +21,7 @@ tags: [screen, client]
 - [[AboutScreen\|About]]
 - [[TermsScreen\|Terms]]
 - [[ReportProblemScreen\|ReportProblem]]
-- [[SignUpStep3Screen\|SignUpStep3]]
+- `SignUpStep3` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

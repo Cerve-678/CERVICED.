@@ -14,6 +14,9 @@ import * as Haptics from 'expo-haptics';
 import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
 import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
 import { exploreScrollHandler, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
+import { getMasonryItemHeight } from '../../utils/masonryHeight';
+import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
+import { shuffle } from '../../utils/shuffle';
 import { ExploreStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -22,7 +25,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 
 // Discover components
-import { MasonryGrid } from '../../components/MasonryGrid';
+import { MasonryGrid, MasonryGridHandle } from '../../components/MasonryGrid';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import { ImageDetailModal } from '../../components/ImageDetailModal';
 
@@ -34,6 +37,7 @@ import {
   getDiscoverServices,
   getDiscoverUnclaimedProviders,
   getSavedPortfolioDetails,
+  prefetchProviderBySlug,
 } from '../../services/databaseService';
 import type { DiscoverUnclaimedProvider } from '../../services/databaseService';
 import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider } from '../../types/database';
@@ -44,29 +48,75 @@ import { useBookmarkStore } from '../../stores/useBookmarkStore';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Mixes portfolio photos with provider and service cards for a Pinterest-style
-// feed, instead of stacking every source back-to-back — a run of portfolio
-// items with one provider/service card dropped in periodically.
+// feed, instead of stacking every source back-to-back. Picks each next card
+// by weighted random choice among whichever types still have cards left,
+// rather than a fixed cadence (the old version emitted exactly 4 portfolio
+// cards then 1 service then 1 provider, on a loop) — a fixed cadence is a
+// pattern a user's eye locks onto just as easily as same-provider runs are,
+// even once the rows within each type are themselves shuffled. Weights bias
+// toward portfolio (the bulk of real content) while still giving service/
+// provider cards a real, non-deterministic chance to appear back-to-back or
+// several-apart, rather than always landing exactly on schedule.
+const PORTFOLIO_WEIGHT = 4;
+const SERVICE_WEIGHT = 1;
+const PROVIDER_WEIGHT = 1;
+
+// The four discover sources are queried independently and share no dedupe,
+// so the same photo file can legitimately arrive from more than one of them:
+// a provider's cover photo (providers.background_image_url) is very often
+// also one of their own portfolio_items rows, and a service_images row can
+// be the same upload as a portfolio photo. The card ids differ
+// (`provider-<id>` vs the portfolio row's own id), so nothing errors and
+// React keys stay unique — it just reads as the same picture appearing twice
+// in the feed. Dedupe on the image URL, which is the thing the user actually
+// perceives as duplicated.
+//
+// Keeps the FIRST occurrence in the order given, so callers control which
+// source wins by argument order: portfolio photos (the richest cards — real
+// aspect ratio, caption, tags) are passed first and therefore beat a
+// provider cover or service photo pointing at the same file.
+function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
+  const seen = new Set<string>();
+  return cards.filter(card => {
+    const uri = (card.image as { uri?: string } | undefined)?.uri;
+    // A card with no usable URL can't be compared — keep it rather than
+    // collapsing every such card into one.
+    if (!uri) return true;
+    if (seen.has(uri)) return false;
+    seen.add(uri);
+    return true;
+  });
+}
+
 function interleaveDiscoverFeed(
   portfolioCards: PortfolioItem[],
   serviceCards: PortfolioItem[],
   providerCards: PortfolioItem[]
 ): PortfolioItem[] {
-  const PORTFOLIO_RUN = 4;
   const result: PortfolioItem[] = [];
   let pIdx = 0;
   let sIdx = 0;
   let vIdx = 0;
 
   while (pIdx < portfolioCards.length || sIdx < serviceCards.length || vIdx < providerCards.length) {
-    for (let k = 0; k < PORTFOLIO_RUN && pIdx < portfolioCards.length; k++) {
-      result.push(portfolioCards[pIdx++]!);
+    const lanes: { weight: number; take: () => PortfolioItem | undefined }[] = [];
+    if (pIdx < portfolioCards.length) lanes.push({ weight: PORTFOLIO_WEIGHT, take: () => portfolioCards[pIdx++] });
+    if (sIdx < serviceCards.length) lanes.push({ weight: SERVICE_WEIGHT, take: () => serviceCards[sIdx++] });
+    if (vIdx < providerCards.length) lanes.push({ weight: PROVIDER_WEIGHT, take: () => providerCards[vIdx++] });
+
+    const totalWeight = lanes.reduce((sum, lane) => sum + lane.weight, 0);
+    let roll = Math.random() * totalWeight;
+    let chosen = lanes[0]!;
+    for (const lane of lanes) {
+      if (roll < lane.weight) {
+        chosen = lane;
+        break;
+      }
+      roll -= lane.weight;
     }
-    if (sIdx < serviceCards.length) {
-      result.push(serviceCards[sIdx++]!);
-    }
-    if (vIdx < providerCards.length) {
-      result.push(providerCards[vIdx++]!);
-    }
+
+    const card = chosen.take();
+    if (card) result.push(card);
   }
 
   return result;
@@ -184,6 +234,16 @@ const ExploreScreen = memo(() => {
   const [selectedImage, setSelectedImage] = useState<PortfolioItem | null>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
 
+  // Discover's MasonryGrid is one persistent ScrollView for the whole tab,
+  // not one per filter — swapping `data` when selectedFilter changes doesn't
+  // reset native scroll position on its own, so without this a filter switch
+  // leaves the grid wherever the previous filter happened to be scrolled to
+  // instead of jumping back to the top.
+  const discoverGridRef = useRef<MasonryGridHandle>(null);
+  useEffect(() => {
+    discoverGridRef.current?.scrollToTop();
+  }, [selectedFilter]);
+
   // Stores
   const { loadSavedPortfolio, savedPortfolioIds } = useBookmarkStore();
 
@@ -195,6 +255,18 @@ const ExploreScreen = memo(() => {
   // Portfolio items from Supabase
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
+  const [portfolioRefreshing, setPortfolioRefreshing] = useState(false);
+
+  // The discover feed is shuffled client-side (see interleaveDiscoverFeed)
+  // since every source query is deterministically ordered. Without caching
+  // that shuffle per filter, switching filter chips back and forth (or any
+  // re-render that re-triggers the fetch effect) would reshuffle the same
+  // content every time, which reads as the grid never settling rather than
+  // as intentional randomness. Keyed by filter so each category gets its
+  // own remembered order for the rest of the session; a ref (not state)
+  // since writing it must never itself trigger a render. Pull-to-refresh is
+  // the only thing allowed to discard an entry and force a fresh shuffle.
+  const discoverFeedCache = useRef<Map<string, PortfolioItem[]>>(new Map());
 
   // Map a Supabase portfolio row to the local PortfolioItem shape
   const mapDbPortfolioItem = useCallback((item: PortfolioItemWithProvider): PortfolioItem => {
@@ -280,7 +352,11 @@ const ExploreScreen = memo(() => {
       caption: s.description ?? '',
       serviceName: s.name,
       category: p.service_category as unknown as ServiceCategory,
-      aspectRatio: 0.8,
+      // Real stored ratio where the upload measured one (see
+      // service_images.aspect_ratio). Older rows predate that column and
+      // come back null — those fall back to 0.8 for the first paint only,
+      // then get corrected by useMeasuredAspectRatios measuring the file.
+      aspectRatio: img.aspect_ratio ?? 0.8,
       providerId: p.slug,
       price: `£${s.price}`,
       providerName: p.display_name,
@@ -311,44 +387,137 @@ const ExploreScreen = memo(() => {
     Lashes: 'LASHES',
   }), []);
 
-  // Fetch the mixed discovery feed whenever the category filter changes.
-  // Explore's search bar isn't a live filter — tapping it opens SearchScreen
-  // instead — so there's no text-query branch here any more.
+  // Builds one filter's shuffled feed and stores it in discoverFeedCache —
+  // shared by the normal fetch effect below and by pull-to-refresh, which is
+  // the only caller that passes forceRefresh (bypassing/overwriting whatever
+  // was cached for the current filter).
+  const loadDiscoverFeed = useCallback(async (filter: string): Promise<PortfolioItem[]> => {
+    const category = filter !== 'All' ? filterMap[filter] : undefined;
+    const [portfolioData, providerData, serviceData, unclaimedData] = await Promise.all([
+      getPortfolioItems(category),
+      getDiscoverProviders(category),
+      getDiscoverServices(category),
+      getDiscoverUnclaimedProviders(category),
+    ]);
+
+    // Every getDiscover*/getPortfolioItems query is deterministically
+    // ordered (created_at, rating, scraped_at — see databaseService.ts) so
+    // the DB always returns rows in the same order. Shuffling each source's
+    // own rows here, before interleaveDiscoverFeed mixes the three types
+    // together, is what actually randomizes the feed — without it the same
+    // provider's photos (or the same top-rated providers) reliably cluster/
+    // repeat in the same run every load. Shuffled at the row level (before
+    // serviceData's flatMap), not after, so a single service's own carousel
+    // photos stay adjacent to each other instead of scattering across the
+    // feed.
+    // Deduped across all four sources before interleaving — the same photo
+    // file can arrive from more than one source (see dedupeByImageUri).
+    // Order matters: portfolio cards are passed first so they win over a
+    // provider cover or service photo pointing at the same upload.
+    const portfolioCards = shuffle(portfolioData).map(mapDbPortfolioItem);
+    const serviceCards = shuffle(serviceData).flatMap(mapDbServiceToCards);
+    const providerCards = shuffle([
+      ...providerData.map(mapDbProviderToCard),
+      ...unclaimedData.map(mapDbUnclaimedProviderToCard),
+    ]);
+    const deduped = dedupeByImageUri([
+      ...portfolioCards,
+      ...serviceCards,
+      ...providerCards,
+    ]);
+    const keep = new Set(deduped.map(c => c.id));
+    const feed = interleaveDiscoverFeed(
+      portfolioCards.filter(c => keep.has(c.id)),
+      serviceCards.filter(c => keep.has(c.id)),
+      providerCards.filter(c => keep.has(c.id))
+    );
+    discoverFeedCache.current.set(filter, feed);
+    return feed;
+  }, [filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbUnclaimedProviderToCard, mapDbServiceToCards]);
+
+  // Fetch the mixed discovery feed whenever the category filter changes —
+  // but only if this filter hasn't been shuffled yet this session. Revisiting
+  // a filter you've already seen (switching chips back and forth, or leaving
+  // and returning to the tab) shows the same cached order instead of
+  // reshuffling; only an explicit pull-to-refresh (handleRefreshDiscover
+  // below) discards a filter's cache entry. Explore's search bar isn't a
+  // live filter — tapping it opens SearchScreen instead — so there's no
+  // text-query branch here.
   useEffect(() => {
+    const cached = discoverFeedCache.current.get(selectedFilter);
+    if (cached) {
+      setPortfolioItems(cached);
+      return;
+    }
+
     let cancelled = false;
     setPortfolioLoading(true);
-    const category = selectedFilter !== 'All' ? filterMap[selectedFilter] : undefined;
 
-    const load = async () => {
-      try {
-        const [portfolioData, providerData, serviceData, unclaimedData] = await Promise.all([
-          getPortfolioItems(category),
-          getDiscoverProviders(category),
-          getDiscoverServices(category),
-          getDiscoverUnclaimedProviders(category),
-        ]);
-
-        if (!cancelled) {
-          setPortfolioItems(
-            interleaveDiscoverFeed(
-              portfolioData.map(mapDbPortfolioItem),
-              serviceData.flatMap(mapDbServiceToCards),
-              [
-                ...providerData.map(mapDbProviderToCard),
-                ...unclaimedData.map(mapDbUnclaimedProviderToCard),
-              ]
-            )
-          );
-        }
-      } catch {
+    loadDiscoverFeed(selectedFilter)
+      .then(feed => {
+        if (!cancelled) setPortfolioItems(feed);
+      })
+      .catch(() => {
         if (!cancelled) setPortfolioItems([]);
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setPortfolioLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedFilter, loadDiscoverFeed]);
+
+  // Background-prefetch every other filter once the first one has loaded, so
+  // a first-time tap on a filter chip is usually already cached by the time
+  // it happens instead of paying for 4 parallel network round-trips in the
+  // moment (the DB side of these queries is sub-2ms at current table sizes —
+  // the felt delay is network/request overhead, not query time). Guarded by
+  // a ref (not just checking portfolioLoading) so this genuinely fires once
+  // per screen session — portfolioLoading flips false after every filter
+  // switch too, and re-running the full prefetch sweep on each one would be
+  // wasteful even though the cache check makes it harmless. Sequential, not
+  // Promise.all across filters: this is speculative, lower-priority than the
+  // real fetch above, and 7 filters × 4 queries all at once would contend
+  // with whatever the user is actually waiting on. Every prefetch call goes
+  // through the same loadDiscoverFeed (and discoverFeedCache) as a real
+  // filter tap, so if the user taps a filter that's already mid-prefetch,
+  // the normal fetch effect just runs redundantly in parallel — no broken
+  // state, just one extra request.
+  const hasStartedPrefetch = useRef(false);
+  useEffect(() => {
+    if (portfolioLoading || hasStartedPrefetch.current) return;
+    hasStartedPrefetch.current = true;
+    let cancelled = false;
+
+    const prefetchRemaining = async () => {
+      for (const filter of filters) {
+        if (cancelled) return;
+        if (discoverFeedCache.current.has(filter)) continue;
+        try {
+          await loadDiscoverFeed(filter);
+        } catch {
+          // Best-effort — a failed prefetch just means that filter falls
+          // back to the normal fetch-on-tap path, same as before prefetch
+          // existed.
+        }
       }
     };
-    load();
+    prefetchRemaining();
+
     return () => { cancelled = true; };
-  }, [selectedFilter, filterMap, mapDbPortfolioItem, mapDbProviderToCard, mapDbUnclaimedProviderToCard, mapDbServiceToCards]);
+  }, [portfolioLoading, filters, loadDiscoverFeed]);
+
+  // Pull-to-refresh is the only user action allowed to force a new shuffle
+  // for the currently-selected filter — discards that filter's cache entry
+  // and re-fetches, leaving every other filter's cached order untouched.
+  const handleRefreshDiscover = useCallback(() => {
+    discoverFeedCache.current.delete(selectedFilter);
+    setPortfolioRefreshing(true);
+    loadDiscoverFeed(selectedFilter)
+      .then(feed => setPortfolioItems(feed))
+      .catch(() => setPortfolioItems([]))
+      .finally(() => setPortfolioRefreshing(false));
+  }, [selectedFilter, loadDiscoverFeed]);
 
   // Fetch favourites whenever the tab is opened or the saved-ids list changes
   // (e.g. hearting/unhearting something while already on this tab).
@@ -397,12 +566,34 @@ const ExploreScreen = memo(() => {
     return (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm) / 2;
   }, []);
 
-  // Masonry item height calculator — aspectRatio is width/height, so height = width / ratio.
+  // Measure the true dimensions of every photo in both feeds. Only portfolio
+  // cards carry a real aspect_ratio from the DB; service/provider/unclaimed
+  // cards are mapped with a hardcoded 0.8 above because nothing stores their
+  // dimensions, so without this a landscape service photo would be packed
+  // and rendered as a portrait card and cropped to fit.
+  const measuredUris = useMemo(
+    () =>
+      [...portfolioItems, ...favouriteItems].map(
+        i => (i.image as { uri?: string } | undefined)?.uri,
+      ),
+    [portfolioItems, favouriteItems],
+  );
+  const { resolveRatio } = useMeasuredAspectRatios(measuredUris);
+
+  // Masonry item height calculator. Goes through getMasonryItemHeight (not a
+  // plain colWidth / aspectRatio) so the reserved slot the packer computes is
+  // identical to what PortfolioCard actually renders at — see that helper's
+  // comment for why they must never diverge. Both sides resolve the ratio the
+  // same way: measured-if-known, declared otherwise.
   const getItemHeight = useCallback(
     (item: PortfolioItem, colWidth: number) => {
-      return colWidth / item.aspectRatio;
+      const ratio = resolveRatio(
+        (item.image as { uri?: string } | undefined)?.uri,
+        item.aspectRatio,
+      );
+      return getMasonryItemHeight(item.id, ratio, colWidth);
     },
-    []
+    [resolveRatio]
   );
 
   // Handlers
@@ -432,6 +623,7 @@ const ExploreScreen = memo(() => {
   const handleViewProfile = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      prefetchProviderBySlug(providerId);
       navigation.navigate('ProviderProfile', {
         providerId,
         source: 'explore',
@@ -449,6 +641,7 @@ const ExploreScreen = memo(() => {
   const handleBookNow = useCallback(
     (providerId: string, _providerName: string, _providerService: string, _providerLogo: any, serviceId?: string) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      prefetchProviderBySlug(providerId);
       navigation.navigate('ProviderProfile', {
         providerId,
         source: 'explore',
@@ -458,16 +651,21 @@ const ExploreScreen = memo(() => {
     [navigation]
   );
 
+  // imageHeight is passed in rather than recomputed inside the card: the
+  // packer's reserved slot and the card's rendered box must be the exact
+  // same number (see masonryHeight.ts), and only this screen holds the
+  // measured-ratio cache both sides need to agree on.
   const renderPortfolioCard = useCallback(
     (item: PortfolioItem, index: number) => (
       <PortfolioCard
         item={item}
         columnWidth={columnWidth}
+        imageHeight={getItemHeight(item, columnWidth)}
         onPress={handleImagePress}
         index={index}
       />
     ),
-    [columnWidth, handleImagePress]
+    [columnWidth, handleImagePress, getItemHeight]
   );
 
 
@@ -499,7 +697,7 @@ const ExploreScreen = memo(() => {
                 style={styles.savedButton}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  navigation.navigate('BookmarkedProviders' as any);
+                  navigation.navigate('BookmarkedProviders');
                 }}
               >
                 <TabIcon name="bookmark" size={20} color={P.text} />
@@ -527,6 +725,7 @@ const ExploreScreen = memo(() => {
               <SkeletonMasonryGrid />
             ) : (
               <MasonryGrid
+                ref={discoverGridRef}
                 data={portfolioItems}
                 renderItem={renderPortfolioCard}
                 getItemHeight={getItemHeight}
@@ -534,6 +733,8 @@ const ExploreScreen = memo(() => {
                 onScroll={exploreScrollHandler}
                 onScrollEndDrag={settleExplorePillTracking}
                 onMomentumScrollEnd={settleExplorePillTracking}
+                refreshing={portfolioRefreshing}
+                onRefresh={handleRefreshDiscover}
                 ListHeaderComponent={
                   <View style={styles.gridHeader}>
                     <Text style={[styles.gridCount, { color: P.sub }]}>
@@ -615,15 +816,6 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-  },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    fontFamily: 'Jura-VariableFont_wght',
   },
 
   savedButton: {

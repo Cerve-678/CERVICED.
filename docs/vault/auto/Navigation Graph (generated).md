@@ -46,21 +46,21 @@ graph LR
   CartScreen --> BookingsScreen
   CartScreen --> Home
   CartScreen --> ProviderProfileScreen
-  ClaimProviderScreen --> SignUpStep1Screen
+  ClaimProviderScreen --> SignUpStep1
   ExploreScreen --> BookmarkedProvidersScreen
   ExploreScreen --> ProviderProfileScreen
   ExploreScreen --> SearchScreen
-  ForgotPasswordScreen --> ResetPasswordOTPScreen
+  ForgotPasswordScreen --> ResetPasswordOTP
   HomeScreen --> BookingsScreen
   HomeScreen --> BookmarkedProvidersScreen
   HomeScreen --> NotificationsScreen
   HomeScreen --> OffersScreen
   HomeScreen --> ProviderProfileScreen
   HomeScreen --> SearchScreen
-  LoginScreen --> ForgotPasswordScreen
-  LoginScreen --> SignUpStep1Screen
+  LoginScreen --> ForgotPassword
+  LoginScreen --> SignUpStep1
   MessagesScreen --> ProviderChatScreen
-  NewPasswordScreen --> LoginScreen
+  NewPasswordScreen --> Login
   NotificationsScreen --> BookingsScreen
   NotificationsScreen --> ProviderHome
   NotificationsScreen --> ProviderProfileScreen
@@ -79,8 +79,8 @@ graph LR
   ProviderAccountScreen --> ProviderPromotionsScreen
   ProviderAccountScreen --> ProviderScheduleScreen
   ProviderAccountScreen --> ReportProblemScreen
-  ProviderAccountScreen --> SignUpStep1Screen
-  ProviderAccountScreen --> SignUpStep2Screen
+  ProviderAccountScreen --> SignUpStep1
+  ProviderAccountScreen --> SignUpStep2
   ProviderAccountScreen --> TermsScreen
   ProviderAnalyticsScreen --> ProviderBookingDetailScreen
   ProviderAnalyticsScreen --> ProviderBookingHistoryScreen
@@ -102,19 +102,19 @@ graph LR
   ProviderMyProfileScreen --> ProviderScheduleScreen
   ProviderProfileScreen --> Cart
   ProviderProfileScreen --> CartScreen
-  ProviderProfileScreen --> ClaimProviderScreen
+  ProviderProfileScreen --> ClaimProvider
   ProviderProfileScreen --> ProviderChatScreen
   ProviderPromotionsScreen --> ProviderClienteleScreen
-  ResetPasswordOTPScreen --> LoginScreen
-  ResetPasswordOTPScreen --> NewPasswordScreen
+  ResetPasswordOTPScreen --> Login
+  ResetPasswordOTPScreen --> NewPassword
   SchedulingScreen --> ProviderScheduleScreen
   SearchScreen --> ProviderProfileScreen
-  SignUpStep1Screen --> SignUpStep2Screen
-  SignUpStep2Screen --> SignUpStep3Screen
-  SignUpStep3Screen --> SignUpStep4Screen
-  SignUpStep4Screen --> SignUpStep5Screen
-  SignUpStep5Screen --> EmailVerificationScreen
-  SignUpStep5Screen --> LoginScreen
+  SignUpStep1Screen --> SignUpStep2
+  SignUpStep2Screen --> SignUpStep3
+  SignUpStep3Screen --> SignUpStep4
+  SignUpStep4Screen --> SignUpStep5
+  SignUpStep5Screen --> EmailVerification
+  SignUpStep5Screen --> Login
   UserProfileScreen --> AboutScreen
   UserProfileScreen --> BeautyProfileScreen
   UserProfileScreen --> BookingsScreen
@@ -127,27 +127,27 @@ graph LR
   UserProfileScreen --> PointsScreen
   UserProfileScreen --> ProfileInfoScreen
   UserProfileScreen --> ReportProblemScreen
-  UserProfileScreen --> SignUpStep3Screen
+  UserProfileScreen --> SignUpStep3
   UserProfileScreen --> SubscriptionScreen
   UserProfileScreen --> TermsScreen
-  WelcomeScreen --> ClaimProviderScreen
-  WelcomeScreen --> LoginScreen
-  WelcomeScreen --> SignUpStep1Screen
+  WelcomeScreen --> ClaimProvider
+  WelcomeScreen --> Login
+  WelcomeScreen --> SignUpStep1
 ```
 
 ## By screen
 - `auth/AuthScreen` → `Home`
-- `auth/ClaimProviderScreen` → `auth/SignUpStep1Screen`
-- `auth/ForgotPasswordScreen` → `auth/ResetPasswordOTPScreen`
-- `auth/LoginScreen` → `auth/ForgotPasswordScreen`, `auth/SignUpStep1Screen`
-- `auth/NewPasswordScreen` → `auth/LoginScreen`
-- `auth/ResetPasswordOTPScreen` → `auth/LoginScreen`, `auth/NewPasswordScreen`
-- `auth/SignUpStep1Screen` → `auth/SignUpStep2Screen`
-- `auth/SignUpStep2Screen` → `auth/SignUpStep3Screen`
-- `auth/SignUpStep3Screen` → `auth/SignUpStep4Screen`
-- `auth/SignUpStep4Screen` → `auth/SignUpStep5Screen`
-- `auth/SignUpStep5Screen` → `auth/EmailVerificationScreen`, `auth/LoginScreen`
-- `auth/WelcomeScreen` → `auth/ClaimProviderScreen`, `auth/LoginScreen`, `auth/SignUpStep1Screen`
+- `auth/ClaimProviderScreen` → `SignUpStep1`
+- `auth/ForgotPasswordScreen` → `ResetPasswordOTP`
+- `auth/LoginScreen` → `ForgotPassword`, `SignUpStep1`
+- `auth/NewPasswordScreen` → `Login`
+- `auth/ResetPasswordOTPScreen` → `Login`, `NewPassword`
+- `auth/SignUpStep1Screen` → `SignUpStep2`
+- `auth/SignUpStep2Screen` → `SignUpStep3`
+- `auth/SignUpStep3Screen` → `SignUpStep4`
+- `auth/SignUpStep4Screen` → `SignUpStep5`
+- `auth/SignUpStep5Screen` → `EmailVerification`, `Login`
+- `auth/WelcomeScreen` → `ClaimProvider`, `Login`, `SignUpStep1`
 - `client/BeautyBillingScreen` → `client/BeautyProfileScreen`, `client/PaymentMethodsScreen`, `client/SubscriptionScreen`
 - `client/BookingDetailScreen` → `Cart`, `client/ClientIntakeFormScreen`, `client/ProviderChatScreen`, `client/RescheduleScreen`
 - `client/BookingsScreen` → `Cart`, `client/BookingDetailScreen`, `client/ProviderChatScreen`, `client/ProviderProfileScreen`, `client/RescheduleScreen`, `shared/DevSettingsScreen`
@@ -157,15 +157,15 @@ graph LR
 - `client/HomeScreen` → `client/BookingsScreen`, `client/BookmarkedProvidersScreen`, `client/OffersScreen`, `client/ProviderProfileScreen`, `client/SearchScreen`, `shared/NotificationsScreen`
 - `client/MessagesScreen` → `client/ProviderChatScreen`
 - `client/OffersScreen` → `client/ProviderProfileScreen`
-- `client/ProviderProfileScreen` → `auth/ClaimProviderScreen`, `Cart`, `client/CartScreen`, `client/ProviderChatScreen`
+- `client/ProviderProfileScreen` → `Cart`, `ClaimProvider`, `client/CartScreen`, `client/ProviderChatScreen`
 - `client/SearchScreen` → `client/ProviderProfileScreen`
-- `client/UserProfileScreen` → `auth/SignUpStep3Screen`, `client/BeautyProfileScreen`, `client/BookingsScreen`, `client/BookmarkedProvidersScreen`, `client/MessagesScreen`, `client/NotificationsSettingsScreen`, `client/PaymentMethodsScreen`, `client/PointsScreen`, `client/ProfileInfoScreen`, `client/SubscriptionScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`
+- `client/UserProfileScreen` → `client/BeautyProfileScreen`, `client/BookingsScreen`, `client/BookmarkedProvidersScreen`, `client/MessagesScreen`, `client/NotificationsSettingsScreen`, `client/PaymentMethodsScreen`, `client/PointsScreen`, `client/ProfileInfoScreen`, `client/SubscriptionScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep3`
 - `provider/AddBookingScreen` → `ProviderHome`
 - `provider/BusinessDetailsScreen` → `provider/AboutYouScreen`, `provider/BusinessInfoScreen`, `provider/PaymentsScreen`, `provider/PoliciesScreen`, `provider/SchedulingScreen`, `provider/ServicesPricingScreen`
 - `provider/BusinessInfoScreen` → `provider/ProviderCommunicationsScreen`
 - `provider/BusinessProfileScreen` → `provider/BrandingScreen`, `provider/BusinessDetailsScreen`, `provider/InfoRegScreen`, `provider/ProviderAutomationsScreen`, `provider/ProviderCommunicationsScreen`
 - `provider/PaymentsScreen` → `provider/PoliciesScreen`
-- `provider/ProviderAccountScreen` → `auth/SignUpStep1Screen`, `auth/SignUpStep2Screen`, `provider/BusinessProfileScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`
+- `provider/ProviderAccountScreen` → `provider/BusinessProfileScreen`, `provider/ProviderAccountInfoScreen`, `provider/ProviderAnalyticsScreen`, `provider/ProviderBookingHistoryScreen`, `provider/ProviderClienteleScreen`, `provider/ProviderInboxScreen`, `provider/ProviderPromotionsScreen`, `provider/ProviderScheduleScreen`, `shared/AboutScreen`, `shared/ChangePasswordScreen`, `shared/HelpCentreScreen`, `shared/NotificationsScreen`, `shared/ReportProblemScreen`, `shared/TermsScreen`, `SignUpStep1`, `SignUpStep2`
 - `provider/ProviderAnalyticsScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderBookingHistoryScreen`
 - `provider/ProviderBookingDetailScreen` → `provider/ProviderConversationScreen`, `provider/ProviderIntakeFormScreen`
 - `provider/ProviderBookingHistoryScreen` → `provider/ProviderBookingDetailScreen`, `provider/ProviderInboxScreen`, `shared/DevSettingsScreen`

@@ -4,10 +4,10 @@ tags: [screen, client]
 # ForgotPasswordScreen
 #screen · `src/screens/auth/ForgotPasswordScreen.tsx`
 
-**Registered route(s):** `ForgotPassword`
+**Registered route(s):** _unregistered_
 
 ## → Navigates to
-- [[ResetPasswordOTPScreen\|ResetPasswordOTP]]
+- `ResetPasswordOTP` _(navigator / dynamic)_
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

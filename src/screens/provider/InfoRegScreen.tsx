@@ -19,6 +19,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -31,15 +32,17 @@ import * as Haptics from 'expo-haptics';
 import { BellIcon } from '../../components/IconLibrary';
 import CategoryTabPill from '../../components/CategoryTabPill';
 import AddressPicker from '../../components/AddressPicker';
-import { CityMultiSelect } from '../../components/CityMultiSelect';
 import TermsScreen from '../shared/TermsScreen';
+import { ACCESSIBILITY_OPTS } from '../../features/business-details/options';
 import { Ionicons } from '@expo/vector-icons';
 
-// Theme imports
-import { useTheme } from '../../contexts/ThemeContext';
+// Theme imports — this screen always renders in light mode (see
+// useScreenStyles/useChrome below, and makeStyles/lightStyles further down),
+// so useTheme() is never called here. darkTheme stays imported because
+// makeStyles(isDark) still takes the flag generically; it's just never
+// invoked with `true` in this file anymore.
 import { lightTheme, darkTheme } from '../../constants/theme';
-import { ThemedBackground } from '../../components/ThemedBackground';
-import SlidingTabs from '../../components/SlidingTabs';
+import { HAIR_TYPES } from '../../constants/hairTypes';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 
 // Auth
@@ -64,9 +67,9 @@ import {
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
+import { ordinalSuffix } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
-import { SectionHeader } from '../../features/provider-registration/SectionHeader';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
 import { ChipSelect } from '../../features/provider-registration/ChipSelect';
 import { LocationPicker } from '../../features/provider-registration/LocationPicker';
@@ -93,25 +96,30 @@ const BUSINESS_TYPE_LABELS: Record<string, string> = {
   mobile: 'Mobile',
 };
 
-const INFO_TABS = [
-  { key: 'about' as const,  label: 'About' },
-  { key: 'policy' as const, label: 'Policy' },
-];
-
-/** The editor is a hub plus focused editors, not a linear wizard: the screen
- *  opens on a summary of these five sections, and tapping one drills into just
- *  that section's fields full-screen. There's no prescribed order — a provider
- *  editing an existing profile usually wants one specific thing, not a tour.
- *  The old "review" step isn't in this list because the hub *is* the review. */
+/** The editor is one continuous document, not a hub-and-editor split and not a
+ *  wizard: all five sections render sequentially in a single scroll, separated
+ *  by oversized numerals and typographic breaks rather than bordered cards.
+ *  This list is the scrollspy rail's data source — the rail indicates reading
+ *  position ONLY. It is deliberately not a stepper and not a navigation gate:
+ *  there is no prescribed order, no Next/Finish, and nothing here can prevent
+ *  a provider from reaching any part of the form. Scrolling is the progression.
+ *  The old "review" step isn't in this list because the document *is* the
+ *  review — required-field warnings surface inline at the offending field plus
+ *  as a summary next to Publish. */
 const EDITOR_SECTIONS = [
-  { key: 'identity' as const, label: 'About You', title: 'About You' },
-  { key: 'about' as const,    label: 'Portfolio', title: 'About & portfolio' },
-  { key: 'contact' as const,  label: 'Contact',   title: 'Contact details' },
-  { key: 'services' as const, label: 'Services',  title: 'Services & prices' },
-  { key: 'policies' as const, label: 'Policies',  title: 'Booking policies' },
+  { key: 'identity' as const, num: '01', title: 'Identity',          sub: 'Business identity · how clients first find you' },
+  { key: 'about' as const,    num: '02', title: 'About & Portfolio', sub: 'Your introduction and the work clients see' },
+  { key: 'contact' as const,  num: '03', title: 'Contact',           sub: 'How clients reach you off-app' },
+  { key: 'services' as const, num: '04', title: 'Services',          sub: 'What you offer, and what it costs' },
+  { key: 'policies' as const, num: '05', title: 'Address Confirmation', sub: 'Business setup, address release' },
 ];
 
 type EditorSectionKey = (typeof EDITOR_SECTIONS)[number]['key'];
+
+/** The section the scrollspy falls back to before/above any measurement — the
+ *  top of the document. Named rather than read as EDITOR_SECTIONS[0] so it's
+ *  statically known to exist under noUncheckedIndexedAccess. */
+const FIRST_EDITOR_SECTION: EditorSectionKey = 'identity';
 
 /** The app's semantic warn colour — same amber used for pending/attention
  *  states elsewhere (e.g. ProviderBookingDetailScreen's STATUS_COLORS).
@@ -131,6 +139,7 @@ type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
 type DepositType      = 'percent' | 'fixed';
 type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
+type WaitlistSelectionMethod = 'fifo' | 'manual';
 
 interface ProviderPolicies {
   cancelNotice:     CancelNotice;
@@ -147,6 +156,20 @@ interface ProviderPolicies {
   depositNote:      string;
   noShowAction:     NoShowAction;
   noShowNote:       string;
+  /** Free-text disclosure only — the provider describes their refund policy
+   *  in their own words. Deliberately NOT a percentage/amount field: this
+   *  app has no refund-processing infra and never calculates or enforces a
+   *  refund automatically (see CLAUDE.md's payment liability-boundary
+   *  rules), so a numeric field here would misleadingly imply automated
+   *  enforcement that doesn't exist. Same free-text-only pattern as
+   *  cancelNote/depositNote/noShowNote above. */
+  refundPolicyNote: string;
+  /** Minutes past the booked start time before "No Show" can be marked
+   *  (server-enforced in provider_update_booking_status()). '0' = no grace,
+   *  matches the app's historical instant-eligible behavior. String field
+   *  like the other numeric policy inputs (e.g. depositAmount) — parsed at
+   *  the read site. */
+  noShowGraceMinutes: string;
   /** Optional instructions stamped onto every new booking (e.g. "please
    *  arrive 10 minutes early") — shown to clients in their booking details */
   bookingInstructions: string;
@@ -154,6 +177,15 @@ interface ProviderPolicies {
    *  a scanned consent form) — shown to clients via a pop-up on their
    *  profile view, on top of the structured fields above. */
   policyImageUrl: string;
+  /** Waitlist candidate-selection strategy for invite_next_waitlist_entry().
+   *  'manual' is a reserved value for a future feature — the RPC still runs
+   *  plain FIFO for it today (see fix_waitlist_selection_method_hook.sql).
+   *  No UI control yet: InfoRegScreen has no existing waitlist-settings
+   *  section (waitlistEnabled/autoAcceptWaitlist live in a different JSONB
+   *  column, automation_settings, edited on ProviderAutomationsScreen) — this
+   *  field exists so the schema isn't a dead end for a later manual-
+   *  selection UI, not because it's editable here today. */
+  waitlistSelectionMethod: WaitlistSelectionMethod;
 }
 
 const DEFAULT_POLICIES: ProviderPolicies = {
@@ -170,8 +202,11 @@ const DEFAULT_POLICIES: ProviderPolicies = {
   depositNote:      '',
   noShowAction:     'none',
   noShowNote:       '',
+  refundPolicyNote: '',
+  noShowGraceMinutes: '0',
   bookingInstructions: '',
   policyImageUrl:   '',
+  waitlistSelectionMethod: 'fifo',
 };
 
 // Add-on interface
@@ -205,6 +240,8 @@ interface ServiceData {
   contraindications: string[];
   aftercareNotes: string;
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
+  hairTypesSuitable: string[];
 }
 
 // ─── Category kinds ──────────────────────────────────────────────────────────
@@ -221,6 +258,7 @@ type CategoryKind = 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS' | 'MUA' | 'AESTHETICS'
 // services in those categories. This only affects the default shown when
 // adding a new service — never overrides a value the provider already set.
 const PATCH_TEST_DEFAULT_CATEGORIES: ReadonlySet<CategoryKind> = new Set(['HAIR', 'LASHES', 'BROWS', 'AESTHETICS']);
+
 
 const CATEGORY_KINDS: CategoryKind[] = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 
@@ -396,23 +434,73 @@ const TREND_NAMES_BY_CATEGORY: Record<CategoryKind, string[]> = {
   OTHER:      ['clean-girl', 'old-money', 'that-girl', 'quiet-luxury', 'coastal-grandma', 'mob-wife'],
 };
 
-// Starter contraindications for aesthetic treatments — common, well-established
-// conditions practitioners routinely screen for. Tap to add instantly; providers
-// can still type their own for anything treatment-specific.
+// Starter contraindications — common, well-established conditions
+// practitioners routinely screen for, tailored to the kind of treatment the
+// service belongs to (the same catKey used for style/technique/outcome tags
+// above) rather than one generic aesthetics-flavoured list shown to every
+// provider type. Capped at 6 per kind to keep the chip row scannable — tap to
+// add instantly; providers can still type their own for anything
+// treatment-specific.
 // TODO: revisit with a proper pass on current per-treatment guidance — see the
 // research prompt in the PR/commit notes for sourcing more specific ones.
-const COMMON_CONTRAINDICATIONS = [
-  'Pregnant or breastfeeding',
-  'Active cold sore / skin infection in area',
-  'Blood thinning medication',
-  'Autoimmune condition',
-  'Keloid scarring history',
-  'Active acne in treatment area',
-  'Allergy to local anaesthetic',
-  'Recent sunburn / sun exposure',
-  'Uncontrolled diabetes',
-  'Under 18 without guardian consent',
-];
+const COMMON_CONTRAINDICATIONS_BY_CATEGORY: Record<CategoryKind, string[]> = {
+  AESTHETICS: [
+    'Pregnant or breastfeeding',
+    'Blood thinning medication',
+    'Autoimmune condition',
+    'Keloid scarring history',
+    'Allergy to local anaesthetic',
+    'Uncontrolled diabetes',
+  ],
+  HAIR: [
+    'Scalp psoriasis / eczema',
+    'Recent chemical treatment',
+    'Allergy to hair dye / PPD',
+    'Open scalp sores or cuts',
+    'Pregnant or breastfeeding',
+    'Under 18 without guardian consent',
+  ],
+  NAILS: [
+    'Nail fungus or infection',
+    'Allergy to acrylic / gel products',
+    'Broken skin around the nail',
+    'Diabetes with poor circulation',
+    'Recent nail surgery',
+    'Under 18 without guardian consent',
+  ],
+  LASHES: [
+    'Allergy to lash adhesive / latex',
+    'Active eye infection',
+    'Recent eye surgery',
+    'Sensitive or watery eyes',
+    'Pregnant or breastfeeding',
+    'Under 18 without guardian consent',
+  ],
+  BROWS: [
+    'Allergy to tint / henna',
+    'Active skin infection in area',
+    'Recent Botox in the brow area',
+    'Keloid scarring history',
+    'Pregnant or breastfeeding',
+    'Under 18 without guardian consent',
+  ],
+  MUA: [
+    'Active cold sore / skin infection',
+    'Allergy to makeup products',
+    'Active acne in treatment area',
+    'Recent facial treatment / peel',
+    'Sensitive skin / rosacea',
+    'Under 18 without guardian consent',
+  ],
+  OTHER: [
+    'Pregnant or breastfeeding',
+    'Active skin infection in area',
+    'Known allergy to products used',
+    'Recent surgery in treatment area',
+    'Uncontrolled diabetes',
+    'Under 18 without guardian consent',
+  ],
+};
 
 // Pre-built service starting points offered the moment a provider taps "Add
 // Service" — pre-fills name + duration so most services are two taps to save.
@@ -666,7 +754,78 @@ const SUBCATEGORY_SCOPE: Record<string, SubcategoryScope> = {
   'Lymphatic Drainage':     { templates: ['Facial Lymphatic Drainage Massage', 'Full Body Lymphatic Drainage Massage', 'Skin Consultation'], techniques: ['lymphatic-drainage'], outcomes: ['reduction', 'glow', 'firmness'] },
 };
 
-// ─── Reusable chip-select row ─────────────────────────────────────────────────
+// ─── Reusable chip-select row, with a trailing "Other" chip ───────────────────
+// Wraps ChipSelect with one more chip at the end. Tapping it reveals a text
+// box (rather than adding "Other" itself as a tag) — typing a value and
+// hitting + / return adds THAT value to the same selected array, exactly like
+// the Trend Names section's always-visible text box already works. Keeps
+// every preset-tag section (style/occasion/technique/outcome) able to accept
+// a value that isn't in the curated per-category list, without changing what
+// gets stored (still just a plain string in that section's tags array).
+interface TagSelectWithOtherProps {
+  options: string[];
+  selected: string[];
+  onToggle: (tag: string) => void;
+  onAddOther: (tag: string) => void;
+  accentColor?: string;
+  styles: any;
+}
+const TagSelectWithOther: React.FC<TagSelectWithOtherProps> = ({ options, selected, onToggle, onAddOther, accentColor = '#9C27B0', styles }) => {
+  const chrome = useChrome();
+  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [otherValue, setOtherValue] = useState('');
+
+  const submitOther = () => {
+    const trimmed = otherValue.trim();
+    if (trimmed) onAddOther(trimmed);
+    setOtherValue('');
+  };
+
+  return (
+    <View>
+      <View style={styles.chipGrid}>
+        {options.map(option => {
+          const active = selected.includes(option);
+          return (
+            <TouchableOpacity
+              key={option}
+              style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
+              onPress={() => onToggle(option)}
+            >
+              <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
+            </TouchableOpacity>
+          );
+        })}
+        <TouchableOpacity
+          style={[styles.chip, showOtherInput && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
+          onPress={() => setShowOtherInput(v => !v)}
+        >
+          <Text style={[styles.chipText, showOtherInput && { color: accentColor }]}>Other</Text>
+        </TouchableOpacity>
+      </View>
+      {showOtherInput && (
+        <View style={[styles.addAddOnRow, { marginTop: 8 }]}>
+          <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1 }]}>
+            <TextInput
+              style={styles.textInput}
+              value={otherValue}
+              onChangeText={setOtherValue}
+              placeholder="Type your own..."
+              placeholderTextColor={chrome.fg(0.4)}
+              onSubmitEditing={submitOther}
+              returnKeyType="done"
+              autoFocus
+            />
+          </BlurView>
+          <TouchableOpacity style={styles.addAddOnButton} onPress={submitOther}>
+            <Text style={styles.addAddOnButtonText}>+</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+};
+
 // ─── Service template picker ──────────────────────────────────────────────────
 // Shown the moment a provider taps "Add Service" — pre-built options for the
 // category's kind, so most services are a single tap to pre-fill.
@@ -803,6 +962,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const modalTintBottom = blend(accentColor, '#FFFFFF', 0.82);
   const catKey = inferCategoryKind(categoryName, fallbackKind);
   const isAesthetics = catKey === 'AESTHETICS';
+  const isHair = catKey === 'HAIR';
   // If the category is a specific subcategory (e.g. "Microneedling"), narrow
   // technique/outcome options to just what's relevant to it — otherwise a
   // Microneedling service would offer botox/filler/laser tags too, since
@@ -813,6 +973,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const styleOptions: string[] = STYLE_TAGS_BY_CATEGORY[catKey] ?? STYLE_TAGS_BY_CATEGORY.OTHER;
   const occasionOptions: string[] = OCCASION_TAGS_BY_CATEGORY[catKey] ?? OCCASION_TAGS_DEFAULT;
   const trendOptions: string[] = TREND_NAMES_BY_CATEGORY[catKey] ?? TREND_NAMES_BY_CATEGORY.OTHER;
+  const contraindicationOptions: string[] = COMMON_CONTRAINDICATIONS_BY_CATEGORY[catKey] ?? COMMON_CONTRAINDICATIONS_BY_CATEGORY.OTHER;
 
   const [name, setName] = useState(service?.name || '');
   const [price, setPrice] = useState(service?.price ? String(service.price) : '');
@@ -841,6 +1002,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
   const [contraindications, setContraindications] = useState<string[]>(service?.contraindications || []);
   const [contraindicationInput, setContraindicationInput] = useState('');
   const [aftercareNotes, setAftercareNotes] = useState(service?.aftercareNotes || '');
+  const [hairTypesSuitable, setHairTypesSuitable] = useState<string[]>(service?.hairTypesSuitable || []);
 
   const scrollViewRef = useRef<ScrollView>(null);
   // Measured Y position of each input group, captured via onLayout — lets
@@ -887,6 +1049,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
     setContraindications(service?.contraindications || []);
     setContraindicationInput('');
     setAftercareNotes(service?.aftercareNotes || '');
+    setHairTypesSuitable(service?.hairTypesSuitable || []);
   }, [service, catKey]);
 
   const toggleTag = (arr: string[], setArr: (v: string[]) => void) => (tag: string) =>
@@ -962,6 +1125,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
       contraindications,
       aftercareNotes: aftercareNotes.trim(),
       serviceType,
+      hairTypesSuitable,
     });
     onClose();
   };
@@ -1070,6 +1234,100 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 </BlurView>
               </View>
 
+              {/* ── Service Type ─────────────────────────────────────── */}
+              {/* Tag sections moved up to sit right after the core identity
+                  fields (name/price/duration/description) instead of after
+                  every kind-specific block — these describe what the service
+                  IS and are relevant to every provider type, so they shouldn't
+                  be buried below aesthetics-only fields most providers never see. */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Service Type</Text>
+                <Text style={styles.inputHint}>Helps clients understand what kind of service this is</Text>
+                <View style={styles.chipGrid}>
+                  {SERVICE_TYPES.map(({ value, label }) => {
+                    const active = serviceType === value;
+                    return (
+                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setServiceType(active ? '' : value)}>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* ── Style Tags ───────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Style / Vibe</Text>
+                <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
+                <TagSelectWithOther options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} onAddOther={(t) => setSelectedTags(selectedTags.includes(t) ? selectedTags : [...selectedTags, t])} accentColor={accentColor} styles={styles} />
+              </View>
+
+              {/* ── Occasion Tags ────────────────────────────────────── */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Best For (Occasion)</Text>
+                <Text style={styles.inputHint}>When would a client typically book this?</Text>
+                <TagSelectWithOther options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} onAddOther={(t) => setSelectedOccasions(selectedOccasions.includes(t) ? selectedOccasions : [...selectedOccasions, t])} accentColor={accentColor} styles={styles} />
+              </View>
+
+              {/* ── Technique Tags ───────────────────────────────────── */}
+              {techniquOptions.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Techniques Used</Text>
+                  <Text style={styles.inputHint}>Select every technique this service involves</Text>
+                  <TagSelectWithOther options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} onAddOther={(t) => setSelectedTechniques(selectedTechniques.includes(t) ? selectedTechniques : [...selectedTechniques, t])} accentColor={accentColor} styles={styles} />
+                </View>
+              )}
+
+              {/* ── Outcome Tags ─────────────────────────────────────── */}
+              {outcomeOptions.length > 0 && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Results / Outcomes</Text>
+                  <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
+                  <TagSelectWithOther options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} onAddOther={(t) => setSelectedOutcomes(selectedOutcomes.includes(t) ? selectedOutcomes : [...selectedOutcomes, t])} accentColor={accentColor} styles={styles} />
+                </View>
+              )}
+
+              {/* ── Trend Names ──────────────────────────────────────── */}
+              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['trendInput'] = e.nativeEvent.layout.y; }}>
+                <Text style={styles.inputLabel}>Trend Names (Optional)</Text>
+                <Text style={styles.inputHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
+                {trendNames.length > 0 && (
+                  <View style={styles.chipGrid}>
+                    {trendNames.map(t => (
+                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setTrendNames(trendNames.filter(x => x !== t))}>
+                        <Text style={styles.chipTextActive}>{t} ×</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.addAddOnRow}>
+                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
+                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
+                  </BlurView>
+                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
+                    <Text style={styles.addAddOnButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.chipGrid}>
+                  {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
+                    <TouchableOpacity key={t} style={styles.chip} onPress={() => setTrendNames([...trendNames, t])}>
+                      <Text style={styles.chipText}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* ── Suitable Hair Types (HAIR only) — lets clients tell at a
+                   glance whether this service fits their hair type before
+                   booking. Empty selection = suits all hair types. ────── */}
+              {isHair && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Suitable Hair Types</Text>
+                  <Text style={styles.inputHint}>Select which hair types this service suits — leave blank if it suits all</Text>
+                  <ChipSelect options={HAIR_TYPES} selected={hairTypesSuitable} onToggle={toggleTag(hairTypesSuitable, setHairTypesSuitable)} accentColor={accentColor} styles={styles} />
+                </View>
+              )}
+
               {/* ── Aesthetics Safety Section (AESTHETICS only) — shown right
                    under the description, since this is what clients need to
                    see before booking a treatment ─────────────────────── */}
@@ -1121,14 +1379,19 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                         <Text style={styles.addAddOnButtonText}>+</Text>
                       </TouchableOpacity>
                     </View>
-                    {/* Starter suggestions — common contraindications across aesthetic
-                        treatments. Below the textbox so typing stays the primary action. */}
-                    <View style={[styles.chipGrid, { marginTop: 8 }]}>
-                      {COMMON_CONTRAINDICATIONS.filter(c => !contraindications.includes(c)).map(c => (
-                        <TouchableOpacity key={c} style={styles.chip} onPress={() => setContraindications([...contraindications, c])}>
-                          <Text style={styles.chipText}>{c}</Text>
-                        </TouchableOpacity>
-                      ))}
+                    {/* Starter suggestions — tailored to this service's treatment
+                        kind (same catKey the style/technique/outcome tags use)
+                        rather than one generic aesthetics-flavoured list shown
+                        to every provider type. Below the textbox so typing
+                        stays the primary action. */}
+                    <View style={{ marginTop: 8 }}>
+                      <ChipSelect
+                        options={contraindicationOptions.filter(c => !contraindications.includes(c))}
+                        selected={[]}
+                        onToggle={(c) => setContraindications([...contraindications, c])}
+                        accentColor={accentColor}
+                        styles={styles}
+                      />
                     </View>
                   </View>
                 </View>
@@ -1153,84 +1416,6 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, { backgroundColor: inputTint }]}>
                   <TextInput style={[styles.textInput, styles.textInputMultiline]} value={aftercareNotes} onChangeText={setAftercareNotes} placeholder="e.g. Avoid water for 24 hours, no oil-based products..." placeholderTextColor={chrome.fg(0.4)} multiline numberOfLines={3} textAlignVertical="top" onFocus={() => handleInputFocus('aftercareNotes')} />
                 </BlurView>
-              </View>
-
-              {/* ── Service Type ─────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Service Type</Text>
-                <Text style={styles.inputHint}>Helps clients understand what kind of service this is</Text>
-                <View style={styles.chipGrid}>
-                  {SERVICE_TYPES.map(({ value, label }) => {
-                    const active = serviceType === value;
-                    return (
-                      <TouchableOpacity key={value} style={[styles.chip, active && { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setServiceType(active ? '' : value)}>
-                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* ── Style Tags ───────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Style / Vibe</Text>
-                <Text style={styles.inputHint}>How would you describe this service's aesthetic?</Text>
-                <ChipSelect options={styleOptions} selected={selectedTags} onToggle={toggleTag(selectedTags, setSelectedTags)} accentColor={accentColor} styles={styles} />
-              </View>
-
-              {/* ── Occasion Tags ────────────────────────────────────── */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Best For (Occasion)</Text>
-                <Text style={styles.inputHint}>When would a client typically book this?</Text>
-                <ChipSelect options={occasionOptions} selected={selectedOccasions} onToggle={toggleTag(selectedOccasions, setSelectedOccasions)} accentColor={accentColor} styles={styles} />
-              </View>
-
-              {/* ── Technique Tags ───────────────────────────────────── */}
-              {techniquOptions.length > 0 && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Techniques Used</Text>
-                  <Text style={styles.inputHint}>Select every technique this service involves</Text>
-                  <ChipSelect options={techniquOptions} selected={selectedTechniques} onToggle={toggleTag(selectedTechniques, setSelectedTechniques)} accentColor={accentColor} styles={styles} />
-                </View>
-              )}
-
-              {/* ── Outcome Tags ─────────────────────────────────────── */}
-              {outcomeOptions.length > 0 && (
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Results / Outcomes</Text>
-                  <Text style={styles.inputHint}>What will the client achieve with this service?</Text>
-                  <ChipSelect options={outcomeOptions} selected={selectedOutcomes} onToggle={toggleTag(selectedOutcomes, setSelectedOutcomes)} accentColor={accentColor} styles={styles} />
-                </View>
-              )}
-
-              {/* ── Trend Names ──────────────────────────────────────── */}
-              <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['trendInput'] = e.nativeEvent.layout.y; }}>
-                <Text style={styles.inputLabel}>Trend Names (Optional)</Text>
-                <Text style={styles.inputHint}>Viral names clients search for — tap the {CATEGORY_META[catKey].label.toLowerCase()} ones that fit</Text>
-                {trendNames.length > 0 && (
-                  <View style={styles.chipGrid}>
-                    {trendNames.map(t => (
-                      <TouchableOpacity key={t} style={[styles.chip, { backgroundColor: accentColor, borderColor: accentColor }]} onPress={() => setTrendNames(trendNames.filter(x => x !== t))}>
-                        <Text style={styles.chipTextActive}>{t} ×</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-                <View style={styles.addAddOnRow}>
-                  <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, { flex: 1, backgroundColor: inputTint }]}>
-                    <TextInput style={styles.textInput} value={trendInput} onChangeText={setTrendInput} placeholder="e.g. glazed-donut" placeholderTextColor={chrome.fg(0.4)} onSubmitEditing={handleAddTrend} returnKeyType="done" onFocus={() => handleInputFocus('trendInput')} />
-                  </BlurView>
-                  <TouchableOpacity style={styles.addAddOnButton} onPress={handleAddTrend}>
-                    <Text style={styles.addAddOnButtonText}>+</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.chipGrid}>
-                  {trendOptions.filter(t => !trendNames.includes(t)).map(t => (
-                    <TouchableOpacity key={t} style={styles.chip} onPress={() => setTrendNames([...trendNames, t])}>
-                      <Text style={styles.chipText}>{t}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
 
               {/* ── Add-Ons ──────────────────────────────────────────── */}
@@ -1624,10 +1809,6 @@ interface PreviewModalProps {
   providerData: ProviderRegistrationData;
   accentColor: string;
   portfolio: DbPortfolioItem[];
-  // Live, possibly-unsaved Policies-tab state — shown here instead of
-  // providerData.bookingPolicies so the preview reflects in-progress edits,
-  // same as every other field on this modal.
-  policies: ProviderPolicies;
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -1636,7 +1817,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   providerData,
   accentColor,
   portfolio,
-  policies,
 }) => {
   const styles = useScreenStyles();
   const chrome = useChrome();
@@ -1650,17 +1830,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
     categoryNames[0] || ''
   );
   const [showFullAbout, setShowFullAbout] = useState(false);
-  const [infoTab, setInfoTab] = useState<'about' | 'policy'>('about');
-  const [showPolicyImage, setShowPolicyImage] = useState(false);
-
-  // Mirrors hasPolicyInfo(provider) on ProviderProfileScreen, against the
-  // live editable policies state rather than the last-saved DB snapshot.
-  const hasPolicyInfo =
-    providerData.cancellationNoticeHours > 0 ||
-    (!!policies.depositRequired && !!policies.depositAmount) ||
-    (!!policies.cancelNotice && policies.cancelNotice !== 'none') ||
-    !!(policies.rescheduleNotice || policies.maxReschedules) ||
-    (!!policies.noShowAction && policies.noShowAction !== 'none');
 
   // Update selected category when categories change
   React.useEffect(() => {
@@ -1825,10 +1994,13 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewSlotsCardHighlight}
                 />
-                {/* Echoes the free-text box below — this is the client's
-                    own words, shown exactly as typed. */}
+                {/* Mirrors the computed pill on the real client-facing
+                    profile — same scheduleReleaseDay source, so the preview
+                    never shows text the live screen wouldn't. */}
                 <Text style={[styles.previewSlotsText, { color: PP.sub }]}>
-                  {providerData.slotsText || "Add a slots message below"}
+                  {providerData.scheduleReleaseDay != null
+                    ? `Slots out every ${ordinalSuffix(providerData.scheduleReleaseDay)} of the month`
+                    : "Set a release day below"}
                 </Text>
                 <View style={styles.previewBellButtonInline}>
                   <BellIcon size={16} color={PP.sub} />
@@ -1840,7 +2012,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 top corners — same floating-card-over-photo composition as
                 ProviderProfileScreen. */}
             <View style={[styles.previewContentSheet, { backgroundColor: PP.bg }]}>
-              {/* About / Policy tabbed card */}
+            <View style={[styles.previewContentSheetClip, { backgroundColor: PP.bg }]}>
+              {/* About card — the Policy tab that used to live here moved out
+                  to Business Profile → Policies along with editing, so this
+                  preview no longer shows or depends on any policy state. */}
               <BlurView
                 intensity={cardBlurIntensity}
                 tint={cardBlurTint}
@@ -1852,129 +2027,21 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   end={{ x: 0, y: 1 }}
                   style={styles.previewCardHighlight}
                 />
-                {hasPolicyInfo && (
-                  <View style={[styles.previewInfoTabRow, { borderBottomColor: PP.border }]}>
-                    <SlidingTabs
-                      tabs={INFO_TABS}
-                      activeKey={infoTab}
-                      onPress={setInfoTab}
-                      accentColor={accentColor}
-                      inactiveTextColor={PP.sub}
-                      scrollable={false}
-                    />
-                  </View>
-                )}
-
-                {infoTab === 'about' || !hasPolicyInfo ? (
-                  <>
-                    {!hasPolicyInfo && (
-                      <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
-                    )}
-                    <Text style={[styles.previewAboutText, { color: PP.sub }]}>
-                      {showFullAbout
-                        ? providerData.aboutText || 'Your business description will appear here...'
-                        : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setShowFullAbout(!showFullAbout)}
-                      style={styles.previewMoreButton}
-                    >
-                      <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
-                        {showFullAbout ? 'Show Less' : 'More'}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  /* Policy tab content — mirrors ProviderProfileScreen's row-building exactly,
-                     against the live (possibly unsaved) Policies-tab state. */
-                  (() => {
-                    const bp = policies;
-                    const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; tag?: string }[] = [];
-                    if (bp.depositRequired && bp.depositAmount) {
-                      rows.push({
-                        icon: 'card-outline',
-                        label: 'Deposit',
-                        value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required`,
-                        ...(bp.depositOnly ? { tag: 'ONLY' } : {}),
-                      });
-                    }
-                    const cancelPenaltyText =
-                      bp.cancelPenalty && bp.cancelPenalty !== 'none'
-                        ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}`
-                        : '';
-                    if (providerData.cancellationNoticeHours > 0) {
-                      rows.push({
-                        icon: 'time-outline',
-                        label: 'Cancellation',
-                        value: `${providerData.cancellationNoticeHours} hours' notice${cancelPenaltyText}`,
-                      });
-                    } else if (bp.cancelNotice && bp.cancelNotice !== 'none') {
-                      rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${bp.cancelNotice} notice${cancelPenaltyText}` });
-                    }
-                    if (bp.rescheduleNotice || bp.maxReschedules) {
-                      const parts: string[] = [];
-                      if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
-                      if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
-                      if (parts.length > 0) rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: parts.join(' · ') });
-                    }
-                    if (bp.noShowAction && bp.noShowAction !== 'none') {
-                      rows.push({
-                        icon: 'close-circle-outline',
-                        label: 'No-show',
-                        value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge',
-                      });
-                    }
-                    if (bp.cancelNote) {
-                      rows.push({ icon: 'information-circle-outline', label: 'Note', value: bp.cancelNote });
-                    }
-                    return (
-                      <View style={{ paddingTop: 8 }}>
-                        {rows.map((row, i) => (
-                          <View
-                            key={i}
-                            style={[styles.previewPolicyRow, i < rows.length - 1 && { borderBottomColor: PP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}
-                          >
-                            <View style={styles.previewPolicyIcon}>
-                              <Ionicons name={row.icon} size={18} color={PP.sub} />
-                            </View>
-                            <View style={styles.previewPolicyRowText}>
-                              <View style={styles.previewPolicyLabelRow}>
-                                <Text style={[styles.previewPolicyLabel, { color: PP.sub }]}>{row.label}</Text>
-                                {!!row.tag && (
-                                  <View style={[styles.previewPolicyTag, { backgroundColor: accentColor }]}>
-                                    <Text style={styles.previewPolicyTagText}>{row.tag}</Text>
-                                  </View>
-                                )}
-                              </View>
-                              <Text style={[styles.previewPolicyValue, { color: PP.text }]}>{row.value}</Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    );
-                  })()
-                )}
-
-                {policies.policyImageUrl ? (
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => setShowPolicyImage(true)}
-                    style={[styles.previewPolicyImageFab, { backgroundColor: accentColor }]}
-                    accessibilityLabel="View full policy details"
-                    accessibilityRole="button"
-                  >
-                    <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                ) : null}
+                <Text style={[styles.previewSectionTitle, { color: PP.text }]}>About</Text>
+                <Text style={[styles.previewAboutText, { color: PP.sub }]}>
+                  {showFullAbout
+                    ? providerData.aboutText || 'Your business description will appear here...'
+                    : `${(providerData.aboutText || 'Your business description will appear here...').substring(0, 150)}...`}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowFullAbout(!showFullAbout)}
+                  style={styles.previewMoreButton}
+                >
+                  <Text style={[styles.previewMoreButtonText, { color: PP.text }]}>
+                    {showFullAbout ? 'Show Less' : 'More'}
+                  </Text>
+                </TouchableOpacity>
               </BlurView>
-
-              {policies.policyImageUrl ? (
-                <Modal visible={showPolicyImage} transparent animationType="fade" onRequestClose={() => setShowPolicyImage(false)}>
-                  <TouchableOpacity style={styles.previewPolicyImageModalOverlay} activeOpacity={1} onPress={() => setShowPolicyImage(false)}>
-                    <Image source={{ uri: policies.policyImageUrl }} style={styles.previewPolicyImageModalFull} resizeMode="contain" />
-                  </TouchableOpacity>
-                </Modal>
-              ) : null}
 
               {/* Services Section */}
               {categoryNames.length > 0 && (
@@ -2191,6 +2258,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </View>
               )}
             </View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </View>
@@ -2200,12 +2268,17 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
 // Main Component
 const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
-  const { theme, isDarkMode } = useTheme();
+  // This screen always renders in light mode regardless of the app's dark
+  // mode setting (see useScreenStyles/useChrome above) — nothing in this file
+  // reads useTheme().isDarkMode or branches on the device/app appearance.
+  // statusBarStyle mirrors what useTheme()'s legacy `theme.statusBar` would
+  // be in light mode.
+  const statusBarStyle = 'dark-content' as const;
   const styles = useScreenStyles();
   const chrome = useChrome();
   // Header/inline icons can't read a StyleSheet colour, so they take the same
   // palette token the sheet above is built from.
-  const chromeText = isDarkMode ? darkTheme.text : lightTheme.text;
+  const chromeText = lightTheme.text;
   const { user } = useAuth();
 
   // Read from the ROOT provider (App.tsx), deliberately not the nested
@@ -2255,20 +2328,51 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // Ref for main scrollview to enable auto-scroll to focused inputs
   const mainScrollViewRef = useRef<ScrollView>(null);
 
-  // Track input positions for auto-scroll
-  const inputPositions = useRef<Record<string, number>>({});
+  // ── Auto-scroll to the focused field ──────────────────────────────────
+  // Each registered field keeps a handle to its own wrapper View, and the
+  // position is MEASURED at focus time via measureLayout against the
+  // ScrollView's inner content node. That yields the field's true offset
+  // within the scroll content regardless of how deeply it's nested.
+  //
+  // This deliberately replaces the previous scheme, which stored a local
+  // `e.nativeEvent.layout.y` from onLayout plus a per-field hardcoded fudge
+  // constant (+150/+200/+500/+700/+750/+800/+850/+875/+900 …). Those
+  // constants existed only to hand-compensate for the fact that, when one
+  // section rendered at a time, a field's local layout.y was not its page
+  // position. In a single continuous document every one of them would be
+  // wrong at once — and wrong silently, scrolling to the wrong place rather
+  // than erroring. Measuring removes the guesswork entirely: there is no
+  // magic number left to keep in sync when the layout changes.
+  const fieldNodes = useRef<Record<string, View | null>>({});
+  const scrollContentRef = useRef<View>(null);
 
-  // Handle input focus - auto-scroll to show the input
-  const handleInputFocus = useCallback((inputName: string, yPosition?: number) => {
-    if (yPosition !== undefined) {
-      inputPositions.current[inputName] = yPosition;
-    }
-    const scrollTo = inputPositions.current[inputName] || 0;
+  const registerField = useCallback(
+    (name: string) => (node: View | null) => { fieldNodes.current[name] = node; },
+    [],
+  );
+
+  // Keeps the focused field clear of the keyboard without slamming it to the
+  // very top of the viewport.
+  const FOCUS_SCROLL_MARGIN = 120;
+
+  const handleInputFocus = useCallback((inputName: string) => {
+    const node = fieldNodes.current[inputName];
+    const content = scrollContentRef.current;
+    const scroller = mainScrollViewRef.current;
+    if (!node || !content || !scroller) return;
+    // Deferred a beat so the measurement happens after the keyboard-driven
+    // layout settles, same reason the previous implementation waited.
     setTimeout(() => {
-      mainScrollViewRef.current?.scrollTo({
-        y: Math.max(0, scrollTo - 250),
-        animated: true,
-      });
+      // RN 0.81's measureLayout takes a HostInstance directly as the
+      // relativeTo target (the numeric node handle form is the deprecated
+      // one), so the content View's ref can be passed straight through.
+      node.measureLayout(
+        content,
+        (_x, y) => {
+          scroller.scrollTo({ y: Math.max(0, y - FOCUS_SCROLL_MARGIN), animated: true });
+        },
+        () => { /* node unmounted mid-measure — nothing to scroll to */ },
+      );
     }, 300);
   }, []);
 
@@ -2279,7 +2383,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     customServiceType: '',
     location: '',
     aboutText: '',
-    slotsText: 'Slots out every 15th of the month',
     scheduleReleaseDay: null,
     gradient: ['#FF6B6B', '#4ECDC4', '#45B7D1'],
     hasCustomGradient: false,
@@ -2314,13 +2417,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   });
 
   const [isEditMode, setIsEditMode] = useState(false);
-  // null = the hub (the section summary list). A key = that section's fields
-  // shown full-screen. View-level state, not navigation routes, so the whole
-  // form stays mounted and unsaved edits survive moving between sections.
-  const [activeSection, setActiveSection] = useState<EditorSectionKey | null>(null);
+  // Which section the reader is currently inside, for the scrollspy rail only.
+  // Purely presentational: nothing gates on it, nothing renders conditionally
+  // on it, and it never affects what's reachable. Every section is always
+  // mounted, so unsaved edits can't be lost by scrolling.
+  const [activeSpySection, setActiveSpySection] = useState<EditorSectionKey>(FIRST_EDITOR_SECTION);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
+  // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
+  // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
+  // moved to Business Profile → Policies. handleSubmit still writes this
+  // blob back unchanged on every save so publishing never clobbers whatever
+  // is currently saved in booking_policies. policiesLoaded gates that
+  // write — see the load effect below for why.
   const [policies, setPolicies] = useState<ProviderPolicies>(DEFAULT_POLICIES);
-  const [policyImageUploading, setPolicyImageUploading] = useState(false);
+  const [policiesLoaded, setPoliciesLoaded] = useState(false);
 
   // True until the existing-provider fetch settles — without this the form
   // renders with empty defaults ('Provider Registration', blank fields, the
@@ -2408,7 +2518,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     // the local cache inside loadProviderPolicies. Merge over defaults so
     // fields added later (e.g. bookingInstructions) are never undefined.
     loadProviderPolicies(user.id)
-      .then(saved => { if (saved) setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) }); })
+      .then(saved => {
+        if (!saved) { setPoliciesLoaded(true); return; }
+        const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) };
+        // Collapse the old two-toggle state onto the single one. Blobs saved
+        // before "Deposit only" was merged into "Require deposit" can hold
+        // depositRequired:true + depositOnly:false; loading that verbatim
+        // would resurrect the removed middle state with no UI left to change
+        // it. depositRequired is authoritative from here on.
+        setPolicies({ ...merged, depositOnly: merged.depositRequired });
+        setPoliciesLoaded(true);
+      })
+      // Deliberately leaves policiesLoaded false on failure — this screen no
+      // longer edits any policy field (moved to PoliciesScreen), but
+      // handleSubmit still round-trips this blob back to booking_policies on
+      // every save. Writing it back while still at DEFAULT_POLICIES (never
+      // successfully loaded) would silently overwrite a provider's real
+      // cancellation/deposit/refund/no-show settings with defaults —
+      // handleSubmit skips that write until this flag is true.
       .catch(() => {});
   }, [user?.id]);
 
@@ -2417,6 +2544,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const [portfolioItems, setPortfolioItems] = useState<DbPortfolioItem[]>([]);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [portfolioUploading, setPortfolioUploading] = useState(false);
+  const [venuePhotoUploading, setVenuePhotoUploading] = useState(false);
+  // Address/venue photos live in the same portfolio_items table and list as
+  // gallery photos (category: 'venue' distinguishes them) — they're a
+  // filtered view over portfolioItems, not a separate data source, so they
+  // show up under Portfolio wherever the full list is rendered.
+  const venuePhotos = useMemo(
+    () => portfolioItems.filter(item => item.category === 'venue'),
+    [portfolioItems]
+  );
 
   useEffect(() => {
     if (!user?.id) { setPortfolioLoading(false); return; }
@@ -2441,7 +2577,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       .finally(() => setPortfolioLoading(false));
   }, [providerDbId]);
 
-  const handleAddPortfolioImages = useCallback(async () => {
+  // category is optional and only stamped when passed — omitting it keeps
+  // the default gallery-upload behavior of addPortfolioItem (falls back to
+  // the provider's own service_category). Passing 'venue' is how the
+  // Address Confirmation step's photos land in the same portfolio_items
+  // table/list but stay distinguishable as their own section.
+  const handleAddPortfolioImages = useCallback(async (category?: string) => {
     if (!user?.id || !providerDbId) return;
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -2472,7 +2613,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         service_id: null,
         image_url: asset.uri,
         caption: null,
-        category: null,
+        category: category ?? null,
         tags: null,
         price: null,
         aspect_ratio: asset.width && asset.height ? asset.width / asset.height : 1,
@@ -2497,7 +2638,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         // upload as bytes instead, same as the provider logo upload.
         const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
         const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
-        const item = await addPortfolioItem(providerDbId, publicUrl, ratio);
+        const item = await addPortfolioItem(providerDbId, publicUrl, ratio, category);
         setPortfolioItems(prev => prev.map(p => (p.id === tempId ? item : p)));
       } catch (e: any) {
         setPortfolioItems(prev => prev.filter(p => p.id !== tempId));
@@ -2593,6 +2734,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const dragBaselineRef = useRef<Record<string, { x: number; y: number; width: number }>>({});
   const dragGrantXRef = useRef(0);
   const dragTargetRef = useRef(0);
+  // Reordering used to arm on the very first touch move, which made the
+  // handle read as accidentally grabby — a light tap that was meant to just
+  // land on the pill could kick off a drag. Requiring a short hold before the
+  // drag actually engages (see armCategoryDragRef/CATEGORY_DRAG_HOLD_MS below)
+  // makes a deliberate press-and-hold the only thing that starts one.
+  const categoryDragHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const categoryDragArmedRef = useRef(false);
 
   // Auto-scroll while dragging near either edge of the category strip — without
   // this, a pill can never be dragged past whatever happens to already be
@@ -2623,6 +2771,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   const AUTOSCROLL_MAX_RAMP = 2.2;
   const CATEGORY_STRIP_TRAILING_PADDING = 20; // matches categoryTabsContent's paddingRight
   const CATEGORY_STRIP_GAP = 10; // matches categoryTabsContent's gap
+  const CATEGORY_DRAG_HOLD_MS = 220; // press-and-hold duration required before a reorder drag engages
+  const CATEGORY_DRAG_HOLD_SLOP = 6; // px of finger movement tolerated while waiting to arm, before treating it as a scroll/tap instead
 
   // Handle logo selection
   const handleSelectLogo = async () => {
@@ -2791,52 +2941,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   }, []);
 
   // Submit registration
-  const setPolicy = useCallback(<K extends keyof ProviderPolicies>(key: K, value: ProviderPolicies[K]) => {
-    setPolicies(prev => ({ ...prev, [key]: value }));
-  }, []);
-
-  // Detailed policy image — a free-form photo (house rules sheet, consent
-  // form, etc.) clients can pop open from their view of this profile,
-  // alongside the structured fields above. Stored as a URL inside the same
-  // policies blob, so it saves/loads with everything else on this tab —
-  // uploaded to storage right away (so we have a public URL to hold onto),
-  // but only actually persisted to the provider row when Save is tapped,
-  // same as every other field here.
-  const handlePickPolicyImage = useCallback(async () => {
-    if (!user?.id) return;
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Permission Required', 'Please allow access to your photo library.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      // No fixed `aspect` — a policy document photo is usually portrait, not
-      // square, so the crop handles start at the photo's own shape and the
-      // provider drags them to whatever they actually want to keep.
-      allowsEditing: true,
-      quality: 0.85,
-    });
-    const asset = result.assets?.[0];
-    if (result.canceled || !asset) return;
-
-    setPolicyImageUploading(true);
-    try {
-      const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const path = `${user.id}/policy-${Date.now()}.${ext}`;
-      const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
-      setPolicy('policyImageUrl', publicUrl);
-    } catch (e: any) {
-      Alert.alert('Upload failed', e?.message ?? 'Could not upload the image.');
-    } finally {
-      setPolicyImageUploading(false);
-    }
-  }, [user?.id, setPolicy]);
-
-  const handleRemovePolicyImage = useCallback(() => {
-    setPolicy('policyImageUrl', '');
-  }, [setPolicy]);
-
   const handleSubmit = useCallback(async () => {
     if (!providerData.providerName.trim()) {
       Alert.alert('Missing Information', 'Please enter your business name.');
@@ -2862,7 +2966,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     setIsSubmitting(true);
     try {
       await saveProviderToSupabase(user.id, providerData, !isEditMode && termsAccepted);
-      await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
+      // Only round-trip booking_policies if it actually loaded successfully —
+      // writing the in-memory `policies` back while it's still stuck at
+      // DEFAULT_POLICIES (a failed load) would silently wipe out whatever a
+      // provider had already saved via Business Profile → Policies.
+      if (policiesLoaded) {
+        await saveProviderPolicies(user.id, policies as unknown as Record<string, unknown>);
+      }
       Alert.alert(
         'Profile Saved!',
         'Your provider profile has been saved successfully.',
@@ -2876,50 +2986,42 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [providerData, user, policies, navigation, isEditMode, termsAccepted]);
+  }, [providerData, user, policies, policiesLoaded, navigation, isEditMode, termsAccepted]);
 
-  // ── Hub ⇄ section navigation ──────────────────────────────────────────
-  // Both directions reset the scroll: the hub and a section are different
-  // screens sharing one ScrollView, so without this you land mid-content
-  // carried over from wherever the other view was scrolled to.
-  const openSection = useCallback((next: EditorSectionKey) => {
-    Haptics.selectionAsync().catch(() => {});
-    setActiveSection(next);
-    mainScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  // ── Scrollspy ─────────────────────────────────────────────────────────
+  // Each section's real top offset within the scroll content, keyed by section.
+  // Written by onSectionLayout below, which measures against the ScrollView's
+  // content — not a local `layout.y` — so these are true page positions.
+  const sectionOffsets = useRef<Partial<Record<EditorSectionKey, number>>>({});
+
+  const onSectionLayout = useCallback((key: EditorSectionKey, y: number) => {
+    sectionOffsets.current[key] = y;
   }, []);
 
-  // Back from a section just returns to the hub — it deliberately does NOT
-  // save. Edits live in providerData/policies until the hub's Publish commits
-  // them, so a section has nothing of its own to persist.
-  const closeSection = useCallback(() => {
-    Haptics.selectionAsync().catch(() => {});
-    setActiveSection(null);
-    mainScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  // Position indicator only. Picks the last section whose top has passed the
+  // reading line (a third of the way down the viewport), which is what "the
+  // section I'm currently reading" means to a reader. Deliberately does not
+  // scroll, gate, or navigate anything.
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const readingLine = y + e.nativeEvent.layoutMeasurement.height / 3;
+    let current: EditorSectionKey = FIRST_EDITOR_SECTION;
+    for (const s of EDITOR_SECTIONS) {
+      const top = sectionOffsets.current[s.key];
+      if (top !== undefined && top <= readingLine) current = s.key;
+    }
+    setActiveSpySection(prev => (prev === current ? prev : current));
   }, []);
 
-  // Sequential movement between section editors, for working straight through
-  // the profile without bouncing off the hub each time. Distinct from the
-  // header's Back, which always returns to the hub — these two are deliberately
-  // different exits, not duplicates. Both route through openSection, so the
-  // scroll reset applies to section→section moves as well.
-  const sectionIndex = activeSection
-    ? EDITOR_SECTIONS.findIndex(s => s.key === activeSection)
-    : -1;
-  const isFirstSection = sectionIndex === 0;
-  const isLastSection = sectionIndex === EDITOR_SECTIONS.length - 1;
-
-  const goToPreviousSection = useCallback(() => {
-    const prev = EDITOR_SECTIONS[sectionIndex - 1];
-    if (prev) openSection(prev.key);
-  }, [sectionIndex, openSection]);
-
-  // On the last section this is "Finish", which returns to the hub. It
-  // deliberately does NOT publish — saving stays the hub's job alone.
-  const goToNextSection = useCallback(() => {
-    const next = EDITOR_SECTIONS[sectionIndex + 1];
-    if (next) openSection(next.key);
-    else closeSection();
-  }, [sectionIndex, openSection, closeSection]);
+  // Explicit "Next" affordance at the end of each section — additive to the
+  // scrollspy above (which stays a passive, non-navigating indicator).
+  // Jumps by measured offset rather than a fixed distance so it lands exactly
+  // on the next section's heading regardless of how tall the current one is.
+  const goToSection = useCallback((key: EditorSectionKey) => {
+    const y = sectionOffsets.current[key];
+    if (y === undefined) return;
+    mainScrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+  }, []);
 
   // Get adaptive accent color - now uses user-selected accent color
   const adaptiveAccentColor = useMemo(() => {
@@ -2963,7 +3065,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           rows: [
             { label: 'Business name', value: filled(providerData.providerName), required: true },
             { label: 'Service type', value: serviceTypeLabel },
-            { label: 'Location', value: filled(providerData.location), required: true },
+            { label: 'Where you\'re based', value: filled(providerData.location), required: true },
             { label: 'Logo', value: providerData.logo ? 'Added' : '' },
           ],
         },
@@ -3000,25 +3102,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         },
         {
           section: 'policies',
-          title: 'Booking policies',
+          title: 'Business setup',
           rows: [
             { label: 'Business type', value: filled(providerData.businessType) ? (BUSINESS_TYPE_LABELS[providerData.businessType] ?? providerData.businessType) : '' },
             { label: 'Full address', value: filled(providerData.fullAddress) ? 'Added (stays private)' : '', required: true },
-            { label: 'Cancellation notice', value: policies.cancelNotice === 'none' ? 'No notice required' : policies.cancelNotice },
-            { label: 'Deposit', value: policies.depositRequired ? 'Required' : 'Not required' },
           ],
         },
       ];
     },
-    [providerData, portfolioItems.length, serviceCount, categoryNames.length, policies],
+    [providerData, portfolioItems.length, serviceCount, categoryNames.length],
   );
 
-  // Only genuinely-required, genuinely-empty fields — this is what the hub
-  // warns about and what Publish would otherwise fail on.
+  // Only genuinely-required, genuinely-empty fields — this is what the roll-up
+  // above Publish warns about and what Publish would otherwise fail on.
   const missingRequired = useMemo(
     () => sectionSummaries.flatMap(g => g.rows.filter(r => r.required && !r.value).map(r => r.label)),
     [sectionSummaries],
   );
+
+  // Set membership of the above, so an individual field can flag itself inline
+  // without each call site re-deriving "is this one empty" and drifting from
+  // what Publish actually enforces. Keys are the row labels in
+  // sectionSummaries — the same strings the roll-up prints.
+  const missingRequiredSet = useMemo(() => new Set(missingRequired), [missingRequired]);
 
   // Keep the draggable order in sync with the real data — but never while a
   // drag is in progress, or the live reflow would get stomped mid-gesture.
@@ -3033,6 +3139,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   useEffect(() => () => {
     if (dragAutoScrollFrameRef.current != null) cancelAnimationFrame(dragAutoScrollFrameRef.current);
     if (settleCategoryFrameRef.current != null) cancelAnimationFrame(settleCategoryFrameRef.current);
+    if (categoryDragHoldTimerRef.current != null) clearTimeout(categoryDragHoldTimerRef.current);
     isCategoryDraggingRef.current = false;
   }, []);
 
@@ -3154,6 +3261,65 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     const cached = categoryDragRespondersRef.current[name];
     if (cached) return cached;
 
+    // Actually engages the drag — separated from onPanResponderGrant so it can
+    // be deferred until the hold threshold below elapses, instead of firing
+    // the instant the finger touches down.
+    const armDrag = (pageX: number) => {
+      dragBaselineRef.current = { ...pillLayoutRef.current };
+      dragGrantXRef.current = dragBaselineRef.current[name]?.x ?? 0;
+      dragTargetRef.current = categoryOrderRef.current.indexOf(name);
+      dragAutoScrollDeltaRef.current = 0;
+      dragAutoScrollHoldFramesRef.current = 0;
+      dragLatestDxRef.current = 0;
+      dragLatestPageXRef.current = pageX;
+      dragX.setValue(0);
+      dragLift.setValue(0);
+      categoryDragArmedRef.current = true;
+      setDraggingCategory(name);
+      Animated.spring(dragLift, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 26,
+        bounciness: 5,
+      }).start();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      // onContentSizeChange (below, on the ScrollView) reports the real
+      // native content width and is the authoritative source whenever it's
+      // fired — but it isn't guaranteed to have fired yet before the user's
+      // very first drag, in which case categoryContentWidthRef is still its
+      // 0 default, which clamped auto-scroll to zero distance and made a
+      // drag look like it couldn't reach the end of the row at all. This
+      // hand-summed estimate from each pill's own measured layout is only a
+      // fallback for that gap — it must never overwrite an already-known
+      // real value, or every subsequent drag inherits this slightly-off
+      // estimate instead of the accurate one, permanently capping how far
+      // auto-scroll can go short of the true end.
+      if (categoryContentWidthRef.current === 0) {
+        const rightmost = Object.values(dragBaselineRef.current)
+          .reduce((max, p) => Math.max(max, p.x + p.width), 0);
+        categoryContentWidthRef.current = rightmost + CATEGORY_STRIP_TRAILING_PADDING;
+      }
+      // Set this before the state update below. The re-render makes the
+      // active pill absolute; without the frozen minimum width, that layout
+      // pass shrinks the content and clamps horizontal scrolling mid-drag.
+      isCategoryDraggingRef.current = true;
+      setDragContentWidth(categoryContentWidthRef.current);
+      // measureInWindow exists on the underlying native view via the
+      // NativeMethods mixin, but isn't in ScrollView's TS surface.
+      (categoryScrollRef.current as unknown as { measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void } | null)
+        ?.measureInWindow((x, _y, width) => {
+          categoryViewportRef.current = { x, width };
+        });
+      startCategoryAutoScroll(name);
+    };
+
+    const clearDragHoldTimer = () => {
+      if (categoryDragHoldTimerRef.current != null) {
+        clearTimeout(categoryDragHoldTimerRef.current);
+        categoryDragHoldTimerRef.current = null;
+      }
+    };
+
     const responder = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       // Without this, the surrounding horizontal ScrollView reclaims the touch
@@ -3163,53 +3329,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       // gesture once granted here is safe and doesn't block scrolling anywhere else.
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (evt) => {
-        dragBaselineRef.current = { ...pillLayoutRef.current };
-        dragGrantXRef.current = dragBaselineRef.current[name]?.x ?? 0;
-        dragTargetRef.current = categoryOrderRef.current.indexOf(name);
-        dragAutoScrollDeltaRef.current = 0;
-        dragAutoScrollHoldFramesRef.current = 0;
-        dragLatestDxRef.current = 0;
-        dragLatestPageXRef.current = evt.nativeEvent.pageX;
-        dragX.setValue(0);
-        dragLift.setValue(0);
-        setDraggingCategory(name);
-        Animated.spring(dragLift, {
-          toValue: 1,
-          useNativeDriver: true,
-          speed: 26,
-          bounciness: 5,
-        }).start();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        // onContentSizeChange (below, on the ScrollView) reports the real
-        // native content width and is the authoritative source whenever it's
-        // fired — but it isn't guaranteed to have fired yet before the user's
-        // very first drag, in which case categoryContentWidthRef is still its
-        // 0 default, which clamped auto-scroll to zero distance and made a
-        // drag look like it couldn't reach the end of the row at all. This
-        // hand-summed estimate from each pill's own measured layout is only a
-        // fallback for that gap — it must never overwrite an already-known
-        // real value, or every subsequent drag inherits this slightly-off
-        // estimate instead of the accurate one, permanently capping how far
-        // auto-scroll can go short of the true end.
-        if (categoryContentWidthRef.current === 0) {
-          const rightmost = Object.values(dragBaselineRef.current)
-            .reduce((max, p) => Math.max(max, p.x + p.width), 0);
-          categoryContentWidthRef.current = rightmost + CATEGORY_STRIP_TRAILING_PADDING;
-        }
-        // Set this before the state update below. The re-render makes the
-        // active pill absolute; without the frozen minimum width, that layout
-        // pass shrinks the content and clamps horizontal scrolling mid-drag.
-        isCategoryDraggingRef.current = true;
-        setDragContentWidth(categoryContentWidthRef.current);
-        // measureInWindow exists on the underlying native view via the
-        // NativeMethods mixin, but isn't in ScrollView's TS surface.
-        (categoryScrollRef.current as unknown as { measureInWindow: (cb: (x: number, y: number, width: number, height: number) => void) => void } | null)
-          ?.measureInWindow((x, _y, width) => {
-            categoryViewportRef.current = { x, width };
-          });
-        startCategoryAutoScroll(name);
+        // Claim the touch immediately (so the ScrollView doesn't steal it),
+        // but don't actually start moving the pill until the finger has been
+        // held for CATEGORY_DRAG_HOLD_MS — a bare tap or an early scroll
+        // swipe (see onPanResponderMove) never reaches armDrag at all.
+        categoryDragArmedRef.current = false;
+        const pageX = evt.nativeEvent.pageX;
+        clearDragHoldTimer();
+        categoryDragHoldTimerRef.current = setTimeout(() => {
+          categoryDragHoldTimerRef.current = null;
+          armDrag(pageX);
+        }, CATEGORY_DRAG_HOLD_MS);
       },
       onPanResponderMove: (evt, g) => {
+        if (!categoryDragArmedRef.current) {
+          // Any real movement before the hold threshold reads as a scroll or
+          // a mis-tap, not a deliberate press-and-hold — bail out of arming
+          // so the strip's own ScrollView keeps handling it.
+          if (Math.abs(g.dx) > CATEGORY_DRAG_HOLD_SLOP || Math.abs(g.dy) > CATEGORY_DRAG_HOLD_SLOP) {
+            clearDragHoldTimer();
+          }
+          return;
+        }
         // Track the finger 1:1 — the pill is rendered as a position:absolute
         // overlay pinned to its frozen grant-time origin (see the render
         // below), so this offset is the ONLY thing moving it. Nothing about
@@ -3222,6 +3363,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         applyDragPosition(name, g.dx + dragAutoScrollDeltaRef.current);
       },
       onPanResponderRelease: () => {
+        clearDragHoldTimer();
+        if (!categoryDragArmedRef.current) return;
+        categoryDragArmedRef.current = false;
         stopCategoryAutoScroll();
         const finalOrder = categoryOrderRef.current;
         handleSetCategoryOrder(finalOrder);
@@ -3266,6 +3410,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         });
       },
       onPanResponderTerminate: () => {
+        clearDragHoldTimer();
+        const wasArmed = categoryDragArmedRef.current;
+        categoryDragArmedRef.current = false;
+        if (!wasArmed) return;
         stopCategoryAutoScroll();
         isCategoryDraggingRef.current = false;
         setDragContentWidth(null);
@@ -3294,15 +3442,28 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
   return (
     <SafeAreaProvider>
-      <ThemedBackground>
-        <LinearGradient
-          colors={providerData.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={styles.gradientOverlay}
-        />
+      {/* Plain light-painted View instead of <ThemedBackground> — that
+          component reads the app's shared ThemeContext directly, so it would
+          still paint dark whenever the app itself is in dark mode. This
+          screen ignores dark mode entirely (see useScreenStyles/useChrome
+          above), so its root background is pinned to the same light bg
+          value ThemedBackground would use in light mode. */}
+      <View style={{ flex: 1, backgroundColor: lightTheme.bg }}>
+        {/* Only paint the provider's custom gradient — same gate the hero
+            preview uses (line ~1768). Without it this rendered unconditionally,
+            defaulting to providerData.gradient's hardcoded placeholder rainbow
+            at 0.85 opacity over the whole screen, which visually smothered
+            the background's bg entirely. */}
+        {providerData.hasCustomGradient && (
+          <LinearGradient
+            colors={providerData.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.gradientOverlay}
+          />
+        )}
 
-        <StatusBar barStyle={theme.statusBar} translucent backgroundColor="transparent" />
+        <StatusBar barStyle={statusBarStyle} translucent backgroundColor="transparent" />
 
         {/* Transfer Data Modal */}
         <TransferDataModal
@@ -3371,7 +3532,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           providerData={providerData}
           accentColor={adaptiveAccentColor}
           portfolio={portfolioItems}
-          policies={policies}
         />
 
         {/* No `edges` prop: under fullScreenModal the nested provider this sits
@@ -3380,21 +3540,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             applied manually from the root provider's inset; bottom is handled
             by each pinned bar's own paddingBottom. */}
         <SafeAreaView style={styles.safeArea} edges={[]}>
-          {/* Header. Back either leaves the screen (from the hub) or returns
-              to the hub (from a section) — one control, whichever "back" means
-              where you are. Preview is available from both. Saving lives only
-              on the hub's Publish button, so there's exactly one save path. */}
+          {/* Header. One static title and one Back that always leaves the
+              screen — with the hub/editor split gone there is no intermediate
+              view left to back out to. Preview stays available throughout.
+              Saving lives only on the pinned Publish button, so there's still
+              exactly one save path. */}
           <View style={[styles.header, { paddingTop: topInset + 6 }]}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={activeSection ? closeSection : () => navigation.goBack()}
+              activeOpacity={0.5}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                navigation.goBack();
+              }}
             >
               <Text style={styles.backButtonText}>←</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {activeSection
-                ? (EDITOR_SECTIONS.find(s => s.key === activeSection)?.title ?? '')
-                : (isEditMode ? 'Public Profile' : 'Set Up Your Profile')}
+              {isEditMode ? 'Public Profile' : 'Set Up Your Profile'}
             </Text>
             <View style={styles.headerActions}>
               <TouchableOpacity
@@ -3415,6 +3578,24 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             </View>
           )}
 
+          {/* The document and its scrollspy rail share a positioning context so
+              the rail can pin itself over the scroll without scrolling with it. */}
+          <View style={styles.docApp}>
+            {/* ── Scrollspy rail ── Reading-position indicator ONLY. Not
+                touchable, not a stepper, not a gate: it reports where you are
+                and never constrains where you can go. */}
+            <View style={styles.docScrollspy} pointerEvents="none">
+              {EDITOR_SECTIONS.map(s => (
+                <View
+                  key={s.key}
+                  style={[
+                    styles.docSpySeg,
+                    s.key === activeSpySection && { backgroundColor: adaptiveAccentColor },
+                  ]}
+                />
+              ))}
+            </View>
+
             <ScrollView
               ref={mainScrollViewRef}
               style={styles.content}
@@ -3423,6 +3604,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
               automaticallyAdjustKeyboardInsets={true}
+              onScroll={handleScroll}
+              scrollEventThrottle={64}
               // The category-pill drag handle refuses to give up its responder to
               // the horizontal strip it lives in, but this outer vertical
               // ScrollView is a separate native scroll recognizer one level up —
@@ -3433,193 +3616,84 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               // like the other pills weren't reacting to the drag at all.
               scrollEnabled={!draggingCategory}
             >
-            {/* ── HUB ── The screen's home view: the whole profile at a
-                glance, one card per section, each tappable to drill in. This
-                replaces both the old wizard and its separate review step —
-                the summary IS the landing page now, not a final stop. */}
-            {activeSection === null && (
-              <>
-                {missingRequired.length > 0 && (
-                  <View style={styles.reviewWarningBanner}>
-                    <Ionicons name="alert-circle-outline" size={18} color={REVIEW_WARN_COLOR} />
-                    <Text style={styles.reviewWarningText}>
-                      {missingRequired.length === 1
-                        ? `${missingRequired[0]} is still needed before you can publish.`
-                        : `${missingRequired.join(', ')} are still needed before you can publish.`}
-                    </Text>
-                  </View>
-                )}
+            {/* The measurement origin for every field's auto-scroll position.
+                measureLayout against this node yields true content offsets —
+                see handleInputFocus. */}
+            <View ref={scrollContentRef} collapsable={false}>
+            {/* ── 01 · Identity ── First section of the continuous
+                document. Oversized numeral + typographic break carries the
+                structure; there is no hub, no card border, and nothing to tap
+                into. Required-field warnings now live inline at the offending
+                field, with a roll-up next to Publish. */}
+            <View
+              style={styles.docSection}
+              onLayout={(e) => onSectionLayout('identity', e.nativeEvent.layout.y)}
+            >
+              <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>01</Text>
+              <Text style={styles.docHeading}>Identity</Text>
+              <Text style={styles.docSub}>Business identity · how clients first find you</Text>
 
-                {sectionSummaries.map((group, groupIndex) => {
-                  const groupMissing = group.rows.filter(r => r.required && !r.value).length;
-                  const filledCount = group.rows.filter(r => r.value).length;
-                  const completionRatio = group.rows.length > 0 ? filledCount / group.rows.length : 0;
-                  return (
-                    <TouchableOpacity
-                      key={group.section}
-                      style={styles.cardShadowWrap}
-                      activeOpacity={0.85}
-                      onPress={() => openSection(group.section)}
-                    >
-                      <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
-                        <LinearGradient
-                          colors={[chrome.surf(0.3), 'transparent']}
-                          start={{ x: 0, y: 0 }}
-                          end={{ x: 0, y: 1 }}
-                          style={styles.cardHighlight}
-                        />
-                        <View style={styles.reviewGroupHeader}>
-                          <View style={styles.reviewGroupHeaderTitle}>
-                            <SectionHeader index={groupIndex + 1} title={group.title} accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
-                          </View>
-                          <Ionicons name="chevron-forward" size={18} color={chrome.fg(0.4)} />
-                        </View>
-
-                        {/* Status line: what still blocks publishing, or how
-                            much of this section is filled in. */}
-                        <Text
-                          style={[
-                            styles.hubStatusText,
-                            groupMissing > 0 && styles.hubStatusTextMissing,
-                          ]}
-                        >
-                          {groupMissing > 0
-                            ? `${groupMissing} required field${groupMissing === 1 ? '' : 's'} missing`
-                            : `${filledCount} of ${group.rows.length} filled in`}
-                        </Text>
-
-                        {/* Slim completion fill — same warn/accent split as the
-                            status text above, so the two never disagree. */}
-                        <View style={styles.hubProgressTrack}>
-                          <View
-                            style={[
-                              styles.hubProgressFill,
-                              {
-                                width: `${Math.round(completionRatio * 100)}%`,
-                                backgroundColor: groupMissing > 0 ? REVIEW_WARN_COLOR : adaptiveAccentColor,
-                              },
-                            ]}
-                          />
-                        </View>
-
-                        {group.rows.map(row => {
-                          const isMissingRequired = Boolean(row.required) && !row.value;
-                          return (
-                            <View key={row.label} style={styles.reviewRow}>
-                              <Text style={styles.reviewRowLabel}>{row.label}</Text>
-                              <Text
-                                style={[
-                                  styles.reviewRowValue,
-                                  isMissingRequired && styles.reviewRowValueMissing,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {row.value || (isMissingRequired ? 'Required' : 'Not added')}
-                              </Text>
-                            </View>
-                          );
-                        })}
-                      </BlurView>
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* Only asked once, at first publish — an already-live
-                    provider has already accepted (providers.terms_accepted_at
-                    is stamped on that first insert) and edit-saves never
-                    re-ask. */}
-                {!isEditMode && (
-                  <TouchableOpacity
-                    style={styles.termsRow}
-                    activeOpacity={0.75}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setTermsAccepted(prev => !prev);
-                    }}
-                  >
-                    <View
-                      style={[
-                        styles.termsCheckbox,
-                        termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
-                      ]}
-                    >
-                      {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
-                    </View>
-                    <Text style={styles.termsRowText}>
-                      I agree to the{' '}
-                      <Text
-                        style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                        onPress={() => setShowTermsModal(true)}
-                      >
-                        Terms &amp; Conditions
-                      </Text>
-                    </Text>
-                  </TouchableOpacity>
-                )}
-
-                <Text style={styles.reviewFootnote}>
-                  Publishing saves your profile and policies. You can come back and
-                  change any of this at any time.
-                </Text>
-              </>
-            )}
-
-            {activeSection === 'identity' && (<>
+              {/* Next now lives at the top of each section — a jump-ahead
+                  control (like tapping a step in a progress bar), not a
+                  "confirm this section" action, so it's available before
+                  the fields below are filled in. */}
+              <TouchableOpacity
+                style={styles.docNextButton}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  goToSection('about');
+                }}
+                activeOpacity={0.55}
+              >
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · About & Portfolio</Text>
+                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+              </TouchableOpacity>
 
             {/* Plain circular avatar picker — no card chrome around it. The
                 surrounding panel was doing nothing the circle doesn't already
                 communicate, and the standard avatar treatment (circle + corner
                 camera badge) reads as tappable on its own. Business name and
                 the rest of Step 1 continue below, unchanged. */}
-            <View style={styles.logoSection}>
-              <TouchableOpacity
-                style={styles.logoContainer}
-                onPress={handleSelectLogo}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
-              >
-                {providerData.logo ? (
-                  <Image
-                    source={{ uri: providerData.logo }}
-                    style={styles.providerLogo}
-                    resizeMode="cover"
-                    // Per the Scalability rules: without this any unrelated
-                    // re-render can retrigger the default fade-in as a flicker.
-                    fadeDuration={0}
-                  />
-                ) : (
-                  <View style={styles.logoPlaceholder}>
-                    <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+              <View style={styles.logoSection}>
+                <TouchableOpacity
+                  style={styles.logoContainer}
+                  onPress={handleSelectLogo}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={providerData.logo ? 'Change logo' : 'Add logo'}
+                >
+                  {providerData.logo ? (
+                    <Image
+                      source={{ uri: providerData.logo }}
+                      style={styles.providerLogo}
+                      resizeMode="cover"
+                      // Per the Scalability rules: without this any unrelated
+                      // re-render can retrigger the default fade-in as a flicker.
+                      fadeDuration={0}
+                    />
+                  ) : (
+                    <View style={styles.logoPlaceholder}>
+                      <Ionicons name="camera-outline" size={30} color={adaptiveAccentColor} />
+                    </View>
+                  )}
+                  {/* Badge sits on the 45° diagonal of the circle rather than a
+                      square's corner, so it hugs the edge instead of floating
+                      off it — offset = r - (r/√2) - badgeR, rounded. */}
+                  <View style={styles.logoEditBadge}>
+                    <Ionicons name="camera" size={14} color={chrome.onAccent} />
                   </View>
-                )}
-                {/* Badge sits on the 45° diagonal of the circle rather than a
-                    square's corner, so it hugs the edge instead of floating
-                    off it — offset = r - (r/√2) - badgeR, rounded. */}
-                <View style={styles.logoEditBadge}>
-                  <Ionicons name="camera" size={14} color={chrome.onAccent} />
-                </View>
-              </TouchableOpacity>
-              <Text style={styles.logoCaption}>
-                {providerData.logo ? 'Change Logo' : 'Add Logo'}
-              </Text>
-            </View>
+                </TouchableOpacity>
+                <Text style={styles.logoCaption}>
+                  {providerData.logo ? 'Change Logo' : 'Add Logo'}
+                </Text>
+              </View>
 
             {/* Business Name */}
-            <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
-              <LinearGradient
-                colors={[chrome.surf(0.3), 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <SectionHeader index={1} title="Business Details" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['businessName'] = e.nativeEvent.layout.y; }}
+                ref={registerField('businessName')}
               >
-                <RequiredLabel required styles={styles}>Business Name</RequiredLabel>
+                <RequiredLabel required missing={missingRequiredSet.has('Business name')} styles={styles}>Business Name</RequiredLabel>
                 {isEditMode ? (
                   <>
                     <View style={[styles.serviceCategoryChip, styles.serviceCategoryChipSelected, { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }]}>
@@ -3697,7 +3771,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 {providerData.providerService === 'OTHER' && (
                   <View
                     style={styles.customServiceInput}
-                    onLayout={(e) => { inputPositions.current['customService'] = e.nativeEvent.layout.y + 150; }}
+                    ref={registerField('customService')}
                   >
                     <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                       <TextInput
@@ -3719,14 +3793,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               {/* Location */}
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['location'] = e.nativeEvent.layout.y + 200; }}
+                ref={registerField('location')}
               >
-                <RequiredLabel required styles={styles}>Location</RequiredLabel>
-                {/* Structured picker for the cities we have area data for, plain
+                <RequiredLabel required missing={missingRequiredSet.has("Where you're based")} styles={styles}>Where you're based</RequiredLabel>
+                {/* providerData.location → geocoded and saved as location_text:
+                    the single place the business is based. Drives the Distance
+                    filter/sort, free-text search matching, and the location
+                    line on provider cards.
+
+                    The separate "cities you cover" multi-select (serviceLocations
+                    → providers.service_locations, feeding the client Search
+                    "City" filter) lives in Business Details › AboutYouScreen —
+                    not duplicated here.
+
+                    Structured picker for the cities we have area data for, plain
                     free text for everywhere else. Either way it writes the same
-                    plain string to `providerData.location` — the value
-                    providerRegistrationService geocodes and saves as
-                    location_text, so the data model is untouched. */}
+                    plain string to `providerData.location`. */}
                 <LocationPicker
                   value={providerData.location}
                   onChange={(location) =>
@@ -3740,26 +3822,34 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   styles={styles}
                 />
               </View>
-            </BlurView>
+
             </View>
 
-            </>)}
+            {/* ── 02 · About & Portfolio ── */}
+            <View
+              style={styles.docSection}
+              onLayout={(e) => onSectionLayout('about', e.nativeEvent.layout.y)}
+            >
+              <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>02</Text>
+              <Text style={styles.docHeading}>About & Portfolio</Text>
+              <Text style={styles.docSub}>Your introduction and the work clients see</Text>
 
-            {activeSection === 'about' && (<>
+              <TouchableOpacity
+                style={styles.docNextButton}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  goToSection('contact');
+                }}
+                activeOpacity={0.55}
+              >
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Contact</Text>
+                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+              </TouchableOpacity>
 
             {/* About Section */}
-            <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
-              <LinearGradient
-                colors={[chrome.surf(0.3), 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <SectionHeader index={1} title="About Your Business" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['about'] = e.nativeEvent.layout.y + 500; }}
+                ref={registerField('about')}
               >
                 <Text style={styles.inputLabel}>Description</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox]}>
@@ -3781,31 +3871,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['slotsText'] = e.nativeEvent.layout.y + 500; }}
+                ref={registerField('scheduleReleaseDay')}
               >
-                <Text style={styles.inputLabel}>Slots Message</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={providerData.slotsText}
-                    onChangeText={(text) =>
-                      setProviderData({ ...providerData, slotsText: text })
-                    }
-                    placeholder="e.g. Slots out every 15th of the month"
-                    placeholderTextColor={chrome.fg(0.4)}
-                    onFocus={() => handleInputFocus('slotsText')}
-                  />
-                </BlurView>
-                <Text style={styles.inputHint}>
-                  Shown as a short pill on your profile, next to the notification bell — your own words, not pulled from your schedule.
-                </Text>
-
                 {/* Same setting as ProviderAutomationsScreen's "Notify
                     followers on schedule release day" card — both read/write
                     providers.automation_settings.scheduleReleaseDay, so
                     changing it here or there updates the same value and each
-                    screen shows the current one on its own next load. */}
-                <View style={[styles.toggleRow, { marginTop: 16 }]}>
+                    screen shows the current one on its own next load. The
+                    client-facing profile's "Slots out every Nth of the
+                    month" pill is computed live from this same value —
+                    there's no separate free-text field to keep in sync
+                    anymore, so this is the only place this ever needs
+                    setting. */}
+                <View style={[styles.toggleRow]}>
                   <View style={styles.toggleInfo}>
                     <Text style={styles.toggleLabel}>Notify Followers on Release Day</Text>
                     <Text style={styles.toggleHint}>Clients who turned on notifications for your profile get a reminder on this day each month</Text>
@@ -3833,19 +3911,8 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </TouchableOpacity>
                 )}
               </View>
-            </BlurView>
-            </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
-            <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
-              <LinearGradient
-                colors={[chrome.surf(0.3), 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <SectionHeader index={2} title="Portfolio" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <Text style={styles.sectionSubtitle}>
                 Photos of your work, shown on your public profile in a two-column gallery.
               </Text>
@@ -3871,7 +3938,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
                   <TouchableOpacity
                     style={styles.portfolioAddTile}
-                    onPress={handleAddPortfolioImages}
+                    onPress={() => handleAddPortfolioImages()}
                     activeOpacity={0.8}
                     disabled={portfolioUploading || !providerDbId}
                   >
@@ -3890,30 +3957,38 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               {!providerDbId && !portfolioLoading && (
                 <Text style={styles.inputHint}>Save your profile once before adding portfolio photos.</Text>
               )}
-            </BlurView>
+
             </View>
 
-            </>)}
+            {/* ── 03 · Contact ── */}
+            <View
+              style={styles.docSection}
+              onLayout={(e) => onSectionLayout('contact', e.nativeEvent.layout.y)}
+            >
+              <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>03</Text>
+              <Text style={styles.docHeading}>Contact</Text>
+              <Text style={styles.docSub}>How clients reach you off-app</Text>
 
-            {activeSection === 'contact' && (<>
+              <TouchableOpacity
+                style={styles.docNextButton}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  goToSection('services');
+                }}
+                activeOpacity={0.55}
+              >
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Services</Text>
+                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+              </TouchableOpacity>
 
             {/* Contact Information */}
-            <View style={styles.cardShadowWrap}>
-            <BlurView intensity={50} tint={chrome.blurTint} style={styles.card}>
-              <LinearGradient
-                colors={[chrome.surf(0.3), 'transparent']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <SectionHeader index={1} title="Contact Information" accentColor={adaptiveAccentColor} styles={styles} withAlpha={withAlpha} />
               <Text style={styles.sectionSubtitle}>
                 What clients see on your public profile
               </Text>
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['phone'] = e.nativeEvent.layout.y + 700; }}
+                ref={registerField('phone')}
               >
                 <Text style={styles.inputLabel}>Phone Number</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
@@ -3931,7 +4006,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['contactEmail'] = e.nativeEvent.layout.y + 750; }}
+                ref={registerField('contactEmail')}
               >
                 <Text style={styles.inputLabel}>Contact Email</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
@@ -3951,7 +4026,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['instagram'] = e.nativeEvent.layout.y + 800; }}
+                ref={registerField('instagram')}
               >
                 <Text style={styles.inputLabel}>Instagram Handle</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
@@ -3972,7 +4047,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['website'] = e.nativeEvent.layout.y + 850; }}
+                ref={registerField('website')}
               >
                 <Text style={styles.inputLabel}>Website</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
@@ -3992,7 +4067,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
               <View
                 style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['externalBookingUrl'] = e.nativeEvent.layout.y + 875; }}
+                ref={registerField('externalBookingUrl')}
               >
                 <Text style={styles.inputLabel}>External Booking Link (optional)</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
@@ -4013,605 +4088,366 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </Text>
               </View>
 
-              <View
-                style={styles.inputGroup}
-                onLayout={(e) => { inputPositions.current['experience'] = e.nativeEvent.layout.y + 900; }}
-              >
-                <Text style={styles.inputLabel}>Years of Experience</Text>
-                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={providerData.yearsExperience}
-                    onChangeText={(text) => setProviderData({ ...providerData, yearsExperience: text.replace(/[^0-9]/g, '') })}
-                    placeholder="e.g., 5"
-                    placeholderTextColor={chrome.fg(0.4)}
-                    keyboardType="numeric"
-                    onFocus={() => handleInputFocus('experience')}
-                  />
-                </BlurView>
-              </View>
-            </BlurView>
+              {/* Years of Experience moved to Business Profile → Business
+                  Details → Business Info — it's an ongoing business fact a
+                  provider updates over time, not first-publish setup.
+                  providerData.yearsExperience still round-trips through this
+                  screen untouched (hero preview reads it) so an existing
+                  value is never lost by editing/saving here. */}
+
             </View>
 
-            </>)}
+            {/* ── 04 · Services ── */}
+            <View
+              style={styles.docSection}
+              onLayout={(e) => onSectionLayout('services', e.nativeEvent.layout.y)}
+            >
+              <Text style={[styles.docNum, styles.docNumLead, { color: adaptiveAccentColor }]}>04</Text>
+              <Text style={styles.docHeading}>Services</Text>
+              <Text style={styles.docSub}>What you offer, and what it costs</Text>
 
-            {activeSection === 'services' && (<>
+              <TouchableOpacity
+                style={styles.docNextButton}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  goToSection('policies');
+                }}
+                activeOpacity={0.55}
+              >
+                <Text style={[styles.docNextButtonText, { color: chromeText }]}>Next · Address Confirmation</Text>
+                <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
+              </TouchableOpacity>
 
             {/* Services Section */}
-            <View style={styles.servicesSection}>
-              <View style={styles.servicesSectionHeader}>
-                <Text style={styles.sectionTitleNoCard}>Your Services</Text>
-                <TouchableOpacity
-                  style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
-                  onPress={() => setShowCategoryModal(true)}
-                >
-                  <Text style={styles.addCategoryText}>+ Add Category</Text>
-                </TouchableOpacity>
-              </View>
-
-              {categoryNames.length === 0 ? (
-                <BlurView intensity={50} tint={chrome.blurTint} style={styles.emptyServicesCard}>
-                  <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
-                  <Text style={styles.emptyServicesText}>
-                    Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
-                    (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
-                  </Text>
-                </BlurView>
-              ) : (
-                <>
-                  <Text style={styles.categoryHint}>
-                    Tap to open · drag ☰ to reorder · long-press to edit or delete
-                  </Text>
-                  {/* Category Tabs */}
-                  <ScrollView
-                    ref={categoryScrollRef}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoryTabs}
-                    contentContainerStyle={[
-                      styles.categoryTabsContent,
-                      dragContentWidth != null && { minWidth: dragContentWidth },
-                    ]}
-                    scrollEnabled={!draggingCategory}
-                    onScroll={(e) => { categoryScrollXRef.current = e.nativeEvent.contentOffset.x; }}
-                    scrollEventThrottle={16}
-                    onContentSizeChange={(w) => {
-                      // The temporary absolute-positioned pill is excluded
-                      // from this measurement; retaining the pre-drag width
-                      // avoids replacing a correct value with that smaller one.
-                      if (!isCategoryDraggingRef.current) categoryContentWidthRef.current = w;
-                    }}
+              <View style={styles.servicesSection}>
+                <View style={styles.servicesSectionHeader}>
+                  <Text style={styles.sectionTitleNoCard}>Your Services</Text>
+                  <TouchableOpacity
+                    style={[styles.addCategoryButton, { backgroundColor: adaptiveAccentColor }]}
+                    onPress={() => setShowCategoryModal(true)}
                   >
-                    {categoryOrder.map((item, index) => {
-                      const isSel = selectedCategory === item;
-                      const isDragging = draggingCategory === item;
-                      const isSettling = settlingCategory === item;
-                      const layoutTransition = isDragging || isSettling
-                        ? {}
-                        : { layout: LinearTransition.duration(220) };
-                      const panResponder = getCategoryDragResponder(item);
-                      // While dragging, the pill is pulled out of the flex flow and
-                      // pinned (via `left`) to exactly where it was when the gesture
-                      // started — dragBaselineRef is frozen for the whole gesture, so
-                      // this position never moves. `translateX` then follows the
-                      // finger on top of that fixed point (raw gesture dx, plus
-                      // whatever the auto-scroll loop has scrolled the strip by —
-                      // since `left` stays fixed in content space, that scrolled
-                      // amount has to be added back so the pill still tracks the
-                      // finger's actual screen position while the content moves
-                      // underneath it). Because the pill no longer participates in
-                      // flex layout while dragging, reordering the array (which
-                      // reflows the OTHER pills via the Reanimated `layout` transition
-                      // below) can't yank its base position out from under it — that
-                      // fight between "flex position just jumped to the new slot" and
-                      // "translateX still assumes the old slot" was the source of the
-                      // snap/bounce-back glitch at every swap.
-                      const dragOrigin = isDragging ? dragBaselineRef.current[item] : undefined;
-                      // Dims every pill except the one actually being dragged, so it's
-                      // unambiguous which one is moving instead of it blending into a
-                      // row of equally-solid pills.
-                      const isOtherWhileDragging = !!draggingCategory && !isDragging;
-                      return (
-                        // Outer wrapper owns the real flex position (measured by
-                        // onLayout below) and the escape-to-absolute-position-while-
-                        // dragging behavior. It also carries the Reanimated `layout`
-                        // transition, which animates THIS pill's position whenever
-                        // categoryOrder changes and shifts it to a new index — that's
-                        // what makes a drop read as "concrete": the other pills visibly
-                        // slide open/closed to make room instead of instantly snapping,
-                        // which is what RN's own LayoutAnimation was supposed to do but
-                        // is known to silently no-op under the New Architecture.
-                        <ReAnimated.View
-                          key={item}
-                          // The dragged/just-dropped pill owns its position
-                          // directly. Every other pill keeps the normal
-                          // animated reflow that opens and closes the gap.
-                          {...layoutTransition}
-                          onLayout={(e) => {
-                            pillLayoutRef.current[item] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, width: e.nativeEvent.layout.width };
-                          }}
-                          style={[
-                            // `top` uses the pill's own measured y rather than a
-                            // hardcoded 0 — assuming every pill sits flush at the
-                            // row's top edge doesn't hold once padding/alignment on
-                            // the strip is accounted for, and being off even a few
-                            // px reads as the pill visibly popping out of the row
-                            // into its own floating card instead of sliding along it.
-                            isDragging && dragOrigin && {
-                              position: 'absolute',
-                              left: dragOrigin.x,
-                              top: dragOrigin.y,
-                              zIndex: 10,
-                            },
-                          ]}
-                        >
-                          {/* Inner view owns the raw finger-tracking transform (an RN
-                              Animated.Value driven imperatively from the gesture
-                              handlers) — kept separate from the outer Reanimated
-                              wrapper since the two animation systems don't share values. */}
-                          <Animated.View
-                            style={[
-                              {
-                                transform: [
-                                  { translateX: isDragging ? dragX : 0 },
-                                  {
-                                    scale: isDragging
-                                      ? dragLift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] })
-                                      : 1,
-                                  },
-                                ],
-                              },
-                              isOtherWhileDragging && styles.categoryTabDimmed,
-                            ]}
-                          >
-                          <TouchableOpacity
-                            style={[
-                              styles.categoryTab,
-                              isSel && styles.selectedCategoryTab,
-                            ]}
-                            activeOpacity={0.8}
-                            onPress={() => setSelectedCategory(item)}
-                            onLongPress={() => {
-                              Alert.alert(
-                                `“${item}”`,
-                                'What would you like to do?',
-                                [
-                                  { text: 'Cancel', style: 'cancel' },
-                                  { text: 'Edit (name & description)', onPress: () => { setEditingCategory(item); setShowEditCategoryModal(true); } },
-                                  ...(index > 0 ? [{ text: '← Move left', onPress: () => handleReorderCategory(item, -1) }] : []),
-                                  ...(index < categoryOrder.length - 1 ? [{ text: 'Move right →', onPress: () => handleReorderCategory(item, 1) }] : []),
-                                  { text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteCategory(item) },
-                                ]
-                              );
+                    <Text style={styles.addCategoryText}>+ Add Category</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {categoryNames.length === 0 ? (
+                  <BlurView intensity={50} tint={chrome.blurTint} style={styles.emptyServicesCard}>
+                    <Ionicons name="folder-open-outline" size={36} color={chrome.fg(0.35)} style={styles.emptyServicesEmoji} />
+                    <Text style={styles.emptyServicesText}>
+                      Tap <Text style={{ fontWeight: '700' }}>+ Add Category</Text> to pick what you offer
+                      (Hair, Nails, Lashes…). We'll suggest matching services, durations and tags for each one.
+                    </Text>
+                  </BlurView>
+                ) : (
+                  <>
+                    <Text style={styles.categoryHint}>
+                      Tap to open · drag ☰ to reorder · long-press to edit or delete
+                    </Text>
+                    {/* Category Tabs */}
+                    <ScrollView
+                      ref={categoryScrollRef}
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.categoryTabs}
+                      contentContainerStyle={[
+                        styles.categoryTabsContent,
+                        dragContentWidth != null && { minWidth: dragContentWidth },
+                      ]}
+                      scrollEnabled={!draggingCategory}
+                      onScroll={(e) => { categoryScrollXRef.current = e.nativeEvent.contentOffset.x; }}
+                      scrollEventThrottle={16}
+                      onContentSizeChange={(w) => {
+                        // The temporary absolute-positioned pill is excluded
+                        // from this measurement; retaining the pre-drag width
+                        // avoids replacing a correct value with that smaller one.
+                        if (!isCategoryDraggingRef.current) categoryContentWidthRef.current = w;
+                      }}
+                    >
+                      {categoryOrder.map((item, index) => {
+                        const isSel = selectedCategory === item;
+                        const isDragging = draggingCategory === item;
+                        const isSettling = settlingCategory === item;
+                        const layoutTransition = isDragging || isSettling
+                          ? {}
+                          : { layout: LinearTransition.duration(220) };
+                        const panResponder = getCategoryDragResponder(item);
+                        // While dragging, the pill is pulled out of the flex flow and
+                        // pinned (via `left`) to exactly where it was when the gesture
+                        // started — dragBaselineRef is frozen for the whole gesture, so
+                        // this position never moves. `translateX` then follows the
+                        // finger on top of that fixed point (raw gesture dx, plus
+                        // whatever the auto-scroll loop has scrolled the strip by —
+                        // since `left` stays fixed in content space, that scrolled
+                        // amount has to be added back so the pill still tracks the
+                        // finger's actual screen position while the content moves
+                        // underneath it). Because the pill no longer participates in
+                        // flex layout while dragging, reordering the array (which
+                        // reflows the OTHER pills via the Reanimated `layout` transition
+                        // below) can't yank its base position out from under it — that
+                        // fight between "flex position just jumped to the new slot" and
+                        // "translateX still assumes the old slot" was the source of the
+                        // snap/bounce-back glitch at every swap.
+                        const dragOrigin = isDragging ? dragBaselineRef.current[item] : undefined;
+                        // Dims every pill except the one actually being dragged, so it's
+                        // unambiguous which one is moving instead of it blending into a
+                        // row of equally-solid pills.
+                        const isOtherWhileDragging = !!draggingCategory && !isDragging;
+                        return (
+                          // Outer wrapper owns the real flex position (measured by
+                          // onLayout below) and the escape-to-absolute-position-while-
+                          // dragging behavior. It also carries the Reanimated `layout`
+                          // transition, which animates THIS pill's position whenever
+                          // categoryOrder changes and shifts it to a new index — that's
+                          // what makes a drop read as "concrete": the other pills visibly
+                          // slide open/closed to make room instead of instantly snapping,
+                          // which is what RN's own LayoutAnimation was supposed to do but
+                          // is known to silently no-op under the New Architecture.
+                          <ReAnimated.View
+                            key={item}
+                            // The dragged/just-dropped pill owns its position
+                            // directly. Every other pill keeps the normal
+                            // animated reflow that opens and closes the gap.
+                            {...layoutTransition}
+                            onLayout={(e) => {
+                              pillLayoutRef.current[item] = { x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y, width: e.nativeEvent.layout.width };
                             }}
+                            style={[
+                              // `top` uses the pill's own measured y rather than a
+                              // hardcoded 0 — assuming every pill sits flush at the
+                              // row's top edge doesn't hold once padding/alignment on
+                              // the strip is accounted for, and being off even a few
+                              // px reads as the pill visibly popping out of the row
+                              // into its own floating card instead of sliding along it.
+                              isDragging && dragOrigin && {
+                                position: 'absolute',
+                                left: dragOrigin.x,
+                                top: dragOrigin.y,
+                                zIndex: 10,
+                              },
+                            ]}
                           >
-                            <BlurView
-                              intensity={isDragging ? 40 : isSel ? 16 : 10}
-                              tint={chrome.blurTint}
+                            {/* Inner view owns the raw finger-tracking transform (an RN
+                                Animated.Value driven imperatively from the gesture
+                                handlers) — kept separate from the outer Reanimated
+                                wrapper since the two animation systems don't share values. */}
+                            <Animated.View
                               style={[
-                                styles.categoryTabBlur,
-                                isSel && styles.selectedCategoryTabBlur,
-                                // The blur/tint look here depends on what's actually
-                                // rendered behind the pill. Inline, that's the busy
-                                // strip of neighboring pills; but once dragging pulls
-                                // it out to float above wherever it started, its
-                                // neighbors have already slid away underneath it, so
-                                // the same translucent background reads as washed-out
-                                // instead of frosted glass. Bumping its own opacity
-                                // while dragging keeps it looking like a normal, solid
-                                // pill regardless of what's now behind it.
-                                isDragging && styles.draggingCategoryTabBlur,
+                                {
+                                  transform: [
+                                    { translateX: isDragging ? dragX : 0 },
+                                    {
+                                      scale: isDragging
+                                        ? dragLift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] })
+                                        : 1,
+                                    },
+                                  ],
+                                },
+                                isOtherWhileDragging && styles.categoryTabDimmed,
                               ]}
                             >
-                              <Text
+                            <TouchableOpacity
+                              style={[
+                                styles.categoryTab,
+                                isSel && styles.selectedCategoryTab,
+                              ]}
+                              activeOpacity={0.8}
+                              onPress={() => setSelectedCategory(item)}
+                              onLongPress={() => {
+                                Alert.alert(
+                                  `“${item}”`,
+                                  'What would you like to do?',
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: 'Edit (name & description)', onPress: () => { setEditingCategory(item); setShowEditCategoryModal(true); } },
+                                    ...(index > 0 ? [{ text: '← Move left', onPress: () => handleReorderCategory(item, -1) }] : []),
+                                    ...(index < categoryOrder.length - 1 ? [{ text: 'Move right →', onPress: () => handleReorderCategory(item, 1) }] : []),
+                                    { text: 'Delete', style: 'destructive' as const, onPress: () => handleDeleteCategory(item) },
+                                  ]
+                                );
+                              }}
+                            >
+                              <BlurView
+                                intensity={isDragging ? 40 : isSel ? 16 : 10}
+                                tint={chrome.blurTint}
                                 style={[
-                                  styles.categoryTabText,
-                                  isSel && styles.selectedCategoryTabText,
+                                  styles.categoryTabBlur,
+                                  isSel && styles.selectedCategoryTabBlur,
+                                  // The blur/tint look here depends on what's actually
+                                  // rendered behind the pill. Inline, that's the busy
+                                  // strip of neighboring pills; but once dragging pulls
+                                  // it out to float above wherever it started, its
+                                  // neighbors have already slid away underneath it, so
+                                  // the same translucent background reads as washed-out
+                                  // instead of frosted glass. Bumping its own opacity
+                                  // while dragging keeps it looking like a normal, solid
+                                  // pill regardless of what's now behind it.
+                                  isDragging && styles.draggingCategoryTabBlur,
                                 ]}
                               >
-                                {item}
-                              </Text>
-                              {/* Dedicated drag handle — the only part of the pill that
-                                  starts a reorder, so tapping, long-pressing and
-                                  side-scrolling the strip are never mistaken for a drag. */}
-                              <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}>
-                                <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
-                              </View>
-                            </BlurView>
-                          </TouchableOpacity>
-                          </Animated.View>
-                        </ReAnimated.View>
-                      );
-                    })}
-                  </ScrollView>
+                                <Text
+                                  style={[
+                                    styles.categoryTabText,
+                                    isSel && styles.selectedCategoryTabText,
+                                  ]}
+                                >
+                                  {item}
+                                </Text>
+                                {/* Dedicated drag handle — the only part of the pill that
+                                    starts a reorder, so tapping, long-pressing and
+                                    side-scrolling the strip are never mistaken for a drag. */}
+                                <View {...panResponder.panHandlers} style={styles.categoryDragHandle} hitSlop={{ top: 10, bottom: 10, left: 4, right: 10 }}>
+                                  <Ionicons name="reorder-three-outline" size={20} color={chrome.fg(0.4)} />
+                                </View>
+                              </BlurView>
+                            </TouchableOpacity>
+                            </Animated.View>
+                          </ReAnimated.View>
+                        );
+                      })}
+                    </ScrollView>
 
-                  {/* Selected category's client-facing description — same text
-                      shown under the tab on the public profile. */}
-                  {selectedCategory && providerData.categoryDescriptions?.[selectedCategory] ? (
-                    <Text style={styles.selectedCategoryDescription}>
-                      {providerData.categoryDescriptions[selectedCategory]}
-                    </Text>
-                  ) : null}
+                    {/* Selected category's client-facing description — same text
+                        shown under the tab on the public profile. */}
+                    {selectedCategory && providerData.categoryDescriptions?.[selectedCategory] ? (
+                      <Text style={styles.selectedCategoryDescription}>
+                        {providerData.categoryDescriptions[selectedCategory]}
+                      </Text>
+                    ) : null}
 
-                  {/* Services in Selected Category */}
-                  {selectedCategory && (
-                    <View style={styles.categoryServicesContainer}>
-                      {providerData.categories[selectedCategory]?.map((service) => (
-                        <View key={service.id} style={styles.serviceItemCard}>
-                          <BlurView intensity={50} tint={chrome.blurTint} style={styles.serviceCardBlur}>
-                            <LinearGradient
-                              colors={[chrome.surf(0.3), 'transparent']}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 0, y: 1 }}
-                              style={styles.cardHighlight}
-                            />
-                            <View style={styles.serviceItem}>
-                              {/* Service Image Carousel */}
-                              <View style={styles.serviceImageContainer}>
-                                {service.images.length > 0 ? (
-                                  <FlatList
-                                    data={service.images}
-                                    horizontal
-                                    pagingEnabled
-                                    showsHorizontalScrollIndicator={false}
-                                    keyExtractor={(_, index) => index.toString()}
-                                    renderItem={({ item }) => (
-                                      <Image
-                                        source={{ uri: item }}
-                                        style={styles.serviceImage}
-                                        resizeMode="cover"
-                                        fadeDuration={0}
-                                      />
-                                    )}
-                                  />
-                                ) : (
-                                  <View style={styles.serviceImagePlaceholder}>
-                                    <Ionicons name="camera-outline" size={24} color={chrome.fg(0.3)} />
-                                  </View>
-                                )}
-                                {service.images.length > 1 && (
-                                  <View style={styles.imageCountBadge}>
-                                    <Text style={styles.imageCountText}>
-                                      {service.images.length}
+                    {/* Services in Selected Category */}
+                    {selectedCategory && (
+                      <View style={styles.categoryServicesContainer}>
+                        {providerData.categories[selectedCategory]?.map((service) => (
+                          <View key={service.id} style={styles.serviceItemCard}>
+                            <BlurView intensity={50} tint={chrome.blurTint} style={styles.serviceCardBlur}>
+                              <LinearGradient
+                                colors={[chrome.surf(0.3), 'transparent']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={styles.cardHighlight}
+                              />
+                              <View style={styles.serviceItem}>
+                                {/* Service Image Carousel */}
+                                <View style={styles.serviceImageContainer}>
+                                  {service.images.length > 0 ? (
+                                    <FlatList
+                                      data={service.images}
+                                      horizontal
+                                      pagingEnabled
+                                      showsHorizontalScrollIndicator={false}
+                                      keyExtractor={(_, index) => index.toString()}
+                                      renderItem={({ item }) => (
+                                        <Image
+                                          source={{ uri: item }}
+                                          style={styles.serviceImage}
+                                          resizeMode="cover"
+                                          fadeDuration={0}
+                                        />
+                                      )}
+                                    />
+                                  ) : (
+                                    <View style={styles.serviceImagePlaceholder}>
+                                      <Ionicons name="camera-outline" size={24} color={chrome.fg(0.3)} />
+                                    </View>
+                                  )}
+                                  {service.images.length > 1 && (
+                                    <View style={styles.imageCountBadge}>
+                                      <Text style={styles.imageCountText}>
+                                        {service.images.length}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+
+                                <View style={styles.serviceInfo}>
+                                  <Text style={styles.serviceName}>{service.name}</Text>
+                                  <Text style={styles.serviceDescription} numberOfLines={2}>
+                                    {service.description}
+                                  </Text>
+                                  <View style={styles.serviceDetails}>
+                                    <Text style={styles.serviceDuration}>{service.duration}</Text>
+                                    <Text
+                                      style={[
+                                        styles.servicePrice,
+                                        { color: adaptiveAccentColor },
+                                      ]}
+                                    >
+                                      £{service.price}
                                     </Text>
                                   </View>
-                                )}
-                              </View>
+                                </View>
 
-                              <View style={styles.serviceInfo}>
-                                <Text style={styles.serviceName}>{service.name}</Text>
-                                <Text style={styles.serviceDescription} numberOfLines={2}>
-                                  {service.description}
-                                </Text>
-                                <View style={styles.serviceDetails}>
-                                  <Text style={styles.serviceDuration}>{service.duration}</Text>
-                                  <Text
-                                    style={[
-                                      styles.servicePrice,
-                                      { color: adaptiveAccentColor },
-                                    ]}
+                                <View style={styles.serviceActions}>
+                                  <TouchableOpacity
+                                    style={styles.editServiceButton}
+                                    onPress={() => {
+                                      setCurrentCategory(selectedCategory);
+                                      setEditingService(service);
+                                      setIsEditingService(true);
+                                      setShowServiceModal(true);
+                                    }}
                                   >
-                                    £{service.price}
-                                  </Text>
+                                    <Text style={styles.editServiceText}>✎</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.deleteServiceButton}
+                                    onPress={() =>
+                                      handleDeleteService(selectedCategory, service.id)
+                                    }
+                                  >
+                                    <Text style={styles.deleteServiceText}>×</Text>
+                                  </TouchableOpacity>
                                 </View>
                               </View>
-
-                              <View style={styles.serviceActions}>
-                                <TouchableOpacity
-                                  style={styles.editServiceButton}
-                                  onPress={() => {
-                                    setCurrentCategory(selectedCategory);
-                                    setEditingService(service);
-                                    setIsEditingService(true);
-                                    setShowServiceModal(true);
-                                  }}
-                                >
-                                  <Text style={styles.editServiceText}>✎</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.deleteServiceButton}
-                                  onPress={() =>
-                                    handleDeleteService(selectedCategory, service.id)
-                                  }
-                                >
-                                  <Text style={styles.deleteServiceText}>×</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          </BlurView>
-                        </View>
-                      ))}
-
-                      {/* Add Service Button — opens the template picker first */}
-                      <TouchableOpacity
-                        style={styles.addServiceButton}
-                        onPress={() => {
-                          setCurrentCategory(selectedCategory);
-                          setShowTemplatePicker(true);
-                        }}
-                        activeOpacity={0.85}
-                      >
-                        <BlurView intensity={30} tint={chrome.blurTint} style={styles.addServiceBlur}>
-                          <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
-                            + Add Service to {selectedCategory}
-                          </Text>
-                        </BlurView>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-
-            </>)}
-
-            {activeSection === 'policies' && (
-              <BlurView intensity={50} tint={chrome.blurTint} style={styles.policiesCard}>
-                <LinearGradient
-                  colors={[chrome.surf(0.3), 'transparent']}
-                  start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-                  style={styles.cardHighlight}
-                />
-
-                {/* Cancellation */}
-                <Text style={styles.policySectionTitle}>Cancellation</Text>
-                <Text style={styles.policyLabel}>NOTICE REQUIRED</Text>
-                <View style={styles.pillRow}>
-                  {(['none', '24h', '48h', '72h'] as CancelNotice[]).map(opt => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[styles.policyPill, policies.cancelNotice === opt && { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => setPolicy('cancelNotice', opt)}
-                    >
-                      <Text style={[styles.policyPillText, policies.cancelNotice === opt && { color: '#fff' }]}>
-                        {opt === 'none' ? 'None' : opt}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={[styles.policyLabel, { marginTop: 12 }]}>IF CANCELLED LATE</Text>
-                <View style={styles.pillRow}>
-                  {([
-                    { v: 'none' as CancelPenalty,    l: 'No penalty' },
-                    { v: 'deposit' as CancelPenalty, l: 'Deposit kept' },
-                    { v: 'full' as CancelPenalty,    l: 'Full charge' },
-                  ]).map(({ v, l }) => (
-                    <TouchableOpacity
-                      key={v}
-                      style={[styles.policyPill, policies.cancelPenalty === v && { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => setPolicy('cancelPenalty', v)}
-                    >
-                      <Text style={[styles.policyPillText, policies.cancelPenalty === v && { color: '#fff' }]}>{l}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.policyNote}
-                  placeholder="Note (e.g. cancellations via message only)"
-                  placeholderTextColor={chrome.fg(0.3)}
-                  value={policies.cancelNote}
-                  onChangeText={v => setPolicy('cancelNote', v)}
-                />
-
-                <View style={styles.policySep} />
-
-                {/* Rescheduling */}
-                <Text style={styles.policySectionTitle}>Rescheduling</Text>
-                <Text style={styles.policyLabel}>NOTICE REQUIRED</Text>
-                <View style={styles.pillRow}>
-                  {([
-                    { v: 'same_day' as RescheduleNotice, l: 'Same day' },
-                    { v: '24h' as RescheduleNotice,      l: '24h' },
-                    { v: '48h' as RescheduleNotice,      l: '48h' },
-                    { v: '72h' as RescheduleNotice,      l: '72h' },
-                  ]).map(({ v, l }) => (
-                    <TouchableOpacity
-                      key={v}
-                      style={[styles.policyPill, policies.rescheduleNotice === v && { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => setPolicy('rescheduleNotice', v)}
-                    >
-                      <Text style={[styles.policyPillText, policies.rescheduleNotice === v && { color: '#fff' }]}>{l}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={[styles.policyLabel, { marginTop: 12 }]}>MAX RESCHEDULES PER BOOKING</Text>
-                <View style={styles.pillRow}>
-                  {(['1', '2', 'unlimited'] as MaxReschedules[]).map(opt => (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[styles.policyPill, policies.maxReschedules === opt && { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => setPolicy('maxReschedules', opt)}
-                    >
-                      <Text style={[styles.policyPillText, policies.maxReschedules === opt && { color: '#fff' }]}>
-                        {opt === 'unlimited' ? 'Unlimited' : opt}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.policyNote}
-                  placeholder="Note (optional)"
-                  placeholderTextColor={chrome.fg(0.3)}
-                  value={policies.rescheduleNote}
-                  onChangeText={v => setPolicy('rescheduleNote', v)}
-                />
-
-                <View style={styles.policySep} />
-
-                {/* Deposit */}
-                <Text style={styles.policySectionTitle}>Deposit</Text>
-                <View style={styles.depositHeader}>
-                  <Text style={styles.policyLabel}>REQUIRE DEPOSIT</Text>
-                  <Switch
-                    value={policies.depositRequired}
-                    onValueChange={v => setPolicy('depositRequired', v)}
-                    trackColor={{ false: chrome.fg(0.12), true: adaptiveAccentColor }}
-                    thumbColor="#fff"
-                  />
-                </View>
-                {policies.depositRequired && (
-                  <>
-                    <View style={styles.depositRow}>
-                      <View style={styles.pillRow}>
-                        {(['percent', 'fixed'] as DepositType[]).map(opt => (
-                          <TouchableOpacity
-                            key={opt}
-                            style={[styles.policyPill, policies.depositType === opt && { backgroundColor: adaptiveAccentColor }]}
-                            onPress={() => setPolicy('depositType', opt)}
-                          >
-                            <Text style={[styles.policyPillText, policies.depositType === opt && { color: '#fff' }]}>
-                              {opt === 'percent' ? '%' : '£'}
-                            </Text>
-                          </TouchableOpacity>
+                            </BlurView>
+                          </View>
                         ))}
+
+                        {/* Add Service Button — opens the template picker first */}
+                        <TouchableOpacity
+                          style={styles.addServiceButton}
+                          onPress={() => {
+                            setCurrentCategory(selectedCategory);
+                            setShowTemplatePicker(true);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <BlurView intensity={30} tint={chrome.blurTint} style={styles.addServiceBlur}>
+                            <Text style={[styles.addServiceText, { color: adaptiveAccentColor }]}>
+                              + Add Service to {selectedCategory}
+                            </Text>
+                          </BlurView>
+                        </TouchableOpacity>
                       </View>
-                      <TextInput
-                        style={styles.depositInput}
-                        placeholder={policies.depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
-                        placeholderTextColor={chrome.fg(0.3)}
-                        value={policies.depositAmount}
-                        onChangeText={v => setPolicy('depositAmount', v)}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    <TextInput
-                      style={styles.policyNote}
-                      placeholder="Note (optional)"
-                      placeholderTextColor={chrome.fg(0.3)}
-                      value={policies.depositNote}
-                      onChangeText={v => setPolicy('depositNote', v)}
-                    />
-                    <View style={styles.depositHeader}>
-                      <View style={{ flex: 1, paddingRight: 12 }}>
-                        <Text style={styles.policyLabel}>DEPOSIT ONLY</Text>
-                        <Text style={styles.policySubLabel}>
-                          Clients must pay the deposit — they won't be able to choose to pay in full.
-                        </Text>
-                      </View>
-                      <Switch
-                        value={policies.depositOnly}
-                        onValueChange={v => setPolicy('depositOnly', v)}
-                        trackColor={{ false: chrome.fg(0.12), true: adaptiveAccentColor }}
-                        thumbColor="#fff"
-                      />
-                    </View>
+                    )}
                   </>
                 )}
+              </View>
 
-                <View style={styles.policySep} />
+            </View>
 
-                {/* No-show */}
-                <Text style={styles.policySectionTitle}>No-show</Text>
-                <Text style={styles.policyLabel}>ACTION</Text>
-                <View style={styles.pillRow}>
-                  {([
-                    { v: 'none' as NoShowAction,           l: 'No action' },
-                    { v: 'warn' as NoShowAction,           l: 'Warn client' },
-                    { v: 'charge_deposit' as NoShowAction, l: 'Charge deposit' },
-                    { v: 'charge_full' as NoShowAction,    l: 'Charge in full' },
-                  ]).map(({ v, l }) => (
-                    <TouchableOpacity
-                      key={v}
-                      style={[styles.policyPill, policies.noShowAction === v && { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => setPolicy('noShowAction', v)}
-                    >
-                      <Text style={[styles.policyPillText, policies.noShowAction === v && { color: '#fff' }]}>{l}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TextInput
-                  style={styles.policyNote}
-                  placeholder="Note (optional)"
-                  placeholderTextColor={chrome.fg(0.3)}
-                  value={policies.noShowNote}
-                  onChangeText={v => setPolicy('noShowNote', v)}
-                />
+            {/* ── 05 · Policies ── Full-bleed: no card wrapper, the
+                typographic break is the only separator. */}
+            <View
+              style={[styles.docSection, styles.docSectionLast]}
+              onLayout={(e) => onSectionLayout('policies', e.nativeEvent.layout.y)}
+            >
+              <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>05</Text>
+              <Text style={styles.docHeading}>Address Confirmation</Text>
+              <Text style={styles.docSub}>Business setup, address release</Text>
 
-                <View style={styles.policySep} />
-
-                {/* Booking instructions — stamped onto every new booking */}
-                <Text style={styles.policySectionTitle}>Booking Instructions</Text>
-                <Text style={styles.policyLabel}>SHOWN TO CLIENTS ON EVERY BOOKING (OPTIONAL)</Text>
-                <TextInput
-                  style={styles.policyNote}
-                  placeholder='e.g. "Please arrive 10 minutes early", parking info…'
-                  placeholderTextColor={chrome.fg(0.3)}
-                  value={policies.bookingInstructions}
-                  onChangeText={v => setPolicy('bookingInstructions', v)}
-                  multiline
-                />
-
-                <View style={styles.policySep} />
-
-                {/* Detailed policy image — a photo clients can pop open from
-                    their view of this profile, for anything too specific
-                    for the pill options above (a full house-rules sheet, a
-                    consent form, etc). */}
-                <Text style={styles.policySectionTitle}>Detailed Policy Image</Text>
-                <Text style={styles.policyLabel}>
-                  OPTIONAL — SHOWN AS A POP-UP ON YOUR PROFILE
-                </Text>
-                <View style={styles.portfolioGrid}>
-                  {policies.policyImageUrl ? (
-                    <View style={styles.portfolioThumbWrap}>
-                      <TouchableOpacity
-                        onPress={handlePickPolicyImage}
-                        disabled={policyImageUploading}
-                        activeOpacity={0.7}
-                      >
-                        <Image
-                          source={{ uri: policies.policyImageUrl }}
-                          style={styles.portfolioThumb}
-                          fadeDuration={0}
-                        />
-                        {policyImageUploading && (
-                          <View style={styles.portfolioThumbUploading}>
-                            <ActivityIndicator size="small" color="#fff" />
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.portfolioRemoveBtn}
-                        onPress={handleRemovePolicyImage}
-                        disabled={policyImageUploading}
-                      >
-                        <Text style={styles.portfolioRemoveText}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                  {!policies.policyImageUrl && (
-                    <TouchableOpacity
-                      style={styles.portfolioAddTile}
-                      onPress={handlePickPolicyImage}
-                      disabled={policyImageUploading}
-                    >
-                      {policyImageUploading ? (
-                        <ActivityIndicator size="small" />
-                      ) : (
-                        <>
-                          <Text style={styles.portfolioAddPlus}>+</Text>
-                          <Text style={styles.portfolioAddText}>Add Image</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-                {policies.policyImageUrl ? (
-                  <TouchableOpacity
-                    onPress={handlePickPolicyImage}
-                    disabled={policyImageUploading}
-                    style={{ marginTop: 8 }}
-                  >
-                    <Text style={[styles.policyLabel, { color: adaptiveAccentColor }]}>
-                      {policyImageUploading ? 'UPLOADING…' : 'REPLACE PHOTO'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {/* ── Business Setup ── */}
-                <View style={styles.policySep} />
-                <Text style={styles.policySectionTitle}>Business Setup</Text>
-                <Text style={styles.policyLabel}>TYPE</Text>
+              {/* Cancellations, reschedules, deposits, no-shows, refund policy,
+                  booking instructions and the detailed policy image all moved to
+                  Business Profile → Business Details → Policies — they're
+                  ongoing business policy, not first-publish setup, and now live
+                  alongside the rest of the app's reschedule/cancellation logic
+                  instead of inside this one-shot registration document. What
+                  stays here (business type, address, address release,
+                  accessibility) is required or required-adjacent for first
+                  publish, so a new provider is still asked for it during
+                  signup. */}
+              <Text style={styles.policySectionTitle}>Business Setup</Text>
+              <Text style={styles.policyLabel}>TYPE</Text>
                 {/* Locked post-first-save: business_type decides whether a
                     private address is required (mobile is exempt) and drives
                     address-release timing options below — changing it later
@@ -4648,26 +4484,81 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   <Text style={styles.inputHint}>Set at sign-up — contact support to change your business type.</Text>
                 )}
 
-                <>
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>
-                    FULL ADDRESS <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <Text style={styles.addressHint}>
-                    {providerData.businessType === 'mobile'
-                      ? "Private — never shown to clients. You travel to them, so this is just used to verify your account and keep your records accurate. Include your postcode."
-                      : providerData.businessType === 'home_based'
-                      ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
-                      : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
-                  </Text>
-                  <AddressPicker
-                    value={providerData.fullAddress}
-                    onChange={({ address, coordinates }) => setProviderData(prev => ({
-                      ...prev,
-                      fullAddress: address,
-                      fullAddressCoordinates: coordinates,
-                    }))}
-                    accentColor={adaptiveAccentColor}
-                  />
+              <View style={[styles.docFieldRow, { marginTop: 14 }]}>
+                <Text style={styles.policyLabel}>
+                  FULL ADDRESS <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                {missingRequiredSet.has('Full address') && (
+                  <Text style={styles.docFieldFlag}>Required</Text>
+                )}
+              </View>
+              <Text style={styles.addressHint}>
+                {providerData.businessType === 'mobile'
+                  ? "Private — never shown to clients. You travel to them, so this is just used to verify your account and keep your records accurate. Include your postcode."
+                  : providerData.businessType === 'home_based'
+                  ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
+                  : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
+              </Text>
+              <AddressPicker
+                value={providerData.fullAddress}
+                onChange={({ address, coordinates }) => setProviderData(prev => ({
+                  ...prev,
+                  fullAddress: address,
+                  fullAddressCoordinates: coordinates,
+                }))}
+                accentColor={adaptiveAccentColor}
+              />
+
+              {/* Address/venue photos — stored as portfolio_items tagged
+                  category: 'venue', so they appear under Portfolio (filtered
+                  into their own section there) instead of a separate field.
+                  Unlike the address text above, these are always public on
+                  the profile regardless of business type or address-release
+                  policy — the hint says so explicitly rather than implying
+                  the same privacy the address field gets. */}
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS PHOTOS</Text>
+              <Text style={styles.addressHint}>
+                Photos of your venue or workspace, shown publicly under Portfolio — clients booking mobile or home-based providers often look for these before choosing who to book, so adding some can help boost bookings.
+              </Text>
+              <View style={styles.portfolioGrid}>
+                {venuePhotos.map(item => (
+                  <View key={item.id} style={styles.portfolioThumbWrap}>
+                    <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
+                    <TouchableOpacity
+                      style={styles.portfolioRemoveBtn}
+                      onPress={() => handleRemovePortfolioItem(item)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.portfolioRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity
+                  style={styles.portfolioAddTile}
+                  onPress={async () => {
+                    setVenuePhotoUploading(true);
+                    try {
+                      await handleAddPortfolioImages('venue');
+                    } finally {
+                      setVenuePhotoUploading(false);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                  disabled={venuePhotoUploading || portfolioUploading || !providerDbId}
+                >
+                  {venuePhotoUploading ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <>
+                      <Text style={styles.portfolioAddPlus}>+</Text>
+                      <Text style={styles.portfolioAddText}>Add Photos</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {!providerDbId && (
+                <Text style={styles.inputHint}>Save your profile once before adding address photos.</Text>
+              )}
 
                   {providerData.businessType !== 'mobile' && (
                     <>
@@ -4717,185 +4608,157 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     </>
                   )}
 
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>WHERE YOU WORK</Text>
-                  <Text style={styles.addressHint}>Which cities do you cover? Shown to clients as a search filter.</Text>
-                  <CityMultiSelect
-                    selected={providerData.serviceLocations}
-                    onChange={(next) => setProviderData(prev => ({ ...prev, serviceLocations: next }))}
-                    palette={isDarkMode ? darkTheme : lightTheme}
-                    placeholder="Select the cities you cover"
-                  />
+              {/* WHERE YOU WORK (cities covered) moved up to 01 · Identity,
+                  alongside "Where you're based" — the two location questions
+                  belong together rather than four sections apart. */}
 
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>PRICE RANGE</Text>
-                  <Text style={styles.addressHint}>Where do most of your services sit? Shown to clients as a price filter.</Text>
-                  <View style={styles.pillRow}>
-                    {([
-                      { v: 'budget'  as const, l: '£15–£35' },
-                      { v: 'mid'     as const, l: '£35–£65' },
-                      { v: 'premium' as const, l: '£65–£100' },
-                      { v: 'luxury'  as const, l: '£100+' },
-                    ]).map(({ v, l }) => (
-                      <TouchableOpacity
-                        key={v}
-                        style={[styles.policyPill, providerData.priceRange === v && { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => setProviderData(prev => ({ ...prev, priceRange: prev.priceRange === v ? '' : v }))}
-                      >
-                        <Text style={[styles.policyPillText, providerData.priceRange === v && { color: '#fff' }]}>{l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+              {/* PRICE RANGE moved out to Services & Pricing (ServicesPricingScreen) —
+                  same field, same providers.price_tier column, alongside the
+                  rest of the "how you actually work" questions rather than
+                  the first-publish document. `priceRange` remains on
+                  providerData purely so an existing value round-trips
+                  untouched through this screen's save. */}
 
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>WHO YOU WORK WITH</Text>
-                  <View style={styles.pillRow}>
-                    {([
-                      { v: 'solo'       as const, l: 'Just me' },
-                      { v: 'small_team' as const, l: '2–5 people' },
-                      { v: 'large_team' as const, l: '6+ people' },
-                    ]).map(({ v, l }) => (
-                      <TouchableOpacity
-                        key={v}
-                        style={[styles.policyPill, providerData.teamSize === v && { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => setProviderData(prev => ({ ...prev, teamSize: prev.teamSize === v ? '' : v }))}
-                      >
-                        <Text style={[styles.policyPillText, providerData.teamSize === v && { color: '#fff' }]}>{l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>LANGUAGES SPOKEN</Text>
-                  <View style={styles.pillRow}>
-                    {['English', 'Urdu', 'Punjabi', 'Polish', 'Arabic', 'French', 'Spanish', 'BSL', 'Other'].map(lang => (
-                      <TouchableOpacity
-                        key={lang}
-                        style={[styles.policyPill, providerData.languagesSpoken.includes(lang) && { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => setProviderData(prev => ({
-                          ...prev,
-                          languagesSpoken: prev.languagesSpoken.includes(lang)
-                            ? prev.languagesSpoken.filter(l => l !== lang)
-                            : [...prev.languagesSpoken, lang],
-                        }))}
-                      >
-                        <Text style={[styles.policyPillText, providerData.languagesSpoken.includes(lang) && { color: '#fff' }]}>{lang}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>ACCESSIBILITY</Text>
-                  <Text style={styles.addressHint}>Anything clients should know before booking (optional)</Text>
-                  <TextInput
-                    style={styles.policyNote}
-                    value={providerData.accessibilityNotes}
-                    onChangeText={(v) => setProviderData(prev => ({ ...prev, accessibilityNotes: v }))}
-                    placeholder="e.g. Step-free access, accessible parking..."
-                    placeholderTextColor={chrome.fg(0.3)}
-                    multiline
-                  />
-
-                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>PREFERRED PAYMENT TYPE</Text>
-                  <View style={styles.pillRow}>
-                    {([
-                      { v: 'card' as const, l: 'Card' },
-                      { v: 'cash' as const, l: 'Cash' },
-                      { v: 'bank_transfer' as const, l: 'Bank transfer' },
-                    ]).map(({ v, l }) => (
-                      <TouchableOpacity
-                        key={v}
-                        style={[styles.policyPill, providerData.preferredPaymentMethods.includes(v) && { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => setProviderData(prev => ({
-                          ...prev,
-                          preferredPaymentMethods: prev.preferredPaymentMethods.includes(v)
-                            ? prev.preferredPaymentMethods.filter(m => m !== v)
-                            : [...prev.preferredPaymentMethods, v],
-                        }))}
-                      >
-                        <Text style={[styles.policyPillText, providerData.preferredPaymentMethods.includes(v) && { color: '#fff' }]}>{l}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                </>
-              </BlurView>
-            )}
-
-          </ScrollView>
-
-          {/* Publish — the hub's single commit action, and the only thing on
-              this screen that writes to the server. Pinned below the scroll
-              content as permanent bottom chrome, so it's always reachable
-              without scrolling to the end of the hub. Hidden inside a section
-              editor — a section's Back returns to the hub without saving, so
-              offering Publish there would imply the section saves on its own. */}
-          {activeSection === null && (
-            <View style={[styles.pinnedBar, { paddingBottom: pinnedBarBottomPad }]}>
-              <TouchableOpacity
-                style={[
-                  styles.pinnedBarButton,
-                  { backgroundColor: adaptiveAccentColor },
-                  isSubmitting && styles.pinnedBarButtonDisabled,
-                ]}
-                onPress={handleSubmit}
-                activeOpacity={0.85}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color={chrome.onAccent} />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark" size={18} color={chrome.onAccent} />
-                    <Text style={[styles.pinnedBarButtonText, { color: chrome.onAccent }]}>
-                      Save &amp; Publish
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Section editor footer — steps sequentially through the sections
-              for working straight through the profile. The header's Back is a
-              different exit (straight to the hub) and stays as it was. */}
-          {activeSection !== null && (
-            <View style={[styles.pinnedBar, { paddingBottom: pinnedBarBottomPad }]}>
-              {/* Slim position indicator — one dot per section. Deliberately
-                  lighter than the full progress track this replaced: it
-                  answers "where am I" without re-implying a forced order. */}
-              <View style={styles.sectionDots}>
-                {EDITOR_SECTIONS.map((s, i) => (
-                  <View
-                    key={s.key}
-                    style={[
-                      styles.sectionDot,
-                      i === sectionIndex
-                        ? { backgroundColor: adaptiveAccentColor, width: 16 }
-                        : { backgroundColor: chrome.fg(0.2) },
-                    ]}
-                  />
-                ))}
+              {/* Same '|'-delimited accessibility_notes column and fixed
+                  ACCESSIBILITY_OPTS vocabulary as AboutYouScreen.tsx (Business
+                  Details) — this used to be a free-text field here, which
+                  wrote unparseable prose into a column the other screen reads
+                  as pipe-joined chips. Converted to the same picker so both
+                  screens edit the same data the same way. */}
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ACCESSIBILITY</Text>
+              <Text style={styles.addressHint}>Anything clients should know before booking (optional)</Text>
+              <View style={styles.pillRow}>
+                {ACCESSIBILITY_OPTS.map((opt) => {
+                  const selected = providerData.accessibilityNotes.split('|').filter(Boolean).includes(opt);
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.policyPill, selected && { backgroundColor: adaptiveAccentColor }]}
+                      onPress={() => setProviderData(prev => {
+                        const current = prev.accessibilityNotes.split('|').filter(Boolean);
+                        const next = current.includes(opt)
+                          ? current.filter(v => v !== opt)
+                          : [...current, opt];
+                        return { ...prev, accessibilityNotes: next.join('|') };
+                      })}
+                    >
+                      <Text style={[styles.policyPillText, selected && { color: '#fff' }]}>{opt}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <View style={styles.sectionFooterRow}>
-                {!isFirstSection && (
-                  <TouchableOpacity
-                    style={styles.sectionBackButton}
-                    onPress={goToPreviousSection}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.sectionBackButtonText}>Back</Text>
-                  </TouchableOpacity>
-                )}
+              {/* PREFERRED PAYMENT TYPE, WHO YOU WORK WITH and LANGUAGES SPOKEN
+                  moved out of registration to Business Details — payment/
+                  clientele now live on ServicesPricingScreen and languages on
+                  AboutYouScreen. They're standing business facts, not
+                  things to decide while first publishing a profile.
+                  `preferredPaymentMethods`, `teamSize` and `languagesSpoken`
+                  remain on providerData so existing values round-trip
+                  untouched; registration just no longer edits them. */}
 
+              {/* ── End of document ── The terms gate and closing note used to
+                  live on the hub; with the hub gone they belong at the natural
+                  end of the scroll, immediately before the reader reaches
+                  Publish. */}
+              {!isEditMode && (
+                <View style={styles.termsBox}>
                 <TouchableOpacity
-                  style={[styles.sectionNextButton, { backgroundColor: adaptiveAccentColor }]}
-                  onPress={goToNextSection}
-                  activeOpacity={0.85}
+                  style={styles.termsRow}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setTermsAccepted(prev => !prev);
+                  }}
                 >
-                  <Text style={[styles.sectionNextButtonText, { color: chrome.onAccent }]}>
-                    {isLastSection ? 'Finish' : 'Next'}
+                  <View
+                    style={[
+                      styles.termsCheckbox,
+                      termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                    ]}
+                  >
+                    {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
+                  </View>
+                  <Text style={styles.termsRowText}>
+                    I agree to the{' '}
+                    <Text
+                      style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
+                      onPress={() => setShowTermsModal(true)}
+                    >
+                      Terms &amp; Conditions
+                    </Text>
+                  </Text>
+                </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.docEnd}>
+                <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
+                <Text style={styles.reviewFootnote}>
+                  Publishing saves your profile and policies. You can come back and
+                  change any of this at any time.
+                </Text>
+                {/* The acceptance checkbox above only shows on first
+                    publish (!isEditMode) — this plain link stays visible
+                    every time, so an existing provider editing their
+                    profile can still reach CERVICED's Terms & Conditions
+                    from this screen, not just at signup. */}
+                <TouchableOpacity
+                  onPress={() => setShowTermsModal(true)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ marginTop: 14 }}
+                >
+                  <Text style={[styles.termsRowLink, { color: adaptiveAccentColor, textAlign: 'center' }]}>
+                    CERVICED Terms & Conditions
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
-          )}
+
+            </View>
+          </ScrollView>
+
+          {/* Publish — the document's single commit action, and the only
+              thing on this screen that writes to the server. Now permanently
+              visible: with no hub/section split there is no state in which
+              saving would be ambiguous. The missing-required roll-up sits
+              directly above it (each offending field also flags itself
+              inline), so the reader sees what blocks publishing at the moment
+              they reach the button. */}
+          <View style={[styles.pinnedBar, { paddingBottom: pinnedBarBottomPad }]}>
+            {missingRequired.length > 0 && (
+              <View style={styles.publishWarningRow}>
+                <Ionicons name="alert-circle-outline" size={15} color={REVIEW_WARN_COLOR} />
+                <Text style={styles.publishWarningText} numberOfLines={2}>
+                  {missingRequired.length === 1
+                    ? `${missingRequired[0]} is still needed before you can publish.`
+                    : `${missingRequired.join(', ')} are still needed before you can publish.`}
+                </Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.pinnedBarButton,
+                { backgroundColor: adaptiveAccentColor },
+                isSubmitting && styles.pinnedBarButtonDisabled,
+              ]}
+              onPress={handleSubmit}
+              activeOpacity={0.85}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color={chrome.onAccent} />
+              ) : (
+                <>
+                  <Ionicons name="checkmark" size={18} color={chrome.onAccent} />
+                  <Text style={[styles.pinnedBarButtonText, { color: chrome.onAccent }]}>
+                    Save &amp; Publish
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+          </View>
 
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
@@ -4916,7 +4779,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             <TermsScreen navigation={{ goBack: () => setShowTermsModal(false) }} />
           </Modal>
         </SafeAreaView>
-      </ThemedBackground>
+      </View>
     </SafeAreaProvider>
   );
 };
@@ -4949,8 +4812,20 @@ const fgFor = (isDark: boolean) => (alpha: number) =>
 // pasted on top rather than a surface belonging to the same palette. Dark mode
 // is unchanged — its ramp is a white overlay at low alpha, which is already a
 // tint of the backdrop rather than an opaque fill.
+// The dark multiplier was 0.34, which kept fills honest but left inputs and
+// pills reading flat — barely separated from the backdrop. 0.52 lifts them to
+// a legible surface while staying a *tint* of the backdrop rather than an
+// opaque panel, so they still belong to the palette instead of sitting on it.
+// Light mode keeps the warm off-white base for the same reason: brighter, but
+// never pure white.
 const surfFor = (isDark: boolean) => (alpha: number) =>
-  isDark ? withAlpha('#FFFFFF', alpha * 0.34) : withAlpha('#FDFBF8', alpha);
+  isDark ? withAlpha('#FFFFFF', alpha * 0.52) : withAlpha('#FDFBF8', alpha);
+
+/** Hairline edge for input/pill surfaces. A raised fill alone still reads soft;
+ *  a defined border is what makes it look crisp rather than just lighter. Warm
+ *  in light mode to match the cream backdrop, a white tint in dark mode. */
+const edgeFor = (isDark: boolean) => (alpha: number) =>
+  isDark ? withAlpha('#FFFFFF', alpha) : withAlpha('#8A7361', alpha);
 
 /** The rose tint-shadow used across the provider surfaces (confirmed in
  *  ProviderMyProfileScreen). A flat black shadow greys the warm palette;
@@ -4976,6 +4851,7 @@ const makeStyles = (isDark: boolean) => {
   const P = isDark ? darkTheme : lightTheme;
   const fg = fgFor(isDark);
   const surf = surfFor(isDark);
+  const edge = edgeFor(isDark);
   // Accent-tinted chrome for the cohesive button/card family. The provider's
   // own accent varies per profile, so these are derived from the app palette's
   // accent (the chrome accent) rather than the provider's — the provider's
@@ -5133,28 +5009,163 @@ const makeStyles = (isDark: boolean) => {
     marginTop: 10,
   },
 
-  // ── Hub chrome ────────────────────────────────────────────────────────
-  // Per-section completion line on each hub card, and the pinned Publish bar.
-  hubStatusText: {
+  // ── Continuous document ───────────────────────────────────────────────
+  // Direction B: the whole profile is one scroll. Structure is carried by
+  // oversized numerals and typographic breaks rather than bordered cards, so
+  // there is deliberately no border/blur/shadow on a section itself.
+  docApp: {
+    flex: 1,
+    position: 'relative',
+  },
+  // Reading-position rail. Pinned over the scroll (never scrolls with it) and
+  // pointerEvents="none" at the call site — it is an indicator, not a control.
+  docScrollspy: {
+    position: 'absolute',
+    right: 6,
+    top: 24,
+    bottom: 24,
+    width: 3,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    zIndex: 5,
+  },
+  docSpySeg: {
+    flex: 1,
+    marginVertical: 2,
+    borderRadius: 2,
+    backgroundColor: fg(0.12),
+  },
+  // Full-bleed section: a hairline rule and generous space do the separating.
+  docSection: {
+    marginBottom: 40,
+    paddingBottom: 32,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: fg(0.12),
+  },
+  docSectionLast: {
+    marginBottom: 0,
+    paddingBottom: 0,
+    borderBottomWidth: 0,
+  },
+  // The oversized numeral. Low opacity so it reads as a structural watermark
+  // rather than competing with the heading; colour is applied at the call site
+  // from the provider's accent.
+  // 0.18 was faint enough that the numerals read as texture rather than as the
+  // structure they're meant to carry; 0.32 keeps them clearly secondary to the
+  // heading while actually being legible.
+  docNum: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 46,
+    lineHeight: 50,
+    opacity: 0.42,
+    marginBottom: -6,
+  },
+
+  /** Services (04) carries the most work of any section — the service list,
+   *  categories and the whole ServiceModal — so its numeral steps up over its
+   *  siblings. The heading itself stays at the shared 24: DESIGN_SYSTEM.md caps
+   *  section headings at 20–24, so emphasis comes from the numeral alone rather
+   *  than an out-of-scale heading. */
+  docNumLead: {
+    fontSize: 60,
+    lineHeight: 64,
+    opacity: 0.6,
+  },
+  docHeading: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 24,
+    letterSpacing: 0.2,
+    color: P.text,
+    marginBottom: 4,
+  },
+  docSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 13,
+    lineHeight: 18,
+    color: fg(0.85),
+    marginBottom: 20,
+  },
+  // Additive jump-to-next affordance at the foot of each section — the
+  // scrollspy rail stays a passive indicator, this is a separate, optional
+  // shortcut for a reader who'd rather tap than scroll. Deliberately a small,
+  // right-aligned outlined pill — NOT full-width/filled/shadowed like a
+  // primary CTA, since Publish (pinnedBarButton) is the only real primary
+  // action on this screen and this shouldn't visually compete with it.
+  // Surface fill + accent-tinted border matches the header icon buttons
+  // (backButton) rather than any filled-accent treatment.
+  docNextButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 6,
+    marginTop: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: RADIUS.footerButton,
+    backgroundColor: surf(isDark ? 0.4 : 0.6),
+    borderWidth: 1,
+    borderColor: accentBorder,
+  },
+  docNextButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+  // Closing typographic marker — signals the scroll has genuinely ended,
+  // which matters more without a hub to return to.
+  docEnd: {
+    alignItems: 'center',
+    marginTop: 30,
+    paddingTop: 22,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: fg(0.12),
+  },
+  docEndMark: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    letterSpacing: 1,
+    color: fg(0.6),
+    marginBottom: 12,
+  },
+  // ── Inline required-field flag ────────────────────────────────────────
+  // Sits on the field's own label row, so "this blocks publishing" is visible
+  // where the problem is and not only in a roll-up. Amber, not the provider
+  // accent — see REVIEW_WARN_COLOR.
+  // Label and flag share one baseline-aligned row, so the flag reads as
+  // belonging to that field rather than floating between fields.
+  docFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  // Was 10px, which made the one flag explaining why Publish is blocked the
+  // faintest thing on the row. 11.5 with tighter tracking stays compact but is
+  // actually readable; the amber was already full-strength.
+  docFieldFlag: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: REVIEW_WARN_COLOR,
+  },
+  // Roll-up above Publish. The counterpart to the inline flags — same amber,
+  // same source (missingRequired), so the two can never disagree.
+  publishWarningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  publishWarningText: {
+    flex: 1,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 11,
-    color: fg(0.5),
-    marginBottom: 8,
-  },
-  hubStatusTextMissing: {
+    lineHeight: 15,
     color: REVIEW_WARN_COLOR,
-  },
-  hubProgressTrack: {
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: fg(0.1),
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  hubProgressFill: {
-    height: '100%',
-    borderRadius: 2,
   },
   // ── Pinned bottom bar ─────────────────────────────────────────────────
   // Permanent bottom chrome sitting BELOW the ScrollView (not floating over
@@ -5166,7 +5177,11 @@ const makeStyles = (isDark: boolean) => {
     paddingBottom: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: fg(0.12),
-    backgroundColor: isDark ? P.card : '#FDFBF8',
+    // Matches the screen background (ThemedBackground paints palette.bg) so
+    // the pinned bar reads as part of the page rather than a separate white
+    // slab. Was isDark ? P.card : '#FDFBF8' — an off-white that didn't
+    // correspond to any background token and visibly banded against #F5F1EC.
+    backgroundColor: P.bg,
   },
   // Full-width, flat accent fill — the standard primary-action treatment.
   pinnedBarButton: {
@@ -5195,127 +5210,41 @@ const makeStyles = (isDark: boolean) => {
   // flex-end, not space-between: on the first section Back is hidden, and
   // space-between would leave Next stranded on the left. This keeps Next
   // pinned right in both cases, with Back sitting to its left when present.
-  sectionFooterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 10,
-  },
   // Plainer secondary treatment — a surface fill with the shared accent-tinted
   // border, matching the header icon buttons rather than the primary action.
-  sectionBackButton: {
-    paddingVertical: 13,
-    paddingHorizontal: 24,
-    borderRadius: RADIUS.footerButton,
-    backgroundColor: surf(0.45),
-    borderWidth: 1,
-    borderColor: accentBorder,
-  },
-  sectionBackButtonText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    color: P.text,
-  },
-  sectionNextButton: {
-    paddingVertical: 13,
-    paddingHorizontal: 30,
-    borderRadius: RADIUS.footerButton,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sectionNextButtonText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  sectionDots: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginBottom: 12,
-  },
-  sectionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
 
 
   // ── Review & publish step ─────────────────────────────────────────────
-  reviewWarningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 18,
-    backgroundColor: isDark ? 'rgba(255,149,0,0.12)' : 'rgba(255,149,0,0.10)',
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,149,0,0.30)' : 'rgba(255,149,0,0.24)',
-  },
-  reviewWarningText: {
-    flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 17,
-    color: P.text,
-  },
-  reviewGroupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
   // The header row already carries its own bottom margin; this just lets the
   // title take the free space so "Edit" stays pinned right.
-  reviewGroupHeaderTitle: {
-    flex: 1,
-  },
-  reviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 14,
-    paddingVertical: 7,
-  },
-  reviewRowLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '700',
-    color: fg(0.55),
-  },
-  reviewRowValue: {
-    flexShrink: 1,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'right',
-    color: P.text,
-  },
   // Only for a required field that's actually empty — an optional blank
   // stays neutral, so the warn colour always means "this blocks publishing".
-  reviewRowValueMissing: {
-    color: REVIEW_WARN_COLOR,
-  },
   reviewFootnote: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
     fontWeight: '600',
     lineHeight: 16,
-    color: fg(0.5),
+    color: fg(0.66),
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 8,
+  },
+  // A dedicated card rather than a bare row floating in the section flow —
+  // the terms gate gets the same boxed treatment as an input field, so it
+  // reads as its own distinct, important checkpoint before Publish.
+  termsBox: {
+    borderRadius: 12,
+    backgroundColor: surf(isDark ? 0.3 : 0.96),
+    borderWidth: 1,
+    borderColor: edge(isDark ? 0.15 : 0.13),
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 18,
   },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 4,
-    marginTop: 12,
-    marginBottom: 4,
   },
   termsCheckbox: {
     width: 20,
@@ -5338,43 +5267,10 @@ const makeStyles = (isDark: boolean) => {
     textDecorationLine: 'underline',
   },
 
-  // Cards
-  // Shadow lives on the OUTER wrapper (cardShadowWrap), not here — this is a
-  // BlurView, and overflow:hidden is required for the native blur effect to
-  // clip to the rounded corners (without it, the blur renders as a square
-  // block poking past the rounded border). overflow:hidden also silently
-  // kills a shadow on the same view, hence the separate wrapper.
-  // Calmer card treatment. Every section on this screen used an identical
-  // recipe at identical weight — full drop shadow + top sheen + border, six
-  // times down one scroll — so nothing anchored the eye and it read as a
-  // single undifferentiated wall. Same frosted language, less shouting:
-  // roomier padding, a shallow shadow instead of a spotlight, and no sheen
-  // (see cardHighlight below).
-  card: {
-    padding: 22,
-    borderRadius: RADIUS.card,
-    backgroundColor: surf(0.1),
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: accentBorder,
-  },
-  cardShadowWrap: {
-    borderRadius: RADIUS.card,
-    // Bigger gap BETWEEN cards (spacing within them is tighter) so related
-    // fields group into one thought instead of an even grey rhythm.
-    marginBottom: 28,
-    // Rose tint-shadow rather than flat black — black greys out the warm
-    // palette, this keeps the depth in the same colour family.
-    shadowColor: CARD_SHADOW_COLOR,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: isDark ? 0.22 : 0.16,
-    shadowRadius: 12,
-    elevation: 2,
-  },
   // Zero-height: the 40px white gradient that sat on top of every card is
   // gone. Kept as a style (rather than deleting the <LinearGradient> from
-  // six render sites) so the markup stays untouched and the sheen is one
-  // line away if it's ever wanted back.
+  // the remaining service-card render site) so the markup stays untouched and
+  // the sheen is one line away if it's ever wanted back.
   cardHighlight: {
     position: 'absolute',
     top: 0,
@@ -5440,7 +5336,7 @@ const makeStyles = (isDark: boolean) => {
   },
   portfolioAddPlus: {
     fontSize: 22,
-    color: fg(0.5),
+    color: fg(0.7),
     fontWeight: '300',
     lineHeight: 24,
   },
@@ -5448,41 +5344,17 @@ const makeStyles = (isDark: boolean) => {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 9,
-    color: fg(0.5),
+    color: fg(0.72),
     marginTop: 2,
   },
 
   // ── Elevated section header: numbered accent chip + stronger title ──
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  sectionHeaderChip: {
-    width: 26,
-    height: 26,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionHeaderChipText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 13,
-  },
-  sectionHeaderTitle: {
-    flex: 1,
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 20,
-    color: P.text,
-  },
   sectionSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 19,
-    color: fg(0.55),
+    color: fg(0.7),
     marginBottom: 18,
   },
   sectionTitleNoCard: {
@@ -5495,20 +5367,23 @@ const makeStyles = (isDark: boolean) => {
   inputGroup: {
     marginBottom: 14,
   },
+  // Field labels carry the form's structure, so they were the worst thing to
+  // have sitting at 0.55 — uppercase at 11px is already low-contrast before
+  // any alpha is applied. Lifted to 0.78 and up a half-point in size.
   inputLabel: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
-    fontSize: 11,
-    letterSpacing: 0.5,
+    fontSize: 12,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: fg(0.55),
+    color: fg(0.78),
     marginBottom: 7,
   },
   inputHint: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 12,
-    fontWeight: '600',
-    color: fg(0.72),
+    fontWeight: '700',
+    color: fg(0.86),
     marginTop: 6,
   },
   // Bright, well-defined text-box card — was a near-invisible 0.2-alpha
@@ -5550,10 +5425,14 @@ const makeStyles = (isDark: boolean) => {
   // rather than nearly disappearing into it. Deliberately still short of the
   // full inputBlur treatment: the border/shadow stay off, so this is a
   // brighter quiet field, not a second raised surface on top of the card.
+  // Brighter fill + a hairline edge instead of the old borderless surf(0.28),
+  // which read flat against the backdrop. Shadow stays off — depth here comes
+  // from the edge, not a drop shadow, so fields stay crisp rather than puffy.
   profileInputBox: {
     borderRadius: 12,
-    backgroundColor: surf(0.28),
-    borderWidth: 0,
+    backgroundColor: surf(isDark ? 0.3 : 0.96),
+    borderWidth: 1,
+    borderColor: edge(isDark ? 0.15 : 0.13),
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -5595,7 +5474,7 @@ const makeStyles = (isDark: boolean) => {
     fontSize: 11,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    color: fg(0.55),
+    color: fg(0.72),
     marginTop: 14,
   },
 
@@ -5834,7 +5713,7 @@ const makeStyles = (isDark: boolean) => {
   serviceDuration: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
-    color: fg(0.5),
+    color: fg(0.68),
   },
   servicePrice: {
     fontFamily: 'BakbakOne-Regular',
@@ -5925,7 +5804,11 @@ const makeStyles = (isDark: boolean) => {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
-    backgroundColor: surf(0.75),
+    // Below templateCard/categoryTypeCard's surf(0.55): a sheet backdrop
+    // brighter than the cards sitting on it (0.75 in dark mode washes out
+    // to a near-white panel over BlurView's tint="dark") inverts the surface
+    // hierarchy — the container should read dimmer than its contents.
+    backgroundColor: surf(0.4),
   },
   sheetHandle: {
     alignSelf: 'center',
@@ -5940,7 +5823,7 @@ const makeStyles = (isDark: boolean) => {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
     fontSize: 12,
-    color: fg(0.5),
+    color: fg(0.66),
     marginTop: 3,
   },
   templateGroupLabel: {
@@ -6411,12 +6294,19 @@ const makeStyles = (isDark: boolean) => {
   previewSafeArea: {
     flex: 1,
   },
+  // Full-bleed, exactly like ProviderProfileScreen/ProviderMyProfileScreen's
+  // heroImage. A fixed height (this was 340) cut the backdrop off partway
+  // through the hero block — the logo, name, rating and years-experience
+  // stack runs past 340pt once the status inset and header are counted — so
+  // the bare PP.bg showed through behind the lower hero text while the
+  // content sheet still floated over it. The sheet below is opaque, so
+  // extending to the bottom changes nothing except covering that gap.
   previewHeroImage: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 340,
+    bottom: 0,
   },
   previewHeader: {
     flexDirection: 'row',
@@ -6465,10 +6355,6 @@ const makeStyles = (isDark: boolean) => {
   // corners — same floating-card-over-photo composition as
   // ProviderProfileScreen's contentSheet.
   previewContentSheet: {
-    minHeight: screenHeight,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 60,
     borderTopLeftRadius: PREVIEW_SHEET_LIP_RADIUS,
     borderTopRightRadius: PREVIEW_SHEET_LIP_RADIUS,
     shadowColor: '#000',
@@ -6476,6 +6362,22 @@ const makeStyles = (isDark: boolean) => {
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 6,
+  },
+  // Radius + overflow live on this INNER view, separate from
+  // previewContentSheet's shadow — iOS silently drops a view's shadow when
+  // overflow:'hidden' is set on that same view, so clip and shadow must be on
+  // different layers. Without the clip the opaque PP.bg painted as a hard
+  // square over the hero backdrop (the rounded top corners never actually cut),
+  // which read as the sheet chopping the hero off. Mirrors
+  // ProviderMyProfileScreen's contentSheet/contentSheetClip pair exactly.
+  previewContentSheetClip: {
+    minHeight: screenHeight,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 60,
+    borderTopLeftRadius: PREVIEW_SHEET_LIP_RADIUS,
+    borderTopRightRadius: PREVIEW_SHEET_LIP_RADIUS,
+    overflow: 'hidden',
   },
   // Logo — same 148x148 dimensions as ProviderProfileScreen
   previewLogoContainer: {
@@ -6642,83 +6544,6 @@ const makeStyles = (isDark: boolean) => {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
     fontWeight: 'bold',
-  },
-
-  // About/Policy tab switcher
-  previewInfoTabRow: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 12,
-    marginHorizontal: -4,
-  },
-
-  // Policy tab rows
-  previewPolicyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 14,
-  },
-  previewPolicyIcon: {
-    width: 28,
-    alignItems: 'center',
-  },
-  previewPolicyRowText: {
-    flex: 1,
-  },
-  previewPolicyLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  previewPolicyLabel: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 10,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  previewPolicyTag: {
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginBottom: 2,
-  },
-  previewPolicyTagText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: '#fff',
-  },
-  previewPolicyValue: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  previewPolicyImageFab: {
-    position: 'absolute',
-    bottom: 14,
-    right: 14,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  previewPolicyImageModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewPolicyImageModalFull: {
-    width: '100%',
-    height: '80%',
   },
 
   // Services Section
@@ -7206,13 +7031,6 @@ const makeStyles = (isDark: boolean) => {
 
   // ── Tab switcher ──
   // ── Policies step ──
-  policiesCard: {
-    marginHorizontal: 16,
-    borderRadius: 24,
-    padding: 22,
-    marginBottom: 28,
-    overflow: 'hidden',
-  },
   // Matched to the Profile tab's hierarchy. These were the only headings on
   // the screen with no fontFamily at all, so they rendered in the OS default
   // while everything around them used the app's two fonts.
@@ -7222,19 +7040,17 @@ const makeStyles = (isDark: boolean) => {
     color: fg(0.82),
     marginBottom: 12,
   },
+  // 10px uppercase at 0.42 alpha with 1.3 tracking was the faintest text on the
+  // screen — these are section labels, not fine print. Bigger, less spaced out,
+  // and much closer to full strength.
   policyLabel: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1.3,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: fg(0.42),
+    color: fg(0.72),
     marginBottom: 8,
-  },
-  policySubLabel: {
-    fontSize: 12,
-    color: fg(0.5),
-    lineHeight: 16,
   },
   pillRow: {
     flexDirection: 'row',
@@ -7242,11 +7058,15 @@ const makeStyles = (isDark: boolean) => {
     gap: 7,
     marginBottom: 4,
   },
+  // Unselected pills sit on the surface ramp with a hairline edge rather than a
+  // flat fg() wash — fg() is the *text* ramp, so using it as a fill read muddy.
   policyPill: {
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: fg(0.08),
+    backgroundColor: surf(isDark ? 0.16 : 0.9),
+    borderWidth: 1,
+    borderColor: edge(isDark ? 0.14 : 0.13),
   },
   policyPillText: {
     fontSize: 13,
@@ -7256,57 +7076,18 @@ const makeStyles = (isDark: boolean) => {
   policyNote: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: fg(0.12),
+    borderColor: edge(isDark ? 0.16 : 0.14),
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
-    color: fg(0.7),
-    backgroundColor: fg(0.03),
-  },
-  policySep: {
-    height: 1,
-    backgroundColor: fg(0.08),
-    marginVertical: 18,
-  },
-  depositHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  depositRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 6,
-  },
-  depositInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: fg(0.12),
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 14,
-    color: fg(0.7),
-    backgroundColor: fg(0.03),
-  },
-  savePoliciesBtn: {
-    marginTop: 20,
-    paddingVertical: 15,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  savePoliciesBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
+    color: P.text,
+    backgroundColor: surf(isDark ? 0.16 : 0.92),
   },
   addressHint: {
     fontSize: 13,
     fontWeight: '600',
-    color: fg(0.6),
+    color: fg(0.72),
     marginTop: 6,
     marginBottom: 4,
     lineHeight: 18,
@@ -7315,20 +7096,18 @@ const makeStyles = (isDark: boolean) => {
   });
 };
 
-// Both sheets are built once at module load (there are only two modes), so
-// `useScreenStyles()` is a lookup rather than a per-render StyleSheet.create.
+// Only the light sheet is ever used — InfoRegScreen deliberately ignores the
+// app's dark mode setting (the registration/business-details flow reads as a
+// single document meant to look the same regardless of device theme), so
+// there's no dark counterpart to build or look up.
 const lightStyles = makeStyles(false);
-const darkStyles = makeStyles(true);
 
-/** The themed style sheet for the current app mode. Every component in this
- *  file calls this instead of closing over a single static `styles` object. */
-const useScreenStyles = () => (useTheme().isDarkMode ? darkStyles : lightStyles);
+/** The themed style sheet for this screen — always the light sheet, never
+ *  read from useTheme().isDarkMode the way the rest of the app's screens do. */
+const useScreenStyles = () => lightStyles;
 
-// Same two ramps the sheets are built from, for the colours that can't live in
+// Same ramp the sheet above is built from, for the colours that can't live in
 // a StyleSheet: `placeholderTextColor`, `<Ionicons color>`, `trackColor`, etc.
-// `blurTint` matters as much as the text colours: a `tint="light"` BlurView in
-// dark mode washes its surface pale, which would undo the foreground fix by
-// putting light text back on a light frosted panel.
 const lightChrome = {
   fg: fgFor(false),
   surf: surfFor(false),
@@ -7336,15 +7115,9 @@ const lightChrome = {
   onAccent: lightTheme.onAccent,
   blurTint: 'light' as const,
 };
-const darkChrome = {
-  fg: fgFor(true),
-  surf: surfFor(true),
-  text: darkTheme.text,
-  onAccent: darkTheme.onAccent,
-  blurTint: 'dark' as const,
-};
 
-/** Theme-aware colours for inline props that a StyleSheet can't carry. */
-const useChrome = () => (useTheme().isDarkMode ? darkChrome : lightChrome);
+/** Colours for inline props that a StyleSheet can't carry — always the light
+ *  ramp, for the same reason useScreenStyles() above never reads dark mode. */
+const useChrome = () => lightChrome;
 
 export default InfoRegScreen;

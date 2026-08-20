@@ -10,7 +10,18 @@
 ## Entry points
 _Screens nothing else navigates to (roots / tab mains / deep-link targets):_
 - [[AuthScreen]]
+- [[ClaimProviderScreen]]
+- [[EmailVerificationScreen]]
+- [[ForgotPasswordScreen]]
+- [[LoginScreen]]
+- [[NewPasswordScreen]]
 - [[ReactivateAccountScreen]]
+- [[ResetPasswordOTPScreen]]
+- [[SignUpStep1Screen]]
+- [[SignUpStep2Screen]]
+- [[SignUpStep3Screen]]
+- [[SignUpStep4Screen]]
+- [[SignUpStep5Screen]]
 - [[WelcomeScreen]]
 - [[BeautyBillingScreen]]
 - [[ExploreScreen]]

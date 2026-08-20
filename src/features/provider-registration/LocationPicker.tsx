@@ -3,6 +3,7 @@ import {
   Modal,
   SafeAreaView,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -10,7 +11,6 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { ChipSelect } from './ChipSelect';
 import {
   CITY_AREA_NAMES,
   getCityAreaData,
@@ -38,7 +38,8 @@ interface LocationPickerProps {
  *  existing provider re-opening the editor sees their choice reflected rather
  *  than a blank picker. Only recognises strings this picker itself composes
  *  (`"<area>, <city>"`); anything else — including every location typed before
- *  this picker existed — is treated as free text, which is the safe default. */
+ *  this picker existed, and any custom-typed region/area — is treated as free
+ *  text, which is the safe default. */
 const parseSavedLocation = (
   saved: string,
 ): { city: string; region: string; area: string } | null => {
@@ -58,6 +59,52 @@ const parseSavedLocation = (
     area: match.areas.find(a => a.toLowerCase() === area.toLowerCase()) ?? area,
   };
 };
+
+/** Chip-select row with a trailing "Other" chip, matching the convention
+ *  already established in InfoRegScreen's TagSelectWithOther: "Other" is
+ *  rendered as its own chip (not a value baked into `options`), and toggling
+ *  it reveals a text field rather than adding "Other" itself as the answer. */
+interface ChipSelectWithOtherProps {
+  options: string[];
+  selected: string;
+  onSelect: (option: string) => void;
+  otherActive: boolean;
+  onToggleOther: () => void;
+  accentColor: string;
+  styles: any;
+}
+function ChipSelectWithOther({
+  options,
+  selected,
+  onSelect,
+  otherActive,
+  onToggleOther,
+  accentColor,
+  styles,
+}: ChipSelectWithOtherProps) {
+  return (
+    <View style={styles.chipGrid}>
+      {options.map(option => {
+        const active = selected === option;
+        return (
+          <TouchableOpacity
+            key={option}
+            style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
+            onPress={() => onSelect(option)}
+          >
+            <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
+          </TouchableOpacity>
+        );
+      })}
+      <TouchableOpacity
+        style={[styles.chip, otherActive && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
+        onPress={onToggleOther}
+      >
+        <Text style={[styles.chipText, otherActive && { color: accentColor }]}>Other…</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 /**
  * Two-level location picker for the provider's public location.
@@ -94,32 +141,80 @@ export function LocationPicker({
   const [region, setRegion] = useState<string>(saved?.region ?? '');
   const [area, setArea] = useState<string>(saved?.area ?? '');
   const [cityModalVisible, setCityModalVisible] = useState(false);
+  const [citySearch, setCitySearch] = useState('');
+  // "Other…" chip state for the region/area steps — separate booleans (not a
+  // sentinel stuffed into `region`/`area`) so a typed value can compose
+  // immediately without fighting a placeholder value in the same field.
+  const [regionOtherActive, setRegionOtherActive] = useState(false);
+  const [areaOtherActive, setAreaOtherActive] = useState(false);
+  const [customRegionText, setCustomRegionText] = useState('');
+  const [customAreaText, setCustomAreaText] = useState('');
 
   const cityData: CityAreaData | undefined =
     city && city !== OTHER_CITY ? getCityAreaData(city) : undefined;
   const regionAreas =
     cityData?.regions.find(r => r.region === region)?.areas ?? [];
 
-  const selectCity = (nextCity: string) => {
-    setCity(nextCity);
+  const filteredCityNames = useMemo(() => {
+    const q = citySearch.trim().toLowerCase();
+    if (!q) return CITY_AREA_NAMES;
+    return CITY_AREA_NAMES.filter(name => name.toLowerCase().includes(q));
+  }, [citySearch]);
+
+  const resetBelowCity = () => {
     setRegion('');
     setArea('');
+    setRegionOtherActive(false);
+    setAreaOtherActive(false);
+    setCustomRegionText('');
+    setCustomAreaText('');
+  };
+
+  const selectCity = (nextCity: string) => {
+    setCity(nextCity);
+    resetBelowCity();
     setCityModalVisible(false);
-    // Both branches clear the composed value: the previous city's area no
-    // longer describes where this provider is, and leaving it behind would
-    // let a stale location survive a city change.
+    setCitySearch('');
+    // Clears the composed value: the previous city's area no longer
+    // describes where this provider is, and leaving it behind would let a
+    // stale location survive a city change.
     onChange('');
   };
 
   const selectRegion = (nextRegion: string) => {
-    const same = region === nextRegion;
+    const same = region === nextRegion && !regionOtherActive;
     setRegion(same ? '' : nextRegion);
+    setRegionOtherActive(false);
     setArea('');
+    setAreaOtherActive(false);
+    setCustomAreaText('');
+    onChange('');
+  };
+
+  const toggleRegionOther = () => {
+    setRegionOtherActive(v => !v);
+    setRegion('');
+    setArea('');
+    setAreaOtherActive(false);
+    setCustomAreaText('');
+    onChange('');
+  };
+
+  // Typing a custom region composes nothing by itself (a region alone isn't
+  // specific enough to geocode) — the "Where in <region>?" step below still
+  // needs an area. Kept out of `onChange` until that area exists.
+  const onCustomRegionChangeText = (text: string) => {
+    setCustomRegionText(text);
+    setArea('');
+    setAreaOtherActive(false);
+    setCustomAreaText('');
     onChange('');
   };
 
   const selectArea = (nextArea: string) => {
-    if (area === nextArea) {
+    const same = area === nextArea && !areaOtherActive;
+    setAreaOtherActive(false);
+    if (same) {
       setArea('');
       onChange('');
       return;
@@ -128,6 +223,21 @@ export function LocationPicker({
     // Most-specific-first, so the geocoder gets a real address-like string.
     onChange(cityData ? `${nextArea}, ${cityData.city}` : nextArea);
   };
+
+  const toggleAreaOther = () => {
+    setAreaOtherActive(v => !v);
+    setArea('');
+    onChange('');
+  };
+
+  // Typing a custom area composes immediately, same as tapping a listed
+  // chip — the city (already chosen) still anchors the geocoded string.
+  const onCustomAreaChangeText = (text: string) => {
+    setCustomAreaText(text);
+    onChange(text.trim() && cityData ? `${text.trim()}, ${cityData.city}` : '');
+  };
+
+  const effectiveRegionLabel = regionOtherActive ? customRegionText.trim() : region;
 
   const cityLabel =
     city === OTHER_CITY ? 'Another city' : city || 'Choose your city';
@@ -152,30 +262,88 @@ export function LocationPicker({
         <Ionicons name="chevron-down" size={16} color={iconColor} />
       </TouchableOpacity>
 
-      {/* Structured cities: region first, then the areas within it. */}
+      {/* Structured cities: region first, then the areas within it. Both
+          steps end with an "Other…" chip for a region/area this city's data
+          doesn't list — picking it reveals a text field for just that one
+          piece, which still composes onto the already-chosen city. */}
       {cityData && (
         <>
           <Text style={styles.locationStepLabel}>Area of {cityData.city}</Text>
-          <ChipSelect
+          <ChipSelectWithOther
             options={cityData.regions.map(r => r.region)}
-            selected={region ? [region] : []}
-            onToggle={selectRegion}
+            selected={region}
+            onSelect={selectRegion}
+            otherActive={regionOtherActive}
+            onToggleOther={toggleRegionOther}
             accentColor={accentColor}
             styles={styles}
           />
+          {regionOtherActive && (
+            <BlurView
+              intensity={15}
+              tint={blurTint}
+              style={[styles.inputBlur, styles.profileInputBox, { marginTop: 10 }]}
+            >
+              <TextInput
+                style={styles.textInput}
+                value={customRegionText}
+                onChangeText={onCustomRegionChangeText}
+                placeholder="e.g., North West"
+                placeholderTextColor={placeholderColor}
+                onFocus={onFocus}
+              />
+            </BlurView>
+          )}
         </>
       )}
 
-      {cityData && region && (
+      {cityData && effectiveRegionLabel && !(regionOtherActive && !customRegionText.trim()) && (
         <>
-          <Text style={styles.locationStepLabel}>Where in {region}?</Text>
-          <ChipSelect
-            options={regionAreas}
-            selected={area ? [area] : []}
-            onToggle={selectArea}
-            accentColor={accentColor}
-            styles={styles}
-          />
+          <Text style={styles.locationStepLabel}>Where in {effectiveRegionLabel}?</Text>
+          {regionOtherActive ? (
+            <BlurView
+              intensity={15}
+              tint={blurTint}
+              style={[styles.inputBlur, styles.profileInputBox, { marginTop: 10 }]}
+            >
+              <TextInput
+                style={styles.textInput}
+                value={customAreaText}
+                onChangeText={onCustomAreaChangeText}
+                placeholder="e.g., Chinatown"
+                placeholderTextColor={placeholderColor}
+                onFocus={onFocus}
+              />
+            </BlurView>
+          ) : (
+            <>
+              <ChipSelectWithOther
+                options={regionAreas}
+                selected={area}
+                onSelect={selectArea}
+                otherActive={areaOtherActive}
+                onToggleOther={toggleAreaOther}
+                accentColor={accentColor}
+                styles={styles}
+              />
+              {areaOtherActive && (
+                <BlurView
+                  intensity={15}
+                  tint={blurTint}
+                  style={[styles.inputBlur, styles.profileInputBox, { marginTop: 10 }]}
+                >
+                  <TextInput
+                    style={styles.textInput}
+                    value={customAreaText}
+                    onChangeText={onCustomAreaChangeText}
+                    placeholder="e.g., Chinatown"
+                    placeholderTextColor={placeholderColor}
+                    onFocus={onFocus}
+                  />
+                </BlurView>
+              )}
+            </>
+          )}
         </>
       )}
 
@@ -227,12 +395,48 @@ export function LocationPicker({
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
+
+              <BlurView
+                intensity={15}
+                tint={blurTint}
+                style={[styles.inputBlur, styles.profileInputBox, { marginBottom: 12 }]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Ionicons name="search" size={16} color={iconColor} />
+                  <TextInput
+                    style={[styles.textInput, { flex: 1 }]}
+                    value={citySearch}
+                    onChangeText={setCitySearch}
+                    placeholder="Search cities..."
+                    placeholderTextColor={placeholderColor}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
+                </View>
+              </BlurView>
+
               <ScrollView
                 style={styles.modalContent}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 24 }}
+                keyboardShouldPersistTaps="handled"
               >
-                {CITY_AREA_NAMES.map(name => (
+                {/* "Other city…" pinned at the top — typing your own town
+                    shouldn't require scrolling past every structured city
+                    first. Compact single-line row rather than a full card:
+                    one option among many here, not the primary path. */}
+                <TouchableOpacity
+                  style={[localStyles.otherRow, { borderColor: accentColor }]}
+                  onPress={() => selectCity(OTHER_CITY)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="create-outline" size={16} color={accentColor} />
+                  <Text style={[localStyles.otherRowText, { color: accentColor }]}>
+                    Other city…
+                  </Text>
+                </TouchableOpacity>
+
+                {filteredCityNames.map(name => (
                   <TouchableOpacity
                     key={name}
                     style={styles.templateCard}
@@ -247,25 +451,11 @@ export function LocationPicker({
                     )}
                   </TouchableOpacity>
                 ))}
-                <Text style={styles.templateGroupLabel}>Somewhere else</Text>
-                <TouchableOpacity
-                  style={[styles.templateScratchCard, { borderColor: accentColor }]}
-                  onPress={() => selectCity(OTHER_CITY)}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons
-                    name="create-outline"
-                    size={20}
-                    color={accentColor}
-                    style={styles.templateScratchIcon}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.templateScratchTitle}>Other city…</Text>
-                    <Text style={styles.templateScratchSub}>
-                      Type your own town or area
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                {filteredCityNames.length === 0 && (
+                  <Text style={styles.templateScratchSub}>
+                    No cities match "{citySearch}" — use "Other city…" above.
+                  </Text>
+                )}
               </ScrollView>
             </SafeAreaView>
           </BlurView>
@@ -274,3 +464,23 @@ export function LocationPicker({
     </>
   );
 }
+
+const localStyles = StyleSheet.create({
+  otherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+  },
+  otherRowText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});

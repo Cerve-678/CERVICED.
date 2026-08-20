@@ -167,22 +167,28 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
 
   // This screen is the provider's home for their public presence, not only a
   // mirror of what clients see. Keep the signal deliberately practical: these
-  // are the pieces that make a profile bookable and trustworthy.
+  // are the pieces that make a profile bookable and trustworthy. Each item
+  // carries the screen it's fixed on (InfoReg's own editor for the original
+  // five, Business Details' sub-screens for the rest) so the missing-items
+  // list can navigate there directly instead of just naming the gap.
   const profileReadiness = useMemo(() => {
-    if (!providerData) return { complete: 0, total: 5, services: 0, missing: [] as string[] };
+    if (!providerData) return { complete: 0, total: 6, services: 0, missing: [] as { label: string; screen: string }[] };
     const services = Object.values(providerData.categories).reduce((count, category) => count + category.length, 0);
     const items = [
-      { done: Boolean(providerData.logo), label: 'add a logo' },
-      { done: Boolean(providerData.aboutText.trim()), label: 'write an introduction' },
-      { done: Boolean(providerData.location.trim()), label: 'add your location' },
-      { done: services > 0, label: 'add services and prices' },
-      { done: portfolio.length > 0, label: 'add portfolio photos' },
+      { done: Boolean(providerData.logo), label: 'add a logo', screen: 'EditProfile' },
+      { done: Boolean(providerData.aboutText.trim()), label: 'write an introduction', screen: 'EditProfile' },
+      { done: Boolean(providerData.location.trim()), label: 'add your location', screen: 'EditProfile' },
+      { done: services > 0, label: 'add services and prices', screen: 'EditProfile' },
+      { done: portfolio.length > 0, label: 'add portfolio photos', screen: 'EditProfile' },
+      // Booking policies live in Business Details, not InfoReg's editor —
+      // see hasPolicyInfo above (mirrors ProviderProfileScreen's own check).
+      { done: hasPolicyInfo(providerData), label: 'set your booking policies', screen: 'Policies' },
     ];
     return {
       complete: items.filter(item => item.done).length,
       total: items.length,
       services,
-      missing: items.filter(item => !item.done).map(item => item.label),
+      missing: items.filter(item => !item.done).map(item => ({ label: item.label, screen: item.screen })),
     };
   }, [providerData, portfolio.length]);
 
@@ -391,6 +397,30 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                 </Text>
               ) : null}
 
+              {/* Catalogue size — categories and services as two square stat
+                  tiles. Both counts reuse values already derived above
+                  (categoryNames / profileReadiness.services, the same figure
+                  the readiness card counts) rather than re-deriving them, so
+                  they can't drift apart. */}
+              <View style={styles.statBoxRow}>
+                <View style={[styles.statBox, { borderColor: heroSub, backgroundColor: heroIsDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.28)' }]}>
+                  <Text style={[styles.statBoxValue, { color: heroText }, heroIsDark && styles.heroTextShadow]}>
+                    {categoryNames.length}
+                  </Text>
+                  <Text style={[styles.statBoxLabel, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
+                    {categoryNames.length === 1 ? 'CATEGORY' : 'CATEGORIES'}
+                  </Text>
+                </View>
+                <View style={[styles.statBox, { borderColor: heroSub, backgroundColor: heroIsDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.28)' }]}>
+                  <Text style={[styles.statBoxValue, { color: heroText }, heroIsDark && styles.heroTextShadow]}>
+                    {profileReadiness.services}
+                  </Text>
+                  <Text style={[styles.statBoxLabel, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
+                    {profileReadiness.services === 1 ? 'SERVICE' : 'SERVICES'}
+                  </Text>
+                </View>
+              </View>
+
             </View>
           </View>
 
@@ -425,22 +455,30 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               </View>
               <Text style={[styles.profileHubSubtext, { color: PP.sub }]}>
                 {profileReadiness.services} service{profileReadiness.services === 1 ? '' : 's'} and {portfolio.length} portfolio photo{portfolio.length === 1 ? '' : 's'} live.
-                {profileReadiness.missing.length
-                  ? ` Next: ${profileReadiness.missing.slice(0, 2).join(' · ')}`
-                  : ''}
               </Text>
-              <View style={[styles.profileHubActions, { borderTopColor: PP.border }]}>
-                <TouchableOpacity style={styles.profileHubAction} onPress={handleEditProfile} activeOpacity={0.7}>
-                  <View style={[styles.profileHubIcon, { backgroundColor: accentColor + '1C' }]}>
-                    <Ionicons name="create-outline" size={18} color={accentColor} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.profileHubActionTitle, { color: PP.text }]}>Public details</Text>
-                    <Text style={[styles.profileHubActionSub, { color: PP.sub }]}>Bio, contact, services and policies</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={PP.sub} />
-                </TouchableOpacity>
-              </View>
+
+              {/* Each unfinished item is its own tappable row — jumps
+                  straight to wherever it's fixed (InfoReg's editor for
+                  profile basics, Business Details for policies) instead of
+                  just naming the gap and leaving the provider to find it. */}
+              {profileReadiness.missing.length > 0 && (
+                <View style={styles.readinessChecklist}>
+                  {profileReadiness.missing.map(item => (
+                    <TouchableOpacity
+                      key={item.label}
+                      style={styles.readinessChecklistRow}
+                      onPress={() => navigation.navigate(item.screen)}
+                      activeOpacity={0.65}
+                    >
+                      <Ionicons name="ellipse-outline" size={14} color={accentColor} />
+                      <Text style={[styles.readinessChecklistText, { color: PP.text }]}>
+                        {item.label}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={14} color={PP.sub} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </BlurView>
             </View>
 
@@ -521,7 +559,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       icon: 'card-outline',
                       label: 'Deposit',
                       value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required`,
-                      ...(bp.depositOnly ? { tag: 'ONLY' } : {}),
                     });
                   }
                   const cancelPenaltyText =
@@ -1028,6 +1065,33 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     letterSpacing: 0.4,
   },
+  statBoxRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  // Square, not a pill: fixed equal width/height with a small corner radius.
+  statBox: {
+    width: 72,
+    height: 72,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  statBoxValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 22,
+    lineHeight: 26,
+  },
+  statBoxLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 9,
+    letterSpacing: 0.6,
+  },
   availabilityWrap: {
     marginBottom: 20,
   },
@@ -1080,39 +1144,28 @@ const styles = StyleSheet.create({
     fontFamily: 'BakbakOne-Regular',
     fontSize: 14,
   },
+  readinessChecklist: {
+    marginTop: 10,
+    gap: 2,
+  },
+  readinessChecklistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 7,
+  },
+  readinessChecklistText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 13,
+  },
   profileHubSubtext: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '700',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 12,
-  },
-  profileHubActions: {
-    marginTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  profileHubAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-  },
-  profileHubIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileHubActionTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-  },
-  profileHubActionSub: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 11,
-    marginTop: 2,
   },
   clientViewLabel: {
     fontFamily: 'Jura-VariableFont_wght',

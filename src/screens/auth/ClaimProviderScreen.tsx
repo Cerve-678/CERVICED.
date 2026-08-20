@@ -34,10 +34,21 @@ import {
   type UnclaimedProviderSummary,
   type UnclaimedProviderDetail,
 } from '../../services/providerClaimService';
+import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'ClaimProvider'>;
 
 type Step = 'search' | 'preview' | 'code';
+
+/** DB guard messages (P0001) are written for people and safe to show; a coded
+ *  or technical error (RLS, network, missing column…) is not — return null so
+ *  the caller falls back to a calm generic line. */
+function friendlyClaimError(e: any): string | null {
+  const isTechnical = e?.code && e.code !== 'P0001';
+  return typeof e?.message === 'string' && e.message.length > 0 && !isTechnical && !e.message.includes('Network')
+    ? e.message
+    : null;
+}
 
 export default function ClaimProviderScreen({ navigation, route }: Props) {
   const { isDarkMode, palette: t } = useTheme();
@@ -74,7 +85,8 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
       })
       .catch((e: any) => {
         if (cancelled) return;
-        Alert.alert('Couldn\'t load listing', e?.message ?? 'Please try again.');
+        logger.error('[ClaimProvider] load listing failed:', e);
+      Alert.alert("Couldn't load listing", friendlyClaimError(e) ?? 'Please try again.');
         setStep('search');
       })
       .finally(() => {
@@ -91,7 +103,8 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
       const found = await searchUnclaimedProviders(text);
       setResults(found);
     } catch (e: any) {
-      Alert.alert('Search failed', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] search failed:', e);
+      Alert.alert('Search failed', friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsSearching(false);
     }
@@ -109,7 +122,8 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
       setSelected(detail);
       setStep('preview');
     } catch (e: any) {
-      Alert.alert('Couldn\'t load listing', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] load listing failed:', e);
+      Alert.alert("Couldn't load listing", friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
@@ -124,7 +138,8 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
       setMaskedEmail(masked);
       setStep('code');
     } catch (e: any) {
-      Alert.alert('Couldn\'t send code', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] request code failed:', e);
+      Alert.alert("Couldn't send code", friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
@@ -154,7 +169,8 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.navigate('SignUpStep1');
     } catch (e: any) {
-      Alert.alert('Something went wrong', e?.message ?? 'Please try again.');
+      logger.error('[ClaimProvider] confirm claim failed:', e);
+      Alert.alert('Something went wrong', friendlyClaimError(e) ?? 'Please try again.');
     } finally {
       setIsBusy(false);
     }
