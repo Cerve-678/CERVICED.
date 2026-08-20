@@ -142,18 +142,6 @@ export async function getTopRatedProviders(limit = 10): Promise<DbProvider[]> {
   return (data ?? []) as DbProvider[];
 }
 
-/** Provider IDs trending this week — from the get_trending_providers() RPC.
- *  This is a SECURITY DEFINER function rather than a plain view because it
- *  aggregates booking counts across every provider's bookings, which the
- *  owner-scoped RLS on `bookings` would otherwise restrict per-caller. */
-export async function getTrendingProviderIds(limit = 10): Promise<string[]> {
-  const { data, error } = await supabase.rpc("get_trending_providers", {
-    p_limit: limit,
-  });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((r: { provider_id: string }) => r.provider_id);
-}
-
 // ─────────────────────────────────────────────────────────
 // PROVIDERS
 // ─────────────────────────────────────────────────────────
