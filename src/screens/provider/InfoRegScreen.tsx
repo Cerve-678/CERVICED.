@@ -2964,7 +2964,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       return;
     }
     if (!providerData.fullAddress.trim()) {
-      Alert.alert('Missing Information', 'Please enter your full address — required for every business type now, including mobile (it stays private).');
+      Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
       return;
     }
     if (!user?.id) {
@@ -4510,7 +4510,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
               <Text style={styles.addressHint}>
                 {providerData.businessType === 'mobile'
-                  ? "Private — never shown to clients. You travel to them, so this is just used to verify your account and keep your records accurate. Include your postcode."
+                  ? "Never shown publicly. You travel to your clients, so they give you their address — yours is only shared with a booked client on the timing you pick below. Include your postcode."
                   : providerData.businessType === 'home_based'
                   ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
                   : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
@@ -4588,13 +4588,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <>
                       <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
                       <View style={styles.pillRow}>
-                        {ADDRESS_RELEASE_OPTS
-                          .filter(o => isAddressReleaseAllowed(providerData.businessType as BusinessType, o.value))
-                          .map(({ value: v, label: l }) => (
+                        {[
+                          ...ADDRESS_RELEASE_OPTS
+                            .filter(o => isAddressReleaseAllowed(providerData.businessType as BusinessType, o.value))
+                            .map(o => ({ value: o.value as string, label: o.label })),
+                          // Mobile only — see BusinessInfoScreen. '' is stored
+                          // as NULL, i.e. never released.
+                          ...(providerData.businessType === 'mobile'
+                            ? [{ value: '', label: 'Never share' }]
+                            : []),
+                        ].map(({ value: v, label: l }) => (
                           <TouchableOpacity
                             key={v}
                             style={[styles.policyPill, providerData.addressReleasePolicy === v && { backgroundColor: adaptiveAccentColor }]}
-                            onPress={() => { tapSelect(); setProviderData(prev => ({ ...prev, addressReleasePolicy: v })); }}
+                            onPress={() => { tapSelect(); setProviderData(prev => ({ ...prev, addressReleasePolicy: v as typeof prev.addressReleasePolicy })); }}
                           >
                             <Text style={[styles.policyPillText, providerData.addressReleasePolicy === v && { color: '#fff' }]}>{l}</Text>
                           </TouchableOpacity>

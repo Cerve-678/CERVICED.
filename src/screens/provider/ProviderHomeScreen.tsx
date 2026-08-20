@@ -918,13 +918,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
-          // Mobile providers travel to the client, so they're exempt. Everyone
-          // else needs the real private address on file (fullAddress) — the
-          // vague public location_text is already required just to save a
-          // profile at all, so accepting it here made this trivially true for
-          // almost everyone regardless of whether address release could
-          // actually work for them.
-          addressSet: profile.business_type === 'mobile' ? true : !!fullAddress,
+          // No business-type exemption. Mobile used to be excluded here, but
+          // mobile providers can now pick an address-release timing like any
+          // other type, and a release with no real address on file releases
+          // nothing. require_provider_address.sql gates go-live on the same
+          // thing server-side for every type, so exempting mobile here just
+          // meant the checklist said "done" where the DB said "not yet".
+          // The vague public location_text doesn't count — it's already
+          // required just to save a profile, so accepting it made this
+          // trivially true for almost everyone.
+          addressSet: !!fullAddress,
           brandingSet: !!profile.logo_url,
         });
 

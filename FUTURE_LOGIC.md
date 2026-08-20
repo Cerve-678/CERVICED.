@@ -379,6 +379,65 @@ Flip `MULTI_SERVICE_BOOKING_ENABLED` to `true` in `src/constants/featureFlags.ts
 
 ---
 
+## Multiple Service Types Per Provider (Discovery, Not Just Display)
+
+### What it means
+
+A provider who genuinely does two things — hair *and* nails, lashes *and* brows — wants to be found under both.
+
+### What currently happens
+
+`providers.service_category` is a **single** value, picked at sign-up and locked afterwards. It is the only thing client-facing discovery filters on:
+
+- `getProviders` / `getProvidersByCategory` / the Explore category tabs / category search all do `.eq("service_category", category)` (several call sites in `databaseService.ts`).
+- `SUBCATEGORY_SUGGESTIONS_BY_CATEGORY` in `InfoRegScreen.tsx` scopes the "+ Add Category" suggestion grid off it.
+- `addPortfolioItem` **stamps** `portfolio_items.category` from it when no explicit category is passed — so a HAIR provider's nail photos are tagged HAIR, and appear under the HAIR tab in Explore.
+
+Separately, `services.category_name` is free-form and unbounded — a provider can add as many categories as they like via "+ Add Category". Those drive the category tabs **on their own profile only**.
+
+So the current state is: a provider can *display* many service types, but is *discoverable* under exactly one. A HAIR provider who adds a Nails category never appears under NAILS anywhere, and their nail work is filed under HAIR. That mismatch is also why `service_category` is locked — changing it re-scopes the suggestion pools and orphans the category stamps on every portfolio row already written.
+
+### What needs to happen
+
+1. **Schema**: `service_categories TEXT[]` (or a `provider_service_categories` join table) alongside a retained single `service_category` as the *primary* — the primary still has to exist, because subcategory suggestions and the default portfolio stamp both need one answer, not a set.
+2. **Queries**: every `.eq("service_category", …)` becomes an array-overlap test (`.contains` / `.overlaps`, or `.in` on the join table). Nine-ish call sites in `databaseService.ts`; grep for `service_category` before starting.
+3. **Portfolio stamping**: `addPortfolioItem` can no longer infer a single category. Either add a per-photo category picker to the upload UI (there has never been one — see the `portfolio-category-null-bug` memory for what happened last time this column went unwritten), or stamp from the service/category the photo was uploaded under.
+4. **Unlock the picker**: `InfoRegScreen`'s Service Type lock and `BusinessInfoScreen` both need to let the set be edited, with copy explaining that the primary drives suggestions.
+5. **Backfill**: existing rows need `service_categories = ARRAY[service_category]`.
+
+### Why it's deferred
+
+Deferred on 2026-08-20. It touches every discovery query in the app plus a column with a known history of being silently unwritten, so it's a schema-and-query project, not a UI change. Until then the honest framing for providers is: your service type is your *primary* type and it's what clients find you under; extra categories organise your own profile.
+
+---
+
+## In-Person / Pay-on-the-Day Checkout Option
+
+### What it means
+
+A client books and pays nothing (or only a deposit) through the app, settling the rest — or all of it — with the provider in person.
+
+### What currently happens
+
+Half of this already exists. A deposit checkout takes the deposit through the app and shows the client `Remaining: £X (pay at appointment)`; the provider's Payments screen lists which in-person methods they accept (cash, card, bank transfer). What does **not** exist is a checkout option that takes £0.
+
+### What needs deciding before it can be built
+
+1. **The liability boundary.** `CLAUDE.md` forbids the app collecting, storing, verifying, or attesting to an off-app payment between a client and a provider — a "mark balance collected" feature was built and removed for exactly this reason, and the Terms & Conditions "Deposits & Remaining Balances" clause draws the same line. A "pay in person" option is only safe if the app records *how the client intends to pay* and never *whether they did*. No paid/unpaid state, no amount-received field, no reconciliation.
+2. **Platform fee.** `calculatePlatformFee` returns `0` when nothing goes through the app (`amount <= 0` and not a deposit checkout). A £0 checkout therefore earns Cerviced nothing, and there's no obvious place to charge from. Either the fee moves to the provider side, or the option is restricted to deposit-plus-balance so a deposit is always taken.
+3. **No-show exposure.** With no deposit and no card on file, a no-show costs the provider the whole slot and there is no instrument to charge against — which makes the existing `noShowAction: 'charge_deposit' | 'charge_full'` policy unenforceable for these bookings. The policy UI would need to say so.
+4. **Terms acceptance.** Offering this needs an explicit Cerviced T&C acceptance at checkout, because the platform is expressly not a party to the in-person payment. **This is legal copy — flag it, do not draft it.** See `LEGAL-COMPLIANCE-NOTES.md` and the `cerviced-legal-flagger` agent.
+
+### Likely shape when built
+
+A provider-level opt-in (Business Details → Payments, next to `depositMode`) that adds a third client-facing checkout state alongside the existing `full_only` / `client_choice` / `deposit_required` — most likely "deposit now, balance in person", since that keeps a payment instrument and a platform fee in play. Read the deposit mode through `resolveDepositMode()` in `src/utils/depositPolicy.ts`; do not add a fourth parallel flag.
+
+### Why it's deferred
+
+Deferred on 2026-08-20. Items 1–4 above are product, pricing and legal decisions, not engineering ones.
+
+---
+
 ## Provider Deactivation / Pause Bookings (No Such Toggle Exists Today)
 
 ### What it means

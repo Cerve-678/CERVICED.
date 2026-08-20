@@ -27,7 +27,6 @@ describe('address release policy vs business type', () => {
     expect(reconcileAddressReleasePolicy('mobile', 'on_confirmation')).toBe('on_confirmation');
     expect(reconcileAddressReleasePolicy('mobile', 'manual')).toBe('manual');
     expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.mobile).not.toContain('always');
-    expect(reconcileAddressReleasePolicy('mobile', 'always')).toBe('on_confirmation');
   });
 
   // 'always' is the only standing-visible option, so it stays limited to the
@@ -44,7 +43,19 @@ describe('address release policy vs business type', () => {
     expect(isAddressReleaseAllowed('salon', null)).toBe(false);
   });
 
-  it('always produces a value the resulting type actually offers', () => {
+  // The regression this guards: every pre-existing mobile row has a NULL
+  // policy from when mobile had no picker at all. If reconcile handed them
+  // the 'on_confirmation' default like every other type, the next unrelated
+  // save on Business Info would start releasing a home address to every
+  // confirmed client without the provider ever choosing to share it.
+  it('never defaults a mobile provider into sharing', () => {
+    expect(reconcileAddressReleasePolicy('mobile', null)).toBeNull();
+    // 'always' is not offered to mobile, so it falls back — to null, not to
+    // the premises-type default.
+    expect(reconcileAddressReleasePolicy('mobile', 'always')).toBeNull();
+  });
+
+  it('always produces a value the resulting type actually offers, or null', () => {
     const types = ['salon', 'studio', 'home_based', 'mobile'] as const;
     const policies = [
       'always', 'on_confirmation', 'day_before', 'two_days_before',
@@ -54,7 +65,10 @@ describe('address release policy vs business type', () => {
     for (const type of types) {
       for (const policy of policies) {
         const result = reconcileAddressReleasePolicy(type, policy);
-        expect(isAddressReleaseAllowed(type, result)).toBe(true);
+        // null is a legitimate outcome for mobile — it means "never share" —
+        // but never a stale timing the type doesn't offer.
+        if (result === null) expect(type).toBe('mobile');
+        else expect(isAddressReleaseAllowed(type, result)).toBe(true);
       }
     }
   });

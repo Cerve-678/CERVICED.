@@ -153,7 +153,7 @@ export const BUSINESS_TYPE_OPTS: { value: BusinessType; label: string; sub: stri
   { value: 'salon',      label: 'Salon',       sub: 'Clients come to a commercial salon premises.' },
   { value: 'studio',     label: 'Studio',      sub: 'Clients come to a dedicated studio space.' },
   { value: 'home_based', label: 'Home Studio', sub: 'Clients come to your home — address stays private until you release it.' },
-  { value: 'mobile',     label: 'Mobile',      sub: 'You travel to the client. Your address is never shared.' },
+  { value: 'mobile',     label: 'Mobile',      sub: 'You travel to the client. Your address stays private until you release it.' },
 ];
 
 export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string; sub: string }[] = [
@@ -203,10 +203,21 @@ export function isAddressReleaseAllowed(
 /**
  * The policy to store for `businessType`, keeping the current one when the new
  * type still offers it and falling back to the safest option it does offer.
+ *
+ * For mobile the safest option is NULL — not sharing at all. Every other type
+ * falls back to 'on_confirmation', which is the product default for an address
+ * clients are expected to travel to. Mobile must not inherit that default:
+ * a mobile provider's address on file is usually their home, and every
+ * existing mobile row has a NULL policy from when the type had no picker at
+ * all. Returning 'on_confirmation' for them would start releasing a home
+ * address to every confirmed client the next time that provider saved their
+ * business info for any unrelated reason. Sharing has to be chosen, never
+ * defaulted into.
  */
 export function reconcileAddressReleasePolicy(
   businessType: BusinessType,
   current: AddressReleasePolicy | null,
 ): AddressReleasePolicy | null {
-  return isAddressReleaseAllowed(businessType, current) ? current : 'on_confirmation';
+  if (isAddressReleaseAllowed(businessType, current)) return current;
+  return businessType === 'mobile' ? null : 'on_confirmation';
 }

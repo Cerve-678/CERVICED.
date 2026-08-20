@@ -12,7 +12,7 @@ Curated: [[Address Release]] · **77 files**
 - `src/services/databaseService.ts` _(85)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(64)_
 - `src/services/providerRegistrationService.ts` _(56)_
-- `src/screens/provider/InfoRegScreen.tsx` _(53)_
+- `src/screens/provider/InfoRegScreen.tsx` _(55)_
 - `src/components/AddressPicker.tsx` _(44)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
@@ -21,13 +21,13 @@ Curated: [[Address Release]] · **77 files**
 - `src/services/addressLookupService.ts` _(32)_
 - `supabase/require_provider_address.sql` _(32)_
 - `src/screens/client/CartScreen.tsx` _(31)_
+- `src/screens/provider/BusinessInfoScreen.tsx` _(30)_
 - `src/screens/client/BookingDetailScreen.tsx` _(28)_
-- `src/screens/provider/BusinessInfoScreen.tsx` _(28)_
 - `src/contexts/BookingContext.tsx` _(27)_
 - `supabase/address_release_enforcement.sql` _(27)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
+- `src/features/business-details/options.ts` _(24)_
 - `src/services/becca/capabilities/provider.ts` _(23)_
-- `src/features/business-details/options.ts` _(21)_
 - `src/types/booking.ts` _(20)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `src/screens/client/BookingsScreen.tsx` _(16)_
@@ -180,7 +180,7 @@ Curated: [[Provider Onboarding & Go-Live]] · **65 files**
 - `src/services/databaseService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(25)_
 - `src/contexts/RegistrationContext.tsx` _(24)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(20)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(21)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(17)_
 - `src/screens/shared/DevSettingsScreen.tsx` _(14)_
 - `src/services/providerRegistrationService.ts` _(14)_

@@ -216,10 +216,20 @@ export default function BusinessInfoScreen({ navigation }: any) {
                       ? 'You travel to your clients, so they give you their address — this controls when a booked client can see yours.'
                       : 'When a booked client can see your address.'}
                   </Text>
+                  {/* Mobile gets an explicit "never" choice, stored as NULL.
+                      Without it, not-sharing would only ever be the initial
+                      state and a provider who picked a timing could never go
+                      back to private. Offered to mobile only: for a premises
+                      type the address is the whole point of the booking. */}
                   <RadioGroup
-                    options={ADDRESS_RELEASE_OPTS.filter(o => isAddressReleaseAllowed(businessType, o.value))}
+                    options={[
+                      ...ADDRESS_RELEASE_OPTS.filter(o => isAddressReleaseAllowed(businessType, o.value)),
+                      ...(businessType === 'mobile'
+                        ? [{ value: '', label: 'Never share', sub: 'Your address is never sent to clients. They give you theirs instead.' }]
+                        : []),
+                    ]}
                     value={addressReleasePolicy ?? ''}
-                    onChange={v => setAddressReleasePolicy(v as AddressReleasePolicy)}
+                    onChange={v => setAddressReleasePolicy(v === '' ? null : (v as AddressReleasePolicy))}
                   />
                 </View>
               )}
