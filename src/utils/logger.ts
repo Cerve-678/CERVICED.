@@ -127,4 +127,3 @@ export function installAuthErrorFilter(): void {
     originalConsoleError(...args);
   };
 }
-// hook test marker Thu Aug 20 01:26:03 BST 2026
