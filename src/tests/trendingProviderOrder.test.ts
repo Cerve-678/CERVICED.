@@ -15,7 +15,7 @@ const RANKED = {
 const mockRpc = jest.fn();
 const mockIn = jest.fn();
 
-jest.mock('../services/supabase', () => ({
+jest.mock('../lib/supabase', () => ({
   supabase: {
     rpc: (...args: unknown[]) => mockRpc(...args),
     from: () => ({
