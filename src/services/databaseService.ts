@@ -1349,6 +1349,13 @@ export async function getProviderClientele(): Promise<
     )
     .eq("provider_id", provider.id)
     .in("status", ["completed", "confirmed"])
+    // A provider is not their own client. Self-bookings are blocked at the DB
+    // now, but rows created before that guard existed still sit in bookings —
+    // and left in, they surface a card whose every action is either a no-op or
+    // a server rejection (get_or_create_provider_conversation raises
+    // self_conversation_not_allowed), plus they'd receive their own
+    // announcements and rebook nudges.
+    .neq("user_id", user.id)
     .order("booking_date", { ascending: false })
     // Rows here are aggregated into unique clients below, so this caps the
     // booking history scanned, not the clientele size. Ordered newest-first,
