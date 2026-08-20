@@ -66,3 +66,12 @@ supabase/.temp/
 * [0-9].js
 * [0-9].jsx
 * [0-9].json
+
+# Vault generator collisions. docs/vault/auto/ is regenerated wholesale by
+# scripts/gen-vault.mjs; every real file there is un-numbered, so a numbered
+# sibling is always a fork, never content. Safe to scope by directory (unlike
+# the source-extension rule above) because nothing here is hand-authored.
+# The generator itself still needs fixing to overwrite in place — see
+# PRE-LAUNCH-TODO.md section 9.
+docs/vault/auto/**/* [0-9].md
+docs/vault/auto/**/* [0-9][0-9].md

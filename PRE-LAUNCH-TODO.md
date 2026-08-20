@@ -374,3 +374,29 @@ does exist (e.g. `20260818105903_prevent_self_booking.sql`), but "looks
 superseded" is not evidence — reconcile against the live schema first. Same
 reason `supabase/migrations/` is excluded from the `.gitignore` rule: a real
 migration must never be silently untracked.
+
+---
+
+## 9. Vault generator forks its output instead of overwriting (2026-08-20)
+
+`docs/vault/auto/` holds 83 tracked, generated files — and, at the time of
+writing, **1,008 untracked numbered forks** of them: 72 screens duplicated up
+to 16 times each (`AboutScreen 2.md` … `AboutScreen 16.md`). CLAUDE.md has
+flagged this pattern since it was two files; it is now three orders of
+magnitude bigger.
+
+They are now gitignored (`docs/vault/auto/**/* [0-9].md`), so they no longer
+show up as untracked noise or risk being swept into a commit. **That is
+containment, not a fix** — the forks are still sitting on disk, and the count
+grows every time the generator runs.
+
+**The actual fix** is in `scripts/gen-vault.mjs`: make regeneration overwrite
+each file in place rather than writing a numbered sibling when the target
+exists. Worth checking whether iCloud is the cause here too (the same
+`~/Desktop` sync collision behind section 8) rather than the script's own
+write logic — if it's iCloud, the script needs to write atomically, or the
+vault output needs to live outside the synced tree.
+
+Deleting the 1,008 existing forks is safe whenever you want — everything in
+that directory is regenerated from source — but do the generator fix first, or
+they simply come back.
