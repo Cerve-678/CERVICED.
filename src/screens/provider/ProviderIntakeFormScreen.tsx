@@ -54,7 +54,7 @@ function makeId() { return Math.random().toString(36).slice(2, 9); }
 
 interface Template {
   id:        string;
-  kind:      'consultation' | 'patchTest' | 'medicalHistory' | 'policy';
+  kind:      'consultation' | 'patchTest' | 'medicalHistory' | 'policy' | 'terms';
   label:     string;
   subtitle:  string;
   keywords:  string[];
@@ -87,6 +87,34 @@ function buildPolicyTemplate(policyRows: PolicyDisplayRow[]): Template | null {
     ],
   };
 }
+
+/** The provider's own Terms & Conditions.
+ *
+ *  Static, unlike buildPolicyTemplate: booking_policies can generate a policy
+ *  summary because those are structured fields, but terms are prose only the
+ *  provider can write. So this is a starting shell with an empty body and the
+ *  headings most providers need, not generated content — nothing here is
+ *  legal wording put into a provider's mouth.
+ *
+ *  Kept out of TEMPLATES so it gets its own section rather than competing for
+ *  a slot in the keyword-scored consultation grid; every provider is offered
+ *  it regardless of what they do.
+ */
+const TERMS_TEMPLATE: Template = {
+  id: 'terms-and-conditions',
+  kind: 'terms',
+  label: 'Terms & Conditions',
+  subtitle: 'Your own terms, shown to clients when they book',
+  keywords: [],
+  questions: [
+    {
+      type: 'policy',
+      label: 'Terms & Conditions',
+      body: '',
+      required: true,
+    },
+  ],
+};
 
 const TEMPLATES: Template[] = [
   // ── Consultation forms (one per category — the general "what are we doing today" form) ──
@@ -309,6 +337,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [title, setTitle]                   = useState(`${serviceName} – Consultation Form`);
   const [questions, setQuestions]           = useState<IntakeFormQuestion[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [isTerms, setIsTerms] = useState(false);
   // Every service linked, not merely "as many as exist" — a provider with no
   // services at all shouldn't read as fully selected (the picker is hidden in
   // that case anyway, but the label would be wrong if it ever weren't).
@@ -408,6 +437,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setSelectedServices([]);
     setAutoSend(false);
     setRequiresSignature(false);
+    // Carried through the save so get_provider_terms can find this one row
+    // among a library that also holds medical-history and patch-test forms.
+    setIsTerms(tpl.kind === 'terms');
     setMode('builder');
   }, []);
 
@@ -419,6 +451,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setSelectedServices(form.serviceNames);
     setAutoSend(form.autoSend);
     setRequiresSignature(form.requiresSignature);
+    setIsTerms(form.isTerms);
     setMode('builder');
   }, []);
 
@@ -485,8 +518,9 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           serviceNames: selectedServices,
           autoSend,
           requiresSignature,
+          isTerms,
         });
-        saved = { id: editingId, providerId: '', title, questions, serviceNames: selectedServices, autoSend, requiresSignature, sentCount: 0, createdAt: '' };
+        saved = { id: editingId, providerId: '', title, questions, serviceNames: selectedServices, autoSend, requiresSignature, isTerms, sentCount: 0, createdAt: '' };
       } else {
         saved = await saveFormToLibrary({
           title: title.trim() || 'Consultation Form',
@@ -494,6 +528,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
           serviceNames: selectedServices,
           autoSend,
           requiresSignature,
+          isTerms,
         });
       }
       // Refresh library
@@ -507,7 +542,7 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, showToast]);
+  }, [editingId, title, questions, selectedServices, autoSend, requiresSignature, isTerms, showToast]);
 
   // ── Send to client ────────────────────────────────────────────────────────
   // Opened from a booking: bookingId/clientUserId are already known — send
@@ -731,6 +766,37 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
                         </View>
                       </TouchableOpacity>
                     ))}
+                  </View>
+
+                  {/* The provider's own T&Cs. Its own section, like the
+                      policy one below and for the same reason: every provider
+                      needs it regardless of what they do, so it isn't scored
+                      against service keywords like the grid above.
+                      Distinct from Policy Agreement — that's a generated
+                      summary of structured booking_policies (cancellation
+                      window, deposit, no-show); this is prose the provider
+                      writes, and it's the one form clients can read from the
+                      booking sheet before they book. */}
+                  <Text style={[styles.sectionHeading, { color: P.sub, marginTop: 24 }]}>YOUR TERMS</Text>
+                  <View style={styles.templateGrid}>
+                    <TouchableOpacity
+                      style={[styles.templateCard, { backgroundColor: P.card, borderColor: P.border }]}
+                      onPress={() => {
+                        const existing = libraryForms.find(f => f.isTerms);
+                        if (existing) openBuilderFromLibrary(existing);
+                        else openBuilderFromTemplate(TERMS_TEMPLATE);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.templateCardLabel, { color: P.text }]}>{TERMS_TEMPLATE.label}</Text>
+                      <Text style={[styles.templateCardSub, { color: P.sub }]}>{TERMS_TEMPLATE.subtitle}</Text>
+                      <View style={styles.templateCardFoot}>
+                        <Text style={[styles.templateCardCount, { color: P.sub }]}>
+                          {libraryForms.some(f => f.isTerms) ? 'Written — tap to edit' : 'Not written yet'}
+                        </Text>
+                        <Ionicons name="arrow-forward" size={13} color={P.sub} />
+                      </View>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Every provider has a policy (or can set one in Public

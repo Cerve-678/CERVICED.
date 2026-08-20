@@ -18,6 +18,7 @@ import {
   Switch,
   Animated,
   PanResponder,
+  Linking,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
@@ -86,6 +87,19 @@ import {
 } from '../../features/business-details/options';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+/**
+ * Where CERVICED's own Terms & Conditions live publicly.
+ *
+ * Deliberately null until someone supplies the real published URL — a guessed
+ * address that 404s is worse than the in-app copy, because a provider is being
+ * asked to agree to it. While it's null, tapping the link opens the same
+ * read-only TermsScreen shown from account settings, which is the complete
+ * document and is already kept in sync. Set this string and the link opens
+ * externally instead; nothing else has to change.
+ */
+const CERVICED_TERMS_URL: string | null = null;
+
 
 /**
  * Tap feedback. This screen is the longest form in the app and had haptics on
@@ -2438,6 +2452,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // mounted, so unsaved edits can't be lost by scrolling.
   const [activeSpySection, setActiveSpySection] = useState<EditorSectionKey>(FIRST_EDITOR_SECTION);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
+
+  // External when a public URL exists, in-app otherwise — see
+  // CERVICED_TERMS_URL. Falls back to the modal if the OS can't open the link
+  // rather than leaving the tap dead.
+  const openCervicedTerms = useCallback(() => {
+    if (!CERVICED_TERMS_URL) { setShowTermsModal(true); return; }
+    Linking.openURL(CERVICED_TERMS_URL).catch(() => setShowTermsModal(true));
+  }, []);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
   // moved to Business Profile → Policies. handleSubmit still writes this
@@ -3898,34 +3920,29 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     there's no separate free-text field to keep in sync
                     anymore, so this is the only place this ever needs
                     setting. */}
-                <View style={[styles.toggleRow]}>
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>Notify Followers on Release Day</Text>
-                    <Text style={styles.toggleHint}>Clients who turned on notifications for your profile get a reminder on this day each month</Text>
-                  </View>
-                  <Switch
-                    value={providerData.scheduleReleaseDay != null}
-                    onValueChange={(v) => {
-                      tapSelect();
-                      setProviderData({
-                        ...providerData,
-                        scheduleReleaseDay: v ? new Date().getDate() : null,
-                      });
-                    }}
-                    trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }}
-                    thumbColor="#fff"
-                  />
+                {/* One control, not a switch plus a hidden picker. The switch
+                    only ever meant "is a day set", and flipping it on guessed
+                    today's date — a real value the provider never chose, which
+                    then had to be corrected in the picker underneath. Now the
+                    row IS the picker: tap it, choose a day (it opens on today
+                    when nothing is set yet), and choosing "Don't notify" in
+                    there is what clears it. */}
+                <View style={styles.toggleInfo}>
+                  <Text style={styles.toggleLabel}>Notify Followers on Release Day</Text>
+                  <Text style={styles.toggleHint}>Clients who turned on notifications for your profile get a reminder on this day each month</Text>
                 </View>
-                {providerData.scheduleReleaseDay != null && (
-                  <TouchableOpacity
-                    style={styles.releaseDayBtn}
-                    onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
-                  >
-                    <Text style={styles.releaseDayBtnText}>
-                      Day {providerData.scheduleReleaseDay} of every month
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.releaseDayBtn}
+                  onPress={() => { tapSelect(); setReleaseDayPickerVisible(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.releaseDayBtnText}>
+                    {providerData.scheduleReleaseDay != null
+                      ? `Day ${providerData.scheduleReleaseDay} of every month`
+                      : 'Choose a day'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={chrome.fg(0.5)} />
+                </TouchableOpacity>
               </View>
 
             {/* Portfolio — client work gallery shown on your public profile */}
@@ -4746,7 +4763,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       {isEditMode ? 'You agreed to the ' : 'I agree to the '}
                       <Text
                         style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                        onPress={() => { tapSelect(); setShowTermsModal(true); }}
+                        onPress={() => { tapSelect(); openCervicedTerms(); }}
                       >
                         CERVICED Terms &amp; Conditions
                       </Text>
@@ -4806,13 +4823,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
 
           <ReleaseDayPicker
             visible={releaseDayPickerVisible}
-            value={providerData.scheduleReleaseDay ?? 1}
+            value={providerData.scheduleReleaseDay ?? new Date().getDate()}
             accentColor={adaptiveAccentColor}
             cardColor={editTheme.card}
             textColor={editTheme.text}
             subColor={editTheme.sub}
             borderColor={editTheme.border}
             styles={styles}
+            allowClear
+            onClear={() => setProviderData(prev => ({ ...prev, scheduleReleaseDay: null }))}
             onSelect={(day) => setProviderData(prev => ({ ...prev, scheduleReleaseDay: day }))}
             onClose={() => setReleaseDayPickerVisible(false)}
           />
@@ -7060,6 +7079,18 @@ const makeStyles = (isDark: boolean) => {
     color: fg(0.72),
   },
   releaseDayOptionTextSelected: { color: '#FFFFFF' },
+  releasePickerClearButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  releasePickerClearText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
+    fontSize: 13,
+    textDecorationLine: 'underline',
+  },
   releasePickerDoneButton: {
     borderRadius: 15,
     alignItems: 'center',

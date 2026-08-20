@@ -27,6 +27,8 @@ import { AvailabilityService } from '../services/AvailabilityService';
 import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
   getProviderDepositPoliciesByDisplayNames,
+  getProviderIdByDisplayName,
+  getProviderTerms,
   ProviderDepositPolicy,
   validatePromoCode,
 } from '../services/databaseService';
@@ -264,6 +266,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   const resolvedOnce = useRef(false);
   const depositFetched = useRef(false);
+  const termsFetched = useRef(false);
+  const [providerTerms, setProviderTerms] = useState<{ title: string; body: string } | null>(null);
+  const [showProviderTerms, setShowProviderTerms] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
@@ -281,6 +286,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setStep((service?.addOns?.length ?? 0) > 0 ? 'addons' : 'when');
     resolvedOnce.current = false;
     depositFetched.current = false;
+    termsFetched.current = false;
     consultationResolvedOnce.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, service?.id]);
@@ -334,6 +340,24 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       .then(policies => setDepositPolicy(policies[providerDisplayName]))
       .catch(() => {});
   }, [isVisible, providerDisplayName]);
+
+  // The provider's own Terms & Conditions, if they've written any. Read-only
+  // here: this is a "read before you book" surface, not an agreement step —
+  // sending it as a real form the client signs is a separate feature (see
+  // FUTURE_LOGIC.md). null means they haven't written any, which is normal
+  // and shows nothing; a failed read is treated the same way rather than
+  // blocking the booking on a document that may not exist.
+  useEffect(() => {
+    if (!isVisible || termsFetched.current) return;
+    termsFetched.current = true;
+    const resolveProviderId = UUID_RE.test(providerIdentifier)
+      ? Promise.resolve(providerIdentifier)
+      : getProviderIdByDisplayName(providerDisplayName);
+    resolveProviderId
+      .then(id => (id ? getProviderTerms(id) : null))
+      .then(setProviderTerms)
+      .catch(() => setProviderTerms(null));
+  }, [isVisible, providerIdentifier, providerDisplayName]);
 
   // Provider requires deposit-only (set in their business details) — the
   // client has no "pay in full" choice, so force it regardless of whatever
@@ -869,6 +893,25 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   </Text>
                 </TouchableOpacity>
               )}
+
+              {/* Read-only, and shown whether or not there's a policy to agree
+                  to — a provider can have written terms without having filled
+                  in any structured booking policy. Deliberately not a second
+                  checkbox: nothing here records agreement to these terms, so
+                  presenting it as consent would claim something the app can't
+                  back up. Sending them as a signable form is the follow-on
+                  feature (FUTURE_LOGIC.md). */}
+              {providerTerms && (
+                <TouchableOpacity
+                  style={styles.providerTermsLinkRow}
+                  onPress={() => setShowProviderTerms(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
+                    Read {providerDisplayName}'s Terms &amp; Conditions
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </ScrollView>
@@ -965,6 +1008,44 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           </SafeAreaView>
         </View>
       </KeyboardDismissView>
+
+      {/* Nested inside the sheet's own Modal so it lands on top of it rather
+          than replacing it — the client is mid-booking and goes straight back
+          to where they were. */}
+      <Modal
+        visible={showProviderTerms}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowProviderTerms(false)}
+      >
+        <View style={styles.termsOverlay}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+              <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
+                  {providerTerms?.title ?? 'Terms & Conditions'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowProviderTerms(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close terms"
+                >
+                  <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.termsBody}>
+                <Text style={[styles.termsBodyText, { color: tokens.text }]}>
+                  {providerTerms?.body ?? ''}
+                </Text>
+                <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
+                  Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -1007,6 +1088,19 @@ const styles = StyleSheet.create({
   addOnCheckmark: { fontSize: 12, fontWeight: '700' },
   policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 },
   policyCheckboxLabel: { flex: 1, fontSize: 13 },
+  providerTermsLinkRow: { paddingVertical: 10 },
+  providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  termsHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  termsTitle: { flex: 1, fontSize: 17, fontWeight: '700', marginRight: 12 },
+  termsClose: { fontSize: 18, fontWeight: '600' },
+  termsBody: { paddingHorizontal: 20, paddingVertical: 18, paddingBottom: 40 },
+  termsBodyText: { fontSize: 14, lineHeight: 21 },
+  termsFootnote: { fontSize: 12, lineHeight: 18, marginTop: 22, fontStyle: 'italic' },
   requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   resolvingText: { fontSize: 13 },

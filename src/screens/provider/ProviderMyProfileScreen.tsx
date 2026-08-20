@@ -85,9 +85,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const [showPolicyImage, setShowPolicyImage] = useState(false);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
-  // A provider's own T&Cs are a form with a 'policy' question in it — that's
-  // the only shape in the app that captures a client actually agreeing to
-  // something, so it's what "has terms" means here. See BusinessInfoScreen.
+  // A provider's own T&Cs are the one library form flagged is_terms — the
+  // Terms & Conditions template in Forms sets it, and it's what
+  // get_provider_terms serves to the booking sheet. Checking "has a policy
+  // question" instead would also match the Policy Agreement form, which is a
+  // different document.
   const [hasTermsForm, setHasTermsForm] = useState<boolean | null>(null);
 
   // Reload data every time screen comes into focus
@@ -138,7 +140,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               // so the readiness list omits the item entirely rather than
               // telling a provider to write terms they may already have.
               getProviderFormLibrary()
-                .then(forms => setHasTermsForm(forms.some(f => f.questions.some(q => q.type === 'policy'))))
+                .then(forms => setHasTermsForm(forms.some(f => f.isTerms)))
                 .catch(() => setHasTermsForm(null));
             }
           }

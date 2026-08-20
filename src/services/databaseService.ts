@@ -3638,6 +3638,10 @@ export interface LibraryForm {
   serviceNames: string[]; // provider's service names this form covers
   autoSend: boolean; // auto-send when matching service is booked
   requiresSignature: boolean;
+  /** This form IS the provider's own Terms & Conditions — the one clients can
+   *  read from the booking sheet before booking. At most one per provider
+   *  (enforced by a partial unique index, not just here). */
+  isTerms: boolean;
   sentCount: number;
   createdAt: string;
 }
@@ -3658,12 +3662,35 @@ export async function getProviderFormLibrary(): Promise<LibraryForm[]> {
   return (data ?? []).map(mapLibraryForm);
 }
 
+/** A provider's own Terms & Conditions, as a client sees them before booking.
+ *
+ *  Goes through the get_provider_terms RPC rather than reading
+ *  provider_form_library directly: that table is owner-only by design (it also
+ *  holds medical-history and patch-test forms), so the RPC is the one narrow
+ *  window onto it — terms text only, and only for a live provider. Returns
+ *  null when this provider hasn't written any, which is the normal case.
+ *
+ *  Requires supabase/provider_terms_and_conditions.sql to have been run.
+ */
+export async function getProviderTerms(
+  providerId: string,
+): Promise<{ title: string; body: string } | null> {
+  const { data, error } = await supabase.rpc("get_provider_terms", {
+    p_provider_id: providerId,
+  });
+  if (error) throw error;
+  const row = (data as { title: string; body: string | null }[] | null)?.[0];
+  if (!row?.body) return null;
+  return { title: row.title, body: row.body };
+}
+
 export async function saveFormToLibrary(params: {
   title: string;
   questions: IntakeFormQuestion[];
   serviceNames: string[];
   autoSend: boolean;
   requiresSignature: boolean;
+  isTerms?: boolean;
 }): Promise<LibraryForm> {
   const provider = await getMyProviderProfile();
   if (!provider) throw new Error("No provider profile");
@@ -3676,6 +3703,7 @@ export async function saveFormToLibrary(params: {
       service_names: params.serviceNames,
       auto_send: params.autoSend,
       requires_signature: params.requiresSignature,
+      is_terms: params.isTerms ?? false,
     })
     .select()
     .single();
@@ -3691,6 +3719,7 @@ export async function updateLibraryForm(
     serviceNames: string[];
     autoSend: boolean;
     requiresSignature: boolean;
+    isTerms: boolean;
   }>,
 ): Promise<void> {
   const patch: Record<string, unknown> = {};
@@ -3701,6 +3730,7 @@ export async function updateLibraryForm(
   if (params.autoSend !== undefined) patch["auto_send"] = params.autoSend;
   if (params.requiresSignature !== undefined)
     patch["requires_signature"] = params.requiresSignature;
+  if (params.isTerms !== undefined) patch["is_terms"] = params.isTerms;
   patch["updated_at"] = new Date().toISOString();
   const { error } = await supabase
     .from("provider_form_library")
@@ -3808,6 +3838,7 @@ function mapLibraryForm(d: any): LibraryForm {
     serviceNames: d.service_names ?? [],
     autoSend: d.auto_send ?? false,
     requiresSignature: d.requires_signature ?? false,
+    isTerms: d.is_terms ?? false,
     sentCount: d.sent_count ?? 0,
     createdAt: d.created_at,
   };

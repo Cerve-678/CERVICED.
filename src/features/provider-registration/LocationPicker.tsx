@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import {
   CITY_AREA_NAMES,
@@ -90,7 +91,7 @@ function ChipSelectWithOther({
           <TouchableOpacity
             key={option}
             style={[styles.chip, active && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
-            onPress={() => onSelect(option)}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); onSelect(option); }}
           >
             <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
           </TouchableOpacity>
@@ -98,7 +99,7 @@ function ChipSelectWithOther({
       })}
       <TouchableOpacity
         style={[styles.chip, otherActive && { backgroundColor: `${accentColor}2E`, borderColor: accentColor }]}
-        onPress={onToggleOther}
+        onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggleOther(); }}
       >
         <Text style={[styles.chipText, otherActive && { color: accentColor }]}>Other…</Text>
       </TouchableOpacity>
@@ -246,7 +247,7 @@ export function LocationPicker({
     <>
       <TouchableOpacity
         style={styles.locationSelectRow}
-        onPress={() => setCityModalVisible(true)}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setCityModalVisible(true); }}
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel="Choose your city"
@@ -390,7 +391,7 @@ export function LocationPicker({
                 </View>
                 <TouchableOpacity
                   style={styles.modalCloseButton}
-                  onPress={() => setCityModalVisible(false)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setCityModalVisible(false); }}
                 >
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
@@ -427,7 +428,7 @@ export function LocationPicker({
                     one option among many here, not the primary path. */}
                 <TouchableOpacity
                   style={[localStyles.otherRow, { borderColor: accentColor }]}
-                  onPress={() => selectCity(OTHER_CITY)}
+                  onPress={() => { Haptics.selectionAsync().catch(() => {}); selectCity(OTHER_CITY); }}
                   activeOpacity={0.85}
                 >
                   <Ionicons name="create-outline" size={16} color={accentColor} />
@@ -440,7 +441,7 @@ export function LocationPicker({
                   <TouchableOpacity
                     key={name}
                     style={styles.templateCard}
-                    onPress={() => selectCity(name)}
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); selectCity(name); }}
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityState={{ selected: city === name }}

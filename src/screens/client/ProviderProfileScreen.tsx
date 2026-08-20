@@ -95,7 +95,7 @@ import {
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
-import { BUSINESS_TYPE_LABEL, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
+import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import { mapProviderProfileData } from "../../features/providers/profileMapper";
 import type { ProviderProfileData, ProviderProfileService } from "../../features/providers/profileTypes";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
@@ -2114,7 +2114,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     await handleLeaveWaitlist(entry);
   }, [leaveConfirmEntry, handleLeaveWaitlist]);
 
-  // Get In Touch → opens in-app chat with this provider
+  // Get In Touch → in-app chat, or the communication-options sheet when
+  // you're looking at your own profile.
+  const [contactSheetVisible, setContactSheetVisible] = useState(false);
+
   const handleGetInTouch = useCallback(() => {
     if (!provider || !providerDbId) {
       Alert.alert("Not available", "Provider details are still loading.");
@@ -2123,13 +2126,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // get_or_create_provider_conversation raises self_conversation_not_allowed
     // for this, and ProviderChatScreen had no handling for it — the client
     // landed on a permanently empty thread with the raw Postgres message in
-    // the logs and nothing on screen. Stop before navigating and point at the
-    // contact details, which is all you actually need on your own profile.
+    // the logs and nothing on screen. Stop before navigating.
+    //
+    // This used to raise an OS Alert reading "That's your profile — your
+    // contact options are in the Contact section below", which was both an
+    // out-of-app system dialog on a heavily themed screen AND a dead end that
+    // told you to go and scroll somewhere. Show the options themselves
+    // instead, in the app's own bottom sheet.
     if (isOwnProvider) {
-      Alert.alert(
-        "That's your profile",
-        "You can't message yourself. Your contact options are in the Contact section below.",
-      );
+      setContactSheetVisible(true);
       return;
     }
     navigation.navigate("ProviderChat", {
@@ -2138,6 +2143,67 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       providerName: provider.displayName,
     });
   }, [provider, providerDbId, navigation, isOwnProvider]);
+
+  // The communication options this provider actually publishes, in the order
+  // the Contact card lists them. Built once so the sheet and that card can't
+  // drift apart on which methods count as available.
+  const contactOptions = useMemo(() => {
+    if (!provider) return [];
+    const methods = provider.preferredContactMethods ?? [];
+    const options: {
+      key: string;
+      icon: keyof typeof Ionicons.glyphMap;
+      label: string;
+      detail: string;
+      url: string;
+    }[] = [];
+    if (provider.phone && methods.includes("phone")) {
+      options.push({
+        key: "phone",
+        icon: "chatbubble-outline",
+        label: "Text message",
+        detail: provider.phone,
+        url: `sms:${provider.phone.replace(/\s/g, "")}`,
+      });
+    }
+    if (provider.whatsapp && methods.includes("whatsapp")) {
+      options.push({
+        key: "whatsapp",
+        icon: "logo-whatsapp",
+        label: "WhatsApp",
+        detail: provider.whatsapp,
+        url: `https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, "")}`,
+      });
+    }
+    if (provider.email && methods.includes("email")) {
+      options.push({
+        key: "email",
+        icon: "mail-outline",
+        label: "Email",
+        detail: provider.email,
+        url: `mailto:${provider.email}`,
+      });
+    }
+    if (provider.instagram) {
+      options.push({
+        key: "instagram",
+        icon: "logo-instagram",
+        label: "Instagram",
+        detail: `@${provider.instagram}`,
+        url: `https://instagram.com/${provider.instagram}`,
+      });
+    }
+    if (provider.website) {
+      options.push({
+        key: "website",
+        icon: "globe-outline",
+        label: "Website",
+        detail: provider.website,
+        url: provider.website,
+      });
+    }
+    return options;
+  }, [provider]);
 
   // Configure the navigation header with your gradient and icons
   React.useLayoutEffect(() => {
@@ -4289,25 +4355,42 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   )}
                 </View>
 
-                {/* SERVICE TYPE · LOCATION in small caps */}
-                <Text
-                  style={[
-                    styles.providerMeta,
-                    { color: heroSub },
-                    heroIsDark && styles.heroTextShadow,
-                  ]}
-                >
-                  {(provider.providerService === "OTHER"
-                    ? provider.customServiceType || "SERVICE"
-                    : provider.providerService
-                  ).toUpperCase()}
-                  {provider.location
-                    ? ` · ${provider.location.toUpperCase()}`
-                    : ""}
-                  {provider.businessType
-                    ? ` · ${BUSINESS_TYPE_LABEL[provider.businessType].toUpperCase()}`
-                    : ""}
-                </Text>
+                {/* SERVICE TYPE · LOCATION · business-type glyph, in small
+                    caps. The business type is the icon rather than its words
+                    — "HOME STUDIO" is long next to a service and a city, and
+                    BUSINESS_TYPE_ICON already carries the same meaning on
+                    search cards, so the two surfaces now read the same way.
+                    Laid out as a row rather than inline text so the glyph can
+                    be optically centred against the caps (which sit high in
+                    their line box) instead of riding the text baseline. */}
+                <View style={styles.providerMetaRow}>
+                  <Text
+                    style={[
+                      styles.providerMeta,
+                      { color: heroSub },
+                      heroIsDark && styles.heroTextShadow,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {(provider.providerService === "OTHER"
+                      ? provider.customServiceType || "SERVICE"
+                      : provider.providerService
+                    ).toUpperCase()}
+                    {provider.location
+                      ? ` · ${provider.location.toUpperCase()}`
+                      : ""}
+                    {provider.businessType ? " · " : ""}
+                  </Text>
+                  {provider.businessType ? (
+                    <Ionicons
+                      name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
+                      size={13}
+                      color={heroSub}
+                      style={styles.providerMetaIcon}
+                      accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
+                    />
+                  ) : null}
+                </View>
 
                 {/* Rating inline */}
                 <View style={styles.ratingRow}>
@@ -4354,18 +4437,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       ? `${availability.headline}${availability.detail ? ` · ${availability.detail}` : ""}`
                       : "";
                   // A provider who publishes slots on a fixed day of the
-                  // month leads with THAT, not with today's open/closed
-                  // headline — "Open today until 6pm" is the less useful
-                  // half of the sentence for someone waiting on next
-                  // month's diary to drop. Availability stays on as the
-                  // secondary clause when there's one to add.
-                  const releaseText =
+                  // month says THAT and nothing else. Today's open/closed
+                  // headline is the wrong answer for someone waiting on next
+                  // month's diary to drop, and pairing the two ("New slots
+                  // drop on the 20th · Open today until 6pm") reads as two
+                  // competing claims about when you can book. The release
+                  // day replaces the availability line, it doesn't lead it.
+                  const rowText =
                     provider.scheduleReleaseDay != null
                       ? `New slots drop on the ${ordinalSuffix(provider.scheduleReleaseDay)}`
-                      : "";
-                  const rowText = releaseText
-                    ? `${releaseText}${pillText ? ` · ${pillText}` : ""}`
-                    : pillText;
+                      : pillText;
                   // The bell subscribes to this provider's release
                   // notification, but it is also the general "tell me when
                   // this provider opens up" control, so it renders for every
@@ -4375,29 +4456,53 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   const showInstagram = !!provider.instagram;
                   if (availabilityLoading) return null;
                   return (
-                  <BlurView
-                    intensity={cardBlurIntensity}
-                    tint={cardBlurTint}
-                    style={[
-                      styles.slotsRow,
-                      { backgroundColor: cardBg, borderColor: OP.border },
-                    ]}
-                  >
-                    <LinearGradient
-                      colors={cardHighlightColors}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={styles.slotsCardHighlight}
-                    />
-                    <Text
-                      style={[styles.slotsText, { color: OP.sub }]}
-                      numberOfLines={1}
+                  // Instagram sits OUTSIDE the pill, as its own round button
+                  // beside it. Inside, it read as part of the availability
+                  // statement — a third element in a row that says "when you
+                  // can book" — when it's really a link off to another app.
+                  // The bell stays in: it acts on this provider's
+                  // availability, which is exactly what the pill is about.
+                  <View style={styles.slotsRowOuter}>
+                    <BlurView
+                      intensity={cardBlurIntensity}
+                      tint={cardBlurTint}
+                      style={[
+                        styles.slotsRow,
+                        { backgroundColor: cardBg, borderColor: OP.border },
+                      ]}
                     >
-                      {rowText || "Availability on request"}
-                    </Text>
-                    {showInstagram ? (
+                      <LinearGradient
+                        colors={cardHighlightColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.slotsCardHighlight}
+                      />
+                      <Text
+                        style={[styles.slotsText, { color: OP.sub }]}
+                        numberOfLines={1}
+                      >
+                        {rowText || "Availability on request"}
+                      </Text>
                       <TouchableOpacity
                         style={styles.bellButtonInline}
+                        onPress={handleNotificationToggle}
+                        activeOpacity={0.8}
+                        accessibilityLabel="Notifications"
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isNotificationsEnabled }}
+                      >
+                        <BellIcon
+                          size={16}
+                          color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
+                        />
+                      </TouchableOpacity>
+                    </BlurView>
+                    {showInstagram ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.instagramButtonOutside,
+                          { backgroundColor: cardBg, borderColor: OP.border },
+                        ]}
                         onPress={() => {
                           Haptics.selectionAsync().catch(() => {});
                           Linking.openURL(
@@ -4415,25 +4520,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       >
                         <Ionicons
                           name="logo-instagram"
-                          size={16}
+                          size={17}
                           color={OP.sub}
                         />
                       </TouchableOpacity>
                     ) : null}
-                    <TouchableOpacity
-                      style={styles.bellButtonInline}
-                      onPress={handleNotificationToggle}
-                      activeOpacity={0.8}
-                      accessibilityLabel="Notifications"
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isNotificationsEnabled }}
-                    >
-                      <BellIcon
-                        size={16}
-                        color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
-                      />
-                    </TouchableOpacity>
-                  </BlurView>
+                  </View>
                   );
                 })()}
 
@@ -5184,13 +5276,27 @@ const styles = StyleSheet.create({
     textAlign: "center",
     opacity: 0.7,
   },
+  // Row wrapper so the business-type glyph sits beside the caps line rather
+  // than inside it. marginBottom moves here from providerMeta — the row now
+  // owns the spacing below the whole line.
+  providerMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
   providerMeta: {
     fontFamily: "Jura-VariableFont_wght",
     fontWeight: "800",
     fontSize: 12,
     letterSpacing: 1.2,
     textAlign: "center",
-    marginBottom: 10,
+    flexShrink: 1,
+  },
+  // Caps sit high in their line box, so centring the glyph on the row leaves
+  // it looking a touch low against the letterforms — nudged up to match.
+  providerMetaIcon: {
+    marginTop: -1,
   },
   ratingRow: {
     flexDirection: "row",
@@ -5251,6 +5357,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.3,
   },
+  // Holds the availability pill and, beside it, the Instagram button.
+  // marginBottom moves here from slotsRow so the pair share one gap below.
+  slotsRowOuter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
   slotsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -5260,7 +5374,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    marginBottom: 4,
+    flexShrink: 1,
+  },
+  // Matches the pill's own surface and border so it reads as a sibling of
+  // it, not a floating icon. Square-ish so it's a circle at this size.
+  instagramButtonOutside: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   providerNameLarge: {
     fontFamily: "BakbakOne-Regular",
