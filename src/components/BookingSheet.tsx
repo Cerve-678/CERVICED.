@@ -714,7 +714,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       <Text style={[styles.paymentOptionText, { color: tokens.sub }, isDepositOnly && { color: adaptiveAccentColor, fontWeight: '700' }]}>
                         {depositPolicy
                           ? depositPolicy.depositType === 'fixed'
-                            ? `Pay Deposit (£${depositPolicy.depositAmount} flat)`
+                            ? `Pay Deposit (£${depositPolicy.depositAmount})`
                             : `Pay Deposit (${depositPolicy.depositAmount}%)`
                           : 'Pay Deposit (20%)'}
                       </Text>

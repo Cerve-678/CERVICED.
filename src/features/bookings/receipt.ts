@@ -1,6 +1,6 @@
 import type { ConfirmedBooking } from '../../contexts/BookingContext';
 import { formatLongDate, formatShortDate } from '../../utils/dateUtils';
-import { PAYMENT_METHOD_LABELS } from './paymentPresentation';
+import { PAYMENT_METHOD_LABELS, calculateBookingPaymentBreakdown } from './paymentPresentation';
 
 const money = (amount: number) => `£${Math.max(0, amount).toFixed(2)}`;
 // Coerce to string first: a receipt is built from booking data that must never
@@ -12,26 +12,39 @@ const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>'"]/g, c
  * fee is shown as no line at all, and the client sees exactly what remains to
  * be settled with the provider at the appointment. */
 export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
-  const servicePrice = Number(booking.price) || 0;
+  // Shares calculateBookingPaymentBreakdown with the in-app payment card so
+  // the printed receipt and the screen can never word the same booking
+  // differently — in particular which figure counts as "paid" on a deposit,
+  // and whether anything was paid at all.
+  const payment = calculateBookingPaymentBreakdown(booking);
   const addOns = booking.addOns ?? [];
-  const addOnsTotal = addOns.reduce((sum, addOn) => sum + (Number(addOn.price) || 0), 0);
-  const serviceTotal = servicePrice + addOnsTotal;
-  const platformFee = Number(booking.serviceCharge) || 0;
-  const bookingTotal = serviceTotal + platformFee;
-  const paymentType = booking.paymentType || 'full';
-  const amountPaid = Number(booking.amountPaid) || 0;
-  const depositAmount = Number(booking.depositAmount) || 0;
-  const remainingBalance = Math.max(0, bookingTotal - amountPaid);
+  const servicePrice = payment.servicePrice;
+  const serviceTotal = payment.subtotal;
+  const platformFee = payment.serviceCharge;
+  const bookingTotal = payment.total;
+  const remainingBalance = Math.max(0, payment.remainingBalance);
+  const depositAmount = payment.depositAmount;
   const paymentMethod = (booking as { paymentMethod?: string }).paymentMethod;
   const paymentMethodLabel = paymentMethod ? PAYMENT_METHOD_LABELS[paymentMethod] ?? 'Card' : 'Card';
   const addOnRows = addOns.map(addOn => `<tr><td class="muted indent">+ ${escapeHtml(addOn.name)}</td><td>${money(Number(addOn.price) || 0)}</td></tr>`).join('');
   const platformFeeRow = platformFee > 0 ? `<tr><td class="muted">Cerviced platform fee</td><td>${money(platformFee)}</td></tr>` : '';
-  const paidLabel = paymentType === 'deposit' ? 'Deposit paid to provider' : 'Paid today';
+  // On a deposit this is the provider's deposit alone — the platform fee is
+  // already its own line above and is not part of what the client has put
+  // towards the service.
+  const paidLabel = payment.isDeposit
+    ? 'Deposit paid to provider'
+    : payment.isUnpaid ? 'Paid so far' : 'Paid today';
+  const paidAmount = payment.paidAmount;
   const balanceRow = remainingBalance > 0
     ? `<tr class="balance"><td>Due to provider at appointment</td><td>${money(remainingBalance)}</td></tr>`
     : `<tr class="settled"><td>Balance due</td><td>£0.00</td></tr>`;
 
-  const statusLabel = paymentType === 'deposit' ? 'Deposit paid' : 'Paid in full';
+  // Driven by payment_status, never payment_type: a booking the provider
+  // added by hand is payment_type 'full' with nothing paid, and used to head
+  // its own receipt "Paid in full · £0.00".
+  const statusLabel = payment.isDeposit
+    ? 'Deposit paid'
+    : payment.isPaidInFull ? 'Paid in full' : 'Awaiting payment';
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @page{margin:16mm}*{box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#211d1a;background:#fff;font-size:13px;line-height:1.45}.page{max-width:680px;margin:0 auto}
@@ -70,10 +83,10 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   </style></head><body><main class="page">
     <header class="header"><div><div class="brand">CERVICED</div><div class="eyebrow">Booking payment receipt</div></div><div><div class="receipt-title">Receipt</div><div class="reference">#${escapeHtml((booking.id ?? '').slice(0, 8).toUpperCase())}</div></div></header>
     <div class="accent-bar"></div>
-    <div class="status-panel"><div><div class="status-label">${escapeHtml(statusLabel)}</div><div class="status-value">${money(amountPaid)}</div></div><div class="status-total"><div class="status-label">Booking total</div><div class="status-value">${money(bookingTotal)}</div></div></div>
+    <div class="status-panel"><div><div class="status-label">${escapeHtml(statusLabel)}</div><div class="status-value">${money(paidAmount)}</div></div><div class="status-total"><div class="status-label">Booking total</div><div class="status-value">${money(bookingTotal)}</div></div></div>
     <div class="grid"><div><div class="block-title">Provider</div><div class="block-value">${escapeHtml(booking.providerName ?? '—')}</div></div><div><div class="block-title">Appointment</div><div class="block-value">${booking.bookingDate ? escapeHtml(formatLongDate(booking.bookingDate)) : '—'}</div><div class="block-note">${escapeHtml(booking.bookingTime ?? '—')}</div></div></div>
     <section><div class="section-title">Services</div><table><tr class="strong"><td>${escapeHtml(booking.serviceName ?? 'Service')}</td><td>${money(servicePrice)}</td></tr>${addOnRows}${addOns.length > 0 ? `<tr><td class="muted">Service subtotal</td><td>${money(serviceTotal)}</td></tr>` : ''}${platformFeeRow}</table></section>
-    <section><div class="section-title">Payment</div><table><tr class="total"><td>Booking total</td><td>${money(bookingTotal)}</td></tr><tr class="paid"><td>${paidLabel}</td><td>${money(amountPaid)}</td></tr>${balanceRow}<tr><td class="muted">Payment method</td><td>${escapeHtml(paymentMethodLabel)}</td></tr></table>${paymentType === 'deposit' ? `<div class="notice">Your ${money(depositAmount || amountPaid)} deposit is for the provider’s service. ${remainingBalance > 0 ? `${money(remainingBalance)} remains payable directly to the provider at your appointment.` : 'No balance remains.'}</div>` : ''}</section>
+    <section><div class="section-title">Payment</div><table><tr class="total"><td>Booking total</td><td>${money(bookingTotal)}</td></tr><tr class="paid"><td>${paidLabel}</td><td>${money(paidAmount)}</td></tr>${balanceRow}<tr><td class="muted">Payment method</td><td>${escapeHtml(paymentMethodLabel)}</td></tr></table>${payment.isDeposit ? `<div class="notice">Your ${money(depositAmount)} deposit is for the provider’s service. ${remainingBalance > 0 ? `${money(remainingBalance)} remains payable directly to the provider at your appointment.` : 'No balance remains.'}</div>` : ''}${payment.isUnpaid && remainingBalance > 0 ? `<div class="notice">No payment has been taken through CERVICED for this booking. Payment is arranged directly with ${escapeHtml(booking.providerName ?? 'your provider')}.</div>` : ''}</section>
     <footer class="footer">${booking.createdAt ? `Issued ${escapeHtml(formatShortDate(new Date(booking.createdAt)))} · ` : ''}Keep this receipt for your records<br/><span class="footer-brand">CERVICED</span></footer>
   </main></body></html>`;
 }

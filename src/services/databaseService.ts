@@ -792,6 +792,15 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Portfolio rows a provider uploaded as photos of their venue/workspace
+ *  rather than of their work (see InfoRegScreen's "Address & venue photos"
+ *  uploader, which stamps this exact category). They belong on the
+ *  provider's own profile — a client deciding between a salon and a home
+ *  studio wants to see the room — but not in a browse/inspiration feed,
+ *  where a picture of an empty treatment room sits oddly among photos of
+ *  actual results. Stored lowercase, unlike every real service category. */
+const VENUE_PORTFOLIO_CATEGORY = "venue";
+
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
@@ -809,6 +818,14 @@ export async function getPortfolioItems(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Venue/workspace shots are excluded from Explore's discovery feed and
+    // Becca's inspiration search. getProviderPortfolio() (the provider
+    // profile's own Portfolio grid) is deliberately NOT filtered — that is
+    // where these are meant to be seen. Written as an OR with is-null rather
+    // than a plain .neq(): in SQL `category <> 'venue'` is NULL (not true)
+    // for a NULL category, so a bare .neq would silently drop the legacy
+    // category-less rows mapDbPortfolioItem still has a fallback for.
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .order("created_at", { ascending: false });
 
   if (category && category !== "All") {
@@ -834,6 +851,11 @@ export async function searchPortfolio(
     )
     .eq("provider.is_active", true)
     .eq("provider.has_gone_live", true)
+    // Same exclusion as getPortfolioItems — this is the text-search half of
+    // the same discovery/inspiration surface. A second .or() is a separate
+    // top-level condition ANDed with the caption/tags one below, not a
+    // replacement for it.
+    .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
     .or(`caption.ilike.%${query}%,tags.cs.{${query}}`)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -5211,19 +5233,6 @@ export async function getUserSignupPrefillInfo(userId: string): Promise<{
     preferred_contact_methods: string[] | null;
     preferred_payment_methods: string[] | null;
   };
-}
-
-/** Fetch allergies and medical_notes — attached to bookings at checkout so the provider is briefed */
-export async function getUserHealthProfile(
-  userId: string,
-): Promise<{ allergies: string[]; medical_notes: string | null } | null> {
-  const { data, error } = await supabase
-    .from("users")
-    .select("allergies, medical_notes")
-    .eq("id", userId)
-    .single();
-  if (error) return null; // non-fatal — health data is best-effort
-  return data as { allergies: string[]; medical_notes: string | null };
 }
 
 /** Fetch the name field from the users table (distinct from providers.display_name) */

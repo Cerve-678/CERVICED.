@@ -83,6 +83,34 @@ export default function ExploreNavigator() {
         }}
       />
 
+      {/* PUSH NAVIGATION for Search — deliberately a card, NOT part of the
+          fullScreenModal group below. react-native-screens presents a
+          fullScreenModal as a presented view controller on top of the
+          navigation controller, and every screen pushed after it joins that
+          presentation chain rather than the underlying stack — so tapping a
+          result in Search (which pushes ProviderProfile, a 'card') did
+          nothing at all when Search was reached from Explore, while the
+          identical tap worked from Home, where Search is a plain push.
+          HomeNavigator registers it the same way; `animation: 'none'` is
+          what Search's own "float up and merge" entrance (see
+          SearchScreen's isMorphEntry) needs, and it never needed the modal
+          presentation to get that. Same class of bug as BookmarkedProviders
+          above. */}
+      <ExploreStack.Screen
+        name="Search"
+        component={SearchScreen}
+        options={{
+          title: 'Search Cervices',
+          presentation: 'card',
+          animation: 'none',
+          headerBackTitle: 'Back',
+          headerStyle: {
+            backgroundColor: theme.background,
+          },
+          headerTintColor: theme.text,
+        }}
+      />
+
       {/* FULL-SCREEN MODALS */}
       <ExploreStack.Group screenOptions={{
         presentation: 'fullScreenModal',
@@ -92,22 +120,6 @@ export default function ExploreNavigator() {
         },
         headerTintColor: theme.text,
       }}>
-        <ExploreStack.Screen
-          name="Search"
-          component={SearchScreen}
-          options={{
-            title: 'Search Cervices',
-            // Overrides the group's fullScreenModal slide-up-from-bottom —
-            // Search plays its own internal "float up and merge" entrance
-            // (see SearchScreen's isMorphEntry), so the screen itself must
-            // enter with no transition of its own, same as HomeNavigator's
-            // Search screen. The per-navigate `{ animation: 'none' }' 3rd
-            // argument some callers pass to navigation.navigate() doesn't
-            // actually override a navigator-level presentation animation —
-            // this static option is what actually takes effect.
-            animation: 'none',
-          }}
-        />
         <ExploreStack.Screen
           name="DevSettings"
           component={DevSettingsScreen}

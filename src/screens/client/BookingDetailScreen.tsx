@@ -777,7 +777,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
-                <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total Paid</Text><Text style={[st.rowValue, { color: '#34C759' }]}>£{(payment.paymentType === 'deposit' ? payment.totalPaidAtCheckout : payment.amountPaidAtCheckout).toFixed(2)}</Text></View>
+                <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
+                {/* Only on a deposit, where paidLabel's figure is the
+                    provider's deposit alone — without this row the deposit
+                    and the balance don't add up to the total. */}
+                {payment.feePaidSeparately > 0 && (
+                  <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Platform Fee Paid</Text><Text style={[st.rowValue, { color: '#34C759' }]}>£{payment.feePaidSeparately.toFixed(2)}</Text></View>
+                )}
                 <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
@@ -844,8 +850,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.text, fontWeight: '700', fontSize: 15 }}>£{payment.total.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paymentType === 'deposit' ? 'Deposit Paid' : 'Total Paid'}</Text>
-                    <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>£{(payment.paymentType === 'deposit' ? payment.totalPaidAtCheckout : payment.amountPaidAtCheckout).toFixed(2)}</Text>
+                    <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
+                    <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
@@ -858,10 +864,20 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
 
-                  {payment.paymentType === 'full' && (
+                  {payment.isPaidInFull && (
                     <View style={st.receiptFullyPaidBadge}>
                       <Text style={st.receiptFullyPaidText}>Paid in Full</Text>
                     </View>
+                  )}
+                  {/* A booking the provider added for you never went through
+                      checkout, so there is nothing paid to receipt yet —
+                      say so plainly rather than leaving a £0.00 "paid" line
+                      to be read as an error. */}
+                  {payment.isUnpaid && payment.remainingBalance > 0 && (
+                    <Text style={{ color: C.sub, fontSize: 11, textAlign: 'center', marginTop: 10, lineHeight: 16 }}>
+                      No payment has been taken through CERVICED for this booking.
+                      Payment is arranged directly with {booking.providerName}.
+                    </Text>
                   )}
 
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
@@ -877,7 +893,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             )}
           </View>
 
-          {/* Notes / Instructions */}
+          {/* The client's own notes — nothing else is folded in here (the
+              provider's booking_instructions moved down to their policy
+              card, and health data is never copied in; see CartScreen). */}
           {booking.notes && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>YOUR NOTES</Text>
@@ -886,20 +904,20 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           )}
-          {booking.bookingInstructions && (
-            <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>INSTRUCTIONS</Text>
-              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
-                <Text style={{ color: C.text, fontSize: 14, lineHeight: 20, padding: 16 }}>{booking.bookingInstructions}</Text>
-              </View>
-            </View>
-          )}
 
           {/* Provider's cancellation/booking policy — the exact terms this
               client agreed to at checkout (policySnapshot), or the
               provider's current policy as a fallback for bookings made
-              before that was captured. */}
-          {policyRows.length > 0 && (
+              before that was captured.
+
+              booking_instructions lives here too, not up with the client's
+              own notes: it's the provider telling the client how to turn up
+              ("arrive 10 minutes early"), which belongs with the provider's
+              other stated terms rather than in a Notes block the client
+              reads as theirs. Rendered as a full-width block under the rows
+              rather than a label/value row, since it's free prose and would
+              otherwise be squeezed into the 65% value column. */}
+          {(policyRows.length > 0 || !!booking.bookingInstructions) && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>
                 {booking.providerName}'S POLICY
@@ -908,7 +926,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 {policyRows.map((row, i) => (
                   <View
                     key={row.label}
-                    style={[st.row, i === policyRows.length - 1 && { borderBottomWidth: 0 }]}
+                    style={[st.row, i === policyRows.length - 1 && !booking.bookingInstructions && { borderBottomWidth: 0 }]}
                   >
                     <Text style={[st.rowLabel, { color: C.sub, flex: 0.35 }]}>{row.label}</Text>
                     <Text style={[st.rowValue, { color: C.text, flex: 0.65 }]}>
@@ -916,6 +934,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                 ))}
+                {!!booking.bookingInstructions && (
+                  <View style={{ padding: 16 }}>
+                    <Text style={[st.rowLabel, { color: C.sub, marginBottom: 6 }]}>Instructions</Text>
+                    <Text style={{ color: C.text, fontSize: 14, lineHeight: 20 }}>{booking.bookingInstructions}</Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -1039,16 +1063,38 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 )}
               </View>
             )}
+            {/* Rate / Tip / Book Again — same treatment as the identical trio
+                on the map screen's appointment cards (BookingsScreen): a
+                tinted fill with a matching solid border per action, rather
+                than three solid accent-filled blocks that read as one
+                undifferentiated bar. Colours are BookingsScreen's exact
+                values; only the type scales up, since this row is
+                full-width here and 9pt would be unreadable at this size. */}
             {isCompleted && (
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: hasBeenRated ? C.border : C.accent }]} disabled={hasBeenRated} onPress={() => setShowRatingModal(true)} activeOpacity={0.7}>
-                  <Text style={[st.primaryBtnText, { color: hasBeenRated ? C.text : C.onAccent }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={[st.mapActionBtn, { backgroundColor: C.accentDim, borderColor: C.accent }, hasBeenRated && st.mapActionBtnDisabled, hasBeenRated && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
+                  disabled={hasBeenRated}
+                  onPress={() => setShowRatingModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: hasBeenTipped ? C.border : '#34C759' }]} disabled={hasBeenTipped} onPress={() => setShowTipModal(true)} activeOpacity={0.7}>
-                  <Text style={[st.primaryBtnText, { color: hasBeenTipped ? C.text : '#FFF' }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
+                <TouchableOpacity
+                  style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, hasBeenTipped && st.mapActionBtnDisabled, hasBeenTipped && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
+                  disabled={hasBeenTipped}
+                  onPress={() => setShowTipModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} disabled={rebookBusy} onPress={() => handleRebook(booking)} activeOpacity={0.7}>
-                  {rebookBusy ? <ActivityIndicator size="small" color={C.onAccent} /> : <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Book Again</Text>}
+                <TouchableOpacity
+                  style={[st.mapActionBtn, { backgroundColor: '#f28f0c58', borderColor: '#b9550dff' }, rebookBusy && st.mapActionBtnDisabled]}
+                  disabled={rebookBusy}
+                  onPress={() => handleRebook(booking)}
+                  activeOpacity={0.7}
+                >
+                  {rebookBusy ? <ActivityIndicator size="small" color={C.text} /> : <Text style={[st.mapActionBtnText, { color: C.text }]}>Book Again</Text>}
                 </TouchableOpacity>
               </View>
             )}
@@ -1412,6 +1458,22 @@ const st = StyleSheet.create({
   primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   rescheduleBanner: { borderRadius: 14, borderWidth: 1, padding: 16 },
   actionChip: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
+  // Mirrors BookingsScreen's rateButton/tipButton/bookAgainButton shape —
+  // the per-action fill and border colours are applied inline, since they
+  // differ per button and two of the three are palette-derived.
+  mapActionBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapActionBtnText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, fontWeight: 'bold' },
+  mapActionBtnDisabled: { opacity: 0.5 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   sheetContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
   sheetTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },

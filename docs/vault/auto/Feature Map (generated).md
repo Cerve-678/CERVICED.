@@ -9,7 +9,7 @@
 Curated: [[Address Release]] · **77 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
-- `src/services/databaseService.ts` _(84)_
+- `src/services/databaseService.ts` _(85)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(64)_
 - `src/screens/provider/InfoRegScreen.tsx` _(62)_
 - `src/services/providerRegistrationService.ts` _(56)_
@@ -75,7 +75,7 @@ Curated: [[Availability & Slots]] · **138 files**
 
 ## Payments
 Curated: [[Payments]] · **108 files**
-- `src/screens/client/CartScreen.tsx` _(412)_
+- `src/screens/client/CartScreen.tsx` _(421)_
 - `src/screens/provider/PaymentsScreen.tsx` _(147)_
 - `src/services/bookingService.ts` _(117)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
@@ -83,10 +83,11 @@ Curated: [[Payments]] · **108 files**
 - `src/contexts/BookingContext.tsx` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(90)_
 - `src/services/databaseService.ts` _(82)_
+- `src/features/bookings/receipt.ts` _(63)_
+- `src/features/bookings/paymentPresentation.ts` _(50)_
+- `src/screens/client/BookingDetailScreen.tsx` _(45)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(44)_
-- `src/screens/client/BookingDetailScreen.tsx` _(43)_
 - `src/types/database.ts` _(40)_
-- `src/features/bookings/receipt.ts` _(39)_
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
 - `src/utils/depositPolicy.ts` _(37)_
@@ -104,19 +105,18 @@ Curated: [[Payments]] · **108 files**
 - `supabase/notifications_cleanup_2026_08.sql` _(21)_
 - `supabase/fix_claim_cart_booking_slots_policy_snapshot.sql` _(19)_
 - `supabase/fix_claim_cart_booking_slots_ambiguous_column.sql` _(18)_
-- `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(18)_
 - … +78 more
 
 ## Booking flow
 Curated: [[Booking Flow]] · **223 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(837)_
 - `src/contexts/BookingContext.tsx` _(678)_
-- `src/services/databaseService.ts` _(504)_
 - `src/services/becca/capabilities/client.ts` _(502)_
+- `src/services/databaseService.ts` _(502)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(458)_
-- `src/screens/client/CartScreen.tsx` _(378)_
+- `src/screens/client/CartScreen.tsx` _(407)_
+- `src/screens/client/BookingDetailScreen.tsx` _(307)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
-- `src/screens/client/BookingDetailScreen.tsx` _(298)_
 - `src/screens/client/BookingsScreen.tsx` _(267)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(191)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
@@ -316,7 +316,7 @@ Curated: [[Services]] · **36 files**
 - `src/screens/shared/BeccaScreen.tsx` _(84)_
 - `src/services/becca/engine.ts` _(49)_
 - `src/services/becca/capabilities/client.ts` _(48)_
-- `src/services/databaseService.ts` _(35)_
+- `src/services/databaseService.ts` _(36)_
 - `src/navigation/provider/tabs/ProviderBeccaNavigator.tsx` _(34)_
 - `src/services/becca/types.ts` _(32)_
 - `src/components/ChatComponents.tsx` _(29)_
@@ -347,23 +347,23 @@ Curated: [[Services]] · **36 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **55 files**
-- `src/screens/client/CartScreen.tsx` _(171)_
+- `src/screens/client/CartScreen.tsx` _(194)_
 - `src/contexts/BookingContext.tsx` _(57)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(54)_
-- `src/services/databaseService.ts` _(46)_
+- `src/services/databaseService.ts` _(45)_
 - `src/contexts/CartContext.tsx` _(28)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
 - `src/components/BookingSheet.tsx` _(20)_
-- `src/screens/client/BookingDetailScreen.tsx` _(17)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
+- `src/screens/client/BookingDetailScreen.tsx` _(14)_
 - `src/services/bookingService.ts` _(14)_
 - `src/services/becca/capabilities/client.ts` _(13)_
 - `src/services/AvailabilityService.ts` _(12)_
 - `src/services/stripeService.ts` _(10)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/components/MultiBookingSheet.tsx` _(6)_
-- `src/features/bookings/paymentPresentation.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
+- `src/features/bookings/paymentPresentation.ts` _(5)_
 - `src/features/cart/platformFee.ts` _(5)_
 - `src/navigation/types.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
