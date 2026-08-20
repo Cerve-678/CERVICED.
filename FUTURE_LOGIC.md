@@ -438,6 +438,66 @@ Deferred on 2026-08-20. Items 1–4 above are product, pricing and legal decisio
 
 ---
 
+## Provider T&Cs as a Signable Form (Not Just a Read)
+
+### What it means
+
+A client would receive the provider's Terms & Conditions the way they receive any other form — sent against their booking, filled in, signed, and recorded — instead of only reading them in a pop-up at checkout.
+
+### What exists today (2026-08-20)
+
+A provider writes their own T&Cs in **Forms → Your Terms** (the `TERMS_TEMPLATE` in `ProviderIntakeFormScreen.tsx`). It saves as a normal `provider_form_library` row with `is_terms = true` — at most one per provider, enforced by a partial unique index.
+
+Clients read it from `BookingSheet` / `MultiBookingSheet` as a **read-only pop-up**, fed by the `get_provider_terms(uuid)` RPC (`supabase/provider_terms_and_conditions.sql`). That RPC exists because `provider_form_library` is owner-only and must stay that way — it also holds medical-history and patch-test forms. The RPC returns only the terms form's title and its `policy`-question body, and only for a live provider.
+
+Deliberately **not** a second agreement checkbox: nothing records that the client read or agreed to those terms, so presenting it as consent would claim something the app cannot back up. The existing checkbox next to it covers CERVICED's terms and the provider's structured cancellation policy, which *is* snapshotted (`policyAcceptedAt` + `policySnapshot`).
+
+### What needs to happen
+
+1. **Sending**: the plumbing already exists — `sendLibraryFormToClient` copies a library form into `booking_intake_forms`. A terms form could auto-send on booking confirmation the way `auto_send` forms already do.
+2. **Agreement record**: `booking_intake_forms` already has `requires_signature` and `client_signature`. Decide whether terms acceptance is a signature, a `policy`-question acknowledgement, or its own timestamped column.
+3. **Timing**: today's pop-up is pre-booking; a sent form is post-booking. If terms are meant to be a condition of booking rather than a disclosure after it, the form has to be answerable *during* checkout — which is the same blocker as `## Intake Form During Checkout` above. Solve them together.
+4. **Snapshotting**: like `policySnapshot`, the booking has to remember the terms *as they were*, not follow later edits.
+5. **Legal**: whether a read receipt, a tick, or a signature constitutes acceptance is not an engineering call. **Flag it, don't draft it** — see `LEGAL-COMPLIANCE-NOTES.md` and the `cerviced-legal-flagger` agent.
+
+### Why it's deferred
+
+Deferred on 2026-08-20 — the read-only pop-up was the explicitly requested scope. Items 3 and 5 are the real work.
+
+---
+
+## Providers Who Are Both Mobile AND Premises-Based
+
+### What it means
+
+A provider who has a salon or home studio **and** also travels to clients. Today they must pick one.
+
+### What currently happens
+
+`providers.business_type` is a single value: `'salon' | 'studio' | 'home_based' | 'mobile'`. It is not cosmetic — it drives real, divergent behaviour:
+
+- **Address release.** `ADDRESS_RELEASE_BY_BUSINESS_TYPE` gates which timings the provider may even choose. Premises types get `'always'`; `home_based` gets the timed set; `mobile` gets `['manual']` only, defaulting to not sharing at all. A single provider who is both needs *both* answers at once, and the right one depends on the individual booking, not the profile.
+- **Whose address is used.** For mobile bookings the client supplies theirs (`bookings.client_address`, shown in `ProviderBookingDetailScreen`'s ADDRESS section, which renders on `business_type === 'mobile'`). For premises bookings the provider's is released. A both-provider needs this decided per booking.
+- **Copy everywhere.** InfoRegScreen's address hint, `BUSINESS_TYPE_OPTS`, BusinessInfoScreen's Address Release sub-line and the booking-detail Location row all branch on the single type.
+
+So a provider who does both currently has to choose which half of their business the app describes correctly.
+
+### What needs to happen
+
+The honest shape is almost certainly **per-service or per-booking location mode**, not a second business type:
+
+1. A service-level flag (`services.location_mode`: `'at_provider' | 'at_client' | 'either'`), since it's really the *service* that is or isn't mobile.
+2. The client picks, at booking time, where an `'either'` service happens — which then decides whose address matters for that booking.
+3. Address release becomes per-booking rather than a single profile-wide policy: a booking at the provider's premises releases their address on their chosen timing; a booking at the client's does not release it at all.
+4. `business_type` stays as the *primary* premises answer (or becomes null for pure-mobile), because the address-required rule and the "is there a premises" question still need one answer.
+5. Copy across the four surfaces above stops branching on a single type.
+
+### Why it's deferred
+
+Deferred on 2026-08-20. It reopens address release — the one area of this app where the DB, not the UI, is the enforcement point (`is_address_released()`, the `client_bookings` view, the on-confirmation trigger) — so it is a schema-and-policy change, not a settings-screen change. See the `address-release-server-enforced` memory before starting.
+
+---
+
 ## Provider Deactivation / Pause Bookings (No Such Toggle Exists Today)
 
 ### What it means
