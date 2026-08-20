@@ -35,6 +35,12 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     ? 'Deposit paid to provider'
     : payment.isUnpaid ? 'Total paid' : 'Paid today';
   const paidAmount = payment.paidAmount;
+  // Mirrors BookingDetailScreen's "Platform Fee Paid" row — on a deposit the
+  // paid figure above is the provider's deposit alone, so the fee needs its
+  // own paid line or the receipt's numbers don't add up to the booking total.
+  const feePaidRow = payment.feePaidSeparately > 0
+    ? `<tr class="paid"><td>Cerviced platform fee paid</td><td>${money(payment.feePaidSeparately)}</td></tr>`
+    : '';
   const balanceRow = remainingBalance > 0
     ? `<tr class="balance"><td>Due to provider at appointment</td><td>${money(remainingBalance)}</td></tr>`
     : `<tr class="settled"><td>Balance due</td><td>£0.00</td></tr>`;
@@ -86,7 +92,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     <div class="status-panel"><div><div class="status-label">${escapeHtml(statusLabel)}</div><div class="status-value">${money(paidAmount)}</div></div><div class="status-total"><div class="status-label">Booking total</div><div class="status-value">${money(bookingTotal)}</div></div></div>
     <div class="grid"><div><div class="block-title">Provider</div><div class="block-value">${escapeHtml(booking.providerName ?? '—')}</div></div><div><div class="block-title">Appointment</div><div class="block-value">${booking.bookingDate ? escapeHtml(formatLongDate(booking.bookingDate)) : '—'}</div><div class="block-note">${escapeHtml(booking.bookingTime ?? '—')}</div></div></div>
     <section><div class="section-title">Services</div><table><tr class="strong"><td>${escapeHtml(booking.serviceName ?? 'Service')}</td><td>${money(servicePrice)}</td></tr>${addOnRows}${addOns.length > 0 ? `<tr><td class="muted">Service subtotal</td><td>${money(serviceTotal)}</td></tr>` : ''}${platformFeeRow}</table></section>
-    <section><div class="section-title">Payment</div><table><tr class="total"><td>Booking total</td><td>${money(bookingTotal)}</td></tr><tr class="paid"><td>${paidLabel}</td><td>${money(paidAmount)}</td></tr>${balanceRow}<tr><td class="muted">Payment method</td><td>${escapeHtml(paymentMethodLabel)}</td></tr></table>${payment.isDeposit ? `<div class="notice">Your ${money(depositAmount)} deposit is for the provider’s service. ${remainingBalance > 0 ? `${money(remainingBalance)} remains payable directly to the provider at your appointment.` : 'No balance remains.'}</div>` : ''}${payment.isUnpaid && remainingBalance > 0 ? `<div class="notice">No payment has been taken through CERVICED for this booking. Payment is arranged directly with ${escapeHtml(booking.providerName ?? 'your provider')}.</div>` : ''}</section>
+    <section><div class="section-title">Payment</div><table><tr class="total"><td>Booking total</td><td>${money(bookingTotal)}</td></tr><tr class="paid"><td>${paidLabel}</td><td>${money(paidAmount)}</td></tr>${feePaidRow}${balanceRow}<tr><td class="muted">Payment method</td><td>${escapeHtml(paymentMethodLabel)}</td></tr></table>${payment.isDeposit ? `<div class="notice">Your ${money(depositAmount)} deposit is for the provider’s service. ${remainingBalance > 0 ? `${money(remainingBalance)} remains payable directly to the provider at your appointment.` : 'No balance remains.'}</div>` : ''}${payment.isUnpaid && remainingBalance > 0 ? `<div class="notice">No payment has been taken through CERVICED for this booking. Payment is arranged directly with ${escapeHtml(booking.providerName ?? 'your provider')}.</div>` : ''}</section>
     <footer class="footer">${booking.createdAt ? `Issued ${escapeHtml(formatShortDate(new Date(booking.createdAt)))} · ` : ''}Keep this receipt for your records<br/><span class="footer-brand">CERVICED</span></footer>
   </main></body></html>`;
 }

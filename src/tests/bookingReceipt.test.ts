@@ -31,6 +31,61 @@ describe('booking receipt', () => {
     expect(receipt).toContain('Paid in full');
   });
 
+  it("accounts for every pound of a deposit booking's total", () => {
+    // Deposit £20 + £0.99 platform fee left the card at checkout; £80 is due
+    // to the provider on the day. Total £100.99 must be fully explained by
+    // the rows shown, or the client is looking at a 99p hole.
+    const booking = {
+      id: 'fee12345-booking',
+      serviceName: 'Balayage',
+      providerName: 'Studio One',
+      bookingDate: '2026-08-10',
+      bookingTime: '10:00',
+      createdAt: '2026-08-01T12:00:00.000Z',
+      price: 100,
+      serviceCharge: 0.99,
+      depositAmount: 20,
+      amountPaid: 20.99,
+      paymentType: 'deposit',
+      paymentStatus: PaymentStatus.DEPOSIT_PAID,
+      status: BookingStatus.UPCOMING,
+      addOns: [],
+    } as unknown as ConfirmedBooking;
+
+    const payment = calculateBookingPaymentBreakdown(booking);
+
+    expect(payment.paidAmount).toBe(20);
+    expect(payment.feePaidSeparately).toBe(0.99);
+    expect(payment.paidAmount + payment.feePaidSeparately + payment.remainingBalance)
+      .toBeCloseTo(payment.total, 2);
+
+    expect(buildClientReceiptHTML(booking)).toContain('Cerviced platform fee paid');
+  });
+
+  it('never shows a fee-paid row when no payment was taken', () => {
+    const booking = {
+      id: 'fee67890-booking',
+      serviceName: 'Blow dry',
+      providerName: 'Studio One',
+      bookingDate: '2026-08-10',
+      bookingTime: '10:00',
+      createdAt: '2026-08-01T12:00:00.000Z',
+      price: 40,
+      serviceCharge: 1.99,
+      depositAmount: 10,
+      amountPaid: 0,
+      paymentType: 'deposit',
+      paymentStatus: PaymentStatus.PENDING,
+      status: BookingStatus.UPCOMING,
+      addOns: [],
+    } as unknown as ConfirmedBooking;
+
+    const payment = calculateBookingPaymentBreakdown(booking);
+
+    expect(payment.feePaidSeparately).toBe(0);
+    expect(buildClientReceiptHTML(booking)).not.toContain('Cerviced platform fee paid');
+  });
+
   it('does not head a provider-created booking as paid in full', () => {
     const booking = {
       id: 'def67890-booking',

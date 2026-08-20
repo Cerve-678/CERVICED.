@@ -47,6 +47,14 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const paidLabel = !isUnpaid && isDeposit ? 'Deposit Paid' : 'Total Paid';
   const paidAmount = isUnpaid ? 0 : isDeposit ? depositAmount : amountPaidAtCheckout;
 
+  // The platform fee the client already paid at checkout, shown as its own
+  // "paid" row on a deposit booking. Without it the card reads Total £100.99 /
+  // Deposit Paid £20.00 / Due £80.00 — three numbers that don't reconcile,
+  // because `paidAmount` is deliberately the provider's deposit alone while
+  // the fee sits inside `total`. Zero for a full payment (already inside
+  // `paidAmount`) and for an unpaid booking (nothing was charged).
+  const feePaidSeparately = !isUnpaid && isDeposit ? serviceCharge : 0;
+
   return {
     servicePrice,
     addOnsTotal,
@@ -63,5 +71,6 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isUnpaid,
     paidLabel,
     paidAmount,
+    feePaidSeparately,
   };
 }

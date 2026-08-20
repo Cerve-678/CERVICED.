@@ -83,10 +83,10 @@ Curated: [[Payments]] · **108 files**
 - `src/contexts/BookingContext.tsx` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(90)_
 - `src/services/databaseService.ts` _(82)_
-- `src/features/bookings/receipt.ts` _(64)_
-- `src/features/bookings/paymentPresentation.ts` _(47)_
+- `src/features/bookings/receipt.ts` _(68)_
+- `src/features/bookings/paymentPresentation.ts` _(52)_
+- `src/screens/client/BookingDetailScreen.tsx` _(52)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(44)_
-- `src/screens/client/BookingDetailScreen.tsx` _(41)_
 - `src/types/database.ts` _(40)_
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
@@ -115,7 +115,7 @@ Curated: [[Booking Flow]] · **223 files**
 - `src/services/databaseService.ts` _(502)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(458)_
 - `src/screens/client/CartScreen.tsx` _(411)_
-- `src/screens/client/BookingDetailScreen.tsx` _(304)_
+- `src/screens/client/BookingDetailScreen.tsx` _(306)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(267)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(191)_
@@ -354,7 +354,7 @@ Curated: [[Payments]] · **55 files**
 - `src/contexts/CartContext.tsx` _(28)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
 - `src/components/BookingSheet.tsx` _(20)_
-- `src/screens/client/BookingDetailScreen.tsx` _(15)_
+- `src/screens/client/BookingDetailScreen.tsx` _(16)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
 - `src/services/bookingService.ts` _(14)_
 - `src/services/becca/capabilities/client.ts` _(13)_
@@ -362,8 +362,8 @@ Curated: [[Payments]] · **55 files**
 - `src/services/stripeService.ts` _(10)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/components/MultiBookingSheet.tsx` _(6)_
+- `src/features/bookings/paymentPresentation.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
-- `src/features/bookings/paymentPresentation.ts` _(5)_
 - `src/features/cart/platformFee.ts` _(5)_
 - `src/navigation/types.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
