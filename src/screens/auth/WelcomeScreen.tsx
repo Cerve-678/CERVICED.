@@ -1,5 +1,5 @@
 // src/screens/auth/WelcomeScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,16 +14,27 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { reportError } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
+  const { isLoggedIn } = useAuth();
   const insets = useSafeAreaInsets();
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+  // Guards re-entrant taps synchronously — `disabled={isAppleLoading}` on the
+  // button only takes effect after a re-render, leaving a brief window where
+  // a fast double-tap fires handleAppleLogin twice concurrently. A second
+  // concurrent AppleAuthentication.signInAsync() call while the first is
+  // still in flight rejects (the native sheet is already showing/dismissed),
+  // which used to surface a "Sign in failed" alert even though the FIRST
+  // call's signInWithIdToken had already succeeded and logged the user in.
+  const isAppleInFlightRef = useRef(false);
 
   const handleSocialLogin = (provider: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -31,6 +42,8 @@ export default function WelcomeScreen({ navigation }: Props) {
   };
 
   const handleAppleLogin = async () => {
+    if (isAppleInFlightRef.current) return;
+    isAppleInFlightRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -50,14 +63,20 @@ export default function WelcomeScreen({ navigation }: Props) {
       });
       setIsAppleLoading(false);
       if (error) {
-        Alert.alert('Sign in failed', error.message);
+        reportError(error, 'WelcomeScreen:appleSignIn');
+        Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
         return;
       }
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
-      if (e.code !== 'ERR_REQUEST_CANCELED') {
+      // A concurrent/duplicate attempt (or one that lands after the user is
+      // already signed in via an earlier in-flight call) must not show a
+      // false failure alert — check the real auth state before alerting.
+      if (e.code !== 'ERR_REQUEST_CANCELED' && !isLoggedIn) {
         Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
       }
+    } finally {
+      isAppleInFlightRef.current = false;
     }
   };
 

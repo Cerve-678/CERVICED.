@@ -134,11 +134,16 @@ visibly slow:
 
 ## Functionality & verification
 
-- `npx tsc --noEmit` is the actual verification standard right now —
-  `npm test` (no `jest-expo` installed) and `npm run lint` (ESLint 9, no
-  config file) are both broken pre-existing, not something your change broke.
-  Don't try to "fix" that as a side effect of an unrelated task without
-  asking; do run `tsc` before calling anything done.
+- Run **both** `npx tsc --noEmit` and `npm test` before calling anything done.
+  `jest-expo` is installed and the suite genuinely passes (20 suites / 44
+  tests, a few seconds) — it covers Becca routing and capability contracts,
+  booking/cart/date presentation, profile mappers, receipts and the platform
+  fee, so it catches real regressions in exactly the areas most likely to
+  break. Add a test alongside new logic in those areas rather than leaving
+  the suite behind.
+- `npm run lint` **is** still broken pre-existing (ESLint 9, no config file
+  anywhere in the repo) — that's not something your change broke. Don't try
+  to "fix" it as a side effect of an unrelated task without asking.
 - For UI changes, actually run the app and exercise the golden path when you
   can (see the `run` skill). Typechecking proves the code compiles, not that
   the feature works.
@@ -231,7 +236,7 @@ agent — these are the standing rules of thumb for every session.
   what they *are* (`stripeService.ts` vs. the mock flow it's replacing), not
   for their age.
 - **"Done" is a program-management gate, not just green output.** For
-  anything non-trivial: `tsc` clean, golden path actually run (not just
+  anything non-trivial: `tsc` clean, `npm test` green, golden path actually run (not just
   typechecked), the relevant specialist review agent(s) invoked (security /
   scalability / legal as applicable), no orphaned files or dead code left
   behind, and — if the change changes a fact worth remembering — the

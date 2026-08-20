@@ -1,5 +1,5 @@
 // src/screens/auth/LoginScreen.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
   ActivityIndicator,
@@ -33,12 +33,14 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { logger } from '../../utils/logger';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
 
 export default function LoginScreen({ navigation }: Props) {
   const { isDarkMode, palette: t } = useTheme();
+  const { isLoggedIn } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
@@ -50,6 +52,8 @@ export default function LoginScreen({ navigation }: Props) {
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('Face ID');
+  // Guards re-entrant taps synchronously — see handleAppleLogin below.
+  const isAppleInFlightRef = useRef(false);
 
   // useFocusEffect (not a mount-only useEffect) — a failed login attempt
   // doesn't unmount this screen, and a stale one-time check could otherwise
@@ -149,7 +153,16 @@ export default function LoginScreen({ navigation }: Props) {
     setIsLoading(false);
 
     if (error) {
-      Alert.alert('Login failed', 'Incorrect email or password. Please try again.');
+      // A 4xx (bad credentials / unconfirmed) is the user's details; a 5xx,
+      // rate-limit, or no-status (network) is our problem, not their password —
+      // log those so we can see them, and give an accurate, non-blaming message.
+      const status = (error as { status?: number }).status;
+      if (!status || status >= 500 || status === 429) {
+        logger.error('[Login] sign-in failed (server/network):', error);
+        Alert.alert('Login failed', "We couldn't sign you in just now. Please try again.");
+      } else {
+        Alert.alert('Login failed', 'Incorrect email or password. Please try again.');
+      }
       return;
     }
 
@@ -163,6 +176,15 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   const handleAppleLogin = async () => {
+    // Synchronous re-entry guard — `disabled={isLoading}` on the button only
+    // takes effect after a re-render, leaving a brief window where a fast
+    // double-tap fires this handler twice concurrently. A second concurrent
+    // AppleAuthentication.signInAsync() call while the first is still in
+    // flight rejects (the native sheet is already showing/dismissed), which
+    // used to surface a "Sign in failed" alert even though the FIRST call's
+    // signInWithIdToken had already succeeded and logged the user in.
+    if (isAppleInFlightRef.current) return;
+    isAppleInFlightRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -182,15 +204,21 @@ export default function LoginScreen({ navigation }: Props) {
       });
       setIsLoading(false);
       if (error) {
-        Alert.alert('Sign in failed', error.message);
+        logger.error('[Login] Apple sign-in failed:', error);
+        Alert.alert('Sign in failed', "We couldn't sign you in just now. Please try again.");
         return;
       }
       maybePromptEnableBiometric(data.session?.refresh_token);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
-      if (e.code !== 'ERR_REQUEST_CANCELED') {
+      // A concurrent/duplicate attempt (or one that lands after the user is
+      // already signed in via an earlier in-flight call) must not show a
+      // false failure alert — check the real auth state before alerting.
+      if (e.code !== 'ERR_REQUEST_CANCELED' && !isLoggedIn) {
         Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
       }
+    } finally {
+      isAppleInFlightRef.current = false;
     }
   };
 

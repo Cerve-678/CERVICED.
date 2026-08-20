@@ -9,6 +9,9 @@ export enum BookingStatus {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
   NO_SHOW = 'no_show',
+  /** Reverse of NO_SHOW — the CLIENT marked the PROVIDER as not having shown
+   *  up (client_mark_provider_no_show() RPC). Terminal, same as NO_SHOW. */
+  PROVIDER_NO_SHOW = 'provider_no_show',
 }
 
 // Map a raw DB bookings.status string → app BookingStatus enum. Single source
@@ -25,6 +28,7 @@ export function mapDbBookingStatus(s: string): BookingStatus {
     case 'cancelled': return BookingStatus.CANCELLED;
     case 'in_progress': return BookingStatus.IN_PROGRESS;
     case 'no_show': return BookingStatus.NO_SHOW;
+    case 'provider_no_show': return BookingStatus.PROVIDER_NO_SHOW;
     default: return BookingStatus.UPCOMING;
   }
 }

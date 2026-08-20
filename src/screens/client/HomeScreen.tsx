@@ -33,11 +33,11 @@ import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
-import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders } from '../../services/databaseService';
+import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, prefetchProviderBySlug } from '../../services/databaseService';
 import type { DbProvider, DbPromotionWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
-import { getDistanceKm, formatDistance } from '../../utils/distance';
+import { getDistanceKm } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 
@@ -641,6 +641,7 @@ export default function HomeScreen() {
 
       // The 'view' interaction is tracked once, by ProviderProfileScreen itself
       // on load — tracking it again here double-counted every visit.
+      prefetchProviderBySlug(provider.slug);
       navigation.navigate('ProviderProfile', {
         providerId: provider.slug,
         source: 'home',
@@ -1597,11 +1598,6 @@ export default function HomeScreen() {
                       <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
                         {provider.name}
                       </Text>
-                      {provider.distanceKm != null && (
-                        <Text style={[styles.distanceBadge, { color: P.sub }]} numberOfLines={1}>
-                          {formatDistance(provider.distanceKm)}
-                        </Text>
-                      )}
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -2093,14 +2089,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     fontWeight: '600',
-  },
-  distanceBadge: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 10,
-    marginTop: 4,
-    textAlign: 'center',
-    fontWeight: '500',
-    opacity: 0.7,
   },
   nearYouPrompt: {
     borderRadius: 16,

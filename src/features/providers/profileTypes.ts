@@ -32,7 +32,12 @@ export interface ProviderProfileData {
   location: string;
   businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   rating: number;
-  slotsText: string;
+  /** providers.automation_settings.scheduleReleaseDay — day of month (1-31)
+   *  new slots go out, or null if the provider hasn't set one. Drives the
+   *  "Slots out every Nth of the month" pill; superseded the old hand-typed
+   *  slots_text field, which could say anything regardless of the provider's
+   *  actual release cadence. */
+  scheduleReleaseDay: number | null;
   aboutText: string;
   categories: Record<string, ProviderProfileService[]>;
   categoryDescriptions: Record<string, string>;
@@ -53,6 +58,22 @@ export interface ProviderProfileData {
   isVerified: boolean;
   preferredContactMethods: string[];
   onlineConsultationsAvailable: boolean;
+  /** accessibility_notes is stored as a '|'-delimited list of fixed
+   *  ACCESSIBILITY_OPTS chip values (see AboutYouScreen.tsx), not free
+   *  text — split here so it renders as tags, matching how it's collected. */
+  accessibilityTags: string[];
+  languagesSpoken: string[];
+  qualifications: string;
+  /** Provider's own attestation — Cerviced does not verify either. Always
+   *  label as self-declared wherever these render (see AboutYouScreen.tsx). */
+  isInsuredSelfDeclared: boolean;
+  dbsCheckedSelfDeclared: boolean;
+  teamSize: 'solo' | 'small_team' | 'large_team' | null;
+  walkInsWelcome: boolean;
+  groupBookingsAvailable: boolean;
+  veganCrueltyFree: boolean;
+  travelRadius: string;
+  productsUsed: string;
   bookingPolicies: {
     cancelNotice?: string;
     cancelPenalty?: string;

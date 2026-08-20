@@ -33,6 +33,7 @@ export interface ProviderServiceDraft {
   contraindications: string[];
   aftercareNotes: string;
   serviceType: ProviderServiceType;
+  hairTypesSuitable: string[];
 }
 
 // Date.now() alone can return the same millisecond for two drafts created in
@@ -70,5 +71,6 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     contraindications: [],
     aftercareNotes: '',
     serviceType: template?.serviceType ?? '',
+    hairTypesSuitable: [],
   };
 }

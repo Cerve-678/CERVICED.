@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem } from '../services/databaseService';
+import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow } from '../services/databaseService';
 import type { DbBookingRescheduleRequest } from '../types/database';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
@@ -91,6 +91,13 @@ export interface BookingContextType {
   releaseCartCheckoutSlots: (holdBatchId: string) => Promise<void>;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => Promise<void>;
   cancelBooking: (bookingId: string) => Promise<void>;
+  // Reverse of the provider's no_show action — client marks the PROVIDER as
+  // not having shown up. Routed through client_mark_provider_no_show() (see
+  // supabase/fix_provider_no_show_status.sql), same guardrails philosophy
+  // as the provider's own no_show button (same-day, appointment start
+  // passed, terminal-state check, no active reschedule request) enforced
+  // server-side.
+  markProviderNoShow: (bookingId: string) => Promise<void>;
   getBookingsByProvider: (providerName: string) => ConfirmedBooking[];
   getBookingsByDate: (date: string) => ConfirmedBooking[];
   getBookingById: (bookingId: string) => ConfirmedBooking | undefined;
@@ -1279,6 +1286,39 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [saveBookings]);
 
+  // Reverse of the provider's no_show action — client marks the PROVIDER as
+  // not having shown up. Routed through client_mark_provider_no_show()
+  // (SECURITY DEFINER RPC, see supabase/fix_provider_no_show_status.sql),
+  // which enforces the same guardrails as the provider's own no_show button
+  // server-side (same calendar day, appointment start time passed, terminal-
+  // state check, no active reschedule request) — this app never trusts a
+  // client-side check alone for that kind of rule. The provider is notified
+  // by handle_booking_status_change() (DB trigger owns this).
+  const markProviderNoShow = useCallback(async (bookingId: string) => {
+    try {
+      logger.log('Marking provider no-show:', bookingId);
+      if (!isDbBookingId(bookingId)) return;
+      await dbMarkProviderNoShow(bookingId);
+
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const currentBookings: ConfirmedBooking[] = stored ? JSON.parse(stored) : [];
+      const booking = currentBookings.find(b => b.id === bookingId);
+      if (booking) {
+        const updatedBookings = currentBookings.map(b =>
+          b.id === bookingId
+            ? { ...b, status: BookingStatus.PROVIDER_NO_SHOW, updatedAt: new Date().toISOString() }
+            : b
+        );
+        await saveBookings(updatedBookings);
+      }
+
+      logger.log('Provider marked no-show successfully');
+    } catch (error) {
+      logger.error('❌ Failed to mark provider no-show:', error);
+      throw error;
+    }
+  }, [saveBookings]);
+
   const updateBookingStatus = useCallback(async (bookingId: string, status: BookingStatus) => {
     try {
       const updatedBookings = bookings.map(b =>
@@ -1860,7 +1900,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         const newIds = new Set(newBookings.map(nb => nb.id));
         await saveBookings(updatedBookings.filter(b => !newIds.has(b.id)));
         throw new BookingError(
-          "We couldn't reach the server, so your booking wasn't placed. Please check your connection and try again."
+          "We couldn't place your booking just now. Please check your connection and try again."
         );
       }
 
@@ -2231,6 +2271,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     validateBookingsBeforeCheckout,
     updateBookingStatus,
     cancelBooking,
+    markProviderNoShow,
     getBookingsByProvider,
     getBookingsByDate,
     getBookingById,
@@ -2261,6 +2302,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     validateBookingsBeforeCheckout,
     updateBookingStatus,
     cancelBooking,
+    markProviderNoShow,
     getBookingsByProvider,
     getBookingsByDate,
     getBookingById,

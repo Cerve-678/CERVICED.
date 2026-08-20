@@ -10,6 +10,7 @@ import {
   Modal,
   ScrollView,
   Switch,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,8 @@ import {
   queueScheduledAnnouncement,
   getClientBookingHistory,
   getMyProviderProfile,
+  getClientReliabilityStatsBatch,
+  ClientReliabilityStats,
 } from '../../services/databaseService';
 import type { ClienteleMember, DbBooking } from '../../types/database';
 import { useProviderDialog } from '../../components/ProviderDialog';
@@ -31,6 +34,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatTime12 } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
+import { toUserMessage } from '../../utils/userFacingError';
 
 // ─── Brand palette ────────────────────────────────────────────────────────────
 const LIGHT = {
@@ -227,6 +231,7 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
   const [schedAt, setSchedAt] = useState<Date>(tomorrow9am);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const { isDarkMode } = useTheme();
 
   const audienceOptions: { key: AudienceKey; label: string; icon: string }[] = [
     { key: 'all',    label: 'All clients',    icon: 'people-outline' },
@@ -443,7 +448,12 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
           </View>
         )}
 
-        {showDatePicker && (
+        {/* Android's native dialogs render as OS overlays with no wrapper
+            needed. iOS's inline "default" picker doesn't — it renders into
+            the surrounding layout in place, which inside this bottom sheet
+            meant it could push/cover the header above it. Matches the modal
+            wrapper RescheduleScreen already uses for the same picker. */}
+        {showDatePicker && Platform.OS === 'android' && (
           <DateTimePicker
             value={schedAt}
             mode="date"
@@ -459,7 +469,7 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
             }}
           />
         )}
-        {showTimePicker && (
+        {showTimePicker && Platform.OS === 'android' && (
           <DateTimePicker
             value={schedAt}
             mode="time"
@@ -473,6 +483,62 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
               }
             }}
           />
+        )}
+        {(showDatePicker || showTimePicker) && Platform.OS === 'ios' && (
+          <Modal transparent animationType="fade" visible onRequestClose={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
+            <View style={anSt.pickerModalWrap}>
+              <TouchableOpacity
+                style={anSt.pickerDismiss}
+                activeOpacity={1}
+                onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}
+              />
+              <View style={[anSt.pickerSheet, { backgroundColor: P.card }]}>
+                <View style={[anSt.pickerHeader, { borderBottomColor: P.border }]}>
+                  <Text style={[anSt.pickerHeaderLabel, { color: P.text }]}>
+                    {showDatePicker ? 'Select Date' : 'Select Time'}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowDatePicker(false); setShowTimePicker(false); }}>
+                    <Text style={[anSt.pickerDoneLabel, { color: P.accent }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                {showDatePicker ? (
+                  <DateTimePicker
+                    value={schedAt}
+                    mode="date"
+                    minimumDate={new Date()}
+                    display="spinner"
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    textColor={P.text}
+                    style={{ width: '100%' }}
+                    onChange={(_, date) => {
+                      if (date) {
+                        const updated = new Date(schedAt);
+                        updated.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                        setSchedAt(updated);
+                      }
+                    }}
+                  />
+                ) : (
+                  <DateTimePicker
+                    value={schedAt}
+                    mode="time"
+                    display="spinner"
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    textColor={P.text}
+                    minuteInterval={5}
+                    style={{ width: '100%' }}
+                    onChange={(_, date) => {
+                      if (date) {
+                        const updated = new Date(schedAt);
+                        updated.setHours(date.getHours(), date.getMinutes());
+                        setSchedAt(updated);
+                      }
+                    }}
+                  />
+                )}
+              </View>
+            </View>
+          </Modal>
         )}
 
         <TouchableOpacity
@@ -525,20 +591,31 @@ const anSt = StyleSheet.create({
   sendBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 15, marginTop: 20 },
   sendBtnText:  { fontSize: 15, fontWeight: '700', color: '#fff' },
   errorText:    { fontSize: 13, color: '#FF6868', textAlign: 'center', marginTop: 10 },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
+  pickerDismiss:   { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet:     { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerHeader:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
+  pickerDoneLabel:   { fontSize: 15, fontWeight: '700' },
 });
 
 // ── Client Card ───────────────────────────────────────────────────────────────
 
-function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, P }: {
+function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, reliability, P }: {
   member: ClienteleMember;
   onMessage: (m: ClienteleMember) => void;
   onRebook: (m: ClienteleMember) => void;
   onViewHistory: (m: ClienteleMember) => void;
   lapsed?: boolean;
+  // No-show / late-cancel history this client has with THIS provider
+  // (client_provider_reliability, batch-fetched once for the whole list —
+  // see getClientReliabilityStatsBatch). Undefined/zero = nothing to show.
+  reliability?: ClientReliabilityStats | undefined;
   P: typeof LIGHT;
 }) {
   const color = avatarColor(member.customer_name);
   const days = daysSince(member.last_booking_date);
+  const hasReliabilityFlag = !!reliability && (reliability.noShowCount > 0 || reliability.lateCancelCount > 0);
 
   return (
     <TouchableOpacity style={[ccSt.wrap, { backgroundColor: P.surface }]} onPress={() => onViewHistory(member)} activeOpacity={0.8}>
@@ -557,6 +634,17 @@ function ClientCard({ member, onMessage, onRebook, onViewHistory, lapsed, P }: {
         <Text style={[ccSt.meta, { color: P.sub }]}>
           {member.booking_count} {member.booking_count === 1 ? 'booking' : 'bookings'} · Last {formatShort(member.last_booking_date)}
         </Text>
+        {hasReliabilityFlag && (
+          <View style={ccSt.reliabilityRow}>
+            <Ionicons name="alert-circle-outline" size={11} color="#FF9500" />
+            <Text style={[ccSt.reliabilityText, { color: '#FF9500' }]}>
+              {[
+                reliability!.noShowCount > 0 ? `${reliability!.noShowCount} no-show${reliability!.noShowCount === 1 ? '' : 's'}` : null,
+                reliability!.lateCancelCount > 0 ? `${reliability!.lateCancelCount} late cancel${reliability!.lateCancelCount === 1 ? '' : 's'}` : null,
+              ].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+        )}
       </View>
       <View style={ccSt.right}>
         {member.total_spent > 0 && (
@@ -596,6 +684,8 @@ const ccSt = StyleSheet.create({
   btnText:     { fontSize: 11, fontWeight: '700' },
   lapsedBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(255,104,104,0.15)' },
   lapsedText:  { fontSize: 10, fontWeight: '600' },
+  reliabilityRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  reliabilityText: { fontSize: 11, fontWeight: '600' },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -604,6 +694,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
   const [clients, setClients] = useState<ClienteleMember[]>([]);
+  const [reliabilityByClient, setReliabilityByClient] = useState<Record<string, ClientReliabilityStats>>({});
   const [providerName, setProviderName] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('all');
@@ -625,8 +716,17 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       setClients(data);
       setProviderName(profile?.display_name ?? '');
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+
+      // Batched, not per-card — one query for the whole list's reliability
+      // history (see CLAUDE.md's no-N+1 rule). Best-effort: a failure here
+      // shouldn't block the clientele list itself from rendering.
+      if (data.length > 0) {
+        getClientReliabilityStatsBatch(data.map(c => c.user_id))
+          .then(setReliabilityByClient)
+          .catch(() => {});
+      }
     } catch (e: any) {
-      showToast(e.message ?? 'Could not load clientele', 'error');
+      showToast(toUserMessage(e, 'Could not load your clientele.', 'ProviderClienteleScreen.load'), 'error');
     } finally {
       setLoading(false);
     }
@@ -660,7 +760,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       await sendRebookPrompt(member.user_id, providerName);
       showToast(`Rebook nudge sent to ${member.customer_name}`);
     } catch (e: any) {
-      showToast(e.message ?? 'Could not send rebook prompt', 'error');
+      showToast(toUserMessage(e, 'Could not send that rebook prompt.', 'ProviderClienteleScreen.rebook'), 'error');
     }
   };
 
@@ -672,7 +772,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       const data = await getClientBookingHistory(member.user_id);
       setHistoryBookings(data);
     } catch (e: any) {
-      showToast(e.message ?? 'Could not load history', 'error');
+      showToast(toUserMessage(e, 'Could not load that history.', 'ProviderClienteleScreen.history'), 'error');
     } finally {
       setHistoryLoading(false);
     }
@@ -747,6 +847,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                 <ClientCard
                   member={item}
                   lapsed={tab === 'lapsed' || daysSince(item.last_booking_date) > 60}
+                  reliability={reliabilityByClient[item.user_id]}
                   onMessage={m => setMessageTarget(m)}
                   onRebook={handleRebook}
                   onViewHistory={handleViewHistory}

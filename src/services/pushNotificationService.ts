@@ -10,12 +10,29 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
+import { setPushTokenIfChanged } from './databaseService';
 
 // Expo Go dropped remote push support in SDK 53 — getExpoPushTokenAsync() fails
 // there and no APNs/FCM delivery is possible, by design, no matter how the
 // backend is configured. startExpoGoNotificationBridge() below is the only way
 // to see notification content while testing in Expo Go.
 export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+// Realtime can briefly redeliver an INSERT after reconnecting. Keep a bounded
+// process-local record of rows already mirrored so Expo Go schedules each row
+// at most once even if the subscription callback is repeated.
+const mirroredNotificationIds = new Set<string>();
+const MAX_MIRRORED_NOTIFICATION_IDS = 500;
+
+function claimExpoGoMirror(notificationId: string): boolean {
+  if (mirroredNotificationIds.has(notificationId)) return false;
+  mirroredNotificationIds.add(notificationId);
+  if (mirroredNotificationIds.size > MAX_MIRRORED_NOTIFICATION_IDS) {
+    const oldestId = mirroredNotificationIds.values().next().value;
+    if (oldestId) mirroredNotificationIds.delete(oldestId);
+  }
+  return true;
+}
 
 // Show banner + play sound even when the app is foregrounded
 Notifications.setNotificationHandler({
@@ -77,14 +94,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // Save token to the current user's row in Supabase
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { error } = await supabase
-        .from('users')
-        .update({ push_token: token })
-        .eq('id', user.id);
-      if (error) {
-        logger.warn('[Push] Failed to save token to DB:', error.message);
-      } else {
-        logger.log('[Push] Token saved to Supabase');
+      try {
+        const wrote = await setPushTokenIfChanged(user.id, token);
+        logger.log(wrote ? '[Push] Token saved to Supabase' : '[Push] Token unchanged — skipped write');
+      } catch (error) {
+        logger.warn('[Push] Failed to save token to DB:', error);
       }
     }
 
@@ -119,6 +133,10 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
           booking_id: string | null;
           recipient_role: 'provider' | 'client';
         };
+        if (!claimExpoGoMirror(row.id)) {
+          logger.log('[Push] Skipped duplicate Expo Go notification row:', row.id);
+          return;
+        }
         // Title is sent as-is, matching the production push Edge Function —
         // no business-name prefix (it clipped long titles like "You have a
         // new booking", and provider vs client is already clear from content).
@@ -146,10 +164,7 @@ export async function unregisterPushToken(): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase
-        .from('users')
-        .update({ push_token: null })
-        .eq('id', user.id);
+      await setPushTokenIfChanged(user.id, null);
     }
   } catch {
     // Ignore — logging out should never fail because of this

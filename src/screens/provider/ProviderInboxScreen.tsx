@@ -34,6 +34,7 @@ import type { BookingWithAddOns, DbBooking } from '../../types/database';
 import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
 import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import { formatTime12 } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -469,11 +470,15 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   }, [route?.params?.initialFilter]);
 
   const fetchBookings = useCallback(async () => {
-    try { setBookings(await getProviderBookings()); } catch {}
+    try { setBookings(await getProviderBookings()); } catch (err) {
+      logger.error('[ProviderInbox] load bookings failed:', err);
+    }
   }, []);
 
   const fetchConversations = useCallback(async () => {
-    try { setConversations(await getProviderConversations()); } catch {}
+    try { setConversations(await getProviderConversations()); } catch (err) {
+      logger.error('[ProviderInbox] load conversations failed:', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -493,11 +498,15 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     Promise.resolve(fn())
       .then(() => fetchBookings())
       .catch((err: any) => {
+        logger.error('[ProviderInbox] booking action failed:', err);
         // Group RPCs (provider_update_group_booking_status /
         // provider_cancel_group_booking) throw a specific, actionable reason
-        // when a sibling can't legally transition — surface it verbatim.
+        // as a DB guard message (P0001) when a sibling can't legally
+        // transition — that's written for people and safe to surface
+        // verbatim. Any other coded (RLS, etc.) or network error is not.
+        const isTechnical = err?.code && err.code !== 'P0001';
         const message =
-          typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
+          typeof err?.message === 'string' && err.message.length > 0 && !isTechnical && !err.message.includes('Network')
             ? err.message
             : 'Could not complete this action. Check your connection and try again.';
         Alert.alert('Action failed', message);
@@ -547,7 +556,10 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
   const handleMarkConversationRead = useCallback((conversation: ProviderConversationWithClient) => {
     markConversationReadByProvider(conversation.id)
       .then(() => fetchConversations())
-      .catch(() => Alert.alert('Could not mark as read', 'Check your connection and try again.'));
+      .catch((err) => {
+        logger.error('[ProviderInbox] mark-read failed:', err);
+        Alert.alert('Could not mark as read', 'Check your connection and try again.');
+      });
   }, [fetchConversations]);
 
   const handleSendReply = useCallback(async () => {
@@ -564,7 +576,8 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
       setReplyTarget(null);
       Keyboard.dismiss();
       fetchConversations();
-    } catch {
+    } catch (err) {
+      logger.error('[ProviderInbox] quick reply failed:', err);
       showToast('Message not sent. Check your connection and try again.', 'error');
     }
     setReplySending(false);

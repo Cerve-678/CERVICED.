@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken, startExpoGoNotificationBridge } from '../services/pushNotificationService';
 import { updateBiometricToken } from '../services/biometricService';
-import { registerModeSetter } from '../navigation/modeController';
+import { registerModeSetter, resolveModeChange } from '../navigation/modeController';
 import {
   getUserProfileById,
   upgradeUserToProvider,
@@ -135,6 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [activeMode, setActiveMode] = useState<'provider' | 'client'>('client');
+  // Mirrors activeMode for applyMode's noop check without pulling activeMode
+  // into that callback's deps (which would otherwise force it to be
+  // re-created — and re-registered via registerModeSetter — on every switch).
+  const activeModeRef = useRef(activeMode);
+  useEffect(() => { activeModeRef.current = activeMode; }, [activeMode]);
 
   // Restore the persisted hat, but never into a hat this account doesn't hold.
   // The saved mode is a device-local preference; `role` is the server's
@@ -333,7 +338,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...(profile.business_name != null ? { businessName: profile.business_name } : {}),
           ...(profile.business_email != null ? { businessEmail: profile.business_email } : {}),
           needsEmailVerification: !session.user.email_confirmed_at,
-          hasClientProfile: !!profile.dob,
+          // A real `users` row existing at all already means this account has
+          // a client profile — NOT whether dob happens to be filled in. Apple
+          // Sign-In never provides a date of birth (Apple's identity token
+          // doesn't carry one), so gating on `!!profile.dob` made every
+          // Apple-authenticated client look "incomplete" on every sign-in,
+          // permanently — not a one-time race. Only a provider-only account
+          // (role === 'provider') that hasn't set up a client hat yet should
+          // read as not having a client profile; for those, dob is still the
+          // right signal since addClientProfile is what writes it.
+          hasClientProfile: role !== 'provider' || profile.dob != null,
           gender: (profile as any).gender ?? null,
           has_kids: (profile as any).has_kids ?? null,
           birth_year: (profile as any).birth_year ?? null,
@@ -419,10 +433,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Directly set the mode (used by notification taps / deep-links that must land
   // in a specific hat). Exposed to non-React code via the mode controller so the
   // push tap handler can switch hats before deep-linking.
+  //
+  // This is the one chokepoint every mode-change path (switchMode, and
+  // requestMode from outside React) funnels through, so it's the only place
+  // that needs to enforce hat ownership. Without this check, a client-only
+  // account could be driven into the provider navigator (or vice versa) by
+  // anything that can call requestMode/switchMode — e.g. a forged/stray
+  // notification payload — even though nothing ever granted that hat.
+  // Falls back to whichever hat the account actually holds rather than a
+  // silent no-op, so a rejected switch still lands somewhere real.
   const applyMode = useCallback(async (mode: 'provider' | 'client') => {
-    setActiveMode(mode);
-    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, mode).catch(() => {});
-  }, []);
+    const ownsProvider = user?.accountType === 'provider';
+    const ownsClient = user?.accountType !== 'provider' || !!user?.hasClientProfile;
+    const allowed = mode === 'provider' ? ownsProvider : ownsClient;
+    const resolved = allowed ? mode : (ownsProvider ? 'provider' : 'client');
+    if (!allowed) {
+      logger.warn(`[AuthContext] applyMode('${mode}') rejected — account does not hold that hat; staying on '${resolved}'`);
+    }
+    // If this doesn't actually change activeMode (already in `resolved`, or
+    // rejected back to the hat we're already in), React bails out of
+    // re-rendering — RootNavigation's activeMode effect never re-fires, so
+    // resolveModeChange() must be called directly here or requestMode()
+    // callers would hang waiting for a re-render that never happens.
+    const isNoop = resolved === activeModeRef.current;
+    setActiveMode(resolved);
+    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, resolved).catch(() => {});
+    if (isNoop) resolveModeChange(resolved);
+  }, [user?.accountType, user?.hasClientProfile]);
 
   useEffect(() => {
     registerModeSetter((mode) => { applyMode(mode).catch(() => {}); });
@@ -430,6 +467,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchMode = useCallback(async () => {
     const next = activeMode === 'provider' ? 'client' : 'provider';
+    const ownsProvider = user?.accountType === 'provider';
+    const ownsClient = user?.accountType !== 'provider' || !!user?.hasClientProfile;
+    const allowed = next === 'provider' ? ownsProvider : ownsClient;
+    if (!allowed) {
+      logger.warn(`[AuthContext] switchMode() to '${next}' rejected — account does not hold that hat`);
+      return;
+    }
     setSwitchingTo(next);
     setIsSwitching(true);
     // Brief pause so the overlay renders before the navigator swaps
@@ -438,7 +482,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, next).catch(() => {});
     await new Promise(resolve => setTimeout(resolve, 600));
     setIsSwitching(false);
-  }, [activeMode]);
+  }, [activeMode, user?.accountType, user?.hasClientProfile]);
 
   // Upgrades an existing client account to provider in-place — no new auth user created.
   // Updates the DB role, local state, and activeMode all in one call.
@@ -512,12 +556,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
+    await updateUserNamePhone(updated.id, updated.name, updated.phone ?? '');
     setUser(updated);
-    try {
-      await updateUserNamePhone(updated.id, updated.name, updated.phone ?? '');
-    } catch (err: any) {
-      logger.warn('updateUser DB error:', err.message);
-    }
   }, [user, session]);
 
   const logout = useCallback(async () => {

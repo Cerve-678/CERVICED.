@@ -51,6 +51,7 @@ export interface RegistrationData {
   // detail, more descriptive than operational.
   accessibilityNotes: string;
   languagesSpoken: string[];
+  languagesOther: string;
   specialties: string[];
   specialtiesOther: string;
   // Set when a logged-in client starts the provider upgrade flow
@@ -109,6 +110,7 @@ const initialData: RegistrationData = {
   // Provider "Tell me more"
   accessibilityNotes: '',
   languagesSpoken: [],
+  languagesOther: '',
   specialties: [],
   specialtiesOther: '',
   fromProviderSwitch: false,

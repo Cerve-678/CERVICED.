@@ -42,6 +42,12 @@ It must return only:
 `capabilityId` must exactly match one tool name from the supplied schema.
 Return `null` whenever the model is unsure.
 
+Optionally, implement `compose()` to return one short, conversational
+`leadIn`. This is how the AI can make Becca sound more natural without
+replacing the verified answer. The engine rejects lead-ins containing figures,
+prices, markdown, bullets, or multiple lines; the deterministic factual answer
+and actions always remain intact beneath it.
+
 ## Non-negotiable safety rules
 
 - Never let the model call Supabase, write SQL, or call app services.
@@ -87,3 +93,22 @@ No interpreter means no behavioural regression: the deterministic matcher and
 all existing reply/action fallbacks keep working exactly as they do today. An
 interpreter that takes longer than 3.5 seconds also falls back automatically,
 so a slow model can never leave the chat stuck on its waiting state.
+
+## NVIDIA Nemotron deployment
+
+The ready-to-deploy integration is `supabase/functions/becca-ai/index.ts` and
+`src/services/becca/nvidiaInterpreter.ts`. It calls
+`nvidia/nemotron-3-super-120b-a12b` through NVIDIA's hosted API from a
+signed-in Supabase Edge Function.
+
+Before enabling it:
+
+1. Add the NVIDIA key as the `NVIDIA_API_KEY` Edge Function secret.
+2. Deploy the `becca-ai` function.
+3. Set `EXPO_PUBLIC_BECCA_AI_ENABLED=true` for the mobile build.
+
+The key is never placed in the app. NVIDIA is used for routing only: the
+function sends the user's message, active hat, approved capability schema, and
+locally resolved entity *kinds*. It does not send booking data, profile data,
+payment data, or deterministic reply content. Reply composition remains local
+and deterministic until a separately reviewed redaction policy exists.

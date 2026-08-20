@@ -16,22 +16,26 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { supabase } from '../../lib/supabase';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { PasswordRequirements } from '../../components/PasswordRequirements';
+import { validatePassword } from '../../utils/validation';
 
 export default function ChangePasswordScreen({ navigation }: any) {
-  const { theme, isDarkMode, palette: P } = useTheme();
+  const { isDarkMode, palette: P } = useTheme();
   const insets = useSafeAreaInsets();
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showNext, setShowNext] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
-  const inputStyle = [
-    styles.input,
+  const rowStyle = [
+    styles.inputRow,
     {
-      color: theme.text,
       backgroundColor: isDarkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
       borderColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
     },
   ];
+  const inputStyle = [styles.inputWithEye, { color: P.text }];
 
   const handleSave = async () => {
     if (!next.trim() || !confirm.trim()) {
@@ -42,8 +46,9 @@ export default function ChangePasswordScreen({ navigation }: any) {
       Alert.alert('Mismatch', 'New passwords do not match.');
       return;
     }
-    if (next.length < 8) {
-      Alert.alert('Too short', 'Password must be at least 8 characters.');
+    const passwordError = validatePassword(next);
+    if (passwordError) {
+      Alert.alert('Weak password', passwordError);
       return;
     }
     setLoading(true);
@@ -62,7 +67,7 @@ export default function ChangePasswordScreen({ navigation }: any) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <StatusBar barStyle={theme.statusBar} translucent />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent />
       <KeyboardDismissView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
@@ -74,36 +79,57 @@ export default function ChangePasswordScreen({ navigation }: any) {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.backArrow, { color: theme.text }]}>{'←'}</Text>
+            <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: theme.text }]}>Change Password</Text>
-          <Text style={[styles.subtitle, { color: theme.secondaryText }]}>Update your account credentials</Text>
+          <Text style={[styles.title, { color: P.text }]}>Change Password</Text>
+          <Text style={[styles.subtitle, { color: P.sub }]}>Update your account credentials</Text>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.secondaryText }]}>NEW PASSWORD</Text>
-            <TextInput
-              style={inputStyle}
-              value={next}
-              onChangeText={setNext}
-              placeholder="Min. 8 characters"
-              placeholderTextColor={theme.secondaryText}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <Text style={[styles.label, { color: P.sub }]}>NEW PASSWORD</Text>
+            <View style={rowStyle}>
+              <TextInput
+                style={inputStyle}
+                value={next}
+                onChangeText={setNext}
+                placeholder="Min. 8 characters"
+                placeholderTextColor={P.sub}
+                secureTextEntry={!showNext}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowNext(v => !v); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.eyeText, { color: P.sub }]}>{showNext ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
+            {next.length > 0 && (
+              <PasswordRequirements password={next} goodColor={P.accent} pendingColor={P.sub} />
+            )}
           </View>
 
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.secondaryText }]}>CONFIRM NEW PASSWORD</Text>
-            <TextInput
-              style={inputStyle}
-              value={confirm}
-              onChangeText={setConfirm}
-              placeholder="Re-enter new password"
-              placeholderTextColor={theme.secondaryText}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <Text style={[styles.label, { color: P.sub }]}>CONFIRM NEW PASSWORD</Text>
+            <View style={rowStyle}>
+              <TextInput
+                style={inputStyle}
+                value={confirm}
+                onChangeText={setConfirm}
+                placeholder="Re-enter new password"
+                placeholderTextColor={P.sub}
+                secureTextEntry={!showConfirm}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowConfirm(v => !v); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.eyeText, { color: P.sub }]}>{showConfirm ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -113,8 +139,8 @@ export default function ChangePasswordScreen({ navigation }: any) {
             activeOpacity={0.8}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.saveBtnText}>UPDATE PASSWORD</Text>
+              ? <ActivityIndicator color={P.onAccent} />
+              : <Text style={[styles.saveBtnText, { color: P.onAccent }]}>UPDATE PASSWORD</Text>
             }
           </TouchableOpacity>
         </ScrollView>
@@ -132,19 +158,21 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, marginBottom: 32, lineHeight: 20 },
   fieldGroup: { marginBottom: 20 },
   label: { fontSize: 11, letterSpacing: 1, marginBottom: 8 },
-  input: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    
   },
+  inputWithEye: { flex: 1, paddingVertical: 14, fontSize: 15 },
+  eyeBtn: { paddingLeft: 8 },
+  eyeText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, fontWeight: '600' },
   saveBtn: {
     borderRadius: 100,
     paddingVertical: 15,
     alignItems: 'center',
     marginTop: 8,
   },
-  saveBtnText: { fontSize: 15, fontWeight: '700', letterSpacing: 1, color: '#fff' },
+  saveBtnText: { fontSize: 15, fontWeight: '700', letterSpacing: 1 },
 });

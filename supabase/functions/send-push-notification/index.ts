@@ -126,11 +126,45 @@ serve(async (req) => {
 
     const { user_id, title, message } = payload.record;
 
+    if (!payload.record.id) {
+      return new Response(JSON.stringify({ error: 'missing_notification_id' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Use service role to read the user's push_token (bypasses RLS)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // Database webhooks are at-least-once delivery. Atomically claim this row
+    // before calling Expo so a retry/concurrent webhook cannot show the same
+    // notification twice. Keep the claim even if the downstream outcome is
+    // uncertain: retrying an accepted-but-unacknowledged Expo request is the
+    // exact failure mode that produces duplicate visible alerts.
+    const { data: claimed, error: claimError } = await supabase.rpc(
+      'claim_notification_push',
+      { p_notification_id: payload.record.id },
+    );
+
+    if (claimError) {
+      console.error(
+        `[push] claim failed notification=${payload.record.id}: ${claimError.message}`,
+      );
+      return new Response(JSON.stringify({ error: 'claim_failed' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!claimed) {
+      console.log(`[push] duplicate skipped notification=${payload.record.id}`);
+      return new Response(JSON.stringify({ sent: false, reason: 'duplicate' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const { data: userRow, error } = await supabase
       .from('users')

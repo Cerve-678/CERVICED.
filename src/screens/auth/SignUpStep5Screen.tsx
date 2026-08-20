@@ -25,6 +25,8 @@ import { reportError } from '../../utils/logger';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS } from '../../features/business-details/options';
+import { recognizeLanguage } from '../../data/languages';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
@@ -37,11 +39,17 @@ const REFERRAL_SOURCES = ['Instagram', 'TikTok', 'Snapchat', 'X', 'Referral', 'G
 // operational logistics. Specialties mirror InfoRegScreen's per-service
 // techniqueTags vocabulary so signup's answer is a familiar starting point,
 // not a competing taxonomy.
-const ACCESSIBILITY_OPTIONS = [
-  'Step-free access', 'Accessible parking', 'Accessible bathroom',
-  'Wheelchair accessible', 'Guide dog friendly', 'Sensory-friendly space', 'None of these',
-];
-const LANGUAGE_OPTIONS = ['English', 'Urdu', 'Punjabi', 'Polish', 'Arabic', 'French', 'Spanish', 'BSL', 'Other'];
+// Same list AboutYouScreen edits post-signup (ACCESSIBILITY_OPTS) — this used
+// to be a hand-duplicated local list with different wording/items and a
+// 'None of these' sentinel the shared vocabulary doesn't have, which meant a
+// value picked here could show as a garbled/unmatched chip later. Selecting
+// nothing already means nothing, same as every other multi-select in this
+// screen, so no explicit opt-out option is needed.
+const ACCESSIBILITY_OPTIONS = ACCESSIBILITY_OPTS;
+// Same list AboutYouScreen edits post-signup (LANGUAGE_OPTS), plus 'Other' —
+// keeping one source of truth avoids the earlier BSL-missing desync bug
+// (see options.ts) where a language chosen here had no chip later.
+const LANGUAGE_OPTIONS = [...LANGUAGE_OPTS, 'Other'];
 
 // Specialty chip options, tailored per service category selected in Step 4
 // (data.serviceInterests) — a provider who picked NAILS sees nail-relevant
@@ -83,8 +91,9 @@ export default function SignUpStep5Screen({ navigation }: Props) {
   const [selectedFrequency, setSelectedFrequency] = useState<string>(data.maintenanceFrequency);
   const [selectedReferral,  setSelectedReferral]  = useState<string>(data.referralSource);
   // Provider-only "Tell me more"
-  const [selectedAccessibility, setSelectedAccessibility] = useState<string[]>(data.accessibilityNotes ? data.accessibilityNotes.split(', ').filter(Boolean) : []);
+  const [selectedAccessibility, setSelectedAccessibility] = useState<string[]>(data.accessibilityNotes ? data.accessibilityNotes.split('|').filter(Boolean) : []);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(data.languagesSpoken);
+  const [languagesOther, setLanguagesOther] = useState<string>(data.languagesOther);
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>(data.specialties);
   const [specialtiesOther, setSpecialtiesOther] = useState<string>(data.specialtiesOther);
   // Category-aware options: union of every selected service category's list
@@ -152,11 +161,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
 
   const toggleAccessibility = (item: string) => {
     Haptics.selectionAsync().catch(() => {});
-    setSelectedAccessibility(prev => {
-      if (item === 'None of these') return prev.includes('None of these') ? [] : ['None of these'];
-      const without = prev.filter(a => a !== 'None of these');
-      return without.includes(item) ? without.filter(a => a !== item) : [...without, item];
-    });
+    setSelectedAccessibility(prev => prev.includes(item) ? prev.filter(a => a !== item) : [...prev, item]);
   };
 
   const toggleLanguage = (item: string) => {
@@ -194,10 +199,18 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     ? [...selectedSpecialties.filter(s => s !== 'Other'), specialtiesOther.trim()]
     : selectedSpecialties.filter(s => s !== 'Other');
 
+  // recognizeLanguage normalises casing/aliases (e.g. "french" → "French")
+  // so a typed language matches the canonical name AboutYouScreen already
+  // knows about, instead of creating a near-duplicate chip later.
+  const finalLanguages = selectedLanguages.includes('Other') && languagesOther.trim()
+    ? [...selectedLanguages.filter(l => l !== 'Other'), recognizeLanguage(languagesOther)]
+    : selectedLanguages.filter(l => l !== 'Other');
+
   const submitSignUp = async () => {
     updateData(isProvider ? {
-      accessibilityNotes: selectedAccessibility.join(', '),
-      languagesSpoken: selectedLanguages,
+      accessibilityNotes: selectedAccessibility.join('|'),
+      languagesSpoken: finalLanguages,
+      languagesOther,
       specialties: finalSpecialties,
       specialtiesOther,
       referralSource: selectedReferral,
@@ -249,8 +262,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           priceRange: data.priceRange, teamSize: data.teamSize,
           preferredContactMethods: data.preferredContactMethods,
           preferredPaymentMethods: data.preferredPaymentMethods,
-          accessibilityNotes: selectedAccessibility.join(', '),
-          languagesSpoken: selectedLanguages, specialties: finalSpecialties,
+          accessibilityNotes: selectedAccessibility.join('|'),
+          languagesSpoken: finalLanguages, specialties: finalSpecialties,
           referralSource: selectedReferral,
         });
         if (user?.email) {
@@ -298,8 +311,8 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             price_range: isProvider ? (data.priceRange || null) : null,
             team_size: isProvider ? (data.teamSize || null) : null,
             preferred_contact_methods: isProvider ? data.preferredContactMethods : null,
-            accessibility_notes: isProvider ? (selectedAccessibility.join(', ') || null) : null,
-            languages_spoken: isProvider ? selectedLanguages : null,
+            accessibility_notes: isProvider ? (selectedAccessibility.join('|') || null) : null,
+            languages_spoken: isProvider ? finalLanguages : null,
             specialties: isProvider ? finalSpecialties : null,
             preferred_payment_methods: isProvider ? data.preferredPaymentMethods : null,
           },
@@ -403,7 +416,34 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         {isProvider ? (
           <>
             {renderSection(accessibilityY, 'ACCESSIBILITY', "Does your space have any of these? Select all that apply", ACCESSIBILITY_OPTIONS, item => selectedAccessibility.includes(item), toggleAccessibility, true)}
-            {renderSection(languagesY, 'LANGUAGES SPOKEN', 'Which languages can you offer appointments in?', LANGUAGE_OPTIONS, item => selectedLanguages.includes(item), toggleLanguage, true)}
+
+            {/* Languages spoken — 'Other' reveals a free-text input, same
+                pattern as Specialties below, so a language outside the
+                fixed list can still be added instead of being lost. */}
+            <View onLayout={(e: LayoutChangeEvent) => { languagesY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedLanguages.length ? '#DC2626' : t.text }]}>
+                LANGUAGES SPOKEN{showErrors && !selectedLanguages.length ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>Which languages can you offer appointments in?</Text>
+              <View style={styles.chipsContainer}>
+                {LANGUAGE_OPTIONS.map(item => (
+                  <TouchableOpacity key={item} style={chipStyle(selectedLanguages.includes(item))} onPress={() => toggleLanguage(item)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedLanguages.includes(item))}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {selectedLanguages.includes('Other') && (
+                <View style={[styles.otherInputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+                  <TextInput
+                    style={[styles.otherInput, { color: t.text }]}
+                    value={languagesOther}
+                    onChangeText={setLanguagesOther}
+                    placeholder="Tell us more..."
+                    placeholderTextColor={t.sub}
+                  />
+                </View>
+              )}
+            </View>
 
             {/* Specialties — options depend on the service categories picked in Step 4 */}
             <View onLayout={(e: LayoutChangeEvent) => { specialtiesY.current = e.nativeEvent.layout.y; }}>

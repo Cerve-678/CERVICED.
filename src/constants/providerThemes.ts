@@ -75,9 +75,38 @@ export function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function isDarkColor(hex: string): boolean {
+/** WCAG relative luminance (0-1) of a single sRGB channel value (0-255). */
+function channelLuminance(c: number): number {
+  const s = c / 255;
+  return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+}
+
+/** WCAG relative luminance (0-1) of a '#RRGGBB' colour. */
+function relativeLuminance(hex: string): number {
   const [r, g, b] = hexChannels(hex);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.45;
+  return 0.2126 * channelLuminance(r) + 0.7152 * channelLuminance(g) + 0.0722 * channelLuminance(b);
+}
+
+/** WCAG contrast ratio (1-21) between two '#RRGGBB' colours. */
+function contrastRatio(hexA: string, hexB: string): number {
+  const lA = relativeLuminance(hexA);
+  const lB = relativeLuminance(hexB);
+  const lighter = Math.max(lA, lB);
+  const darker = Math.min(lA, lB);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+/** Whether foreground content (text/icons) drawn on this background should be
+ *  light-coloured rather than dark. A single luminance threshold isn't a real
+ *  contrast check — a background can sit just on the "light" side of a cutoff
+ *  and still contrast better with white than with navy (or vice versa). This
+ *  picks whichever of white (#fff) or the app's navy (#1B2740) actually wins
+ *  more contrast against the given background, so every text-on-accent call
+ *  site gets a real WCAG comparison instead of a coarse guess. */
+export function isDarkColor(hex: string): boolean {
+  const whiteContrast = contrastRatio(hex, '#FFFFFF');
+  const navyContrast = contrastRatio(hex, '#1B2740');
+  return whiteContrast >= navyContrast;
 }
 
 /** Blend hex colour toward a target by t (0..1), returning a solid hex. */

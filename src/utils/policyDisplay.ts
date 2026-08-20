@@ -18,6 +18,10 @@ export interface PolicyDisplayData {
   depositAmount?: string;
   noShowAction?: string;
   policyImageUrl?: string;
+  /** Free-text refund disclosure only — never a percentage/amount, since
+   *  this app has no refund-processing infra and doesn't calculate or
+   *  enforce refunds automatically. Same free-text pattern as cancelNote. */
+  refundPolicyNote?: string;
 }
 
 export interface PolicyDisplayRow {
@@ -51,7 +55,6 @@ export function buildPolicyDisplayRows(
       value: policy.depositType === 'percent'
         ? `${policy.depositAmount}% required`
         : `£${policy.depositAmount} required`,
-      ...(policy.depositOnly ? { tag: 'ONLY' } : {}),
     });
   }
 
@@ -99,6 +102,10 @@ export function buildPolicyDisplayRows(
 
   if (policy.cancelNote) {
     rows.push({ icon: 'information-circle-outline', label: 'Note', value: policy.cancelNote });
+  }
+
+  if (policy.refundPolicyNote) {
+    rows.push({ icon: 'cash-outline', label: 'Refunds', value: policy.refundPolicyNote });
   }
 
   return rows;

@@ -65,10 +65,11 @@ const beccaStorageService = {
   },
 
   async saveMessage(sessionId: string, message: ChatMessage): Promise<void> {
-    const { suggestions, providerRecommendations } = message as any;
+    const { suggestions, providerRecommendations, inspiration } = message as any;
     const metadata: Record<string, any> = {};
     if (suggestions) metadata['suggestions'] = suggestions;
     if (providerRecommendations) metadata['providerRecommendations'] = providerRecommendations;
+    if (inspiration) metadata['inspiration'] = inspiration;
 
     await upsertBeccaMessage({
       id: message.id,

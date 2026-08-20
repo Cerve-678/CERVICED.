@@ -278,7 +278,7 @@ const handlePayment = useCallback(async () => {
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      {effectiveCartItems.some(i => i.isDeposit) ? 'Pay Now' : 'Total'}
+                      Total
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -583,7 +583,7 @@ const StripePaymentModal: React.FC<PaymentModalProps> = memo(
                   ))}
                   <View style={styles.orderTotal}>
                     <Text style={[styles.orderTotalLabel, { color: theme.text }]}>
-                      {effectiveCartItems.some(i => i.isDeposit) ? 'Pay Now' : 'Total'}
+                      Total
                     </Text>
                     <Text style={[styles.orderTotalAmount, { color: theme.text }]}>£{totalAmount.toFixed(2)}</Text>
                   </View>
@@ -1228,6 +1228,50 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
   }, [getBookingSummary]);
 
+  // Collapse behaviour has two jobs, both so the cart opens as a scannable
+  // list of provider headers rather than a wall of cards:
+  //
+  //   1. On entry, every section starts collapsed — whatever was already in
+  //      the cart is summarised by its header, not expanded.
+  //   2. When a booking is added, every *other* section collapses and only
+  //      the section that received it is left open, so the new booking is
+  //      what's actually visible with space around it.
+  //
+  // Tracked by item id (not just provider key) so adding a second service to
+  // a provider already in the cart counts as an add too, not only a
+  // brand-new provider.
+  const knownItemIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const providerKeys = Object.keys(itemsByProvider);
+    const currentItemIds = new Set(items.map(i => i.id));
+
+    // First run for this mount: collapse everything that's already here.
+    if (knownItemIdsRef.current === null) {
+      knownItemIdsRef.current = currentItemIds;
+      if (providerKeys.length > 0) setCollapsedProviders(new Set(providerKeys));
+      return;
+    }
+
+    const previousItemIds = knownItemIdsRef.current;
+    knownItemIdsRef.current = currentItemIds;
+
+    // Which providers gained an item since last time? (Removals don't
+    // re-collapse anything — you're still working in that section.)
+    const providersWithNewItems = new Set(
+      items
+        .filter(i => !previousItemIds.has(i.id))
+        // Same fallback CartContext's itemsByProvider grouping uses, so an
+        // item with no provider name still maps onto its rendered section.
+        .map(i => i.providerName || 'Unknown Provider'),
+    );
+    if (providersWithNewItems.size === 0) return;
+
+    // Collapse every section except the one(s) that just received an item.
+    setCollapsedProviders(
+      new Set(providerKeys.filter(k => !providersWithNewItems.has(k))),
+    );
+  }, [items, itemsByProvider]);
+
   // Fetch deposit policies for all providers in the cart whenever items change
   useEffect(() => {
     if (items.length === 0) { setProviderDepositPolicies({}); return; }
@@ -1446,16 +1490,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     });
     return units;
   }, [getServiceBooking]);
-
-  // Whether any item in the cart is deposit-only. When true the summary's
-  // bottom line isn't the cost of the services — it's just the amount being
-  // charged now — so the label says "Pay Now" instead of "Total". The
-  // per-item remaining balance stays on the individual service cards; the
-  // app deliberately doesn't total up or track off-app balances here.
-  const hasDepositItem = useMemo(
-    () => items.some(item => getServiceBooking(item.id).isDepositOnly),
-    [items, getServiceBooking]
-  );
 
   // Compute effective cart items for payment modal
   const effectiveCartItems = useMemo(() => {
@@ -1804,6 +1838,14 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
+    // Validate name is provided — this becomes the permanent customer_name
+    // snapshot on the booking row (providers see it on every booking card,
+    // in analytics, clientele, etc.), so an empty value here isn't just a
+    // blank field, it's a silent "Client"/'—' fallback everywhere downstream.
+    if (!reviewName.trim()) {
+      showAlert('Name Required', 'Please enter your name to continue.');
+      return;
+    }
     // Validate phone is provided
     if (!reviewPhone.trim()) {
       showAlert('Phone Required', 'Please enter your phone number to continue.');
@@ -1828,7 +1870,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // to the DB, so including it here silently desyncs local user.email from
     // the real auth email without ever actually changing it server-side.
     if (saveAsDefault) {
-      await updateUser({ name: reviewName, phone: reviewPhone });
+      try {
+        await updateUser({ name: reviewName, phone: reviewPhone });
+      } catch (err) {
+        // Don't block checkout on this — the entered details still carry
+        // through to the booking itself via customerInfo above.
+        logger.error('Failed to save default contact details:', err);
+      }
     }
 
     // Re-confirm agreement per checkout attempt rather than letting a stale
@@ -2523,7 +2571,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         <Text style={[styles.summaryTotalValue, { color: P.text }]}>£{platformFee.toFixed(2)}</Text>
                       </View>}
                       <View style={[styles.summaryTotalRow, styles.summaryGrandTotalRow, { borderTopColor: P.sep }]}>
-                        <Text style={[styles.summaryGrandLabel, { color: P.text }]}>{hasDepositItem ? 'Pay Now' : 'Total'}</Text>
+                        <Text style={[styles.summaryGrandLabel, { color: P.text }]}>Total</Text>
                         <Text style={[styles.summaryGrandValue, { color: P.accentText }]}>£{effectiveFinalTotal.toFixed(2)}</Text>
                       </View>
                     </View>
@@ -3219,7 +3267,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     <Text style={dynamicStyles.summaryValue}>£{platformFee.toFixed(2)}</Text>
                   </View>}
                   <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: P.border }]}>
-                    <Text style={dynamicStyles.totalLabel}>{hasDepositItem ? 'Pay Now' : 'Total'}</Text>
+                    <Text style={dynamicStyles.totalLabel}>Total</Text>
                     <Text style={dynamicStyles.totalValue}>£{effectiveFinalTotal.toFixed(2)}</Text>
                   </View>
                 </View>

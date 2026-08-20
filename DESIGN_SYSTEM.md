@@ -716,6 +716,42 @@ this doc: read `palette`, not `theme`.
 - Mount the sheet itself at all times with `index={-1}`; its open/close is a
   driven animation on an always-present component, not a `visible` prop.
 
+### Date & time picker — the plain, "regular" pattern
+
+The default pattern for picking a date or time — used by the Announcements
+scheduler's "Schedule Send" toggle (`AnnouncementSheet` in
+`ProviderClienteleScreen.tsx`) — is deliberately plain: two small pill
+buttons that open the bare OS-native `@react-native-community/datetimepicker`
+with `display="default"`, no custom modal/sheet wrapper around it.
+
+- One pill per field: a calendar-icon pill showing the formatted date, a
+  clock-icon pill showing the formatted time (`formatTime12` from
+  `src/utils/dateUtils.ts` — see the date/time formatting convention, never
+  hand-roll a formatter). Each pill's `onPress` just flips a
+  `showDatePicker`/`showTimePicker` boolean.
+- The picker itself is conditionally rendered (`{showDatePicker && <DateTimePicker .../>}`)
+  and unmounts itself in `onChange` after picking — no `Modal` wrapper, no
+  spinner `display`, no "Done" header. On iOS this renders as the system's
+  own compact popover; on Android as the system dialog. Follow the platform's
+  native chrome instead of re-skinning it.
+- `minimumDate={new Date()}` on the date picker prevents picking the past.
+  Picking a new date preserves the existing time-of-day (and vice versa) by
+  cloning the current `Date` and only overwriting the changed field —
+  never construct a fresh `Date` from scratch in `onChange`, or you silently
+  reset the other field to its default.
+- This is distinct, on purpose, from the heavier picker in the provider
+  booking detail screen's "Propose New Times" reschedule flow
+  (`ProviderBookingDetailScreen.tsx`), which wraps the same
+  `DateTimePicker` in a custom bottom-sheet-style `Modal` with a
+  "Select Date"/"Done" header and `display="spinner"` on iOS, plus a
+  separate "+ Add custom time" escape hatch and an orange (`#FF9500`)
+  accent tying it to that screen's reschedule affordances. That flow needs
+  the heavier chrome because it's building up a *list* of proposed
+  date+time slots (chips accumulate below it) rather than picking one
+  value — don't use the plain pill pattern there, and don't pull the
+  spinner/modal chrome into the plain pattern elsewhere. Two genuinely
+  different jobs, kept visually distinct.
+
 ### Navigation back button — two valid patterns, pick by header background
 
 Two genuinely different implementations coexist in this app on purpose —

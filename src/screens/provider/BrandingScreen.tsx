@@ -28,6 +28,7 @@ import {
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import { uploadToStorage } from '../../services/providerRegistrationService';
 import { getProviderBrandingByUserId, updateProviderBranding } from '../../services/databaseService';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
@@ -132,7 +133,7 @@ export default function BrandingScreen({ navigation }: any) {
       const url = await uploadBackgroundImage(userId, result.assets[0].uri);
       setBackgroundImage(url);
     } catch (e: any) {
-      Alert.alert('Upload failed', e.message);
+      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'BrandingScreen.upload'));
     } finally {
       setUploadingImage(false);
     }
@@ -170,7 +171,7 @@ export default function BrandingScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Save failed', e.message);
+      Alert.alert('Save failed', toUserMessage(e, 'Could not save your changes.', 'BrandingScreen.save'));
     } finally {
       setSaving(false);
     }

@@ -65,12 +65,69 @@ export interface WeeklyOpeningHoursDay {
   hours: string | null;
 }
 
+interface LegacyAvailabilityRow {
+  day_of_week: number;
+  open_time: string;
+  close_time: string;
+  is_closed: boolean;
+}
+
+interface AvailabilityWindowRow {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+interface WeeklyScheduleRows {
+  legacyRows: LegacyAvailabilityRow[];
+  windowRows: AvailabilityWindowRow[];
+}
+
 const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 // Sun-indexed full names + Mon→Sun reading order — same convention as
 // ProviderScheduleScreen's DAY_FULL/DISPLAY_ORDER, kept in sync deliberately
 // so the client-facing weekly listing and the provider's own editor agree.
 const DAY_FULL_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEK_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const weeklyScheduleRequests = new Map<string, Promise<WeeklyScheduleRows>>();
+
+const fetchWeeklyScheduleRows = async (
+  providerId: string,
+): Promise<WeeklyScheduleRows> => {
+  const inFlight = weeklyScheduleRequests.get(providerId);
+  if (inFlight) return inFlight;
+
+  const request = (async (): Promise<WeeklyScheduleRows> => {
+    const [windowsResult, legacyResult] = await Promise.all([
+      supabase
+        .from('provider_availability_windows')
+        .select('day_of_week, start_time, end_time')
+        .eq('provider_id', providerId)
+        .order('start_time'),
+      supabase
+        .from('provider_availability')
+        .select('day_of_week, open_time, close_time, is_closed')
+        .eq('provider_id', providerId),
+    ]);
+    if (windowsResult.error) throw windowsResult.error;
+    if (legacyResult.error) throw legacyResult.error;
+
+    const rows: WeeklyScheduleRows = {
+      windowRows: (windowsResult.data ?? []) as AvailabilityWindowRow[],
+      legacyRows: (legacyResult.data ?? []) as LegacyAvailabilityRow[],
+    };
+    return rows;
+  })();
+
+  weeklyScheduleRequests.set(providerId, request);
+  try {
+    return await request;
+  } finally {
+    if (weeklyScheduleRequests.get(providerId) === request) {
+      weeklyScheduleRequests.delete(providerId);
+    }
+  }
+};
 
 // Parse time string to minutes for comparison
 const parseTimeToMinutes = (timeStr: string): number => {
@@ -129,6 +186,59 @@ const parse24HTimeToMinutes = (timeStr: string): number => {
   const h = parseInt(parts[0] ?? '0', 10);
   const m = parseInt(parts[1] ?? '0', 10);
   return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+};
+
+const buildWeeklyOpeningHours = ({
+  windowRows,
+  legacyRows,
+}: WeeklyScheduleRows): WeeklyOpeningHoursDay[] | null => {
+  if (windowRows.length === 0 && legacyRows.length === 0) return null;
+
+  const windowsByDow = new Map<number, AvailabilityWindowRow[]>();
+  for (const row of windowRows) {
+    const list = windowsByDow.get(row.day_of_week) ?? [];
+    list.push(row);
+    windowsByDow.set(row.day_of_week, list);
+  }
+  const legacyByDow = new Map<number, LegacyAvailabilityRow>();
+  for (const row of legacyRows) legacyByDow.set(row.day_of_week, row);
+
+  return WEEK_DISPLAY_ORDER.map((dow) => {
+    const windows = windowsByDow.get(dow);
+    if (windows && windows.length > 0) {
+      const earliest = windows.reduce((left, right) =>
+        parse24HTimeToMinutes(left.start_time) <= parse24HTimeToMinutes(right.start_time)
+          ? left
+          : right,
+      );
+      const latest = windows.reduce((left, right) =>
+        parse24HTimeToMinutes(left.end_time) >= parse24HTimeToMinutes(right.end_time)
+          ? left
+          : right,
+      );
+      return {
+        dayOfWeek: dow,
+        label: DAY_FULL_NAMES[dow] ?? '',
+        isOpen: true,
+        hours: `${formatTime12(earliest.start_time)} - ${formatTime12(latest.end_time)}`,
+      };
+    }
+    const legacy = legacyByDow.get(dow);
+    if (legacy && !legacy.is_closed) {
+      return {
+        dayOfWeek: dow,
+        label: DAY_FULL_NAMES[dow] ?? '',
+        isOpen: true,
+        hours: `${formatTime12(legacy.open_time)} - ${formatTime12(legacy.close_time)}`,
+      };
+    }
+    return {
+      dayOfWeek: dow,
+      label: DAY_FULL_NAMES[dow] ?? '',
+      isOpen: false,
+      hours: null,
+    };
+  });
 };
 
 // Minutes-since-midnight -> "09:00am", the display format every slot/time
@@ -1308,9 +1418,9 @@ export const AvailabilityService = {
    */
   async getAvailabilitySummary(
     providerIdOrName: string,
-    options: { searchDays?: number } = {},
+    options: { searchDays?: number; includeExtendedSearch?: boolean } = {},
   ): Promise<AvailabilitySummary | null> {
-    const { searchDays = 60 } = options;
+    const { searchDays = 60, includeExtendedSearch = true } = options;
     try {
       const providerId = await resolveProviderId(providerIdOrName);
       if (!providerId) return null;
@@ -1323,15 +1433,8 @@ export const AvailabilityService = {
       stripEnd.setDate(stripEnd.getDate() + 6);
       const stripEndStr = toLocalDateStr(stripEnd);
 
-      const [availResult, windowsResult, blockedResult, overridesResult, busySpans] = await Promise.all([
-        supabase
-          .from('provider_availability')
-          .select('day_of_week, open_time, close_time, is_closed')
-          .eq('provider_id', providerId),
-        supabase
-          .from('provider_availability_windows')
-          .select('day_of_week, start_time, end_time')
-          .eq('provider_id', providerId),
+      const [weeklyRows, blockedResult, overridesResult, busySpans] = await Promise.all([
+        fetchWeeklyScheduleRows(providerId),
         supabase
           .from('provider_blocked_dates')
           .select('blocked_date')
@@ -1346,9 +1449,11 @@ export const AvailabilityService = {
           .lte('availability_date', stripEndStr),
         fetchBusySpans(providerId, todayStr, stripEndStr),
       ]);
+      if (blockedResult.error) throw blockedResult.error;
+      if (overridesResult.error) throw overridesResult.error;
 
-      const availRows = (availResult.data ?? []) as { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
-      const windowRows = (windowsResult.data ?? []) as { day_of_week: number; start_time: string; end_time: string }[];
+      const availRows = weeklyRows.legacyRows;
+      const windowRows = weeklyRows.windowRows;
 
       // No schedule of any kind published — createBooking would reject every
       // booking, so this is "not bookable yet", not "closed today".
@@ -1461,7 +1566,7 @@ export const AvailabilityService = {
       }
 
       // Nothing inside the strip — only now pay for the wider search.
-      if (!nextFree) {
+      if (!nextFree && includeExtendedSearch) {
         nextFree = await this.resolveNextAvailableSlot(providerId, undefined, undefined, searchDays);
       }
 
@@ -1473,7 +1578,7 @@ export const AvailabilityService = {
         headline = todayDay.closesAt ? `Open today until ${todayDay.closesAt}` : 'Open today';
       } else if (todayDay.state === 'full') {
         state = 'full';
-        headline = 'Fully booked today';
+        headline = 'Open today';
       } else if (todayDay.state === 'blocked') {
         state = 'blocked';
         headline = 'Away today';
@@ -1487,8 +1592,10 @@ export const AvailabilityService = {
         detail = nextFree.date === todayStr
           ? `Next free ${nextFree.time}`
           : `Next free ${formatShortDate(nextFree.date)} ${nextFree.time}`;
-      } else {
+      } else if (includeExtendedSearch) {
         detail = 'No availability in the next few weeks';
+      } else {
+        detail = null;
       }
 
       return { state, headline, detail, days, nextFree };
@@ -1517,61 +1624,7 @@ export const AvailabilityService = {
     try {
       const providerId = await resolveProviderId(providerIdOrName);
       if (!providerId) return null;
-
-      const [windowsResult, legacyResult] = await Promise.all([
-        supabase
-          .from('provider_availability_windows')
-          .select('day_of_week, start_time, end_time')
-          .eq('provider_id', providerId)
-          .order('start_time'),
-        supabase
-          .from('provider_availability')
-          .select('day_of_week, open_time, close_time, is_closed')
-          .eq('provider_id', providerId),
-      ]);
-
-      const windowRows = (windowsResult.data ?? []) as { day_of_week: number; start_time: string; end_time: string }[];
-      const legacyRows = (legacyResult.data ?? []) as { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
-      if (windowRows.length === 0 && legacyRows.length === 0) return null;
-
-      const windowsByDow = new Map<number, { start_time: string; end_time: string }[]>();
-      for (const row of windowRows) {
-        const list = windowsByDow.get(row.day_of_week) ?? [];
-        list.push({ start_time: row.start_time, end_time: row.end_time });
-        windowsByDow.set(row.day_of_week, list);
-      }
-      const legacyByDow = new Map<number, { open_time: string; close_time: string; is_closed: boolean }>();
-      for (const row of legacyRows) legacyByDow.set(row.day_of_week, row);
-
-      return WEEK_DISPLAY_ORDER.map((dow) => {
-        const windows = windowsByDow.get(dow);
-        if (windows && windows.length > 0) {
-          // Collapse every period in the day to its earliest start / latest
-          // end — a split shift reads as one open span, not separate rows.
-          const earliest = windows.reduce((a, b) =>
-            parse24HTimeToMinutes(a.start_time) <= parse24HTimeToMinutes(b.start_time) ? a : b,
-          );
-          const latest = windows.reduce((a, b) =>
-            parse24HTimeToMinutes(a.end_time) >= parse24HTimeToMinutes(b.end_time) ? a : b,
-          );
-          return {
-            dayOfWeek: dow,
-            label: DAY_FULL_NAMES[dow] ?? '',
-            isOpen: true,
-            hours: `${formatTime12(earliest.start_time)} - ${formatTime12(latest.end_time)}`,
-          };
-        }
-        const legacy = legacyByDow.get(dow);
-        if (legacy && !legacy.is_closed) {
-          return {
-            dayOfWeek: dow,
-            label: DAY_FULL_NAMES[dow] ?? '',
-            isOpen: true,
-            hours: `${formatTime12(legacy.open_time)} - ${formatTime12(legacy.close_time)}`,
-          };
-        }
-        return { dayOfWeek: dow, label: DAY_FULL_NAMES[dow] ?? '', isOpen: false, hours: null };
-      });
+      return buildWeeklyOpeningHours(await fetchWeeklyScheduleRows(providerId));
     } catch (error) {
       logger.error('Error building weekly opening hours:', error);
       return null;

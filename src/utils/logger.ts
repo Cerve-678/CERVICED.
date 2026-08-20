@@ -101,3 +101,29 @@ export function reportError(error: unknown, context?: string): void {
     // A failing reporter must never take the app down or mask the original error.
   }
 }
+
+/**
+ * The Supabase auth SDK unconditionally console.errors when it can't recover
+ * a persisted session on cold start (missing/invalid refresh token — e.g.
+ * after a reinstall, or switching between Expo Go and a dev build, which
+ * don't share Keychain access groups). It's expected and self-healing:
+ * onAuthStateChange still fires INITIAL_SESSION/SIGNED_OUT with a null
+ * session right after, which AuthContext already handles by returning the
+ * user to the login screen. Left alone, this reads as a crash-level ERROR
+ * in TestFlight/production device logs for something that isn't one.
+ *
+ * Downgrades ONLY this specific, known error to a warn (still visible in the
+ * terminal and the in-app debug log buffer) — every other console.error
+ * passes through unchanged.
+ */
+export function installAuthErrorFilter(): void {
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    const message = formatArgs(args);
+    if (message.includes('Refresh Token') && message.includes('AuthApiError')) {
+      logger.warn('[supabase-auth] session recovery failed, signing out:', ...args);
+      return;
+    }
+    originalConsoleError(...args);
+  };
+}

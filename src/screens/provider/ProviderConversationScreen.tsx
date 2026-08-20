@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   TextInput,
   TouchableOpacity,
   Platform,
@@ -28,6 +29,7 @@ import {
   DbProviderMessage,
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
 
 type Props = NativeStackScreenProps<ProviderHomeStackParamList, 'ProviderConversation'>;
 
@@ -84,13 +86,15 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   useEffect(() => {
     getMyProviderMessageTemplates()
       .then(templates => setSavedTemplates(templates))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderConversation] load templates failed:', err));
   }, []);
 
   // Mark conversation as read by the provider on open
   useEffect(() => {
     if (!conversationId) return;
-    markConversationReadByProvider(conversationId).catch(() => {});
+    markConversationReadByProvider(conversationId).catch((err) =>
+      logger.error('[ProviderConversation] mark-read failed:', err),
+    );
   }, [conversationId]);
 
   // Load initial messages
@@ -100,7 +104,10 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
     setLoading(true);
     getConversationMessages(conversationId)
       .then(data => { setMessages(data as Message[]); setLoading(false); })
-      .catch(() => { setLoading(false); });
+      .catch((err) => {
+        logger.error('[ProviderConversation] load messages failed:', err);
+        setLoading(false);
+      });
   }, [conversationId]);
 
   // Realtime new messages
@@ -125,7 +132,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
           });
           // Reading it live — clear the unread counter the sender just bumped
           if (msg.sender_type === 'user') {
-            markConversationReadByProvider(conversationId).catch(() => {});
+            markConversationReadByProvider(conversationId).catch((err) =>
+              logger.error('[ProviderConversation] mark-read (realtime) failed:', err),
+            );
           }
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
         }
@@ -164,8 +173,9 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         conversationId,
         message: text,
         senderType: 'provider',
-      }).catch(() => {});
-    } catch {
+      }).catch((err) => logger.error('[ProviderConversation] update last-message failed:', err));
+    } catch (err) {
+      logger.error('[ProviderConversation] send message failed:', err);
       // Message never reached the client — put the text back so it isn't lost
       setInputText(text);
       showToast('Message not sent. Check your connection and try again.', 'error');
@@ -179,6 +189,17 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
     { label: 'Confirm address', text: 'Thanks — please confirm the address for your appointment.' },
     { label: 'Booking details', text: 'Thanks for your message. I’ll check your booking details and come back to you shortly.' },
     { label: 'Availability', text: 'Thanks for getting in touch. What date and time were you hoping for?' },
+    { label: 'On my way', text: 'On my way now — see you shortly!' },
+    { label: 'Running late', text: 'Sorry, I\'m running a little behind — I\'ll be there as soon as I can and will keep you posted.' },
+    { label: 'Reschedule', text: 'Would you like to reschedule? Let me know a few days/times that work for you.' },
+    { label: 'Patch test reminder', text: 'Quick reminder — this service needs a patch test at least 48 hours before your appointment. Let me know if you\'d like to arrange one.' },
+    { label: 'Aftercare sent', text: 'Thanks for booking in! I\'ll send over your aftercare notes after the appointment.' },
+    { label: 'Deposit required', text: 'To secure this slot I\'ll need a deposit — I\'ll send payment details shortly.' },
+    { label: 'Price check', text: 'Thanks for asking — let me confirm the price for you and get right back.' },
+    { label: 'Parking info', text: 'Just so you know, here\'s some info on parking/access for your appointment.' },
+    { label: 'Mobile — I\'ll travel', text: 'I travel to clients for this service — happy to come to you if that\'s easier.' },
+    { label: 'Thank you', text: 'Thank you so much — really appreciate it!' },
+    { label: 'Can\'t make it', text: 'Unfortunately I\'m not able to make this one — really sorry for the short notice. Let me help find another time.' },
   ];
   const quickPrompts = savedTemplates.length > 0
     ? savedTemplates.map(template => ({ label: template.label, text: template.content }))
@@ -275,16 +296,22 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
         />
 
         <View style={[styles.quickPromptRow, { borderTopColor: OP.border, backgroundColor: OP.bg }]}>
-          {quickPrompts.map(prompt => (
-            <TouchableOpacity
-              key={prompt.label}
-              style={[styles.quickPrompt, { backgroundColor: OP.surface, borderColor: OP.border }]}
-              onPress={() => setInputText(prompt.text)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.quickPromptText, { color: OP.accent }]}>{prompt.label}</Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickPromptScrollContent}
+          >
+            {quickPrompts.map(prompt => (
+              <TouchableOpacity
+                key={prompt.label}
+                style={[styles.quickPrompt, { backgroundColor: OP.surface, borderColor: OP.border }]}
+                onPress={() => setInputText(prompt.text)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.quickPromptText, { color: OP.accent }]}>{prompt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Input bar — clears the home indicator, and (while resting, keyboard
@@ -385,9 +412,10 @@ const styles = StyleSheet.create({
   bubbleUser: { borderBottomRightRadius: 4 },
   bubbleProvider: { borderBottomLeftRadius: 4, borderWidth: StyleSheet.hairlineWidth },
   bubbleText: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '700', fontSize: 14, lineHeight: 20 },
-  quickPromptRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  quickPrompt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
-  quickPromptText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 11, fontWeight: '700' },
+  quickPromptRow: { paddingTop: 16, paddingBottom: 14, borderTopWidth: StyleSheet.hairlineWidth },
+  quickPromptScrollContent: { flexDirection: 'row', gap: 10, paddingHorizontal: 14 },
+  quickPrompt: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11 },
+  quickPromptText: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, fontWeight: '700' },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',

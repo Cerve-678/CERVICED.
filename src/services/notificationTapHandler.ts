@@ -23,6 +23,7 @@ const BOOKING_TYPES = new Set([
   'booking_declined',
   'booking_in_progress',
   'no_show',
+  'provider_no_show',
   'booking_reminder',
   'booking_cancelled',
   'payment_success',
@@ -32,8 +33,10 @@ const BOOKING_TYPES = new Set([
   'reschedule_response',
   'reschedule_provider_response',
   'reschedule_confirmed',
+  'reschedule_declined',
   'booking_not_started',
   'balance_reminder',
+  'pending_booking_reminder',
   'intake_form_received',
   'info_pack_received',
   'address_released',
@@ -74,16 +77,32 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
   // not by whichever hat the app happens to be in. Fall back to the saved mode
   // only when the notification didn't carry a role.
   const role = typeof data['recipient_role'] === 'string' ? data['recipient_role'] : null;
-  const isProvider = role ? role === 'provider' : savedMode === 'provider';
+  let isProvider = role ? role === 'provider' : savedMode === 'provider';
 
   // If the notification is for the OTHER hat, switch into it first so the correct
-  // navigator stack is mounted before we deep-link — and persist it so a cold
-  // launch from a killed state also opens in the right mode.
+  // navigator stack is mounted before we deep-link. requestMode → applyMode owns
+  // persisting STORAGE_KEYS.ACTIVE_MODE itself (after verifying the account
+  // actually holds that hat) — don't also write it here, or an unvalidated value
+  // could briefly sit in storage ahead of applyMode's ownership check.
+  //
+  // Awaiting requestMode() (rather than a fixed sleep) is load-bearing: the
+  // hat swap re-renders RootNavigation's MainTabsComponent (ProviderTabNavigation
+  // vs ClientTabNavigation) on React's own schedule. A flat timeout that's too
+  // short lets navigateNested() below fire while the PREVIOUS hat's navigator
+  // is still mounted, so the deep-link lands in the wrong stack — the symptom
+  // being the previous hat's screen reappearing on back-navigation instead of
+  // staying inside the hat the notification was actually for.
+  //
+  // requestMode() resolves with whichever mode actually landed, which can
+  // differ from targetMode if an overlapping request (another notification
+  // tap, or the user's own manual switchMode() toggle) won the race — always
+  // re-derive isProvider from the LANDED mode rather than trusting the
+  // request, or this deep-link can fire against a navigator that doesn't
+  // match the mode this notification was for.
   if (isProvider !== (savedMode === 'provider')) {
     const targetMode = isProvider ? 'provider' : 'client';
-    await AsyncStorage.setItem(STORAGE_KEYS.ACTIVE_MODE, targetMode).catch(() => {});
-    requestMode(targetMode);
-    await new Promise((r) => setTimeout(r, 350));
+    const landed = await requestMode(targetMode);
+    isProvider = landed === 'provider';
   }
 
   // The two hats are different navigators, so the tab hosting the shared

@@ -78,7 +78,12 @@ export function navChip(
  * conversion previously existed across the AI services; new code must use
  * this one rather than adding a fourth.
  */
-export function providerFromDb(p: DbProvider): Provider {
+export function providerFromDb(
+  p: Pick<
+    DbProvider,
+    'slug' | 'display_name' | 'service_category' | 'logo_url' | 'location_text'
+  >,
+): Provider {
   return {
     id: p.slug,
     name: p.display_name,

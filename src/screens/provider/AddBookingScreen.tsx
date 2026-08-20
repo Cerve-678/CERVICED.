@@ -40,6 +40,7 @@ import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { formatTime12, formatShortDate, dateToYMD } from '../../utils/dateUtils';
 import SlidingTabs from '../../components/SlidingTabs';
+import { isDarkColor } from '../../constants/providerThemes';
 
 const WARN = '#E8A13A';
 
@@ -71,11 +72,24 @@ function hhmmss(date: Date): string {
   return `${h}:${m}:00`;
 }
 
+// databaseService.getAvailableSlots can return "HH:MM" (no seconds) — its
+// own to24HourTime() drops them. Comparing that directly against hhmmss()'s
+// always-"HH:MM:SS" output via === never matches (05:00:00" - 3 parts -
+// against "05:00" - 2 parts - are never equal strings even though they're
+// the same instant), so the selected slot chip never highlighted even
+// though pickSlot() itself was updating `time` correctly. Parse both to
+// minutes-since-midnight instead so the comparison survives either format.
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
 export default function AddBookingScreen() {
   const navigation = useNavigation();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useProviderDialog();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
+  const onAccent = isDarkColor(P.accent) ? '#fff' : '#1B2740';
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
@@ -88,6 +102,11 @@ export default function AddBookingScreen() {
   const [clientSearch, setClientSearch] = useState('');
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
+  // Extra minutes blocked out on top of the selected service's own duration
+  // — a scheduling buffer only (e.g. "this client's hair is extra thick, +30
+  // min"), never a price change. Resets whenever the service changes, same
+  // as add-ons/safety-ack below (pickService).
+  const [extraMinutes, setExtraMinutes] = useState(0);
   // Add-ons the provider ticked for the chosen service — sent as ids only;
   // provider_create_manual_booking resolves name/price server-side from
   // service_add_ons rather than trusting anything the client sends.
@@ -162,7 +181,15 @@ export default function AddBookingScreen() {
   // changes — a slot list generated for a generic 60-min duration can offer a
   // start time that doesn't actually fit a longer service.
   const dateYMD = dateToYMD(date);
-  const selectedServiceDuration = services.find(sv => sv.id === serviceId)?.duration_minutes;
+  const baseServiceDuration = services.find(sv => sv.id === serviceId)?.duration_minutes;
+  // Total duration actually being blocked out — base service + any extra
+  // buffer the provider added. Everything downstream (slot fetch, conflict
+  // check, working-hours fit) must use this, not baseServiceDuration alone,
+  // or the UI will show "no conflict" for a slot the buffer actually
+  // overlaps into.
+  const selectedServiceDuration = baseServiceDuration != null
+    ? baseServiceDuration + extraMinutes
+    : undefined;
   useEffect(() => {
     if (!providerId) return;
     let cancelled = false;
@@ -195,6 +222,33 @@ export default function AddBookingScreen() {
         .sort((a, b) => (a.booking_date < b.booking_date ? 1 : -1))[0]?.customer_phone ?? null
     : null;
 
+  // Mirrors enforce_booking_bookability()'s own always-hard "That time has
+  // already passed today" check (supabase/migrations/20260817150000_manual_
+  // booking_scheduling_policy_override.sql) — never overridable, so this
+  // needs to be a client-side hard stop too, not just a DB round-trip.
+  // Applies in BOTH When tabs: a stale Custom time left over from before the
+  // provider switched to Available, or a slot that was valid when fetched
+  // but has since ticked past "now" while the provider was still on this
+  // screen, both need to be caught before Continue/Add Booking, not just
+  // after tapping it.
+  const isTimeAlreadyPassed = dateYMD === dateToYMD(new Date())
+    && (time.getHours() * 60 + time.getMinutes()) <= (new Date().getHours() * 60 + new Date().getMinutes());
+
+  // `time` is a single piece of state shared by both When tabs, with no
+  // "nothing picked yet" value — it defaults to 9:00 AM and otherwise holds
+  // whatever pickSlot()/the native time picker last set it to. Switching
+  // Custom time → Available does NOT clear it (see pickService for the
+  // established pattern of resetting dependent state on a real selection
+  // change — this is deliberately NOT that, because clearing on every tab
+  // switch would also blank a genuinely valid choice the provider is just
+  // glancing away from). Left unguarded, a past Custom time picked before
+  // switching tabs silently satisfies canContinue on the Available tab
+  // too, since nothing there was un-selected. Require Available mode
+  // specifically to have `time` actually match one of the currently
+  // fetched slots — Custom time is unaffected, it's exempt by design.
+  const selectedSlotIsValid = whenMode !== 'slots'
+    || slots.some(slot => timeToMinutes(slot) === timeToMinutes(hhmmss(time)));
+
   // Conflict detection for the custom-time path: does the chosen start (+ the
   // selected service's duration) overlap an existing booking on the same day?
   // Returns the first colliding booking so we can offer to move it. Only
@@ -207,9 +261,13 @@ export default function AddBookingScreen() {
   // COALESCE(end_time, booking_time + 60min)). We can't see buffer_before/after
   // here, so a buffered booking the DB rejects may not flag — treat this as a
   // best-effort warning, not a guarantee; the DB is the real gate.
-  const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return (h ?? 0) * 60 + (m ?? 0); };
+  const toMinutes = timeToMinutes;
   const chosenStart = time.getHours() * 60 + time.getMinutes();
-  const chosenEnd = chosenStart + (selectedService?.duration_minutes ?? 0);
+  // Uses the buffered total (service + extraMinutes), not the service's own
+  // duration alone — otherwise a provider-added buffer wouldn't actually
+  // flag a conflict it creates, contradicting the whole point of blocking
+  // that time out.
+  const chosenEnd = chosenStart + (selectedServiceDuration ?? 0);
   const conflictBooking = selectedService
     ? myBookings.find(b => {
         if (b.booking_date !== dateYMD) return false;
@@ -266,6 +324,7 @@ export default function AddBookingScreen() {
     setServiceSearch('');
     setSelectedAddOnIds([]); // add-ons belong to a service; reset on change
     setSafetyAcknowledged(false); // acknowledgement is per-service, not carried over
+    setExtraMinutes(0); // buffer is per-booking, not carried over to a new service
   }
 
   function toggleAddOn(id: string) {
@@ -279,16 +338,37 @@ export default function AddBookingScreen() {
   const safetyRequired = !!selectedService
     && (!!selectedService.patch_test_required || selectedService.is_pregnancy_safe === false);
 
-  const canContinue = !!clientId && !!serviceId && !conflictBooking && !isBlockedDate
-    && (!safetyRequired || safetyAcknowledged);
+  // Gates the Details→Confirm "Continue" button. Deliberately does NOT
+  // include safetyAcknowledged — that checkbox only exists in the Confirm
+  // phase, so requiring it here made Continue permanently unreachable for
+  // any patch-test/pregnancy-flagged service: the provider could never
+  // scroll to the checkbox that would unblock it. Safety ack is instead
+  // enforced by canSubmit below, right where the checkbox actually lives.
+  // Also deliberately does NOT include isBlockedDate — a blocked date is a
+  // scheduling-POLICY warning the provider can override (see
+  // OVERRIDABLE_PATTERN below), not a hard stop, so Continue still reaches
+  // Confirm and the RPC gives the provider a "Proceed anyway?" choice with
+  // the actual reason. conflictBooking (a genuinely taken slot),
+  // isTimeAlreadyPassed (a same-day time that has already elapsed), and
+  // selectedSlotIsValid (Available mode requires an actually-tapped,
+  // currently-offered slot — guards against a stale Custom time silently
+  // carrying over) are the only hard stops here — none of these is
+  // something the DB will ever let through, override or not.
+  const canContinue = !!clientId && !!serviceId && !conflictBooking && !isTimeAlreadyPassed && selectedSlotIsValid;
+  // Gates the Confirm phase's final "Add Booking" submit.
+  const canSubmit = canContinue && (!safetyRequired || safetyAcknowledged);
 
   function handleContinue() {
     if (!clientId || !serviceId) {
       showToast('Choose a client and service first.', 'info');
       return;
     }
-    if (isBlockedDate) {
-      showToast('This day is blocked. Pick a different date.', 'info');
+    if (isTimeAlreadyPassed) {
+      showToast('That time has already passed today. Pick a later time.', 'info');
+      return;
+    }
+    if (!selectedSlotIsValid) {
+      showToast('Pick one of the available times, or switch to Custom time.', 'info');
       return;
     }
     if (conflictBooking) {
@@ -298,41 +378,79 @@ export default function AddBookingScreen() {
     setPhase('confirm');
   }
 
-  async function handleCreate() {
-    if (!clientId || !serviceId) {
-      showToast('Choose a client and service first.', 'info');
-      return;
-    }
-    if (isBlockedDate) {
-      showToast('This day is blocked. Pick a different date.', 'info');
-      return;
-    }
-    if (conflictBooking) {
-      showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
-      return;
-    }
+  // Reasons the DB will still hard-reject even with overrideScheduling=true
+  // — a genuinely taken slot, or a same-day time that's already elapsed.
+  // Neither is a policy call the provider can override, so these never get
+  // the "Proceed anyway?" treatment.
+  const HARD_BLOCK_PATTERN = /no longer available|already booked|already passed/i;
+  // Scheduling-POLICY warnings the provider can see the reason for and then
+  // choose to override — mirrors the bypass added in
+  // supabase/migrations/20260817150000_manual_booking_scheduling_policy_override.sql.
+  // Deliberately anchored on the full "outside this provider's booking
+  // window" phrase (not just "outside the provider") so this never
+  // collides with the unrelated "outside the provider's working hours"
+  // message from the older, always-unconditional bypass_working_hours GUC.
+  const OVERRIDABLE_PATTERN = /outside this provider's booking window|unavailable on this date|minimum notice/i;
+
+  async function submitBooking(overrideScheduling: boolean) {
     setCreating(true);
     try {
       await providerCreateManualBooking({
-        clientUserId: clientId,
-        serviceId,
+        clientUserId: clientId!,
+        serviceId: serviceId!,
         bookingDate: dateToYMD(date),
         bookingTime: hhmmss(time),
         notes,
         addOnIds: selectedAddOnIds,
         safetyAck: safetyAcknowledged,
+        overrideScheduling,
+        extraMinutes,
       });
       showToast('Booking added and the client has been notified.', 'success');
-      // Jump the calendar to the booked day so a squeeze-in (often not
-      // "today") visibly lands instead of the provider having to go find it.
-      // Navigating to the Home tab's own screen (rather than pushing) also
-      // pops this screen off whatever stack it was opened from.
-      (navigation as any).navigate('ProviderHome', {
-        screen: 'ProviderHomeMain',
-        params: { jumpToDate: dateToYMD(date) },
-      });
+      // AddBooking is presented as a modal (see ProviderHomeNavigator's modal
+      // Group) — navigating straight to a card-presented tab route without
+      // dismissing first fights the native modal-dismiss transition and can
+      // leave the calendar showing underneath rather than in place of this
+      // screen. Same pattern as the "Reschedule that booking" link below:
+      // goBack() to dismiss the modal, THEN navigate via the parent (tab)
+      // navigator once the dismiss animation has actually finished. Jumping
+      // to the booked day (often not "today") makes a squeeze-in visibly
+      // land instead of the provider having to go find it.
+      const nav = navigation as any;
+      const goToCalendar = () => {
+        nav.getParent()?.navigate('ProviderHome', {
+          screen: 'ProviderHomeMain',
+          params: { jumpToDate: dateToYMD(date) },
+        });
+      };
+      if (nav.canGoBack()) {
+        nav.goBack();
+        setTimeout(goToCalendar, 500);
+      } else {
+        goToCalendar();
+      }
     } catch (error) {
       const message = (error instanceof Error ? error.message : 'Could not add this booking.').replace(/^Error:\s*/, '');
+
+      // Scheduling-POLICY warning (booking window / minimum notice /
+      // provider-blocked date) — not overridden yet, so give the provider
+      // the actual reason and a chance to confirm and proceed anyway rather
+      // than a dead-end toast. Retrying with overrideScheduling=true still
+      // goes through the DB, which is the final authority — a genuinely
+      // taken slot or an elapsed same-day time is still rejected even then.
+      if (!overrideScheduling && OVERRIDABLE_PATTERN.test(message)) {
+        setCreating(false);
+        showConfirm(
+          "Couldn't add this booking",
+          `${message} You can proceed anyway if this is intentional.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Proceed anyway', style: 'destructive', onPress: () => submitBooking(true) },
+          ],
+        );
+        return;
+      }
+
       showToast(message, 'error');
       // The DB is the final authority and can reject for reasons the
       // client-side conflictBooking check never saw — most likely someone
@@ -342,13 +460,37 @@ export default function AddBookingScreen() {
       // and a chance to pick a different time — actually renders) instead of
       // leaving them on Confirm where retrying Add Booking would just fail
       // the same way against stale data.
-      if (/no longer available|already booked|outside the provider|blocked|minimum notice|booking window/i.test(message)) {
+      if (HARD_BLOCK_PATTERN.test(message) || OVERRIDABLE_PATTERN.test(message)) {
         setPhase('details');
         getProviderBookings().then(setMyBookings).catch(() => {});
       }
     } finally {
       setCreating(false);
     }
+  }
+
+  function handleCreate() {
+    if (!clientId || !serviceId) {
+      showToast('Choose a client and service first.', 'info');
+      return;
+    }
+    if (isTimeAlreadyPassed) {
+      showToast('That time has already passed today. Go back and pick a later time.', 'info');
+      return;
+    }
+    if (conflictBooking) {
+      showToast('That time is already booked. Move the existing appointment or pick another time.', 'info');
+      return;
+    }
+    if (safetyRequired && !safetyAcknowledged) {
+      showToast('Confirm you’ve told the client the safety information first.', 'info');
+      return;
+    }
+    // isBlockedDate is deliberately not a client-side hard stop — it's a
+    // scheduling-POLICY warning the provider can override. Let submitBooking
+    // hit the RPC; if the DB rejects with the blocked-date message the catch
+    // block below offers "Proceed anyway?" with the actual reason.
+    submitBooking(false);
   }
 
   return (
@@ -484,6 +626,41 @@ export default function AddBookingScreen() {
                   })}
                 </>
               )}
+              {/* Extra time is a scheduling buffer only (blocks out more of
+                  the calendar), never a price change — kept visually and
+                  functionally separate from add-ons above, which do affect
+                  price. Deliberately placed before "When" since it changes
+                  what slots/conflicts even look like. */}
+              {selectedService && (
+                <>
+                  <Text style={[s.label, { color: P.text }]}>Extra time</Text>
+                  <Text style={[s.choiceMeta, { color: P.sub, marginTop: -4, marginBottom: 6 }]}>
+                    Block out more time for this booking. Doesn’t change price.
+                  </Text>
+                  <View style={[s.choice, { backgroundColor: P.surface, borderColor: P.border, justifyContent: 'space-between' }]}>
+                    <Text style={[s.choiceTitle, { color: P.text }]}>
+                      {extraMinutes === 0 ? 'None' : `+${extraMinutes} min`}
+                      {' · '}{(selectedService.duration_minutes + extraMinutes)} min total
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                      <TouchableOpacity
+                        onPress={() => setExtraMinutes(m => Math.max(0, m - 15))}
+                        disabled={extraMinutes === 0}
+                        style={{ opacity: extraMinutes === 0 ? 0.35 : 1 }}
+                      >
+                        <Ionicons name="remove-circle-outline" size={26} color={P.accent} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setExtraMinutes(m => Math.min(240, m + 15))}
+                        disabled={extraMinutes >= 240}
+                        style={{ opacity: extraMinutes >= 240 ? 0.35 : 1 }}
+                      >
+                        <Ionicons name="add-circle-outline" size={26} color={P.accent} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
               </>
               )}
 
@@ -512,7 +689,7 @@ export default function AddBookingScreen() {
                   activeKey={whenMode}
                   onPress={k => setWhenMode(k as 'slots' | 'custom')}
                   accentColor={P.accent}
-                  activeTextColor={P.ice}
+                  activeTextColor={onAccent}
                   inactiveTextColor={P.sub}
                   scrollable={false}
                   height={34}
@@ -525,11 +702,11 @@ export default function AddBookingScreen() {
                 ) : slots.length > 0 ? (
                   <View style={s.slotsWrap}>
                     {slots.map(slot => {
-                      const on = hhmmss(time) === slot;
+                      const on = timeToMinutes(hhmmss(time)) === timeToMinutes(slot);
                       return (
-                        <TouchableOpacity key={slot} onPress={() => pickSlot(slot)} style={[s.slotChip, on && s.slotChipOn, { backgroundColor: on ? P.accent : P.surface, borderColor: on ? P.accent : P.border }]}>
-                          {on && <Ionicons name="checkmark" size={13} color={P.ice} style={s.slotCheckIcon} />}
-                          <Text style={[s.slotText, { color: on ? P.ice : P.text }, on && s.slotTextOn]}>{formatTime12(slot)}</Text>
+                        <TouchableOpacity key={slot} onPress={() => pickSlot(slot)} style={[s.slotChip, on && s.slotChipOn, { backgroundColor: P.surface, borderColor: on ? P.accent : P.border }]}>
+                          {on && <Ionicons name="checkmark" size={13} color={P.accent} style={s.slotCheckIcon} />}
+                          <Text style={[s.slotText, { color: on ? P.accent : P.text }, on && s.slotTextOn]}>{formatTime12(slot)}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -544,19 +721,21 @@ export default function AddBookingScreen() {
                     <Text style={[s.whenText, { color: P.text }]}>{formatTime12(hhmmss(time))}</Text>
                   </TouchableOpacity>
 
-                  {/* Hard stop: Custom time deliberately bypasses the
-                      Available list's own schedule filtering, so this is the
-                      only place a blocked date gets caught before the DB
-                      rejects it on submit. */}
+                  {/* Soft warning, not a hard stop — Custom time deliberately
+                      bypasses the Available list's own schedule filtering, so
+                      this is where a blocked date first becomes visible. The
+                      provider can still continue; if they do, submit will
+                      show a "Proceed anyway?" confirmation with this same
+                      reason before the DB actually lets it through. */}
                   {isBlockedDate && (
                     <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
-                      <Ionicons name="close-circle-outline" size={16} color={WARN} />
+                      <Ionicons name="warning-outline" size={16} color={WARN} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.conflictTitle, { color: P.text }]}>This day is blocked</Text>
+                        <Text style={[s.conflictTitle, { color: P.text }]}>This day is marked blocked</Text>
                         <Text style={[s.conflictSub, { color: P.sub }]}>
                           {blockedDates.find(b => b.blocked_date === dateYMD)?.reason
                             || dayOverride?.reason
-                            || 'You’ve marked this date unavailable. Pick a different day.'}
+                            || 'You’ve marked this date unavailable.'} You can still add this booking as a squeeze-in — you'll be asked to confirm.
                         </Text>
                       </View>
                     </View>
@@ -580,6 +759,23 @@ export default function AddBookingScreen() {
                 </>
               )}
 
+              {/* Shown in BOTH modes: a same-day time that's already elapsed
+                  — including a stale Custom time left over from before
+                  switching to Available, since selectedSlotIsValid only
+                  blocks Continue there silently otherwise. Hard stop, never
+                  overridable (mirrors the DB's own unconditional check). */}
+              {isTimeAlreadyPassed && (
+                <View style={[s.conflict, { borderColor: WARN + '55', backgroundColor: WARN + '14' }]}>
+                  <Ionicons name="alert-circle-outline" size={16} color={WARN} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.conflictTitle, { color: P.text }]}>That time has already passed today</Text>
+                    <Text style={[s.conflictSub, { color: P.sub }]}>
+                      Pick a later time today, or a different date.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {/* Shown in BOTH modes: a listed "available" slot is duration-
                   aware (see the effect above) so this should be rare, but
                   Custom time can still land on a taken slot — this stays the
@@ -594,7 +790,43 @@ export default function AddBookingScreen() {
                       {conflictBooking.service_name_snapshot} at {formatTime12(conflictBooking.booking_time)}. You can't double-book a slot — move that appointment first, or pick another time.
                     </Text>
                     <TouchableOpacity
-                      onPress={() => (navigation as any).navigate('BookingDetail', { bookingId: conflictBooking.id, booking: mapDbBookingToConfirmed(conflictBooking), openReschedule: true })}
+                      onPress={() => {
+                        // AddBooking is presented as a modal (see
+                        // ProviderHomeNavigator's modal Group). Two things
+                        // that DON'T work here, both tried and confirmed
+                        // broken this session:
+                        //  1. navigate('ProviderHome', {screen: 'BookingDetail'})
+                        //     — a no-op re-entry when already inside that
+                        //     same tab's stack, doesn't unwind anything.
+                        //  2. replace('BookingDetail', ...) — going straight
+                        //     from a modal-presented route to a card-
+                        //     presented one fights the native dismiss/push
+                        //     transitions and hangs the screen (same
+                        //     documented pitfall NotificationsScreen.tsx's
+                        //     dismissThenNavigate exists to avoid).
+                        // Match that screen's actual working pattern
+                        // instead: goBack() to dismiss the modal, THEN
+                        // navigate via the parent (tab) navigator once the
+                        // dismiss animation has actually finished.
+                        const nav = navigation as any;
+                        const openBookingDetail = () => {
+                          nav.getParent()?.navigate('ProviderHome', {
+                            screen: 'BookingDetail',
+                            params: {
+                              bookingId: conflictBooking.id,
+                              booking: mapDbBookingToConfirmed(conflictBooking),
+                              openReschedule: true,
+                            },
+                            initial: false,
+                          });
+                        };
+                        if (nav.canGoBack()) {
+                          nav.goBack();
+                          setTimeout(openBookingDetail, 500);
+                        } else {
+                          openBookingDetail();
+                        }
+                      }}
                       style={[s.conflictBtn, { borderColor: P.accent }]}
                     >
                       <Ionicons name="calendar-outline" size={13} color={P.accent} />
@@ -607,7 +839,7 @@ export default function AddBookingScreen() {
               )}
 
               <TouchableOpacity onPress={handleContinue} disabled={!canContinue} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, !canContinue && s.saveBtnDim]}>
-                <Text style={[s.saveTxt, { color: P.ice }]}>Continue</Text>
+                <Text style={[s.saveTxt, { color: onAccent }]}>Continue</Text>
               </TouchableOpacity>
             </ScrollView>
           ) : (
@@ -634,6 +866,11 @@ export default function AddBookingScreen() {
                   {selectedAddOnIds.length > 0 && (
                     <Text style={[s.choiceMeta, { color: P.sub }]}>
                       {selectedAddOnIds.length} add-on{selectedAddOnIds.length !== 1 ? 's' : ''}
+                    </Text>
+                  )}
+                  {extraMinutes > 0 && (
+                    <Text style={[s.choiceMeta, { color: P.sub }]}>
+                      +{extraMinutes} min extra time blocked out
                     </Text>
                   )}
                 </View>
@@ -664,8 +901,8 @@ export default function AddBookingScreen() {
               <Text style={[s.label, { color: P.text }]}>Notes</Text>
               <TextInput value={notes} onChangeText={setNotes} placeholder="Notes (optional)" placeholderTextColor={P.sub} style={[s.notesInput, { backgroundColor: P.surface, color: P.text }]} multiline />
 
-              <TouchableOpacity onPress={handleCreate} disabled={creating || !canContinue} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, (!canContinue || creating) && s.saveBtnDim]}>
-                {creating ? <ActivityIndicator color={P.ice} /> : <Text style={[s.saveTxt, { color: P.ice }]}>Add Booking</Text>}
+              <TouchableOpacity onPress={handleCreate} disabled={creating || !canSubmit} style={[s.saveBtn, { backgroundColor: P.accent, marginTop: 12 }, (!canSubmit || creating) && s.saveBtnDim]}>
+                {creating ? <ActivityIndicator color={onAccent} /> : <Text style={[s.saveTxt, { color: onAccent }]}>Add Booking</Text>}
               </TouchableOpacity>
             </ScrollView>
           )}
@@ -753,7 +990,7 @@ const s = StyleSheet.create({
   whenTabs:    { flexDirection: 'row', height: 42, borderRadius: 10, padding: 4, marginTop: 4 },
   slotsWrap:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   slotChip:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9, borderWidth: 1 },
-  slotChipOn:  { borderWidth: 1.5 },
+  slotChipOn:  { borderWidth: 2 },
   slotCheckIcon:{ marginRight: 4 },
   slotText:    { fontSize: 13, fontWeight: '600' },
   slotTextOn:  { fontWeight: '700' },

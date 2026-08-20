@@ -21,6 +21,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { BeccaScreenProps } from "../../navigation/types";
 import type {
+  BeccaInspiration,
   ChatMessage,
   ChatSuggestion,
   ConversationContext,
@@ -42,12 +43,13 @@ import {
   ChatBubble,
   Suggestions,
   ProviderRecommendations,
+  InspirationGallery,
   ChatInput,
   ThinkingIndicator,
   stripRichText,
 } from "../../components/ChatComponents";
 import { Provider } from "../../services/ProviderDataService";
-import { formatTime12, DAY_NAMES_FULL, ordinalSuffix } from "../../utils/dateUtils";
+import { formatTime12, DAY_NAMES_FULL, ordinalSuffix, relativeDayLabel, formatSectionTitle } from "../../utils/dateUtils";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useBooking } from "../../contexts/BookingContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -63,22 +65,32 @@ function formatHeroDate(date: Date): string {
   return `${DAY_NAMES_FULL[date.getDay()]} ${ordinalSuffix(date.getDate())}`;
 }
 
-/** A truthful, useful progress label while Becca resolves a request. */
-function thinkingLabelFor(message: string, isProviderMode: boolean): string {
+/**
+ * The progress copy describes the work this particular request needs. It is
+ * intentionally not a fake model chain-of-thought: these are short, truthful
+ * status updates for the app's lookup and routing work.
+ */
+function thinkingStepsFor(message: string, isProviderMode: boolean): string[] {
   const text = message.toLowerCase();
+  const steps = (...labels: string[]) => labels;
+
   if (isProviderMode) {
-    if (/\b(?:today|schedule|booking|appointment|diary|week)\b/.test(text)) return "Checking your schedule…";
-    if (/\b(?:client|waitlist|form)\b/.test(text)) return "Looking up your clients…";
-    if (/\b(?:message|inbox|notification)\b/.test(text)) return "Checking your inbox…";
-    if (/\b(?:review|promotion|analytics|service)\b/.test(text)) return "Pulling up your business details…";
-    return "Checking that for you…";
+    if (/\b(?:today|schedule|booking|appointment|diary|week)\b/.test(text)) return steps("Checking your schedule…", "Reading the appointment details…", "Preparing the right next step…");
+    if (/\b(?:client|waitlist|form)\b/.test(text)) return steps("Finding the client record…", "Checking their booking history…", "Preparing a clear summary…");
+    if (/\b(?:message|inbox|notification)\b/.test(text)) return steps("Checking your inbox…", "Sorting the latest updates…", "Getting the relevant action ready…");
+    if (/\b(?:review|promotion|analytics|service)\b/.test(text)) return steps("Looking up your business details…", "Pulling together the relevant information…", "Preparing a clear answer…");
+    return steps("Looking into that…", "Checking the relevant business details…", "Preparing the best next step…");
   }
-  if (/\b(?:booking|appointment|reschedule|cancel|cost|pay|form|prep)\b/.test(text)) return "Checking your bookings…";
-  if (/\b(?:free|available|availability|slot)\b/.test(text)) return "Checking availability…";
-  if (/\b(?:find|search|provider|nails|hair|lashes|brows|makeup|aesthetics)\b/.test(text)) return "Searching providers…";
-  if (/\b(?:review|rating|portfolio|photo|look)\b/.test(text)) return "Looking that up…";
-  if (/\b(?:message|notification|waitlist)\b/.test(text)) return "Checking your updates…";
-  return "Thinking it through…";
+  if (/\b(?:reschedule|move|change|cancel)\b/.test(text)) return steps("Finding that appointment…", "Checking the available actions…", "Getting the right screen ready…");
+  if (/\b(?:cost|price|pay|payment|deposit|refund)\b/.test(text)) return steps("Checking booking totals…", "Reading the payment details…", "Putting the costs together…");
+  if (/\b(?:form|prep|prepare|policy|policies|what.*need|what.*bring)\b/.test(text)) return steps("Reading your booking notes…", "Checking forms and policies…", "Preparing what you need to know…");
+  if (/\b(?:booking|appointment|next appointment|when)\b/.test(text)) return steps("Checking your bookings…", "Reading the appointment details…", "Preparing a clear breakdown…");
+  if (/\b(?:free|available|availability|slot)\b/.test(text)) return steps("Searching open slots…", "Checking provider availability…", "Narrowing down the best options…");
+  if (/\b(?:find|search|provider|nails|hair|lashes|brows|makeup|aesthetics)\b/.test(text)) return steps("Searching providers…", "Matching your request…", "Preparing the best options…");
+  if (/\b(?:review|rating|portfolio|photo|look)\b/.test(text)) return steps("Looking up provider details…", "Reading services and reviews…", "Preparing a clear summary…");
+  if (/\b(?:message|notification|waitlist)\b/.test(text)) return steps("Checking your updates…", "Finding the relevant details…", "Preparing the next action…");
+  if (/\b(?:time|date|day)\b/.test(text)) return steps("Checking the current time…", "Making sure it is up to date…");
+  return steps("Looking into that…", "Checking the relevant details…", "Preparing a helpful answer…");
 }
 
 // ==================== MAIN SCREEN ====================
@@ -103,11 +115,42 @@ export default function BeccaScreen({
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [thinkingLabel, setThinkingLabel] = useState("Thinking it through…");
+  // The completed answer is kept separate until its visible type-in has
+  // finished, so action chips never belong to the previous answer mid-stream.
+  const [streamingResponse, setStreamingResponse] = useState<ChatMessage | null>(null);
+  // When a quick action opens another screen, keep that answer's actions
+  // docked at the bottom for the return journey. The original cards remain
+  // in the transcript too; this is the immediately reachable continuation.
+  const [returnActions, setReturnActions] = useState<ChatSuggestion[] | null>(null);
+  const [usedSuggestionId, setUsedSuggestionId] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   // Attached to an `Animated.ScrollView` (see the hero⇄chat transition), which
   // forwards its ref to the underlying ScrollView — so `scrollToEnd` below
   // still resolves and the `ScrollView` type annotation stays accurate.
   const scrollViewRef = useRef<ScrollView>(null);
+  const responseTypingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Resolves the current typewriter wait. The stop button uses this same
+  // completion path as the natural final character, so persistence, chips and
+  // message state are finalized exactly once either way.
+  const responseTypingResolveRef = useRef<(() => void) | null>(null);
+  // `buildWelcomeMessage` changes whenever bookings refresh. That must never
+  // reset an active chat when a user returns from Booking Detail/Reschedule;
+  // only an actual client↔provider hat switch starts a fresh conversation.
+  const initializedHatRef = useRef<BeccaHat | null>(null);
+
+  useEffect(() => () => {
+    if (responseTypingTimerRef.current) clearInterval(responseTypingTimerRef.current);
+    responseTypingResolveRef.current = null;
+  }, []);
+
+  const handleStopTyping = useCallback(() => {
+    if (!responseTypingTimerRef.current) return;
+    clearInterval(responseTypingTimerRef.current);
+    responseTypingTimerRef.current = null;
+    const finish = responseTypingResolveRef.current;
+    responseTypingResolveRef.current = null;
+    finish?.();
+  }, []);
 
   // Floating tab-bar clearance below ChatInput — rendered as its own sibling
   // spacer AFTER ChatInput (both still inside KeyboardDismissView, so it
@@ -169,6 +212,11 @@ export default function BeccaScreen({
   // turn reads it inside the same async callback, where a state update
   // wouldn't have landed yet. Reset wherever the thread genuinely ends.
   const conversationRef = useRef<ConversationContext | undefined>(undefined);
+  // Guards handleLoadChat against out-of-order resolution: tapping chat A
+  // then chat B before A's fetch lands must never let A's slower response
+  // overwrite B's messages onto the screen. Only the load whose token still
+  // matches when it resolves is allowed to apply its result.
+  const loadChatRequestRef = useRef(0);
   // "50%" — NOT "%50". The percent sign trails the number; @gorhom/bottom-sheet
   // silently fails to parse the reversed form, which is what made this sheet
   // behave like a full-height modal instead of snapping to half the screen.
@@ -239,7 +287,7 @@ export default function BeccaScreen({
           "## Your business assistant\n" +
           "- **Your day** — bookings, schedule and capacity\n" +
           "- **Your clients** — messages, forms and waitlist\n" +
-          "- **Your business** — services, promotions and analytics\n\n" +
+          "- **Your business** — services, reviews and analytics\n\n" +
           "What would you like to check?",
         suggestions: [
           {
@@ -294,10 +342,10 @@ export default function BeccaScreen({
           data: { screen: "Bookings" },
         },
         {
-          id: "find-near-me",
-          text: "Find Services Near Me",
+          id: "next-booking",
+          text: "My Next Appointment",
           action: "message",
-          data: { message: "Find beauty services near me" },
+          data: { message: "When's my next appointment?" },
         },
         {
           id: "browse",
@@ -313,8 +361,14 @@ export default function BeccaScreen({
   // call rather than held on a singleton, so there's no cross-mode state to
   // pin before replying and no stale booking list to invalidate.
   useEffect(() => {
+    if (initializedHatRef.current === beccaHat) return;
+    initializedHatRef.current = beccaHat;
     setMessages([buildWelcomeMessage()]);
-  }, [buildWelcomeMessage]);
+    setCurrentSessionId(null);
+    setReturnActions(null);
+    setUsedSuggestionId(null);
+    conversationRef.current = undefined;
+  }, [beccaHat, buildWelcomeMessage]);
 
   // Load sessions from Supabase on mount, and again whenever the hat changes.
   // History is per-hat: a provider must never see their client-side chats in
@@ -334,7 +388,7 @@ export default function BeccaScreen({
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [messages]);
+  }, [messages, streamingResponse?.content]);
 
   // Save current chat title/preview into sessions list (for UI update)
   const refreshSessions = useCallback(async () => {
@@ -372,10 +426,12 @@ export default function BeccaScreen({
     }
   };
 
-  const handleSend = async (messageText?: string) => {
+  const handleSend = async (messageText?: string, selectedBookingId?: string) => {
     const textToSend = messageText || inputText.trim();
     const imageToSend = selectedImage;
-    if (!textToSend && !imageToSend) return;
+    // A second send while a reply is visibly typing would interleave two
+    // answers and make the conversation difficult to follow.
+    if (isTyping || (!textToSend && !imageToSend)) return;
 
     Keyboard.dismiss();
 
@@ -388,10 +444,14 @@ export default function BeccaScreen({
     if (imageToSend) userMessage.imageUri = imageToSend;
 
     setMessages((prev) => [...prev, userMessage]);
+    setReturnActions(null);
+    setUsedSuggestionId(null);
     setInputText("");
     setSelectedImage(null);
-    setThinkingLabel(thinkingLabelFor(textToSend, isProviderMode));
+    const thinkingSteps = thinkingStepsFor(textToSend, isProviderMode);
+    setThinkingLabel(thinkingSteps[0] ?? "Looking into that…");
     setIsTyping(true);
+    const thinkingStartedAt = Date.now();
 
     // Create session on first user message
     let sessionId = currentSessionId;
@@ -408,16 +468,30 @@ export default function BeccaScreen({
           beccaHat,
         );
         setCurrentSessionId(sessionId);
-        // Save welcome message too
+        // Save welcome message too. If this fails, the session row exists
+        // with zero messages — leaving it as-is turns into a permanently
+        // "empty history" session, so surface it instead of swallowing it.
         const welcome = messages[0];
-        if (welcome) await beccaStorageService.saveMessage(sessionId, welcome);
-      } catch {}
+        if (welcome) {
+          try {
+            await beccaStorageService.saveMessage(sessionId, welcome);
+          } catch (welcomeError) {
+            console.error("[Becca] Failed to save welcome message for new session:", welcomeError);
+          }
+        }
+      } catch (sessionError) {
+        console.error("[Becca] Failed to create chat session:", sessionError);
+      }
     }
 
     // Save user message
     if (sessionId) {
       beccaStorageService.saveMessage(sessionId, userMessage).catch(() => {});
     }
+
+    const progressTimers = thinkingSteps.slice(1).map((label, index) =>
+      setTimeout(() => setThinkingLabel(label), 720 + index * 780),
+    );
 
     setTimeout(async () => {
       const aiInterpreter = getBeccaAIInterpreter();
@@ -437,11 +511,49 @@ export default function BeccaScreen({
         ...(conversationRef.current
           ? { conversation: conversationRef.current }
           : {}),
+        ...(selectedBookingId ? { selectedBookingId } : {}),
         ...(aiInterpreter
           ? { interpreter: aiInterpreter }
           : {}),
       });
       conversationRef.current = context;
+      // A fast local match should still feel intentional rather than making
+      // the processing state flash by before a person can read it.
+      const remainingThinkingMs = Math.max(0, 2_200 - (Date.now() - thinkingStartedAt));
+      if (remainingThinkingMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, remainingThinkingMs));
+      }
+      progressTimers.forEach(clearTimeout);
+
+      // Keep a markdown heading intact, then type the body at a readable pace.
+      // This lets the answer feel present without exposing half a heading or
+      // showing action chips until Becca has finished her sentence.
+      const heading = response.content.match(/^(## [^\n]+\n?)/)?.[0] ?? "";
+      const remainingCharacters = Array.from(response.content.slice(heading.length));
+      const { suggestions: _suggestions, providerRecommendations: _providerRecommendations, ...streamingBase } = response;
+      let characterIndex = 0;
+      setStreamingResponse({ ...streamingBase, content: heading });
+
+      await new Promise<void>((resolve) => {
+        responseTypingResolveRef.current = resolve;
+        responseTypingTimerRef.current = setInterval(() => {
+          characterIndex = Math.min(characterIndex + 3, remainingCharacters.length);
+          setStreamingResponse({
+            ...streamingBase,
+            content: heading + remainingCharacters.slice(0, characterIndex).join(""),
+          });
+
+          if (characterIndex === remainingCharacters.length) {
+            if (responseTypingTimerRef.current) clearInterval(responseTypingTimerRef.current);
+            responseTypingTimerRef.current = null;
+            const finish = responseTypingResolveRef.current;
+            responseTypingResolveRef.current = null;
+            finish?.();
+          }
+        }, 18);
+      });
+
+      setStreamingResponse(null);
       setMessages((prev) => [...prev, response]);
       setIsTyping(false);
 
@@ -479,8 +591,13 @@ export default function BeccaScreen({
       {
         text: "New Chat",
         onPress: () => {
+          // Invalidate any in-flight handleLoadChat so it can't resolve
+          // after this and overwrite the fresh chat with old messages.
+          loadChatRequestRef.current += 1;
           setCurrentSessionId(null);
           setMessages([buildWelcomeMessage()]);
+          setReturnActions(null);
+          setUsedSuggestionId(null);
           setInputText("");
           setSelectedImage(null);
           conversationRef.current = undefined;
@@ -491,13 +608,28 @@ export default function BeccaScreen({
 
   const handleLoadChat = async (session: StoredSession) => {
     historySheetRef.current?.close();
+    const requestId = ++loadChatRequestRef.current;
     try {
       const msgs = await beccaStorageService.loadMessages(session.id);
-      setMessages(msgs.length > 0 ? msgs : [buildWelcomeMessage()]);
+      // A slower, earlier tap resolving after a newer one must not clobber
+      // the chat the user actually asked to see.
+      if (loadChatRequestRef.current !== requestId) return;
+      // Never substitute a synthetic "today" welcome message for a session
+      // being reopened from history — a session with zero stored messages
+      // (a past write failure) must read as empty, not as a fresh chat
+      // that looks like it happened just now.
+      if (msgs.length === 0) {
+        showAlert("Chat unavailable", "This conversation has no saved messages.");
+        return;
+      }
+      setMessages(msgs);
+      setReturnActions(null);
+      setUsedSuggestionId(null);
       setCurrentSessionId(session.id);
       // A loaded chat is not a continuation of the current thread.
       conversationRef.current = undefined;
     } catch {
+      if (loadChatRequestRef.current !== requestId) return;
       showAlert("Error", "Could not load chat.");
     }
   };
@@ -507,8 +639,13 @@ export default function BeccaScreen({
       await beccaStorageService.deleteSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (currentSessionId === sessionId) {
+        // Invalidate any in-flight handleLoadChat for the session just
+        // deleted, so it can't resolve afterward and repopulate it.
+        loadChatRequestRef.current += 1;
         setCurrentSessionId(null);
         setMessages([buildWelcomeMessage()]);
+        setReturnActions(null);
+        setUsedSuggestionId(null);
         conversationRef.current = undefined;
       }
     } catch {
@@ -537,9 +674,14 @@ export default function BeccaScreen({
           onPress: async () => {
             try {
               await beccaStorageService.clearSessions(user.id, beccaHat);
+              // Invalidate any in-flight handleLoadChat so it can't resolve
+              // after this and repopulate a session that was just cleared.
+              loadChatRequestRef.current += 1;
               setSessions([]);
               setCurrentSessionId(null);
               setMessages([buildWelcomeMessage()]);
+              setReturnActions(null);
+              setUsedSuggestionId(null);
               conversationRef.current = undefined;
               historySheetRef.current?.close();
               Haptics.notificationAsync(
@@ -558,16 +700,31 @@ export default function BeccaScreen({
   };
 
   const handleSuggestionPress = (suggestion: ChatSuggestion) => {
+    setUsedSuggestionId(suggestion.id);
     const data = suggestion.data;
     if (!data) return;
 
     if (suggestion.action === "message") {
       // `message` is only present on the message-shaped payload; a navigate
       // chip that reached here would have no message to send.
-      if (data.message) handleSend(data.message);
+      if (data.message) {
+        handleSend(data.message, data.bookingId);
+        // handleSend clears a stale selection for typed messages; restore it
+        // for this deliberate chip tap so the action visibly reads as used.
+        setUsedSuggestionId(suggestion.id);
+      }
       return;
     }
     if (suggestion.action !== "navigate" || !data.screen) return;
+
+    // Keep the full action set that led to this destination ready for when
+    // the client presses Back to return to Becca. A navigation acknowledgement
+    // has no useful actions of its own, so without this the conversation
+    // appeared to end simply because the user briefly left the chat.
+    const source = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant" && message.suggestions?.some((item) => item.id === suggestion.id));
+    setReturnActions(source?.suggestions ?? [suggestion]);
 
     // Navigate chips used to fire silently — the user tapped "Today's
     // Bookings", the app jumped screens, and nothing was ever added to the
@@ -649,12 +806,17 @@ export default function BeccaScreen({
     });
   };
 
-  const lastMessage = messages[messages.length - 1];
-  const showSuggestions =
-    lastMessage?.role === "assistant" && lastMessage?.suggestions;
-  const showRecommendations =
-    lastMessage?.role === "assistant" && lastMessage?.providerRecommendations;
+  const handleInspirationPress = (item: BeccaInspiration) => {
+    if (isProviderMode) return;
+    navigation.navigate("ProviderProfile", {
+      providerId: item.providerSlug,
+      source: "becca-inspiration",
+    });
+  };
 
+  // The hero uses the welcome message's starter actions. In the conversation
+  // view, actions render underneath every individual assistant reply instead.
+  const lastMessage = messages[messages.length - 1];
   const upcomingCount = !isProviderMode
     ? bookings.filter((b) => b.status === "upcoming").length
     : 0;
@@ -662,8 +824,12 @@ export default function BeccaScreen({
   // The hero screen only makes sense before any real exchange has happened —
   // once the user has sent something, it's a full-screen greeting sitting
   // above an active conversation, which is exactly the state this design
-  // scopes it out of.
-  const showHero = messages.length <= 1 && !isTyping;
+  // scopes it out of. A loaded past session must never show it, even one
+  // that only ever got as far as its saved welcome message — otherwise
+  // reopening it renders today's live hero date/time instead of that
+  // chat's own (possibly single-message) history, which reads as if the
+  // chat didn't load at all.
+  const showHero = messages.length <= 1 && !isTyping && !currentSessionId;
 
   // ==================== HERO ⇄ CHAT TRANSITION ====================
   // The two states are still a hard mount/unmount swap — they have different
@@ -812,6 +978,7 @@ export default function BeccaScreen({
                     <Suggestions
                       suggestions={lastMessage.suggestions}
                       onSuggestionPress={handleSuggestionPress}
+                      activeSuggestionId={usedSuggestionId}
                       indented={false}
                     />
                   </View>
@@ -875,29 +1042,62 @@ export default function BeccaScreen({
                 onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
               >
                 <View style={styles.daySep}>
-                  <Text style={[styles.daySepText, { color: P.sub, backgroundColor: P.surface }]}>TODAY</Text>
+                  <Text style={[styles.daySepText, { color: P.sub, backgroundColor: P.surface }]}>
+                    {(
+                      relativeDayLabel(messages[0]?.timestamp ?? new Date()) ??
+                      formatSectionTitle(messages[0]?.timestamp ?? new Date())
+                    ).toUpperCase()}
+                  </Text>
                 </View>
 
                 {messages.map((message) => (
-                  <ChatBubble key={message.id} message={message} />
+                  <React.Fragment key={message.id}>
+                    <ChatBubble message={message} />
+                    {/* Actions belong to the answer that introduced them.
+                        Keeping them inline means a user can open a booking,
+                        come back, and still use a prior answer's next step
+                        instead of being forced to ask Becca again. */}
+                    {message.role === "assistant" && message.suggestions && (
+                      <Suggestions
+                        suggestions={message.suggestions}
+                        onSuggestionPress={handleSuggestionPress}
+                        activeSuggestionId={usedSuggestionId}
+                        indented
+                      />
+                    )}
+                    {message.role === "assistant" && message.providerRecommendations && (
+                      <ProviderRecommendations
+                        providers={message.providerRecommendations}
+                        onProviderPress={handleProviderPress}
+                      />
+                    )}
+                    {message.role === "assistant" && message.inspiration && (
+                      <InspirationGallery
+                        items={message.inspiration}
+                        onInspirationPress={handleInspirationPress}
+                      />
+                    )}
+                  </React.Fragment>
                 ))}
 
-                {isTyping && <ThinkingIndicator label={thinkingLabel} />}
+                {streamingResponse && (
+                  <ChatBubble key={streamingResponse.id} message={streamingResponse} />
+                )}
 
-                {showSuggestions && (
+                {/* Processing and visible typing are separate moments: once
+                    Becca starts writing, the status card leaves so the reply
+                    itself has the user's full attention. */}
+                {isTyping && !streamingResponse && <ThinkingIndicator label={thinkingLabel} />}
+
+                {returnActions && !isTyping && (
                   <Suggestions
-                    suggestions={lastMessage.suggestions!}
+                    suggestions={returnActions}
                     onSuggestionPress={handleSuggestionPress}
+                    activeSuggestionId={usedSuggestionId}
                     indented
                   />
                 )}
 
-                {showRecommendations && (
-                  <ProviderRecommendations
-                    providers={lastMessage.providerRecommendations!}
-                    onProviderPress={handleProviderPress}
-                  />
-                )}
               </Animated.ScrollView>
             </>
           )}
@@ -929,6 +1129,8 @@ export default function BeccaScreen({
             onChangeText={setInputText}
             onSend={() => handleSend()}
             onImagePick={handleImagePick}
+            onStopTyping={handleStopTyping}
+            isReplyTyping={!!streamingResponse}
             placeholder="Ask me anything..."
             hasImage={!!selectedImage}
           />

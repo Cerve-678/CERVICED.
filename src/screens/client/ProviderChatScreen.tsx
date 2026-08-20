@@ -3,6 +3,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   TextInput,
   TouchableOpacity,
   Platform,
@@ -10,8 +11,10 @@ import {
   ActivityIndicator,
   Keyboard,
   Modal,
+  Alert,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { HomeStackParamList } from "../../navigation/types";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -29,11 +32,13 @@ import {
   getConversationMessages,
   sendProviderMessage,
   updateConversationLastMessage,
+  hasBookingHistoryWithProvider,
   DbProviderMessage,
   ProviderAddressPolicy,
   ClientBookingSummary,
 } from "../../services/databaseService";
 import { formatShortDate, formatTime12 } from "../../utils/dateUtils";
+import { logger } from "../../utils/logger";
 
 type Props = NativeStackScreenProps<HomeStackParamList, "ProviderChat">;
 
@@ -50,6 +55,7 @@ interface Message {
 export default function ProviderChatScreen({ navigation, route }: Props) {
   const { providerDbId, providerName } = route.params;
   const { palette: OP } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -62,6 +68,10 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   // Address-sharing (mobile providers only — client sends the address they want visited)
   const [addressSettings, setAddressSettings] =
     useState<ProviderAddressPolicy | null>(null);
+  // Gates which quick-reply pills show: a prospective client with no booking
+  // yet should see query-style prompts, not booking-management ones like
+  // "Reschedule" or "Cancel booking" that assume a booking already exists.
+  const [hasBooking, setHasBooking] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [addressBookings, setAddressBookings] = useState<
     ClientBookingSummary[]
@@ -100,7 +110,14 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
     // show the mobile address-share affordance.
     getProviderAddressPolicy(providerDbId)
       .then(setAddressSettings)
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderChat] address policy load failed:', err));
+  }, [providerDbId]);
+
+  useEffect(() => {
+    if (!providerDbId) return;
+    hasBookingHistoryWithProvider(providerDbId)
+      .then(setHasBooking)
+      .catch((err) => logger.error('[ProviderChat] booking history load failed:', err));
   }, [providerDbId]);
 
   // Get current user
@@ -121,8 +138,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       try {
         const id = await getOrCreateConversation(providerDbId, userId!);
         setConversationId(id);
-      } catch {
-        /* silent */
+      } catch (err) {
+        logger.error('[ProviderChat] failed to get/create conversation:', err);
       }
       setLoading(false);
     }
@@ -133,7 +150,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   // Mark conversation as read by the user on open (mirrors provider side)
   useEffect(() => {
     if (!conversationId) return;
-    markConversationReadByUser(conversationId).catch(() => {});
+    markConversationReadByUser(conversationId).catch((err) =>
+      logger.error('[ProviderChat] mark-read failed:', err),
+    );
   }, [conversationId]);
 
   // Load initial messages
@@ -143,7 +162,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       .then((data) => {
         setMessages(data as Message[]);
       })
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderChat] load messages failed:', err));
   }, [conversationId]);
 
   // Realtime new messages
@@ -168,7 +187,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           });
           // Reading it live — clear the unread counter the sender just bumped
           if (msg.sender_type === "provider") {
-            markConversationReadByUser(conversationId).catch(() => {});
+            markConversationReadByUser(conversationId).catch((err) =>
+              logger.error('[ProviderChat] mark-read (realtime) failed:', err),
+            );
           }
           setTimeout(
             () => flatListRef.current?.scrollToEnd({ animated: true }),
@@ -231,8 +252,11 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
     try {
       await postMessage(text);
-    } catch {
-      /* silent */
+    } catch (err) {
+      logger.error('[ProviderChat] send message failed:', err);
+      // Message never reached the provider — put the text back so it isn't lost
+      setInputText(text);
+      Alert.alert('Message not sent', "Check your connection and try again.");
     }
     setSending(false);
   }, [inputText, conversationId, userId, sending, postMessage]);
@@ -240,16 +264,56 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   // Prompts go into the composer rather than sending immediately: the client
   // can review or edit every message. Address details never appear in a
   // template; they must be shared through the booking-scoped address flow.
-  const quickPrompts = [
+  //
+  // The set shown depends on whether this client has ever actually booked
+  // this provider (hasBooking): prompts like "Reschedule" or "Cancel
+  // booking" assume a real booking exists, so a prospective client just
+  // asking questions gets a query-oriented set instead.
+  const isMobileProvider = addressSettings?.business_type === "mobile";
+
+  const queryPrompts = [
     {
       label: "Availability",
       text: `Hi ${providerName}, could you let me know about your availability?`,
     },
     {
+      label: "Price/quote",
+      text: `Hi ${providerName}, could you let me know the price for this service?`,
+    },
+    {
+      label: "First time",
+      text: `Hi ${providerName}, this is my first time booking with you — anything I should know beforehand?`,
+    },
+    {
+      label: "Patch test",
+      text: `Hi ${providerName}, do I need a patch test before booking this service?`,
+    },
+    {
+      label: "Do you offer...",
+      text: `Hi ${providerName}, do you offer this service, and could you tell me more about it?`,
+    },
+    {
+      label: isMobileProvider ? "Do you travel to me?" : "Parking/access",
+      text: isMobileProvider
+        ? `Hi ${providerName}, do you travel to clients? I'd love to know if you cover my area.`
+        : `Hi ${providerName}, is there anything I should know about parking or access at your location?`,
+    },
+    {
+      label: "Consultation",
+      text: `Hi ${providerName}, could we arrange a consultation before I book?`,
+    },
+    {
+      label: "General question",
+      text: `Hi ${providerName}, I had a quick question before booking.`,
+    },
+  ];
+
+  const bookingPrompts = [
+    {
       label: "Booking question",
       text: `Hi ${providerName}, I have a question about my booking.`,
     },
-    ...(addressSettings?.business_type === "mobile"
+    ...(isMobileProvider
       ? [
           {
             label: "Confirm address",
@@ -257,7 +321,37 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
           },
         ]
       : []),
+    {
+      label: "Reschedule",
+      text: `Hi ${providerName}, would it be possible to reschedule my appointment?`,
+    },
+    {
+      label: "Running late",
+      text: `Hi ${providerName}, I'm running a little late — sorry about that!`,
+    },
+    {
+      label: "Cancel booking",
+      text: `Hi ${providerName}, I need to cancel my upcoming appointment.`,
+    },
+    ...(isMobileProvider
+      ? [
+          {
+            label: "Parking/access",
+            text: `Hi ${providerName}, is there anything I should know about parking or access at my address?`,
+          },
+        ]
+      : []),
+    {
+      label: "Aftercare",
+      text: `Hi ${providerName}, could you send over any aftercare advice for this service?`,
+    },
+    {
+      label: "Thank you",
+      text: `Thank you so much, ${providerName}!`,
+    },
   ];
+
+  const quickPrompts = hasBooking ? bookingPrompts : queryPrompts;
 
   // A navigator can reuse this component for another provider. Never render a
   // stale thread while the next conversation is being resolved.
@@ -311,10 +405,11 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
         priority: "medium",
         is_actionable: false,
         booking_id: selectedBooking.id,
-      }).catch(() => {});
+      }).catch((err) => logger.error('[ProviderChat] address notification failed:', err));
       setShowAddressModal(false);
-    } catch {
-      /* silent */
+    } catch (err) {
+      logger.error('[ProviderChat] send address failed:', err);
+      Alert.alert('Address not sent', "Check your connection and try again.");
     }
     setSendingAddress(false);
   }, [addressText, selectedBooking, sendingAddress, postMessage, providerDbId]);
@@ -375,7 +470,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
 
   return (
     <ThemedBackground style={{ flex: 1 }}>
-      <KeyboardDismissView style={{ flex: 1 }} extraOffset={90}>
+      <KeyboardDismissView style={{ flex: 1 }}>
         <FlatList
           ref={flatListRef}
           data={visibleMessages}
@@ -422,21 +517,27 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             { borderTopColor: OP.border, backgroundColor: OP.bg },
           ]}
         >
-          {quickPrompts.map((prompt) => (
-            <TouchableOpacity
-              key={prompt.label}
-              style={[
-                styles.quickPrompt,
-                { backgroundColor: OP.surface, borderColor: OP.border },
-              ]}
-              onPress={() => setInputText(prompt.text)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.quickPromptText, { color: OP.accentText }]}>
-                {prompt.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickPromptScrollContent}
+          >
+            {quickPrompts.map((prompt) => (
+              <TouchableOpacity
+                key={prompt.label}
+                style={[
+                  styles.quickPrompt,
+                  { backgroundColor: OP.surface, borderColor: OP.border },
+                ]}
+                onPress={() => setInputText(prompt.text)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.quickPromptText, { color: OP.accentText }]}>
+                  {prompt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Input bar */}
@@ -446,7 +547,9 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             {
               backgroundColor: OP.bg,
               borderTopColor: OP.border,
-              paddingBottom: keyboardVisible ? 12 : FLOATING_TAB_BAR_CLEARANCE,
+              paddingBottom: keyboardVisible
+                ? Math.max(insets.bottom, 12)
+                : FLOATING_TAB_BAR_CLEARANCE,
             },
           ]}
         >
@@ -713,21 +816,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   quickPromptRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingTop: 10,
+    paddingTop: 16,
+    paddingBottom: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  quickPromptScrollContent: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 14,
   },
   quickPrompt: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
   },
   quickPromptText: {
     fontFamily: "Jura-VariableFont_wght",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
   },
   modalOverlay: {

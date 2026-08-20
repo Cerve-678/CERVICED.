@@ -22,6 +22,7 @@ import {
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { toUserMessage } from '../../utils/userFacingError';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const CP_DARK = {
@@ -148,7 +149,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
       return;
     }
     if (enabled.has('email') && !profileEmail) {
-      flash('Add a public email in Business Email settings first', 'error');
+      flash('Add a public email in Business Info first', 'error');
       return;
     }
     if (enabled.has('phone') && !profilePhone) {
@@ -167,7 +168,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      flash(e.message ?? 'Could not save changes', 'error');
+      flash(toUserMessage(e, 'Could not save your changes.', 'ProviderCommunicationsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }
@@ -258,7 +259,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                         <Text style={[s.rowDesc, { color: C.sub }]} numberOfLines={2}>{meta.description}</Text>
                         {hasWarning && (
                           <Text style={s.rowWarn}>
-                            {method === 'email' ? 'Set email in Business Email settings' : 'Add phone number to your profile'}
+                            {method === 'email' ? 'Set email in Business Info' : 'Add phone number to your profile'}
                           </Text>
                         )}
                       </View>
@@ -290,8 +291,10 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
               })}
             </View>
 
-            {/* Quick link to Business Email */}
-            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessDetails')} activeOpacity={0.7}>
+            {/* Straight to BusinessInfo, which actually owns the email fields —
+                navigating to the BusinessDetails hub left the provider one tap
+                short, on a menu, with no indication which row to pick. */}
+            <TouchableOpacity style={[s.linkRow, { backgroundColor: C.surface, borderColor: C.border }]} onPress={() => navigation.navigate('BusinessInfo')} activeOpacity={0.7}>
               <Ionicons name="mail-outline" size={16} color={C.accent} />
               <Text style={[s.linkText, { color: C.text }]}>Manage email addresses</Text>
               <Ionicons name="chevron-forward" size={14} color={C.sub} />

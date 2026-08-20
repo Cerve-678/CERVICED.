@@ -4084,8 +4084,11 @@ ALTER TABLE public.bookings
 --   supabase/fix_claim_cart_booking_slots_private_details_ambiguous.sql
 --   supabase/fix_handle_booking_status_change_on_hold_notification.sql
 --   supabase/fix_claim_cart_booking_slots_missing_notifications.sql
+--   supabase/fix_group_booking_per_service_actions.sql
+--   supabase/fix_client_reliability_tracking.sql
+--   supabase/fix_provider_no_show_status.sql
 --
--- All twenty-eight are idempotent/safe to re-run.
+-- All thirty-one are idempotent/safe to re-run.
 --
 -- The 26th: fixes a live-blocking regression in claim_cart_booking_slots() —
 -- every cart-checkout booking attempt failed with 42702 "column reference
@@ -4394,6 +4397,78 @@ ALTER TABLE public.bookings
 -- apply_migration (migration name get_providers_availability_batch,
 -- returned success) and spot-checked against real provider rows on project
 -- ztrfpfvvejzaysrelmfm — confirmed via execute_sql.
+--
+-- The twenty-ninth: fix_group_booking_per_service_actions.sql — closes the
+-- gap where a provider could ONLY status-update or cancel a whole group
+-- booking at once (the nineteenth entry's atomic RPCs), with no way to
+-- mark just ONE service in a group no_show/completed, or cancel just one
+-- already-confirmed service, without forcing the same outcome onto its
+-- siblings. Verified live via pg_get_functiondef first: provider_update_
+-- booking_status(uuid, text) and cancel_own_booking(uuid)/provider_cancel_
+-- own_booking(uuid) already had NO group_booking_id guard at all, live or
+-- in any tracked file — the gap was entirely app-side, not a missing DB
+-- check. This migration is a verification-and-hardening pass, not a
+-- behaviour change: re-affirms (byte-identical) the three single-row RPCs,
+-- adds COMMENT ON FUNCTION markers on all five RPCs (the three single-row
+-- ones plus the two atomic group ones from the nineteenth entry) recording
+-- which is intentionally scoped to one row vs. a whole group, and
+-- re-applies the REVOKE/GRANT anon lockdown defensively. App-side:
+-- ProviderBookingDetailScreen.tsx's updateBookingStatus/cancelBooking
+-- (group-routed) were split from new updateBookingStatusSingle/
+-- cancelBookingSingle (always single-row) — only handleConfirm/
+-- handleDecline (the pending-stage transitions that must stay atomic) still
+-- route through the group RPCs; Start Appointment/Mark Complete/No Show and
+-- post-confirm Cancel now always call the single-row RPC, even within a
+-- group. ProviderBookingHistoryScreen.tsx/ProviderInboxScreen.tsx and the
+-- client-hat cancel path (BookingContext.tsx/BookingDetailScreen.tsx) were
+-- checked and needed no change — none of them routed a per-service action
+-- through a group RPC. Deployed live 2026-08-17 via apply_migration
+-- (migration name fix_group_booking_per_service_actions, returned success);
+-- confirmed via execute_sql that all five COMMENT ON FUNCTION markers are
+-- attached and the anon/authenticated grants are correct.
+-- ════════════════════════════════════════════════════
+--
+-- The thirtieth: fix_client_reliability_tracking.sql — closes the gap where
+-- nothing tracked how many times a specific client had no-showed or
+-- cancelled late against a specific provider, making a repeat offender
+-- invisible. New dedicated table client_provider_reliability, keyed on
+-- (provider_id, client_user_id), with no_show_count/late_cancel_count
+-- columns incremented server-side by provider_update_booking_status() (on
+-- transition to no_show) and cancel_own_booking() (only when the
+-- cancellation is a genuine late cancellation inside the provider's notice
+-- window — not every cancellation). RLS: provider can read only their own
+-- rows. App-side: a reliability read was added to databaseService.ts (no
+-- raw .from() elsewhere, per this repo's access boundary), surfaced as a
+-- minimal badge on ProviderClienteleScreen.tsx (batched, not per-card) and
+-- ProviderBookingDetailScreen.tsx. Deployed live 2026-08-17 via
+-- apply_migration (migration name fix_client_reliability_tracking,
+-- returned success); table and both incrementing call sites confirmed live
+-- via the Supabase CLI (`supabase db query --linked`) after the MCP tool
+-- connection dropped mid-session — see fix_client_reliability_tracking.sql
+-- for the full late-cancellation-definition rationale (must match
+-- cancel_own_booking()'s own notice-window gate exactly, or a cancellation
+-- could be logged as "late" that the RPC itself would have blocked, or vice
+-- versa).
+--
+-- The thirty-first: fix_provider_no_show_status.sql — closes the gap where
+-- `no_show` only ever represented the CLIENT not showing up. Extended
+-- bookings_status_check (TEXT + CHECK, not a Postgres enum — confirmed live
+-- via pg_get_constraintdef before editing) to add 'provider_no_show'. New
+-- RPC client_mark_provider_no_show(p_booking_id) lets the CLIENT mark this,
+-- mirroring provider_update_booking_status()'s no_show guardrails
+-- (same-day, appointment start time passed, terminal-state check, no active
+-- reschedule request — see docs/vault/No-Show.md for the source guardrail
+-- list this mirrors). DB trigger notifies the PROVIDER on this transition,
+-- consistent with this repo's "DB triggers own notifications" rule — no
+-- app-side duplicate insert. App-side: BookingStatus.PROVIDER_NO_SHOW added
+-- to src/types/booking.ts, mapDbBookingStatus() extended, a "Provider
+-- didn't show up" client action wired into BookingDetailScreen.tsx/
+-- BookingContext.tsx gated on the same guardrail math as the RPC. Deployed
+-- live 2026-08-17 via apply_migration (migration name
+-- fix_provider_no_show_status, returned success); the RPC, the extended
+-- status_check constraint, and provider_update_booking_status (unaffected,
+-- re-verified byte-identical) all confirmed live via the Supabase CLI after
+-- the MCP tool connection dropped mid-session.
 -- ════════════════════════════════════════════════════
 
 
@@ -4691,4 +4766,899 @@ CREATE INDEX IF NOT EXISTS idx_providers_service_locations
 
 -- ============================================================
 -- DONE — provider_signup_business_fields.sql applied.
+-- ============================================================
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- fix_no_show_grace_period.sql
+--
+-- GAP: provider_update_booking_status()'s no_show guard allowed marking a
+-- booking no_show the instant appointment start time passed (same calendar
+-- day only) — no grace period. FIX: booking_policies.noShowGraceMinutes
+-- (JSONB key, default 0 = unchanged behavior); no_show guard now checks
+-- now() >= appointment_start + grace_minutes. Applied live 2026-08-17,
+-- confirmed via pg_get_functiondef against the pre-existing live body
+-- (which already carried the same-day + active-reschedule-request guards
+-- from the post-fix_provider_status_transition_guard.sql hardening — both
+-- preserved unchanged). See fix_no_show_grace_period.sql for full rationale.
+-- Safe to re-run (CREATE OR REPLACE).
+-- ════════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.provider_update_booking_status(p_booking_id uuid, p_status text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_current_status  text;
+  v_booking_date    date;
+  v_booking_time    time;
+  v_appt_start      timestamp;
+  v_active_reschedule boolean;
+  v_provider_id     uuid;
+  v_grace_minutes   integer;
+BEGIN
+  SELECT b.status, b.booking_date, b.booking_time, b.provider_id
+    INTO v_current_status, v_booking_date, v_booking_time, v_provider_id
+    FROM public.bookings b
+   WHERE b.id = p_booking_id
+     AND b.provider_id IN (SELECT p.id FROM public.providers p WHERE p.user_id = auth.uid())
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found or not owned by caller';
+  END IF;
+
+  IF v_current_status IN ('cancelled', 'completed', 'no_show') THEN
+    RAISE EXCEPTION 'Booking is already %, no further status changes allowed', v_current_status;
+  END IF;
+
+  IF p_status = 'cancelled' THEN
+    RAISE EXCEPTION 'Use provider_cancel_own_booking() to cancel a booking';
+  END IF;
+
+  v_appt_start := (v_booking_date + v_booking_time)::timestamp;
+
+  SELECT COALESCE((booking_policies->>'noShowGraceMinutes')::integer, 0)
+    INTO v_grace_minutes
+    FROM public.providers
+   WHERE id = v_provider_id;
+  v_grace_minutes := GREATEST(COALESCE(v_grace_minutes, 0), 0);
+
+  IF p_status = 'no_show' THEN
+    IF v_booking_date <> CURRENT_DATE THEN
+      RAISE EXCEPTION 'no_show can only be marked on the day of the appointment';
+    END IF;
+    SELECT EXISTS (
+      SELECT 1 FROM public.booking_reschedule_requests r
+       WHERE r.booking_id = p_booking_id
+         AND r.status IN ('pending', 'provider_responded')
+    ) INTO v_active_reschedule;
+    IF v_active_reschedule THEN
+      RAISE EXCEPTION 'Cannot mark no_show while a reschedule request is active for this booking';
+    END IF;
+  END IF;
+
+  IF v_current_status = 'pending' THEN
+    IF p_status <> 'confirmed' THEN
+      RAISE EXCEPTION 'Invalid status transition: % -> %', v_current_status, p_status;
+    END IF;
+
+  ELSIF v_current_status = 'confirmed' THEN
+    IF p_status = 'in_progress' THEN
+      NULL;
+    ELSIF p_status = 'no_show' THEN
+      IF NOW() < v_appt_start + (v_grace_minutes * INTERVAL '1 minute') THEN
+        RAISE EXCEPTION 'Cannot mark no_show until % minute(s) after the appointment start time', v_grace_minutes;
+      END IF;
+    ELSIF p_status = 'completed' THEN
+      IF v_appt_start >= NOW() THEN
+        RAISE EXCEPTION 'Cannot mark % before the appointment start time', p_status;
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'Invalid status transition: % -> %', v_current_status, p_status;
+    END IF;
+
+  ELSIF v_current_status = 'in_progress' THEN
+    IF p_status = 'completed' THEN
+      NULL;
+    ELSIF p_status = 'no_show' THEN
+      IF NOW() < v_appt_start + (v_grace_minutes * INTERVAL '1 minute') THEN
+        RAISE EXCEPTION 'Cannot mark no_show until % minute(s) after the appointment start time', v_grace_minutes;
+      END IF;
+    ELSE
+      RAISE EXCEPTION 'Invalid status transition: % -> %', v_current_status, p_status;
+    END IF;
+
+  ELSE
+    RAISE EXCEPTION 'Unrecognized current status: %', v_current_status;
+  END IF;
+
+  UPDATE public.bookings SET status = p_status WHERE id = p_booking_id;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.provider_update_booking_status(uuid, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.provider_update_booking_status(uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.provider_update_booking_status(uuid, text) TO authenticated;
+
+-- ============================================================
+-- DONE — fix_no_show_grace_period.sql applied.
+-- ============================================================
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- fix_pending_booking_provider_reminder.sql
+--
+-- GAP: process_pending_booking_warnings() (cron pending-booking-warnings,
+-- 0 10 * * *) notified only the CLIENT at T-24h that a booking was still
+-- pending — the provider, who actually needs to confirm/decline it before
+-- process_expire_stale_pending_bookings() auto-cancels it, was never
+-- notified. FIX: same function now also notifies the provider, using new
+-- notification_type 'pending_booking_reminder' (added to
+-- notifications_type_check), same T-24h population + 25h dedup window,
+-- scoped to the provider's own user id. No opt-out column exists for
+-- providers yet (fires unconditionally, matching this repo's other
+-- provider-facing reminder crons). Applied live 2026-08-17. See
+-- fix_pending_booking_provider_reminder.sql for full rationale.
+-- Safe to re-run (CREATE OR REPLACE; constraint re-add is idempotent).
+-- ════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.notifications
+  DROP CONSTRAINT IF EXISTS notifications_type_check;
+
+ALTER TABLE public.notifications
+  ADD CONSTRAINT notifications_type_check CHECK (type IN (
+    'booking_pending', 'booking_confirmed', 'booking_declined', 'booking_cancelled',
+    'booking_reminder', 'booking_in_progress', 'booking_not_started', 'no_show',
+    'payment_success', 'new_provider', 'reschedule_request', 'reschedule_provider_response',
+    'reschedule_confirmed', 'reschedule_declined', 'review_request', 'review_received', 'promotion',
+    'intake_form_reminder', 'intake_form_received', 'intake_form_completed',
+    'info_pack_received', 'provider_message', 'announcement', 'balance_reminder',
+    'waitlist_slot_available', 'new_message', 'address_released', 'birthday_greeting',
+    'post_appt_check_in', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked',
+    'pending_booking_reminder'
+  ));
+
+CREATE OR REPLACE FUNCTION public.process_pending_booking_warnings()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT b.id AS booking_id, b.user_id, b.booking_date, b.booking_time,
+           b.service_name_snapshot, b.provider_name_snapshot, b.provider_id
+    FROM public.bookings b
+    JOIN public.users u ON u.id = b.user_id
+    WHERE b.status = 'pending'
+      AND (b.booking_date::TIMESTAMP + b.booking_time) BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
+      AND u.pending_warning_enabled = TRUE
+      AND NOT EXISTS (
+        SELECT 1 FROM public.notifications n
+        WHERE n.booking_id = b.id AND n.user_id = b.user_id
+          AND n.type = 'booking_pending' AND n.recipient_role = 'client'
+          AND n.created_at > NOW() - INTERVAL '25 hours'
+      )
+  LOOP
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+    VALUES (
+      r.user_id, 'booking_pending', 'Booking Still Awaiting Confirmation',
+      'Your ' || r.service_name_snapshot ||
+        ' with ' || r.provider_name_snapshot ||
+        ' on ' || TO_CHAR(r.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(r.booking_time, 'HH12:MI AM') ||
+        ' has not been confirmed yet. You may want to contact the provider.',
+      'high', TRUE, r.booking_id, r.provider_id, 'client'
+    );
+  END LOOP;
+
+  FOR r IN
+    SELECT b.id AS booking_id, b.booking_date, b.booking_time,
+           b.service_name_snapshot, b.customer_name, b.provider_id,
+           p.user_id AS provider_user_id
+    FROM public.bookings b
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE b.status = 'pending'
+      AND (b.booking_date::TIMESTAMP + b.booking_time) BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
+      AND p.user_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM public.notifications n
+        WHERE n.booking_id = b.id AND n.user_id = p.user_id
+          AND n.type = 'pending_booking_reminder' AND n.recipient_role = 'provider'
+          AND n.created_at > NOW() - INTERVAL '25 hours'
+      )
+  LOOP
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, booking_id, provider_id, recipient_role)
+    VALUES (
+      r.provider_user_id, 'pending_booking_reminder', 'Booking Awaiting Your Response',
+      r.customer_name || '''s ' || r.service_name_snapshot ||
+        ' on ' || TO_CHAR(r.booking_date, 'DD Mon YYYY') ||
+        ' at ' || TO_CHAR(r.booking_time, 'HH12:MI AM') ||
+        ' is still pending confirmation — it will auto-cancel if not confirmed or declined in time.',
+      'high', TRUE, r.booking_id, r.provider_id, 'provider'
+    );
+  END LOOP;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.process_pending_booking_warnings() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.process_pending_booking_warnings() FROM anon;
+GRANT EXECUTE ON FUNCTION public.process_pending_booking_warnings() TO authenticated, service_role;
+
+-- ============================================================
+-- DONE — fix_pending_booking_provider_reminder.sql applied.
+-- ============================================================
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- fix_waitlist_selection_method_hook.sql
+--
+-- GAP: invite_next_waitlist_entry() ordered candidates strictly FIFO
+-- (position ASC), zero provider input. SCOPE: schema hook only for this
+-- pass — booking_policies.waitlistSelectionMethod ('fifo' default |
+-- 'manual' reserved), read defensively; every value still falls through to
+-- the same FIFO ordering (no manual-selection logic implemented).
+--
+-- IMPORTANT: this REPLACE is layered on top of the already-live
+-- BOOLEAN-returning version of this function (from
+-- supabase/migrations/20260817110500_waitlist_lapse_and_exhaustion_
+-- notifications.sql — confirmed applied live via pg_get_functiondef before
+-- writing this), not the old VOID version — preserves the TRUE/FALSE
+-- offered-vs-exhausted return contract that expire_waitlist_holds()/
+-- decline_waitlist_hold() depend on for their "waitlist exhausted"
+-- provider notifications. Applied live 2026-08-17. See
+-- fix_waitlist_selection_method_hook.sql for full rationale.
+-- Safe to re-run (CREATE OR REPLACE).
+-- ════════════════════════════════════════════════════════════════════════════
+
+DROP FUNCTION IF EXISTS public.invite_next_waitlist_entry(UUID, UUID, DATE, TIME, TIME, NUMERIC, NUMERIC, NUMERIC, TEXT);
+
+CREATE OR REPLACE FUNCTION public.invite_next_waitlist_entry(
+  p_provider_id UUID,
+  p_service_id  UUID,
+  p_booking_date DATE DEFAULT NULL,
+  p_booking_time TIME DEFAULT NULL,
+  p_end_time TIME DEFAULT NULL,
+  p_base_price NUMERIC DEFAULT NULL,
+  p_add_ons_total NUMERIC DEFAULT NULL,
+  p_service_charge NUMERIC DEFAULT NULL,
+  p_service_category_snapshot TEXT DEFAULT NULL
+) RETURNS BOOLEAN AS $$
+DECLARE
+  w                   RECORD;
+  v_waitlist_enabled  BOOLEAN;
+  v_auto_accept       BOOLEAN;
+  v_selection_method  TEXT;
+  v_new_booking_id    UUID;
+BEGIN
+  SELECT COALESCE((automation_settings->>'waitlistEnabled')::boolean, TRUE),
+         COALESCE((automation_settings->>'autoAcceptWaitlist')::boolean, FALSE),
+         COALESCE(booking_policies->>'waitlistSelectionMethod', 'fifo')
+    INTO v_waitlist_enabled, v_auto_accept, v_selection_method
+    FROM public.providers WHERE id = p_provider_id;
+
+  IF NOT COALESCE(v_waitlist_enabled, TRUE) THEN
+    RETURN FALSE;
+  END IF;
+  IF p_booking_date IS NULL OR p_booking_time IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  IF v_selection_method IS DISTINCT FROM 'fifo' THEN
+    NULL; -- reserved for future manual-selection logic; FIFO fallback below
+  END IF;
+
+  FOR w IN
+    SELECT *
+      FROM public.provider_waitlist
+     WHERE provider_id = p_provider_id
+       AND status = 'waiting'
+       AND (service_id = p_service_id OR service_id IS NULL)
+       AND (
+         preferred_dates IS NULL
+         OR (p_booking_date >= preferred_dates[1]
+             AND p_booking_date <= COALESCE(preferred_dates[2], 'infinity'::date))
+       )
+     ORDER BY (service_id IS NOT NULL AND service_id = p_service_id) DESC,
+              position ASC
+  LOOP
+    BEGIN
+      IF v_auto_accept THEN
+        INSERT INTO public.bookings (
+          user_id, provider_id, service_id, status,
+          booking_date, booking_time, end_time,
+          payment_type, base_price, add_ons_total, service_charge,
+          deposit_amount, amount_paid, remaining_balance, payment_status,
+          is_group_booking, group_booking_count,
+          provider_name_snapshot, service_name_snapshot, service_category_snapshot,
+          customer_name, waitlist_entry_id
+        ) VALUES (
+          w.user_id, p_provider_id, p_service_id, 'pending',
+          p_booking_date, p_booking_time, p_end_time,
+          'full', COALESCE(p_base_price, 0), COALESCE(p_add_ons_total, 0), COALESCE(p_service_charge, 0),
+          0, 0, COALESCE(p_base_price, 0) + COALESCE(p_add_ons_total, 0) + COALESCE(p_service_charge, 0), 'pending',
+          FALSE, 1,
+          w.provider_name_snapshot, w.service_name_snapshot, p_service_category_snapshot,
+          w.user_name_snapshot, w.id
+        )
+        RETURNING id INTO v_new_booking_id;
+
+        UPDATE public.provider_waitlist SET status = 'booked', notified_at = NOW() WHERE id = w.id;
+        RETURN TRUE;
+      ELSE
+        INSERT INTO public.bookings (
+          user_id, provider_id, service_id, status,
+          booking_date, booking_time, end_time,
+          payment_type, base_price, add_ons_total, service_charge,
+          deposit_amount, amount_paid, remaining_balance, payment_status,
+          is_group_booking, group_booking_count,
+          provider_name_snapshot, service_name_snapshot, service_category_snapshot,
+          customer_name, waitlist_entry_id, hold_expires_at
+        ) VALUES (
+          w.user_id, p_provider_id, p_service_id, 'on_hold',
+          p_booking_date, p_booking_time, p_end_time,
+          'full', COALESCE(p_base_price, 0), COALESCE(p_add_ons_total, 0), COALESCE(p_service_charge, 0),
+          0, 0, COALESCE(p_base_price, 0) + COALESCE(p_add_ons_total, 0) + COALESCE(p_service_charge, 0), 'pending',
+          FALSE, 1,
+          w.provider_name_snapshot, w.service_name_snapshot, p_service_category_snapshot,
+          w.user_name_snapshot, w.id, NOW() + INTERVAL '3 hours'
+        )
+        RETURNING id INTO v_new_booking_id;
+
+        UPDATE public.provider_waitlist SET status = 'notified', notified_at = NOW() WHERE id = w.id;
+
+        INSERT INTO public.notifications
+          (user_id, type, title, message, priority, is_actionable, provider_id, recipient_role, booking_id)
+        VALUES (
+          w.user_id,
+          'waitlist_slot_available',
+          'A slot opened up!',
+          w.service_name_snapshot || ' with ' || w.provider_name_snapshot ||
+            ' — ' || TO_CHAR(p_booking_date, 'DD Mon') || ' at ' || TO_CHAR(p_booking_time, 'HH12:MI AM') ||
+            ' is held for you for 3 hours. Confirm now before it goes to the next person.',
+          'high',
+          TRUE,
+          p_provider_id,
+          'client',
+          v_new_booking_id
+        );
+        RETURN TRUE;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      CONTINUE;
+    END;
+  END LOOP;
+  RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.invite_next_waitlist_entry(UUID, UUID, DATE, TIME, TIME, NUMERIC, NUMERIC, NUMERIC, TEXT) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.invite_next_waitlist_entry(UUID, UUID, DATE, TIME, TIME, NUMERIC, NUMERIC, NUMERIC, TEXT) FROM public;
+REVOKE EXECUTE ON FUNCTION public.invite_next_waitlist_entry(UUID, UUID, DATE, TIME, TIME, NUMERIC, NUMERIC, NUMERIC, TEXT) FROM anon;
+
+-- ============================================================
+-- DONE — fix_waitlist_selection_method_hook.sql applied.
+-- ============================================================
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- notifications_cleanup_2026_08.sql (was never folded in before — this
+-- block was still writing birthday_greeting/rebooking_nudge notifications
+-- under type='announcement'/'booking_reminder' with the real identity
+-- hidden in metadata->>'kind', instead of the real, dedicated type values
+-- the CHECK constraint already allowed. Folded in now as a prerequisite for
+-- fix_vague_notification_copy.sql below, which layers improved title/body
+-- text on top of these same three functions and assumes the real type
+-- values are already in use.
+--
+-- Also removes process_provider_outstanding_balance_reminders() (the app
+-- has no business nagging providers about an off-app remaining-balance
+-- payment it never collects or verifies — see CLAUDE.md's deposit/balance
+-- liability boundary) and the dead process_user_24hr_reminders() (zero
+-- callers; process_client_appointment_reminders() is the real 24/48/72h
+-- reminder path). handle_booking_cancelled() was also dropped in the
+-- source file as dead code, but was never defined in this file at all, so
+-- that DROP is a no-op here.
+--
+-- The notifications_type_check rebuild below also adds 'provider_no_show',
+-- which the most recent constraint version above (STEP:
+-- fix_pending_booking_provider_reminder.sql) was still missing despite
+-- fix_provider_no_show_status.sql adding it live — same never-folded-in gap.
+-- ════════════════════════════════════════════════════════════════════════════
+
+SELECT cron.unschedule('provider-outstanding-balance-reminders');
+DROP FUNCTION IF EXISTS public.process_provider_outstanding_balance_reminders();
+DROP FUNCTION IF EXISTS public.process_user_24hr_reminders();
+DROP FUNCTION IF EXISTS public.handle_booking_cancelled();
+
+ALTER TABLE public.notifications
+  DROP CONSTRAINT IF EXISTS notifications_type_check;
+
+ALTER TABLE public.notifications
+  ADD CONSTRAINT notifications_type_check CHECK (type IN (
+    'booking_pending', 'booking_confirmed', 'booking_declined', 'booking_cancelled',
+    'booking_reminder', 'booking_in_progress', 'booking_not_started', 'no_show',
+    'provider_no_show', 'payment_success', 'new_provider', 'reschedule_request',
+    'reschedule_provider_response', 'reschedule_confirmed', 'reschedule_declined',
+    'review_request', 'review_received', 'promotion',
+    'intake_form_reminder', 'intake_form_received', 'intake_form_completed',
+    'info_pack_received', 'provider_message', 'announcement', 'balance_reminder',
+    'waitlist_slot_available', 'new_message', 'address_released', 'birthday_greeting',
+    'post_appt_check_in', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked',
+    'pending_booking_reminder'
+    -- 'balance_collected' intentionally excluded: 0 live rows, no producer anywhere.
+  ));
+
+CREATE OR REPLACE FUNCTION public.process_birthday_greetings()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT DISTINCT
+      u.id AS user_id,
+      p.id AS provider_id,
+      p.display_name
+    FROM public.users u
+    JOIN public.bookings b  ON b.user_id = u.id AND b.status = 'completed'
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE u.dob IS NOT NULL
+      AND TO_CHAR(u.dob::DATE, 'MM-DD') = TO_CHAR(CURRENT_DATE, 'MM-DD')
+      AND COALESCE((p.automation_settings->>'birthdayGreeting')::BOOLEAN, FALSE) = TRUE
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM public.notifications n
+       WHERE n.user_id     = r.user_id
+         AND n.provider_id = r.provider_id
+         AND n.metadata->>'kind' = 'birthday_greeting'
+         AND n.created_at  > NOW() - INTERVAL '300 days'
+    ) THEN CONTINUE; END IF;
+
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, provider_id, metadata)
+    VALUES (
+      r.user_id,
+      'birthday_greeting',
+      COALESCE(r.display_name, 'Your provider') || ' — Happy Birthday! 🎂',
+      'Wishing you a wonderful birthday! Treat yourself — your next appointment is just a tap away.',
+      'low',
+      TRUE,
+      r.provider_id,
+      jsonb_build_object('kind', 'birthday_greeting')
+    );
+  END LOOP;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.process_rebooking_nudges()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT
+      b.user_id,
+      b.provider_id,
+      p.display_name
+    FROM public.bookings b
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE p.automation_settings->>'rebookingNudgeWeeks' ~ '^[0-9]+$'
+      AND b.status = 'completed'
+    GROUP BY b.user_id, b.provider_id, p.display_name, p.automation_settings
+    HAVING MAX(b.booking_date) = CURRENT_DATE
+      - ((p.automation_settings->>'rebookingNudgeWeeks')::INT * 7)
+      AND NOT EXISTS (
+        SELECT 1 FROM public.bookings up
+         WHERE up.user_id = b.user_id
+           AND up.provider_id = b.provider_id
+           AND up.status IN ('pending', 'confirmed')
+           AND up.booking_date >= CURRENT_DATE
+      )
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM public.notifications n
+       WHERE n.user_id     = r.user_id
+         AND n.provider_id = r.provider_id
+         AND n.type        = 'rebooking_nudge'
+         AND n.created_at  > NOW() - INTERVAL '21 days'
+    ) THEN CONTINUE; END IF;
+
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, provider_id, metadata)
+    VALUES (
+      r.user_id,
+      'rebooking_nudge',
+      COALESCE(r.display_name, 'Your provider') || ' misses you!',
+      'It''s been a while since your last appointment — book your next one now.',
+      'medium',
+      TRUE,
+      r.provider_id,
+      jsonb_build_object('kind', 'rebooking_nudge')
+    );
+  END LOOP;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.process_provider_daily_recap()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT
+      p.id      AS provider_id,
+      p.user_id AS provider_user_id,
+      COUNT(*)  AS booking_count,
+      MIN(b.booking_time) AS first_time
+    FROM public.providers p
+    JOIN public.bookings b ON b.provider_id = p.id
+    WHERE b.booking_date = CURRENT_DATE
+      AND b.status IN ('pending', 'confirmed')
+      AND COALESCE((p.automation_settings->>'newBookingRecap')::BOOLEAN, TRUE) = TRUE
+      AND NOT EXISTS (
+        SELECT 1 FROM public.notifications n
+         WHERE n.user_id = p.user_id
+           AND n.metadata->>'kind' = 'daily_recap'
+           AND n.created_at::DATE = CURRENT_DATE
+      )
+    GROUP BY p.id, p.user_id
+  LOOP
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, provider_id, recipient_role, metadata)
+    VALUES (
+      r.provider_user_id,
+      'daily_recap',
+      'Today''s Schedule',
+      'You have ' || r.booking_count || ' appointment' ||
+        CASE WHEN r.booking_count = 1 THEN '' ELSE 's' END ||
+        ' today, starting at ' || TO_CHAR(r.first_time, 'HH12:MI AM') || '.',
+      'medium',
+      TRUE,
+      r.provider_id,
+      'provider',
+      jsonb_build_object('kind', 'daily_recap')
+    );
+  END LOOP;
+END;
+$function$;
+
+-- ============================================================
+-- DONE — notifications_cleanup_2026_08.sql applied.
+-- ============================================================
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- fix_vague_notification_copy.sql
+--
+-- Found by a notification-copy audit (2026-08-17): three templates didn't
+-- use data already available in their own query, reading as generic filler
+-- identical regardless of the actual situation. Layers on top of the
+-- notifications_cleanup_2026_08.sql block just above (same three functions,
+-- real type values already in place) — only the SELECT list and the
+-- message/title strings change here, not any eligibility/dedup logic.
+-- ════════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.process_provider_unread_message_reminders()
+RETURNS VOID AS $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT c.id AS conversation_id, c.provider_id, c.updated_at,
+           p.user_id AS provider_user_id, u.name AS client_name
+    FROM public.provider_conversations c
+    JOIN public.providers p ON p.id = c.provider_id
+    JOIN public.users u ON u.id = c.user_id
+    WHERE c.unread_count_provider > 0
+      AND c.updated_at < NOW() - INTERVAL '2 hours'
+      AND p.reminder_notifications_enabled = TRUE
+      AND NOT EXISTS (
+        SELECT 1 FROM public.notifications n
+        WHERE n.provider_id = c.provider_id AND n.user_id = p.user_id
+          AND n.type = 'provider_message'
+          AND (n.metadata->>'conversation_id') = c.id::text
+          AND n.created_at > NOW() - INTERVAL '4 hours'
+      )
+  LOOP
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, provider_id, metadata, recipient_role)
+    VALUES (
+      r.provider_user_id, 'provider_message',
+      COALESCE(r.client_name, 'A client') || ' is waiting on a reply',
+      COALESCE(r.client_name, 'A client') || ' has been waiting ' ||
+        GREATEST(1, ROUND(EXTRACT(EPOCH FROM (NOW() - r.updated_at)) / 3600)::INT) ||
+        ' hour' || CASE WHEN GREATEST(1, ROUND(EXTRACT(EPOCH FROM (NOW() - r.updated_at)) / 3600)::INT) = 1 THEN '' ELSE 's' END ||
+        ' for a reply from you.',
+      'medium', TRUE, r.provider_id,
+      jsonb_build_object('conversation_id', r.conversation_id),
+      'provider'
+    );
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.process_rebooking_nudges()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT
+      b.user_id,
+      b.provider_id,
+      p.display_name,
+      (p.automation_settings->>'rebookingNudgeWeeks')::INT AS nudge_weeks,
+      (ARRAY_AGG(b.service_name_snapshot ORDER BY b.booking_date DESC))[1] AS last_service_name
+    FROM public.bookings b
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE p.automation_settings->>'rebookingNudgeWeeks' ~ '^[0-9]+$'
+      AND b.status = 'completed'
+    GROUP BY b.user_id, b.provider_id, p.display_name, p.automation_settings
+    HAVING MAX(b.booking_date) = CURRENT_DATE
+      - ((p.automation_settings->>'rebookingNudgeWeeks')::INT * 7)
+      AND NOT EXISTS (
+        SELECT 1 FROM public.bookings up
+         WHERE up.user_id = b.user_id
+           AND up.provider_id = b.provider_id
+           AND up.status IN ('pending', 'confirmed')
+           AND up.booking_date >= CURRENT_DATE
+      )
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM public.notifications n
+       WHERE n.user_id     = r.user_id
+         AND n.provider_id = r.provider_id
+         AND n.type        = 'rebooking_nudge'
+         AND n.created_at  > NOW() - INTERVAL '21 days'
+    ) THEN CONTINUE; END IF;
+
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, provider_id, metadata)
+    VALUES (
+      r.user_id,
+      'rebooking_nudge',
+      COALESCE(r.display_name, 'Your provider') || ' misses you!',
+      'It''s been ' || r.nudge_weeks || ' week' || CASE WHEN r.nudge_weeks = 1 THEN '' ELSE 's' END ||
+        ' since your last ' || COALESCE(r.last_service_name, 'appointment') ||
+        ' with ' || COALESCE(r.display_name, 'them') || ' — book your next one now.',
+      'medium',
+      TRUE,
+      r.provider_id,
+      jsonb_build_object('kind', 'rebooking_nudge')
+    );
+  END LOOP;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.process_birthday_greetings()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT DISTINCT
+      u.id AS user_id,
+      u.name AS customer_name,
+      p.id AS provider_id,
+      p.display_name
+    FROM public.users u
+    JOIN public.bookings b  ON b.user_id = u.id AND b.status = 'completed'
+    JOIN public.providers p ON p.id = b.provider_id
+    WHERE u.dob IS NOT NULL
+      AND TO_CHAR(u.dob::DATE, 'MM-DD') = TO_CHAR(CURRENT_DATE, 'MM-DD')
+      AND COALESCE((p.automation_settings->>'birthdayGreeting')::BOOLEAN, FALSE) = TRUE
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM public.notifications n
+       WHERE n.user_id     = r.user_id
+         AND n.provider_id = r.provider_id
+         AND n.metadata->>'kind' = 'birthday_greeting'
+         AND n.created_at  > NOW() - INTERVAL '300 days'
+    ) THEN CONTINUE; END IF;
+
+    INSERT INTO public.notifications
+      (user_id, type, title, message, priority, is_actionable, provider_id, metadata)
+    VALUES (
+      r.user_id,
+      'birthday_greeting',
+      COALESCE(r.display_name, 'Your provider') || ' — Happy Birthday! 🎂',
+      'Happy birthday' || CASE WHEN r.customer_name IS NOT NULL THEN ', ' || r.customer_name ELSE '' END ||
+        '! Treat yourself — your next appointment with ' || COALESCE(r.display_name, 'them') || ' is just a tap away.',
+      'low',
+      TRUE,
+      r.provider_id,
+      jsonb_build_object('kind', 'birthday_greeting')
+    );
+  END LOOP;
+END;
+$function$;
+
+-- ============================================================
+-- DONE — fix_vague_notification_copy.sql applied.
+-- ============================================================
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- provider_practice_details_columns.sql — promotes 13 provider "practice
+-- detail" fields out of device-local AsyncStorage ('@provider_extras') and
+-- into real `providers` columns, so they survive reinstall, sync across
+-- devices, and can actually reach clients.
+--
+-- Three are trust/safety-adjacent and were the real reason this couldn't
+-- stay device-local: patch_test_policy (health-adjacent — clients need it
+-- BEFORE booking), plus is_insured_self_declared / dbs_checked_self_declared.
+-- The `_self_declared` suffix is deliberate: these are provider attestations
+-- that Cerviced does NOT verify, and must never be presented as
+-- platform-verified credentials.
+--
+-- Additive and nullable throughout, no backfill — existing rows read as
+-- "not set" rather than a false negative. RLS unchanged: providers_owner_all
+-- already covers writes, providers_public_read already gates client reads on
+-- has_gone_live = true AND is_active = true.
+-- See supabase/provider_practice_details_columns.sql for the full rationale.
+-- ════════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE public.providers
+  ADD COLUMN IF NOT EXISTS patch_test_policy TEXT
+    CHECK (patch_test_policy IN ('always','new_clients','optional','not_needed')),
+  ADD COLUMN IF NOT EXISTS qualifications TEXT,
+  ADD COLUMN IF NOT EXISTS is_insured_self_declared BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS dbs_checked_self_declared BOOLEAN NOT NULL DEFAULT false,
+  -- No `service_setting` column here on purpose — the UI replaced that
+  -- single-setting question with a cities-covered selector writing
+  -- `service_locations`. See supabase/provider_practice_details_columns.sql.
+  ADD COLUMN IF NOT EXISTS travel_radius TEXT,
+  ADD COLUMN IF NOT EXISTS clientele TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS availability_windows TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS accepts_new_clients TEXT
+    CHECK (accepts_new_clients IN ('yes','waitlist','no')),
+  ADD COLUMN IF NOT EXISTS walk_ins_welcome BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS group_bookings_available BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS products_used TEXT,
+  ADD COLUMN IF NOT EXISTS vegan_cruelty_free BOOLEAN NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_providers_clientele
+  ON public.providers USING GIN (clientele);
+CREATE INDEX IF NOT EXISTS idx_providers_availability_windows
+  ON public.providers USING GIN (availability_windows);
+CREATE INDEX IF NOT EXISTS idx_providers_accepts_new_clients
+  ON public.providers (accepts_new_clients)
+  WHERE accepts_new_clients IS NOT NULL;
+
+COMMENT ON COLUMN public.providers.patch_test_policy IS
+  'Health-adjacent: whether a patch test is required before treatment. Shown to clients pre-booking.';
+COMMENT ON COLUMN public.providers.is_insured_self_declared IS
+  'Provider self-attestation only. Cerviced does NOT verify insurance — never present as platform-verified.';
+COMMENT ON COLUMN public.providers.dbs_checked_self_declared IS
+  'Provider self-attestation only. Cerviced does NOT verify DBS status — never present as platform-verified.';
+
+-- ============================================================
+-- DONE — provider_practice_details_columns.sql applied.
+-- ============================================================
+
+-- ============================================================
+-- cron_job_run_details_retention.sql
+--
+-- cron.job_run_details grows without bound: pg_cron writes one INSERT and
+-- three UPDATEs per job run, and nothing ever purges it. With 24 active jobs
+-- (nine on */5 or */15 schedules) this reached ~27k rows / 6.2 MB in six
+-- weeks, costing ~121s of CPU on the inserts alone.
+--
+-- pg_cron does not ship a retention policy, so schedule one.
+-- Safe to re-run: unschedules any prior copy of the job first.
+-- ============================================================
+
+-- Drop a previously-scheduled copy so this file stays idempotent.
+DO $$
+BEGIN
+  PERFORM cron.unschedule('purge-cron-run-history');
+EXCEPTION WHEN OTHERS THEN
+  NULL; -- not scheduled yet
+END $$;
+
+SELECT cron.schedule(
+  'purge-cron-run-history',
+  '17 4 * * *',  -- daily, off-peak, offset from the 0/8/9/10 job cluster
+  $$DELETE FROM cron.job_run_details WHERE end_time < now() - interval '7 days'$$
+);
+
+-- One-off catch-up for the existing backlog. The scheduled job above keeps it
+-- trimmed from here on.
+DELETE FROM cron.job_run_details WHERE end_time < now() - interval '7 days';
+
+-- ============================================================
+-- DONE — cron_job_run_details_retention.sql applied.
+-- ============================================================
+
+
+-- ════════════════════════════════════════════════════
+-- add_service_images_aspect_ratio.sql
+-- ════════════════════════════════════════════════════
+-- NOTE: only the SCHEMA half of that file is bundled here. Its one-off
+-- backfill UPDATE targets specific live row ids (measured out-of-band from
+-- the image files themselves) and is meaningless in a fresh environment —
+-- new rows get their ratio written at upload time by
+-- replace_provider_services(), and anything still NULL is measured on the
+-- client. See supabase/add_service_images_aspect_ratio.sql for the backfill.
+-- service_images.aspect_ratio
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Explore's masonry grid and ImageDetailModal size an image's box from its
+-- aspect ratio. portfolio_items has stored one since phase 1
+-- (portfolio_items.aspect_ratio, stamped at upload from the picked asset's
+-- width/height), but service_images never did — so every service photo in the
+-- discover feed was mapped with a hardcoded 0.8 placeholder in ExploreScreen.
+-- Real ratios in this table run 0.46–1.33, so that placeholder put landscape
+-- photos in portrait boxes and let contentFit="cover" crop the difference away.
+--
+-- APPLIED LIVE 2026-08-18 (migrations add_service_images_aspect_ratio +
+-- replace_provider_services_carry_aspect_ratio), including the backfill below.
+--
+-- Nullable with NO default on purpose: NULL means "not measured yet" and stays
+-- distinguishable from a real value, so the client falls back to measuring the
+-- file itself (see src/utils/useMeasuredAspectRatios.ts) rather than trusting a
+-- fabricated number. A DEFAULT 1.0 (as portfolio_items has) would make
+-- un-measured rows indistinguishable from genuinely-square photos.
+--
+-- Safe to re-run.
+
+ALTER TABLE public.service_images
+  ADD COLUMN IF NOT EXISTS aspect_ratio NUMERIC(6,4);
+
+COMMENT ON COLUMN public.service_images.aspect_ratio IS
+  'width/height of the image at url. NULL = never measured; the client falls back to measuring the file itself. Written at upload time by replace_provider_services().';
+
+-- A zero/negative ratio would produce a zero-height or inverted card box, and
+-- anything outside this range is a bad measurement rather than a real photo.
+ALTER TABLE public.service_images
+  DROP CONSTRAINT IF EXISTS service_images_aspect_ratio_sane;
+ALTER TABLE public.service_images
+  ADD CONSTRAINT service_images_aspect_ratio_sane
+  CHECK (aspect_ratio IS NULL OR (aspect_ratio > 0 AND aspect_ratio <= 10));
+
+-- ============================================================
+-- DONE — add_service_images_aspect_ratio.sql applied.
+-- ============================================================
+
+-- ============================================================
+-- provider_hair_types_catered.sql — adds the PROVIDER-level
+-- "which hair types do you cater to" field.
+--
+-- Two levels on purpose: providers.hair_types_catered is the broad claim the
+-- client Search "Hair Type" filter matches on (one provider-row read, no
+-- per-service lookup), while the pre-existing services.hair_types_suitable
+-- stays the per-service refinement shown once a client picks a service.
+--
+-- Empty/NULL = caters to all, matching services.hair_types_suitable, so an
+-- untouched value is a valid answer rather than an incomplete profile.
+-- Vocabulary is HAIR_TYPES in src/constants/hairTypes.ts — keep in step.
+-- See supabase/provider_hair_types_catered.sql for the full rationale.
+-- ============================================================
+
+ALTER TABLE public.providers
+  ADD COLUMN IF NOT EXISTS hair_types_catered TEXT[];
+
+CREATE INDEX IF NOT EXISTS idx_providers_hair_types_catered
+  ON public.providers USING GIN (hair_types_catered);
+
+COMMENT ON COLUMN public.providers.hair_types_catered IS
+  'Provider-level hair types this provider caters to (HAIR_TYPES vocabulary). NULL/empty = caters to all. Drives the client Search "Hair Type" filter; services.hair_types_suitable is the per-service refinement.';
+
+-- ============================================================
+-- DONE — provider_hair_types_catered.sql applied.
 -- ============================================================

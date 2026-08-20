@@ -47,6 +47,31 @@ export default function ExploreNavigator() {
         }}
       />
 
+      {/* PUSH NAVIGATION for BookmarkedProviders — deliberately a card, not
+          part of the fullScreenModal group below. BookmarkedProvidersScreen
+          relies entirely on the native stack's back button (its only
+          goBack() is inside the empty-state "Explore Providers" button), and
+          a fullScreenModal renders no back chevron and — unlike 'modal' —
+          can't be swipe-dismissed either, so presenting it modally here left
+          any user with at least one saved provider with no way back.
+          Matches HomeNavigator's registration. */}
+      <ExploreStack.Screen
+        name="BookmarkedProviders"
+        component={BookmarkedProvidersScreen}
+        options={{
+          title: 'Your Providers',
+          presentation: 'card',
+          headerBackTitle: 'Explore',
+          headerStyle: {
+            backgroundColor: theme.background,
+          },
+          headerTintColor: theme.text,
+          headerTitleStyle: {
+            color: theme.text,
+          },
+        }}
+      />
+
       {/* PUSH NAVIGATION for Cart — CartScreen renders its own header, so the
           native stack header must stay hidden (matches CartNavigator's CartMain). */}
       <ExploreStack.Screen
@@ -81,13 +106,6 @@ export default function ExploreNavigator() {
             // actually override a navigator-level presentation animation —
             // this static option is what actually takes effect.
             animation: 'none',
-          }}
-        />
-        <ExploreStack.Screen
-          name="BookmarkedProviders"
-          component={BookmarkedProvidersScreen}
-          options={{
-            title: 'Saved Providers',
           }}
         />
         <ExploreStack.Screen

@@ -22,19 +22,22 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { ExploreStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import TabIcon from '../../components/TabIcon';
+import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import * as Location from 'expo-location';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges } from '../../services/databaseService';
+import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { DbProvider } from '../../types/database';
 import userLearningService from '../../services/userLearningService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDistanceKm } from '../../utils/distance';
-import { UK_CITIES } from '../../constants/ukCities';
+import { CityMultiSelect } from '../../components/CityMultiSelect';
+import { HAIR_TYPES } from '../../constants/hairTypes';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -73,6 +76,9 @@ interface ProviderCardData {
   // filter matches against. Distinct from `location` above, which is a
   // single display string, not a list of covered cities.
   serviceLocations: string[];
+  walkInsWelcome: boolean;
+  groupBookingsAvailable: boolean;
+  veganCrueltyFree: boolean;
 }
 
 // Mirrors HomeScreen's FilterOptions (src/screens/client/HomeScreen.tsx) so
@@ -92,9 +98,22 @@ interface FilterOptions {
   // filtered out, same not-excluded-when-unknown rule Distance follows.
   availableOnly?: boolean;
   // Matches against a provider's service_locations array (see
-  // src/constants/ukCities.ts) — a provider covering this city at all is a
-  // match, independent of the GPS-based Distance filter above.
-  city?: string;
+  // src/constants/ukCities.ts) — a provider covering ANY selected city is a
+  // match (OR, not AND), independent of the GPS-based Distance filter above.
+  // CityMultiSelect is the shared picker (also used by signup's "Where You
+  // Work") so this stays a multi-select, not the single-city pill it used to be.
+  city?: string[];
+  // Matches against the provider-level providers.hair_types_catered via a
+  // batched lookup (getProviderHairTypeMatches). Deliberately the broad
+  // "does this provider cater to X at all" level — services.hair_types_
+  // suitable is the per-service refinement shown once a service is picked.
+  hairType?: string;
+  // Straightforward provider-level boolean matches — no batched lookup
+  // needed since these already ride along on the same DbProvider row
+  // mapDbToCardData reads everything else from.
+  walkInsWelcome?: boolean;
+  groupBookingsAvailable?: boolean;
+  veganCrueltyFree?: boolean;
 }
 
 const DEFAULT_FILTER_OPTIONS: FilterOptions = {
@@ -166,7 +185,7 @@ const KM_TO_MILES = 0.621371;
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
 // instead of one big panel covering every filter at once. ──────────────────
-type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city';
+type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'practice';
 
 const SORT_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
@@ -205,11 +224,6 @@ const SERVICE_TYPE_OPTIONS = [
   { label: 'Mobile', value: 'mobile' },
 ] as const;
 
-// Same list providers pick from at signup (Step 4) and in InfoRegScreen —
-// see src/constants/ukCities.ts. Matches against a provider's
-// service_locations array, independent of GPS-based Distance filtering.
-const CITY_OPTIONS = UK_CITIES;
-
 const FILTER_PILL_LABEL: Record<FilterKey, string> = {
   sort: 'Sort',
   price: 'Price',
@@ -218,6 +232,8 @@ const FILTER_PILL_LABEL: Record<FilterKey, string> = {
   type: 'Type',
   availability: 'Availability',
   city: 'City',
+  hairType: 'Hair Type',
+  practice: 'How They Work',
 };
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
@@ -239,17 +255,7 @@ const AVAILABILITY_INFO: Partial<Record<ProviderAvailabilityStatus, { label: str
   limited:   { label: 'Slots Limited',   color: '#FF9500' },
 };
 
-// Short label for the price/location meta line's third segment — the card
-// is already tight (name, category pill, rating, price/location,
-// availability badge), so this rides the existing text row rather than
-// adding a new pill/row. Mirrors BUSINESS_TYPE_LABEL in
-// ProviderProfileScreen.tsx for the same info shown consistently there.
-const BUSINESS_TYPE_LABEL: Record<'salon' | 'studio' | 'home_based' | 'mobile', string> = {
-  salon: 'Salon',
-  studio: 'Studio',
-  home_based: 'Home Studio',
-  mobile: 'Mobile',
-};
+
 
 // ── Provider Card — vertical, sits two-up in the results grid ──────────────────
 const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) => {
@@ -299,9 +305,22 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
               {[
                 provider.priceRange ? formatPriceRange(provider.priceRange) : null,
                 provider.location || null,
-                provider.businessType ? BUSINESS_TYPE_LABEL[provider.businessType] : null,
               ].filter(Boolean).join(' · ')}
             </Text>
+            {provider.businessType ? (
+              <View
+                style={styles.businessTypeIcon}
+                accessible
+                accessibilityRole="image"
+                accessibilityLabel={BUSINESS_TYPE_LABEL[provider.businessType]}
+              >
+                <Ionicons
+                  name={BUSINESS_TYPE_ICON[provider.businessType] as keyof typeof Ionicons.glyphMap}
+                  size={14}
+                  color={P.sub}
+                />
+              </View>
+            ) : null}
           </View>
 
           {availInfo && (
@@ -447,6 +466,9 @@ export default function SearchScreen({ navigation, route }: Props) {
       // Resolved separately once the batched RPC returns — see
       // providersWithAvailability below.
       availability: null,
+      walkInsWelcome: p.walk_ins_welcome ?? false,
+      groupBookingsAvailable: p.group_bookings_available ?? false,
+      veganCrueltyFree: p.vegan_cruelty_free ?? false,
     };
   }, []);
 
@@ -615,6 +637,29 @@ export default function SearchScreen({ navigation, route }: Props) {
     }));
   }, [providersWithAvailability, priceRangeByProviderId]);
 
+  // Hair-type matches — only fetched while the filter is actually active
+  // (unlike price range, which every card shows), since most searches never
+  // need it.
+  const [hairTypeMatchIds, setHairTypeMatchIds] = useState<Set<string> | null>(null);
+
+  React.useEffect(() => {
+    const hairType = activeFilters.hairType;
+    if (!hairType) {
+      setHairTypeMatchIds(null);
+      return;
+    }
+    const ids = providerData.map(p => p.providerId);
+    if (ids.length === 0) {
+      setHairTypeMatchIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    getProviderHairTypeMatches(ids, hairType)
+      .then(set => { if (!cancelled) setHairTypeMatchIds(set); })
+      .catch(() => { if (!cancelled) setHairTypeMatchIds(new Set()); });
+    return () => { cancelled = true; };
+  }, [providerData, activeFilters.hairType]);
+
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
   // above); rating/price/distance/service-type/availability/sort narrow that
@@ -650,8 +695,23 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.distance && activeFilters.distance < 999) {
       list = list.filter(p => p.distanceMiles != null && p.distanceMiles <= activeFilters.distance!);
     }
-    if (activeFilters.city) {
-      list = list.filter(p => p.serviceLocations.includes(activeFilters.city!));
+    if (activeFilters.city?.length) {
+      list = list.filter(p => activeFilters.city!.some(c => p.serviceLocations.includes(c)));
+    }
+    if (activeFilters.hairType) {
+      // Same "don't claim a match until the batched lookup has answered" rule
+      // as Available Now above — hairTypeMatchIds is null while unresolved.
+      if (!hairTypeMatchIds) return [];
+      list = list.filter(p => hairTypeMatchIds.has(p.providerId));
+    }
+    if (activeFilters.walkInsWelcome) {
+      list = list.filter(p => p.walkInsWelcome);
+    }
+    if (activeFilters.groupBookingsAvailable) {
+      list = list.filter(p => p.groupBookingsAvailable);
+    }
+    if (activeFilters.veganCrueltyFree) {
+      list = list.filter(p => p.veganCrueltyFree);
     }
 
     if (activeFilters.sortBy === 'rating') {
@@ -665,7 +725,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading]);
+  }, [providersWithPriceRange, activeFilters, availabilityLoading, hairTypeMatchIds]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -679,6 +739,17 @@ export default function SearchScreen({ navigation, route }: Props) {
       // type previously couldn't be individually cleared except via Reset.
       const isReselect = JSON.stringify(prev[key]) === JSON.stringify(value);
       return { ...prev, [key]: isReselect ? DEFAULT_FILTER_OPTIONS[key] : value };
+    });
+  }, []);
+
+  // CityMultiSelect manages its own multi-select state and hands back the
+  // full next array directly — the single-value reselect-to-clear logic in
+  // updateFilter above doesn't apply here.
+  const updateCityFilter = useCallback((next: string[]) => {
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveFilters(prev => {
+      const { city: _city, ...rest } = prev;
+      return next.length ? { ...rest, city: next } : rest;
     });
   }, []);
 
@@ -741,6 +812,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // The 'view' interaction is tracked once, by ProviderProfileScreen itself
     // on load — tracking it again here double-counted every visit.
+    prefetchProviderBySlug(provider.id);
     navigation.navigate('ProviderProfile', { providerId: provider.id, source: 'search' });
   }, [navigation]);
 
@@ -776,8 +848,20 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (activeFilters.availableOnly) {
       chips.push({ key: 'availableOnly', label: 'Available now' });
     }
-    if (activeFilters.city) {
-      chips.push({ key: 'city', label: activeFilters.city });
+    if (activeFilters.city?.length) {
+      chips.push({ key: 'city', label: activeFilters.city.join(', ') });
+    }
+    if (activeFilters.hairType) {
+      chips.push({ key: 'hairType', label: activeFilters.hairType });
+    }
+    if (activeFilters.walkInsWelcome) {
+      chips.push({ key: 'walkInsWelcome', label: 'Walk-ins welcome' });
+    }
+    if (activeFilters.groupBookingsAvailable) {
+      chips.push({ key: 'groupBookingsAvailable', label: 'Group bookings' });
+    }
+    if (activeFilters.veganCrueltyFree) {
+      chips.push({ key: 'veganCrueltyFree', label: 'Vegan / cruelty-free' });
     }
     return chips;
   }, [activeFilters]);
@@ -1091,20 +1175,79 @@ export default function SearchScreen({ navigation, route }: Props) {
               <View style={styles.filterSectionHead}>
                 <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.city}</Text>
               </View>
-              <View style={[styles.pillGrid, styles.pillGridLast]}>
-                {CITY_OPTIONS.map(city => {
-                  const isActive = activeFilters.city === city;
+              <View style={styles.pillGrid}>
+                <CityMultiSelect
+                  selected={activeFilters.city ?? []}
+                  onChange={updateCityFilter}
+                  palette={P}
+                  placeholder="Any city"
+                />
+              </View>
+
+              <View style={styles.filterSectionHead}>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.hairType}</Text>
+              </View>
+              <View style={styles.pillGrid}>
+                {HAIR_TYPES.map(type => {
+                  const isActive = activeFilters.hairType === type;
                   return (
                     <TouchableOpacity
-                      key={city}
+                      key={type}
                       style={[styles.filterPill, { borderColor: P.border, backgroundColor: P.surface }, isActive && { backgroundColor: P.accent, borderColor: P.accent }]}
-                      onPress={() => updateFilter('city', city)}
+                      onPress={() => updateFilter('hairType', type)}
                       activeOpacity={0.75}
                     >
-                      <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{city}</Text>
+                      <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{type}</Text>
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+
+              {/* How They Work — practice-level self-toggling pills, same
+                  lone-pill-per-boolean pattern as Available Now above. */}
+              <View style={styles.filterSectionHead}>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.practice}</Text>
+              </View>
+              <View style={[styles.pillGrid, styles.pillGridLast]}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterPill,
+                    { borderColor: P.border, backgroundColor: P.surface },
+                    activeFilters.walkInsWelcome && { backgroundColor: P.accent, borderColor: P.accent },
+                  ]}
+                  onPress={() => updateFilter('walkInsWelcome', !activeFilters.walkInsWelcome)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.filterPillText, { color: activeFilters.walkInsWelcome ? P.onAccent : P.text }]}>
+                    Walk-ins welcome
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterPill,
+                    { borderColor: P.border, backgroundColor: P.surface },
+                    activeFilters.groupBookingsAvailable && { backgroundColor: P.accent, borderColor: P.accent },
+                  ]}
+                  onPress={() => updateFilter('groupBookingsAvailable', !activeFilters.groupBookingsAvailable)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.filterPillText, { color: activeFilters.groupBookingsAvailable ? P.onAccent : P.text }]}>
+                    Group bookings
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.filterPill,
+                    { borderColor: P.border, backgroundColor: P.surface },
+                    activeFilters.veganCrueltyFree && { backgroundColor: P.accent, borderColor: P.accent },
+                  ]}
+                  onPress={() => updateFilter('veganCrueltyFree', !activeFilters.veganCrueltyFree)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.filterPillText, { color: activeFilters.veganCrueltyFree ? P.onAccent : P.text }]}>
+                    Vegan / cruelty-free
+                  </Text>
+                </TouchableOpacity>
               </View>
             </ScrollView>
             <TouchableOpacity
@@ -1490,6 +1633,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 10,
     fontWeight: '600',
+    // Shrinks so a long price/location string ellipsizes within the card.
+    flexShrink: 1,
+  },
+  businessTypeIcon: {
+    marginLeft: 4,
   },
   availBadge: {
     flexDirection: 'row',

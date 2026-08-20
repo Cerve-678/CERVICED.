@@ -13,7 +13,7 @@ export type ServiceCategory =
 
 export type BookingStatus =
   | 'pending' | 'confirmed' | 'in_progress'
-  | 'completed' | 'cancelled' | 'no_show';
+  | 'completed' | 'cancelled' | 'no_show' | 'provider_no_show';
 
 export type PaymentType = 'full' | 'deposit';
 
@@ -24,7 +24,7 @@ export type NotificationType =
   | 'booking_pending'    | 'booking_confirmed'  | 'booking_declined'
   | 'booking_cancelled'  | 'booking_reminder'   | 'booking_in_progress'
   | 'booking_not_started'
-  | 'no_show'            | 'payment_success'    | 'new_provider'
+  | 'no_show'            | 'provider_no_show'   | 'payment_success'    | 'new_provider'
   | 'reschedule_request' | 'reschedule_provider_response' | 'reschedule_confirmed'
   | 'reschedule_declined'
   | 'review_request'     | 'review_received'    | 'promotion'
@@ -41,7 +41,8 @@ export type NotificationType =
   | 'post_appt_check_in'    // provider's automated post-appointment check-in (client-facing)
   | 'rebooking_nudge'       // "it's been a while" nudge to rebook (client-facing)
   | 'daily_recap'           // provider's automated today's-schedule summary (provider-facing)
-  | 'schedule_fully_booked'; // provider's whole calendar has no openings in their alert window (provider-facing)
+  | 'schedule_fully_booked' // provider's whole calendar has no openings in their alert window (provider-facing)
+  | 'pending_booking_reminder'; // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
 
 export type NotificationPriority = 'high' | 'medium' | 'low';
 
@@ -142,9 +143,22 @@ export interface DbProvider {
     depositNote?: string;
     noShowAction?: string;
     noShowNote?: string;
+    /** Client must pay the deposit — no "pay in full" choice at checkout.
+     *  Always mirrors depositRequired; see InfoRegScreen's setPolicy. */
+    depositOnly?: boolean;
+    /** Free-text disclosure only — this app has no refund-processing infra
+     *  and never calculates/enforces a refund automatically. */
+    refundPolicyNote?: string;
+    /** Minutes past the booked start time before "No Show" can be marked. */
+    noShowGraceMinutes?: string;
+    /** Stamped onto every new booking, shown to clients in booking details. */
+    bookingInstructions?: string;
     /** Optional photo of a fuller policy document, shown to clients via a
      *  pop-up on their profile view (see ProviderProfileScreen). */
     policyImageUrl?: string;
+    /** Waitlist candidate-selection strategy — see InfoRegScreen's
+     *  ProviderPolicies.waitlistSelectionMethod for the full explanation. */
+    waitlistSelectionMethod?: string;
   } | null;
   business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
   // full_address is deliberately NOT here. It moved to provider_private_details
@@ -170,6 +184,32 @@ export interface DbProvider {
   // geocodable business-address string, not a coverage list.
   service_locations: string[] | null;
   preferred_payment_methods: string[] | null;
+  // ── Practice details ────────────────────────────────────────────────────
+  // Added by supabase/provider_practice_details_columns.sql, which promoted
+  // these out of device-local AsyncStorage ('@provider_extras') so they
+  // survive reinstall and can actually reach clients.
+  //
+  // patch_test_policy is health-adjacent — clients need it BEFORE booking.
+  // is_insured_self_declared / dbs_checked_self_declared are provider
+  // SELF-ATTESTATIONS that Cerviced does not verify; never render them to a
+  // client as a platform-verified credential.
+  patch_test_policy: 'always' | 'new_clients' | 'optional' | 'not_needed' | null;
+  qualifications: string | null;
+  is_insured_self_declared: boolean;
+  dbs_checked_self_declared: boolean;
+  travel_radius: string | null;
+  clientele: string[] | null;
+  // Provider-level hair types catered to (HAIR_TYPES vocabulary — Straight,
+  // Wavy, Curly, Coily, 4A, 4B, 4C). NULL/empty = caters to all. This is what
+  // the client Search "Hair Type" filter matches on; services.hair_types_
+  // suitable below is the narrower per-service refinement.
+  hair_types_catered: string[] | null;
+  availability_windows: string[] | null;
+  accepts_new_clients: 'yes' | 'waitlist' | 'no' | null;
+  walk_ins_welcome: boolean;
+  group_bookings_available: boolean;
+  products_used: string | null;
+  vegan_cruelty_free: boolean;
   auto_accept_bookings: boolean;
   max_bookings_per_day: number;
   booking_window_days: number;
@@ -188,6 +228,13 @@ export interface DbProvider {
     waitlistEnabled?: boolean;
     autoAcceptWaitlist?: boolean;
     depositRequiredNew?: boolean;
+    /** Daily 07:00 provider recap push. Read by
+     *  process_provider_daily_recap() (pg_cron job `provider-daily-recap`),
+     *  which gates on
+     *  COALESCE((automation_settings->>'newBookingRecap')::BOOLEAN, TRUE).
+     *  Because that COALESCE defaults to TRUE, a MISSING key means "send" —
+     *  so this must always be written, not omitted when false. */
+    newBookingRecap?: boolean;
     /** Day of month (1-31) this provider releases/redoes their schedule.
      *  Read by process_follow_schedule_release_nudges() (provider_follow_
      *  notify_cron.sql) to notify provider_follows rows with
@@ -244,6 +291,9 @@ export interface DbService {
   patch_test_required: boolean;
   min_age: number | null;
   contraindications: string[] | null;
+  // Hair types this service suits (HAIR_TYPES vocabulary — Straight, Wavy,
+  // Curly, Coily, 4A, 4B, 4C). NULL/empty = suits all hair types.
+  hair_types_suitable: string[] | null;
   // Context
   aftercare_notes: string | null;
   service_type: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | null;
@@ -257,6 +307,14 @@ export interface DbServiceImage {
   service_id: string;
   url: string;
   sort_order: number;
+  /**
+   * width/height of the image at `url`, measured at upload time.
+   * NULL for rows created before this column existed (and for any upload
+   * whose measurement failed) — callers must treat null as "unknown" and
+   * measure the file themselves rather than substituting a default, since a
+   * guessed ratio is what makes a landscape photo render in a portrait box.
+   */
+  aspect_ratio: number | null;
 }
 
 export interface DbServiceAddOn {
@@ -547,14 +605,83 @@ export interface DbTransaction {
 
 // ── Joined / enriched types used by the app ─────────────
 
-/** Provider with its services and add-ons — used by ProviderProfileScreen */
-export interface ProviderWithServices extends DbProvider {
-  services: (DbService & {
-    images: DbServiceImage[];
-    add_ons: DbServiceAddOn[];
+/**
+ * Public, client-facing provider profile payload.
+ *
+ * Keep this as an explicit projection rather than extending DbProvider. The
+ * providers table also contains operational/provider-only columns, and a
+ * `.select('*')` here would silently expose every future column to browsing
+ * clients. The query in getProviderBySlug must stay in lock-step with this
+ * allow-list.
+ */
+export type ProviderWithServices = Pick<
+  DbProvider,
+  | 'id'
+  | 'slug'
+  | 'display_name'
+  | 'service_category'
+  | 'custom_service_type'
+  | 'location_text'
+  | 'about_text'
+  | 'logo_url'
+  | 'gradient'
+  | 'accent_color'
+  | 'background_image_url'
+  | 'profile_theme'
+  | 'phone'
+  | 'email'
+  | 'instagram'
+  | 'website'
+  | 'preferred_contact_methods'
+  | 'whatsapp_number'
+  | 'external_booking_url'
+  | 'rating'
+  | 'years_experience'
+  | 'is_verified'
+  | 'booking_policies'
+  | 'business_type'
+  | 'online_consultations_available'
+  | 'cancellation_notice_hours'
+  | 'automation_settings'
+  | 'accessibility_notes'
+  | 'languages_spoken'
+  | 'qualifications'
+  | 'is_insured_self_declared'
+  | 'dbs_checked_self_declared'
+  | 'team_size'
+  | 'walk_ins_welcome'
+  | 'group_bookings_available'
+  | 'vegan_cruelty_free'
+  | 'travel_radius'
+  | 'products_used'
+  | 'hair_types_catered'
+> & {
+  services: (Pick<
+    DbService,
+    | 'id'
+    | 'category_name'
+    | 'category_description'
+    | 'name'
+    | 'description'
+    | 'price'
+    | 'duration_minutes'
+    | 'is_active'
+    | 'sort_order'
+    | 'is_pregnancy_safe'
+    | 'patch_test_required'
+    | 'min_age'
+    | 'contraindications'
+    | 'aftercare_notes'
+    | 'service_type'
+  > & {
+    images: Pick<DbServiceImage, 'id' | 'url' | 'sort_order' | 'aspect_ratio'>[];
+    add_ons: Pick<
+      DbServiceAddOn,
+      'id' | 'name' | 'price' | 'description' | 'is_active'
+    >[];
   })[];
-  specialties: DbProviderSpecialty[];
-}
+  specialties: Pick<DbProviderSpecialty, 'specialty'>[];
+};
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {
@@ -568,7 +695,7 @@ export interface DiscoverServiceWithProvider {
   name: string;
   description: string | null;
   price: number;
-  service_images: Pick<DbServiceImage, 'url' | 'sort_order'>[];
+  service_images: Pick<DbServiceImage, 'url' | 'sort_order' | 'aspect_ratio'>[];
   provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url' | 'rating' | 'review_count'>;
 }
 

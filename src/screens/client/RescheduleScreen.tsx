@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { useAppDialog } from '../../components/AppDialog';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useBooking, AvailableDate } from '../../contexts/BookingContext';
 import {
@@ -22,6 +23,8 @@ import {
 } from '../../services/databaseService';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import { formatLongDate, formatTime12, dateToYMD } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
+import { toUserMessage } from '../../utils/userFacingError';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -101,6 +104,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
   const { palette: C, isDarkMode } = useTheme();
+  const { showConfirm, showAlert, DialogHost } = useAppDialog();
   const {
     todayBookings, upcomingBookings, pastBookings,
     requestReschedule, confirmReschedule, declineReschedule,
@@ -333,8 +337,40 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           `You already have a reschedule request in for this booking. Waiting for ${booking.providerName} to respond.`,
           [{ text: 'OK', onPress: () => navigation.goBack() }],
         );
+      } else if (err?.code === 'P0001' && /notice to reschedule/i.test(err?.message ?? '')) {
+        // request_reschedule_own_booking() gates on the EXISTING booking's
+        // proximity to now (see isPastNoticeWindow above), which should have
+        // blocked this screen before the picker ever rendered. Reaching this
+        // means the client-side reschedulePolicy fetch was stale/slower than
+        // the notice window lapsing between screen-open and submit — show
+        // the same friendly framing as that blocking screen instead of the
+        // raw Postgres message, then bounce back since no chip here can work.
+        Alert.alert(
+          'Too Close to Reschedule',
+          `${booking.providerName} requires more notice than this appointment now has left. Message them directly if you need to change it.`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+      } else if (err?.message === 'No bookings found in storage') {
+        // Local cache is out of sync with the server (the booking was resolved
+        // or removed elsewhere). "storage" is a developer term — never show it.
+        Alert.alert(
+          'Booking No Longer Available',
+          "This booking isn't available anymore. Pull down to refresh your bookings.",
+          [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
+        );
+      } else if (
+        err?.message === 'Only upcoming bookings can be rescheduled' ||
+        err?.message === 'That time has just been taken. Please pick another slot.' ||
+        /^You can reschedule again in /.test(err?.message ?? '') ||
+        /has just been taken\. Please pick another day\.$/.test(err?.message ?? '')
+      ) {
+        // These messages are already written for clients — safe to show as-is.
+        Alert.alert("Can't Reschedule", toUserMessage(err, 'That time is no longer available. Please pick another.', 'RescheduleScreen.submit'));
       } else {
-        Alert.alert('Reschedule Failed', err?.message || 'Something went wrong. Please try again.');
+        // Anything else is unexpected/technical — devs see the real reason in
+        // the logs; the client sees a calm, non-technical line.
+        logger.error('[Reschedule] failed:', err);
+        Alert.alert('Reschedule Failed', "We couldn't reschedule that just now. Please try again.");
       }
     } finally {
       setIsSubmitting(false);
@@ -344,7 +380,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   const handleDecline = useCallback(() => {
     if (!booking) return;
     const groupSuffix = isGroupReschedule ? ` This applies to all ${groupSiblings.length} of your services with them.` : '';
-    Alert.alert(
+    showConfirm(
       'Decline These Times?',
       `None of these will work? ${booking.providerName} will be notified and your original appointment time stays as-is.${groupSuffix}`,
       [
@@ -362,7 +398,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               }
               navigation.goBack();
             } catch (err: any) {
-              Alert.alert('Could Not Decline', err?.message || 'Something went wrong. Please try again.');
+              showAlert('Could Not Decline', err?.message || 'Something went wrong. Please try again.');
             } finally {
               setIsDeclining(false);
             }
@@ -370,7 +406,16 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         },
       ],
     );
-  }, [booking, declineReschedule, declineGroupReschedule, isGroupReschedule, groupSiblings, navigation]);
+  }, [booking, declineReschedule, declineGroupReschedule, isGroupReschedule, groupSiblings, navigation, showConfirm, showAlert]);
+
+  // Keep this hook above every early return. `booking` is initially absent
+  // while route/context state hydrates, so calling it only after that loading
+  // return breaks React's hook ordering on the next render.
+  const hoursUntilBooking = useMemo(() => {
+    if (!booking) return null;
+    const start = new Date(`${booking.bookingDate}T${booking.bookingTime}`);
+    return (start.getTime() - Date.now()) / (1000 * 60 * 60);
+  }, [booking]);
 
   if (!booking) {
     return (
@@ -386,6 +431,17 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   }
 
   const hasProviderResponse = !!booking.rescheduleRequest?.providerAvailableDates;
+  // request_reschedule_own_booking() (supabase/booking_rules_server_enforcement.sql)
+  // gates on how soon the EXISTING booking starts, not on which destination
+  // time is picked — so once the current appointment is inside the
+  // provider's notice window, every chip in the picker below is doomed
+  // before it's tapped, and this device had no way to know that until the
+  // RPC round-tripped a raw P0001. Only applies to the client-request path:
+  // if the provider has already offered specific slots (hasProviderResponse),
+  // they've already worked around their own notice policy by choosing to
+  // offer those times, so this doesn't gate that path.
+  const noticeHours = reschedulePolicy?.rescheduleNoticeHours ?? 0;
+  const isPastNoticeWindow = !hasProviderResponse && noticeHours > 0 && hoursUntilBooking !== null && hoursUntilBooking < noticeHours;
   const selectedDateOption = dateOptions.find(d => d.date === selectedDate);
   // A request is already on file and the provider hasn't responded yet.
   // Previously this state wasn't checked here at all — the picker/submit UI
@@ -422,6 +478,34 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             navigation.popTo('Bookings');
           }} activeOpacity={0.7}>
             <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Back to Bookings</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </ThemedBackground>
+    );
+  }
+
+  if (isPastNoticeWindow) {
+    return (
+      <ThemedBackground>
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }} edges={['bottom', 'left', 'right']}>
+          <Ionicons name="time-outline" size={40} color={C.sub} />
+          <Text style={{ fontSize: 18, fontWeight: '800', color: C.text, textAlign: 'center', marginTop: 16, marginBottom: 8 }}>
+            Too Close to Reschedule
+          </Text>
+          <Text style={{ fontSize: 14, color: C.sub, textAlign: 'center', lineHeight: 20, marginBottom: 8 }}>
+            {booking.providerName} requires {noticeHours} hours notice to reschedule, and this appointment is coming up too soon.
+          </Text>
+          <View style={[st.currentDateBadge, { backgroundColor: C.card, borderColor: C.border, marginTop: 8 }]}>
+            <Ionicons name="calendar-outline" size={14} color={C.sub} />
+            <Text style={[st.currentDateText, { color: C.sub }]}>
+              {formatDisplayDate(booking.bookingDate)} at {formatTime12(booking.bookingTime)}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, color: C.sub, textAlign: 'center', lineHeight: 19, marginTop: 20 }}>
+            Message {booking.providerName} directly if you need to change this appointment.
+          </Text>
+          <TouchableOpacity style={[st.primaryBtn, { backgroundColor: C.accent, width: '100%', marginTop: 28 }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Go Back</Text>
           </TouchableOpacity>
         </SafeAreaView>
       </ThemedBackground>
@@ -789,6 +873,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           )}
         </View>
       </SafeAreaView>
+      <DialogHost />
     </ThemedBackground>
   );
 }

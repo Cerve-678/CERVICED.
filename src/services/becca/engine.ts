@@ -938,11 +938,28 @@ const NUMERIC_TOKEN_RE = /£?\d[\d,.]*(?<![.,])%?/g;
 function verifyComposition(rewritten: string, source: string): boolean {
   // A rewrite that balloons is a sign the model started explaining rather
   // than presenting. Cheap structural guard before the token work.
-  if (rewritten.length > source.length * 2 + 200) return false;
+  if (rewritten.length > source.length * 2 + 200) {
+    if (__DEV__) {
+      console.warn("[becca:compose] rewrite rejected", {
+        reason: "rewrite-too-long",
+        rewrittenLength: rewritten.length,
+        sourceLength: source.length,
+      });
+    }
+    return false;
+  }
 
   const sourceNumbers = new Set(source.match(NUMERIC_TOKEN_RE) ?? []);
   for (const token of rewritten.match(NUMERIC_TOKEN_RE) ?? []) {
-    if (!sourceNumbers.has(token)) return false;
+    if (!sourceNumbers.has(token)) {
+      if (__DEV__) {
+        console.warn("[becca:compose] rewrite rejected", {
+          reason: "numeric-token-not-in-source",
+          token,
+        });
+      }
+      return false;
+    }
   }
 
   const plain = (value: string) => value.replace(/[*_`#>-]/g, " ");
@@ -964,7 +981,16 @@ function verifyComposition(rewritten: string, source: string): boolean {
   );
   for (const word of midSentence.match(/\b[A-Z][A-Za-z'’-]{1,}/g) ?? []) {
     if (COMMON_CAPITALS.has(word.toLowerCase())) continue;
-    if (!sourceWords.has(word.toLowerCase())) return false;
+    if (!sourceWords.has(word.toLowerCase())) {
+      if (__DEV__) {
+        // Do not log the word itself: it may be a provider/client name.
+        console.warn("[becca:compose] rewrite rejected", {
+          reason: "capitalised-token-not-in-source",
+          tokenLength: word.length,
+        });
+      }
+      return false;
+    }
   }
   return true;
 }

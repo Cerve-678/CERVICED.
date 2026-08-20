@@ -7,6 +7,21 @@ export const BUSINESS_TYPE_LABEL: Record<NonNullable<ProviderProfileData['busine
   mobile: 'Mobile',
 };
 
+/**
+ * Business type is shown as an icon rather than its words wherever it sits in
+ * a dense meta line (search cards, the profile header) — the labels are long
+ * relative to the space and were crowding out price/location. The label map
+ * above is still the source of the accessible name for each glyph, so the two
+ * can never describe different things; keep them in sync when adding a value.
+ * These use the consistent outline set from Expo Ionicons.
+ */
+export const BUSINESS_TYPE_ICON: Record<NonNullable<ProviderProfileData['businessType']>, string> = {
+  salon: 'flower-outline',
+  studio: 'business-outline',
+  home_based: 'home-outline',
+  mobile: 'car-outline',
+};
+
 /** Formats a service duration for the client profile. */
 export function formatServiceDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;

@@ -6,6 +6,7 @@
 // booking already selected. See BECCA_CAPABILITIES.md §2.1.
 
 import { BookingStatus, type ConfirmedBooking } from "../../../types/booking";
+import type { DbProvider } from "../../../types/database";
 import {
   dateToYMD,
   formatShortDate,
@@ -841,12 +842,27 @@ const findProviders: Capability = {
   // request for images even without the word "looks" in it.
   excludeWhen: /\b(?:looks?|inspo|inspiration|ideas?|photos?|pictures?|pics|gallery|portfolio|examples?|soft glam|full glam|glam look|makeup look|bridal look)\b/i,
   needs: [{ kind: "service", required: true }],
-  async run({ entities }): Promise<CapabilityResult> {
+  async run({ entities, rawMessage }): Promise<CapabilityResult> {
     const service = entities.service!.value;
     const label = service.specific ?? CATEGORY_LABELS[service.category] ?? service.category.toLowerCase();
     const priceFilter = entities.money?.value;
 
-    const dbProviders = await getProviders(service.category);
+    let dbProviders = await getProviders(service.category);
+
+    // Simple keyword → provider-column matching, same ad-hoc shape as the
+    // price filter above rather than a new entity-resolver abstraction —
+    // these are plain provider-level booleans, not a general concept that
+    // needs scoring against other capabilities.
+    const practiceFilters: { keywords: RegExp; matches: (p: DbProvider) => boolean; label: string }[] = [
+      { keywords: /\bwalk[\s-]?in/i, matches: (p) => !!p.walk_ins_welcome, label: "walk-ins welcome" },
+      { keywords: /\bgroup\s?(booking|appointment)/i, matches: (p) => !!p.group_bookings_available, label: "group bookings" },
+      { keywords: /\bvegan\b|\bcruelty[\s-]?free\b/i, matches: (p) => !!p.vegan_cruelty_free, label: "vegan/cruelty-free" },
+    ];
+    const activePracticeFilters = practiceFilters.filter((f) => f.keywords.test(rawMessage));
+    if (activePracticeFilters.length > 0) {
+      dbProviders = dbProviders.filter((p) => activePracticeFilters.every((f) => f.matches(p)));
+    }
+
     let providers = dbProviders.map(providerFromDb);
 
     if (priceFilter && dbProviders.length > 0) {
@@ -871,19 +887,23 @@ const findProviders: Capability = {
     }
 
     const priceSuffix = priceFilter ? ` ${entities.money!.label}` : "";
+    const practiceSuffix = activePracticeFilters.length > 0
+      ? ` that ${activePracticeFilters.length === 1 ? "is" : "are"} ${activePracticeFilters.map((f) => f.label).join(" and ")}`
+      : "";
 
     if (providers.length === 0) {
       return {
-        text: `I couldn't find any ${label} providers${priceSuffix}. Want to try a different angle?`,
+        text: `I couldn't find any ${label} providers${priceSuffix}${practiceSuffix}. Want to try a different angle?`,
         suggestions: [
           ...(priceFilter ? [askChip("nofilter", "Try without the budget", `Find ${label}`)] : []),
+          ...(activePracticeFilters.length > 0 ? [askChip("noPractice", "Try without that filter", `Find ${label}`)] : []),
           askChip("browse", "Browse everything", "Show me all services"),
         ],
       };
     }
 
     return {
-      text: `I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}.`,
+      text: `I found **${providers.length} ${label} provider${providers.length !== 1 ? "s" : ""}**${priceSuffix}${practiceSuffix}.`,
       providers: providers.slice(0, 12),
       suggestions: [
         askChip("free", "Who's free soon?", `Which ${label} providers are free this week?`),

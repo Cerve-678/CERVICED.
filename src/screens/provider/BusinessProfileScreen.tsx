@@ -105,7 +105,7 @@ export default function BusinessProfileScreen({ navigation }: any) {
             <SettingsOption
               icon="badge"
               title="Business Details"
-              subtitle="Business name, Instagram, website, contact"
+              subtitle="Identity, practice, credentials & accessibility"
               onPress={() => navigation.navigate('BusinessDetails')}
               P={P}
             />

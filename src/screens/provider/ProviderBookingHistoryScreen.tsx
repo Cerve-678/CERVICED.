@@ -30,11 +30,12 @@ import {
   getProviderConversations,
   updateBookingStatus,
   updateGroupBookingStatus,
+  getActiveRescheduleRequestsForBookings,
   type WaitlistEntry,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../contexts/BookingContext';
 import { mapDbBookingStatus, BookingStatus } from '../../types/booking';
-import type { BookingWithAddOns } from '../../types/database';
+import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../../types/database';
 import { logger } from '../../utils/logger';
 import { formatTime12, formatShortDate, formatLongDate, dateToYMD } from '../../utils/dateUtils';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
@@ -341,6 +342,11 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
   const [historyFilter, setHistoryFilter] = useState<HistoryFilterKey>('all');
   const [waitlist, setWaitlist]         = useState<WaitlistEntry[]>([]);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  // Client-requested reschedules still awaiting the provider's response
+  // (status 'pending' — distinct from 'provider_responded', which is
+  // awaiting the CLIENT). Keyed by booking_id so each row can look up its
+  // booking for the client/service name.
+  const [pendingRescheduleRequests, setPendingRescheduleRequests] = useState<Record<string, DbBookingRescheduleRequest>>({});
   const [providerDbId, setProviderDbId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
 
@@ -365,7 +371,19 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
     // cleared out by the auto-complete/expire-stale-pending cron, so a
     // windowed fetch would silently hide real history. Request everything,
     // same opt-in getProviderBookings() gives ProviderAnalyticsScreen.
-    try { setBookings(await getProviderBookings(Infinity)); } catch {}
+    try {
+      const rows = await getProviderBookings(Infinity);
+      setBookings(rows);
+      // Batched .in() lookup over every loaded booking id — same pattern
+      // BookingContext's loadBookings uses client-side — rather than a
+      // per-booking await in a loop.
+      const requests = await getActiveRescheduleRequestsForBookings(rows.map(b => b.id));
+      const pending: Record<string, DbBookingRescheduleRequest> = {};
+      for (const [bookingId, req] of Object.entries(requests)) {
+        if (req.status === 'pending') pending[bookingId] = req;
+      }
+      setPendingRescheduleRequests(pending);
+    } catch {}
   }, []);
 
   const fetchWaitlist = useCallback(async () => {
@@ -411,11 +429,20 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
 
   const pendingCount  = useMemo(() => bookings.filter(b => mapDbBookingStatus(b.status) === BookingStatus.PENDING).length, [bookings]);
   const waitlistCount = useMemo(() => waitlist.filter(e => e.status === 'waiting').length, [waitlist]);
+  const rescheduleRequestCount = useMemo(() => Object.keys(pendingRescheduleRequests).length, [pendingRescheduleRequests]);
+  // Booking rows the reschedule-request rows below link to, keyed by id —
+  // a request whose booking fell out of the loaded ledger (shouldn't happen,
+  // but the fetch is a separate round-trip) is skipped rather than crashing.
+  const rescheduleRequestRows = useMemo(() => {
+    return Object.values(pendingRescheduleRequests)
+      .map(req => ({ req, booking: bookings.find(b => b.id === req.booking_id) }))
+      .filter((r): r is { req: DbBookingRescheduleRequest; booking: BookingWithAddOns } => !!r.booking);
+  }, [pendingRescheduleRequests, bookings]);
 
   const counts = useMemo(() => ({
-    todo:    pendingCount + waitlistCount + unreadMessages,
+    todo:    pendingCount + waitlistCount + unreadMessages + rescheduleRequestCount,
     history: bookings.filter(b => isHistoryStatus(b.status)).length,
-  }), [pendingCount, waitlistCount, unreadMessages, bookings]);
+  }), [pendingCount, waitlistCount, unreadMessages, rescheduleRequestCount, bookings]);
 
   // Collapse group-booking siblings (same client, same group_booking_id,
   // same tab) into one card — a provider's own multi-service group booking
@@ -598,13 +625,18 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={s.devBtn}
-            onPress={() => navigation.navigate('DevSettings')}
-            activeOpacity={0.8}
-          >
-            <Text style={s.devBtnText}>DEV</Text>
-          </TouchableOpacity>
+          {/* Debug-only entry point. The client-side equivalent (BookingsScreen)
+              has always been __DEV__-gated; this one was not, so release builds
+              showed real providers a DEV button opening destructive reset tools. */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={s.devBtn}
+              onPress={() => navigation.navigate('DevSettings')}
+              activeOpacity={0.8}
+            >
+              <Text style={s.devBtnText}>DEV</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Tabs — plain underline indicator (not SlidingTabs' filled
@@ -638,10 +670,10 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
             showsVerticalScrollIndicator={false}
             contentContainerStyle={[
               s.listContent,
-              unreadMessages === 0 && waitlist.length === 0 && items.length === 0 && s.listCentered,
+              unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 && s.listCentered,
             ]}
           >
-            {unreadMessages === 0 && waitlist.length === 0 && items.length === 0 ? (
+            {unreadMessages === 0 && rescheduleRequestRows.length === 0 && waitlist.length === 0 && items.length === 0 ? (
               <View style={s.emptyWrap}>
                 <Ionicons name="checkmark-done-outline" size={44} color={P.faint} style={{ marginBottom: 12 }} />
                 <Text style={[s.emptyTitle, { color: P.text }]}>Nothing here</Text>
@@ -668,9 +700,50 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
                   </TouchableOpacity>
                 )}
 
+                {rescheduleRequestRows.length > 0 && (
+                  <>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: 0 }]}>RESCHEDULE REQUESTS</Text>
+                    {rescheduleRequestRows.map(({ req, booking }) => (
+                      <TouchableOpacity
+                        key={req.id}
+                        style={[wl.card, { backgroundColor: P.card, marginBottom: 10 }, !dark && bc.shadow]}
+                        activeOpacity={0.75}
+                        onPress={() => navigation.navigate('BookingDetail', {
+                          bookingId: booking.id,
+                          booking: mapDbBookingToConfirmed(booking),
+                          openReschedule: true,
+                        })}
+                      >
+                        <View style={wl.cardTop}>
+                          <View style={[wl.avatar, { backgroundColor: P.tile }]}>
+                            <Ionicons name="calendar-outline" size={16} color={P.text} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[wl.clientName, { color: P.text }]} numberOfLines={1}>
+                              {booking.customer_name ?? 'Client'}
+                            </Text>
+                            <Text style={[wl.serviceName, { color: P.sub }]} numberOfLines={1}>
+                              {booking.service_name_snapshot}
+                            </Text>
+                          </View>
+                          <View style={[wl.posBadge, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                            <Text style={[wl.posBadgeText, { color: '#FF9500' }]}>Awaiting response</Text>
+                          </View>
+                        </View>
+                        <Text style={[wl.preferredDates, { color: P.sub }]}>
+                          Was {formatShortDate(req.original_date)} at {formatTime12(req.original_time)}
+                          {req.requested_dates && req.requested_dates.length > 0
+                            ? ` — client asked for ${req.requested_dates.length > 1 ? `${req.requested_dates.length} alternatives` : formatShortDate(req.requested_dates[0]!)}`
+                            : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                )}
+
                 {waitlist.length > 0 && (
                   <>
-                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: 0 }]}>WAITLIST</Text>
+                    <Text style={[wl.popupLabel, { color: P.sub, marginTop: (unreadMessages > 0 || rescheduleRequestRows.length > 0) ? 8 : 0 }]}>WAITLIST</Text>
                     {waitlist.map(entry => (
                       <View key={entry.id} style={[wl.card, { backgroundColor: P.card, marginBottom: 10 }, !dark && bc.shadow]}>
                         <View style={wl.cardTop}>

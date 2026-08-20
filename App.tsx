@@ -26,6 +26,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { storage, STORAGE_KEYS } from './src/utils/storage';
 import { useBookmarkStore } from './src/stores/useBookmarkStore';
 import { initSentry } from './src/lib/sentry';
+import { installAuthErrorFilter } from './src/utils/logger';
 import * as Sentry from '@sentry/react-native';
 import { env } from './src/utils/env';
 
@@ -72,6 +73,7 @@ Sentry.init({
 
 // Initialise crash reporting as early as possible (no-ops without a DSN).
 initSentry();
+installAuthErrorFilter();
 
 SplashScreen.preventAutoHideAsync();
 

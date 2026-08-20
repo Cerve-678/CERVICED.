@@ -34,6 +34,7 @@ export const CLIENT_PROFILE_SCREENS = new Set([
 
 export const PROVIDER_PUSH_NAV: Record<string, string> = {
   schedule: "ProviderSchedule",
+  bookingRules: "Scheduling",
   clients: "Clientele",
   messages: "ProviderInbox",
   conversation: "ProviderConversation",

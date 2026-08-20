@@ -298,10 +298,10 @@ export function stripRichText(content: string): string {
 export function ChatBubble({ message }: ChatBubbleProps) {
   const { palette: P } = useTheme();
   const isUser = message.role === 'user';
-  // Not every acknowledgement needs the full editorial treatment. Longer
-  // answers (and answers that arrive with a clear `##` takeaway) become a
-  // small feature card; quick conversational turns stay light and direct.
-  const isEditorial = message.content.length > 130 || /^##\s+/m.test(message.content);
+  // Only a deliberate `##` heading earns a stronger visual treatment. A
+  // long answer should still read like a conversation, rather than turning
+  // its opening sentence into an oversized headline.
+  const isEditorial = /^##\s+/m.test(message.content);
   const editorialCopy = isEditorial ? splitEditorialCopy(message.content) : null;
 
   if (isUser) {
@@ -687,6 +687,8 @@ interface ChatInputProps {
   onChangeText: (text: string) => void;
   onSend: () => void;
   onImagePick: () => void;
+  onStopTyping?: () => void;
+  isReplyTyping?: boolean;
   placeholder?: string;
   hasImage?: boolean;
 }
@@ -696,6 +698,8 @@ export function ChatInput({
   onChangeText,
   onSend,
   onImagePick,
+  onStopTyping,
+  isReplyTyping = false,
   placeholder = 'Ask me anything...',
   hasImage = false,
 }: ChatInputProps) {
@@ -708,6 +712,11 @@ export function ChatInput({
   };
 
   const handleSend = () => {
+    if (isReplyTyping) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      onStopTyping?.();
+      return;
+    }
     if (!canSend) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     onSend();
@@ -739,12 +748,21 @@ export function ChatInput({
         />
 
         <TouchableOpacity
-          style={[styles.sendButton, { backgroundColor: canSend ? P.accent : P.card }]}
+          style={[
+            styles.sendButton,
+            { backgroundColor: isReplyTyping || canSend ? P.accent : P.card },
+          ]}
           onPress={handleSend}
-          disabled={!canSend}
+          disabled={!isReplyTyping && !canSend}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={isReplyTyping ? "Stop Becca typing" : "Send message"}
         >
-          <Text style={[styles.sendButtonText, { color: canSend ? P.onAccent : P.sub }]}>↑</Text>
+          {isReplyTyping ? (
+            <Ionicons name="stop" size={15} color={P.onAccent} />
+          ) : (
+            <Text style={[styles.sendButtonText, { color: canSend ? P.onAccent : P.sub }]}>↑</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -839,13 +857,14 @@ const styles = StyleSheet.create({
   },
   bubbleListText: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
+    // Lists are body copy. Individual labels, names and values can still use
+    // **bold** markers, but weighting every line made Becca sound shouty.
+    fontWeight: '500',
   },
-  // User text remains lighter and conversational. Becca's factual answers
-  // need more presence across the full sentence, not only in the first
-  // bolded phrase, so the assistant gets the heavier Jura axis throughout.
+  // Keep assistant copy conversational. `bubbleBold` handles the few names,
+  // figures and action labels that genuinely need emphasis.
   assistantText: {
-    fontWeight: '600',
+    fontWeight: '500',
   },
   cardTime: {
     fontFamily: 'Jura-VariableFont_wght',

@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { getProviderBookings, getMyProviderReviews, getMyBookmarkCount } from '../../services/databaseService';
+import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type { BookingWithAddOns, ReviewWithUser } from '../../types/database';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { formatShortDate } from '../../utils/dateUtils';
@@ -104,7 +105,10 @@ function Reveal({
     Animated.timing(anim, {
       toValue: 1,
       duration: 480,
-      delay: index * 70,
+      // Capped so later sections (Rating Analytics, Recent Activity) don't
+      // keep pushing further out as more cards are added above them — the
+      // stagger should read as a quick ripple, not a growing wait.
+      delay: Math.min(index, 5) * 70,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -550,7 +554,7 @@ function RecentStream({
                   <Text style={[stream.price, { color: theme.text }]}>£{total.toFixed(2)}</Text>
                 </View>
                 <Text style={[stream.client, { color: theme.secondaryText }]} numberOfLines={1}>
-                  {b.customer_name ?? '—'} · {formatShortDate(b.booking_date)}
+                  {b.customer_name?.trim() || 'Client'} · {formatShortDate(b.booking_date)}
                 </Text>
               </View>
             </PressScale>
@@ -1440,7 +1444,7 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
                 dark={dark}
                 theme={theme}
                 onPress={b =>
-                  navigation.navigate('BookingDetail', { bookingId: b.id, booking: b })
+                  navigation.navigate('BookingDetail', { bookingId: b.id, booking: mapDbBookingToConfirmed(b) })
                 }
               />
             </Reveal>

@@ -27,6 +27,7 @@ import {
   getProviderBlockedDates,
   addProviderBlockedDate,
   removeProviderBlockedDate,
+  getProviderBookingsByDate,
   getProviderAvailabilityOverrides,
   addProviderAvailabilityOverride,
   removeProviderAvailabilityOverride,
@@ -123,7 +124,7 @@ function formatYMD(ymd: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ProviderScheduleScreen() {
   const navigation = useNavigation();
-  const { showToast, DialogHost } = useProviderDialog();
+  const { showToast, showConfirm, DialogHost } = useProviderDialog();
   const insets = useSafeAreaInsets();
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -317,6 +318,35 @@ export default function ProviderScheduleScreen() {
         showToast('This date is already blocked.', 'info');
         return;
       }
+      const existingBookings = await getProviderBookingsByDate(providerId, ymd);
+      if (existingBookings.length > 0) {
+        setAddingBlock(false);
+        showConfirm(
+          existingBookings.length === 1
+            ? 'You have 1 booking on this date'
+            : `You have ${existingBookings.length} bookings on this date`,
+          'Blocking this date will not cancel or notify the client(s). You’ll need to handle those bookings yourself.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Block anyway',
+              style: 'destructive',
+              onPress: () => { void commitBlockDate(providerId, ymd); },
+            },
+          ],
+        );
+        return;
+      }
+      await commitBlockDate(providerId, ymd);
+    } catch {
+      showToast('Could not block date. Please try again.', 'error');
+      setAddingBlock(false);
+    }
+  }
+
+  async function commitBlockDate(providerId: string, ymd: string) {
+    setAddingBlock(true);
+    try {
       await addProviderBlockedDate(providerId, ymd, blockReason.trim() || null);
       setBlockReason('');
       const updated = await getProviderBlockedDates(providerId);

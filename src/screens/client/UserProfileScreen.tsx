@@ -174,7 +174,7 @@ export default function UserProfileScreen({ navigation }: any) {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: P.sub }]}>Account Management</Text>
             <SettingsOption icon="chat" title="Messages" subtitle="Chats with your providers" onPress={() => navigation.navigate('Messages')} palette={P} />
-            <SettingsOption icon="user" title="Profile Info" subtitle="Name, phone" onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
+            <SettingsOption icon="user" title="Account" subtitle="Name, phone, date of birth" onPress={() => navigation.navigate('ProfileInfo')} palette={P} />
             <SettingsOption icon="heart" title="Beauty Profile" subtitle="Hair, skin, interests" onPress={() => navigation.navigate('BeautyProfile')} palette={P} />
             <SettingsOption icon="lock" title="Change Password" subtitle="Update credentials" onPress={() => navigation.navigate('ChangePassword')} palette={P} />
             <SettingsOption icon="payment" title="Payment Methods" subtitle="Cards, Apple Pay" onPress={() => navigation.navigate('PaymentMethods')} palette={P} />

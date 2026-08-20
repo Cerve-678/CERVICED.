@@ -5,6 +5,7 @@ import NotificationsScreen from "../../../screens/shared/NotificationsScreen";
 import ProviderBookingDetailScreen from "../../../screens/provider/ProviderBookingDetailScreen";
 import DevSettingsScreen from "../../../screens/shared/DevSettingsScreen";
 import ProviderScheduleScreen from "../../../screens/provider/ProviderScheduleScreen";
+import SchedulingScreen from "../../../screens/provider/SchedulingScreen";
 import AddBookingScreen from "../../../screens/provider/AddBookingScreen";
 import ProviderClienteleScreen from "../../../screens/provider/ProviderClienteleScreen";
 import ProviderInboxScreen from "../../../screens/provider/ProviderInboxScreen";
@@ -70,6 +71,15 @@ export default function ProviderBeccaNavigator() {
       <ProviderBeccaStack.Screen
         name="ProviderSchedule"
         component={ProviderScheduleScreen}
+        options={{ headerShown: false, presentation: "card" }}
+      />
+
+      {/* Booking rules owns the daily booking cap. It is registered here so
+          Becca can push straight to the editable control and Back returns to
+          the conversation that offered it. */}
+      <ProviderBeccaStack.Screen
+        name="Scheduling"
+        component={SchedulingScreen}
         options={{ headerShown: false, presentation: "card" }}
       />
 

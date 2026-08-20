@@ -134,6 +134,10 @@ Provider sees bookings grouped by staff member, not just by time. Each staff mem
 
 Don't add a client-facing "choose your stylist" screen until the underlying staff assignment logic works. The client experience is optional and can come after the backend is solid.
 
+### Related surface-level ask, deliberately not built (2026-08-19)
+
+A request came in to show team member names on a provider's public profile (next to the existing solo/small-team/large-team pill). Declined as a display-only change — `team_size` is currently just a self-reported label with no `staff_members` rows behind it, and the booking/availability system has no concept of an individual staff member at all (see above). Adding names without the underlying `staff_members` table + per-staff availability would create data that looks structured but isn't backed by anything — a team name with no way to book that specific person, no per-person schedule, nothing. Do this properly as part of the Multi-Staff feature above, not as a quick add-a-column-and-a-text-field job.
+
 ---
 
 ## Payment Processing (Stripe)
@@ -430,6 +434,163 @@ More than you'd expect, which is why this is a "finish it" item rather than a "b
 ### Related
 
 Found during the 2026-08-18 Becca capability audit. Flagged rather than removed — the read side is deliberate groundwork for a planned feature, not dead code to delete.
+
+---
+
+## Scheduled promotion notification cadence
+
+### What it means
+
+`process_scheduled_promotion_notifications()` (pg_cron jobid 64) runs every 15
+minutes and is the **single most expensive job on the database** — 300 seconds of
+CPU across 3,534 calls over 43 days, out of ~1,595s for all 12 `process_*` jobs
+combined.
+
+### Why it wasn't trimmed with the others
+
+The 2026-08-18 cron trim (`supabase/cron_reminder_frequency_trim.sql`) slowed five
+provider reminder jobs from 30m to 2h and two background queues from 5m to 15m.
+Promotions was pulled out of that change on user instruction.
+
+**Important context found afterwards:** promotions are already disabled app-wide.
+`OFFERS_ENABLED` in `src/constants/featureFlags.ts` has gated every client and
+provider entry point since 2026-08-09 (see "Offers / Promotions — deferred"
+above). Live data confirms the consequence:
+
+- 3 promotions total, newest created **2026-07-11** — none since the flag went off
+- **0** promotion notifications sent in the last 9 days
+
+So jobid 64 currently wakes up every 15 minutes to poll for scheduled promotions
+that **cannot be created through the UI**. It is the single most expensive job on
+the database and, for as long as the feature flag is off, it does nothing at all.
+
+This makes the decision easier than originally framed. The "acceptable delay"
+product question only matters once promotions are re-enabled. While
+`OFFERS_ENABLED` is false, the job could be paused outright
+(`cron.alter_job(64, active => false)`) with zero user-visible effect, recovering
+the full ~300s per 43 days — the largest single saving available.
+
+The reason to be careful is coupling, not delay: pausing the job ties a cron
+schedule to a feature flag in a way nothing currently tracks, so whoever flips
+`OFFERS_ENABLED` back on must also reactivate jobid 64 or scheduled promotions
+will silently never notify. That's the trade-off to weigh — a silent-failure risk
+at re-enable time, versus 300s of CPU spent on a disabled feature.
+
+### The underlying cost is planning, not execution
+
+Worth knowing before anyone tries to "optimize the query": these jobs are slow to
+*plan*, not to *run*. Measured on the equivalent reminder function:
+
+    Execution Time:   0.129 ms
+    Planning Time:   99.656 ms   (949 buffer hits)
+
+Indexes are already correct and the queries return zero rows on almost every
+tick. plpgsql re-plans against a large catalog on each call. **No index or query
+rewrite will help** — frequency is the only lever. See the auto-memory
+`cron-reminder-jobs-planning-cost`.
+
+### What needs to happen
+
+- **Decide whether to pause jobid 64 while `OFFERS_ENABLED` is false.** If yes,
+  `cron.alter_job(64, active => false)` recovers ~300s per 43 days immediately —
+  but it MUST be re-activated in the same change that flips the flag back on.
+  Note that alongside it in `src/constants/featureFlags.ts` so the two move together.
+- If promotions are re-enabled: a product call on how stale a scheduled promotion
+  may be before it notifies. If 30 minutes is acceptable, apply
+  `cron.alter_job(64, schedule => '7,37 * * * *')` for roughly half the saving.
+- If it isn't acceptable, the alternative is making the function cheaper to call
+  rather than calling it less — e.g. an early-exit guard that checks a cheap
+  indexed predicate before the main body, so the expensive statements are never
+  reached on an empty tick.
+- Either way, re-measure `total_plan_time` vs `total_exec_time` in
+  `pg_stat_statements` afterwards rather than assuming the change helped.
+
+### Related
+
+Found during the 2026-08-18 CPU investigation, which established that this
+database is CPU-constrained (68%) and not disk-IO-constrained (45%) — see the
+auto-memory `db-constraint-is-cpu-not-disk-io`. Deferred rather than applied
+because the trade-off is a product judgement, not an engineering one.
+
+---
+
+## Swipeable Stacked-Card Portfolio (Explore-Plan Feature)
+
+### What it means
+
+A Tinder-style physical-stack browsing mode for portfolio photos — top card
+full-size, one or two cards peeking behind it, drag the top card off to
+reveal the next photo — as an alternative to the flat Pinterest-style
+two-column masonry grid. Prototyped on `ProviderProfileScreen.tsx`'s
+Portfolio/Venue sections during the 2026-08-19 session, then reverted back
+to the masonry grid; this section is the record of what was built and what
+it would take to bring it back properly, scoped as part of the Explore plan
+rather than a one-off screen change.
+
+### What currently happens
+
+Portfolio photos on a provider's profile render as a two-column masonry
+grid (`dealIntoColumns` in `ProviderProfileScreen.tsx`), items packed into
+whichever column is shorter with per-item tile height from the item's
+`aspect_ratio`. Tapping a tile opens the existing lightweight fullscreen
+image viewer (`serviceImageModal` state + `openImageViewer`/`FlatList`
+paging — not `ImageDetailModal`, which is a different, richer modal used
+elsewhere for Explore cards). Venue/address photos get their own identical
+grid in a separate labeled section below the main gallery.
+
+### What was prototyped, and why it was reverted
+
+A `PortfolioCardStack` component (`src/components/PortfolioCardStack.tsx`,
+deleted on revert) replaced both grids with a swipeable deck:
+
+- Top card full-size + up to 2 peeking cards behind (offset up, scaled
+  down), all cards sharing one box height derived from the **median real
+  aspect ratio** across the visible items — reusing
+  `useMeasuredAspectRatios` (the same hook `ImageDetailModal` uses for its
+  own multi-photo carousel) plus `portfolio_items.aspect_ratio`, since a
+  stacked deck can't resize per-card without visibly jumping between
+  swipes.
+- `PanResponder`-driven drag: horizontal drag translates/rotates the top
+  card; past a distance or velocity threshold it flies off and the deck
+  cycles (swiped photo rejoins the back of the deck — pure browse, no
+  removal). A tap instead of a drag opens the same fullscreen viewer the
+  grid tiles used.
+- The peek layers eased forward via a shared `dragProgress` Animated.Value
+  driven live by drag distance (not a snap between two fixed poses), so the
+  card behind visibly grows/rises as the top card is dragged away.
+- A `size="compact"` variant existed for the Venue section (62% width,
+  left-aligned) so venue photos read as smaller/secondary to the main
+  portfolio deck.
+
+Reverted at the user's request — the masonry grid is back as the current
+behavior — but not because the mechanism was wrong; the fundamentals
+(median-ratio shared box height so `cover` never zoom-crops, native-driven
+animation throughout, live-interpolated peek layers instead of a snap) are
+worth carrying forward if/when this gets rebuilt.
+
+### What needs to exist to do this properly (Explore-plan scope)
+
+- **Swipe-to-save/skip as a real gesture**, not just browse-only cycling —
+  explicitly deferred during the prototype: "swipe to save will be in the
+  future ... or scale for [the] Explore plan feature." This turns the deck
+  from a passive viewer into an actual save/dismiss interaction, which
+  changes the gesture contract (direction now means something) and needs
+  its own UX pass — likely tied into `useBookmarkStore` the way
+  `PortfolioCard.tsx`'s heart button already is.
+- **Decide scope**: is this an Explore-feed browsing mode (swiping through
+  many providers' photos, closer to what "Explore plan" implies) or a
+  per-provider profile portfolio view (what was actually prototyped)? The
+  prototype was profile-scoped; a save/skip gesture arguably makes more
+  sense feed-wide, where "skip" has an obvious meaning (not interested,
+  show me something else) that it doesn't have on a single provider's own
+  portfolio (skipping your own already-chosen provider's photo means what,
+  exactly?). This should be settled before rebuilding.
+- On-device verification of the drag physics — this was never actually run
+  in the simulator/on a device this session (see auto-memory
+  `simulator-no-tap-automation`), only typechecked and reasoned about; the
+  "stiff" and "wrong image sizing" feedback that led to the mid-session fix
+  is exactly the kind of thing that needs a real device pass, not just
+  `tsc --noEmit`, before shipping.
 
 ---
 

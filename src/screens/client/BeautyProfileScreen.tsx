@@ -19,6 +19,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { useAppDialog } from '../../components/AppDialog';
 import { supabase } from '../../lib/supabase';
 import { upsertUserBeautyProfile } from '../../services/databaseService';
+import { logger } from '../../utils/logger';
 import {
   type BeautyData,
   type CategoryKey,
@@ -31,10 +32,10 @@ import {
   CATEGORY_LABELS,
   type CategoryStats,
 } from '../../utils/beautyProfileStats';
+import { HAIR_TYPES } from '../../constants/hairTypes';
 
 // ── Option lists ────────────────────────────────────────────────────────────
 
-const HAIR_TYPES       = ['Straight', 'Wavy', 'Curly', 'Coily', '4A', '4B', '4C'];
 const SCALP_CONDITIONS = ['Healthy', 'Dry', 'Oily', 'Sensitive', 'Flaky'];
 const HAIR_GOALS       = ['Length retention', 'Volume', 'Colour / highlights', 'Moisture', 'Definition', 'Protective styling'];
 const SKIN_TYPES       = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'];
@@ -152,7 +153,7 @@ export default function BeautyProfileScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
-    const { error } = await supabase.auth.updateUser({
+    const { error: authError } = await supabase.auth.updateUser({
       data: {
         hair_type:           draft.hairType          || null,
         scalp_condition:     draft.scalpCondition    || null,
@@ -183,39 +184,48 @@ export default function BeautyProfileScreen({ navigation }: any) {
     });
 
     // Sync all beauty profile fields to users table so providers can read them.
-    // Uses upsert in case the users row doesn't exist yet.
+    // Uses upsert in case the users row doesn't exist yet. Awaited (not
+    // fire-and-forget) since this is the copy providers actually query —
+    // a silent failure here would desync health-adjacent data (allergies,
+    // medical notes) from what the client believes was saved.
+    let syncError: unknown = null;
     if (user?.id) {
-      upsertUserBeautyProfile(user.id, {
-        hair_type:           draft.hairType            || null,
-        scalp_condition:     draft.scalpCondition      || null,
-        hair_goals:          draft.hairGoals,
-        skin_type:           draft.skinType            || null,
-        skin_tone:           draft.skinTone            || null,
-        skin_concerns:       draft.skinConcerns,
-        sensitive_areas:     draft.sensitiveAreas,
-        nail_length:         draft.nailLength          || null,
-        nail_shape:          draft.nailShape           || null,
-        lash_style:          draft.lashStyle           || null,
-        lash_status:         draft.lashStatus          || null,
-        brow_style:          draft.browStyle           || null,
-        brow_condition:      draft.browCondition       || null,
-        makeup_coverage:     draft.makeupCoverage      || null,
-        makeup_finish:       draft.makeupFinish        || null,
-        makeup_eyes:         draft.makeupEyes          || null,
-        makeup_lips:         draft.makeupLips          || null,
-        allergies:           draft.allergies,
-        style_vibe:          draft.styleVibe           || null,
-        medical_notes:       draft.medicalNotes        || null,
-        photography_consent: draft.photographyConsent,
-        treatment_history:   draft.treatmentHistory,
-        service_interests:   draft.serviceInterests,
-        gender:              draft.gender              || null,
-        has_kids:            draft.has_kids,
-      }).then(() => {});
+      try {
+        await upsertUserBeautyProfile(user.id, {
+          hair_type:           draft.hairType            || null,
+          scalp_condition:     draft.scalpCondition      || null,
+          hair_goals:          draft.hairGoals,
+          skin_type:           draft.skinType            || null,
+          skin_tone:           draft.skinTone            || null,
+          skin_concerns:       draft.skinConcerns,
+          sensitive_areas:     draft.sensitiveAreas,
+          nail_length:         draft.nailLength          || null,
+          nail_shape:          draft.nailShape           || null,
+          lash_style:          draft.lashStyle           || null,
+          lash_status:         draft.lashStatus          || null,
+          brow_style:          draft.browStyle           || null,
+          brow_condition:      draft.browCondition       || null,
+          makeup_coverage:     draft.makeupCoverage      || null,
+          makeup_finish:       draft.makeupFinish        || null,
+          makeup_eyes:         draft.makeupEyes          || null,
+          makeup_lips:         draft.makeupLips          || null,
+          allergies:           draft.allergies,
+          style_vibe:          draft.styleVibe           || null,
+          medical_notes:       draft.medicalNotes        || null,
+          photography_consent: draft.photographyConsent,
+          treatment_history:   draft.treatmentHistory,
+          service_interests:   draft.serviceInterests,
+          gender:              draft.gender              || null,
+          has_kids:            draft.has_kids,
+        });
+      } catch (err) {
+        syncError = err;
+        logger.error('upsertUserBeautyProfile failed:', err);
+      }
     }
 
     setSaving(false);
-    if (error) {
+    if (authError || syncError) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       showAlert('Error', 'Couldn\'t save your profile. Please try again.');
     } else {

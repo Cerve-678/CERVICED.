@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
   Dimensions,
+  Easing,
   PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,7 +51,8 @@ import { OFFERS_ENABLED } from '../../constants/featureFlags';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
-const { width: SW } = Dimensions.get('window');
+const { width: SW, height: SH } = Dimensions.get('window');
+const ADD_SHEET_OFFSCREEN_Y = SH;
 
 const CP = { card: '#252220', border: 'rgba(126,102,103,0.18)' }; // static StyleSheet fallback
 
@@ -779,12 +781,13 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
   // Add-action sheet
   const [showAddSheet, setShowAddSheet] = useState(false);
-  const SHEET_H = 420;
-  const sheetY     = useRef(new Animated.Value(SHEET_H)).current;
+  // Use the viewport height, rather than the sheet's approximate height, so
+  // dismissal always carries the entire sheet off-screen before unmounting.
+  const sheetY     = useRef(new Animated.Value(ADD_SHEET_OFFSCREEN_Y)).current;
   const backdropOp = useRef(new Animated.Value(0)).current;
 
   const openSheet = useCallback(() => {
-    sheetY.setValue(SHEET_H);
+    sheetY.setValue(ADD_SHEET_OFFSCREEN_Y);
     backdropOp.setValue(0);
     setShowAddSheet(true);
     Animated.parallel([
@@ -795,8 +798,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
   const closeSheet = useCallback(() => {
     Animated.parallel([
-      Animated.timing(sheetY,     { toValue: SHEET_H, duration: 220, useNativeDriver: true }),
-      Animated.timing(backdropOp, { toValue: 0,        duration: 200, useNativeDriver: true }),
+      Animated.timing(sheetY,     { toValue: ADD_SHEET_OFFSCREEN_Y, duration: 480, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(backdropOp, { toValue: 0,        duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     ]).start(() => { setShowAddSheet(false); });
   }, [sheetY, backdropOp]);
 
@@ -814,14 +817,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     onPanResponderMove: (_, g) => {
       const dy = Math.max(0, g.dy - panStartDy.current);
       sheetY.setValue(dy);
-      backdropOp.setValue(Math.max(0, 1 - dy / SHEET_H));
+      backdropOp.setValue(Math.max(0, 1 - dy / ADD_SHEET_OFFSCREEN_Y));
     },
     onPanResponderRelease: (_, g) => {
       const dy = g.dy - panStartDy.current;
       if (dy > 80 || g.vy > 0.4) {
+        const remainingDistance = Math.max(0, ADD_SHEET_OFFSCREEN_Y - Math.max(0, dy));
+        const exitDuration = Math.max(280, Math.min(480, (remainingDistance / ADD_SHEET_OFFSCREEN_Y) * 480));
         Animated.parallel([
-          Animated.spring(sheetY,     { toValue: SHEET_H, velocity: g.vy, tension: 50, friction: 11, useNativeDriver: true }),
-          Animated.timing(backdropOp, { toValue: 0, duration: 180, useNativeDriver: true }),
+          Animated.timing(sheetY,     { toValue: ADD_SHEET_OFFSCREEN_Y, duration: exitDuration, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(backdropOp, { toValue: 0, duration: exitDuration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         ]).start(() => { setShowAddSheet(false); });
       } else {
         Animated.parallel([

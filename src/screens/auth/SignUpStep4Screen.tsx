@@ -21,10 +21,10 @@ import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
+import { HAIR_TYPES } from '../../constants/hairTypes';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep4'>;
 
-const HAIR_TYPES        = ['Straight', 'Wavy', 'Curly', 'Coily', '4A', '4B', '4C'];
 const SKIN_TYPES        = ['Normal', 'Oily', 'Dry', 'Combination', 'Sensitive'];
 const SKIN_CONCERNS     = ['Acne', 'Redness', 'Dry patches', 'Oiliness', 'Hyperpigmentation', 'Sensitivity', 'Fine lines', 'Uneven tone', 'None'];
 const STYLE_VIBES       = ['Natural', 'Glam', 'Minimal', 'Bold', 'Classic', 'Edgy', 'Soft', 'Trendy'];
@@ -246,8 +246,8 @@ export default function SignUpStep4Screen({ navigation }: Props) {
   const handleContinue = () => {
     if (isProvider) {
       const firstEmptyY =
-        !selectedBusinessType          ? businessTypeY :
         !selectedServices.length      ? servicesY :
+        !selectedBusinessType          ? businessTypeY :
         !selectedLocations.length     ? locationY :
         !selectedPriceRange           ? priceRangeY :
         !selectedTeamSize             ? teamSizeY :
@@ -459,21 +459,6 @@ export default function SignUpStep4Screen({ navigation }: Props) {
           </>
         ) : (
           <>
-            {/* Business type */}
-            <View onLayout={(e: LayoutChangeEvent) => { businessTypeY.current = e.nativeEvent.layout.y; }}>
-              <Text style={[styles.sectionLabel, { color: showErrors && !selectedBusinessType ? '#DC2626' : t.text }]}>
-                BUSINESS TYPE{showErrors && !selectedBusinessType ? '  — required' : ''}
-              </Text>
-              <Text style={[styles.sectionSub, { color: t.sub }]}>How do you run your business?</Text>
-              <View style={styles.chipsContainer}>
-                {BUSINESS_TYPES.map(({ v, l }) => (
-                  <TouchableOpacity key={v} style={chipStyle(selectedBusinessType === v)} onPress={() => pickBusinessType(v)} activeOpacity={0.6}>
-                    <Text style={chipTextStyle(selectedBusinessType === v)}>{l}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
             {/* Services you offer */}
             <View onLayout={(e: LayoutChangeEvent) => { servicesY.current = e.nativeEvent.layout.y; }}>
               <Text style={[styles.sectionLabel, { color: showErrors && !selectedServices.length ? '#DC2626' : t.text }]}>
@@ -484,6 +469,21 @@ export default function SignUpStep4Screen({ navigation }: Props) {
                 {SERVICE_CATEGORIES.map(category => (
                   <TouchableOpacity key={category} style={chipStyle(selectedServices.includes(category))} onPress={() => toggleService(category)} activeOpacity={0.6}>
                     <Text style={chipTextStyle(selectedServices.includes(category))}>{category}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Business type */}
+            <View onLayout={(e: LayoutChangeEvent) => { businessTypeY.current = e.nativeEvent.layout.y; }}>
+              <Text style={[styles.sectionLabel, { color: showErrors && !selectedBusinessType ? '#DC2626' : t.text }]}>
+                BUSINESS TYPE{showErrors && !selectedBusinessType ? '  — required' : ''}
+              </Text>
+              <Text style={[styles.sectionSub, { color: t.sub }]}>How do you run your business?</Text>
+              <View style={styles.chipsContainer}>
+                {BUSINESS_TYPES.map(({ v, l }) => (
+                  <TouchableOpacity key={v} style={chipStyle(selectedBusinessType === v)} onPress={() => pickBusinessType(v)} activeOpacity={0.6}>
+                    <Text style={chipTextStyle(selectedBusinessType === v)}>{l}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

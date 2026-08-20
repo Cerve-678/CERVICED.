@@ -4,6 +4,9 @@ import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
+// Only for getSize (reading an image's true pixel dimensions) — this service
+// renders nothing.
+import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
 import { setMyProviderFullAddress } from './databaseService';
 import type { DbProvider } from '../types/database';
@@ -38,6 +41,8 @@ export interface ServiceData {
   contraindications: string[];
   aftercareNotes: string;
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
+  // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
+  hairTypesSuitable: string[];
 }
 
 export interface ProviderRegistrationData {
@@ -46,13 +51,13 @@ export interface ProviderRegistrationData {
   customServiceType: string;
   location: string;
   aboutText: string;
-  slotsText: string;
-  /** Day of month (1-31) clients who've turned on the profile bell get
-   *  notified — set alongside slotsText so the message and its cadence stay
-   *  in one place rather than split across two screens. Stored in
+  /** Day of month (1-31) new slots go out AND clients who've turned on the
+   *  profile bell get notified. Drives the client-facing profile's "Slots
+   *  out every Nth of the month" pill directly (computed live, no separate
+   *  text field to keep in sync). Stored in
    *  providers.automation_settings.scheduleReleaseDay (merged in, not
    *  overwritten — that JSONB blob also holds unrelated settings owned by
-   *  ProviderAutomationsScreen). null = notifications off. */
+   *  ProviderAutomationsScreen). null = no release day set / notifications off. */
   scheduleReleaseDay: number | null;
   gradient: [string, string, ...string[]];
   // True only when `providers.gradient` was genuinely non-null in the DB —
@@ -276,6 +281,28 @@ export async function geocodeAndValidateUkAddress(
 // Upserts the provider row, uploads images, replaces services/images/add-ons.
 // Also updates the user's role to 'provider' and refreshes the AsyncStorage cache.
 
+/**
+ * A local or remote image's width/height ratio, or null if it can't be read.
+ *
+ * Never throws: a failed measurement must not be able to fail a provider's
+ * whole service save. Null means "not measured" and is stored as SQL NULL,
+ * which the client treats as "fall back to measuring this myself" rather
+ * than as a real ratio.
+ */
+function measureAspectRatio(uri: string): Promise<number | null> {
+  return new Promise(resolve => {
+    try {
+      RNImage.getSize(
+        uri,
+        (w, h) => resolve(w > 0 && h > 0 ? w / h : null),
+        () => resolve(null),
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 export async function saveProviderToSupabase(
   userId: string,
   data: ProviderRegistrationData,
@@ -294,12 +321,35 @@ export async function saveProviderToSupabase(
     data.fullAddressCoordinates,
   );
 
-  // 1. Upload logo if it's a local file
+  // 1. Upload logo if it's a local file. Path is versioned with Date.now()
+  // (matching the pattern already used for portfolio/promotions uploads)
+  // rather than a fixed `${userId}/logo.jpg` — a fixed path with upsert:true
+  // overwrites the same object, so the public URL is byte-identical across
+  // re-uploads and RN Image/expo-image/Supabase's CDN all keep serving the
+  // old cached bytes for that URL indefinitely.
   let logoUrl: string | null = data.logo;
+  let previousLogoStoragePath: string | null = null;
   if (data.logo && isLocalUri(data.logo)) {
+    // Grab the current logo path before it's replaced, so the now-orphaned
+    // object (versioned paths are no longer overwritten in place) can be
+    // cleaned up below once the new one is safely saved.
+    const { data: providerForLogo } = await supabase
+      .from('providers')
+      .select('logo_url')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (providerForLogo?.logo_url) {
+      try {
+        previousLogoStoragePath = new URL(providerForLogo.logo_url).pathname
+          .split('/provider-logos/')[1] ?? null;
+      } catch {
+        previousLogoStoragePath = null;
+      }
+    }
+
     logoUrl = await uploadToStorage(
       'provider-logos',
-      `${userId}/logo.jpg`,
+      `${userId}/logo-${Date.now()}.jpg`,
       data.logo
     );
   }
@@ -371,7 +421,6 @@ export async function saveProviderToSupabase(
         latitude,
         longitude,
         about_text: data.aboutText,
-        slots_text: data.slotsText,
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
@@ -419,7 +468,6 @@ export async function saveProviderToSupabase(
         latitude,
         longitude,
         about_text: data.aboutText,
-        slots_text: data.slotsText,
         logo_url: logoUrl,
         gradient: data.gradient,
         accent_color: data.accentColor,
@@ -447,6 +495,19 @@ export async function saveProviderToSupabase(
       .single();
     if (error) throw new Error(`Provider insert failed: ${error.message}`);
     providerId = newProvider.id;
+  }
+
+  // Now that the new logo_url is durably saved, remove the old versioned
+  // object it replaced — best-effort, never blocks the save. Without this,
+  // every logo re-upload leaves the previous object orphaned in Storage
+  // forever, since versioned paths (unlike the old fixed path) are never
+  // overwritten in place.
+  if (previousLogoStoragePath) {
+    try {
+      await supabase.storage.from('provider-logos').remove([previousLogoStoragePath]);
+    } catch {
+      // Orphaned object, not a failed save — safe to ignore.
+    }
   }
 
   // The street address lives in the owner-only provider_private_details table,
@@ -478,15 +539,36 @@ export async function saveProviderToSupabase(
       const svc = services[sortOrder];
       if (!svc) continue;
 
-      const images: { url: string; sort_order: number }[] = [];
+      const images: {
+        url: string;
+        sort_order: number;
+        aspect_ratio: number | null;
+      }[] = [];
       for (let i = 0; i < svc.images.length; i++) {
         const imgUri = svc.images[i];
         if (!imgUri) continue;
         let imgUrl = imgUri;
         if (isLocalUri(imgUri)) {
-          imgUrl = await uploadToStorage('service-images', `${userId}/${safeCat}-${sortOrder}-${i}.jpg`, imgUri);
+          // Versioned with Date.now() for the same reason as the logo path
+          // above — a fixed per-slot path would make a replaced photo's URL
+          // identical to the old one and never bust the image cache.
+          imgUrl = await uploadToStorage('service-images', `${userId}/${safeCat}-${sortOrder}-${i}-${Date.now()}.jpg`, imgUri);
         }
-        images.push({ url: imgUrl, sort_order: i });
+        // Measured off the LOCAL uri where there is one — it's already on
+        // disk, so this needs no network round-trip and can't be affected by
+        // the upload. Falls back to the resolved remote URL for an image
+        // that was already uploaded on a previous save.
+        //
+        // Stored so Explore's masonry grid and ImageDetailModal can size
+        // this photo's box to its real shape. Without it the client has to
+        // measure every service photo itself on each feed load (see
+        // useMeasuredAspectRatios), and until that resolves the card renders
+        // at a hardcoded 0.8 placeholder — which is what put landscape
+        // photos in portrait boxes. Null on failure rather than a guessed
+        // default, so "unknown" stays distinguishable from a real square.
+        const aspect_ratio =
+          (await measureAspectRatio(imgUri)) ?? (await measureAspectRatio(imgUrl));
+        images.push({ url: imgUrl, sort_order: i, aspect_ratio });
       }
 
       servicesPayload.push({
@@ -510,6 +592,7 @@ export async function saveProviderToSupabase(
         contraindications: svc.contraindications?.length ? svc.contraindications : null,
         aftercare_notes: svc.aftercareNotes || null,
         service_type: svc.serviceType || null,
+        hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
         images,
         add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
       });
@@ -580,6 +663,7 @@ export async function loadProviderFromSupabase(
         contraindications,
         aftercare_notes,
         service_type,
+        hair_types_suitable,
         service_images ( url, sort_order ),
         service_add_ons ( name, price )
       `)
@@ -641,6 +725,7 @@ export async function loadProviderFromSupabase(
       contraindications: svc.contraindications || [],
       aftercareNotes: svc.aftercare_notes || '',
       serviceType: svc.service_type || '',
+      hairTypesSuitable: svc.hair_types_suitable || [],
     });
   }
 
@@ -650,7 +735,6 @@ export async function loadProviderFromSupabase(
     customServiceType: provider.custom_service_type || '',
     location: provider.location_text || '',
     aboutText: provider.about_text || '',
-    slotsText: provider.slots_text || '',
     scheduleReleaseDay: provider.automation_settings?.scheduleReleaseDay ?? null,
     gradient: (provider.gradient || ['#FF6B6B', '#4ECDC4', '#45B7D1']) as [string, string, ...string[]],
     hasCustomGradient: !!(provider.gradient && provider.gradient.length >= 2),
@@ -690,16 +774,18 @@ export async function loadProviderFromSupabase(
 // ── Booking policies — saved to Supabase booking_policies column ─────────────
 
 export async function saveProviderPolicies(userId: string, policies: Record<string, unknown>): Promise<void> {
-  const { data: existing } = await supabase
+  const { data: existing, error: selectError } = await supabase
     .from('providers')
     .select('id')
     .eq('user_id', userId)
     .maybeSingle();
+  if (selectError) throw selectError;
   if (!existing) return;
-  await supabase
+  const { error: updateError } = await supabase
     .from('providers')
     .update({ booking_policies: policies })
     .eq('id', existing.id);
+  if (updateError) throw updateError;
   // Keep local copy in sync
   await AsyncStorage.setItem(`provider_policies_${userId}`, JSON.stringify(policies));
 }

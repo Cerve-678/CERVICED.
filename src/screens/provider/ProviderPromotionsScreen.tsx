@@ -42,6 +42,7 @@ import {
 import type { DbPromotion, ClienteleMember, DbService } from '../../types/database';
 import { supabase } from '../../lib/supabase';
 import { formatTime12 } from '../../utils/dateUtils';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -1422,7 +1423,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
 
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     } catch (e: any) {
-      showToast(e.message ?? 'Could not load promotions');
+      showToast(toUserMessage(e, 'Could not load promotions.', 'ProviderPromotionsScreen.load'));
     } finally {
       setLoading(false);
     }
@@ -1443,7 +1444,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
     try {
       await togglePromotion(id, active);
     } catch (e: any) {
-      showToast(e.message ?? 'Could not update promotion');
+      showToast(toUserMessage(e, 'Could not update that promotion.', 'ProviderPromotionsScreen.update'));
       setPromos(prev => prev.map(p => p.id === id ? { ...p, is_active: !active } : p));
     }
   }, [showToast]);
@@ -1455,7 +1456,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
         text: 'Delete', style: 'destructive', onPress: async () => {
           setPromos(prev => prev.filter(p => p.id !== id));
           try { await deletePromotion(id); }
-          catch (e: any) { showToast(e.message ?? 'Could not delete promotion'); load(); }
+          catch (e: any) { showToast(toUserMessage(e, 'Could not delete that promotion.', 'ProviderPromotionsScreen.delete')); load(); }
         },
       },
     ]);
@@ -1544,7 +1545,7 @@ export default function ProviderPromotionsScreen({ navigation }: any) {
         showToast(`Sent to ${sent} client${sent !== 1 ? 's' : ''}`);
       }
     } catch (e: any) {
-      showToast(e.message ?? 'Could not send notification');
+      showToast(toUserMessage(e, 'Could not send that notification.', 'ProviderPromotionsScreen.notify'));
     }
   }, [notifyPromo, showToast]);
 

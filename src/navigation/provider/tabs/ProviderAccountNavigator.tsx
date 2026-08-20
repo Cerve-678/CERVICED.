@@ -18,7 +18,13 @@ import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotio
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
-import ProviderBusinessEmailScreen from '../../../screens/provider/ProviderBusinessEmailScreen';
+import BusinessDetailsScreen from '../../../screens/provider/BusinessDetailsScreen';
+import BusinessInfoScreen from '../../../screens/provider/BusinessInfoScreen';
+import ServicesPricingScreen from '../../../screens/provider/ServicesPricingScreen';
+import AboutYouScreen from '../../../screens/provider/AboutYouScreen';
+import SchedulingScreen from '../../../screens/provider/SchedulingScreen';
+import PaymentsScreen from '../../../screens/provider/PaymentsScreen';
+import PoliciesScreen from '../../../screens/provider/PoliciesScreen';
 import ProviderCommunicationsScreen from '../../../screens/provider/ProviderCommunicationsScreen';
 import ProviderAutomationsScreen from '../../../screens/provider/ProviderAutomationsScreen';
 import BusinessProfileScreen from '../../../screens/provider/BusinessProfileScreen';
@@ -138,9 +144,49 @@ export default function ProviderAccountNavigator() {
         options={{ headerShown: false }}
       />
 
+      {/* Business Details is a hub; the sub-screens below each own a slice of
+          what used to be one 671-line screen. Scheduling and Payments were
+          added later, consolidating settings that had spread across
+          ServicesPricing and Automations. */}
       <ProviderAccountStack.Screen
         name="BusinessDetails"
-        component={ProviderBusinessEmailScreen}
+        component={BusinessDetailsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="BusinessInfo"
+        component={BusinessInfoScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="ServicesPricing"
+        component={ServicesPricingScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="AboutYou"
+        component={AboutYouScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Scheduling"
+        component={SchedulingScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Payments"
+        component={PaymentsScreen}
+        options={{ headerShown: false }}
+      />
+
+      <ProviderAccountStack.Screen
+        name="Policies"
+        component={PoliciesScreen}
         options={{ headerShown: false }}
       />
 

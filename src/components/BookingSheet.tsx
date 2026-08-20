@@ -20,7 +20,7 @@ import {
   UIManager,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
 import { AvailabilityService } from '../services/AvailabilityService';
@@ -214,6 +214,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   consultationRequired,
   onSubmit,
 }) => {
+  const insets = useSafeAreaInsets();
   const sheetBackground = backgroundColor;
   // Every other colour in this sheet (text/sub/border/surface) is derived
   // from its own backdrop too — nothing here reads the app's light/dark
@@ -520,7 +521,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           off the bottom of the visible sheet. */}
       <KeyboardDismissView style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: sheetBackground }]}>
-          <SafeAreaView style={styles.container}>
+          <SafeAreaView style={styles.container} edges={['bottom']}>
         <View style={[styles.header, { borderBottomColor: tokens.border }]}>
           {!isFirstStep && (
             <TouchableOpacity
@@ -557,7 +558,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           borderColor={tokens.border}
         />
 
-        <ScrollView ref={scrollRef} style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.body}
+          // The footer is pinned, so leave enough room to scroll the last
+          // field fully above it instead of letting it sit behind the CTA.
+          contentContainerStyle={[styles.bodyContent, { paddingBottom: 180 + insets.bottom }]}
+          showsVerticalScrollIndicator={false}
+        >
           {step === 'addons' ? (
             <View style={styles.section}>
               {availableAddOns.map(addOn => {
@@ -857,16 +865,28 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           )}
         </ScrollView>
 
-        <View style={[styles.footer, { borderTopColor: tokens.border, backgroundColor: sheetBackground }]}>
+        <View
+          style={[
+            styles.footer,
+            {
+              borderTopColor: tokens.border,
+              backgroundColor: sheetBackground,
+              // Keep the action above the home indicator / Android gesture
+              // bar, including on shorter devices where the modal reaches
+              // the very bottom of the display.
+              bottom: Math.max(16, insets.bottom + 16),
+            },
+          ]}
+        >
           {step === 'addons' ? (
             <TouchableOpacity
               style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }]}
               onPress={() => goToStep('when')}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Next: choose appointment time"
             >
-              <Text style={[styles.submitButtonText, { color: onAccentColor }]}>
-                {`Next${totalAddOnsPrice > 0 ? ` • +£${totalAddOnsPrice.toFixed(2)}` : ''}`}
-              </Text>
+              <Text style={[styles.submitButtonText, { color: onAccentColor }]}>Next</Text>
             </TouchableOpacity>
           ) : (
             <>
@@ -1008,7 +1028,13 @@ const styles = StyleSheet.create({
   paymentOptionText: { fontSize: 13, fontWeight: '600' },
   depositOnlyNotice: { fontSize: 13, lineHeight: 18 },
   depositRemainingText: { fontSize: 12, marginTop: 4 },
-  footer: { borderTopWidth: StyleSheet.hairlineWidth, padding: 20 },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    padding: 20,
+  },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   totalLabel: { fontFamily: 'BakbakOne-Regular', fontSize: 16 },
   totalPrice: { fontFamily: 'BakbakOne-Regular', fontSize: 20, fontWeight: 'bold' },
@@ -1021,8 +1047,22 @@ const styles = StyleSheet.create({
   summaryItemPrice: { fontSize: 14, fontWeight: '700' },
   summaryDivider: { height: StyleSheet.hairlineWidth, marginVertical: 8 },
   footerButtonRow: { flexDirection: 'row', gap: 10 },
-  submitButton: { borderRadius: 20, paddingVertical: 15, alignItems: 'center', flex: 1 },
+  submitButton: {
+    minHeight: 52,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
   doneButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
   submitButtonDisabled: { opacity: 0.5 },
-  submitButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 15, fontWeight: 'bold' },
+  submitButtonText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    fontWeight: 'bold',
+    lineHeight: 20,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
 });

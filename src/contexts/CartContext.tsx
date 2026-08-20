@@ -4,6 +4,26 @@ import { Alert } from 'react-native';
 import { logger } from '../utils/logger';
 import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { getProviderBySlug, getProviderIdByDisplayName } from '../services/databaseService';
+
+/**
+ * Resolve a cart item to a real provider UUID: carried providerId → slug lookup
+ * → display-name lookup. Returns null only when the provider genuinely can't be
+ * found (deleted / renamed / offline). Used to guarantee every cart item is
+ * linked to a bookable provider, so checkout never hits "couldn't link provider".
+ */
+async function resolveCartItemProviderId(p: {
+  providerId?: string | undefined;
+  providerSlug?: string | undefined;
+  providerName: string;
+}): Promise<string | null> {
+  if (p.providerId) return p.providerId;
+  if (p.providerSlug) {
+    const bySlug = await getProviderBySlug(p.providerSlug).catch(() => null);
+    if (bySlug?.id) return bySlug.id;
+  }
+  return getProviderIdByDisplayName(p.providerName).catch(() => null);
+}
 import { calculatePlatformFee } from '../features/cart/platformFee';
 
 // CartItem interface
@@ -143,7 +163,7 @@ export interface AddToCartParams {
  * splits the item back into a standalone booking).
  */
 export type CartItemUpdates = Partial<
-  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly'>
+  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly' | 'providerId'>
 > & {
   /** Explicitly `| undefined` (not just optional): under
    *  exactOptionalPropertyTypes, clearing the group requires passing the key
@@ -448,6 +468,36 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const stored = await storage.getItem<CartItem[]>(STORAGE_KEYS.CART_ITEMS);
         if (stored && stored.length > 0) {
           dispatch({ type: CartActionType.HYDRATE, payload: { items: stored } });
+          // State is now populated, so it's safe to allow persistence — and it
+          // must be on before the reconcile below, or the repaired/cleaned cart
+          // wouldn't be saved and the cleanup (and its notice) would repeat every
+          // launch until the user next changed the cart.
+          hydratedRef.current = true;
+
+          // Repair or drop any stored item that lost its provider link while the
+          // cart sat in storage (provider went offline, was renamed, or the item
+          // predates providerId). Items already carrying a providerId are trusted
+          // and skipped, so this is a no-op DB call in the common case.
+          const needLink = stored.filter(i => !i.providerId);
+          if (needLink.length > 0) {
+            const removedNames: string[] = [];
+            for (const it of needLink) {
+              const resolvedId = await resolveCartItemProviderId(it).catch(() => null);
+              if (resolvedId) {
+                dispatch({ type: CartActionType.UPDATE_ITEM, payload: { itemId: it.id, updates: { providerId: resolvedId } } });
+              } else {
+                dispatch({ type: CartActionType.REMOVE_ITEM, payload: { itemId: it.id } });
+                removedNames.push(it.providerDisplayName ?? it.providerName);
+              }
+            }
+            if (removedNames.length > 0) {
+              const names = [...new Set(removedNames)].join(', ');
+              Alert.alert(
+                'Some items removed',
+                `${names} ${removedNames.length > 1 ? 'are' : 'is'} no longer available, so we removed ${removedNames.length > 1 ? 'them' : 'it'} from your cart.`
+              );
+            }
+          }
         }
       } catch (error) {
         logger.error('Failed to restore cart:', error);
@@ -489,7 +539,25 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [state.items]);
 
   const addToCart = useCallback((item: AddToCartParams) => {
-    dispatch({ type: CartActionType.ADD_ITEM, payload: item });
+    // Common path: the caller already has the provider's UUID — add instantly.
+    if (item.providerId) {
+      dispatch({ type: CartActionType.ADD_ITEM, payload: item });
+      return;
+    }
+    // No providerId yet — resolve to a real provider BEFORE adding, so a cart
+    // item can never reach checkout unlinked. If the provider genuinely can't be
+    // found, don't add a dead item; tell the user gently instead.
+    (async () => {
+      const resolvedId = await resolveCartItemProviderId(item).catch(() => null);
+      if (resolvedId) {
+        dispatch({ type: CartActionType.ADD_ITEM, payload: { ...item, providerId: resolvedId } });
+      } else {
+        Alert.alert(
+          'Provider unavailable',
+          `${item.providerDisplayName ?? item.providerName} isn't available to book right now. Please try again from their profile a little later.`
+        );
+      }
+    })();
   }, []);
 
   const addServiceInstance = useCallback((baseItem: CartItem) => {

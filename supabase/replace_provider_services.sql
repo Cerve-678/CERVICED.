@@ -14,10 +14,14 @@
 --
 -- Run in the Supabase SQL editor. Safe to re-run.
 --
--- NOTE: category_description was added later — see
--- supabase/add_category_description.sql for the column + the CREATE OR
--- REPLACE that actually carries it through. Kept here too so this file
+-- NOTE: category_description and hair_types_suitable were added later — see
+-- supabase/add_category_description.sql and supabase/add_hair_types_suitable.sql
+-- for the columns + the CREATE OR REPLACEs that actually carry them through.
+-- service_images.aspect_ratio was added the same way — see
+-- supabase/add_service_images_aspect_ratio.sql. Kept here too so this file
 -- stays the accurate reference for the function as a whole.
+-- Live definition re-confirmed byte-identical to this file on 2026-08-18
+-- before the aspect_ratio change below was applied.
 
 CREATE OR REPLACE FUNCTION public.replace_provider_services(
   p_provider_id uuid,
@@ -53,7 +57,7 @@ BEGIN
       buffer_before_mins, buffer_after_mins, is_active, sort_order,
       tags, technique_tags, outcome_tags, occasion_tags, trend_names,
       is_pregnancy_safe, patch_test_required, min_age, contraindications,
-      aftercare_notes, service_type
+      aftercare_notes, service_type, hair_types_suitable
     ) VALUES (
       p_provider_id,
       v_svc->>'category_name',
@@ -76,14 +80,23 @@ BEGIN
       NULLIF(v_svc->>'min_age','')::int,
       CASE WHEN jsonb_typeof(v_svc->'contraindications') = 'array' THEN ARRAY(SELECT jsonb_array_elements_text(v_svc->'contraindications')) END,
       v_svc->>'aftercare_notes',
-      v_svc->>'service_type'
+      v_svc->>'service_type',
+      CASE WHEN jsonb_typeof(v_svc->'hair_types_suitable') = 'array' THEN ARRAY(SELECT jsonb_array_elements_text(v_svc->'hair_types_suitable')) END
     )
     RETURNING id INTO v_service_id;
 
     FOR v_img IN SELECT * FROM jsonb_array_elements(COALESCE(v_svc->'images', '[]'::jsonb))
     LOOP
-      INSERT INTO public.service_images (service_id, url, sort_order)
-      VALUES (v_service_id, v_img->>'url', COALESCE((v_img->>'sort_order')::int, 0));
+      INSERT INTO public.service_images (service_id, url, sort_order, aspect_ratio)
+      VALUES (
+        v_service_id,
+        v_img->>'url',
+        COALESCE((v_img->>'sort_order')::int, 0),
+        -- NULLIF(...,'') so an image posted without a ratio (older app build,
+        -- or an on-device measurement that failed) stores NULL — "not
+        -- measured" — rather than 0, which the CHECK constraint rejects.
+        NULLIF(v_img->>'aspect_ratio','')::numeric
+      );
     END LOOP;
 
     FOR v_addon IN SELECT * FROM jsonb_array_elements(COALESCE(v_svc->'add_ons', '[]'::jsonb))

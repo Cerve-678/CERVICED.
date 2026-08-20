@@ -18,6 +18,7 @@ import { getUserBasicInfo, updateUserNamePhone, updateUserDob } from '../../serv
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const CP_DARK = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
@@ -86,7 +87,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Could not save changes', e.message ?? 'Please try again.');
+      Alert.alert('Could not save changes', toUserMessage(e, 'Please try again.', 'ProviderAccountInfoScreen.save'));
     } finally {
       setSaving(false);
     }

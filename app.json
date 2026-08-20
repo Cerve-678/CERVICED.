@@ -81,13 +81,11 @@
           "merchantIdentifier": "merchant.com.cerviced",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "expo-splash-screen",
+      "@react-native-community/datetimepicker"
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "124a2960-5455-41f8-bbb5-820013f52951"
       }

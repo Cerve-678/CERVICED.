@@ -49,6 +49,7 @@ import {
 } from '../../features/bookings/clientBookingPresentation';
 import { buildClientReceiptHTML } from '../../features/bookings/receipt';
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
+import { logger } from '../../utils/logger';
 
 if (Platform.OS === 'android') {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -60,9 +61,17 @@ type Props = {
   route: { params: { bookingId: string } };
 };
 
-async function shareReceipt(booking: ConfirmedBooking) {
+/**
+ * Generate the receipt PDF (always possible — built from the booking's own
+ * data) and open the share sheet. Returns false only when the device has no
+ * share sheet available; a user cancelling the sheet resolves normally (not an
+ * error). Throwing here now means a genuine, loggable failure.
+ */
+async function shareReceipt(booking: ConfirmedBooking): Promise<boolean> {
   const { uri } = await Print.printToFileAsync({ html: buildClientReceiptHTML(booking) });
+  if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Receipt', UTI: 'com.adobe.pdf' });
+  return true;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -74,7 +83,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const { addToCart } = useCart();
   const {
     todayBookings, upcomingBookings, pastBookings,
-    cancelBooking, canReschedule,
+    cancelBooking, canReschedule, markProviderNoShow,
   } = useBooking();
 
   // Look up the booking from context
@@ -263,7 +272,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     const map: Record<string, string> = {
       [BookingStatus.UPCOMING]: '#4CAF50', [BookingStatus.IN_PROGRESS]: '#2196F3',
       [BookingStatus.COMPLETED]: '#2196F3', [BookingStatus.CANCELLED]: '#F44336',
-      [BookingStatus.NO_SHOW]: '#FF9800',
+      [BookingStatus.NO_SHOW]: '#FF9800', [BookingStatus.PROVIDER_NO_SHOW]: '#FF9800',
     };
     return map[status] || '#9E9E9E';
   }, [C.accent]);
@@ -285,7 +294,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       });
       if (url && await Linking.canOpenURL(url)) await Linking.openURL(url);
       else await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`);
-    } catch { Alert.alert('Error', 'Unable to open maps'); }
+    } catch (err) { logger.error('[BookingDetail] open maps failed:', err); Alert.alert("Couldn't Open Maps", 'Please try again in a moment.'); }
   }, []);
 
   const openContactSheet = useCallback(async (b: ConfirmedBooking) => {
@@ -339,9 +348,49 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setSuccessMessage('Your appointment has been cancelled successfully.');
       setSuccessIcon('✓');
       setShowSuccessModal(true);
-    } catch { Alert.alert('Error', 'Failed to cancel booking. Please try again.'); }
+    } catch (err) {
+      logger.error('[BookingDetail] cancel failed:', err);
+      Alert.alert('Cancellation Failed', "We couldn't cancel this booking just now. Please try again.");
+    }
     finally { setIsLoading(false); }
   }, [booking, cancelBooking, isPastCancellationWindow]);
+
+  // "Provider didn't show up" — client-side mirror of the RPC's guardrails
+  // (client_mark_provider_no_show / fix_provider_no_show_status.sql), used
+  // only to decide the button's visible/disabled state. The RPC itself is
+  // the real enforcement, same relationship as isPastCancellationWindow
+  // above — same calendar day as the appointment, and the appointment start
+  // time must have already passed.
+  const canMarkProviderNoShow = useMemo(() => {
+    if (!booking || !booking.bookingDate || !booking.bookingTime) return false;
+    if (booking.status !== BookingStatus.UPCOMING && booking.status !== BookingStatus.IN_PROGRESS) return false;
+    if (booking.isPendingReschedule) return false;
+    const apptStart = createBookingDateTime(booking.bookingDate, booking.bookingTime);
+    const now = new Date();
+    const isSameDay = apptStart.getFullYear() === now.getFullYear()
+      && apptStart.getMonth() === now.getMonth()
+      && apptStart.getDate() === now.getDate();
+    return isSameDay && now.getTime() >= apptStart.getTime();
+  }, [booking]);
+
+  const handleMarkProviderNoShow = useCallback(async () => {
+    if (!booking || !canMarkProviderNoShow) return;
+    setIsLoading(true);
+    try {
+      await markProviderNoShow(booking.id);
+      setSuccessMessage("We've let the provider know they were marked as a no-show.");
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      logger.error('[BookingDetail] mark provider no-show failed:', error);
+      // The RPC raises a human reason (P0001, e.g. timing/status rules). Show
+      // that; genericise anything coded/technical.
+      const isTechnical = error?.code && error.code !== 'P0001';
+      const friendly = typeof error?.message === 'string' && error.message.length > 0 && !isTechnical && !error.message.includes('Network')
+        ? error.message : null;
+      Alert.alert("Couldn't Report", friendly ?? "We couldn't report this just now. Please try again.");
+    } finally { setIsLoading(false); }
+  }, [booking, canMarkProviderNoShow, markProviderNoShow]);
 
   const handleReschedulePress = useCallback(() => {
     if (!booking) return;
@@ -497,7 +546,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setRatedBookings(prev => new Set(prev).add(booking.id));
       setHasRated(true);
       setTimeout(() => { setShowRatingModal(false); setRating(0); setReviewText(''); }, 2000);
-    } catch { Alert.alert('Error', 'Failed to submit rating.'); }
+    } catch (err) { logger.error('[BookingDetail] submit rating failed:', err); Alert.alert('Rating Not Saved', 'Please try again in a moment.'); }
     finally { setIsLoading(false); }
   }, [booking, rating, reviewText, user]);
 
@@ -530,8 +579,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setSuccessIcon('✓');
       setShowSuccessModal(true);
       setTimeout(() => setTipAmount(0), 2000);
-    } catch {
-      Alert.alert('Error', 'Failed to save your tip. Please try again.');
+    } catch (err) {
+      logger.error('[BookingDetail] save tip failed:', err);
+      Alert.alert('Tip Not Saved', 'Please try again in a moment.');
     } finally {
       setIsLoading(false);
     }
@@ -736,7 +786,15 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 12, position: 'relative' }}>
                     <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>PAYMENT RECEIPT</Text>
                     <TouchableOpacity
-                      onPress={async () => { try { await shareReceipt(booking); } catch { Alert.alert('Error', 'Could not generate receipt.'); } }}
+                      onPress={async () => {
+                        try {
+                          const shared = await shareReceipt(booking);
+                          if (!shared) Alert.alert('Sharing Unavailable', "Your receipt is ready, but this device can't open a share sheet.");
+                        } catch (err) {
+                          logger.error('[BookingDetail] share receipt failed:', err);
+                          Alert.alert('Receipt Unavailable', "We couldn't open your receipt just now. Please try again.");
+                        }
+                      }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={{ position: 'absolute', right: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: C.iconBg, alignItems: 'center', justifyContent: 'center' }}
                     >
@@ -944,6 +1002,30 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
+            )}
+            {/* "Provider didn't show up" — only once the appointment start
+                time has actually passed, same day, mirroring the provider's
+                own no_show button gating. Kept as its own row (not crowded
+                into the Cancel/Reschedule pair above) since it only appears
+                same-day and shouldn't be mistaken for a routine action. */}
+            {isUpcoming && canMarkProviderNoShow && (
+              <TouchableOpacity
+                style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
+                onPress={() =>
+                  Alert.alert(
+                    "Provider didn't show up?",
+                    'This marks the appointment as a missed appointment and notifies the provider.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Confirm', style: 'destructive', onPress: handleMarkProviderNoShow },
+                    ],
+                  )
+                }
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>Provider didn't show up</Text>
+              </TouchableOpacity>
             )}
             {booking.isPendingReschedule && (
               <View style={{ flexDirection: 'row', gap: 12 }}>

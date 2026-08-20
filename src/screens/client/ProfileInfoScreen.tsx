@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,10 +15,20 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import { updateUserDob } from '../../services/databaseService';
+import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
+
+// Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
+// encoded as the picker's maximumDate so the UI can't select an invalid date at all.
+const MAX_DOB = new Date();
+MAX_DOB.setFullYear(MAX_DOB.getFullYear() - 16);
+const MIN_DOB = new Date(1900, 0, 1);
 
 export default function ProfileInfoScreen({ navigation }: any) {
   const { user, updateUser, deleteClientProfile } = useAuth();
@@ -25,6 +37,10 @@ export default function ProfileInfoScreen({ navigation }: any) {
 
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
+  // users.dob is a Postgres `date` column — stored/loaded as an ISO
+  // "YYYY-MM-DD" string, parsed to a Date only for the picker/display.
+  const [dob, setDob] = useState<Date | null>(user?.dob ? new Date(user.dob) : null);
+  const [showDobPicker, setShowDobPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
@@ -41,7 +57,17 @@ export default function ProfileInfoScreen({ navigation }: any) {
     if (!name.trim()) { Alert.alert('Name required'); return; }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    await updateUser({ name: name.trim(), phone: phone.trim() });
+    try {
+      await Promise.all([
+        updateUser({ name: name.trim(), phone: phone.trim() }),
+        user?.id ? updateUserDob(user.id, dob ? dateToYMD(dob) : null) : Promise.resolve(),
+      ]);
+    } catch {
+      setLoading(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Error', 'Couldn\'t save your changes. Please try again.');
+      return;
+    }
     setLoading(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     navigation.goBack();
@@ -99,7 +125,7 @@ export default function ProfileInfoScreen({ navigation }: any) {
             <Text style={[styles.backArrow, { color: P.text }]}>{'←'}</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.title, { color: P.text }]}>Profile Info</Text>
+          <Text style={[styles.title, { color: P.text }]}>Account</Text>
           <Text style={[styles.subtitle, { color: P.sub }]}>Update your personal details</Text>
 
           {/* Email */}
@@ -143,6 +169,65 @@ export default function ProfileInfoScreen({ navigation }: any) {
               autoCapitalize="none"
             />
           </View>
+
+          {/* Date of birth */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: P.sub }]}>DATE OF BIRTH</Text>
+            <TouchableOpacity
+              style={[inputStyle, styles.dobRow]}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowDobPicker(true); }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.dobText, { color: dob ? P.text : P.sub }]}>
+                {dob ? formatShortDate(dob) : 'DD/MM/YYYY'}
+              </Text>
+              <Ionicons name="calendar-outline" size={18} color={P.sub} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Android's native dialog renders as an OS overlay with no wrapper
+              needed. iOS's inline "default" picker doesn't — it renders into
+              the surrounding layout in place, so it needs the modal sheet
+              wrapper (matches RescheduleScreen/ProviderClienteleScreen). */}
+          {showDobPicker && Platform.OS === 'android' && (
+            <DateTimePicker
+              value={dob ?? MAX_DOB}
+              mode="date"
+              display="default"
+              maximumDate={MAX_DOB}
+              minimumDate={MIN_DOB}
+              onChange={(_, date) => {
+                setShowDobPicker(false);
+                if (date) setDob(date);
+              }}
+            />
+          )}
+          {showDobPicker && Platform.OS === 'ios' && (
+            <Modal transparent animationType="fade" visible onRequestClose={() => setShowDobPicker(false)}>
+              <View style={styles.pickerModalWrap}>
+                <TouchableOpacity style={styles.pickerDismiss} activeOpacity={1} onPress={() => setShowDobPicker(false)} />
+                <View style={[styles.pickerSheet, { backgroundColor: P.card }]}>
+                  <View style={[styles.pickerHeader, { borderBottomColor: P.border }]}>
+                    <Text style={[styles.pickerHeaderLabel, { color: P.text }]}>Date of Birth</Text>
+                    <TouchableOpacity onPress={() => setShowDobPicker(false)}>
+                      <Text style={[styles.pickerDoneLabel, { color: P.accent }]}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={dob ?? MAX_DOB}
+                    mode="date"
+                    display="spinner"
+                    maximumDate={MAX_DOB}
+                    minimumDate={MIN_DOB}
+                    themeVariant={isDarkMode ? 'dark' : 'light'}
+                    textColor={P.text}
+                    style={{ width: '100%' }}
+                    onChange={(_, date) => { if (date) setDob(date); }}
+                  />
+                </View>
+              </View>
+            </Modal>
+          )}
 
           {/* Save */}
           <TouchableOpacity
@@ -194,6 +279,14 @@ const styles = StyleSheet.create({
   },
   lockedRow: { flexDirection: 'row', alignItems: 'center', opacity: 0.7 },
   lockedText: { flex: 1, fontSize: 15 },
+  dobRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dobText: { fontSize: 15 },
+  pickerModalWrap: { flex: 1, flexDirection: 'column', justifyContent: 'flex-end' },
+  pickerDismiss: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  pickerSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden', paddingBottom: 20 },
+  pickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  pickerHeaderLabel: { fontSize: 15, fontWeight: '600' },
+  pickerDoneLabel: { fontSize: 15, fontWeight: '700' },
   saveBtn: {
     borderRadius: 100,
     paddingVertical: 15,

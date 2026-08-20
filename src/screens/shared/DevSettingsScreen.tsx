@@ -376,6 +376,11 @@ export default function DevSettingsScreen({ navigation }: any) {
           onPress: async () => {
             try {
               const keys = await AsyncStorage.getAllKeys();
+              // '@provider_extras' is no longer written by anything — the
+              // Business Details fields it used to hold got real `providers`
+              // columns (supabase/provider_practice_details_columns.sql). It
+              // stays in this filter only to purge stale copies left on
+              // devices from before that migration.
               const providerKeys = keys.filter(
                 (k) => k === '@provider_extras' || k.startsWith('@provider_reg_data_')
               );

@@ -12,7 +12,6 @@ interface ExtractedProfile {
   providerName?: string;
   location?: string;
   aboutText?: string;
-  slotsText?: string;
   serviceCategory?: string;
   phone?: string;
   email?: string;
@@ -55,6 +54,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       contraindications: [],
       aftercareNotes: '',
       serviceType: '' as const,
+      hairTypesSuitable: [],
     }));
   }
 
@@ -65,7 +65,6 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       extracted.serviceCategory === 'OTHER' ? (extracted.providerName || '') : '',
     location: extracted.location || '',
     aboutText: extracted.aboutText || '',
-    slotsText: extracted.slotsText || '',
     // Acuity has no equivalent concept to import — provider sets this
     // themselves afterward via InfoRegScreen/ProviderAutomationsScreen.
     scheduleReleaseDay: null,

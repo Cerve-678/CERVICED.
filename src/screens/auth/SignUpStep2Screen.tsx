@@ -17,6 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
 import { validateEmail, validatePassword, validatePhone, validateDob, getPasswordStrength } from '../../utils/validation';
+import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -49,6 +50,7 @@ export default function SignUpStep2Screen({ navigation }: Props) {
   const [dobYear, setDobYear] = useState(data.dobYear);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [showPassword, setShowPassword] = useState(false);
 
   const isClientSwitch = data.fromClientSwitch;
   const isProvider = data.accountType === 'provider';
@@ -249,25 +251,34 @@ export default function SignUpStep2Screen({ navigation }: Props) {
             {!isClientSwitch && (
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: t.sub }]}>PASSWORD</Text>
-                <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: inputBorder('password') }]}>
+                <View style={[styles.inputWrap, styles.inputWrapRow, { backgroundColor: t.surface, borderColor: inputBorder('password') }]}>
                   <TextInput
-                    style={[styles.input, { color: t.text }]}
+                    style={[styles.input, styles.inputWithEye, { color: t.text }]}
                     value={password}
                     onChangeText={setPassword}
                     onBlur={() => markTouched('password')}
                     placeholder="••••••••"
                     placeholderTextColor={t.sub}
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                   />
+                  <TouchableOpacity
+                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setShowPassword(v => !v); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.eyeText, { color: t.sub }]}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
                 </View>
                 {renderError('password')}
                 {password.length > 0 && (
-                  <View style={styles.strengthRow}>
-                    <View style={[styles.strengthTrack, { backgroundColor: t.border }]}>
-                      <View style={[styles.strengthFill, { width: strength.width as any, backgroundColor: strength.color }]} />
+                  <>
+                    <View style={styles.strengthRow}>
+                      <View style={[styles.strengthTrack, { backgroundColor: t.border }]}>
+                        <View style={[styles.strengthFill, { width: strength.width as any, backgroundColor: strength.color }]} />
+                      </View>
+                      <Text style={[styles.strengthText, { color: t.sub }]}>{strength.label}</Text>
                     </View>
-                    <Text style={[styles.strengthText, { color: t.sub }]}>{strength.label}</Text>
-                  </View>
+                    <PasswordRequirements password={password} goodColor={t.accent} pendingColor={t.sub} />
+                  </>
                 )}
               </View>
             )}
@@ -324,6 +335,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'android' ? 10 : 13,
+  },
+  inputWrapRow: { flexDirection: 'row', alignItems: 'center' },
+  inputWithEye: { flex: 1, paddingRight: 8 },
+  eyeText: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+    fontWeight: '600',
   },
   dobRow: { flexDirection: 'row', alignItems: 'center' },
   dobField: { flex: 1, paddingHorizontal: 8 },
