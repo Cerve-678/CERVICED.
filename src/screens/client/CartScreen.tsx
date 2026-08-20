@@ -2701,6 +2701,14 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                                 ? err.message.replace(/^Error:\s*/, '')
                                 : "We couldn't reserve that time. Please try again.";
                             const title = err instanceof BookingError ? 'Scheduling Conflict' : 'Booking Not Completed';
+                            // Close the summary sheet FIRST. CartScreen's
+                            // DialogHost is a sibling of this <Modal>, not a
+                            // child, so an alert raised while the sheet is
+                            // still presented never reaches the screen — the
+                            // failure looked completely silent. Same
+                            // close-then-alert order the payment sheet already
+                            // uses on its own failure path.
+                            setShowBookingSummaryModal(false);
                             showAlert(title, message);
                           } finally {
                             setIsReservingSlots(false);

@@ -75,7 +75,7 @@ Curated: [[Availability & Slots]] · **137 files**
 
 ## Payments
 Curated: [[Payments]] · **107 files**
-- `src/screens/client/CartScreen.tsx` _(411)_
+- `src/screens/client/CartScreen.tsx` _(412)_
 - `src/services/bookingService.ts` _(117)_
 - `src/contexts/BookingContext.tsx` _(115)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
