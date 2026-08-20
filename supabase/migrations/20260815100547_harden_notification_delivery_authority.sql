@@ -172,6 +172,8 @@ GRANT EXECUTE ON FUNCTION public.send_client_provider_booking_notification(uuid,
 DROP POLICY IF EXISTS "Providers can send notifications to clients" ON public.notifications;
 DROP POLICY IF EXISTS "notifications_participant_insert" ON public.notifications;
 
+DROP POLICY IF EXISTS "notifications_owner_insert" ON public.notifications;
+
 CREATE POLICY "notifications_owner_insert"
 ON public.notifications
 FOR INSERT
