@@ -4710,6 +4710,34 @@ export async function getClientBookingsForAddressShare(
   return (data ?? []) as ClientBookingSummary[];
 }
 
+/**
+ * The address this client last gave for a mobile booking, so the checkout
+ * "Confirm Your Details" step can prefill it instead of making them retype
+ * their home address on every order.
+ *
+ * Reads the gated `client_bookings` view, not the base table — clients have no
+ * direct SELECT on `bookings` (see getMyBookings). Best-effort by nature: a
+ * client with no prior mobile booking simply gets an empty field.
+ */
+export async function getMyLastClientAddress(): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("client_bookings")
+    .select("client_address")
+    .eq("user_id", user.id)
+    .not("client_address", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data?.client_address as string | undefined) ?? null;
+}
+
 /** Save the address a client sends their mobile provider, for a specific booking.
  *  Routed through a SECURITY DEFINER RPC — see fix_bookings_client_update_bypass.sql.
  *  The general "clients can update their own booking row" policy was dropped, so a
