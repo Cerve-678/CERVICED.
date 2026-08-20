@@ -57,3 +57,34 @@ export function toUserMessage(
   const match = FRIENDLY_PATTERNS.find(p => p.test.test(raw));
   return match ? match.message : fallback;
 }
+
+/**
+ * Same as `toUserMessage`, but a database guard message is shown verbatim.
+ *
+ * A "guard" here means a `RAISE EXCEPTION` in one of our own RPCs, which
+ * arrives as SQLSTATE `P0001`. Those messages are written for the person
+ * reading them, not for a developer: the all-or-nothing group booking RPCs
+ * raise things like "Booking X is already completed" to name exactly which
+ * sibling blocked a transition, and swapping that for a generic message throws
+ * away the only actionable part of the failure.
+ *
+ * Every other coded error — RLS `42501`, unique violation `23505`, anything
+ * Postgres or PostgREST raised on its own — is implementation detail and takes
+ * the normal friendly-message path above.
+ *
+ * Note a PostgREST error is a plain `{ message, code, details }` object, not an
+ * `Error` instance, so this matches on the SQLSTATE rather than the shape.
+ */
+export function toUserMessageAllowingDbGuard(
+  error: unknown,
+  fallback: string = GENERIC,
+  context?: string,
+): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  const raw = (error as { message?: unknown } | null)?.message;
+  if (code === 'P0001' && typeof raw === 'string' && raw.trim()) {
+    reportError(error, context);
+    return raw;
+  }
+  return toUserMessage(error, fallback, context);
+}

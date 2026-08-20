@@ -61,6 +61,8 @@ import {
 import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
 import { formatTime12, dateToYMD } from '../../utils/dateUtils';
+import { logger } from '../../utils/logger';
+import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
@@ -335,14 +337,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         if ((raw as any).user_id) setClientUserId((raw as any).user_id);
         setFetching(false);
       })
-      .catch(() => { setFetching(false); });
+      .catch((err) => { logger.error('[ProviderBookingDetail] booking load failed:', err); setFetching(false); });
   }, [bookingId, passedProviderBooking]);
 
   useEffect(() => {
     if (!bookingId) return;
     getActiveRescheduleRequest(bookingId)
       .then(r => setDbReschedule(r))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] reschedule request load failed:', err));
   }, [bookingId]);
 
   // Realtime: keep reschedule state + booking date/time in sync while screen is open.
@@ -400,14 +402,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!providerId) return;
     getProviderAddressPolicy(providerId)
       .then(s => setAddressSettings(s))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] address policy load failed:', err));
   }, [passedProviderBooking?.providerId, fetchedBooking?.providerId]);
 
   useEffect(() => {
     if (!bookingId) return;
     getBookingAddressReleasedAt(bookingId)
       .then(t => setAddressReleasedAt(t))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] address release time load failed:', err));
   }, [bookingId]);
 
   // For context-passed bookings we also look up user_id from Supabase
@@ -415,7 +417,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!bookingId || clientUserId) return;
     getBookingUserId(bookingId)
       .then(uid => { if (uid) setClientUserId(uid); })
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] booking user id load failed:', err));
   }, [bookingId, clientUserId]);
 
   useEffect(() => {
@@ -428,17 +430,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           setProfileExpanded(true);
         }
       })
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] client beauty profile load failed:', err));
   }, [clientUserId]);
 
   useEffect(() => {
     if (!bookingId) return;
     getIntakeFormByBooking(bookingId)
       .then(f => setIntakeForm(f))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] intake form load failed:', err));
     getInfoPacksByBooking(bookingId)
       .then(p => setBookingInfoPacks(p))
-      .catch(() => {});
+      .catch((err) => logger.error('[ProviderBookingDetail] info packs load failed:', err));
   }, [bookingId]);
 
   // Fetch current provider's service category + available info packs once on mount
@@ -453,7 +455,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         ]);
         if (category) setProviderServiceCategory(category as ServiceCategory);
         setProviderInfoPacks(packs);
-      } catch {}
+      } catch (err) {
+        logger.error('[ProviderBookingDetail] provider category / info pack load failed:', err);
+      }
     })();
   }, []);
 
@@ -494,7 +498,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (passedGroupSiblings || !booking?.groupBookingId) return;
     getGroupBookingSiblings(booking.groupBookingId)
       .then(rows => setFetchedGroupSiblings(rows.map(mapDbBookingToConfirmed)))
-      .catch(() => setFetchedGroupSiblings([]));
+      .catch((err) => { logger.error('[ProviderBookingDetail] group siblings load failed:', err); setFetchedGroupSiblings([]); });
   }, [passedGroupSiblings, booking?.groupBookingId]);
 
   // Every other service in this client's group booking that this provider
@@ -578,7 +582,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     setInitLoadingTimes(true);
     getAvailableSlots(booking.providerId, initSlotDate)
       .then(slots => { if (!cancelled) { setInitSuggestedTimes(slots); setInitSelectedTimes([]); } })
-      .catch(() => { if (!cancelled) setInitSuggestedTimes([]); })
+      .catch((err) => { logger.error('[ProviderBookingDetail] available slots load failed:', err); if (!cancelled) setInitSuggestedTimes([]); })
       .finally(() => { if (!cancelled) setInitLoadingTimes(false); });
     return () => { cancelled = true; };
   }, [initSlotDate, booking?.providerId]);
@@ -644,7 +648,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         });
       }
       setInitSent(true);
-    } catch {
+    } catch (err) {
+      logger.error('[ProviderBookingDetail] send reschedule response failed:', err);
       setInitInputError(respondingToClientRequest ? 'Could not send response. Please try again.' : 'Could not send reschedule request. Please try again.');
     } finally {
       setInitLoading(false);
@@ -674,7 +679,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       await rejectRescheduleRequest(booking.id, sendApology ? apologyText : undefined);
       setDbReschedule(prev => prev ? { ...prev, status: 'rejected' } : prev);
       closeInitRescheduleModal();
-    } catch {
+    } catch (err) {
+      Alert.alert('Could not decline', toUserMessage(err, 'That reschedule request is still open. Please try again.', 'ProviderBookingDetail.declineReschedule'));
     } finally {
       setRespondLoading(false);
     }
@@ -714,7 +720,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           groupChainsByStart.current.set(`${date}|${chain[0]!.time}`, chain);
         });
         return chains.map(chain => chain[0]!.time);
-      } catch {
+      } catch (err) {
+        logger.error('[ProviderBookingDetail] back-to-back slot search failed:', err);
         return [];
       }
     },
@@ -773,10 +780,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       await providerInitiateGroupReschedule(booking.groupBookingId, proposals);
       setInitSent(true);
     } catch (err: unknown) {
+      // A P0001 guard names the sibling that blocked this all-or-nothing move,
+      // so it's shown as-is; any other coded error is backend detail.
       setGroupRescheduleError(
-        err instanceof Error && 'code' in err
-          ? err.message
-          : 'Could not send reschedule request. Please try again.'
+        toUserMessageAllowingDbGuard(err, 'Could not send reschedule request. Please try again.', 'ProviderBookingDetail.groupReschedule')
       );
     } finally {
       setGroupRescheduleSending(false);
@@ -801,8 +808,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       await releaseBookingAddress(booking.id);
       const now = new Date().toISOString();
       setAddressReleasedAt(now);
-    } catch {
-      Alert.alert('Error', 'Could not release address. Please try again.');
+    } catch (err) {
+      Alert.alert('Address not sent', toUserMessage(err, 'Could not send your address. Please try again.', 'ProviderBookingDetail.releaseAddress'));
     } finally {
       setReleasingAddress(false);
     }
@@ -817,7 +824,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     // needed on the rare taps that actually send one, and RLS scopes
     // getMyProviderFullAddress to the caller's own row. A failed read just
     // drops the preview line — it must not block the send.
-    const address = await getMyProviderFullAddress().catch(() => null);
+    const address = await getMyProviderFullAddress().catch((err) => { logger.error('[ProviderBookingDetail] address preview load failed:', err); return null; });
     Alert.alert(
       'Send your address?',
       'Check it\u2019s correct before sending \u2014 this can\u2019t be undone.'
@@ -943,8 +950,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       const clientName = booking.customerName ?? 'Client';
       const conversationId = await getOrCreateConversation(booking.providerId, clientUserId);
       navigation.navigate('ProviderConversation', { conversationId, clientUserId, clientName });
-    } catch {
-      Alert.alert('Error', 'Could not open chat. Try again.');
+    } catch (err) {
+      Alert.alert('Chat unavailable', toUserMessage(err, 'Could not open this chat. Please try again.', 'ProviderBookingDetail.openChat'));
     }
   }, [booking, clientUserId, navigation]);
 
@@ -955,8 +962,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
       const html = buildInvoiceHTML(booking, t);
       const { uri } = await Print.printToFileAsync({ html });
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Invoice', UTI: 'com.adobe.pdf' });
-    } catch {
-      Alert.alert('Invoice error', 'Could not generate the invoice. Rebuild the app if this persists.');
+    } catch (err) {
+      Alert.alert('Invoice not created', toUserMessage(err, 'Could not generate the invoice. Please try again.', 'ProviderBookingDetail.shareInvoice'));
     }
   }, [booking]);
 
@@ -1343,7 +1350,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         try {
                           const h = await getClientBookingHistory(clientUserId);
                           setClientHistoryBookings(h);
-                        } catch {}
+                        } catch (err) {
+                          logger.error('[ProviderBookingDetail] client booking history load failed:', err);
+                        }
                         setClientHistoryLoading(false);
                       }}
                       style={{ marginLeft: 'auto', padding: 8 }}
@@ -2453,16 +2462,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     // (e.g. "Booking X is already completed") when even one
                     // sibling can't legally make the transition — surface
                     // that verbatim instead of a generic message so the
-                    // provider knows what actually blocked it. A Postgrest/RPC
-                    // error is a plain {message, code, details} object, NOT
-                    // `instanceof Error` — requiring that check silently threw
-                    // away exactly the specific message this comment says to
-                    // preserve. Network/unexpected errors (no message, or an
-                    // explicit Network mention) still fall back to the generic copy.
-                    const message =
-                      typeof err?.message === 'string' && err.message.length > 0 && !err.message.includes('Network')
-                        ? err.message
-                        : 'Could not complete this action. Check your connection and try again.';
+                    // provider knows what actually blocked it. A PostgREST/RPC
+                    // error is a plain {message, code, details} object, NOT an
+                    // `Error` instance, so it's matched on SQLSTATE instead:
+                    // only P0001 (our own RAISE EXCEPTION) is copy meant for a
+                    // provider to read. Anything else coded — RLS 42501, unique
+                    // violation 23505 — is backend detail and gets the generic
+                    // message plus a log.
+                    const message = toUserMessageAllowingDbGuard(
+                      err,
+                      'Could not complete this action. Check your connection and try again.',
+                      'ProviderBookingDetail.confirmAction',
+                    );
                     Alert.alert('Action failed', message);
                   });
                 }}
@@ -2520,8 +2531,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           const updated = await getInfoPacksByBooking(bookingId);
                           setBookingInfoPacks(updated);
                           setShowInfoPackPicker(false);
-                        } catch (e: any) {
-                          Alert.alert('Error', e?.message ?? 'Failed to send info pack.');
+                        } catch (e) {
+                          Alert.alert('Info pack not sent', toUserMessage(e, 'Could not send that info pack. Please try again.', 'ProviderBookingDetail.attachInfoPack'));
                         } finally {
                           setIsAttachingInfoPack(false);
                         }
