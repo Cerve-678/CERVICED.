@@ -274,7 +274,7 @@ export default function ProviderScheduleScreen() {
     // provider never toggled still render as open Mon-Fri 9-6 (makeDefault())
     // — that's what they see and believe they're saving — but a day with no
     // row in provider_availability is treated as closed everywhere a client
-    // checks availability (AvailabilityService, createBooking). Saving only
+    // checks availability (AvailabilityService, enforce_booking_bookability). Saving only
     // "dirty" days meant a provider who accepted the shown defaults, or only
     // edited one day, ended up with some or all days silently un-persisted:
     // the screen looked fully configured but clients could never book those

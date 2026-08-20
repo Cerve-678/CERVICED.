@@ -4245,7 +4245,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     the pill is now always derived from the real schedule, so
                     there's nothing for a provider to keep in sync by hand.
                     Hidden entirely for a provider with no schedule published
-                    at all (state === 'unpublished') — createBooking rejects
+                    at all (state === 'unpublished') — the booking RPC rejects
                     every booking for them, so a "notify me when slots open"
                     bell wouldn't be true. The bell/notify-on-release-day
                     logic is unchanged — it was never tied to this text. */}

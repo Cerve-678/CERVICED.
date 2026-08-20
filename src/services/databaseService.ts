@@ -2015,8 +2015,8 @@ export async function holdCartBookingSlots(
 }
 
 /** Full per-item payload claim_cart_booking_slots() writes onto a held row
- *  when payment succeeds — mirrors every field createBooking()'s fresh
- *  INSERT would otherwise set. */
+ *  when payment succeeds — this is the complete booking row, since the claim
+ *  is now the only way a client booking reaches the table. */
 export type CartClaimItem = Omit<
   DbBooking,
   | "id"
@@ -2040,9 +2040,10 @@ export interface CartClaimResult {
 
 /** Convert this batch's still-live held rows into real bookings in place.
  *  Items with no matching live hold (expired, or never held) are simply
- *  absent from the result — the caller must fall back to a normal
- *  createBooking() INSERT for those, this never throws on a partial or
- *  empty match. */
+ *  absent from the result; this never throws on a partial or empty match.
+ *  There is no fallback insert — clients have no INSERT policy on bookings,
+ *  so an absent item means that booking did not happen and the caller must
+ *  report it as failed. */
 export async function claimCartBookingSlots(
   holdBatchId: string,
   items: (CartClaimItem & {
@@ -2073,224 +2074,15 @@ export async function releaseCartBookingSlots(
   if (error) throw error;
 }
 
-/** Create a new booking with its add-ons */
-export async function createBooking(
-  booking: Omit<DbBooking, "id" | "created_at" | "updated_at" | "confirmed_at">,
-  addOnIds: {
-    add_on_id: string;
-    name_snapshot: string;
-    price_snapshot: number;
-  }[],
-): Promise<DbBooking> {
-  // ── Validation ──────────────────────────────────────────
-  // 1. Booking date must not be in the past
-  const todayStr = dateToYMD(new Date());
-  if (booking.booking_date < todayStr) {
-    throw new Error("Booking date cannot be in the past.");
-  }
-
-  // 2. A provider who also has a client hat cannot book their own provider
-  //    profile through the client-side flow. Defense in depth: the
-  //    cart-checkout RPCs (hold_cart_booking_slots / claim_cart_booking_slots)
-  //    enforce this same rule server-side already — this covers the direct
-  //    createBooking() INSERT path (the cart-checkout fallback after a failed
-  //    claim, and any other future caller of this function).
-  const { data: ownerCheck } = await supabase
-    .from("providers")
-    .select("user_id")
-    .eq("id", booking.provider_id)
-    .maybeSingle();
-  if (ownerCheck && ownerCheck.user_id === booking.user_id) {
-    throw new Error("You can't book your own provider profile.");
-  }
-
-  // 3. Provider must have published a schedule, and be open on that day.
-  //    No availability row = the provider never set their hours — they are
-  //    not bookable until they do (no silent default schedule).
-  const bookingDayOfWeek = new Date(
-    booking.booking_date + "T12:00:00",
-  ).getDay(); // 0=Sun
-  const { data: availability } = await supabase
-    .from("provider_availability")
-    .select("open_time, close_time, is_closed")
-    .eq("provider_id", booking.provider_id)
-    .eq("day_of_week", bookingDayOfWeek)
-    .maybeSingle();
-
-  if (!availability) {
-    throw new Error(
-      "This provider has no availability right now. Check back later, or open their profile and try again.",
-    );
-  }
-  if (availability.is_closed) {
-    throw new Error("The provider is not available on that day.");
-  }
-
-  // 4. Date must not be a blocked date
-  const { data: blocked } = await supabase
-    .from("provider_blocked_dates")
-    .select("id")
-    .eq("provider_id", booking.provider_id)
-    .eq("blocked_date", booking.booking_date)
-    .maybeSingle();
-
-  if (blocked) {
-    throw new Error("The provider is unavailable on that date.");
-  }
-
-  // 5. Determine this booking's real time span. Priority:
-  //    caller-provided end_time → service duration_minutes → 60 min default.
-  //    The span is what gets blocked in the calendar, so it must never be
-  //    zero-length — an end_time equal to the start would leave the rest of
-  //    the appointment open for someone else to book.
-  const toMinutes = (t: string): number => {
-    const [hh, mm] = t.split(":");
-    return Number(hh ?? 0) * 60 + Number(mm ?? 0);
-  };
-  const startMins = toMinutes(booking.booking_time);
-
-  let durationMinutes = 0;
-  if (booking.end_time && toMinutes(booking.end_time) > startMins) {
-    durationMinutes = toMinutes(booking.end_time) - startMins;
-  }
-  if (durationMinutes <= 0 && booking.service_id) {
-    const { data: service } = await supabase
-      .from("services")
-      .select("duration_minutes")
-      .eq("id", booking.service_id)
-      .maybeSingle();
-    if (service?.duration_minutes) durationMinutes = service.duration_minutes;
-  }
-  if (durationMinutes <= 0) durationMinutes = 60;
-
-  const endMins = Math.min(startMins + durationMinutes, 23 * 60 + 59);
-  const endTimeStr = `${String(Math.floor(endMins / 60)).padStart(2, "0")}:${String(endMins % 60).padStart(2, "0")}:00`;
-
-  // Persist the guaranteed end_time so every future overlap check, calendar
-  // view and auto-complete job sees the appointment's true span
-  booking = { ...booking, end_time: endTimeStr };
-
-  // 6. No overlapping active bookings for same provider + date, respecting
-  //    buffer gaps. Each booking's buffer comes from its OWN service (NULL
-  //    falls back to the provider's global buffer_mins) so a 3-hour colour
-  //    appointment's cleanup gap still applies even when the new request is
-  //    for an unrelated quick service.
-  const { data: providerBufferRow } = await supabase
-    .from("providers")
-    .select("buffer_mins")
-    .eq("id", booking.provider_id)
-    .maybeSingle();
-  const providerBufferMins = (providerBufferRow as any)?.buffer_mins ?? 0;
-
-  let newBufferBefore = 0;
-  let newBufferAfter = providerBufferMins;
-  if (booking.service_id) {
-    const { data: newSvc } = await supabase
-      .from("services")
-      .select("buffer_before_mins, buffer_after_mins")
-      .eq("id", booking.service_id)
-      .maybeSingle();
-    newBufferBefore = (newSvc as any)?.buffer_before_mins ?? 0;
-    newBufferAfter = (newSvc as any)?.buffer_after_mins ?? providerBufferMins;
-  }
-  const newEffStart = startMins - newBufferBefore;
-  const newEffEnd = endMins + newBufferAfter;
-
-  // Excludes the caller's OWN on_hold rows for this slot: the cart-checkout
-  // fallback path calls createBooking() after a failed claimCartBookingSlots
-  // (e.g. hold expired, claim RPC error), and hold_cart_booking_slots()
-  // already verified bookability for those exact rows at hold time — without
-  // this exclusion, a user's own still-live hold makes this check reject
-  // their own retry as "already booked". Another user's on_hold row for the
-  // same slot is still a real conflict and still blocks correctly.
-  const { data: conflicts } = await supabase
-    .from("bookings")
-    .select("booking_time, end_time, service_id")
-    .eq("provider_id", booking.provider_id)
-    .eq("booking_date", booking.booking_date)
-    .in("status", ["pending", "confirmed", "in_progress", "on_hold"])
-    .or(`status.neq.on_hold,user_id.neq.${booking.user_id}`);
-
-  if (conflicts && conflicts.length > 0) {
-    // Batch-fetch every conflicting booking's service row in one query —
-    // this loop used to await a separate `services` lookup per conflict,
-    // which turns "a provider double-booked several times today" into that
-    // many extra sequential round trips during checkout.
-    const conflictServiceIds = [
-      ...new Set(
-        conflicts.map((c) => c.service_id).filter((id): id is string => !!id),
-      ),
-    ];
-    const conflictServicesById = new Map<
-      string,
-      {
-        duration_minutes: number | null;
-        buffer_before_mins: number | null;
-        buffer_after_mins: number | null;
-      }
-    >();
-    if (conflictServiceIds.length > 0) {
-      const { data: conflictServices } = await supabase
-        .from("services")
-        .select("id, duration_minutes, buffer_before_mins, buffer_after_mins")
-        .in("id", conflictServiceIds);
-      for (const svc of conflictServices ?? []) {
-        conflictServicesById.set(svc.id, svc);
-      }
-    }
-
-    for (const existing of conflicts) {
-      const existParts = existing.booking_time.split(":");
-      const existStart =
-        Number(existParts[0] ?? 0) * 60 + Number(existParts[1] ?? 0);
-
-      // Determine existing booking's end time and its own buffer
-      let existEnd = existStart + 60; // fallback
-      let existBufferBefore = 0;
-      let existBufferAfter = providerBufferMins;
-      if (existing.end_time) {
-        const endParts = existing.end_time.split(":");
-        existEnd = Number(endParts[0] ?? 0) * 60 + Number(endParts[1] ?? 0);
-      }
-      if (existing.service_id) {
-        const svc = conflictServicesById.get(existing.service_id);
-        if (!existing.end_time && svc?.duration_minutes)
-          existEnd = existStart + svc.duration_minutes;
-        existBufferBefore = svc?.buffer_before_mins ?? 0;
-        existBufferAfter = svc?.buffer_after_mins ?? providerBufferMins;
-      }
-
-      const existEffStart = existStart - existBufferBefore;
-      const existEffEnd = existEnd + existBufferAfter;
-
-      // Overlap check: two effective (buffer-padded) intervals overlap if
-      // one starts before the other ends
-      if (newEffStart < existEffEnd && newEffEnd > existEffStart) {
-        throw new Error(
-          "That time slot is already booked. Please choose a different time.",
-        );
-      }
-    }
-  }
-  // ── End Validation ──────────────────────────────────────
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .insert(booking)
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  if (addOnIds.length > 0) {
-    const { error: addOnError } = await supabase
-      .from("booking_add_ons")
-      .insert(addOnIds.map((a) => ({ ...a, booking_id: data.id })));
-    if (addOnError) throw addOnError;
-  }
-
-  return data;
-}
+// createBooking() was deleted here on 2026-08-20. It did a direct client
+// INSERT into public.bookings, which no RLS policy has permitted since
+// 20260810180302_revoke_legacy_client_booking_writes — the only INSERT
+// policy is bookings_provider_insert. Its last caller was BookingContext's
+// post-payment fallback, which could therefore only ever produce an RLS
+// error; that path now reports the item as unbookable instead. Client
+// bookings go exclusively through hold_cart_booking_slots +
+// claim_cart_booking_slots; provider-side manual bookings go through
+// provider_create_manual_booking / insertDirectBooking.
 
 /** Update booking status (provider-side confirm/start/complete/no-show — cancel
  *  goes through cancelOwnBooking/providerCancelOwnBooking instead). Routed

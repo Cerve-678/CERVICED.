@@ -589,7 +589,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
       setInviteTime(null);
     } catch (err: any) {
       logger.error('Invite failed:', err);
-      // createBooking() throws a real, specific reason (blocked date,
+      // The invite RPC throws a real, specific reason (blocked date,
       // overlapping slot, provider closed that day) — surface it instead of
       // always showing the generic connection copy, which previously hid
       // exactly that kind of actionable message.

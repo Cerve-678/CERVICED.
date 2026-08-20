@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
-import { createBooking as dbCreateBooking, getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow } from '../services/databaseService';
+import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow } from '../services/databaseService';
 import type { DbBookingRescheduleRequest } from '../types/database';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
@@ -73,7 +73,7 @@ export interface BookingContextType {
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
   // for the 10-minute window while the user is on the payment screen —
   // closes the gap between "committed to paying" and "booking actually
-  // inserted" that createBooking()'s insert-time-only conflict check can't
+  // inserted" that the claim RPC's insert-time-only conflict check can't
   // cover on its own. Only needs date/time per item (not full
   // AppointmentData — customer/payment details aren't known yet at this
   // point in checkout). Returns the batch id to pass into
@@ -1651,7 +1651,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           // holdCartCheckoutSlots when the user commits to payment), claim
           // it now: every item with a still-live held row gets converted in
           // place (UPDATE, not a fresh INSERT) and is looked up below by
-          // (provider, date, time) to skip dbCreateBooking entirely. Items
+          // (provider, date, time) to skip the per-item insert entirely. Items
           // with no live hold (expired, or the hold call never happened —
           // e.g. an old client build) simply fall through to the normal
           // insert path unchanged, same as if no hold existed at all.
@@ -1760,105 +1760,22 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
               continue;
             }
 
-            const endTimeStr = calculateEndTime(apt.time, item.duration);
-            const pgEndTime = timeTo24(endTimeStr);
-
-            const addOnsTotal = item.addOns?.reduce((s, a) => s + (a.price || 0), 0) ?? 0;
-            const logoUrl = typeof item.providerImage === 'string'
-              ? item.providerImage
-              : (item.providerImage && typeof item.providerImage === 'object' && 'uri' in item.providerImage
-                  ? (item.providerImage as { uri?: string }).uri ?? null
-                  : null);
-            const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
-
-            const newDbBooking = await dbCreateBooking(
-              {
-                user_id: user.id,
-                provider_id: providerId,
-                // Link the real service row when the cart item carries the DB
-                // UUID (static/demo services have numeric ids — store null).
-                // This powers waitlist service-matching, duration lookups and
-                // review linkage downstream.
-                service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
-                status: 'pending',
-                booking_date: apt.date,
-                booking_time: pgTime,
-                end_time: pgEndTime,
-                notes: apt.notes ?? null,
-                booking_instructions: null,
-                payment_type: apt.paymentType,
-                base_price: item.price,
-                add_ons_total: addOnsTotal,
-                service_charge: apt.serviceCharge,
-                deposit_amount: apt.depositAmount,
-                amount_paid: apt.amountPaid,
-                remaining_balance: apt.remainingBalance,
-                payment_status: dbPayStatus as 'fully_paid' | 'deposit_paid',
-                payment_method: apt.paymentMethod ?? null,
-                payment_intent_id: apt.paymentIntentId ?? null,
-                is_group_booking: groupInfo.isGroupBooking,
-                group_booking_id: groupInfo.groupBookingId ?? null,
-                group_booking_count: groupInfo.isGroupBooking ? groupInfo.groupBookingCount : 1,
-                provider_name_snapshot: item.providerName,
-                service_name_snapshot: item.serviceName,
-                service_category_snapshot: item.providerService || null,
-                provider_logo_snapshot: logoUrl,
-                // Keyed by provider id — a display-name key could pull a
-                // different provider's address when two share a name.
-                // This is only ever the public, approximate location (the client
-                // can't read a different provider's real address — RLS on
-                // provider_private_details blocks it) or the pending placeholder.
-                // trg_stamp_booking_address_snapshot overwrites it server-side with
-                // the real full_address when the provider has one on file — see
-                // fix_booking_address_snapshot_uses_real_address.sql.
-                provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
-                provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
-                provider_coordinates: (() => {
-                  const c = providerLocations[providerId]?.coordinates;
-                  return c ? { lat: c.latitude, lng: c.longitude } : null;
-                })(),
-                customer_name: apt.customerName,
-                customer_email: apt.customerEmail,
-                customer_phone: apt.customerPhone,
-                address_released_at: null,
-                client_address: clientAddress ?? null,
-                occasion_type: null,
-                style_request: null,
-                reference_image_url: null,
-                policy_accepted_at: item.policyAcceptedAt ?? null,
-                policy_snapshot: item.policySnapshot ?? null,
-              },
-              (item.addOns ?? []).map(a => ({
-                add_on_id: String(a.id),
-                name_snapshot: a.name,
-                price_snapshot: a.price,
-              }))
+            // The hold batch is the ONLY way a client can create a booking.
+            // public.bookings has no client INSERT policy — only
+            // bookings_provider_insert — so the direct createBooking() insert
+            // that used to live here could do nothing but fail RLS and surface
+            // Postgres' policy text to the client. If the slot wasn't claimed
+            // from the hold, the booking genuinely did not happen; say so
+            // plainly instead of attempting a doomed write.
+            //
+            // The policy is deliberately NOT being restored — a blanket
+            // authenticated INSERT would let a client forge rows with arbitrary
+            // price/status/snapshot fields, bypassing every validation the claim
+            // RPC performs. See supabase/migrations/20260810180952_restore_
+            // legacy_booking_writes_pending_stripe.sql.
+            throw new Error(
+              `That time slot with ${item.providerDisplayName ?? item.providerName} is no longer available. Please choose a different time.`
             );
-
-            if (newDbBooking?.id) {
-              dbIdByCartItemId[item.id] = newDbBooking.id;
-            }
-
-            // Auto-confirm is owned by the DB trigger handle_new_booking, which
-            // flips the row to 'confirmed' on insert when the provider has
-            // auto-accept enabled. Confirming here too produced a SECOND
-            // "Booking Confirmed" notification — the app's status update fired the
-            // status-change trigger on top of the trigger's own confirm — so the
-            // app no longer confirms; the DB trigger is the single source.
-            // Requires the auto-accepting handle_new_booking to be deployed
-            // (fix_auto_accept_provider_notification.sql), else these stay 'pending'.
-            // Confirmation email — fire and forget, never blocks booking
-            if (apt.customerEmail) {
-              const { subject, html } = bookingConfirmationEmail({
-                clientName: apt.customerName || 'there',
-                providerName: item.providerName,
-                service: item.serviceName,
-                date: formatLongDate(apt.date),
-                time: formatTime12(apt.time),
-                location: apt.address || 'Address shared on confirmation',
-              });
-              sendEmail(apt.customerEmail, subject, html).catch(() => {});
-            }
 
             } catch (itemError: any) {
               const name = item.providerDisplayName ?? item.providerName;
@@ -1875,7 +1792,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 && itemError.message.length > 0
                 && !itemError.message.includes('Network')
               ) {
-                // Any other error with a real message — createBooking()'s own
+                // Any other error with a real message — the claim RPC's own
                 // `new Error(...)` validations (closed day, blocked date,
                 // overlap), or a raw Supabase/PostgrestError, which is a plain
                 // object with {message, code, details} and is NOT
@@ -2014,7 +1931,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
   // right when the user commits to payment — closes the gap between
   // "committed to paying" and "booking actually inserted" that
-  // createBooking()'s insert-time-only conflict check leaves open for the
+  // the claim RPC's insert-time-only conflict check leaves open for the
   // whole review + payment-sheet interaction. Takes only date/time per item
   // (not full AppointmentData) since customer/payment details aren't known
   // yet at "Confirm & Pay" time — CartScreen's checkoutSnapshot.bookings

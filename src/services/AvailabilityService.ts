@@ -1395,11 +1395,11 @@ export const AvailabilityService = {
    * Everything here is derived from the same records that actually govern
    * booking (weekly windows, date overrides, blocked dates, existing
    * bookings), resolved through the same `resolveWorkingWindows` precedence
-   * createBooking enforces — so the line can't claim a provider is open on a
+   * the booking RPC enforces — so the line can't claim a provider is open on a
    * day they'd be rejected for.
    *
    * `unpublished` is deliberately distinct from `closed`: a provider who has
-   * never set hours is not bookable at all (createBooking rejects them
+   * never set hours is not bookable at all (the booking RPC rejects them
    * outright), which is a different message from one who is simply shut
    * today. Callers must render the two differently.
    *
@@ -1455,7 +1455,7 @@ export const AvailabilityService = {
       const availRows = weeklyRows.legacyRows;
       const windowRows = weeklyRows.windowRows;
 
-      // No schedule of any kind published — createBooking would reject every
+      // No schedule of any kind published — the booking RPC would reject every
       // booking, so this is "not bookable yet", not "closed today".
       if (availRows.length === 0 && windowRows.length === 0) {
         return {
@@ -1535,7 +1535,8 @@ export const AvailabilityService = {
       // already covered by a known booking, in whole slot-interval steps.
       // It can therefore differ slightly from the booking picker's own
       // answer, so it is presented as guidance ("Next free …"), never used
-      // to gate a booking — createBooking remains the only authority.
+      // to gate a booking — the server-side enforce_booking_bookability
+      // trigger remains the only authority.
       const SLOT_STEP = 30;
       let nextFree: { date: string; time: string } | null = null;
       for (const day of days) {

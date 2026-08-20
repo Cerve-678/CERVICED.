@@ -1776,7 +1776,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // overlap each other, or a slot that's since been taken by someone else's
     // booking in Supabase — BEFORE the payment sheet opens. Without this,
     // the first conflict either of those produces is only discovered by
-    // createBooking()'s own insert-time check, mid-checkout, after the card
+    // the claim RPC's own insert-time check, mid-checkout, after the card
     // has already been authorised.
     const conflictCheck = await AvailabilityService.validateCartBookings(
       items.map(item => {
@@ -2682,7 +2682,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           // Reserve every item's slot as an on_hold booking
                           // BEFORE opening the payment sheet — closes the
                           // window between "committed to paying" and
-                          // "booking actually inserted" that createBooking()'s
+                          // "booking actually inserted" that the claim RPC's
                           // insert-time-only conflict check leaves open for
                           // the whole payment-sheet interaction.
                           setIsReservingSlots(true);

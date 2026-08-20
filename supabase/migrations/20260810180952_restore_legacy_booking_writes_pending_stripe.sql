@@ -1,21 +1,23 @@
--- ⚠️ NOT APPLIED LIVE — and deliberately left that way pending a decision.
+-- ⚠️ SUPERSEDED — DO NOT APPLY. Kept as a record of a closed decision.
 --
--- Confirmed 2026-08-20: public.bookings has no bookings_user_insert policy;
--- its only INSERT policy is bookings_provider_insert. So clients cannot insert
--- booking rows directly, and this file has never taken effect.
+-- Never applied live: public.bookings has only bookings_provider_insert,
+-- bookings_provider_read and bookings_user_read. Clients have no INSERT
+-- policy, so this file's rollback never took effect.
 --
--- What that means today: EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED is unset, so the
--- mock checkout path is live. It books through the SECURITY DEFINER RPCs
--- (hold_cart_booking_slots / claim_cart_booking_slots), which is fine — but
--- BookingContext falls back to a direct createBooking() insert when the claim
--- fails, and that fallback can now only produce an RLS error. The comment
--- there ("never surface as a checkout failure") no longer describes reality.
+-- RESOLVED 2026-08-20 in the app instead of the database. The only thing that
+-- still depended on a client INSERT was BookingContext's post-payment fallback
+-- to a direct createBooking() insert when claim_cart_booking_slots returned no
+-- row for an item. That call could no longer do anything but fail RLS and show
+-- the client Postgres' policy text, so it was removed: an unclaimed item is now
+-- reported as "that time slot is no longer available". createBooking() itself
+-- had no callers left and was deleted from databaseService.ts in the same pass.
 --
--- Do NOT apply this just to make the fallback work again: a blanket
--- authenticated INSERT policy on bookings lets a client forge rows with
--- arbitrary price, status and snapshot fields, bypassing every validation the
--- RPC performs. The safer fix is to make the fallback fail loudly or remove
--- it. Owner decision — see the 2026-08-20 reconciliation notes.
+-- Do NOT apply this to "restore the fallback". A blanket authenticated INSERT
+-- on bookings lets a client forge rows with arbitrary price, status and
+-- snapshot fields, bypassing every validation the claim RPC performs. Client
+-- bookings go exclusively through hold_cart_booking_slots +
+-- claim_cart_booking_slots; provider-side manual bookings go through
+-- provider_create_manual_booking / insertDirectBooking.
 
 -- Compatibility rollback while Stripe checkout is deliberately disabled.
 -- Revoke these again when EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED is enabled in a

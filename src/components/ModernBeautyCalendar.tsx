@@ -114,7 +114,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // upstream (search, go-live gating) currently prevents it. Without this,
   // that renders as every day showing 'closed', identical to a provider
   // simply not working that day, and the client only learns the real reason
-  // from createBooking()'s rejection after picking a date AND time. Checked
+  // from the booking attempt's rejection after picking a date AND time. Checked
   // once per provider via the same getAvailabilitySummary state the
   // provider's own profile already computes ('unpublished' vs 'closed').
   const [providerUnpublished, setProviderUnpublished] = useState<boolean>(false);
@@ -617,7 +617,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {/* ── No schedule published ────────────────────────────────────────
           Distinct from providerFound === false (bad identifier) and from a
           day simply being 'closed' — this provider exists but has never set
-          any hours, so createBooking would reject every date. The day pills
+          any hours, so the booking RPC would reject every date. The day pills
           still render (dimmed, disabled) so the week strip's shape stays
           recognisable instead of the section just vanishing; the time row
           is skipped entirely since there is nothing to ever populate it. */}
