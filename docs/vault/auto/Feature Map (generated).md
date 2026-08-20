@@ -142,7 +142,7 @@ Curated: [[Booking Flow]] · **242 files**
 - … +212 more
 
 ## Notifications
-Curated: [[Notifications]] · **148 files**
+Curated: [[Notifications]] · **149 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(258)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **148 files**
 - `supabase/chat_two_way_fix.sql` _(25)_
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - `src/screens/client/BookingsScreen.tsx` _(23)_
-- … +118 more
+- … +119 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **67 files**

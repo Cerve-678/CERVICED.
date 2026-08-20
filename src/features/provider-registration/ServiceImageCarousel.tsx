@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { FlatList, Image, Text, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
 interface ServiceImageCarouselProps {
   images: string[];
@@ -30,14 +31,14 @@ export function ServiceImageCarousel({ images, onAddImage, onRemoveImage, size =
         keyExtractor={(item, index) => `${item}-${index}`}
         getItemLayout={(_data, index) => ({ length: size, offset: size * index, index })}
         renderItem={({ item, index }) => item === 'add' ? (
-          <TouchableOpacity style={[styles.addImageButton, { width: size, height: size }]} onPress={onAddImage} activeOpacity={0.7}>
+          <TouchableOpacity style={[styles.addImageButton, { width: size, height: size }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); onAddImage(); }} activeOpacity={0.7}>
             <Text style={styles.addImageIcon}>+</Text>
             <Text style={styles.addImageText}>Add</Text>
           </TouchableOpacity>
         ) : (
           <View style={[styles.carouselImageContainer, { width: size, height: size }]}>
             <Image source={{ uri: item }} style={[styles.carouselImage, { width: size, height: size }]} resizeMode="cover" />
-            <TouchableOpacity style={styles.removeImageButton} onPress={() => onRemoveImage(index)}>
+            <TouchableOpacity style={styles.removeImageButton} onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}); onRemoveImage(index); }}>
               <Text style={styles.removeImageIcon}>×</Text>
             </TouchableOpacity>
           </View>

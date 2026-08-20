@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { withAlpha } from '../../constants/providerThemes';
 
 interface ChipSelectProps {
@@ -20,7 +21,7 @@ export function ChipSelect({ options, selected, onToggle, accentColor = '#9C27B0
           <TouchableOpacity
             key={option}
             style={[styles.chip, active && { backgroundColor: withAlpha(accentColor, 0.18), borderColor: accentColor }]}
-            onPress={() => onToggle(option)}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); onToggle(option); }}
           >
             <Text style={[styles.chipText, active && { color: accentColor }]}>{option}</Text>
           </TouchableOpacity>
