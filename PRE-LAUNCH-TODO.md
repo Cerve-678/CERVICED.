@@ -81,6 +81,73 @@ from reappearing as the schema evolves.
 
 ---
 
+## 1b. BLOCKING — there is no refund logic anywhere in the app
+
+Added 2026-08-20. Verified against the live function bodies, not just the SQL
+files.
+
+`cancel_own_booking()` only does `UPDATE bookings SET status = 'cancelled'`. It
+never touches `payment_status`, never touches `amount_paid`, and never calls
+Stripe. There is no `refund` call in `src/services/stripeService.ts` or in any
+edge function — the only occurrence of the word in `supabase/functions/` is a
+comment in `create-payment-intent/index.ts` noting there's "nothing to refund it
+automatically".
+
+Practical effect once Stripe is switched on (see item 1): **a client who pays a
+deposit or pays in full and then cancels gets nothing back, and no screen
+anywhere tells them that.** Money would be captured with no reversal path, and
+the provider has no way to issue one from inside the app either.
+
+`refundPolicyNote` (`PoliciesScreen.tsx` / `PaymentsScreen.tsx`, stored in
+`providers.booking_policies`) is free text shown to clients on the provider
+profile and enforced by **nothing**. As of 2026-08-20 all 4 live providers had
+it blank, so clients currently see no refund terms at all.
+
+The provider's cancellation-notice window is likewise not payment-linked:
+cancelling inside the window is *blocked* rather than charged, and cancelling
+outside it refunds nothing, so the notice policy and the money are two
+unconnected systems.
+
+### What has to be decided before this can be built
+
+These are product/legal calls, not engineering ones — do not pick defaults
+unilaterally (see `LEGAL-COMPLIANCE-NOTES.md` and the CLAUDE.md legal rule):
+
+- Are deposits refundable at all, and if so up to when? Right now they are
+  non-refundable purely by omission, which no copy states.
+- Does cancelling outside the provider's notice window trigger a full refund,
+  a partial one, or none — and is that per-provider or platform-wide?
+- Who absorbs the Stripe processing fee and the platform fee on a refund?
+- Provider-initiated cancellations: presumably always a full refund, but this
+  needs stating.
+- What happens to a refund when a booking is cancelled as part of the account
+  deletion flow (see `ACCOUNT_DELETION.md` — transactions survive,
+  pseudonymised).
+- Does a declined/expired reschedule ever produce a refund, or only a cancel?
+
+### What building it involves
+
+- A `refund-payment` edge function wrapping Stripe's Refunds API, keyed on the
+  payment intent stored at checkout. Must be server-side and idempotent — the
+  client must never be able to trigger or size a refund.
+- A `refund_own_booking` / provider-side SECURITY DEFINER RPC that re-verifies
+  ownership and eligibility server-side, same shape as `cancel_own_booking()`.
+  The refund amount must be computed server-side from the snapshot policy, not
+  passed in.
+- `payment_status` transitions to `refunded` / a new `partially_refunded`, plus
+  the amount actually returned. The `refunded` value is already referenced by
+  the reminder-job queries, so the enum exists but is currently never written.
+- Client and provider notifications for the refund, trigger-owned like every
+  other booking status notification (see memory
+  `booking-notifications-architecture` — do not add an app-side insert).
+- Client-facing copy on the cancel modal stating what will and won't come back,
+  *before* they confirm — `BookingDetailScreen.tsx`'s cancel modal already
+  branches on the notice window and is the right place for it.
+- Terms & Conditions wording to match, flagged not drafted.
+
+Blocked on item 1: pointless to build until real payments are actually flowing.
+But item 1 must not ship without it.
+
 ## 2. RESOLVED — account deletion grace period is 30 days
 
 Migration `20260810152938_account_deletion_grace_period_30_days` was deployed
@@ -251,3 +318,59 @@ Two gaps flagged in earlier sessions were resolved this session:
 Both `tsc`-clean. Golden-path exercise (add multi-provider cart, checkout,
 back out before paying, confirm slot frees immediately) still pending —
 see memory `cart-checkout-slot-hold.md` for the full design record.
+
+---
+
+## 8. Unresolved iCloud-duplicate files — 15 need a human call (2026-08-20)
+
+This repo lives under `~/Desktop`, so iCloud resolves a conflicting write by
+forking a numbered copy — `shuffle 2.ts` next to `shuffle.ts`. A `Stop` hook
+running `git add -A` on every turn had been committing them indiscriminately;
+that hook is now removed (see CLAUDE.md, "Committing").
+
+Commit `1c4eb19` deleted the 33 that were byte-identical to their counterpart
+and referenced by nothing. **These 15 were deliberately left tracked** — each
+needs someone to say which version is real. Do not resolve them by glob or by
+filename heuristic; that is exactly what would destroy the legitimate ones.
+
+### 8a. Six differ from their counterpart — decide which is current
+
+| File | Counterpart |
+|---|---|
+| `tsconfig 2.json` | `tsconfig.json` |
+| `src/features/business-details/options 2.ts` | `options.ts` |
+| `src/tests/addressReleasePolicy.test 2.ts` | `addressReleasePolicy.test.ts` |
+| `assets/images/background 2.png` | `background.png` |
+| `supabase/migrations/20260817160000_manual_booking_extra_minutes 2.sql` | same name, no ` 2` |
+| `supabase/migrations/20260819001800_deduplicate_push_delivery 2.sql` | same name, no ` 2` |
+
+The two source files are the *pre-edit* copies of files that were being changed
+when the fork happened (`options.ts` gained mobile address-release timings on
+2026-08-20), so the un-numbered file is almost certainly current — but confirm
+rather than assume. **The two migrations matter most:** two files claiming the
+same migration timestamp is a real deploy hazard. Diff each against the live
+schema (`cerviced-migration-drift`) before deleting either.
+
+### 8b. Three are NOT duplicates — leave them alone
+
+`assets/logos/iPhone 14 & 15 Pro Max - 3.png`, `- 7.png`, `- 8.png` are real
+filenames that merely look like the collision pattern. This is why the
+`.gitignore` rule is scoped to source extensions and never covers assets.
+
+### 8c. Six migrations have no un-numbered counterpart
+
+```
+20260817110000_fix_pregnancy_safe_default 2.sql
+20260817110500_waitlist_lapse_and_exhaustion_notifications 2.sql
+20260817120000_replace_my_provider_specialties 2.sql
+20260817140000_manual_booking_category_snapshot_parity 2.sql
+20260817150000_manual_booking_scheduling_policy_override 2.sql
+20260818105725_prevent_self_booking 2.sql
+```
+
+The numbered file is the **only** copy of each, so deleting it would lose the
+migration outright. Several look superseded by a later-timestamped file that
+does exist (e.g. `20260818105903_prevent_self_booking.sql`), but "looks
+superseded" is not evidence — reconcile against the live schema first. Same
+reason `supabase/migrations/` is excluded from the `.gitignore` rule: a real
+migration must never be silently untracked.

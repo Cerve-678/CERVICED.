@@ -235,6 +235,26 @@ agent — these are the standing rules of thumb for every session.
   version), or, if both must coexist for a migration window, name both for
   what they *are* (`stripeService.ts` vs. the mock flow it's replacing), not
   for their age.
+- **Commit intentionally; never `git add -A`.** There is no auto-checkpoint
+  hook any more — a `Stop` hook that ran
+  `git add -A && git commit -m "checkpoint: WIP <date>"` on every turn was
+  removed on 2026-08-20. It produced 24 meaningless commits out of 142 and,
+  because this repo is often open in **two Claude sessions at once**, each
+  session kept committing the other's half-written files — which is what made
+  a constant appear to "revert" mid-session and threw `tsc` errors in files
+  nobody was editing. Stage the specific paths you touched, commit when a unit
+  of work is actually done, and write a message that says what changed.
+  `/rewind` covers mid-turn undo without touching git. The branch is
+  squash-merged into `main`, so the existing WIP commits never reach it.
+- **This repo lives under `~/Desktop`, so iCloud forks conflicting writes**
+  into numbered copies (`shuffle 2.ts` beside `shuffle.ts`). They are never
+  intentional content, and `.gitignore` now drops them — but only for
+  `ts/tsx/js/jsx/json`. Numbered **asset** files are legitimate here
+  (`assets/logos/iPhone 14 & 15 Pro Max - 3.png`) and `supabase/migrations/`
+  is excluded on purpose, since a real migration must never be silently
+  untracked. Never resolve one of these by filename heuristic: diff it against
+  its counterpart first. 15 unresolved ones are listed in `PRE-LAUNCH-TODO.md`
+  section 8.
 - **"Done" is a program-management gate, not just green output.** For
   anything non-trivial: `tsc` clean, `npm test` green, golden path actually run (not just
   typechecked), the relevant specialist review agent(s) invoked (security /
