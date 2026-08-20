@@ -28,7 +28,7 @@ import {
   validatePromoCode,
   getUserHealthProfile,
   getServiceSafetyFlags,
- getMobileProviderDisplayNames, prepareCheckout, cancelCheckout } from '../../services/databaseService';
+ getMobileProviderDisplayNames, prepareCheckout, cancelCheckout, getMyLastClientAddress } from '../../services/databaseService';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -1067,6 +1067,13 @@ GroupedServiceCard.displayName = 'GroupedServiceCard';
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const { theme, isDarkMode, palette: P } = useTheme();
   const { showAlert, showConfirm, DialogHost } = useAppDialog();
+  // A SECOND host, rendered inside the "Confirm Your Details" <Modal> rather
+  // than beside it. The screen-level DialogHost above is a sibling of that
+  // modal, and iOS won't present a modal from a sibling subtree while another
+  // is already up — so the validation alerts below raised from there were
+  // never visible, and tapping Continue with a blank name did nothing at all.
+  // Same nesting the payment sheet uses for its own in-modal alerts.
+  const { showAlert: showReviewAlert, DialogHost: ReviewDialogHost } = useAppDialog();
   const insets = useSafeAreaInsets();
 
   const {
@@ -1828,13 +1835,27 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setSaveAsDefault(false);
     setIsEditingDetails(false);
     setShowReviewModal(true);
+
+    // Carry the client's last mobile-booking address forward rather than
+    // making them retype it every checkout. Fired after the modal opens and
+    // deliberately not awaited: the field is editable and only required when
+    // a mobile provider is in the cart, so a slow or empty lookup shouldn't
+    // hold up the whole review step. Only prefills a still-empty field, so it
+    // can never overwrite something the client has already typed.
+    if (hasMobileProvider) {
+      getMyLastClientAddress()
+        .then(saved => {
+          if (saved) setClientAddress(prev => (prev.trim() ? prev : saved));
+        })
+        .catch(err => logger.error('Could not prefill saved address:', err));
+    }
   } catch (error) {
     logger.error('Checkout error:', error);
     showAlert('Something went wrong', 'We couldn\'t start checkout. Please try again.');
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert]);
+}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, hasMobileProvider]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -1843,21 +1864,25 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // in analytics, clientele, etc.), so an empty value here isn't just a
     // blank field, it's a silent "Client"/'—' fallback everywhere downstream.
     if (!reviewName.trim()) {
-      showAlert('Name Required', 'Please enter your name to continue.');
+      showReviewAlert('Name Required', 'Please enter your name to continue.');
+      setIsEditingDetails(true);
       return;
     }
     // Validate phone is provided
     if (!reviewPhone.trim()) {
-      showAlert('Phone Required', 'Please enter your phone number to continue.');
+      showReviewAlert('Phone Required', 'Please enter your phone number to continue.');
+      setIsEditingDetails(true);
       return;
     }
     const digitsOnly = reviewPhone.replace(/[\s\-()+ ]/g, '');
     if (digitsOnly.length < 10) {
-      showAlert('Check your phone number', 'Please enter a valid phone number.');
+      showReviewAlert('Check your phone number', 'Please enter a valid phone number.');
+      setIsEditingDetails(true);
       return;
     }
     if (hasMobileProvider && !clientAddress.trim()) {
-      showAlert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
+      showReviewAlert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
+      setIsEditingDetails(true);
       return;
     }
 
@@ -1884,7 +1909,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setAgreedToPolicy(false);
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
-  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showAlert, hasMobileProvider, clientAddress]);
+  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, hasMobileProvider, clientAddress]);
 
 const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIntentId?: string) => {
   if (__DEV__) {
@@ -2391,6 +2416,8 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 </View>
               </View>
             </View>
+            {/* Nested INSIDE this modal on purpose — see showReviewAlert. */}
+            <ReviewDialogHost />
           </Modal>
 
           {/* Booking Summary Modal */}
