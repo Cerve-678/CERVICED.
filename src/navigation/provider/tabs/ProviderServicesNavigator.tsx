@@ -5,6 +5,7 @@ import InfoRegScreen from '../../../screens/provider/InfoRegScreen';
 import ProviderPromotionsScreen from '../../../screens/provider/ProviderPromotionsScreen';
 import ProviderClienteleScreen from '../../../screens/provider/ProviderClienteleScreen';
 import ProviderInfoPackScreen from '../../../screens/provider/ProviderInfoPackScreen';
+import ProviderConversationScreen from '../../../screens/provider/ProviderConversationScreen';
 import ProviderScheduleScreen from '../../../screens/provider/ProviderScheduleScreen';
 import AddBookingScreen from '../../../screens/provider/AddBookingScreen';
 import DevSettingsScreen from '../../../screens/shared/DevSettingsScreen';
@@ -48,6 +49,15 @@ export default function ProviderServicesNavigator() {
       <ProviderServicesStack.Screen
         name="InfoPacks"
         component={ProviderInfoPackScreen}
+        options={{ headerShown: false, presentation: 'card' }}
+      />
+
+      {/* Reached from Clientele's Message button. Registered HERE (as well as
+          on the Home/Becca/Account stacks) so that tap PUSHES within this
+          stack, leaving Clientele underneath for back. */}
+      <ProviderServicesStack.Screen
+        name="ProviderConversation"
+        component={ProviderConversationScreen}
         options={{ headerShown: false, presentation: 'card' }}
       />
 

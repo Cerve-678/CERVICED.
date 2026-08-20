@@ -239,6 +239,15 @@ export type ProviderServicesStackParamList = {
   Promotions: undefined;
   InfoPacks: undefined;
   Clientele: undefined;
+  // Pushed from the Clientele screen's Message button, for the same reason
+  // ProviderSchedule is registered here — a cross-tab navigate would land the
+  // conversation at a bare tab root and its back button would fire an
+  // unhandled GO_BACK.
+  ProviderConversation: {
+    conversationId: string;
+    clientUserId: string;
+    clientName: string;
+  };
   // Pushed from the availability card on the provider's own profile, so the
   // schedule opens with that profile beneath it instead of at a bare tab root.
   ProviderSchedule: undefined;

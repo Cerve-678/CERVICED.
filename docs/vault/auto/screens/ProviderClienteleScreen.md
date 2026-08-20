@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `Clientele`
 
 ## → Navigates to
-- _— none —_
+- [[ProviderConversationScreen\|ProviderConversation]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]

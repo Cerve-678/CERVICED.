@@ -27,6 +27,7 @@ import {
   getMyProviderProfile,
   getClientReliabilityStatsBatch,
   ClientReliabilityStats,
+  getOrCreateConversation,
 } from '../../services/databaseService';
 import type { ClienteleMember, DbBooking } from '../../types/database';
 import { useProviderDialog } from '../../components/ProviderDialog';
@@ -208,14 +209,10 @@ function tomorrow9am() {
   return d;
 }
 
-function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose, onSent, onScheduled, onError, P }: {
+function AnnouncementSheet({ visible, counts, clients, onClose, onSent, onScheduled, onError, P }: {
   visible: boolean;
   counts: Record<AudienceKey, number>;
   clients: ClienteleMember[];
-  // When set, the sheet targets exactly this one client — audience picker
-  // is hidden and "to {name}" is shown instead, matching the removed
-  // PromoPickerSheet's single-recipient framing.
-  forcedRecipient?: ClienteleMember | null;
   onClose: () => void;
   onSent: (count: number) => void;
   onScheduled: (when: Date) => void;
@@ -241,14 +238,13 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
   ];
 
   const recipientIds = (): string[] => {
-    if (forcedRecipient) return [forcedRecipient.user_id];
     if (audience === 'all')    return clients.map(c => c.user_id);
     if (audience === 'repeat') return clients.filter(c => c.booking_count >= 2).map(c => c.user_id);
     if (audience === 'new')    return clients.filter(c => c.booking_count === 1).map(c => c.user_id);
     return clients.filter(c => daysSince(c.last_booking_date) > 60).map(c => c.user_id);
   };
 
-  const recipientCount = forcedRecipient ? 1 : counts[audience];
+  const recipientCount = counts[audience];
   const canSend = title.trim().length > 0 && body.trim().length > 0 && recipientCount > 0 && !sending;
 
   const sheetRef = useRef<BottomSheet>(null);
@@ -352,11 +348,9 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
     >
       <View style={anSt.header}>
         <View>
-          <Text style={[anSt.title, { color: P.text }]}>{forcedRecipient ? 'Message Client' : 'New Announcement'}</Text>
+          <Text style={[anSt.title, { color: P.text }]}>New Announcement</Text>
           <Text style={[anSt.sub, { color: P.sub }]}>
-            {forcedRecipient
-              ? `to ${forcedRecipient.customer_name}`
-              : `${recipientCount} client${recipientCount !== 1 ? 's' : ''} will receive this`}
+            {recipientCount} client{recipientCount !== 1 ? 's' : ''} will receive this
           </Text>
         </View>
         <TouchableOpacity onPress={() => sheetRef.current?.close()} activeOpacity={0.7}>
@@ -365,34 +359,25 @@ function AnnouncementSheet({ visible, counts, clients, forcedRecipient, onClose,
       </View>
 
       <BottomSheetScrollView style={anSt.scrollFlex} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={anSt.scroll}>
-        {forcedRecipient ? (
-          <View style={[anSt.audienceChip, { borderColor: P.border, backgroundColor: 'transparent', marginBottom: 4 }]}>
-            <Ionicons name="person-outline" size={12} color={P.sub} />
-            <Text style={[anSt.audienceLabel, { color: P.text }]}>{forcedRecipient.customer_name}</Text>
-          </View>
-        ) : (
-          <>
-            <Text style={[anSt.label, { color: P.sub }]}>AUDIENCE</Text>
-            <View style={anSt.audienceRow}>
-              {audienceOptions.map(opt => {
-                const active = audience === opt.key;
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[anSt.audienceChip, { borderColor: active ? P.accent : P.border, backgroundColor: active ? P.accent + '18' : 'transparent' }]}
-                    onPress={() => { Haptics.selectionAsync().catch(() => {}); setAudience(opt.key); }}
-                    activeOpacity={0.7}>
-                    <Ionicons name={opt.icon as any} size={12} color={active ? P.accent : P.sub} />
-                    <Text style={[anSt.audienceLabel, { color: active ? P.accent : P.sub }]}>{opt.label}</Text>
-                    <View style={[anSt.countBadge, { backgroundColor: active ? P.accent + '30' : P.border }]}>
-                      <Text style={[anSt.countText, { color: active ? P.accent : P.sub }]}>{counts[opt.key]}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </>
-        )}
+        <Text style={[anSt.label, { color: P.sub }]}>AUDIENCE</Text>
+        <View style={anSt.audienceRow}>
+          {audienceOptions.map(opt => {
+            const active = audience === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                style={[anSt.audienceChip, { borderColor: active ? P.accent : P.border, backgroundColor: active ? P.accent + '18' : 'transparent' }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setAudience(opt.key); }}
+                activeOpacity={0.7}>
+                <Ionicons name={opt.icon as any} size={12} color={active ? P.accent : P.sub} />
+                <Text style={[anSt.audienceLabel, { color: active ? P.accent : P.sub }]}>{opt.label}</Text>
+                <View style={[anSt.countBadge, { backgroundColor: active ? P.accent + '30' : P.border }]}>
+                  <Text style={[anSt.countText, { color: active ? P.accent : P.sub }]}>{counts[opt.key]}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <Text style={[anSt.label, { color: P.sub }]}>TITLE</Text>
         <BottomSheetTextInput
@@ -696,9 +681,9 @@ export default function ProviderClienteleScreen({ navigation }: any) {
   const [clients, setClients] = useState<ClienteleMember[]>([]);
   const [reliabilityByClient, setReliabilityByClient] = useState<Record<string, ClientReliabilityStats>>({});
   const [providerName, setProviderName] = useState('');
+  const [providerId, setProviderId] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('all');
-  const [messageTarget, setMessageTarget] = useState<ClienteleMember | null>(null);
   const [announcementOpen, setAnnouncementOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<ClienteleMember | null>(null);
   const [historyBookings, setHistoryBookings] = useState<DbBooking[]>([]);
@@ -715,6 +700,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       ]);
       setClients(data);
       setProviderName(profile?.display_name ?? '');
+      setProviderId(profile?.id ?? '');
       Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
 
       // Batched, not per-card — one query for the whole list's reliability
@@ -745,15 +731,30 @@ export default function ProviderClienteleScreen({ navigation }: any) {
 
   const handleAnnouncementSent = (count: number) => {
     setAnnouncementOpen(false);
-    setMessageTarget(null);
     showToast(`Announcement sent to ${count} client${count !== 1 ? 's' : ''}`);
   };
 
   const handleAnnouncementScheduled = (when: Date) => {
     setAnnouncementOpen(false);
-    setMessageTarget(null);
     showToast(`Scheduled for ${when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} at ${formatTime12(when)}`);
   };
+
+  // Opens the real in-app conversation with this client rather than a
+  // one-off announcement — same path the Calendar tab and Inbox use, so the
+  // thread is shared instead of forking into a separate broadcast channel.
+  const handleMessage = useCallback(async (member: ClienteleMember) => {
+    if (!providerId) return;
+    try {
+      const conversationId = await getOrCreateConversation(providerId, member.user_id);
+      navigation.navigate('ProviderConversation', {
+        conversationId,
+        clientUserId: member.user_id,
+        clientName: member.customer_name,
+      });
+    } catch (e: any) {
+      showToast(toUserMessage(e, 'Could not open that conversation.', 'ProviderClienteleScreen.message'), 'error');
+    }
+  }, [providerId, navigation, showToast]);
 
   const handleRebook = async (member: ClienteleMember) => {
     try {
@@ -848,7 +849,7 @@ export default function ProviderClienteleScreen({ navigation }: any) {
                   member={item}
                   lapsed={tab === 'lapsed' || daysSince(item.last_booking_date) > 60}
                   reliability={reliabilityByClient[item.user_id]}
-                  onMessage={m => setMessageTarget(m)}
+                  onMessage={handleMessage}
                   onRebook={handleRebook}
                   onViewHistory={handleViewHistory}
                   P={P}
@@ -862,11 +863,10 @@ export default function ProviderClienteleScreen({ navigation }: any) {
       </SafeAreaView>
 
       <AnnouncementSheet
-        visible={announcementOpen || messageTarget !== null}
+        visible={announcementOpen}
         counts={counts}
         clients={clients}
-        forcedRecipient={messageTarget}
-        onClose={() => { setAnnouncementOpen(false); setMessageTarget(null); }}
+        onClose={() => setAnnouncementOpen(false)}
         onSent={handleAnnouncementSent}
         onScheduled={handleAnnouncementScheduled}
         onError={msg => showToast(msg, 'error')}

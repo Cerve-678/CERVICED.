@@ -338,11 +338,11 @@ Curated: [[Services]] · **37 files**
 - `src/services/becca/entityResolver.ts` _(3)_
 - `src/services/becca/matcher.ts` _(3)_
 - `src/services/userLearningService.ts` _(3)_
+- `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(2)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(2)_
 - `src/services/becca/serviceCatalogue.ts` _(2)_
 - `src/types/database.ts` _(2)_
 - `supabase/becca_chat_migration_001.sql` _(2)_
-- `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(1)_
 - … +7 more
 
 ## Cart & checkout
