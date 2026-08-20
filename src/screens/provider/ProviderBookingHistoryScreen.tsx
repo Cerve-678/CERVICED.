@@ -22,7 +22,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import {
   getProviderBookings,
   getMyProviderProfile,
-  getServicePrice,
+  getServiceBookingDefaults,
   insertDirectBooking,
   getProviderWaitlist,
   inviteFromWaitlist,
@@ -557,11 +557,22 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
     try {
       const entry = inviteModal.entry;
       let basePrice = 0;
+      // Length matters as much as price here: without it the booking is
+      // written with no end_time, which leaves the DB overlap constraint
+      // nothing to measure and shows up on the provider's day as a block of
+      // unknown length. An hour is the same fallback the database itself
+      // uses (get_provider_busy_spans COALESCEs to booking_time + 1 hour),
+      // so a service with no duration set still produces a real span.
+      let durationMinutes = 60;
       if (entry.service_id) {
-        basePrice = await getServicePrice(entry.service_id);
+        const defaults = await getServiceBookingDefaults(entry.service_id);
+        basePrice = defaults.price;
+        if (defaults.durationMinutes > 0) durationMinutes = defaults.durationMinutes;
       }
       const bookingDate = inviteDate.toISOString().split('T')[0]!;
       const bookingTime = inviteTime.toTimeString().split(' ')[0]!;
+      const endAt = new Date(inviteTime.getTime() + durationMinutes * 60_000);
+      const endTime = endAt.toTimeString().split(' ')[0]!;
       await insertDirectBooking({
         user_id: entry.user_id,
         provider_id: providerDbId,
@@ -569,6 +580,7 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
         status: 'pending',
         booking_date: bookingDate,
         booking_time: bookingTime,
+        end_time: endTime,
         payment_type: 'full',
         base_price: basePrice,
         add_ons_total: 0,

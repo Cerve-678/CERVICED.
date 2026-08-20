@@ -12,11 +12,7 @@ import {
 } from '../types/booking';
 import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../types/database';
 import type { ProviderLocationData } from './databaseService';
-import {
-  getMyBookings,
-  updateBookingStatus as dbUpdateBookingStatus,
-  updateBookingDateTime,
-} from './databaseService';
+import { getMyBookings } from './databaseService';
 import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
 import { calculatePlatformFee } from '../features/cart/platformFee';
@@ -512,27 +508,20 @@ export async function fetchBookingsFromSupabase(userId: string): Promise<Confirm
   return rows.map(mapDbBookingToConfirmed);
 }
 
-/**
- * Mark a booking as cancelled in Supabase.
- * The reason parameter is reserved for future cancellation-reason tracking.
- * Throws on failure — callers must handle the error.
- */
-export async function cancelBookingInSupabase(
-  bookingId: string,
-  _reason?: string
-): Promise<void> {
-  await dbUpdateBookingStatus(bookingId, 'cancelled');
-}
-
-/**
- * Persist a rescheduled date/time for a booking in Supabase.
- * Throws on failure — callers must handle the error.
- */
-export async function rescheduleBookingInSupabase(
-  bookingId: string,
-  newDate: string,
-  newTime: string,
-  newEndTime: string
-): Promise<void> {
-  await updateBookingDateTime(bookingId, newDate, newTime, newEndTime);
-}
+// cancelBookingInSupabase() and rescheduleBookingInSupabase() were removed
+// here (2026-08-20) — both were 100% dead (zero callers anywhere in the
+// app) and both wrapped an enforcement gap: cancelBookingInSupabase called
+// updateBookingStatus(id, 'cancelled'), which the live
+// provider_update_booking_status() RPC now rejects outright ("Use
+// provider_cancel_own_booking() to cancel a booking" — see
+// supabase/migrations/20260817105507_fix_client_reliability_tracking.sql),
+// and rescheduleBookingInSupabase called databaseService.ts's
+// updateBookingDateTime(), a raw .update() on booking_date/booking_time/
+// end_time with none of the reschedule-request approval flow, reschedule-
+// count limit, or notice-window checks the real path
+// (requestRescheduleOwnBooking / confirmRescheduleOwnBooking) enforces —
+// and bookings' RLS has no WITH CHECK clause to catch it at the DB layer
+// either. Real cancellation goes through BookingContext's cancelBooking()
+// (cancelOwnBooking/providerCancelOwnBooking); real reschedule goes through
+// the request/confirm RPC pair. updateBookingDateTime() itself was removed
+// from databaseService.ts in the same pass for the same reason.

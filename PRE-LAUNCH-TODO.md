@@ -400,3 +400,47 @@ vault output needs to live outside the synced tree.
 Deleting the 1,008 existing forks is safe whenever you want — everything in
 that directory is regenerated from source — but do the generator fix first, or
 they simply come back.
+
+## 10. Component decision guide — pick a winner per category, write it into DESIGN_SYSTEM.md (2026-08-20)
+
+`DESIGN_SYSTEM.md` documents palette/typography but has no "what component to
+use when" guide — e.g. which of the app's several alert/modal styles is *the*
+one for an informational message like "this time is no longer available."
+InfoRegScreen's redesign needs this decided first so it doesn't add a new,
+one-off variant.
+
+A full-app survey found real, already-consistent patterns alongside genuine
+silent drift — several component jobs have 2-4 unmerged implementations doing
+the same thing, sometimes coexisting in the same file:
+
+- **Quick informational alerts** — 4 variants: `useAppDialog`/`useProviderDialog`'s
+  blurred bottom sheet (`showAlert`), two independently hand-copied centered-card
+  families (`UserProfileScreen`/`ProviderAccountScreen` vs. `BookingDetailScreen`/
+  `BookingsScreen`), and raw `Alert.alert` — 203 call sites across 32 files,
+  unthemed, winning purely by inertia.
+- **Toasts** — 3 families: `AppDialog`'s floating+blurred, `ProviderPromotionsScreen`'s
+  near-identical floating-unblurred cousin (hand-rolled in the same file that
+  also imports the real `useProviderDialog` hook), and a non-floating inline
+  banner used in 3 provider screens.
+- **Tabs** — the healthiest category: `SlidingTabs` (10 screens) and
+  `CategoryTabPill` (3 screens) are both genuinely shared and self-documented
+  in code comments as deliberate. Only loose thread: an underline-tab style
+  exists twice (`ExploreScreen`'s `SubTabBar`, `ProviderIntakeFormScreen`'s
+  `tabBar`) with no shared code between the two copies.
+- **Cards** — border radius scattered across 8 independent literals
+  (12/15/16/18/20/22/26/32), no shared token backs any of them; 18px shows up
+  in three unrelated files but by coincidence, not a shared constant. Shadow
+  treatment is similarly inconsistent (some cards own explicit shadow/elevation,
+  some rely purely on a BlurView, `ProviderCard` doesn't own either — both are
+  injected per call site).
+
+A side-by-side visual comparison of every variant (rendered with the app's
+real palette and fonts) was published as an Artifact during this audit —
+ask in-session for the link if it's needed again, since Artifact URLs aren't
+recorded in this file.
+
+**Next step:** pick one winner per category (alerts, toasts, the underline-tab
+duplication), and optionally a canonical card radius/shadow formula, then write
+the decision into `DESIGN_SYSTEM.md` as an explicit "use X for Y situation"
+guide. Not blocking launch, but do it before InfoRegScreen's redesign so that
+work has a real target to build against instead of adding a fifth variant.

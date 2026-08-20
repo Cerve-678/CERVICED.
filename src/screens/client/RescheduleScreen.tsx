@@ -22,7 +22,11 @@ import {
   ProviderReschedulePolicy,
 } from '../../services/databaseService';
 import { AvailabilityService } from '../../services/AvailabilityService';
-import { formatLongDate, formatTime12, dateToYMD } from '../../utils/dateUtils';
+import { formatLongDate, formatTime12, formatTime12Safe, dateToYMD } from '../../utils/dateUtils';
+import {
+  rescheduleProbeStart, rescheduleCandidateDates, rescheduleWindowLabel, rescheduleRequestToken,
+  RESCHEDULE_MAX_DATES,
+} from '../../utils/rescheduleWindow';
 import { logger } from '../../utils/logger';
 import { toUserMessage } from '../../utils/userFacingError';
 
@@ -47,13 +51,6 @@ function dateToTimeHHMM(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-// Number of upcoming days to probe for real availability when the client is
-// requesting a reschedule (before the provider has offered specific slots).
-const RESCHEDULE_HORIZON_DAYS = 14;
-// Cap how many dates-with-availability we surface in the horizontal strip, so a
-// wide-open provider doesn't produce an endlessly long scroll.
-const RESCHEDULE_MAX_DATES = 7;
-
 function providerRespondedDates(providerAvailableDates: AvailableDate[]): DateOption[] {
   return providerAvailableDates.map(entry => ({
     date: entry.date,
@@ -62,10 +59,11 @@ function providerRespondedDates(providerAvailableDates: AvailableDate[]): DateOp
   }));
 }
 
-// Client-request path: probe the provider's REAL open slots across the next
-// RESCHEDULE_HORIZON_DAYS via getAvailableSlots (the same buffer/notice/
-// booking-window-aware source the new-booking picker and the provider's own
-// reschedule modals use), and surface only dates that actually have openings.
+// Client-request path: probe the provider's REAL open slots across a
+// RESCHEDULE_HORIZON_DAYS window (see rescheduleProbeStart for where it
+// starts) via getAvailableSlots — the same buffer/notice/booking-window-aware
+// source the new-booking picker and the provider's own reschedule modals use —
+// and surface only dates that actually have openings.
 // This replaces an older generator that fabricated 5 dates × 3 synthetic times
 // off the current booking time — those were never real availability, so a
 // client could request a slot the provider's own policies would reject.
@@ -73,17 +71,7 @@ async function fetchRealRescheduleDates(
   providerId: string,
   currentDate: string,
 ): Promise<DateOption[]> {
-  const start = new Date();
-  start.setDate(start.getDate() + 1); // from tomorrow
-
-  const candidateDates: string[] = [];
-  for (let i = 0; i < RESCHEDULE_HORIZON_DAYS; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (iso === currentDate) continue; // no point offering the slot they're leaving
-    candidateDates.push(iso);
-  }
+  const candidateDates = rescheduleCandidateDates(currentDate);
 
   // Independent per-date queries — fetch in parallel, not sequentially.
   const results = await Promise.all(
@@ -235,11 +223,29 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     return floor;
   }, [reschedulePolicy]);
 
+  // Describes the window fetchRealRescheduleDates actually probed, so the
+  // empty state doesn't claim "the next 14 days" for a booking whose window is
+  // anchored months out (see rescheduleProbeStart).
+  const probeWindowLabel = useMemo(
+    () => (booking ? rescheduleWindowLabel(booking.bookingDate) : ''),
+    [booking],
+  );
+
+  // Open the spinner near the booking's own date rather than always on
+  // tomorrow — moving an appointment three months out otherwise meant
+  // spinning through every intervening month. minPickerDate stays the hard
+  // floor (notice period), it's only the starting position that moves.
+  const customPickerSeed = useMemo(() => {
+    if (!booking) return minPickerDate;
+    const anchored = rescheduleProbeStart(booking.bookingDate);
+    return anchored > minPickerDate ? anchored : minPickerDate;
+  }, [booking, minPickerDate]);
+
   const openCustomDatePicker = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setCustomDate(minPickerDate);
+    setCustomDate(customPickerSeed);
     setCustomPickerStep('date');
-  }, [minPickerDate]);
+  }, [customPickerSeed]);
 
   const handleCustomDateChange = useCallback((_: unknown, picked?: Date) => {
     if (Platform.OS === 'android') setCustomPickerStep(null);
@@ -298,7 +304,10 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       } else if (isConfirmPhase) {
         await confirmReschedule(booking.id, selectedDate, selectedTime);
       } else {
-        await requestReschedule(booking.id, [`${selectedDate} ${selectedTime}`]);
+        // Never `${selectedDate} ${selectedTime}` — the slot chips carry
+        // 12-hour strings and both ends of this pipe split the token on
+        // whitespace, which dropped the meridiem. See rescheduleRequestToken.
+        await requestReschedule(booking.id, [rescheduleRequestToken(selectedDate, selectedTime)]);
       }
       setPhase('done');
     } catch (err: any) {
@@ -525,7 +534,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               <View style={[st.currentDateBadge, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Ionicons name="calendar-outline" size={14} color={C.sub} />
                 <Text style={[st.currentDateText, { color: C.sub }]}>
-                  Currently: {formatDisplayDate(booking.bookingDate)} at {booking.bookingTime}
+                  Currently: {formatDisplayDate(booking.bookingDate)} at {formatTime12Safe(booking.bookingTime) ?? booking.bookingTime}
                 </Text>
               </View>
             </View>
@@ -551,8 +560,8 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                       style={[st.row, { borderBottomColor: C.border, borderBottomWidth: i === requestedDates.length - 1 ? 0 : StyleSheet.hairlineWidth }]}
                     >
                       <Text style={[st.rowLabel, { color: C.sub, flex: 1 }]}>{formatDisplayDate(d)}</Text>
-                      {!!requestedTimes[i] && (
-                        <Text style={[st.rowValue, { color: C.text, fontWeight: '700', flex: 0 }]}>{requestedTimes[i]}</Text>
+                      {!!formatTime12Safe(requestedTimes[i]) && (
+                        <Text style={[st.rowValue, { color: C.text, fontWeight: '700', flex: 0 }]}>{formatTime12Safe(requestedTimes[i])}</Text>
                       )}
                     </View>
                   ))}
@@ -671,7 +680,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                 <Ionicons name="calendar-clear-outline" size={28} color={C.sub} />
                 <Text style={{ color: C.text, marginTop: 10, fontSize: 14, fontWeight: '600' }}>No open times right now</Text>
                 <Text style={{ color: C.sub, marginTop: 4, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 20 }}>
-                  {booking.providerName} has no availability in the next {RESCHEDULE_HORIZON_DAYS} days. Try again later, or message them directly.
+                  {booking.providerName} has no availability {probeWindowLabel}. Try again later, use "Request specific time" to propose a date yourself, or message them directly.
                 </Text>
               </View>
             ) : (
@@ -742,7 +751,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   {customPickerStep === 'date' ? (
                     <DateTimePicker
                       mode="date"
-                      value={customDate ?? minPickerDate}
+                      value={customDate ?? customPickerSeed}
                       onChange={handleCustomDateChange}
                       display="spinner"
                       themeVariant={isDarkMode ? 'dark' : 'light'}
@@ -753,7 +762,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
                   ) : (
                     <DateTimePicker
                       mode="time"
-                      value={customDate ?? minPickerDate}
+                      value={customDate ?? customPickerSeed}
                       onChange={handleCustomTimeChange}
                       display="spinner"
                       themeVariant={isDarkMode ? 'dark' : 'light'}
@@ -770,7 +779,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             customPickerStep === 'date' ? (
               <DateTimePicker
                 mode="date"
-                value={customDate ?? minPickerDate}
+                value={customDate ?? customPickerSeed}
                 onChange={handleCustomDateChange}
                 display="default"
                 minimumDate={minPickerDate}
@@ -778,7 +787,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
             ) : (
               <DateTimePicker
                 mode="time"
-                value={customDate ?? minPickerDate}
+                value={customDate ?? customPickerSeed}
                 onChange={handleCustomTimeChange}
                 display="default"
                 minuteInterval={5}

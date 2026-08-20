@@ -82,14 +82,6 @@ interface ServiceBooking {
   isDepositOnly?: boolean;
 }
 
-// The checkout summary goes full screen once it stops being a glance: at or
-// above this many services, OR above this many providers. Each extra
-// provider costs a whole card of chrome (header, logo, subtotal) on top of
-// its own appointments, so provider count runs out of room independently of
-// service count. See the Booking Summary <Modal>.
-const FULL_SCREEN_SUMMARY_THRESHOLD = 5;
-const FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD = 3;
-
 // How recently a cart item must have been added for the cart to treat it as
 // "just added" and leave its provider section expanded on first mount. Wide
 // enough to cover adding a booking and then navigating to the cart (which
@@ -106,41 +98,25 @@ function formatNameList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
 }
 
-/** Chrome around the checkout summary's content. Two presentations, one
- *  body: a centred card for a small cart, a full screen with a pinned
- *  action row for a large one. Kept at module scope (not inlined in
- *  CartScreen's render) so flipping between them doesn't remount the
- *  content on every parent render. */
+/** Chrome around the checkout summary's content: a full screen with a pinned
+ *  action row. It used to switch to a centred card for small carts, but the
+ *  same layout for every cart is what makes the step recognisable, and the
+ *  card's fixed 90%-wide / 85%-tall box turned into a cramped inner scroll
+ *  the moment appointments carried add-ons or a group block — with the Terms
+ *  checkbox and Confirm & Pay pushed below the fold. Kept at module scope
+ *  (not inlined in CartScreen's render) so it doesn't remount the content on
+ *  every parent render. */
 function SummaryShell({
-  fullScreen,
   P,
   onBack,
   actions,
   children,
 }: {
-  fullScreen: boolean;
   P: AppTheme;
   onBack: () => void;
   actions: React.ReactNode;
   children: React.ReactNode;
 }) {
-  if (!fullScreen) {
-    return (
-      <View style={styles.modalOverlayNoBlur}>
-        <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
-          <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-            <View style={styles.reviewModalContent}>
-              <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
-              <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>Review your appointments before payment</Text>
-              {children}
-              <View style={styles.reviewButtonRow}>{actions}</View>
-            </View>
-          </ScrollView>
-        </View>
-      </View>
-    );
-  }
-
   return (
     // Own SafeAreaProvider: a fullScreen modal renders into its own native
     // surface that the app-root provider doesn't measure, so insets would
@@ -1514,12 +1490,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     name: string; email: string; phone: string;
   } | null>(null);
   const [showBookingSummaryModal, setShowBookingSummaryModal] = useState(false);
-  // A small cart stays a centred card; anything bigger takes the whole
-  // screen. See FULL_SCREEN_SUMMARY_THRESHOLD.
-  const useFullScreenSummary =
-    checkoutSnapshot.items.length >= FULL_SCREEN_SUMMARY_THRESHOLD
-    || new Set(checkoutSnapshot.items.map(i => i.providerName)).size
-       > FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD;
   // Summary → back to the customer-details review step. Shared by the
   // header chevron, the Back button and the Android hardware back gesture,
   // so all three land in the same place.
@@ -2078,7 +2048,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           selectedTime: result.time,
           notes: result.notes,
           isDepositOnly: result.isDepositOnly,
-          ...(result.policyAcceptedAt ? { policyAcceptedAt: result.policyAcceptedAt } : {}),
           ...(result.policySnapshot ? { policySnapshot: result.policySnapshot } : {}),
         });
       } catch (error) {
@@ -2854,28 +2823,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             <ReviewDialogHost />
           </Modal>
 
-          {/* Booking Summary. A small cart stays a centred card — that reads
-              as a confirmation step, and blowing four lines up to fill a
-              phone screen feels heavier than the decision is. From
-              FULL_SCREEN_SUMMARY_THRESHOLD appointments up it goes full
-              screen instead: past that, each appointment carrying its own
-              add-ons, group block and time overflowed the 90%-wide /
-              85%-tall card into a cramped inner scroll, with the Terms
-              checkbox and Confirm & Pay pushed below the fold.
-
-              `key` forces a remount when the presentation flips — React
-              Native's Modal doesn't apply a changed
-              transparent/presentationStyle to an already-mounted modal. */}
+          {/* Booking Summary — always full screen, whatever the cart size, so
+              the last step before paying is the same shape every time and
+              never has to fit a long multi-provider cart into a fixed card. */}
           <Modal
-            key={useFullScreenSummary ? 'summary-fullscreen' : 'summary-card'}
             visible={showBookingSummaryModal}
-            animationType={useFullScreenSummary ? 'slide' : 'fade'}
-            transparent={!useFullScreenSummary}
-            {...(useFullScreenSummary ? { presentationStyle: 'fullScreen' as const } : {})}
+            animationType="slide"
+            presentationStyle="fullScreen"
             onRequestClose={backFromSummary}
           >
             <SummaryShell
-              fullScreen={useFullScreenSummary}
               P={P}
               onBack={backFromSummary}
               actions={<>
@@ -2894,6 +2851,32 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     onPress={async () => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                       console.log('[CartScreen] Confirm & Pay pressed', { agreedToPolicy, isReservingSlots, itemCount: checkoutSnapshot.items.length });
+                      // This checkbox is the ONLY place the client agrees to
+                      // the Terms and each provider's cancellation policy —
+                      // the booking sheets deliberately no longer ask a second
+                      // time. It gates this button, so reaching here means
+                      // consent was given; stamp every item with the moment it
+                      // happened so the booking carries a real record.
+                      const policyAcceptedAt = new Date().toISOString();
+                      checkoutSnapshot.items.forEach(item => {
+                        updateCartItem(item.id, { policyAcceptedAt });
+                      });
+                      // …and onto the SNAPSHOT, which is what actually gets
+                      // booked. handlePaymentSuccess passes
+                      // checkoutSnapshot.items to createBookingsFromCart, and
+                      // that reads item.policyAcceptedAt for the row's
+                      // policy_accepted_at. The snapshot was captured back in
+                      // handleCheckout, before this stamp existed, and
+                      // updateCartItem only replaces the object in cart state
+                      // — so without this every booking was written with
+                      // policy_accepted_at NULL even though the client had
+                      // just ticked the box, and a SECOND checkout attempt
+                      // wrote the PREVIOUS attempt's timestamp (the stale one
+                      // left on the cart item) instead of this one.
+                      setCheckoutSnapshot(prev => ({
+                        ...prev,
+                        items: prev.items.map(i => ({ ...i, policyAcceptedAt })),
+                      }));
                       // Reserve every item's slot as an on_hold booking
                       // BEFORE opening the payment sheet — closes the
                       // window between "committed to paying" and
@@ -3471,7 +3454,6 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 selectedTime: editingItem.selectedTime,
                 notes: editingItem.notes,
                 isDepositOnly: editingItem.isDepositOnly,
-                agreedToPolicy: !!editingItem.policyAcceptedAt,
               }}
             />
           )}
@@ -4874,12 +4856,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
 
-  // Booking Summary — centred-card presentation (small carts)
-  summaryModalContainer: {
-    maxHeight: '85%',
-  },
-
-  // Booking Summary — full-screen presentation (FULL_SCREEN_SUMMARY_THRESHOLD+)
+  // Booking Summary — full-screen presentation (the only one)
   summaryScreen: {
     flex: 1,
   },

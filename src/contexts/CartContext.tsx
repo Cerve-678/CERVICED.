@@ -163,7 +163,7 @@ export interface AddToCartParams {
  * splits the item back into a standalone booking).
  */
 export type CartItemUpdates = Partial<
-  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly' | 'providerId'>
+  Pick<CartItem, 'addOns' | 'selectedDate' | 'selectedTime' | 'notes' | 'isDepositOnly' | 'providerId' | 'policyAcceptedAt'>
 > & {
   /** Explicitly `| undefined` (not just optional): under
    *  exactOptionalPropertyTypes, clearing the group requires passing the key

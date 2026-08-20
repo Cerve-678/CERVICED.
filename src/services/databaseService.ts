@@ -3057,23 +3057,13 @@ export async function respondToRescheduleRequest(
   if (error) throw error;
 }
 
-/** Update a booking's date and time after a confirmed reschedule */
-export async function updateBookingDateTime(
-  bookingId: string,
-  bookingDate: string,
-  bookingTime: string,
-  endTime: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("bookings")
-    .update({
-      booking_date: bookingDate,
-      booking_time: bookingTime,
-      end_time: endTime,
-    })
-    .eq("id", bookingId);
-  if (error) throw error;
-}
+// updateBookingDateTime() was removed here (2026-08-20) — a raw .update() on
+// booking_date/booking_time/end_time with none of the reschedule-request
+// approval flow, reschedule-count limit, or notice-window checks this path
+// needs, and bookings' RLS has no WITH CHECK to catch that at the DB layer
+// either. It was already dead (its only caller, bookingService.ts's
+// rescheduleBookingInSupabase(), had zero callers itself). Use
+// confirmRescheduleOwnBooking() below instead.
 
 /** Client confirms a provider-approved reschedule slot. Routed through
  *  confirm_reschedule_own_booking() — requires an active provider_responded
@@ -3670,7 +3660,8 @@ export async function getProviderFormLibrary(): Promise<LibraryForm[]> {
  *  window onto it — terms text only, and only for a live provider. Returns
  *  null when this provider hasn't written any, which is the normal case.
  *
- *  Requires supabase/provider_terms_and_conditions.sql to have been run.
+ *  Requires supabase/migrations/20260820161251_provider_terms_and_conditions.sql
+ *  to have been run.
  */
 export async function getProviderTerms(
   providerId: string,
@@ -4489,6 +4480,39 @@ export async function getMyProviderFullAddress(): Promise<string | null> {
     .maybeSingle();
   return (
     (data as { full_address?: string | null } | null)?.full_address ?? null
+  );
+}
+
+/**
+ * Whether the calling provider's own private address satisfies the *same*
+ * condition the server enforces before it will flip `has_gone_live` — see
+ * check_and_set_provider_live(), which requires a non-blank `full_address`
+ * AND real geocoded `latitude`/`longitude`.
+ *
+ * The go-live checklist must test exactly this, not just the address string:
+ * an address saved without coordinates let the checklist tick its last box
+ * and disappear while the database still refused to publish the provider,
+ * leaving them with nothing on screen explaining why they weren't live.
+ */
+export async function hasMyProviderGoLiveAddress(): Promise<boolean> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return false;
+  const { data, error } = await supabase
+    .from("provider_private_details")
+    .select("full_address, latitude, longitude")
+    .eq("provider_id", provider.id)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as {
+    full_address?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
+  return (
+    !!row &&
+    (row.full_address ?? "").trim() !== "" &&
+    row.latitude != null &&
+    row.longitude != null
   );
 }
 
@@ -5680,6 +5704,15 @@ export async function updateProviderBranding(
 export async function updateProviderContactDetails(
   providerId: string,
   patch: {
+    /**
+     * The provider's public business name. Changeable, but not again for 14
+     * days — enforced by the providers_display_name_cooldown trigger (see
+     * supabase/migrations/20260820191958_provider_display_name_change_cooldown.sql),
+     * NOT by whichever screen happens to be writing. A change inside the
+     * window throws with a plain-English message naming the date it reopens;
+     * surface that message rather than a generic one.
+     */
+    display_name?: string;
     email?: string | null;
     whatsapp_number?: string | null;
     preferred_contact_methods?: string[] | null;
@@ -5838,7 +5871,12 @@ export async function getBookingUserId(
 }
 
 /** Insert a booking directly without overlap/availability validation.
- *  Used for provider-initiated waitlist invites where the provider has explicitly chosen a slot. */
+ *  Used for provider-initiated waitlist invites where the provider has explicitly chosen a slot.
+ *
+ *  `end_time` is required, not optional. This function used to omit it
+ *  entirely, so every waitlist-invite booking landed with a NULL end — which
+ *  left the row with no length the DB overlap constraint could measure, no
+ *  duration in the app, and an unresolvable block on the provider's day. */
 export async function insertDirectBooking(data: {
   user_id: string;
   provider_id: string;
@@ -5846,6 +5884,7 @@ export async function insertDirectBooking(data: {
   status: string;
   booking_date: string;
   booking_time: string;
+  end_time: string;
   payment_type: string;
   base_price: number;
   add_ons_total: number;
@@ -5961,13 +6000,46 @@ export async function getServiceSafetyFlags(
 }
 
 /** Fetch the price for a single service by ID */
-export async function getServicePrice(serviceId: string): Promise<number> {
-  const { data } = await supabase
+/** Price AND length of a service, together — the two things anyone creating
+ *  a booking from a service id needs. Read as one row rather than a price
+ *  lookup on its own: a booking written without a duration has no `end_time`,
+ *  and a booking with no `end_time` can't be overlap-checked by the DB
+ *  constraint, doesn't render a length in the app, and shows up as an
+ *  unresolvable block on the provider's day. */
+export async function getServiceBookingDefaults(
+  serviceId: string,
+): Promise<{ price: number; durationMinutes: number }> {
+  const { data, error } = await supabase
     .from("services")
-    .select("price")
+    .select("price, duration_minutes")
     .eq("id", serviceId)
     .maybeSingle();
-  return Number((data as any)?.price ?? 0);
+  if (error) throw error;
+  const row = data as { price?: number | null; duration_minutes?: number | null } | null;
+  return {
+    price: Number(row?.price ?? 0),
+    durationMinutes: Number(row?.duration_minutes ?? 0),
+  };
+}
+
+/** Length in minutes for a set of services, in one query. Used to recover the
+ *  real duration of bookings written before `end_time` was populated, without
+ *  a per-row lookup. Services that no longer exist are simply absent. */
+export async function getServiceDurationsByIds(
+  serviceIds: readonly string[],
+): Promise<Map<string, number>> {
+  const distinct = Array.from(new Set(serviceIds));
+  if (distinct.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, duration_minutes")
+    .in("id", distinct);
+  if (error) throw error;
+  const map = new Map<string, number>();
+  for (const row of (data ?? []) as { id: string; duration_minutes: number | null }[]) {
+    if (row.duration_minutes != null) map.set(row.id, Number(row.duration_minutes));
+  }
+  return map;
 }
 
 /** Count the number of active services for a provider — drives the setup-status indicator */

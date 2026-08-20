@@ -126,6 +126,17 @@ protections attach to the transaction regardless of what a platform's T&Cs
 say, particularly if bookings could be characterized as distance/off-premises
 contracts.
 
+**Added 2026-08-20 — the delegation is currently to nothing.** Verified against
+the live functions: `cancel_own_booking()` only sets `status='cancelled'`; it
+never touches `payment_status`, `amount_paid`, or Stripe, and no refund code
+exists anywhere in the app. `refundPolicyNote` is free text on the provider's
+profile enforced by nothing, and all 4 live providers had it blank on that date.
+So a paying client who cancels currently gets nothing back, no screen says so,
+and the provider has no in-app way to issue a refund even if they wanted to.
+Deposits are non-refundable purely by omission. This becomes live exposure the
+moment Stripe is enabled — see `PRE-LAUNCH-TODO.md` item 1b for the engineering
+work and the product/legal decisions it's blocked on.
+
 ## 7. Reviews and user-generated content
 
 T&Cs already prohibit "false reviews" and fraudulent activity (good). Worth

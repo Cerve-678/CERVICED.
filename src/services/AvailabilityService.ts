@@ -151,6 +151,30 @@ const parseTimeToMinutes = (timeStr: string): number => {
   return hours * 60 + minutes;
 };
 
+/**
+ * The earliest wall-clock instant a slot may start, as epoch ms.
+ *
+ * `now` is the floor even when the provider sets NO minimum notice — 0 is the
+ * default every provider starts on (SchedulingScreen seeds '0' = "No
+ * minimum"), and the old `noticeHrs > 0 ? cutoff : null` shape skipped the
+ * filter entirely in that case. That meant today's already-past times stayed
+ * in the picker: at 3pm the calendar still offered 9:00 AM, the auto-resolve
+ * "earliest available slot" handed one straight to the client, and the
+ * booking was only rejected later by checkNoticeWindow at checkout (or by the
+ * enforce_booking_bookability trigger), with no way for them to tell why.
+ */
+export const earliestBookableStartMs = (noticeHrs: number | null | undefined): number =>
+  Date.now() + Math.max(0, noticeHrs ?? 0) * 60 * 60 * 1000;
+
+/** Epoch ms for a 'YYYY-MM-DD' + minutes-from-midnight pair. Built from local
+ *  midnight then offset, the same construction the slot generators use —
+ *  parsing "HH:MM AM/PM" into a Date directly isn't reliable across platforms. */
+export const slotStartMs = (date: string, minutesFromMidnight: number): number => {
+  const d = new Date(date + 'T00:00:00');
+  d.setMinutes(minutesFromMidnight);
+  return d.getTime();
+};
+
 // Parse duration string to minutes
 // Sums EVERY component, not just the first: formatDuration() emits "1h 30min"
 // for 90 minutes, and a first-match-only parse read that as 60 — silently
@@ -273,7 +297,7 @@ const toLocalDateStr = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
-type WorkingWindow = { start_time: string; end_time: string };
+export type WorkingWindow = { start_time: string; end_time: string };
 
 /** A taken interval, in minutes since midnight, already buffer-padded. */
 type BusySpan = { date: string; start: number; end: number };
@@ -327,8 +351,14 @@ const groupBusyByDate = (spans: BusySpan[]): Map<string, BusySpan[]> => {
  * every other record; otherwise one or more override periods are the working
  * day. If a provider has not migrated yet we safely fall back to their legacy
  * single daily availability row.
+ *
+ * Exported because this precedence is the app's single definition of "when is
+ * this provider actually working" — ProviderHomeScreen's schedule-issue check
+ * resolves windows through this same function rather than re-deriving opening
+ * hours from the legacy table, which would disagree with it for any provider
+ * on multi-window days or date overrides.
  */
-const resolveWorkingWindows = (
+export const resolveWorkingWindows = (
   recurring: WorkingWindow[],
   overrideRows: { is_closed: boolean; start_time: string | null; end_time: string | null }[],
   legacy: { open_time: string; close_time: string; is_closed: boolean } | null,
@@ -425,9 +455,13 @@ const checkNoticeWindow = async (
     };
   }
 
+  // display_name comes along on the read we're already doing — the message
+  // below names the provider rather than saying "this provider", which reads
+  // as a generic system error in a flow where the client knows exactly who
+  // they're booking with.
   const { data, error } = await supabase
     .from('providers')
-    .select('min_booking_notice_hrs')
+    .select('min_booking_notice_hrs, display_name')
     .eq('id', providerId)
     .maybeSingle();
 
@@ -441,14 +475,15 @@ const checkNoticeWindow = async (
     return null;
   }
 
-  const noticeHrs =
-    (data as { min_booking_notice_hrs: number } | null)?.min_booking_notice_hrs ?? 0;
+  const row = data as { min_booking_notice_hrs: number; display_name: string | null } | null;
+  const noticeHrs = row?.min_booking_notice_hrs ?? 0;
   if (noticeHrs <= 0) return null;
 
   if (slotStart.getTime() < Date.now() + noticeHrs * 60 * 60 * 1000) {
+    const who = row?.display_name?.trim() || 'This provider';
     return {
       hasConflict: true,
-      message: `This provider needs at least ${noticeHrs}h notice — please pick a later slot.`,
+      message: `${who} needs at least ${noticeHrs}h notice — please pick a later slot.`,
     };
   }
   return null;
@@ -495,7 +530,7 @@ async function findBackToBackSlotsForDate(
     supabase.from('provider_availability').select('open_time, close_time, is_closed').eq('provider_id', providerId).eq('day_of_week', dayOfWeek).maybeSingle(),
     supabase.from('provider_availability_windows').select('start_time, end_time').eq('provider_id', providerId).eq('day_of_week', dayOfWeek).order('start_time'),
     supabase.from('provider_availability_overrides').select('is_closed, start_time, end_time').eq('provider_id', providerId).eq('availability_date', date).order('start_time'),
-    supabase.from('providers').select('booking_window_days, slot_interval_mins, buffer_mins').eq('id', providerId).maybeSingle(),
+    supabase.from('providers').select('booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs').eq('id', providerId).maybeSingle(),
   ]);
   if (blockedResult.data) return null;
 
@@ -503,6 +538,7 @@ async function findBackToBackSlotsForDate(
     booking_window_days: number;
     slot_interval_mins: number;
     buffer_mins: number;
+    min_booking_notice_hrs: number;
   } | null;
 
   const windowDays = settings?.booking_window_days ?? 60;
@@ -515,6 +551,12 @@ async function findBackToBackSlotsForDate(
 
   const intervalMins = settings?.slot_interval_mins ?? 60;
   const bufferMins = settings?.buffer_mins ?? 0;
+  // The single-service generators have always applied this; the chain-fit
+  // path never did, so MultiBookingSheet's group picker offered today's
+  // already-past starts AND starts inside the provider's notice window even
+  // for a provider with a 24h minimum. Every one of those was rejected later
+  // by the checkout hold, not at the point the client picked it.
+  const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
 
   const windows = resolveWorkingWindows(
     (windowsResult.data ?? []) as WorkingWindow[],
@@ -539,7 +581,8 @@ async function findBackToBackSlotsForDate(
   for (const window of windows) {
     const windowEnd = parse24HTimeToMinutes(window.end_time);
     const candidateStarts = generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
-      .map(t => parseTimeToMinutes(t));
+      .map(t => parseTimeToMinutes(t))
+      .filter(mins => slotStartMs(date, mins) >= earliestStart);
 
     for (const start0 of candidateStarts) {
       const chain: { start: number; end: number }[] = [];
@@ -695,8 +738,9 @@ export const AvailabilityService = {
         // Enforce minimum notice — a slot starting sooner than this from now
         // isn't offered at all (matches the server-side enforce_booking_bookability
         // trigger, so the calendar never shows a time the DB will then reject).
-        const noticeHrs = settings?.min_booking_notice_hrs ?? 0;
-        const noticeCutoff = noticeHrs > 0 ? Date.now() + noticeHrs * 60 * 60 * 1000 : null;
+        // Floors at "now" regardless of the notice setting; see
+        // earliestBookableStartMs for why that matters on the 0-notice default.
+        const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
 
         const windows = resolveWorkingWindows(
           (windowsResult.data ?? []) as WorkingWindow[],
@@ -707,12 +751,7 @@ export const AvailabilityService = {
         const baseSlots = windows.flatMap(window =>
           generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
             .filter(time => parseTimeToMinutes(time) + durationMinutes <= parse24HTimeToMinutes(window.end_time))
-            .filter(time => {
-              if (noticeCutoff === null) return true;
-              const slotStart = new Date(date + 'T00:00:00');
-              slotStart.setMinutes(parseTimeToMinutes(time));
-              return slotStart.getTime() >= noticeCutoff;
-            }),
+            .filter(time => slotStartMs(date, parseTimeToMinutes(time)) >= earliestStart),
         );
 
         if (baseSlots.length === 0) return [];
@@ -986,8 +1025,7 @@ export const AvailabilityService = {
         buffer_mins: number;
         min_booking_notice_hrs: number;
       } | null;
-      const noticeHrs = settings?.min_booking_notice_hrs ?? 0;
-      const noticeCutoff = noticeHrs > 0 ? Date.now() + noticeHrs * 60 * 60 * 1000 : null;
+      const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
 
       const windowDays = settings?.booking_window_days ?? 60;
       // Scan out to whichever requested horizon is larger — one fetch/scan
@@ -1079,12 +1117,7 @@ export const AvailabilityService = {
           const daySlots = windows.flatMap(window =>
             generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
               .filter(t => parseTimeToMinutes(t) + durationMinutes <= parse24HTimeToMinutes(window.end_time))
-              .filter(t => {
-                if (noticeCutoff === null) return true;
-                const slotStart = new Date(dateStr + 'T00:00:00');
-                slotStart.setMinutes(parseTimeToMinutes(t));
-                return slotStart.getTime() >= noticeCutoff;
-              }),
+              .filter(t => slotStartMs(dateStr, parseTimeToMinutes(t)) >= earliestStart),
           );
           if (daySlots.length === 0) continue;
 
@@ -1160,8 +1193,10 @@ export const AvailabilityService = {
         buffer_mins: number;
         min_booking_notice_hrs: number;
       } | null;
-      const noticeHrs = settings?.min_booking_notice_hrs ?? 0;
-      const noticeCutoff = noticeHrs > 0 ? Date.now() + noticeHrs * 60 * 60 * 1000 : null;
+      // Same "now" floor as getAvailableSlots — without it this returns TODAY
+      // for a 0-notice provider on the strength of times that already passed,
+      // and resolveNextAvailableSlot then hands the client a slot in the past.
+      const earliestStart = earliestBookableStartMs(settings?.min_booking_notice_hrs);
 
       const windowDays = settings?.booking_window_days ?? 60;
       const horizon = windowDays > 0 ? Math.min(searchDays, windowDays) : searchDays;
@@ -1234,12 +1269,7 @@ export const AvailabilityService = {
         const daySlots = windows.flatMap(window =>
           generateSlotsFromRange(window.start_time, window.end_time, intervalMins)
             .filter(t => parseTimeToMinutes(t) + durationMinutes <= parse24HTimeToMinutes(window.end_time))
-            .filter(t => {
-              if (noticeCutoff === null) return true;
-              const slotStart = new Date(dateStr + 'T00:00:00');
-              slotStart.setMinutes(parseTimeToMinutes(t));
-              return slotStart.getTime() >= noticeCutoff;
-            }),
+            .filter(t => slotStartMs(dateStr, parseTimeToMinutes(t)) >= earliestStart),
         );
         if (daySlots.length === 0) continue;
 

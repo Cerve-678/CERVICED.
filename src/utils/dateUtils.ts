@@ -37,7 +37,7 @@ export function ordinalSuffix(day: number): string {
  * Parses a "YYYY-MM-DD" string (or any string Date can parse, or a Date) into
  * a local Date at midnight, avoiding UTC-shift-by-one-day bugs from `new Date("YYYY-MM-DD")`.
  */
-function toLocalDate(input: string | Date): Date {
+export function toLocalDate(input: string | Date): Date {
   if (input instanceof Date) return input;
   const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(input);
   if (ymdMatch) {
@@ -125,6 +125,22 @@ export function formatTime12(input: string | Date): string {
   const paddedMinute = String(minutes).padStart(2, '0');
   const period = isPM ? 'pm' : 'am';
   return `${displayHourStr}:${paddedMinute}${period}`;
+}
+
+/**
+ * formatTime12 that returns null instead of throwing on an unparseable value.
+ * For rendering times that came from the database (e.g.
+ * booking_reschedule_requests.requested_times, which is nullable and has
+ * historically held loosely-formatted strings) — a throw inside a render
+ * would take the whole screen down over one bad row.
+ */
+export function formatTime12Safe(input: string | Date | null | undefined): string | null {
+  if (input === null || input === undefined || input === '') return null;
+  try {
+    return formatTime12(input);
+  } catch {
+    return null;
+  }
 }
 
 /** Converts a 12-hour display string ("9:00 AM", "9:00am", etc.) to 24-hour "HH:MM". */
