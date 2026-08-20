@@ -31,9 +31,9 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
   // On a deposit this is the provider's deposit alone — the platform fee is
   // already its own line above and is not part of what the client has put
   // towards the service.
-  const paidLabel = payment.isDeposit
+  const paidLabel = payment.isDeposit && !payment.isUnpaid
     ? 'Deposit paid to provider'
-    : payment.isUnpaid ? 'Paid so far' : 'Paid today';
+    : payment.isUnpaid ? 'Total paid' : 'Paid today';
   const paidAmount = payment.paidAmount;
   const balanceRow = remainingBalance > 0
     ? `<tr class="balance"><td>Due to provider at appointment</td><td>${money(remainingBalance)}</td></tr>`

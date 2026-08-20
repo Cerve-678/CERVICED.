@@ -13,6 +13,8 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +38,7 @@ import type { AppTheme } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useAppDialog } from '../../components/AppDialog';
 import { BookingSheet, type BookingSheetResult } from '../../components/BookingSheet';
@@ -84,6 +87,22 @@ interface ServiceBooking {
 // At or above this many appointments the checkout summary is presented as a
 // full screen rather than a centred card — see the Booking Summary <Modal>.
 const FULL_SCREEN_SUMMARY_THRESHOLD = 5;
+
+// How recently a cart item must have been added for the cart to treat it as
+// "just added" and leave its provider section expanded on first mount. Wide
+// enough to cover adding a booking and then navigating to the cart (which
+// remounts this screen), short enough that reopening the cart later still
+// gets the fully-collapsed scannable list.
+const JUST_ADDED_WINDOW_MS = 60_000;
+
+/** "Ana", "Ana and Bea", "Ana, Bea and Cleo" — for naming the mobile
+ *  providers in a sentence rather than saying "your provider" and leaving a
+ *  multi-provider cart to guess which one is travelling. */
+function formatNameList(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0]!;
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
+}
 
 /** Chrome around the checkout summary's content. Two presentations, one
  *  body: a centred card for a small cart, a full screen with a pinned
@@ -1413,6 +1432,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const sections = new Map<string, {
       providerKey: string;
       providerLabel: string;
+      providerService: string;
+      providerImage: CartItem['providerImage'];
       units: CartRenderUnit[];
       appointmentCount: number;
       total: number;
@@ -1436,6 +1457,8 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         sections.set(key, {
           providerKey: key,
           providerLabel: label,
+          providerService: first.providerService ?? '',
+          providerImage: first.providerImage,
           units: [unit],
           appointmentCount: members.length,
           total: subtotal,
@@ -1497,7 +1520,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setShowBookingSummaryModal(false);
     setShowReviewModal(true);
   }, []);
-  const [hasMobileProvider, setHasMobileProvider] = useState(false);
+  // Names, not just a boolean: with more than one provider in the cart the
+  // client needs to know WHICH of them is coming to them, since the address
+  // they type is only used by those.
+  const [mobileProviderNames, setMobileProviderNames] = useState<string[]>([]);
+  const hasMobileProvider = mobileProviderNames.length > 0;
   const [clientAddress, setClientAddress] = useState('');
 
   // Memoize expensive calculations properly
@@ -1541,10 +1568,30 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const providerKeys = Object.keys(itemsByProvider);
     const currentItemIds = new Set(items.map(i => i.id));
 
-    // First run for this mount: collapse everything that's already here.
+    // First run for this mount. Rule 1 (collapse everything) can't apply
+    // blindly here: the commonest way to reach the cart is to add a booking
+    // on a provider profile and then open the cart, and that MOUNTS this
+    // screen — so the item that was just added arrived before the ref
+    // existed, and collapsing everything hid the very booking the user came
+    // to look at. Anything added in the last JUST_ADDED_WINDOW_MS is treated
+    // as "just added" and its section is left open, which is the same
+    // outcome rule 2 produces when the cart was already on screen.
     if (knownItemIdsRef.current === null) {
       knownItemIdsRef.current = currentItemIds;
-      if (providerKeys.length > 0) setCollapsedProviders(new Set(providerKeys));
+      const justAddedCutoff = Date.now() - JUST_ADDED_WINDOW_MS;
+      const recentlyAddedProviders = new Set(
+        items
+          .filter(i => {
+            const addedAt = Date.parse(i.addedAt ?? '');
+            return Number.isFinite(addedAt) && addedAt >= justAddedCutoff;
+          })
+          .map(i => i.providerName || 'Unknown Provider'),
+      );
+      if (providerKeys.length > 0) {
+        setCollapsedProviders(
+          new Set(providerKeys.filter(k => !recentlyAddedProviders.has(k))),
+        );
+      }
       return;
     }
 
@@ -1985,13 +2032,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     [editingItem, updateCartItem, showAlert]
   );
 
-  // Detect if any provider in the cart is mobile (travels to client)
+  // Which providers in the cart are mobile (travel to the client). Kept in
+  // cart order so the sentence below reads in the same order as the sections
+  // above it.
   useEffect(() => {
-    if (items.length === 0) { setHasMobileProvider(false); return; }
+    if (items.length === 0) { setMobileProviderNames([]); return; }
     const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
     getMobileProviderDisplayNames(names)
-      .then(mobileSet => setHasMobileProvider(mobileSet.size > 0))
-      .catch(() => setHasMobileProvider(false));
+      .then(mobileSet => setMobileProviderNames(names.filter(n => mobileSet.has(n))))
+      .catch(() => setMobileProviderNames([]));
   }, [items]);
 
   // Navigation handlers - BACK TO HOME
@@ -2546,171 +2595,188 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             </View>
           )}
 
-          {/* Confirm Your Details Modal */}
-          <Modal visible={showReviewModal} animationType="fade" transparent={true}>
-            <View style={styles.modalOverlayNoBlur}>
-              <View style={[styles.reviewModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
-                <View style={styles.reviewModalContent}>
-                  {/* Title row with Edit button */}
-                  <View style={styles.reviewTitleRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.reviewModalTitle, { color: P.text }]}>Confirm Your Details</Text>
-                      <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>
-                        This info will be shared with your provider
-                      </Text>
-                    </View>
-                    {!isEditingDetails && (
-                      <TouchableOpacity
-                        style={[styles.reviewEditBtn, { backgroundColor: P.accentDim, borderColor: P.border }]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                          setIsEditingDetails(true);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.reviewEditText, { color: P.accentText }]}>Edit</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+          {/* Confirm Your Details Modal.
 
-                  {/* Name */}
-                  <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>NAME</Text>
-                    {isEditingDetails ? (
-                      <TextInput
-                        style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
-                        value={reviewName}
-                        onChangeText={setReviewName}
-                        placeholder="Your name"
-                        placeholderTextColor={P.sub}
-                      />
-                    ) : (
-                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewName || '—'}</Text>
-                    )}
-                  </View>
-
-                  {/* Email */}
-                  <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>EMAIL</Text>
-                    {isEditingDetails ? (
-                      <TextInput
-                        style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
-                        value={reviewEmail}
-                        onChangeText={setReviewEmail}
-                        placeholder="your@email.com"
-                        placeholderTextColor={P.sub}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-                    ) : (
-                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewEmail || '—'}</Text>
-                    )}
-                  </View>
-
-                  {/* Phone */}
-                  <View style={styles.reviewFieldGroup}>
-                    <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>PHONE NUMBER</Text>
-                    {isEditingDetails ? (
-                      <TextInput
-                        style={[styles.reviewInput, {
-                          color: P.text,
-                          borderColor: !reviewPhone.trim() ? '#FF3B30' : P.border,
-                          backgroundColor: P.surface,
-                        }]}
-                        value={reviewPhone}
-                        onChangeText={setReviewPhone}
-                        placeholder="+44 7700 900000"
-                        placeholderTextColor={P.sub}
-                        keyboardType="phone-pad"
-                      />
-                    ) : (
-                      <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewPhone || '—'}</Text>
-                    )}
-                    {isEditingDetails && !reviewPhone.trim() && (
-                      <Text style={styles.reviewPhoneWarning}>Phone number is required to book</Text>
-                    )}
-                  </View>
-
-                  {/* Address — only shown when a mobile provider is in the cart */}
-                  {hasMobileProvider && (
-                    <View style={styles.reviewFieldGroup}>
-                      <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
-                      <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
-                        Your provider is mobile and will come to you
-                      </Text>
-                      {isEditingDetails ? (
-                        <TextInput
-                          style={[styles.reviewInput, {
-                            color: P.text, borderColor: !clientAddress.trim() ? '#FF3B30' : P.border, backgroundColor: P.surface,
-                          }]}
-                          value={clientAddress}
-                          onChangeText={setClientAddress}
-                          placeholder="e.g. 12 High Street, London, SW1A 1AA"
-                          placeholderTextColor={P.sub}
-                          autoCapitalize="words"
-                        />
-                      ) : (
-                        <Text style={[styles.reviewFieldValue, { color: clientAddress ? P.text : '#FF3B30' }]}>
-                          {clientAddress || 'Address required'}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Save as Default — only in edit mode */}
-                  {isEditingDetails && (
-                    <TouchableOpacity
-                      style={styles.reviewCheckboxRow}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        setSaveAsDefault(!saveAsDefault);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.reviewCheckbox, {
-                        borderColor: P.border,
-                        backgroundColor: saveAsDefault ? P.accent : 'transparent',
-                      }]}>
-                        {saveAsDefault && <Text style={[styles.reviewCheckmark, { color: P.onAccent }]}>✓</Text>}
+              Wrapped so a tap anywhere off an input dismisses the keyboard:
+              the phone and address fields open a numeric/plain keypad with
+              no return key, which left no way at all to put the keyboard
+              away and reach the buttons underneath. TextInputs claim the
+              touch responder themselves, so moving between fields still
+              works — only taps on inert areas dismiss. */}
+          <Modal
+            visible={showReviewModal}
+            animationType="fade"
+            transparent={true}
+            onRequestClose={() => setShowReviewModal(false)}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View style={styles.modalOverlayNoBlur}>
+                <KeyboardDismissView style={styles.reviewKeyboardWrap}>
+                  <View style={[styles.reviewModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
+                    <View style={styles.reviewModalContent}>
+                      {/* Title row with Edit button */}
+                      <View style={styles.reviewTitleRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.reviewModalTitle, { color: P.text }]}>Confirm Your Details</Text>
+                          <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>
+                            This info will be shared with your provider
+                          </Text>
+                        </View>
+                        {!isEditingDetails && (
+                          <TouchableOpacity
+                            style={[styles.reviewEditBtn, { backgroundColor: P.accentDim, borderColor: P.border }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                              setIsEditingDetails(true);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.reviewEditText, { color: P.accentText }]}>Edit</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                      <Text style={[styles.reviewCheckboxLabel, { color: P.text }]}>
-                        Set as default for future bookings
-                      </Text>
-                    </TouchableOpacity>
-                  )}
 
-                  {/* Buttons */}
-                  <View style={[styles.reviewButtonRow, isEditingDetails && { marginTop: 8 }]}>
-                    <TouchableOpacity
-                      style={[styles.reviewCancelBtn, { borderColor: P.border }]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        if (isEditingDetails) {
-                          setIsEditingDetails(false);
-                        } else {
-                          setShowReviewModal(false);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.reviewCancelText, { color: P.text }]}>
-                        {isEditingDetails ? 'Done' : 'Cancel'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                        handleReviewConfirm();
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.reviewConfirmText, { color: P.onAccent }]}>Continue</Text>
-                    </TouchableOpacity>
+                      {/* Name */}
+                      <View style={styles.reviewFieldGroup}>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>NAME</Text>
+                        {isEditingDetails ? (
+                          <TextInput
+                            style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                            value={reviewName}
+                            onChangeText={setReviewName}
+                            placeholder="Your name"
+                            placeholderTextColor={P.sub}
+                          />
+                        ) : (
+                          <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewName || '—'}</Text>
+                        )}
+                      </View>
+
+                      {/* Email */}
+                      <View style={styles.reviewFieldGroup}>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>EMAIL</Text>
+                        {isEditingDetails ? (
+                          <TextInput
+                            style={[styles.reviewInput, { color: P.text, borderColor: P.border, backgroundColor: P.surface }]}
+                            value={reviewEmail}
+                            onChangeText={setReviewEmail}
+                            placeholder="your@email.com"
+                            placeholderTextColor={P.sub}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                          />
+                        ) : (
+                          <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewEmail || '—'}</Text>
+                        )}
+                      </View>
+
+                      {/* Phone */}
+                      <View style={styles.reviewFieldGroup}>
+                        <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>PHONE NUMBER</Text>
+                        {isEditingDetails ? (
+                          <TextInput
+                            style={[styles.reviewInput, {
+                              color: P.text,
+                              borderColor: !reviewPhone.trim() ? '#FF3B30' : P.border,
+                              backgroundColor: P.surface,
+                            }]}
+                            value={reviewPhone}
+                            onChangeText={setReviewPhone}
+                            placeholder="+44 7700 900000"
+                            placeholderTextColor={P.sub}
+                            keyboardType="phone-pad"
+                          />
+                        ) : (
+                          <Text style={[styles.reviewFieldValue, { color: P.text }]}>{reviewPhone || '—'}</Text>
+                        )}
+                        {isEditingDetails && !reviewPhone.trim() && (
+                          <Text style={styles.reviewPhoneWarning}>Phone number is required to book</Text>
+                        )}
+                      </View>
+
+                      {/* Address — only shown when a mobile provider is in the cart */}
+                      {hasMobileProvider && (
+                        <View style={styles.reviewFieldGroup}>
+                          <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
+                          <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
+                            {formatNameList(mobileProviderNames)}{' '}
+                            {mobileProviderNames.length === 1 ? 'is' : 'are'} mobile and will come to you
+                          </Text>
+                          {isEditingDetails ? (
+                            <TextInput
+                              style={[styles.reviewInput, {
+                                color: P.text, borderColor: !clientAddress.trim() ? '#FF3B30' : P.border, backgroundColor: P.surface,
+                              }]}
+                              value={clientAddress}
+                              onChangeText={setClientAddress}
+                              placeholder="e.g. 12 High Street, London, SW1A 1AA"
+                              placeholderTextColor={P.sub}
+                              autoCapitalize="words"
+                            />
+                          ) : (
+                            <Text style={[styles.reviewFieldValue, { color: clientAddress ? P.text : '#FF3B30' }]}>
+                              {clientAddress || 'Address required'}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      {/* Save as Default — only in edit mode */}
+                      {isEditingDetails && (
+                        <TouchableOpacity
+                          style={styles.reviewCheckboxRow}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            setSaveAsDefault(!saveAsDefault);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.reviewCheckbox, {
+                            borderColor: P.border,
+                            backgroundColor: saveAsDefault ? P.accent : 'transparent',
+                          }]}>
+                            {saveAsDefault && <Text style={[styles.reviewCheckmark, { color: P.onAccent }]}>✓</Text>}
+                          </View>
+                          <Text style={[styles.reviewCheckboxLabel, { color: P.text }]}>
+                            Set as default for future bookings
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Buttons */}
+                      <View style={[styles.reviewButtonRow, isEditingDetails && { marginTop: 8 }]}>
+                        <TouchableOpacity
+                          style={[styles.reviewCancelBtn, { borderColor: P.border }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            if (isEditingDetails) {
+                              setIsEditingDetails(false);
+                            } else {
+                              setShowReviewModal(false);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.reviewCancelText, { color: P.text }]}>
+                            {isEditingDetails ? 'Done' : 'Cancel'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reviewConfirmBtn, { backgroundColor: P.accent }]}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            handleReviewConfirm();
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.reviewConfirmText, { color: P.onAccent }]}>Continue</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                </View>
+                </KeyboardDismissView>
               </View>
-            </View>
+            </TouchableWithoutFeedback>
             {/* Nested INSIDE this modal on purpose — see showReviewAlert. */}
             <ReviewDialogHost />
           </Modal>
@@ -2851,31 +2917,61 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 </View>
               )}
 
-              {/* Appointments */}
-              <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
-                <Text style={[styles.summarySectionTitle, { color: P.sub }]}>APPOINTMENTS</Text>
-                {checkoutProviderSections.map(section => (
-                  <View key={section.providerKey} style={styles.summaryProviderGroup}>
-                    {/* Same-provider heading. Distinct from a GROUP
-                        BOOKING block below it: that means services
-                        deliberately booked back-to-back in one sitting,
-                        whereas this is simply every appointment that
-                        happens to be with the same provider, however
-                        far apart. Without it a five-appointment cart
-                        read as one undifferentiated list with the
-                        provider name repeated under every row. */}
-                    <View style={[styles.summaryProviderHeader, { borderBottomColor: P.sep }]}>
+              {/* Appointments, one card per provider.
+
+                  A bare heading with a hairline under it wasn't legible as a
+                  grouping — it read as one more line of text in the same
+                  list. Each provider now gets its own bordered card with a
+                  tinted header (logo, name, category, count and subtotal)
+                  and its appointments contained inside it, which is the same
+                  shape as the cart's own provider sections directly behind
+                  this sheet.
+
+                  Not the same thing as a GROUP BOOKING: that's services
+                  deliberately booked back-to-back in one sitting, and it
+                  stays its own badged block INSIDE whichever provider card
+                  owns it. This grouping is simply "everything you're booking
+                  with this provider", however far apart the dates are. */}
+              <Text style={[styles.summarySectionTitle, { color: P.sub, marginTop: 4 }]}>APPOINTMENTS</Text>
+              {checkoutProviderSections.map(section => (
+                <View
+                  key={section.providerKey}
+                  style={[styles.summaryProviderCard, { backgroundColor: P.card, borderColor: P.border }]}
+                >
+                  <View style={[styles.summaryProviderHeader, { backgroundColor: P.accentDim, borderBottomColor: P.border }]}>
+                    {section.providerImage ? (
+                      <Image
+                        source={section.providerImage}
+                        style={[styles.summaryProviderLogo, { borderColor: P.accentDim }]}
+                        fadeDuration={0}
+                      />
+                    ) : (
+                      <View style={[styles.summaryProviderLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
+                    )}
+                    <View style={styles.summaryProviderHeaderText}>
                       <Text style={[styles.summaryProviderName, { color: P.text }]} numberOfLines={1}>
                         {section.providerLabel}
                       </Text>
+                      {!!section.providerService && (
+                        <Text style={[styles.summaryProviderMeta, { color: P.sub }]} numberOfLines={1}>
+                          {section.providerService}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.summaryProviderTotals}>
+                      <Text style={[styles.summaryProviderTotal, { color: P.accentText }]}>
+                        £{section.total.toFixed(2)}
+                      </Text>
                       <Text style={[styles.summaryProviderMeta, { color: P.sub }]}>
-                        {section.appointmentCount} {section.appointmentCount === 1 ? 'appt' : 'appts'} · £{section.total.toFixed(2)}
+                        {section.appointmentCount} {section.appointmentCount === 1 ? 'appointment' : 'appointments'}
                       </Text>
                     </View>
+                  </View>
+                  <View style={styles.summaryProviderBody}>
                     {section.units.map((unit, index) => renderCheckoutUnit(unit, section.units[index - 1]))}
                   </View>
-                ))}
-              </View>
+                </View>
+              ))}
 
               {/* Totals */}
               <View style={[styles.summarySection, { backgroundColor: P.surface, borderColor: P.sep }]}>
@@ -4537,6 +4633,13 @@ const styles = StyleSheet.create({
   },
 
   // Review Modal Styles
+  // KeyboardAvoidingView wrapper around the card — sized to the card, not
+  // flex:1, so it doesn't stretch over the whole dimmed overlay and swallow
+  // the backdrop taps that dismiss the keyboard.
+  reviewKeyboardWrap: {
+    width: '100%',
+    alignItems: 'center',
+  },
   reviewModalContainer: {
     width: '90%',
     maxWidth: 400,
@@ -4723,28 +4826,52 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 
-  // Same-provider grouping inside the APPOINTMENTS section
-  summaryProviderGroup: {
-    marginTop: 10,
+  // Same-provider grouping in the APPOINTMENTS section — one card each,
+  // mirroring the cart's own provider sections so the grouping reads the
+  // same way in both places.
+  summaryProviderCard: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    marginBottom: 12,
   },
   summaryProviderHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 10,
-    paddingBottom: 6,
-    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  summaryProviderLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  summaryProviderHeaderText: {
+    flex: 1,
+  },
+  summaryProviderTotals: {
+    alignItems: 'flex-end',
+  },
+  summaryProviderTotal: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 14,
+  },
+  summaryProviderBody: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   summaryProviderName: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 13,
     letterSpacing: 0.3,
-    flexShrink: 1,
   },
   summaryProviderMeta: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 11,
+    marginTop: 1,
   },
   summarySection: {
     borderRadius: 12,

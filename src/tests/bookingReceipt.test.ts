@@ -83,10 +83,9 @@ describe('booking payment presentation', () => {
     expect(breakdown.amountPaidAtCheckout).toBe(10.99);
     expect(breakdown.paidLabel).toBe('Deposit Paid');
     expect(breakdown.paidAmount).toBe(10);
-    expect(breakdown.feePaidSeparately).toBe(0.99);
-    // deposit + fee + balance reconciles back to the total.
-    expect(breakdown.paidAmount + breakdown.feePaidSeparately + breakdown.remainingBalance)
-      .toBeCloseTo(breakdown.total, 2);
+    // The platform fee is inside `total` and itemised separately on the
+    // receipt — it is never rolled into the deposit figure.
+    expect(breakdown.serviceCharge).toBe(0.99);
     expect(breakdown.isPaidInFull).toBe(false);
   });
 
@@ -105,7 +104,7 @@ describe('booking payment presentation', () => {
 
     expect(breakdown.isPaidInFull).toBe(false);
     expect(breakdown.isUnpaid).toBe(true);
-    expect(breakdown.paidLabel).toBe('Paid So Far');
+    expect(breakdown.paidLabel).toBe('Total Paid');
     expect(breakdown.paidAmount).toBe(0);
     expect(breakdown.remainingBalance).toBe(65.5);
   });

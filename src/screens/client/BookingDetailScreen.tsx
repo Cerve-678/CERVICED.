@@ -777,14 +777,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
-                <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
-                {/* Only on a deposit, where paidLabel's figure is the
-                    provider's deposit alone — without this row the deposit
-                    and the balance don't add up to the total. */}
-                {payment.feePaidSeparately > 0 && (
-                  <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Platform Fee Paid</Text><Text style={[st.rowValue, { color: '#34C759' }]}>£{payment.feePaidSeparately.toFixed(2)}</Text></View>
+                <View style={[st.row, payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
+                {/* Total already includes the platform fee, so a settled
+                    booking ends at "Total Paid" — a "Due at Appointment
+                    £0.00" row underneath just invites the question. */}
+                {payment.remainingBalance > 0 && (
+                  <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: '#FF9500' }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
                 )}
-                <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: payment.remainingBalance > 0 ? '#FF9500' : C.sub }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
               </View>
             ) : (
               <View style={[st.receiptContainer, { backgroundColor: C.surface }]}>
@@ -853,10 +852,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
-                  <View style={st.rcptRow}>
-                    <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
-                    <Text style={{ color: payment.remainingBalance > 0 ? '#FF9500' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
-                  </View>
+                  {payment.remainingBalance > 0 && (
+                    <View style={st.rcptRow}>
+                      <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
+                      <Text style={{ color: '#FF9500', fontSize: 13, fontWeight: '600' }}>£{payment.remainingBalance.toFixed(2)}</Text>
+                    </View>
+                  )}
                   <View style={st.rcptRow}>
                     <Text style={{ color: C.sub, fontSize: 13 }}>Payment Method</Text>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
@@ -908,16 +909,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Provider's cancellation/booking policy — the exact terms this
               client agreed to at checkout (policySnapshot), or the
               provider's current policy as a fallback for bookings made
-              before that was captured.
-
-              booking_instructions lives here too, not up with the client's
-              own notes: it's the provider telling the client how to turn up
-              ("arrive 10 minutes early"), which belongs with the provider's
-              other stated terms rather than in a Notes block the client
-              reads as theirs. Rendered as a full-width block under the rows
-              rather than a label/value row, since it's free prose and would
-              otherwise be squeezed into the 65% value column. */}
-          {(policyRows.length > 0 || !!booking.bookingInstructions) && (
+              before that was captured. */}
+          {policyRows.length > 0 && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>
                 {booking.providerName}'S POLICY
@@ -926,7 +919,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 {policyRows.map((row, i) => (
                   <View
                     key={row.label}
-                    style={[st.row, i === policyRows.length - 1 && !booking.bookingInstructions && { borderBottomWidth: 0 }]}
+                    style={[st.row, i === policyRows.length - 1 && { borderBottomWidth: 0 }]}
                   >
                     <Text style={[st.rowLabel, { color: C.sub, flex: 0.35 }]}>{row.label}</Text>
                     <Text style={[st.rowValue, { color: C.text, flex: 0.65 }]}>
@@ -934,12 +927,20 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                 ))}
-                {!!booking.bookingInstructions && (
-                  <View style={{ padding: 16 }}>
-                    <Text style={[st.rowLabel, { color: C.sub, marginBottom: 6 }]}>Instructions</Text>
-                    <Text style={{ color: C.text, fontSize: 14, lineHeight: 20 }}>{booking.bookingInstructions}</Text>
-                  </View>
-                )}
+              </View>
+            </View>
+          )}
+
+          {/* The provider's own instructions — its own section, not folded
+              into the policy card above and not into the client's notes
+              above that. It sits next to the policy because both come from
+              the provider, but it isn't a term the client agreed to at
+              checkout, which is all the policy card is. */}
+          {!!booking.bookingInstructions && (
+            <View style={st.section}>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>INSTRUCTIONS</Text>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Text style={{ color: C.text, fontSize: 14, lineHeight: 20, padding: 16 }}>{booking.bookingInstructions}</Text>
               </View>
             </View>
           )}

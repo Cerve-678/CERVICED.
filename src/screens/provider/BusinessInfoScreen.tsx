@@ -204,11 +204,17 @@ export default function BusinessInfoScreen({ navigation }: any) {
                 }}
               />
 
-              {businessType && businessType !== 'mobile' && (
+              {/* Mobile providers get this picker too now. The list they're
+                  offered excludes 'always' (see ADDRESS_RELEASE_BY_BUSINESS_TYPE)
+                  because the address on file for a mobile provider is usually
+                  their home. */}
+              {businessType && (
                 <View style={{ marginTop: 18 }}>
                   <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>Address Release</Text>
                   <Text style={[s.cardSub, { color: C.sub }]}>
-                    When a booked client can see your address.
+                    {businessType === 'mobile'
+                      ? 'You travel to your clients, so they give you their address — this controls when a booked client can see yours.'
+                      : 'When a booked client can see your address.'}
                   </Text>
                   <RadioGroup
                     options={ADDRESS_RELEASE_OPTS.filter(o => isAddressReleaseAllowed(businessType, o.value))}
@@ -216,12 +222,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
                     onChange={v => setAddressReleasePolicy(v as AddressReleasePolicy)}
                   />
                 </View>
-              )}
-
-              {businessType === 'mobile' && (
-                <Text style={[s.cardSub, { color: C.sub, marginTop: 12, marginBottom: 0 }]}>
-                  You travel to your clients, so your address is never shared with them.
-                </Text>
               )}
             </Card>
 

@@ -19,9 +19,24 @@ describe('address release policy vs business type', () => {
     expect(reconcileAddressReleasePolicy('home_based', 'always')).toBe('on_confirmation');
   });
 
-  it('clears the policy for mobile, which never shares an address', () => {
-    expect(reconcileAddressReleasePolicy('mobile', 'on_confirmation')).toBeNull();
-    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.mobile).toHaveLength(0);
+  // Mobile used to be excluded from address release entirely. It now gets the
+  // same private-until-released set as home_based — but never 'always': the
+  // address a mobile provider has on file is typically their home, so a
+  // standing-visible option would publish it to anyone with a booking.
+  it('gives mobile the private-until-released timings, but never always', () => {
+    expect(reconcileAddressReleasePolicy('mobile', 'on_confirmation')).toBe('on_confirmation');
+    expect(reconcileAddressReleasePolicy('mobile', 'manual')).toBe('manual');
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.mobile).not.toContain('always');
+    expect(reconcileAddressReleasePolicy('mobile', 'always')).toBe('on_confirmation');
+  });
+
+  // 'always' is the only standing-visible option, so it stays limited to the
+  // two business types whose address is a commercial premises.
+  it('offers always only to salon and studio', () => {
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.salon).toContain('always');
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.studio).toContain('always');
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.home_based).not.toContain('always');
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.mobile).not.toContain('always');
   });
 
   it('handles a provider with no policy set yet', () => {
@@ -39,8 +54,7 @@ describe('address release policy vs business type', () => {
     for (const type of types) {
       for (const policy of policies) {
         const result = reconcileAddressReleasePolicy(type, policy);
-        if (type === 'mobile') expect(result).toBeNull();
-        else expect(isAddressReleaseAllowed(type, result)).toBe(true);
+        expect(isAddressReleaseAllowed(type, result)).toBe(true);
       }
     }
   });

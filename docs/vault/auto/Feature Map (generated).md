@@ -11,8 +11,8 @@ Curated: [[Address Release]] · **77 files**
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/services/databaseService.ts` _(85)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(64)_
-- `src/screens/provider/InfoRegScreen.tsx` _(62)_
 - `src/services/providerRegistrationService.ts` _(56)_
+- `src/screens/provider/InfoRegScreen.tsx` _(53)_
 - `src/components/AddressPicker.tsx` _(44)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
@@ -20,11 +20,11 @@ Curated: [[Address Release]] · **77 files**
 - `supabase/address_release_notification.sql` _(33)_
 - `src/services/addressLookupService.ts` _(32)_
 - `supabase/require_provider_address.sql` _(32)_
-- `src/screens/client/CartScreen.tsx` _(29)_
+- `src/screens/client/CartScreen.tsx` _(31)_
 - `src/screens/client/BookingDetailScreen.tsx` _(28)_
+- `src/screens/provider/BusinessInfoScreen.tsx` _(28)_
 - `src/contexts/BookingContext.tsx` _(27)_
 - `supabase/address_release_enforcement.sql` _(27)_
-- `src/screens/provider/BusinessInfoScreen.tsx` _(26)_
 - `supabase/stamp_booking_address_snapshot_fallback_location_text.sql` _(26)_
 - `src/services/becca/capabilities/provider.ts` _(23)_
 - `src/features/business-details/options.ts` _(21)_
@@ -83,10 +83,10 @@ Curated: [[Payments]] · **108 files**
 - `src/contexts/BookingContext.tsx` _(99)_
 - `src/components/MultiBookingSheet.tsx` _(90)_
 - `src/services/databaseService.ts` _(82)_
-- `src/features/bookings/receipt.ts` _(63)_
-- `src/features/bookings/paymentPresentation.ts` _(50)_
-- `src/screens/client/BookingDetailScreen.tsx` _(45)_
+- `src/features/bookings/receipt.ts` _(64)_
+- `src/features/bookings/paymentPresentation.ts` _(47)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(44)_
+- `src/screens/client/BookingDetailScreen.tsx` _(41)_
 - `src/types/database.ts` _(40)_
 - `src/services/becca/capabilities/client.ts` _(39)_
 - `supabase/waitlist_holds.sql` _(39)_
@@ -114,8 +114,8 @@ Curated: [[Booking Flow]] · **223 files**
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/services/databaseService.ts` _(502)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(458)_
-- `src/screens/client/CartScreen.tsx` _(407)_
-- `src/screens/client/BookingDetailScreen.tsx` _(307)_
+- `src/screens/client/CartScreen.tsx` _(411)_
+- `src/screens/client/BookingDetailScreen.tsx` _(304)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(267)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(191)_
@@ -347,15 +347,15 @@ Curated: [[Services]] · **36 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **55 files**
-- `src/screens/client/CartScreen.tsx` _(194)_
+- `src/screens/client/CartScreen.tsx` _(205)_
 - `src/contexts/BookingContext.tsx` _(57)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(54)_
 - `src/services/databaseService.ts` _(45)_
 - `src/contexts/CartContext.tsx` _(28)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
 - `src/components/BookingSheet.tsx` _(20)_
+- `src/screens/client/BookingDetailScreen.tsx` _(15)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
-- `src/screens/client/BookingDetailScreen.tsx` _(14)_
 - `src/services/bookingService.ts` _(14)_
 - `src/services/becca/capabilities/client.ts` _(13)_
 - `src/services/AvailabilityService.ts` _(12)_

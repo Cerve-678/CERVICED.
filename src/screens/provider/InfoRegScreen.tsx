@@ -77,6 +77,12 @@ import { createServiceDraft } from '../../features/provider-registration/service
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
+import {
+  ADDRESS_RELEASE_OPTS,
+  isAddressReleaseAllowed,
+  type BusinessType,
+} from '../../features/business-details/options';
+
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 /**
@@ -4570,20 +4576,21 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Text style={styles.inputHint}>Save your profile once before adding address photos.</Text>
               )}
 
-                  {providerData.businessType !== 'mobile' && (
+                  {/* Which timings each business type may offer is
+                      ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
+                      This used to be a hand-maintained `show:` flag per row —
+                      a second copy of the same table that had to be edited in
+                      lockstep with the real one, and wasn't: mobile was
+                      excluded here and in the shared table, and giving mobile
+                      release timings meant fixing both. One source now.
+                      Mobile is no longer excluded. */}
+                  {providerData.businessType && (
                     <>
                       <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
                       <View style={styles.pillRow}>
-                        {([
-                          { v: 'always'           as const, l: 'Always visible',  show: providerData.businessType === 'salon' || providerData.businessType === 'studio' },
-                          { v: 'on_confirmation'  as const, l: 'On confirmation', show: true },
-                          { v: 'day_before'       as const, l: '24h before',      show: providerData.businessType === 'home_based' },
-                          { v: 'two_days_before'  as const, l: '48h before',      show: providerData.businessType === 'home_based' },
-                          { v: 'three_days_before'as const, l: '72h before',      show: providerData.businessType === 'home_based' },
-                          { v: 'five_days_before' as const, l: '5 days before',   show: providerData.businessType === 'home_based' },
-                          { v: 'week_before'      as const, l: '1 week before',   show: providerData.businessType === 'home_based' },
-                          { v: 'manual'           as const, l: 'Manual release',  show: providerData.businessType === 'home_based' },
-                        ]).filter(o => o.show).map(({ v, l }) => (
+                        {ADDRESS_RELEASE_OPTS
+                          .filter(o => isAddressReleaseAllowed(providerData.businessType as BusinessType, o.value))
+                          .map(({ value: v, label: l }) => (
                           <TouchableOpacity
                             key={v}
                             style={[styles.policyPill, providerData.addressReleasePolicy === v && { backgroundColor: adaptiveAccentColor }]}
@@ -4593,28 +4600,18 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           </TouchableOpacity>
                         ))}
                       </View>
-                      {({
-                        always:           'Your address is always visible to booked clients.',
-                        on_confirmation:  'Address is shared automatically when the booking is confirmed.',
-                        day_before:       'Address is automatically shared 24 hours before the appointment.',
-                        two_days_before:  'Address is automatically shared 48 hours before the appointment.',
-                        three_days_before: 'Address is automatically shared 72 hours before the appointment.',
-                        five_days_before:  'Address is automatically shared 5 days before the appointment.',
-                        week_before:       'Address is automatically shared 1 week before the appointment.',
-                        manual:           'You control when each client receives your address from the booking detail page.',
-                      } as Record<string, string>)[providerData.addressReleasePolicy] ? (
-                        <Text style={styles.addressHint}>
-                          {(({
-                            always:           'Your address is always visible to booked clients.',
-                            on_confirmation:  'Address is shared automatically when the booking is confirmed.',
-                            day_before:       'Address is automatically shared 24 hours before the appointment.',
-                            two_days_before:  'Address is automatically shared 48 hours before the appointment.',
-                            three_days_before:'Address is automatically shared 72 hours before the appointment.',
-                            week_before:      'Address is automatically shared 1 week before the appointment.',
-                            manual:           'You control when each client receives your address from the booking detail page.',
-                          } as Record<string, string>)[providerData.addressReleasePolicy])}
-                        </Text>
-                      ) : null}
+                      {/* One lookup, from the same ADDRESS_RELEASE_OPTS the
+                          pills above are built from. This was two copies of
+                          the same object literal — an outer one used as a
+                          presence check and an inner one rendered — and they
+                          had already drifted: the inner copy was missing
+                          five_days_before, so picking "5 days before" passed
+                          the guard and then rendered an empty line. */}
+                      {(() => {
+                        const sub = ADDRESS_RELEASE_OPTS
+                          .find(o => o.value === providerData.addressReleasePolicy)?.sub;
+                        return sub ? <Text style={styles.addressHint}>{sub}</Text> : null;
+                      })()}
                     </>
                   )}
 

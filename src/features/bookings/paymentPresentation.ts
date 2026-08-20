@@ -35,19 +35,17 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   const isPaidInFull = paymentStatus === PaymentStatus.PAID_IN_FULL;
   const isUnpaid = !isPaidInFull && paymentStatus !== PaymentStatus.DEPOSIT_PAID;
 
-  // The provider's own deposit figure, never the deposit + the platform fee
-  // bundled together — the fee is CERVICED's, not part of what the client
-  // has put towards the provider's service, and it already has its own line.
+  // On a deposit the figure shown is the provider's own deposit, never the
+  // deposit + the platform fee bundled together — the fee is CERVICED's, not
+  // part of what the client has put towards the provider's service. It is
+  // already inside `total`, and itemised on its own line in the receipt.
+  //
   // `isUnpaid` is checked FIRST: a booking can carry payment_type 'deposit'
   // while payment_status is still 'pending', and labelling that "Deposit
-  // Paid" would assert a payment that never happened.
-  const paidLabel = isUnpaid ? 'Paid So Far' : isDeposit ? 'Deposit Paid' : 'Total Paid';
+  // Paid" would assert a payment that never happened. An unpaid booking
+  // reads "Total Paid £0.00", which is simply true.
+  const paidLabel = !isUnpaid && isDeposit ? 'Deposit Paid' : 'Total Paid';
   const paidAmount = isUnpaid ? 0 : isDeposit ? depositAmount : amountPaidAtCheckout;
-
-  // Shown as its own row wherever `paidAmount` is a deposit, so deposit +
-  // fee + balance visibly reconciles back to the total instead of leaving an
-  // unexplained gap.
-  const feePaidSeparately = !isUnpaid && isDeposit ? serviceCharge : 0;
 
   return {
     servicePrice,
@@ -65,6 +63,5 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isUnpaid,
     paidLabel,
     paidAmount,
-    feePaidSeparately,
   };
 }

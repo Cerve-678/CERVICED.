@@ -175,14 +175,22 @@ export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string;
  * never offers — the picker would render with nothing selected while the DB
  * still held the stale timing. Anything that writes business_type must run the
  * new value through `reconcileAddressReleasePolicy` rather than writing the
- * type alone. Mobile providers travel to the client, so they release no
- * address at all and the picker is hidden entirely.
+ * type alone.
+ *
+ * Mobile gets the same private-until-released set as home_based, and
+ * deliberately NOT 'always': a mobile provider travels to the client, so the
+ * address on file is typically their home and must never be standing-visible.
+ * They used to be excluded from release entirely (empty list, null policy,
+ * picker hidden). Nothing server-side ever keyed off business_type for this —
+ * `is_address_released()` and the on-confirmation trigger are purely
+ * policy-driven — so giving mobile a real policy is sufficient on its own and
+ * needs no migration.
  */
 export const ADDRESS_RELEASE_BY_BUSINESS_TYPE: Record<BusinessType, AddressReleasePolicy[]> = {
   salon:      ['always', 'on_confirmation'],
   studio:     ['always', 'on_confirmation'],
   home_based: ['on_confirmation', 'day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before', 'manual'],
-  mobile:     [],
+  mobile:     ['on_confirmation', 'day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before', 'manual'],
 };
 
 export function isAddressReleaseAllowed(
@@ -195,12 +203,10 @@ export function isAddressReleaseAllowed(
 /**
  * The policy to store for `businessType`, keeping the current one when the new
  * type still offers it and falling back to the safest option it does offer.
- * Mobile releases no address, so its policy is null rather than a timing.
  */
 export function reconcileAddressReleasePolicy(
   businessType: BusinessType,
   current: AddressReleasePolicy | null,
 ): AddressReleasePolicy | null {
-  if (businessType === 'mobile') return null;
   return isAddressReleaseAllowed(businessType, current) ? current : 'on_confirmation';
 }

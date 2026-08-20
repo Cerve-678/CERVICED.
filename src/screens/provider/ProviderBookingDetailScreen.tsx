@@ -1183,7 +1183,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
-                {addressSettings?.business_type !== 'mobile' && addressPolicy !== 'always' ? (
+                {/* Mobile is no longer excluded here — mobile providers can
+                    now pick a release timing like any other type, so hiding
+                    the row for them would leave 'manual' unreachable. */}
+                {addressPolicy && addressPolicy !== 'always' ? (
                   isAddressReleased ? (
                     <Row
                       label="Location"
