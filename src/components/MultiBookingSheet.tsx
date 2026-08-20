@@ -40,6 +40,8 @@ import { AvailabilityService, type BackToBackSlot } from '../services/Availabili
 import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
   getProviderDepositPoliciesByDisplayNames,
+  getProviderIdByDisplayName,
+  getProviderTerms,
   ProviderDepositPolicy,
 } from '../services/databaseService';
 import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
@@ -216,6 +218,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const separateResolvedRef = useRef<Set<string>>(new Set());
 
   const depositFetched = useRef(false);
+  const termsFetched = useRef(false);
+  const [providerTerms, setProviderTerms] = useState<{ title: string; body: string } | null>(null);
+  const [showProviderTerms, setShowProviderTerms] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset local state each time the sheet opens. Unlike BookingSheet,
@@ -239,6 +244,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     setResolvingSeparate({});
     separateResolvedRef.current = new Set();
     depositFetched.current = false;
+    termsFetched.current = false;
   }, [initialAddOnsByService, isVisible]);
 
   const toggleSeparate = useCallback((serviceKey: string) => {
@@ -382,6 +388,18 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   useEffect(() => {
     if (depositPolicy?.depositOnly) setIsDepositOnly(true);
   }, [depositPolicy]);
+
+  // The provider's own Terms & Conditions — same read-only "read before you
+  // book" surface as the single-service sheet. See BookingSheet for why this
+  // isn't an agreement step.
+  useEffect(() => {
+    if (!isVisible || termsFetched.current) return;
+    termsFetched.current = true;
+    getProviderIdByDisplayName(providerDisplayName)
+      .then(id => (id ? getProviderTerms(id) : null))
+      .then(setProviderTerms)
+      .catch(() => setProviderTerms(null));
+  }, [isVisible, providerDisplayName]);
 
   const servicesTotal = useMemo(() => services.reduce((sum, s) => sum + s.price, 0), [services]);
   const totalAddOnsPrice = useMemo(
@@ -974,6 +992,24 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                   </Text>
                 </TouchableOpacity>
               )}
+
+              {/* Read-only, and shown whether or not there's a policy to agree
+                  to — a provider can have written terms without filling in any
+                  structured booking policy. Deliberately not a second
+                  checkbox: nothing records agreement to these, so presenting
+                  it as consent would claim something the app can't back up.
+                  See FUTURE_LOGIC.md for sending them as a signable form. */}
+              {providerTerms && (
+                <TouchableOpacity
+                  style={styles.providerTermsLinkRow}
+                  onPress={() => setShowProviderTerms(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
+                    Read {providerDisplayName}'s Terms &amp; Conditions
+                  </Text>
+                </TouchableOpacity>
+              )}
               </>
               )}
             </ScrollView>
@@ -1040,6 +1076,44 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
           )}
         </View>
       </KeyboardDismissView>
+
+      {/* Nested inside the sheet's own Modal so it lands on top of it rather
+          than replacing it — the client is mid-booking and goes straight back
+          to where they were. Mirrors BookingSheet's. */}
+      <Modal
+        visible={showProviderTerms}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowProviderTerms(false)}
+      >
+        <View style={styles.termsOverlay}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+              <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
+                  {providerTerms?.title ?? 'Terms & Conditions'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowProviderTerms(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close terms"
+                >
+                  <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.termsBody}>
+                <Text style={[styles.termsBodyText, { color: tokens.text }]}>
+                  {providerTerms?.body ?? ''}
+                </Text>
+                <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
+                  Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };
@@ -1090,6 +1164,19 @@ const styles = StyleSheet.create({
   addOnCheckmark: { fontSize: 12, fontWeight: '700' },
   policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 8 },
   policyCheckboxLabel: { flex: 1, fontSize: 13 },
+  providerTermsLinkRow: { paddingVertical: 10 },
+  providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
+  termsHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  termsTitle: { flex: 1, fontSize: 17, fontWeight: '700', marginRight: 12 },
+  termsClose: { fontSize: 18, fontWeight: '600' },
+  termsBody: { paddingHorizontal: 20, paddingVertical: 18, paddingBottom: 40 },
+  termsBodyText: { fontSize: 14, lineHeight: 21 },
+  termsFootnote: { fontSize: 12, lineHeight: 18, marginTop: 22, fontStyle: 'italic' },
   requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   resolvingText: { fontSize: 13 },

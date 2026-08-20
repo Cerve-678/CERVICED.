@@ -47,7 +47,7 @@ Curated: [[Availability & Slots]] · **152 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/client/SearchScreen.tsx` _(104)_
 - `src/components/ModernBeautyCalendar.tsx` _(102)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(101)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(102)_
 - `src/contexts/BookingContext.tsx` _(82)_
 - `src/services/becca/capabilities/client.ts` _(71)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(60)_
@@ -147,8 +147,8 @@ Curated: [[Notifications]] · **148 files**
 - `src/screens/shared/NotificationsScreen.tsx` _(258)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/services/databaseService.ts` _(120)_
+- `src/screens/client/ProviderProfileScreen.tsx` _(105)_
 - `supabase/notification_recipient_role.sql` _(91)_
-- `src/screens/client/ProviderProfileScreen.tsx` _(89)_
 - `supabase/provider_reminder_jobs.sql` _(86)_
 - `src/screens/provider/ProviderPromotionsScreen.tsx` _(73)_
 - `supabase/fix_reschedule_flow_completion.sql` _(61)_

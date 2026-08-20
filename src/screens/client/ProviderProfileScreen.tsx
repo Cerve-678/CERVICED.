@@ -20,6 +20,7 @@ import {
   Share,
   Linking,
   Modal,
+  Pressable,
   Keyboard,
   TextInput,
   Platform,
@@ -1529,7 +1530,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     null,
   );
   const [notificationMessageType, setNotificationMessageType] = useState<
-    "bell" | "bookmark"
+    "bell" | "bookmark" | "ownProfile"
   >("bell");
 
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
@@ -2363,7 +2364,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       if (!provider) return;
 
     if (isOwnProvider) {
-      Alert.alert("That's your profile", "You can't book your own provider profile.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => {},
+      );
+      setNotificationMessageType("ownProfile");
+      showRightNotification();
       return;
     }
 
@@ -2470,6 +2475,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       hideSuccessMessage,
       navigation,
       isOwnProvider,
+      showRightNotification,
     ],
   );
 
@@ -2564,7 +2570,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     // "Book Now" deep link (route.params.openServiceId), an offer panel and
     // Becca can all reach a service without a button press.
     if (isOwnProvider) {
-      Alert.alert("That's your profile", "You can't book your own provider profile.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => {},
+      );
+      setNotificationMessageType("ownProfile");
+      showRightNotification();
       return;
     }
     if (tryOpenExternalBooking()) return;
@@ -2576,7 +2586,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, [tryOpenExternalBooking, isOwnProvider]);
+  }, [tryOpenExternalBooking, isOwnProvider, showRightNotification]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -2713,7 +2723,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const handleBookSelected = useCallback(() => {
     if (!provider || selectedServicesFlat.length === 0) return;
     if (isOwnProvider) {
-      Alert.alert("That's your profile", "You can't book your own provider profile.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => {},
+      );
+      setNotificationMessageType("ownProfile");
+      showRightNotification();
       return;
     }
     // Defensive only — the "Select" entry point is already hidden for these
@@ -2732,7 +2746,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     setMultiBookingServices(selectedServicesFlat);
     setShowMultiBookingSheet(true);
-  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider]);
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showRightNotification]);
 
   // Floating "N selected • £total — Book" bar. Rendered from two places (the
   // main screen and the fullscreen "All Services" sheet, which is a separate
@@ -2981,6 +2995,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // reviews is now state — seeded with defaults above, overwritten by Supabase fetch in useEffect
 
   const notificationMessage = useMemo(() => {
+    // Blocking your own profile is an ordinary in-app state, not an error
+    // worth a native OS dialog — it uses the same slide-in toast as the bell
+    // and bookmark so it looks like part of the app rather than a system
+    // interruption stacked on top of it.
+    if (notificationMessageType === "ownProfile") {
+      return `That's your profile —\nyou can't book yourself`;
+    }
     if (notificationMessageType === "bell") {
       const fullName = provider?.providerName ?? "this provider";
       // Name what the client actually signed up to receive. "Notifications
@@ -3707,6 +3728,91 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {/* App-styled confirm dialog (leave-with-selection prompt, etc.) —
             not the OS Alert. */}
         <DialogHost />
+
+        {/* Communication options — what "Get In Touch" opens on your own
+            profile, where in-app chat isn't possible. Themed with this
+            provider's own palette (OP) like every other surface here, rather
+            than an OS Alert dropped on top of it. */}
+        <Modal
+          visible={contactSheetVisible}
+          animationType="fade"
+          transparent
+          statusBarTranslucent
+          onRequestClose={() => setContactSheetVisible(false)}
+        >
+          <Pressable
+            style={styles.contactSheetBackdrop}
+            onPress={() => setContactSheetVisible(false)}
+          >
+            <Pressable
+              style={[styles.contactSheet, { backgroundColor: OP.surface }]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={[styles.contactSheetGrabber, { backgroundColor: OP.border }]} />
+              <Text style={[styles.contactSheetTitle, { color: OP.text }]}>
+                Your contact options
+              </Text>
+              <Text style={[styles.contactSheetSub, { color: OP.sub }]}>
+                This is how clients can reach you. In-app messaging isn't
+                available on your own profile.
+              </Text>
+
+              {contactOptions.length === 0 ? (
+                <Text style={[styles.contactSheetEmpty, { color: OP.sub }]}>
+                  You haven't published any contact methods yet. Add them in
+                  Business Profile so clients can get in touch.
+                </Text>
+              ) : (
+                <View style={styles.contactSheetList}>
+                  {contactOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={[
+                        styles.contactSheetOption,
+                        { backgroundColor: OP.card, borderColor: OP.border },
+                      ]}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setContactSheetVisible(false);
+                        Linking.openURL(option.url).catch(() => {});
+                      }}
+                    >
+                      <View
+                        style={[
+                          styles.contactSheetOptionIcon,
+                          { backgroundColor: OP.surface, borderColor: OP.border },
+                        ]}
+                      >
+                        <Ionicons name={option.icon} size={17} color={OP.text} />
+                      </View>
+                      <View style={styles.contactSheetOptionText}>
+                        <Text style={[styles.contactSheetOptionLabel, { color: OP.text }]}>
+                          {option.label}
+                        </Text>
+                        <Text
+                          style={[styles.contactSheetOptionDetail, { color: OP.sub }]}
+                          numberOfLines={1}
+                        >
+                          {option.detail}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={OP.sub} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.contactSheetClose, { borderColor: OP.border }]}
+                onPress={() => setContactSheetVisible(false)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.contactSheetCloseText, { color: OP.text }]}>Close</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         {/* Reviews Modal */}
         <ReviewsModal
@@ -4477,10 +4583,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         end={{ x: 0, y: 1 }}
                         style={styles.slotsCardHighlight}
                       />
-                      <Text
-                        style={[styles.slotsText, { color: OP.sub }]}
-                        numberOfLines={1}
-                      >
+                      <Text style={[styles.slotsText, { color: OP.sub }]}>
                         {rowText || "Availability on request"}
                       </Text>
                       <TouchableOpacity
@@ -5509,7 +5612,6 @@ const styles = StyleSheet.create({
   },
 
   slotsText: {
-    flex: 1,
     fontFamily: "BakbakOne-Regular",
     fontSize: 11,
     textAlign: "center",
@@ -5972,6 +6074,89 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
     // Color will be set dynamically using adaptiveAccentColor
+  },
+
+  // Communication-options sheet (Get In Touch on your own profile)
+  contactSheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  contactSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+  },
+  contactSheetGrabber: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  contactSheetTitle: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 18,
+    marginBottom: 4,
+  },
+  contactSheetSub: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  contactSheetEmpty: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  contactSheetList: {
+    gap: 8,
+  },
+  contactSheetOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  contactSheetOptionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contactSheetOptionText: {
+    flex: 1,
+  },
+  contactSheetOptionLabel: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  contactSheetOptionDetail: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontSize: 12,
+    marginTop: 1,
+  },
+  contactSheetClose: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderRadius: 100,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  contactSheetCloseText: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 14,
+    letterSpacing: 0.5,
   },
 
   // Contact Section
