@@ -66,7 +66,7 @@ import {
 // Navigation types
 import { ProfileStackParamList } from '../../navigation/types';
 import { logger } from '../../utils/logger';
-import { ordinalSuffix } from '../../utils/dateUtils';
+import { ordinalSuffix, formatLongDate } from '../../utils/dateUtils';
 import { ReleaseDayPicker } from '../../features/provider-registration/ReleaseDayPicker';
 import { ServiceImageCarousel } from '../../features/provider-registration/ServiceImageCarousel';
 import { DurationPicker } from '../../features/provider-registration/DurationPicker';
@@ -80,6 +80,8 @@ type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>
 import {
   ADDRESS_RELEASE_OPTS,
   isAddressReleaseAllowed,
+  reconcileAddressReleasePolicy,
+  type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
 
@@ -1353,7 +1355,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Patch Test Required</Text>
                       <Text style={styles.toggleHint}>Client must be patch tested before this treatment</Text>
                     </View>
-                    <Switch value={patchTestRequired} onValueChange={setPatchTestRequired} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={patchTestRequired} onValueChange={v => { tapSelect(); setPatchTestRequired(v); }} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.toggleRow}>
@@ -1361,7 +1363,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
                       <Text style={styles.toggleHint}>This treatment is safe during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
 
                   <View style={styles.inputGroup} onLayout={(e) => { serviceInputPositions.current['minAge'] = e.nativeEvent.layout.y; }}>
@@ -1417,7 +1419,7 @@ const ServiceModal: React.FC<ServiceModalProps> = ({
                       <Text style={styles.toggleLabel}>Pregnancy Safe</Text>
                       <Text style={styles.toggleHint}>This service is safe during pregnancy</Text>
                     </View>
-                    <Switch value={isPregnancySafe} onValueChange={setIsPregnancySafe} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
+                    <Switch value={isPregnancySafe} onValueChange={v => { tapSelect(); setIsPregnancySafe(v); }} trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }} thumbColor="#fff" />
                   </View>
                 </View>
               )}
@@ -2414,6 +2416,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     businessType: '',
     teamSize: '',
     accessibilityNotes: '',
+    termsAcceptedAt: null,
     languagesSpoken: [],
     priceRange: '',
     serviceLocations: [],
@@ -3902,12 +3905,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </View>
                   <Switch
                     value={providerData.scheduleReleaseDay != null}
-                    onValueChange={(v) =>
+                    onValueChange={(v) => {
+                      tapSelect();
                       setProviderData({
                         ...providerData,
                         scheduleReleaseDay: v ? new Date().getDate() : null,
-                      })
-                    }
+                      });
+                    }}
                     trackColor={{ false: chrome.fg(0.1), true: '#9C27B0' }}
                     thumbColor="#fff"
                   />
@@ -4268,6 +4272,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                               activeOpacity={0.8}
                               onPress={() => { tapSelect(); setSelectedCategory(item); }}
                               onLongPress={() => {
+                                tapMedium();
                                 Alert.alert(
                                   `“${item}”`,
                                   'What would you like to do?',
@@ -4487,7 +4492,19 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       <TouchableOpacity
                         key={v}
                         style={[styles.policyPill, providerData.businessType === v && { backgroundColor: adaptiveAccentColor }]}
-                        onPress={() => { tapSelect(); setProviderData(prev => ({ ...prev, businessType: v })); }}
+                        onPress={() => { tapSelect(); setProviderData(prev => ({
+                          ...prev,
+                          businessType: v,
+                          // Switching type can strip the current timing from
+                          // the allowed set. Without this, picking home_based
+                          // + "1 week before" and then switching to mobile
+                          // left week_before in state with no pill selected —
+                          // and saved it, so a mobile provider's home address
+                          // would auto-release a week before every booking.
+                          // BusinessInfoScreen already did this; this screen
+                          // wrote the type alone.
+                          addressReleasePolicy: reconcileAddressReleasePolicy(v, prev.addressReleasePolicy),
+                        })); }}
                       >
                         <Text style={[styles.policyPillText, providerData.businessType === v && { color: '#fff' }]}>{l}</Text>
                       </TouchableOpacity>
@@ -4510,7 +4527,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               </View>
               <Text style={styles.addressHint}>
                 {providerData.businessType === 'mobile'
-                  ? "Never shown publicly. You travel to your clients, so they give you their address — yours is only shared with a booked client on the timing you pick below. Include your postcode."
+                  ? "Never shown publicly, and never sent to a client automatically — you travel to them, so they give you their address instead. If you do want to share yours, pick Manual release below and send it per booking from that booking's detail page. Include your postcode."
                   : providerData.businessType === 'home_based'
                   ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
                   : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
@@ -4580,10 +4597,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                       ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
                       This used to be a hand-maintained `show:` flag per row —
                       a second copy of the same table that had to be edited in
-                      lockstep with the real one, and wasn't: mobile was
-                      excluded here and in the shared table, and giving mobile
-                      release timings meant fixing both. One source now.
-                      Mobile is no longer excluded. */}
+                      lockstep with the real one, and wasn't. One source now.
+                      Mobile is no longer excluded — it's offered exactly
+                      'manual' plus the "Never share" pill below, because a
+                      mobile provider's address should only ever leave by
+                      hand, per booking. */}
                   {providerData.businessType && (
                     <>
                       <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
@@ -4600,10 +4618,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         ].map(({ value: v, label: l }) => (
                           <TouchableOpacity
                             key={v}
-                            style={[styles.policyPill, providerData.addressReleasePolicy === v && { backgroundColor: adaptiveAccentColor }]}
-                            onPress={() => { tapSelect(); setProviderData(prev => ({ ...prev, addressReleasePolicy: v as typeof prev.addressReleasePolicy })); }}
+                            style={[styles.policyPill, (providerData.addressReleasePolicy ?? '') === v && { backgroundColor: adaptiveAccentColor }]}
+                            onPress={() => { tapSelect(); setProviderData(prev => ({
+                              ...prev,
+                              // '' is the "Never share" pill — stored as null,
+                              // which is what the column means by it.
+                              addressReleasePolicy: v === '' ? null : (v as AddressReleasePolicy),
+                            })); }}
                           >
-                            <Text style={[styles.policyPillText, providerData.addressReleasePolicy === v && { color: '#fff' }]}>{l}</Text>
+                            <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: '#fff' }]}>{l}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -4615,6 +4638,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                           five_days_before, so picking "5 days before" passed
                           the guard and then rendered an empty line. */}
                       {(() => {
+                        if (providerData.addressReleasePolicy == null) {
+                          return (
+                            <Text style={styles.addressHint}>
+                              Your address is never sent to clients. They give you theirs instead.
+                            </Text>
+                          );
+                        }
                         const sub = ADDRESS_RELEASE_OPTS
                           .find(o => o.value === providerData.addressReleasePolicy)?.sub;
                         return sub ? <Text style={styles.addressHint}>{sub}</Text> : null;
@@ -4675,61 +4705,57 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   remain on providerData so existing values round-trip
                   untouched; registration just no longer edits them. */}
 
-              {/* ── End of document ── The terms gate and closing note used to
-                  live on the hub; with the hub gone they belong at the natural
-                  end of the scroll, immediately before the reader reaches
-                  Publish. */}
-              {!isEditMode && (
-                <View style={styles.termsBox}>
-                <TouchableOpacity
-                  style={styles.termsRow}
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    tapSelect();
-                    setTermsAccepted(prev => !prev);
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.termsCheckbox,
-                      termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
-                    ]}
-                  >
-                    {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
-                  </View>
-                  <Text style={styles.termsRowText}>
-                    I agree to the{' '}
-                    <Text
-                      style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                      onPress={() => { tapSelect(); setShowTermsModal(true); }}
-                    >
-                      Terms &amp; Conditions
-                    </Text>
-                  </Text>
-                </TouchableOpacity>
-                </View>
-              )}
+              {/* ── End of document ── The CERVICED terms row and closing
+                  note live at the natural end of the scroll, immediately
+                  before the reader reaches Publish.
 
+                  ONE row, not two. This used to be a checkbox box shown only
+                  on first publish plus a separate bare link further down that
+                  showed always — so an existing provider got a link with no
+                  checkbox, and a new one got a checkbox and then a second,
+                  redundant link. Now the checkbox is always beside the link;
+                  what changes is what it means. On first publish it's the
+                  real gate (handleSubmit refuses without it). Afterwards it
+                  reflects the stored providers.terms_accepted_at — checked,
+                  dated, and not re-askable, because nothing clears that
+                  timestamp and re-consenting on every profile edit would be
+                  theatre rather than a gate. */}
               <View style={styles.docEnd}>
                 <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
                 <Text style={styles.reviewFootnote}>
                   Publishing saves your profile and policies. You can come back and
                   change any of this at any time.
                 </Text>
-                {/* The acceptance checkbox above only shows on first
-                    publish (!isEditMode) — this plain link stays visible
-                    every time, so an existing provider editing their
-                    profile can still reach CERVICED's Terms & Conditions
-                    from this screen, not just at signup. */}
-                <TouchableOpacity
-                  onPress={() => { tapSelect(); setShowTermsModal(true); }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={{ marginTop: 14 }}
-                >
-                  <Text style={[styles.termsRowLink, { color: adaptiveAccentColor, textAlign: 'center' }]}>
-                    CERVICED Terms & Conditions
-                  </Text>
-                </TouchableOpacity>
+
+                <View style={[styles.termsBox, { marginTop: 16 }]}>
+                  <TouchableOpacity
+                    style={styles.termsRow}
+                    activeOpacity={isEditMode ? 1 : 0.75}
+                    disabled={isEditMode}
+                    onPress={() => { tapSelect(); setTermsAccepted(prev => !prev); }}
+                  >
+                    <View
+                      style={[
+                        styles.termsCheckbox,
+                        (termsAccepted || isEditMode) && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                      ]}
+                    >
+                      {(termsAccepted || isEditMode) && <Ionicons name="checkmark" size={13} color="#fff" />}
+                    </View>
+                    <Text style={styles.termsRowText}>
+                      {isEditMode ? 'You agreed to the ' : 'I agree to the '}
+                      <Text
+                        style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
+                        onPress={() => { tapSelect(); setShowTermsModal(true); }}
+                      >
+                        CERVICED Terms &amp; Conditions
+                      </Text>
+                      {isEditMode && providerData.termsAcceptedAt
+                        ? ` on ${formatLongDate(providerData.termsAcceptedAt)}`
+                        : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 

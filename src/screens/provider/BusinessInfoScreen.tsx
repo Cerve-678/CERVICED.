@@ -213,7 +213,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
                   <Text style={[s.cardTitle, { color: C.text, marginBottom: 4 }]}>Address Release</Text>
                   <Text style={[s.cardSub, { color: C.sub }]}>
                     {businessType === 'mobile'
-                      ? 'You travel to your clients, so they give you their address — this controls when a booked client can see yours.'
+                      ? 'You travel to your clients, so they give you their address. Yours is never sent automatically — pick Manual release if you want the option to send it per booking.'
                       : 'When a booked client can see your address.'}
                   </Text>
                   {/* Mobile gets an explicit "never" choice, stored as NULL.

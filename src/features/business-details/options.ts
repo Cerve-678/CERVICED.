@@ -153,7 +153,7 @@ export const BUSINESS_TYPE_OPTS: { value: BusinessType; label: string; sub: stri
   { value: 'salon',      label: 'Salon',       sub: 'Clients come to a commercial salon premises.' },
   { value: 'studio',     label: 'Studio',      sub: 'Clients come to a dedicated studio space.' },
   { value: 'home_based', label: 'Home Studio', sub: 'Clients come to your home — address stays private until you release it.' },
-  { value: 'mobile',     label: 'Mobile',      sub: 'You travel to the client. Your address stays private until you release it.' },
+  { value: 'mobile',     label: 'Mobile',      sub: 'You travel to the client. Your address is never sent automatically — only if you send it yourself.' },
 ];
 
 export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string; sub: string }[] = [
@@ -164,7 +164,7 @@ export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string;
   { value: 'three_days_before', label: '72h before',      sub: 'Shared automatically 72 hours before the appointment.' },
   { value: 'five_days_before',  label: '5 days before',   sub: 'Shared automatically 5 days before the appointment.' },
   { value: 'week_before',       label: '1 week before',   sub: 'Shared automatically 1 week before the appointment.' },
-  { value: 'manual',            label: 'Manual release',  sub: 'You release your address per booking from the booking detail page.' },
+  { value: 'manual',            label: 'Manual release',  sub: 'Nothing is sent automatically — you send your address per booking from that booking\u2019s detail page.' },
 ];
 
 /**
@@ -177,11 +177,16 @@ export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string;
  * new value through `reconcileAddressReleasePolicy` rather than writing the
  * type alone.
  *
- * Mobile gets the same private-until-released set as home_based, and
- * deliberately NOT 'always': a mobile provider travels to the client, so the
- * address on file is typically their home and must never be standing-visible.
- * They used to be excluded from release entirely (empty list, null policy,
- * picker hidden). Nothing server-side ever keyed off business_type for this —
+ * Mobile gets 'manual' and nothing else. A mobile provider travels to the
+ * client, so sharing their own address is the exception rather than the flow:
+ * the default is not sharing at all (NULL policy), and if they do want to
+ * share it, it's a deliberate per-booking send from the booking detail screen,
+ * never a timer that fires on its own. Every timed option — and 'always' most
+ * of all — would publish what is usually a home address on a schedule the
+ * provider isn't watching.
+ *
+ * They used to be excluded from release entirely (empty list, picker hidden).
+ * Nothing server-side ever keyed off business_type for this —
  * `is_address_released()` and the on-confirmation trigger are purely
  * policy-driven — so giving mobile a real policy is sufficient on its own and
  * needs no migration.
@@ -190,7 +195,7 @@ export const ADDRESS_RELEASE_BY_BUSINESS_TYPE: Record<BusinessType, AddressRelea
   salon:      ['always', 'on_confirmation'],
   studio:     ['always', 'on_confirmation'],
   home_based: ['on_confirmation', 'day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before', 'manual'],
-  mobile:     ['on_confirmation', 'day_before', 'two_days_before', 'three_days_before', 'five_days_before', 'week_before', 'manual'],
+  mobile:     ['manual'],
 };
 
 export function isAddressReleaseAllowed(

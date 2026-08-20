@@ -777,17 +777,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {!showReceipt ? (
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={st.row}><Text style={[st.rowLabel, { color: C.sub }]}>Total</Text><Text style={[st.rowValue, { color: C.text }]}>£{payment.total.toFixed(2)}</Text></View>
-                <View style={[st.row, payment.feePaidSeparately <= 0 && payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
-                {/* Deposit bookings only. The row above is the provider's
-                    deposit alone, so without this the deposit and the balance
-                    don't add up to the total — the platform fee sits inside
-                    Total and was charged at checkout, not at the appointment. */}
-                {payment.feePaidSeparately > 0 && (
-                  <View style={[st.row, payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Platform Fee Paid</Text><Text style={[st.rowValue, { color: '#34C759' }]}>£{payment.feePaidSeparately.toFixed(2)}</Text></View>
-                )}
-                {/* Total already includes the platform fee, so a settled
-                    booking ends at the paid rows — a "Due at Appointment
-                    £0.00" row underneath just invites the question. */}
+                <View style={[st.row, payment.remainingBalance <= 0 && { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>{payment.paidLabel}</Text><Text style={[st.rowValue, { color: payment.paidAmount > 0 ? '#34C759' : C.sub }]}>£{payment.paidAmount.toFixed(2)}</Text></View>
+                {/* Three rows, deliberately: Total, what's paid, what's left.
+                    The platform fee gets no row of its own — it's inside
+                    Total and itemised in the receipt below, and repeating it
+                    here read as a second charge. A settled booking ends at
+                    the paid row, since "Due at Appointment £0.00" only
+                    invites the question. */}
                 {payment.remainingBalance > 0 && (
                   <View style={[st.row, { borderBottomWidth: 0 }]}><Text style={[st.rowLabel, { color: C.sub }]}>Due at Appointment</Text><Text style={[st.rowValue, { color: '#FF9500' }]}>£{payment.remainingBalance.toFixed(2)}</Text></View>
                 )}
@@ -859,12 +855,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: C.sub, fontSize: 13 }}>{payment.paidLabel}</Text>
                     <Text style={{ color: payment.paidAmount > 0 ? '#34C759' : C.sub, fontSize: 13, fontWeight: '600' }}>£{payment.paidAmount.toFixed(2)}</Text>
                   </View>
-                  {payment.feePaidSeparately > 0 && (
-                    <View style={st.rcptRow}>
-                      <Text style={{ color: C.sub, fontSize: 13 }}>Platform Fee Paid</Text>
-                      <Text style={{ color: '#34C759', fontSize: 13, fontWeight: '600' }}>£{payment.feePaidSeparately.toFixed(2)}</Text>
-                    </View>
-                  )}
                   {payment.remainingBalance > 0 && (
                     <View style={st.rcptRow}>
                       <Text style={{ color: C.sub, fontSize: 13 }}>Due at Appointment</Text>
@@ -951,7 +941,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               checkout, which is all the policy card is. */}
           {!!booking.bookingInstructions && (
             <View style={st.section}>
-              <Text style={[st.sectionTitle, { color: C.sub }]}>INSTRUCTIONS</Text>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>
+                {booking.providerName}'S INSTRUCTIONS
+              </Text>
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <Text style={{ color: C.text, fontSize: 14, lineHeight: 20, padding: 16 }}>{booking.bookingInstructions}</Text>
               </View>

@@ -37,8 +37,14 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
 
   // On a deposit the figure shown is the provider's own deposit, never the
   // deposit + the platform fee bundled together — the fee is CERVICED's, not
-  // part of what the client has put towards the provider's service. It is
-  // already inside `total`, and itemised on its own line in the receipt.
+  // part of what the client has put towards the provider's service.
+  //
+  // The fee gets NO "paid" row of its own anywhere. It is already inside
+  // `total` and already itemised in the receipt's services breakdown, and a
+  // third mention of the same £0.99 next to the deposit made the card read
+  // as if it had been charged twice. Deposit + balance not summing exactly
+  // to Total is the intended reading: what you still owe the provider is the
+  // number that matters at the appointment.
   //
   // `isUnpaid` is checked FIRST: a booking can carry payment_type 'deposit'
   // while payment_status is still 'pending', and labelling that "Deposit
@@ -46,14 +52,6 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
   // reads "Total Paid £0.00", which is simply true.
   const paidLabel = !isUnpaid && isDeposit ? 'Deposit Paid' : 'Total Paid';
   const paidAmount = isUnpaid ? 0 : isDeposit ? depositAmount : amountPaidAtCheckout;
-
-  // The platform fee the client already paid at checkout, shown as its own
-  // "paid" row on a deposit booking. Without it the card reads Total £100.99 /
-  // Deposit Paid £20.00 / Due £80.00 — three numbers that don't reconcile,
-  // because `paidAmount` is deliberately the provider's deposit alone while
-  // the fee sits inside `total`. Zero for a full payment (already inside
-  // `paidAmount`) and for an unpaid booking (nothing was charged).
-  const feePaidSeparately = !isUnpaid && isDeposit ? serviceCharge : 0;
 
   return {
     servicePrice,
@@ -71,6 +69,5 @@ export function calculateBookingPaymentBreakdown(booking: ConfirmedBooking) {
     isUnpaid,
     paidLabel,
     paidAmount,
-    feePaidSeparately,
   };
 }

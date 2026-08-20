@@ -38,6 +38,7 @@ import {
   getInfoPacksByBooking,
   getProviderAddressPolicy,
   releaseBookingAddress,
+  getMyProviderFullAddress,
   getBookingAddressReleasedAt,
   getBookingWithAddOnsById,
   getGroupBookingSiblings,
@@ -206,6 +207,19 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
 </body>
 </html>`;
 }
+
+/** What a client is still waiting on, for the timed release policies. Says
+ *  when it WILL happen rather than offering a tap, because the server does it
+ *  on schedule with no involvement from this screen. 'manual' and 'always'
+ *  aren't here on purpose — neither is a pending timer. */
+const PENDING_RELEASE_COPY: Record<string, string> = {
+  on_confirmation:   'Sends when you confirm',
+  day_before:        'Sends 24 hours before',
+  two_days_before:   'Sends 48 hours before',
+  three_days_before: 'Sends 72 hours before',
+  five_days_before:  'Sends 5 days before',
+  week_before:       'Sends 1 week before',
+};
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
   const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule } = route.params;
@@ -776,7 +790,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     groupChainsByStart.current = new Map();
   }, []);
 
-  const handleReleaseAddress = useCallback(async () => {
+  const releaseAddressNow = useCallback(async () => {
     if (!booking || releasingAddress) return;
     setReleasingAddress(true);
     try {
@@ -794,8 +808,34 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     }
   }, [booking, releasingAddress]);
 
+  // Sending an address is irreversible — there is no "unsend", and for a
+  // mobile or home-studio provider the address in question is their home. So
+  // a manual release asks first, every time, rather than firing on one tap.
+  const handleReleaseAddress = useCallback(async () => {
+    if (!booking || releasingAddress) return;
+    // Fetched here rather than held in state: it's a private address, only
+    // needed on the rare taps that actually send one, and RLS scopes
+    // getMyProviderFullAddress to the caller's own row. A failed read just
+    // drops the preview line — it must not block the send.
+    const address = await getMyProviderFullAddress().catch(() => null);
+    Alert.alert(
+      'Send your address?',
+      'Check it\u2019s correct before sending \u2014 this can\u2019t be undone.'
+        + (address ? `\n\n${address}` : ''),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send address', onPress: () => { void releaseAddressNow(); } },
+      ],
+    );
+  }, [booking, releasingAddress, releaseAddressNow]);
+
+  // NULL is a real state, not a missing one: it means this provider shares no
+  // address at all (the default, and the only default, for mobile). Coercing
+  // it to 'manual' put a send button in front of someone who chose not to
+  // share. isAddressReleasedByPolicy treats an unknown policy as "not
+  // released", so passing null through is safe.
   const addressPolicy = useMemo(
-    () => addressSettings?.address_release_policy ?? 'manual',
+    () => addressSettings?.address_release_policy ?? null,
     [addressSettings]
   );
 
@@ -1183,9 +1223,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
-                {/* Mobile is no longer excluded here — mobile providers can
-                    now pick a release timing like any other type, so hiding
-                    the row for them would leave 'manual' unreachable. */}
+                {/* Three distinct states, where there used to be two.
+                    'always' isn't handled here at all — the address is simply
+                    part of the booking.
+
+                    Only a MANUAL policy gets a button. Every timed policy is
+                    a statement of fact, not an action: the server releases it
+                    on schedule whether or not this screen is open, so
+                    rendering it as a tappable "Address will be confirmed…"
+                    invited a provider to press something that did nothing.
+                    A null policy means this provider shares no address —
+                    mobile's default — so there's nothing to say or do. */}
                 {addressPolicy && addressPolicy !== 'always' ? (
                   isAddressReleased ? (
                     <Row
@@ -1196,10 +1244,10 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       divColor={rowDiv}
                       last
                     />
-                  ) : (
+                  ) : addressPolicy === 'manual' ? (
                     <TouchableOpacity
                       style={styles.row}
-                      onPress={handleReleaseAddress}
+                      onPress={() => { void handleReleaseAddress(); }}
                       activeOpacity={0.7}
                       disabled={releasingAddress}
                     >
@@ -1207,9 +1255,17 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       {releasingAddress ? (
                         <ActivityIndicator size="small" color={P.accent} />
                       ) : (
-                        <Text style={[styles.rowValue, { color: P.accent }]}>Address will be confirmed…</Text>
+                        <Text style={[styles.rowValue, { color: P.accent }]}>Send address to client</Text>
                       )}
                     </TouchableOpacity>
+                  ) : (
+                    <Row
+                      label="Location"
+                      value={PENDING_RELEASE_COPY[addressPolicy] ?? 'Address not sent yet'}
+                      textColor={P.text}
+                      divColor={rowDiv}
+                      last
+                    />
                   )
                 ) : booking.address ? (
                   <Row label="Location" value={booking.address} textColor={P.text} divColor={rowDiv} last />

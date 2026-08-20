@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 
 export type AddressSelection = {
   address: string;
@@ -127,7 +128,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
     <>
       <TouchableOpacity
         style={[styles.field, disabled && styles.disabled]}
-        onPress={() => setVisible(true)}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setVisible(true); }}
         disabled={disabled}
         activeOpacity={0.75}
         accessibilityRole="button"
@@ -142,7 +143,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
 
       <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
         <View style={styles.modalRoot}>
-          <Pressable style={styles.backdrop} onPress={() => setVisible(false)} />
+          <Pressable style={styles.backdrop} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setVisible(false); }} />
           <KeyboardAvoidingView
             style={styles.keyboardAvoiding}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -154,7 +155,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
               <Text style={styles.title}>Choose your full address</Text>
               <Text style={styles.subtitle}>Search by street and postcode, then select the matching address.</Text>
             </View>
-            <TouchableOpacity onPress={() => setVisible(false)} hitSlop={12} accessibilityLabel="Close address picker">
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setVisible(false); }} hitSlop={12} accessibilityLabel="Close address picker">
               <Ionicons name="close" size={24} color="#1C1C1E" />
             </TouchableOpacity>
           </View>
@@ -176,10 +177,10 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
           </View>
 
           <View style={styles.actions}>
-            <TouchableOpacity style={[styles.actionButton, { borderColor: accentColor }]} onPress={() => search()} disabled={searching}>
+            <TouchableOpacity style={[styles.actionButton, { borderColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); search(); }} disabled={searching}>
               <Text style={[styles.actionText, { color: accentColor }]}>Search address</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.currentButton} onPress={useCurrentLocation} disabled={searching}>
+            <TouchableOpacity style={styles.currentButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); useCurrentLocation(); }} disabled={searching}>
               <Ionicons name="navigate-outline" size={17} color="#1C1C1E" />
               <Text style={styles.currentText}>Use current location</Text>
             </TouchableOpacity>
@@ -187,7 +188,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
 
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.results}>
             {results.map(result => (
-              <TouchableOpacity key={result.key} style={styles.result} onPress={() => selectAddress(result)}>
+              <TouchableOpacity key={result.key} style={styles.result} onPress={() => { Haptics.selectionAsync().catch(() => {}); selectAddress(result); }}>
                 <Ionicons name="location" size={20} color={accentColor} />
                 <Text style={styles.resultText}>{result.address}</Text>
               </TouchableOpacity>

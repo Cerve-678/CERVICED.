@@ -5,10 +5,13 @@
 
 #generated
 
-**31 service modules.** Curated overview: [[Services]].
+**32 service modules.** Curated overview: [[Services]].
 
 ### `src/services/acuityTransferService.ts`
 `transferFromAcuity`
+
+### `src/services/addressLookupService 2.ts`
+`findAddressesByPostcode` · `resolvePostcodeAddress`
 
 ### `src/services/addressLookupService.ts`
 `findAddressesByPostcode` · `resolvePostcodeAddress`

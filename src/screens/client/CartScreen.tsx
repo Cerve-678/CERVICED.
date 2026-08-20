@@ -1525,7 +1525,26 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // they type is only used by those.
   const [mobileProviderNames, setMobileProviderNames] = useState<string[]>([]);
   const hasMobileProvider = mobileProviderNames.length > 0;
-  const [clientAddress, setClientAddress] = useState('');
+  // Mirrors the address saved on the account. It's no longer editable here —
+  // the checkout row is a button through to ProfileInfo — so this only ever
+  // reflects what's stored, and re-syncs when the user comes back from
+  // setting it there.
+  const [clientAddress, setClientAddress] = useState(user?.clientAddress ?? '');
+  // Re-sync after a trip to ProfileInfo to set it (AuthContext.updateUser
+  // refreshes `user`, which lands here on the way back). Never clears what's
+  // already shown, so a transient null while the profile reloads can't wipe
+  // the field mid-checkout.
+  useEffect(() => {
+    if (user?.clientAddress) setClientAddress(user.clientAddress);
+  }, [user?.clientAddress]);
+
+  // Send the client to their account to set an address with the real
+  // geocoded picker. Profile is a sibling tab, so this hops stacks via the
+  // tab navigator — same shape as handleContinueShopping's jump to Home.
+  const openAddressSettings = useCallback(() => {
+    setShowReviewModal(false);
+    navigation.getParent()?.navigate('Profile', { screen: 'ProfileInfo' });
+  }, [navigation]);
 
   // Memoize expensive calculations properly
   const itemsByProvider = useMemo(() => {
@@ -2225,8 +2244,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       return;
     }
     if (hasMobileProvider && !clientAddress.trim()) {
-      showReviewAlert('Address Required', 'Your provider is mobile and will travel to you. Please enter your address.');
-      setIsEditingDetails(true);
+      showReviewAlert(
+        'Address Required',
+        `${formatNameList(mobileProviderNames)} ${mobileProviderNames.length === 1 ? 'is a mobile provider' : 'are mobile providers'} and will come to you. Tap "Add your address" to set it on your account first.`,
+      );
       return;
     }
 
@@ -2240,13 +2261,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // the real auth email without ever actually changing it server-side.
     if (saveAsDefault) {
       try {
-        await updateUser({
-          name: reviewName,
-          phone: reviewPhone,
-          // Only offered when a mobile provider is in the cart — that's the
-          // only case the address field is shown or collected at all.
-          ...(hasMobileProvider ? { clientAddress: clientAddress.trim() } : {}),
-        });
+        // Address is deliberately not written here any more — it's owned by
+        // ProfileInfo's AddressPicker, which saves it to the account at the
+        // moment it's picked. Writing it back from this screen's mirror
+        // could only ever re-save the same value, or clobber a newer one.
+        await updateUser({ name: reviewName, phone: reviewPhone });
       } catch (err) {
         // Don't block checkout on this — the entered details still carry
         // through to the booking itself via customerInfo above.
@@ -2259,7 +2278,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setAgreedToPolicy(false);
     setShowReviewModal(false);
     setShowBookingSummaryModal(true);
-  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, hasMobileProvider, clientAddress]);
+  }, [reviewName, reviewEmail, reviewPhone, saveAsDefault, updateUser, showReviewAlert, hasMobileProvider, mobileProviderNames, clientAddress]);
 
 const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIntentId?: string) => {
   if (__DEV__) {
@@ -2694,30 +2713,46 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         )}
                       </View>
 
-                      {/* Address — only shown when a mobile provider is in the cart */}
+                      {/* Address — only shown when a mobile provider is in
+                          the cart. No longer a free-text field here: it opens
+                          the account screen, where the same geocoded
+                          AddressPicker providers use stores it on the
+                          account. Typing it here meant a different,
+                          unvalidated string every checkout, for the one
+                          field a provider actually has to navigate to. */}
                       {hasMobileProvider && (
                         <View style={styles.reviewFieldGroup}>
                           <Text style={[styles.reviewFieldLabel, { color: P.sub }]}>YOUR ADDRESS</Text>
                           <Text style={[styles.reviewFieldLabel, { color: P.sub, fontSize: 11, marginBottom: 4 }]}>
                             {formatNameList(mobileProviderNames)}{' '}
-                            {mobileProviderNames.length === 1 ? 'is' : 'are'} mobile and will come to you
+                            {mobileProviderNames.length === 1
+                              ? 'is a mobile provider'
+                              : 'are mobile providers'} and will come to you
                           </Text>
-                          {isEditingDetails ? (
-                            <TextInput
-                              style={[styles.reviewInput, {
-                                color: P.text, borderColor: !clientAddress.trim() ? '#FF3B30' : P.border, backgroundColor: P.surface,
-                              }]}
-                              value={clientAddress}
-                              onChangeText={setClientAddress}
-                              placeholder="e.g. 12 High Street, London, SW1A 1AA"
-                              placeholderTextColor={P.sub}
-                              autoCapitalize="words"
+                          <TouchableOpacity
+                            style={[styles.reviewAddressBtn, {
+                              borderColor: clientAddress.trim() ? P.border : '#FF3B30',
+                              backgroundColor: P.surface,
+                            }]}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                              openAddressSettings();
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons
+                              name="location-outline"
+                              size={16}
+                              color={clientAddress.trim() ? P.sub : '#FF3B30'}
                             />
-                          ) : (
-                            <Text style={[styles.reviewFieldValue, { color: clientAddress ? P.text : '#FF3B30' }]}>
-                              {clientAddress || 'Address required'}
+                            <Text
+                              style={[styles.reviewAddressBtnText, { color: clientAddress.trim() ? P.text : '#FF3B30' }]}
+                              numberOfLines={2}
+                            >
+                              {clientAddress.trim() || 'Add your address'}
                             </Text>
-                          )}
+                            <Ionicons name="chevron-forward" size={16} color={P.sub} />
+                          </TouchableOpacity>
                         </View>
                       )}
 
@@ -4636,6 +4671,22 @@ const styles = StyleSheet.create({
   // KeyboardAvoidingView wrapper around the card — sized to the card, not
   // flex:1, so it doesn't stretch over the whole dimmed overlay and swallow
   // the backdrop taps that dismiss the keyboard.
+  // Address row in Confirm Your Details — a button through to the account's
+  // AddressPicker, not an input.
+  reviewAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  reviewAddressBtnText: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontSize: 13,
+  },
   reviewKeyboardWrap: {
     width: '100%',
     alignItems: 'center',

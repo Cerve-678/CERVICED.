@@ -86,6 +86,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     businessType: '',
     teamSize: '',
     accessibilityNotes: '',
+    termsAcceptedAt: null,
     languagesSpoken: [],
     priceRange: '',
     serviceLocations: [],

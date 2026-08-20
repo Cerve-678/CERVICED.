@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
+import AddressPicker from '../../components/AddressPicker';
 import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 
@@ -40,6 +41,11 @@ export default function ProfileInfoScreen({ navigation }: any) {
   // users.dob is a Postgres `date` column — stored/loaded as an ISO
   // "YYYY-MM-DD" string, parsed to a Date only for the picker/display.
   const [dob, setDob] = useState<Date | null>(user?.dob ? new Date(user.dob) : null);
+  // Where a mobile provider travels to. Lives here rather than being typed
+  // into the checkout sheet so it's entered once, through the same geocoded
+  // AddressPicker providers use, instead of as free text under time pressure
+  // at the point of paying.
+  const [clientAddress, setClientAddress] = useState(user?.clientAddress ?? '');
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -59,7 +65,7 @@ export default function ProfileInfoScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       await Promise.all([
-        updateUser({ name: name.trim(), phone: phone.trim() }),
+        updateUser({ name: name.trim(), phone: phone.trim(), clientAddress: clientAddress.trim() || null }),
         user?.id ? updateUserDob(user.id, dob ? dateToYMD(dob) : null) : Promise.resolve(),
       ]);
     } catch {
@@ -168,6 +174,21 @@ export default function ProfileInfoScreen({ navigation }: any) {
               keyboardType="phone-pad"
               autoCapitalize="none"
             />
+          </View>
+
+          {/* Your address — used only when a mobile provider travels to you.
+              Geocoded through AddressPicker rather than typed free-text, so
+              what's stored is a real, resolvable address. */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: P.sub }]}>YOUR ADDRESS</Text>
+            <AddressPicker
+              value={clientAddress}
+              onChange={selection => setClientAddress(selection.address)}
+              accentColor={P.accent}
+            />
+            <Text style={[styles.emailHint, { color: P.sub }]}>
+              Only shared with a provider who travels to you, and only once your booking is confirmed.
+            </Text>
           </View>
 
           {/* Date of birth */}

@@ -73,7 +73,7 @@ import {
   joinWaitlist,
   leaveWaitlist,
   type WaitlistEntry,
-  checkFollowNotifyEnabled,
+  getProviderProfileViewerContext,
   setProviderFollowNotify,
 } from "../../services/databaseService";
 import userLearningService from "../../services/userLearningService";
@@ -93,7 +93,7 @@ import {
 } from "../../constants/providerThemes";
 import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
-import { formatShortDate, formatLongDate, formatTime12 } from "../../utils/dateUtils";
+import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { BUSINESS_TYPE_LABEL, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
 import { mapProviderProfileData } from "../../features/providers/profileMapper";
 import type { ProviderProfileData, ProviderProfileService } from "../../features/providers/profileTypes";
@@ -1312,13 +1312,17 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // fetch them in parallel instead of one after another so the
         // screen's loading state clears after the slowest single request
         // rather than the sum of all three.
-        const [reviewsResult, promosResult, portfolioResult, availabilityResult, openingHoursResult, followNotifyResult] = await Promise.allSettled([
+        const [reviewsResult, promosResult, portfolioResult, availabilityResult, openingHoursResult, viewerResult] = await Promise.allSettled([
           getProviderReviews(data.id),
           getProviderActivePromotions(data.id),
           getProviderPortfolio(data.id),
           AvailabilityService.getAvailabilitySummary(data.id),
           AvailabilityService.getWeeklyOpeningHours(data.id),
-          checkFollowNotifyEnabled(data.id),
+          // Carries both the bell state and whether this profile belongs to
+          // the person looking at it — one call instead of two, and the
+          // owner check has to be authenticated-user-scoped, never derived
+          // from anything the profile payload itself carries.
+          getProviderProfileViewerContext(data.id),
         ]);
 
         if (!cancelled && reviewsResult.status === "fulfilled") {
@@ -1357,9 +1361,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           );
           // A rejected/logged-out check leaves the bell off rather than
           // asserting the client is subscribed.
-          setIsNotificationsEnabled(
-            followNotifyResult.status === "fulfilled" ? followNotifyResult.value : false,
-          );
+          const viewer =
+            viewerResult.status === "fulfilled" ? viewerResult.value : null;
+          setIsNotificationsEnabled(viewer?.notificationsEnabled ?? false);
+          // Fails CLOSED in the other direction on purpose: an errored check
+          // leaves the profile bookable rather than locking a real client
+          // out of booking. The server-side guard in hold_cart_booking_slots
+          // is the actual enforcement — this is the honest UI on top of it.
+          setIsOwnProvider(viewer?.isOwnProvider ?? false);
         }
       })
       .catch(() => {
@@ -1447,6 +1456,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // True when the signed-in user owns THIS provider profile. A provider
+  // browsing the client side can reach their own profile through Explore,
+  // Search, Becca or a deep link, and every booking entry point below is
+  // disabled when this is set — the server rejects the booking anyway
+  // (hold_cart_booking_slots / claim_cart_booking_slots both raise), so an
+  // enabled button could only ever lead to an error alert.
+  const [isOwnProvider, setIsOwnProvider] = useState(false);
   const [currentUserName, setCurrentUserName] = useState<string>("");
   const [userWaitlistMap, setUserWaitlistMap] = useState<
     Record<string, WaitlistEntry>
@@ -2243,6 +2259,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.log("Quick Book - Redirecting to checkout:", service.name);
       if (!provider) return;
 
+    if (isOwnProvider) {
+      Alert.alert("That's your profile", "You can't book your own provider profile.");
+      return;
+    }
+
       // Providers with an external booking link are fully bypassed from
       // Cerviced's in-app booking — hand off to their own booking page
       // instead of adding to cart. See tryOpenExternalBooking below, which
@@ -2345,6 +2366,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       showSuccessMessageWithAnimation,
       hideSuccessMessage,
       navigation,
+      isOwnProvider,
     ],
   );
 
@@ -2434,6 +2456,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   );
 
   const handleBook = useCallback((service: ServiceData) => {
+    // Every booking entry point funnels through one of these handlers, so
+    // the own-profile block lives here as well as on the buttons — Explore's
+    // "Book Now" deep link (route.params.openServiceId), an offer panel and
+    // Becca can all reach a service without a button press.
+    if (isOwnProvider) {
+      Alert.alert("That's your profile", "You can't book your own provider profile.");
+      return;
+    }
     if (tryOpenExternalBooking()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -2443,7 +2473,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, [tryOpenExternalBooking]);
+  }, [tryOpenExternalBooking, isOwnProvider]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -2579,6 +2609,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // stranded in select mode with nothing selected.
   const handleBookSelected = useCallback(() => {
     if (!provider || selectedServicesFlat.length === 0) return;
+    if (isOwnProvider) {
+      Alert.alert("That's your profile", "You can't book your own provider profile.");
+      return;
+    }
     // Defensive only — the "Select" entry point is already hidden for these
     // providers (see tryOpenExternalBooking's other call sites).
     if (tryOpenExternalBooking()) return;
@@ -2595,7 +2629,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     setMultiBookingServices(selectedServicesFlat);
     setShowMultiBookingSheet(true);
-  }, [provider, selectedServicesFlat, tryOpenExternalBooking]);
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider]);
 
   // Floating "N selected • £total — Book" bar. Rendered from two places (the
   // main screen and the fullscreen "All Services" sheet, which is a separate
@@ -2620,14 +2654,27 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         {selectedServicesFlat.length} selected • £{selectedTotal.toFixed(2)}
       </Text>
       <TouchableOpacity
+        disabled={isOwnProvider}
         style={[
           styles.selectionBarButton,
-          { backgroundColor: adaptiveAccentColor },
+          {
+            backgroundColor: isOwnProvider
+              ? withAlpha(OP.sub, 0.18)
+              : adaptiveAccentColor,
+          },
         ]}
         onPress={handleBookSelected}
         activeOpacity={0.85}
+        accessibilityState={{ disabled: isOwnProvider }}
       >
-        <Text style={styles.selectionBarButtonText}>Book</Text>
+        <Text
+          style={[
+            styles.selectionBarButtonText,
+            isOwnProvider && { color: OP.sub },
+          ]}
+        >
+          {isOwnProvider ? "Your profile" : "Book"}
+        </Text>
       </TouchableOpacity>
     </BlurView>
   );
@@ -3254,13 +3301,14 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
                     return (
                       <TouchableOpacity
-                        disabled={fullyBooked}
+                        disabled={isOwnProvider || fullyBooked}
                         style={[
                           styles.bookButton,
                           {
-                            backgroundColor: fullyBooked
-                              ? withAlpha(OP.sub, 0.18)
-                              : adaptiveAccentColor,
+                            backgroundColor:
+                              isOwnProvider || fullyBooked
+                                ? withAlpha(OP.sub, 0.18)
+                                : adaptiveAccentColor,
                           },
                         ]}
                         onPress={() => {
@@ -3268,16 +3316,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                           handleBook(service);
                         }}
                         activeOpacity={0.8}
+                        accessibilityState={{ disabled: isOwnProvider || fullyBooked }}
                       >
                         <Text
                           style={[
                             styles.bookButtonText,
-                            fullyBooked
+                            isOwnProvider || fullyBooked
                               ? { color: OP.sub, fontSize: 10 }
                               : { color: "#fff" },
                           ]}
                         >
-                          {fullyBooked ? "Fully Booked" : "Book"}
+                          {isOwnProvider
+                            ? "Your profile"
+                            : fullyBooked
+                              ? "Fully Booked"
+                              : "Book"}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -4254,7 +4307,18 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     availability && availability.state !== "unpublished"
                       ? `${availability.headline}${availability.detail ? ` · ${availability.detail}` : ""}`
                       : "";
-                  if (availabilityLoading || !pillText) return null;
+                  // The bell subscribes to this provider's monthly slot
+                  // RELEASE (providers.automation_settings.scheduleReleaseDay
+                  // — see ProviderAutomationsScreen), which is a completely
+                  // separate fact from whether there's an availability
+                  // headline to print today. It used to share this block's
+                  // early return, so a provider with a release day set but no
+                  // current availability line lost the bell entirely — the
+                  // exact case the release notification exists for. The row
+                  // now renders when EITHER has something to say.
+                  const showBell = provider.scheduleReleaseDay != null;
+                  if (availabilityLoading) return null;
+                  if (!pillText && !showBell) return null;
                   return (
                   <BlurView
                     intensity={cardBlurIntensity}
@@ -4271,8 +4335,10 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                       style={styles.slotsCardHighlight}
                     />
                     <Text style={[styles.slotsText, { color: OP.sub }]}>
-                      {pillText}
+                      {pillText ||
+                        `New slots released on the ${ordinalSuffix(provider.scheduleReleaseDay!)} of each month`}
                     </Text>
+                    {showBell ? (
                     <TouchableOpacity
                       style={styles.bellButtonInline}
                       onPress={handleNotificationToggle}
@@ -4286,6 +4352,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         color={isNotificationsEnabled ? "#4CAF50" : OP.sub}
                       />
                     </TouchableOpacity>
+                    ) : null}
                   </BlurView>
                   );
                 })()}

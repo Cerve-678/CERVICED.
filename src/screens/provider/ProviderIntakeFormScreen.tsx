@@ -309,6 +309,12 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   const [title, setTitle]                   = useState(`${serviceName} – Consultation Form`);
   const [questions, setQuestions]           = useState<IntakeFormQuestion[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  // Every service linked, not merely "as many as exist" — a provider with no
+  // services at all shouldn't read as fully selected (the picker is hidden in
+  // that case anyway, but the label would be wrong if it ever weren't).
+  const allServicesSelected =
+    providerServiceNames.length > 0 &&
+    providerServiceNames.every(name => selectedServices.includes(name));
   const [autoSend, setAutoSend]             = useState(false);
   const [requiresSignature, setRequiresSignature] = useState(false);
   const [saving, setSaving]                 = useState(false);
@@ -779,7 +785,24 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
             {/* Service association */}
             {providerServiceNames.length > 0 && (
               <>
-                <Text style={[styles.fieldLabel, { color: P.sub }]}>LINKS TO YOUR SERVICES</Text>
+                {/* A terms/policy form usually applies to everything a
+                    provider offers, which meant tapping every chip one at a
+                    time. Doubles as Clear, so the same control undoes it. */}
+                <View style={styles.serviceLinkHeader}>
+                  <Text style={[styles.fieldLabel, { color: P.sub, marginBottom: 0 }]}>LINKS TO YOUR SERVICES</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setSelectedServices(allServicesSelected ? [] : [...providerServiceNames]);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.6}
+                  >
+                    <Text style={[styles.serviceLinkAction, { color: P.accent }]}>
+                      {allServicesSelected ? 'CLEAR ALL' : 'SELECT ALL'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={[styles.fieldHint, { color: P.sub }]}>
                   Select which services this form applies to. Toggle Auto-send to send it automatically when the service is booked.
                 </Text>
@@ -1297,6 +1320,8 @@ const styles = StyleSheet.create({
   builderContent: { paddingHorizontal: 16, paddingTop: 16 },
   fieldLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
   fieldHint:  { fontSize: 12, lineHeight: 18, marginBottom: 10, marginTop: -4 },
+  serviceLinkHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  serviceLinkAction: { fontFamily: 'BakbakOne-Regular', fontSize: 11, letterSpacing: 0.6 },
   titleInput: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, fontWeight: '600', marginBottom: 20 },
   divider: { height: StyleSheet.hairlineWidth, marginBottom: 16 },
 

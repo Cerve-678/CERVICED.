@@ -7,6 +7,7 @@ tags: [screen, client]
 **Registered route(s):** `CartMain`
 
 ## → Navigates to
+- `Profile` _(navigator / dynamic)_
 - `Home` _(navigator / dynamic)_
 - [[ProviderProfileScreen\|ProviderProfile]]
 - [[BookingsScreen\|Bookings]]

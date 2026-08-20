@@ -19,14 +19,17 @@ describe('address release policy vs business type', () => {
     expect(reconcileAddressReleasePolicy('home_based', 'always')).toBe('on_confirmation');
   });
 
-  // Mobile used to be excluded from address release entirely. It now gets the
-  // same private-until-released set as home_based — but never 'always': the
-  // address a mobile provider has on file is typically their home, so a
-  // standing-visible option would publish it to anyone with a booking.
-  it('gives mobile the private-until-released timings, but never always', () => {
-    expect(reconcileAddressReleasePolicy('mobile', 'on_confirmation')).toBe('on_confirmation');
+  // Mobile used to be excluded from address release entirely. It can now
+  // release — but only by hand, per booking. No timed option and no 'always':
+  // the address a mobile provider has on file is usually their home, and a
+  // timer would send it on a schedule they aren't watching.
+  it('gives mobile manual release and nothing else', () => {
+    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.mobile).toEqual(['manual']);
     expect(reconcileAddressReleasePolicy('mobile', 'manual')).toBe('manual');
-    expect(ADDRESS_RELEASE_BY_BUSINESS_TYPE.mobile).not.toContain('always');
+    // Every timed option falls back to "not sharing", never to a different timer.
+    expect(reconcileAddressReleasePolicy('mobile', 'on_confirmation')).toBeNull();
+    expect(reconcileAddressReleasePolicy('mobile', 'week_before')).toBeNull();
+    expect(reconcileAddressReleasePolicy('mobile', 'always')).toBeNull();
   });
 
   // 'always' is the only standing-visible option, so it stays limited to the

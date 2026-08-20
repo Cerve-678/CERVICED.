@@ -10,6 +10,10 @@ import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
 import { setMyProviderFullAddress } from './databaseService';
 import type { DbProvider } from '../types/database';
+import {
+  reconcileAddressReleasePolicy,
+  type AddressReleasePolicy,
+} from '../features/business-details/options';
 
 // ── Shared types (mirror InfoRegScreen / ProviderMyProfileScreen) ───────────
 
@@ -96,6 +100,10 @@ export interface ProviderRegistrationData {
   // see supabase/provider_signup_business_fields.sql), editable here too.
   teamSize: 'solo' | 'small_team' | 'large_team' | '';
   accessibilityNotes: string;
+  /** providers.terms_accepted_at — stamped once, on first publish. Read-only
+   *  from the app's side: nothing ever clears or re-stamps it, so its presence
+   *  is the answer to "has this provider accepted CERVICED's terms". */
+  termsAcceptedAt: string | null;
   languagesSpoken: string[];
   preferredPaymentMethods: string[];
   // Drives providers.price_tier — the client-facing price filter/badge
@@ -109,7 +117,13 @@ export interface ProviderRegistrationData {
   /** Coordinates returned by the address picker for this exact address.
    *  Kept in form state only and written atomically with fullAddress. */
   fullAddressCoordinates: { latitude: number; longitude: number } | null;
-  addressReleasePolicy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
+  /** null is a real value, not a missing one: it means this provider shares
+   *  no address at all. That's the default (and the only default) for mobile,
+   *  so this must stay nullable — coercing it to 'on_confirmation' on write
+   *  is how a mobile provider's home address would start auto-releasing to
+   *  every confirmed client. Always run it through
+   *  reconcileAddressReleasePolicy() with the business type. */
+  addressReleasePolicy: AddressReleasePolicy | null;
   // Cover photo set via Branding & Style (providers.background_image_url) —
   // not editable from this form, but the client-facing hero uses it as the
   // backdrop instead of the gradient when set, so any faithful preview of
@@ -439,7 +453,12 @@ export async function saveProviderToSupabase(
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
         preferred_payment_methods: data.preferredPaymentMethods,
-        address_release_policy: data.addressReleasePolicy || 'on_confirmation',
+        // reconcile, not `|| 'on_confirmation'`: the old fallback silently
+        // turned "never share" into "share on confirmation" for any provider
+        // whose policy was null — i.e. every mobile provider — on every save.
+        address_release_policy: data.businessType
+          ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
+          : (data.addressReleasePolicy ?? null),
         automation_settings: mergedAutomationSettings,
         is_active: true,
       })
@@ -486,7 +505,12 @@ export async function saveProviderToSupabase(
         preferred_contact_methods: data.preferredContactMethods,
         service_locations: data.serviceLocations,
         preferred_payment_methods: data.preferredPaymentMethods,
-        address_release_policy: data.addressReleasePolicy || 'on_confirmation',
+        // reconcile, not `|| 'on_confirmation'`: the old fallback silently
+        // turned "never share" into "share on confirmation" for any provider
+        // whose policy was null — i.e. every mobile provider — on every save.
+        address_release_policy: data.businessType
+          ? reconcileAddressReleasePolicy(data.businessType, data.addressReleasePolicy ?? null)
+          : (data.addressReleasePolicy ?? null),
         automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
@@ -752,6 +776,7 @@ export async function loadProviderFromSupabase(
     businessType: (provider.business_type as ProviderRegistrationData['businessType']) || '',
     teamSize: (provider.team_size as ProviderRegistrationData['teamSize']) || '',
     accessibilityNotes: provider.accessibility_notes || '',
+    termsAcceptedAt: provider.terms_accepted_at ?? null,
     languagesSpoken: provider.languages_spoken || [],
     priceRange: (provider.price_tier as ProviderRegistrationData['priceRange']) || '',
     serviceLocations: provider.service_locations || [],
@@ -760,7 +785,8 @@ export async function loadProviderFromSupabase(
     // Existing profiles may predate the picker. A later save falls back to a
     // one-time geocode, while every new picker selection supplies these.
     fullAddressCoordinates: null,
-    addressReleasePolicy: (provider.address_release_policy as ProviderRegistrationData['addressReleasePolicy']) || 'on_confirmation',
+    // NULL round-trips as null — see the field's note on ProviderRegistrationData.
+    addressReleasePolicy: (provider.address_release_policy as AddressReleasePolicy | null) ?? null,
     backgroundImage: provider.background_image_url ?? null,
     isVerified: provider.is_verified ?? false,
     rating: Number(provider.rating) || 0,

@@ -54,15 +54,17 @@ describe('booking receipt', () => {
 
     const payment = calculateBookingPaymentBreakdown(booking);
 
+    // The deposit figure is the provider's own, never deposit + fee.
     expect(payment.paidAmount).toBe(20);
-    expect(payment.feePaidSeparately).toBe(0.99);
-    expect(payment.paidAmount + payment.feePaidSeparately + payment.remainingBalance)
-      .toBeCloseTo(payment.total, 2);
-
-    expect(buildClientReceiptHTML(booking)).toContain('Cerviced platform fee paid');
+    expect(payment.serviceCharge).toBe(0.99);
+    // The fee is inside `total` and itemised once, in the services
+    // breakdown — it never gets a second "paid" row of its own.
+    const html = buildClientReceiptHTML(booking);
+    expect(html).not.toContain('platform fee paid');
+    expect(html).toContain('Cerviced platform fee');
   });
 
-  it('never shows a fee-paid row when no payment was taken', () => {
+  it('does not add the checkout fee onto an unpaid deposit booking', () => {
     const booking = {
       id: 'fee67890-booking',
       serviceName: 'Blow dry',
@@ -82,8 +84,9 @@ describe('booking receipt', () => {
 
     const payment = calculateBookingPaymentBreakdown(booking);
 
-    expect(payment.feePaidSeparately).toBe(0);
-    expect(buildClientReceiptHTML(booking)).not.toContain('Cerviced platform fee paid');
+    expect(payment.paidAmount).toBe(0);
+    expect(payment.paidLabel).toBe('Total Paid');
+    expect(buildClientReceiptHTML(booking)).not.toContain('platform fee paid');
   });
 
   it('does not head a provider-created booking as paid in full', () => {

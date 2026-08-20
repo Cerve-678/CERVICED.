@@ -5,7 +5,7 @@
 
 #generated
 
-**123 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
+**124 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -46,6 +46,7 @@ graph LR
   BusinessProfileScreen --> ProviderCommunicationsScreen
   CartScreen --> BookingsScreen
   CartScreen --> Home
+  CartScreen --> Profile
   CartScreen --> ProviderProfileScreen
   ClaimProviderScreen --> SignUpStep1
   ExploreScreen --> BookmarkedProvidersScreen
@@ -154,7 +155,7 @@ graph LR
 - `client/BookingDetailScreen` → `Cart`, `client/ClientIntakeFormScreen`, `client/ProviderChatScreen`, `client/RescheduleScreen`
 - `client/BookingsScreen` → `Cart`, `client/BookingDetailScreen`, `client/ProviderChatScreen`, `client/ProviderProfileScreen`, `client/RescheduleScreen`, `shared/DevSettingsScreen`
 - `client/BookmarkedProvidersScreen` → `client/ProviderProfileScreen`
-- `client/CartScreen` → `client/BookingsScreen`, `client/ProviderProfileScreen`, `Home`
+- `client/CartScreen` → `client/BookingsScreen`, `client/ProviderProfileScreen`, `Home`, `Profile`
 - `client/ExploreScreen` → `client/BookmarkedProvidersScreen`, `client/ProviderProfileScreen`, `client/SearchScreen`
 - `client/HomeScreen` → `client/BookingsScreen`, `client/BookmarkedProvidersScreen`, `client/OffersScreen`, `client/ProviderProfileScreen`, `client/SearchScreen`, `shared/NotificationsScreen`
 - `client/MessagesScreen` → `client/ProviderChatScreen`

@@ -5,9 +5,9 @@
 
 #generated
 
-**1720 functions** across **241 files**.
+**1749 functions** across **261 files**.
 
-### `src/components/` (35)
+### `src/components/` (36)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · search · selectAddress · useCurrentLocation
 - `AppBackground.tsx` — AppBackground
@@ -29,6 +29,7 @@
 - `MasonryGrid.tsx` — and · columns · component · MasonryGridInner · type
 - `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder
 - `MultiBookingSheet.tsx` — depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSubmit · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
+- `PasswordRequirements 2.tsx` — **PasswordRequirements**
 - `PasswordRequirements.tsx` — **PasswordRequirements**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
 - `PromoCodeRow.tsx` — handleApplyPromoPress · **PromoCodeRow**
@@ -56,7 +57,8 @@
 - `RegistrationContext.tsx` — **RegistrationProvider** · resetData · updateData · **useRegistration** · value
 - `ThemeContext.tsx` — contextValue · createEnterpriseTheme · enterpriseTheme · legacyTheme · loadThemePreference · saveThemePreference · setDarkMode · setThemePreference · **ThemeProvider** · toggleTheme · **useEnterpriseTheme** · **useLegacyTheme** · **useTheme**
 
-### `src/data/` (2)
+### `src/data/` (3)
+- `languages 2.ts` — **recognizeLanguage**
 - `languages.ts` — **recognizeLanguage**
 - `portfolioFeed.ts` — **getAllPortfolioItems** · **getPortfolioByCategory** · **getPortfolioByProvider** · **getPortfolioItemById** · **getProviderForItem** · **searchPortfolio**
 
@@ -68,8 +70,10 @@
 - `presentation.ts` — **formatBookingDate** · **resolveServiceCategory**
 - `receipt.ts` — **buildClientReceiptHTML** · escapeHtml · money
 
-### `src/features/business-details/` (2)
+### `src/features/business-details/` (4)
+- `BusinessDetailsKit 2.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
 - `BusinessDetailsKit.tsx` — **Card** · **ChipGroup** · **Field** · **RadioGroup** · **SaveButton** · **SectionLabel** · **Toast** · **ToggleRow** · **useBusinessPalette**
+- `options 2.ts` — **isAddressReleaseAllowed** · **reconcileAddressReleasePolicy**
 - `options.ts` — **isAddressReleaseAllowed** · **reconcileAddressReleasePolicy**
 
 ### `src/features/cart/` (3)
@@ -90,9 +94,10 @@
 - `serviceDraft.ts` — **createServiceDraft** · nextDraftId
 - `ServiceImageCarousel.tsx` — handleScroll · **ServiceImageCarousel**
 
-### `src/features/providers/` (3)
+### `src/features/providers/` (4)
 - `profileMapper.ts` — **mapProviderProfileData**
 - `profilePresentation.ts` — **formatServiceDuration** · **getAdaptiveAccentColor** · **hasProviderPolicyInfo**
+- `useProviderProfileData 2.ts` — loadAllReviews · **useProviderProfileData**
 - `useProviderProfileData.ts` — loadAllReviews · **useProviderProfileData**
 
 ### `src/lib/` (1)
@@ -144,7 +149,7 @@
 - `BookingDetailScreen.tsx` — addRebookToCart · booking · BookingDetailScreen · canMarkProviderNoShow · confirmRebook · getStatusColor · handleCancelBooking · handleMarkProviderNoShow · handleRatingSubmit · handleRebook · handleReschedulePress · handleTipSubmit · isPastCancellationWindow · noticeWindowText · openContactSheet · openInMaps · openProviderChat · policyRows · shareReceipt · tick
 - `BookingsScreen.tsx` — BookingsScreen · confirmRebook · createStyles · filteredPastBookings · filteredUpcomingBookings · focusMapOnLocation · getUserLocation · handleBookingPress · handleConfirmWaitlistHold · handleDeclineWaitlistHold · handleRatingSubmit · handleRebook · handleTap · handleTipSubmit · hasBookingBeenRated · hasBookingBeenTipped · HiddenDevMenuTrigger · isMessagingAvailable · listItems · onRefresh · openContactSheet · openInMaps · openProviderChat · refreshBookingActionItems · renderServiceCategoryRow · retryLoadBookings · routeCoordinates · styles · to · toggleFilter
 - `BookmarkedProvidersScreen.tsx` — appointmentCounts · BookmarkedProvidersScreen · BookmarkGridCard · handleRemoveBookmark · handleServicePress · handleViewProfile · load · mapDbProvider · SkeletonProviderCard
-- `CartScreen.tsx` — addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartScreen · checkoutProviderSections · checkoutRenderUnits · depositPolicyArg · dynamicStyles · effectiveCartItems · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · formatCardNumber · formatExpiry · formatNameList · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveOne · handleReviewConfirm · hasDeposit · hasUnscheduledItems · itemPromoDiscounts · itemsByProvider · navigateToProvider · onRefresh · platformFee · priceOf · priceOfItem · promoSavingsShown · renderAddOns · renderCheckoutUnit · SummaryShell · timestamp · toggleProviderCollapsed · totalPrice
+- `CartScreen.tsx` — addOnsSummary · backFromSummary · bookingsByItemId · bookingSummary · buildRenderUnits · CartScreen · checkoutProviderSections · checkoutRenderUnits · depositPolicyArg · dynamicStyles · effectiveCartItems · effectiveFinalTotal · effectivePrice · effectiveTotal · effectiveTotalNoPromo · formatCardNumber · formatExpiry · formatNameList · fullPriceOf · getServiceBooking · groupRemaining · groupRescheduleChain · groupRescheduleSpanLabel · groupServiceTotal · groupSlotResolver · groupTotal · handleApplyPromoToProvider · handleBookingSheetEditSubmit · handleCheckout · handleClearCart · handleConfirmGroupReschedule · handleContinueShopping · handleEditItem · handlePayment · handlePaymentSuccess · handlePickerSelect · handlePickerSelectGroup · handleRemove · handleRemoveOne · handleReviewConfirm · hasDeposit · hasUnscheduledItems · itemPromoDiscounts · itemsByProvider · navigateToProvider · onRefresh · openAddressSettings · platformFee · priceOf · priceOfItem · promoSavingsShown · renderAddOns · renderCheckoutUnit · SummaryShell · timestamp · toggleProviderCollapsed · totalPrice
 - `ClientIntakeFormScreen.tsx` — ClientIntakeFormScreen · handleSubmit · QuestionInput · setAnswer
 - `ExploreScreen.tsx` — columnWidth · dedupeByImageUri · filters · filterTabs · getItemHeight · handleBookNow · handleCloseDetail · handleImagePress · handleOpenSearch · handleRefreshDiscover · handleViewProfile · interleaveDiscoverFeed · load · loadDiscoverFeed · mapDbPortfolioItem · mapDbProviderToCard · mapDbServiceToCards · mapDbUnclaimedProviderToCard · measuredUris · prefetchRemaining · renderPortfolioCard · SkeletonMasonryGrid
 - `HomeScreen.tsx` — allCategorizedProviders · currentOffers · finishTour · handleBackPress · handleSelectRegion · handleServicePress · handleViewAllOffers · HomeScreen · kidsProvidersDisplay · loadUnreadCount · maleProvidersDisplay · navigateToBookings · navigateToBookmarks · navigateToNotifications · navigateToProvider · navigateToSearch · nearbyProviders · previouslyBookedProviders · recommendedProvidersList · resetFilters · serviceProviders · showKidsSection · showMaleSection · toggleFilters · toggleViewAllKidsServices · toggleViewAllMaleServices · toggleViewAllProviders · toggleViewAllRecommended · toggleViewAllServices · updateFilter · updateProviderData
@@ -175,7 +180,7 @@
 - `ProviderAccountScreen.tsx` — handleBiometricToggle · handleLogout · handleSwitchToClient · initials · ProviderAccountScreen
 - `ProviderAnalyticsScreen.tsx` — accentColor · AnimatedFillBar · AnimatedNumber · AnimatedPath · bookingServiceMap · chartData · CompletionRing · currentMonthKey · DeckCard · fetchAll · fmtGBP · handlePress · inRange · kpi · LivePulse · monthKey · monthlyRatings · months · monthsAgo · onRefresh · pressIn · pressOut · PressScale · prevMonthKey · ProviderAnalyticsScreen · RangeSelector · ranked · RatingAnalytics · recent · RecentStream · Reveal · RevenueChart · serviceData · ServiceQuadrantCharts · serviceRatings · StarDistRow · stats · StatTile · topServices · TopServices · totalForBookings
 - `ProviderAutomationsScreen.tsx` — AutoCard · ChipSelect · handleSave · isOn · PlatformBadge · ProviderAutomationsScreen · SectionHeader · set · showToast · Toast · toggleReminder
-- `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · buildInvoiceHTML · cancelBooking · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · isAddressReleased · parseMin · Perf · ProviderBookingDetailScreen · relevantInfoPacks · Row · s · show · to12 · toggleInitTime · updateBookingStatus
+- `ProviderBookingDetailScreen.tsx` — ActionButton · addressPolicy · booking · buildInvoiceHTML · cancelBooking · catLabel · chipRow · closeGroupRescheduleModal · closeInitRescheduleModal · confirmDeclineRequest · CR · displayDuration · groupRescheduleChain · groupSlotResolver · handleAddGroupDateOption · handleAddInitSlot · handleCallClient · handleCancel · handleConfirm · handleDecline · handleDeclineRequest · handleInitRescheduleSubmit · handleOpenChat · handlePickCustomTime · handleReleaseAddress · handleSendGroupReschedule · handleShare · handleStatusChange · isAddressReleased · parseMin · Perf · ProviderBookingDetailScreen · releaseAddressNow · relevantInfoPacks · Row · s · show · to12 · toggleInitTime · updateBookingStatus
 - `ProviderBookingHistoryScreen.tsx` — agendaSort · BookingCard · counts · fetchBookings · fetchUnreadMessages · fetchWaitlist · filterBookings · fmtDayLabel · fmtMoney · fmtTime · handleComplete · handleConfirmInvite · handleHistoryFilterPress · handleTabPress · isHistoryStatus · items · matchesHistoryFilter · onRefresh · openInvitePicker · pendingCount · PendingPill · ProviderBookingHistoryScreen · rescheduleRequestCount · rescheduleRequestRows · SkeletonList · statusFor · waitlistCount
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — addTemplate · flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod · updateTemplate
@@ -202,8 +207,9 @@
 - `ReportProblemScreen.tsx` — chipActive · handleSubmit · ReportProblemScreen
 - `TermsScreen.tsx` — TermsScreen
 
-### `src/services/` (13)
+### `src/services/` (14)
 - `acuityTransferService.ts` — **transferFromAcuity**
+- `addressLookupService 2.ts` — **findAddressesByPostcode** · **resolvePostcodeAddress**
 - `addressLookupService.ts` — **findAddressesByPostcode** · **resolvePostcodeAddress**
 - `AvailabilityService.ts` — findBackToBackSlotsForDate · twice
 - `biometricService.ts` — **authenticateWithBiometrics** · **disableBiometric** · **enableBiometric** · **getBiometricLabel** · **getBiometricRefreshToken** · **isBiometricAvailable** · **isBiometricEnabled** · **updateBiometricToken**
@@ -232,13 +238,16 @@
 - `provider.ts` — cutoff · inRange
 - `shared.ts` — **askChip** · **chip** · **money** · **navChip** · **providerFromDb** · **resolveProviderDbId**
 
+### `src/tests/` (1)
+- `beccaEntityResolver.test 2.ts` — booking
+
 ### `src/theme/` (1)
 - `tokens.ts` — MyCard · styles
 
 ### `src/types/` (1)
 - `booking.ts` — **hasMapDestination** · **isAddressPending** · **mapDbBookingStatus**
 
-### `src/utils/` (18)
+### `src/utils/` (23)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
@@ -247,13 +256,18 @@
 - `distance.ts` — **formatDistance** · **getDistanceKm** · toRadians
 - `exploreTabBarScroll.ts` — animateTo · **resetExplorePillTracking** · **settleExplorePillTracking** · trackScrollDirection
 - `FontManager.ts` — **createTextStyles** · getFontFamily · to
+- `hairTypeMatch 2.ts` — **matchesHairType**
 - `hairTypeMatch.ts` — **matchesHairType**
 - `logger.ts` — **clearLogBuffer** · formatArgs · **getLogBuffer** · **installAuthErrorFilter** · noop · pushToBuffer · **reportError** · **setErrorReporter** · **subscribeToLogBuffer**
+- `masonryHeight 2.ts` — **getMasonryItemHeight** · hashToUnit
 - `masonryHeight.ts` — **getMasonryItemHeight** · hashToUnit
 - `performance.ts` — for
 - `policyDisplay.ts` — **buildPolicyDisplayRows**
 - `searchQuery.ts` — **buildLocationTerms** · detectCategory · **parseSearchQuery**
+- `shuffle 2.ts` — **shuffle**
 - `shuffle.ts` — **shuffle**
+- `useMeasuredAspectRatios 2.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
 - `useMeasuredAspectRatios.ts` — **getCachedAspectRatio** · resolveRatio · settle · **useMeasuredAspectRatios**
+- `userFacingError 2.ts` — **toUserMessage**
 - `userFacingError.ts` — **toUserMessage**
 - `validation.ts` — **getPasswordStrength**
