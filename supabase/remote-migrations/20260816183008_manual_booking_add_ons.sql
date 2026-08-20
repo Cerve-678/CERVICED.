@@ -1,54 +1,36 @@
--- PROVENANCE: applied out-of-band (SQL editor), so it has NO row in
--- supabase_migrations.schema_migrations and does NOT appear in
--- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
--- migration-record reconciliation: provider_create_manual_booking() carries p_extra_minutes live.
--- Left un-backfilled rather than hand-inserting a migration row; the
--- version above is this file's authored timestamp, not a recorded one.
+-- GENERATED FROM THE LINKED CERVICED SUPABASE PROJECT.
+-- Remote version: 20260816183008
+-- Remote name: manual_booking_add_ons
+-- Do not edit this recovery archive; create a new tracked migration for changes.
 
--- ════════════════════════════════════════════════════════════════════════════
--- manual_booking_extra_minutes.sql
+-- Persist add-ons on a provider's manual booking.
 --
--- GAP: provider_create_manual_booking() locked a manual booking's duration
--- 100% to the service definition (v_service.duration_minutes) with no
--- provider override — even though the provider often has better information
--- at booking time than at service-creation time (e.g. "this client's hair
--- is extra thick, I need 30 extra minutes").
+-- BUG: AddBookingScreen.tsx lets a provider tick add-ons for the chosen
+-- service, but provider_create_manual_booking() has never taken an add-on
+-- param — the UI collected them and silently dropped them on submit.
 --
--- FIX: add p_extra_minutes, purely a scheduling buffer, NOT a paid add-on.
---   - Extends v_end_time only. base_price/add_ons_total/service_charge are
---     untouched — zero billing effect, by design.
---   - Clamped 0..240 (4 hours) so a fat-fingered or malicious value can't
---     block out a provider's entire day; rejects negative values outright
---     rather than silently clamping them to 0, so a caller bug is loud.
+-- FIX: add p_add_on_ids uuid[] DEFAULT '{}'. Prices/names are resolved
+-- SERVER-SIDE from service_add_ons — the client sends only ids, never a
+-- price. Only add-ons belonging to the chosen service and still is_active
+-- are honoured. add_ons_total/remaining_balance include the resolved sum.
 --
--- Verified live via pg_get_functiondef (Supabase CLI `supabase db query
--- --linked`, MCP tool connector was down) immediately before writing this —
--- signature matches supabase/migrations/20260817150000_manual_booking_
--- scheduling_policy_override.sql exactly (8 args, v_end_time computed from
--- v_service.duration_minutes alone). This migration only touches the
--- v_end_time line and the parameter list; every other line is unchanged
--- from that file.
--- ════════════════════════════════════════════════════════════════════════════
+-- Adding a 6th parameter changes the signature, so the old 5-arg overload
+-- is dropped explicitly first rather than left alongside the new one.
 
-DROP FUNCTION IF EXISTS public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean
-);
+DROP FUNCTION IF EXISTS public.provider_create_manual_booking(uuid, uuid, date, time, text);
 
 CREATE OR REPLACE FUNCTION public.provider_create_manual_booking(
   p_client_user_id uuid,
   p_service_id uuid,
   p_booking_date date,
-  p_booking_time time without time zone,
-  p_notes text DEFAULT NULL::text,
-  p_add_on_ids uuid[] DEFAULT '{}'::uuid[],
-  p_safety_ack boolean DEFAULT false,
-  p_override_scheduling boolean DEFAULT false,
-  p_extra_minutes integer DEFAULT 0
+  p_booking_time time,
+  p_notes text DEFAULT NULL,
+  p_add_on_ids uuid[] DEFAULT '{}'
 )
- RETURNS uuid
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $function$
 DECLARE
   v_provider public.providers%ROWTYPE;
@@ -59,8 +41,6 @@ DECLARE
   v_daily_booking_cap integer;
   v_active_booking_count integer;
   v_add_ons_total numeric(10,2) := 0;
-  v_safety_required boolean;
-  v_extra_minutes integer;
 BEGIN
   SELECT p.* INTO v_provider
     FROM public.providers p
@@ -95,22 +75,10 @@ BEGIN
     RAISE EXCEPTION 'Booking time is required';
   END IF;
 
-  v_extra_minutes := COALESCE(p_extra_minutes, 0);
-  IF v_extra_minutes < 0 THEN
-    RAISE EXCEPTION 'Extra time cannot be negative';
-  END IF;
-  IF v_extra_minutes > 240 THEN
-    RAISE EXCEPTION 'Extra time cannot exceed 4 hours';
-  END IF;
+  v_end_time := p_booking_time + make_interval(mins => v_service.duration_minutes);
 
-  v_safety_required := COALESCE(v_service.patch_test_required, false)
-    OR v_service.is_pregnancy_safe = false;
-  IF v_safety_required AND NOT COALESCE(p_safety_ack, false) THEN
-    RAISE EXCEPTION 'Please confirm the client has been told this treatment''s safety requirements';
-  END IF;
-
-  v_end_time := p_booking_time + make_interval(mins => v_service.duration_minutes + v_extra_minutes);
-
+  -- Server-resolved add-on total — never trust a client-sent price. Only
+  -- add-ons that belong to this exact service and are still active count.
   IF p_add_on_ids IS NOT NULL AND array_length(p_add_on_ids, 1) > 0 THEN
     SELECT COALESCE(SUM(sao.price), 0) INTO v_add_ons_total
       FROM public.service_add_ons sao
@@ -119,6 +87,7 @@ BEGIN
        AND sao.is_active = TRUE;
   END IF;
 
+  -- A provider's capacity is an additional guard on top of time overlap.
   v_daily_booking_cap := COALESCE(v_provider.max_bookings_per_day, 0);
   IF v_daily_booking_cap > 0 THEN
     SELECT count(*) INTO v_active_booking_count
@@ -131,11 +100,9 @@ BEGIN
     END IF;
   END IF;
 
+  -- Squeeze-in support: skip only the working-hours fit check, and only for
+  -- this INSERT. Transaction-local, cannot affect any other statement.
   PERFORM set_config('cerviced.bypass_working_hours', 'on', true);
-
-  IF p_override_scheduling THEN
-    PERFORM set_config('cerviced.bypass_scheduling_policy', 'on', true);
-  END IF;
 
   INSERT INTO public.bookings (
     user_id, provider_id, service_id, status,
@@ -143,16 +110,14 @@ BEGIN
     payment_type, base_price, add_ons_total, service_charge,
     deposit_amount, amount_paid, remaining_balance, payment_status,
     provider_name_snapshot, service_name_snapshot, service_category_snapshot,
-    provider_logo_snapshot, customer_name, customer_email, customer_phone,
-    safety_ack_required, safety_ack_at
+    provider_logo_snapshot, customer_name, customer_email, customer_phone
   ) VALUES (
     v_client.id, v_provider.id, v_service.id, 'on_hold',
     p_booking_date, p_booking_time, v_end_time, NULLIF(btrim(p_notes), ''),
     'full', v_service.price, v_add_ons_total, 0,
     0, 0, v_service.price + v_add_ons_total, 'pending',
-    v_provider.display_name, v_service.name, v_provider.service_category,
-    v_provider.logo_url, v_client.name, v_client.email, v_client.phone,
-    v_safety_required, CASE WHEN v_safety_required THEN now() ELSE NULL END
+    v_provider.display_name, v_service.name, v_service.category_name,
+    v_provider.logo_url, v_client.name, v_client.email, v_client.phone
   ) RETURNING id INTO v_booking_id;
 
   IF p_add_on_ids IS NOT NULL AND array_length(p_add_on_ids, 1) > 0 THEN
@@ -191,12 +156,6 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean, integer
-) TO authenticated, service_role;
-REVOKE ALL ON FUNCTION public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean, integer
-) FROM public;
-REVOKE EXECUTE ON FUNCTION public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean, integer
-) FROM anon;
+REVOKE ALL ON FUNCTION public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[]) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[]) FROM anon;
+GRANT EXECUTE ON FUNCTION public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[]) TO authenticated;

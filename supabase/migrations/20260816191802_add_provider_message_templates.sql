@@ -1,3 +1,10 @@
+-- PROVENANCE: applied out-of-band (SQL editor), so it has NO row in
+-- supabase_migrations.schema_migrations and does NOT appear in
+-- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
+-- migration-record reconciliation: public.provider_message_templates table + replace_my_provider_message_templates() exist live.
+-- Left un-backfilled rather than hand-inserting a migration row; the
+-- version above is this file's authored timestamp, not a recorded one.
+
 -- Private, reusable provider message templates. Clients never receive or read
 -- templates; a template only fills the provider's editable chat composer.
 CREATE TABLE IF NOT EXISTS public.provider_message_templates (

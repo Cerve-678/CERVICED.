@@ -1,3 +1,10 @@
+-- PROVENANCE: applied out-of-band (SQL editor), so it has NO row in
+-- supabase_migrations.schema_migrations and does NOT appear in
+-- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
+-- migration-record reconciliation: public.send_provider_conversation_message exists live.
+-- Left un-backfilled rather than hand-inserting a migration row; the
+-- version above is this file's authored timestamp, not a recorded one.
+
 -- Provider ↔ client chat privacy boundary
 --
 -- A conversation is strictly one client and one provider. These RPCs derive

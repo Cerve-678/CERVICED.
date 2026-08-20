@@ -1,3 +1,10 @@
+-- PROVENANCE: applied out-of-band (SQL editor), so it has NO row in
+-- supabase_migrations.schema_migrations and does NOT appear in
+-- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
+-- migration-record reconciliation: public.claim_notification_push() exists live.
+-- Left un-backfilled rather than hand-inserting a migration row; the
+-- version above is this file's authored timestamp, not a recorded one.
+
 -- A database webhook can occasionally be delivered more than once. Claim each
 -- notification row before contacting Expo so repeated invocations cannot create
 -- repeated device pushes. The claim is intentionally durable: automatically

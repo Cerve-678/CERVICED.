@@ -1,38 +1,107 @@
--- PROVENANCE: applied out-of-band (SQL editor), so it has NO row in
--- supabase_migrations.schema_migrations and does NOT appear in
--- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
--- migration-record reconciliation: provider_create_manual_booking() carries p_extra_minutes live.
--- Left un-backfilled rather than hand-inserting a migration row; the
--- version above is this file's authored timestamp, not a recorded one.
+-- GENERATED FROM THE LINKED CERVICED SUPABASE PROJECT.
+-- Remote version: 20260817152938
+-- Remote name: manual_booking_scheduling_policy_override
+-- Do not edit this recovery archive; create a new tracked migration for changes.
 
--- ════════════════════════════════════════════════════════════════════════════
--- manual_booking_extra_minutes.sql
---
--- GAP: provider_create_manual_booking() locked a manual booking's duration
--- 100% to the service definition (v_service.duration_minutes) with no
--- provider override — even though the provider often has better information
--- at booking time than at service-creation time (e.g. "this client's hair
--- is extra thick, I need 30 extra minutes").
---
--- FIX: add p_extra_minutes, purely a scheduling buffer, NOT a paid add-on.
---   - Extends v_end_time only. base_price/add_ons_total/service_charge are
---     untouched — zero billing effect, by design.
---   - Clamped 0..240 (4 hours) so a fat-fingered or malicious value can't
---     block out a provider's entire day; rejects negative values outright
---     rather than silently clamping them to 0, so a caller bug is loud.
---
--- Verified live via pg_get_functiondef (Supabase CLI `supabase db query
--- --linked`, MCP tool connector was down) immediately before writing this —
--- signature matches supabase/migrations/20260817150000_manual_booking_
--- scheduling_policy_override.sql exactly (8 args, v_end_time computed from
--- v_service.duration_minutes alone). This migration only touches the
--- v_end_time line and the parameter list; every other line is unchanged
--- from that file.
--- ════════════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public.enforce_booking_bookability()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_window_days INTEGER;
+  v_notice_hours INTEGER;
+  v_has_override BOOLEAN;
+  v_fits_window BOOLEAN;
+  v_legacy_open TIME;
+  v_legacy_close TIME;
+  v_legacy_closed BOOLEAN;
+  v_bypass_hours BOOLEAN;
+  v_bypass_policy BOOLEAN;
+BEGIN
+  SELECT booking_window_days, min_booking_notice_hrs
+    INTO v_window_days, v_notice_hours
+    FROM public.providers WHERE id = NEW.provider_id;
 
-DROP FUNCTION IF EXISTS public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean
-);
+  IF NEW.booking_date < CURRENT_DATE THEN
+    RAISE EXCEPTION 'Booking date cannot be in the past';
+  END IF;
+
+  IF NEW.booking_date = CURRENT_DATE AND NEW.booking_time <= LOCALTIME THEN
+    RAISE EXCEPTION 'That time has already passed today';
+  END IF;
+
+  v_bypass_policy := COALESCE(current_setting('cerviced.bypass_scheduling_policy', true), 'off') = 'on';
+
+  IF NOT v_bypass_policy THEN
+    IF COALESCE(v_window_days, 60) > 0
+       AND NEW.booking_date > CURRENT_DATE + COALESCE(v_window_days, 60) THEN
+      RAISE EXCEPTION 'Booking is outside this provider''s booking window';
+    END IF;
+    IF COALESCE(v_notice_hours, 0) > 0
+       AND (NEW.booking_date + NEW.booking_time) < now() + make_interval(hours => v_notice_hours) THEN
+      RAISE EXCEPTION 'This appointment does not meet the provider''s minimum notice';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM public.provider_blocked_dates
+      WHERE provider_id = NEW.provider_id AND blocked_date = NEW.booking_date
+    ) THEN RAISE EXCEPTION 'Provider is unavailable on this date'; END IF;
+  END IF;
+
+  v_bypass_hours := COALESCE(current_setting('cerviced.bypass_working_hours', true), 'off') = 'on';
+
+  IF NOT v_bypass_hours THEN
+    SELECT EXISTS (
+      SELECT 1 FROM public.provider_availability_overrides
+       WHERE provider_id = NEW.provider_id AND availability_date = NEW.booking_date
+    ) INTO v_has_override;
+    IF v_has_override AND EXISTS (
+      SELECT 1 FROM public.provider_availability_overrides
+       WHERE provider_id = NEW.provider_id AND availability_date = NEW.booking_date AND is_closed
+    ) THEN RAISE EXCEPTION 'Provider is unavailable on this date'; END IF;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.provider_availability_overrides
+       WHERE provider_id = NEW.provider_id AND availability_date = NEW.booking_date
+         AND is_closed = FALSE AND NEW.booking_time >= start_time AND NEW.end_time <= end_time
+    ) INTO v_fits_window;
+
+    IF NOT v_has_override THEN
+      SELECT EXISTS (
+        SELECT 1 FROM public.provider_availability_windows
+         WHERE provider_id = NEW.provider_id
+           AND day_of_week = EXTRACT(DOW FROM NEW.booking_date)
+           AND NEW.booking_time >= start_time AND NEW.end_time <= end_time
+      ) INTO v_fits_window;
+
+      IF NOT v_fits_window AND NOT EXISTS (
+        SELECT 1 FROM public.provider_availability_windows WHERE provider_id = NEW.provider_id
+      ) THEN
+        SELECT open_time, close_time, is_closed INTO v_legacy_open, v_legacy_close, v_legacy_closed
+        FROM public.provider_availability
+        WHERE provider_id = NEW.provider_id AND day_of_week = EXTRACT(DOW FROM NEW.booking_date);
+        v_fits_window := FOUND AND NOT COALESCE(v_legacy_closed, TRUE)
+          AND NEW.booking_time >= v_legacy_open AND NEW.end_time <= v_legacy_close;
+      END IF;
+    END IF;
+    IF NOT COALESCE(v_fits_window, FALSE) THEN
+      RAISE EXCEPTION 'This appointment is outside the provider''s working hours';
+    END IF;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.bookings b
+     WHERE b.provider_id = NEW.provider_id AND b.booking_date = NEW.booking_date
+       AND b.status IN ('pending', 'confirmed', 'in_progress', 'on_hold')
+       AND b.id IS DISTINCT FROM NEW.id
+       AND NEW.booking_time < b.end_time AND NEW.end_time > b.booking_time
+  ) THEN RAISE EXCEPTION 'That time is no longer available'; END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.enforce_booking_bookability() FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.provider_create_manual_booking(
   p_client_user_id uuid,
@@ -42,13 +111,12 @@ CREATE OR REPLACE FUNCTION public.provider_create_manual_booking(
   p_notes text DEFAULT NULL::text,
   p_add_on_ids uuid[] DEFAULT '{}'::uuid[],
   p_safety_ack boolean DEFAULT false,
-  p_override_scheduling boolean DEFAULT false,
-  p_extra_minutes integer DEFAULT 0
+  p_override_scheduling boolean DEFAULT false
 )
- RETURNS uuid
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_provider public.providers%ROWTYPE;
@@ -60,7 +128,6 @@ DECLARE
   v_active_booking_count integer;
   v_add_ons_total numeric(10,2) := 0;
   v_safety_required boolean;
-  v_extra_minutes integer;
 BEGIN
   SELECT p.* INTO v_provider
     FROM public.providers p
@@ -95,21 +162,13 @@ BEGIN
     RAISE EXCEPTION 'Booking time is required';
   END IF;
 
-  v_extra_minutes := COALESCE(p_extra_minutes, 0);
-  IF v_extra_minutes < 0 THEN
-    RAISE EXCEPTION 'Extra time cannot be negative';
-  END IF;
-  IF v_extra_minutes > 240 THEN
-    RAISE EXCEPTION 'Extra time cannot exceed 4 hours';
-  END IF;
-
   v_safety_required := COALESCE(v_service.patch_test_required, false)
     OR v_service.is_pregnancy_safe = false;
   IF v_safety_required AND NOT COALESCE(p_safety_ack, false) THEN
     RAISE EXCEPTION 'Please confirm the client has been told this treatment''s safety requirements';
   END IF;
 
-  v_end_time := p_booking_time + make_interval(mins => v_service.duration_minutes + v_extra_minutes);
+  v_end_time := p_booking_time + make_interval(mins => v_service.duration_minutes);
 
   IF p_add_on_ids IS NOT NULL AND array_length(p_add_on_ids, 1) > 0 THEN
     SELECT COALESCE(SUM(sao.price), 0) INTO v_add_ons_total
@@ -191,12 +250,8 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean, integer
-) TO authenticated, service_role;
-REVOKE ALL ON FUNCTION public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean, integer
-) FROM public;
-REVOKE EXECUTE ON FUNCTION public.provider_create_manual_booking(
-  uuid, uuid, date, time, text, uuid[], boolean, boolean, integer
-) FROM anon;
+REVOKE ALL ON FUNCTION public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[], boolean, boolean) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[], boolean, boolean) FROM anon;
+GRANT EXECUTE ON FUNCTION public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[], boolean, boolean) TO authenticated;
+
+DROP FUNCTION IF EXISTS public.provider_create_manual_booking(uuid, uuid, date, time, text, uuid[], boolean);

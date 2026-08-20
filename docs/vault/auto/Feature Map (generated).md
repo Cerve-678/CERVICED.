@@ -7,7 +7,7 @@
 
 ## Address release
 Curated: [[Address Release]] · **77 files**
-- `supabase/RUN_ALL_MIGRATIONS.sql` _(197)_
+- `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/services/databaseService.ts` _(84)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(64)_
@@ -109,7 +109,7 @@ Curated: [[Payments]] · **107 files**
 
 ## Booking flow
 Curated: [[Booking Flow]] · **222 files**
-- `supabase/RUN_ALL_MIGRATIONS.sql` _(844)_
+- `supabase/RUN_ALL_MIGRATIONS.sql` _(837)_
 - `src/contexts/BookingContext.tsx` _(688)_
 - `src/services/databaseService.ts` _(538)_
 - `src/services/becca/capabilities/client.ts` _(502)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **140 files**
 
 ## Auth
 Curated: [[Contexts]] · **153 files**
-- `supabase/RUN_ALL_MIGRATIONS.sql` _(150)_
+- `supabase/RUN_ALL_MIGRATIONS.sql` _(149)_
 - `src/contexts/AuthContext.tsx` _(139)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/services/databaseService.ts` _(96)_
@@ -352,7 +352,7 @@ Curated: [[Payments]] · **56 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(54)_
 - `src/services/databaseService.ts` _(53)_
 - `src/contexts/CartContext.tsx` _(28)_
-- `supabase/RUN_ALL_MIGRATIONS.sql` _(24)_
+- `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
 - `src/components/BookingSheet.tsx` _(20)_
 - `src/screens/client/BookingDetailScreen.tsx` _(17)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
