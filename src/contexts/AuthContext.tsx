@@ -10,7 +10,7 @@ import { registerModeSetter, resolveModeChange } from '../navigation/modeControl
 import {
   getUserProfileById,
   upgradeUserToProvider,
-  updateUserNamePhone,
+  updateUserContactDetails,
   updateClientProfileFields,
   cancelAccountDeletionRequest,
   deleteClientAccountProfile,
@@ -31,6 +31,9 @@ export interface UserData {
   loginMethod: string;
   businessName?: string;
   businessEmail?: string;
+  // Saved default address for mobile bookings, prefilled at checkout. Client
+  // side only — a provider's own address lives on their provider record.
+  clientAddress?: string | null;
   needsEmailVerification?: boolean;
   hasClientProfile?: boolean;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -352,6 +355,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           has_kids: (profile as any).has_kids ?? null,
           birth_year: (profile as any).birth_year ?? null,
           service_interests: profile.service_interests ?? null,
+          clientAddress: profile.client_address ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         const restoredMode = resolveRestoredMode(savedMode, role);
@@ -556,7 +560,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUser = useCallback(async (partial: Partial<UserData>) => {
     if (!user || !session) return;
     const updated = { ...user, ...partial };
-    await updateUserNamePhone(updated.id, updated.name, updated.phone ?? '');
+    await updateUserContactDetails(updated.id, {
+      name: updated.name,
+      phone: updated.phone ?? '',
+      // Only written when this call is actually changing it, so an unrelated
+      // updateUser({ name }) can't wipe a saved address.
+      ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
+    });
     setUser(updated);
   }, [user, session]);
 

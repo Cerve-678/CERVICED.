@@ -63,6 +63,11 @@ export interface DbUser {
   name: string;
   phone: string | null;
   dob: string | null;
+  // Client's saved default address for mobile bookings. Owner-readable only
+  // (every SELECT policy on `users` is auth.uid() = id) — providers see the
+  // per-booking snapshot in bookings.client_address, which the address-release
+  // policy governs, never this.
+  client_address: string | null;
   role: UserRole;
   login_method: string | null;
   business_name: string | null;

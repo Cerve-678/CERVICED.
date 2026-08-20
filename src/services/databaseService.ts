@@ -5584,15 +5584,24 @@ export async function updateClientProfileData(
 }
 
 /** Update name and phone — called from AuthContext so in-memory user stays fresh */
-export async function updateUserNamePhone(
+/**
+ * Update the contact details a user can edit about themselves.
+ *
+ * Only the keys actually passed are written, so a caller that has no notion of
+ * a client address (the provider account-info screen) can't blank out one the
+ * client saved from checkout.
+ */
+export async function updateUserContactDetails(
   userId: string,
-  name: string,
-  phone: string,
+  details: { name?: string; phone?: string; clientAddress?: string | null },
 ): Promise<void> {
-  const { error } = await supabase
-    .from("users")
-    .update({ name, phone })
-    .eq("id", userId);
+  const patch: { name?: string; phone?: string; client_address?: string | null } = {};
+  if (details.name !== undefined) patch.name = details.name;
+  if (details.phone !== undefined) patch.phone = details.phone;
+  if (details.clientAddress !== undefined) patch.client_address = details.clientAddress;
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await supabase.from("users").update(patch).eq("id", userId);
   if (error) throw error;
 }
 

@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
-import { getUserBasicInfo, updateUserNamePhone, updateUserDob } from '../../services/databaseService';
+import { getUserBasicInfo, updateUserContactDetails, updateUserDob } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -78,7 +78,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
     try {
       if (userId) {
         await Promise.all([
-          updateUserNamePhone(userId, name.trim(), phone.trim() || ''),
+          updateUserContactDetails(userId, { name: name.trim(), phone: phone.trim() || '' }),
           updateUserDob(userId, dob.trim() || null),
         ]);
         // Refresh in-memory user so Settings displayName updates immediately

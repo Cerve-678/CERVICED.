@@ -1836,18 +1836,24 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     setIsEditingDetails(false);
     setShowReviewModal(true);
 
-    // Carry the client's last mobile-booking address forward rather than
-    // making them retype it every checkout. Fired after the modal opens and
-    // deliberately not awaited: the field is editable and only required when
-    // a mobile provider is in the cart, so a slow or empty lookup shouldn't
-    // hold up the whole review step. Only prefills a still-empty field, so it
-    // can never overwrite something the client has already typed.
+    // Prefill the address instead of making a mobile-booking client retype it
+    // every checkout. The saved account default (set via the checkbox below)
+    // wins; failing that, fall back to whatever address their last mobile
+    // booking used, so returning clients who predate the saved default still
+    // get one. The fallback is deliberately not awaited — the field is
+    // editable and only required when a mobile provider is in the cart, so a
+    // slow lookup shouldn't hold up the review step — and it only ever fills a
+    // still-empty field, so it can't overwrite what the client has typed.
     if (hasMobileProvider) {
-      getMyLastClientAddress()
-        .then(saved => {
-          if (saved) setClientAddress(prev => (prev.trim() ? prev : saved));
-        })
-        .catch(err => logger.error('Could not prefill saved address:', err));
+      if (user?.clientAddress) {
+        setClientAddress(user.clientAddress);
+      } else {
+        getMyLastClientAddress()
+          .then(saved => {
+            if (saved) setClientAddress(prev => (prev.trim() ? prev : saved));
+          })
+          .catch(err => logger.error('Could not prefill saved address:', err));
+      }
     }
   } catch (error) {
     logger.error('Checkout error:', error);
@@ -1896,7 +1902,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // the real auth email without ever actually changing it server-side.
     if (saveAsDefault) {
       try {
-        await updateUser({ name: reviewName, phone: reviewPhone });
+        await updateUser({
+          name: reviewName,
+          phone: reviewPhone,
+          // Only offered when a mobile provider is in the cart — that's the
+          // only case the address field is shown or collected at all.
+          ...(hasMobileProvider ? { clientAddress: clientAddress.trim() } : {}),
+        });
       } catch (err) {
         // Don't block checkout on this — the entered details still carry
         // through to the booking itself via customerInfo above.
