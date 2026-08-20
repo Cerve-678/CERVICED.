@@ -721,9 +721,17 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                     </TouchableOpacity>
                   )}
                 </View>
+                {/* Whichever single option a provider offers, say why it's
+                    the only one — a lone unexplained button reads as a bug or
+                    a missing choice, not as the provider's policy. */}
                 {!showFullPaymentOption && (
                   <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
                     This provider requires a deposit to book — paying in full isn't available for this service.
+                  </Text>
+                )}
+                {showFullPaymentOption && depositPolicy?.depositAvailable === false && (
+                  <Text style={[styles.depositOnlyNotice, { color: tokens.sub }]}>
+                    This provider doesn't take deposits — the full amount is paid when you book.
                   </Text>
                 )}
                 {isDepositOnly && (

@@ -5,7 +5,6 @@ import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
 import { supabase } from '../lib/supabase';
 import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow } from '../services/databaseService';
-import type { DbBookingRescheduleRequest } from '../types/database';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -917,9 +916,14 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             // while this app was closed (provider-initiated reschedule)
             (!b.isPendingReschedule && b.status === BookingStatus.UPCOMING)
         );
+        // No .catch() swallow here: an empty map means "no active request"
+        // to the applyRejection branch below, so a failed fetch used to clear
+        // isPendingReschedule on bookings whose request was still live
+        // server-side. Let it throw into the outer catch and leave local
+        // state alone — the realtime subscription below still covers us.
         const rescheduleRows = await getActiveRescheduleRequestsForBookings(
           waiting.map(b => b.id)
-        ).catch(() => ({} as Record<string, DbBookingRescheduleRequest>));
+        );
         for (const b of waiting) {
           if (cancelled) break;
           const req = rescheduleRows[b.id];

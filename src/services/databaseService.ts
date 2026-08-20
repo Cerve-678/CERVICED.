@@ -33,6 +33,7 @@ import {
 import { parseSearchQuery } from "../utils/searchQuery";
 import { BoundedTtlCache } from "../utils/boundedTtlCache";
 import { matchesHairType } from "../utils/hairTypeMatch";
+import { resolveDepositMode } from "../utils/depositPolicy";
 
 // Terms end up interpolated into a PostgREST `.or()` filter string — strip
 // the characters that are structurally meaningful to that syntax (comma
@@ -2981,16 +2982,30 @@ export async function getActiveRescheduleRequest(
 export async function getActiveRescheduleRequestsForBookings(
   bookingIds: string[],
 ): Promise<Record<string, DbBookingRescheduleRequest>> {
-  if (bookingIds.length === 0) return {};
+  // booking_id is a uuid column, so PostgREST casts the whole .in() list to
+  // uuid — a single locally-created id (the `booking_`-prefixed ones
+  // BookingContext deliberately keeps in its merge) made the query fail with
+  // 22P02 for EVERY booking, not just that one. Callers read "no row" as
+  // "no active request" and clear isPendingReschedule, so one un-synced local
+  // booking silently wiped the pending-reschedule state off all the others.
+  const uuidIds = bookingIds.filter(isUuid);
+  if (uuidIds.length === 0) return {};
 
   const { data, error } = await supabase
     .from("booking_reschedule_requests")
     .select("*")
-    .in("booking_id", bookingIds)
+    .in("booking_id", uuidIds)
     .in("status", ["pending", "provider_responded"])
     .order("created_at", { ascending: false });
 
-  if (error || !data) return {};
+  // Must throw, never return {} — an empty map is indistinguishable from
+  // "this booking has no active request", and callers act on that by
+  // clearing local reschedule state. Swallowing a transient failure here
+  // dropped the "Reschedule Pending" state off a booking whose request was
+  // very much alive server-side, which then surfaced as an
+  // "already in progress" rejection when the client re-requested.
+  if (error) throw error;
+  if (!data) return {};
 
   const out: Record<string, DbBookingRescheduleRequest> = {};
   for (const row of data as DbBookingRescheduleRequest[]) {
@@ -5000,6 +5015,7 @@ export async function getProviderDepositPoliciesByDisplayNames(
 
   for (const p of data) {
     const policies = p.booking_policies as {
+      depositMode?: string;
       depositRequired?: boolean;
       depositOnly?: boolean;
       depositType?: string;
@@ -5007,17 +5023,21 @@ export async function getProviderDepositPoliciesByDisplayNames(
       depositNote?: string;
     } | null;
 
+    // Shared with PaymentsScreen so the provider editor and the client
+    // booking sheet can never disagree about what a stored blob means.
+    const mode = resolveDepositMode(policies);
+
     // Provider explicitly turned deposits OFF → client pays in full, no
     // deposit option in the cart. (Previously this switch was ignored and
     // any leftover amount kept the deposit option alive.)
-    if (policies && policies.depositRequired === false) {
+    if (mode === "full_only") {
       result[p.display_name] = {
         depositType: "percentage",
         depositAmount: 0,
         depositAvailable: false,
         depositOnly: false,
       };
-    } else if (policies && policies.depositAmount) {
+    } else if (mode && policies?.depositAmount) {
       const depositType: "percentage" | "fixed" =
         policies.depositType === "fixed" ? "fixed" : "percentage";
       const depositAmount = Number(policies.depositAmount);
@@ -5025,9 +5045,16 @@ export async function getProviderDepositPoliciesByDisplayNames(
         depositType,
         depositAmount: depositAmount > 0 ? depositAmount : 20,
         depositAvailable: true,
-        depositOnly: !!policies.depositOnly,
+        // 'client_choice' is the state the booking sheet could always render
+        // but no provider control could ever produce: both buttons, shown
+        // side by side, because the provider chose to offer both.
+        depositOnly: mode === "deposit_required",
       };
     } else {
+      // No deposit policy saved at all. Left as the historical 20%-both-options
+      // default rather than silently switching live profiles to full-only —
+      // note that 20% is a figure the provider never set, so a provider who
+      // has never opened Payments is quoting a deposit they didn't choose.
       result[p.display_name] = { ...defaultPolicy };
     }
   }

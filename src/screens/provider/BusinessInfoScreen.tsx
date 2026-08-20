@@ -235,6 +235,28 @@ export default function BusinessInfoScreen({ navigation }: any) {
               />
             </Card>
 
+            {/* Terms & Conditions — a provider's own terms are authored as a
+                FORM, not as a free-text field here. Forms are the only path in
+                the app that captures a client actually agreeing to something
+                (per-question responses, timestamped against a booking), and
+                the Forms builder already ships a "Policy Agreement" template
+                pre-filled from this provider's saved policies. A text box here
+                would be terms nobody ever signed. Cerviced's own Terms are a
+                separate document and are not editable by providers. */}
+            <TouchableOpacity
+              style={[s.card, { backgroundColor: C.surface, borderColor: C.border, flexDirection: 'row', alignItems: 'center' }]}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('ProviderIntakeForm'); }}
+              activeOpacity={0.75}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, { color: C.text }]}>Terms &amp; Conditions</Text>
+                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>
+                  Your own terms are set up as a form clients agree to before their appointment — build or edit one in Forms.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={C.sub} />
+            </TouchableOpacity>
+
             {/* Contact preferences live in Communications, which owns the
                 canonical lowercase preferred_contact_methods write path. This
                 card used to re-implement it with mismatched capitalized chip

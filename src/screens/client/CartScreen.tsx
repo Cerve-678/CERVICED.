@@ -775,7 +775,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
               )}
               {bookingInfo.isDepositOnly && (
                 <Text style={[styles.depositNote, { color: theme.secondaryText }]}>
-                  Deposit now — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)} due at appointment
+                  Due at appointment — £{BookingService.calculateRemainingBalance(totalPrice, depositPolicyArg).toFixed(2)}
                 </Text>
               )}
               {!!bookingInfo.notes && (
@@ -2151,36 +2151,36 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     headerTitle: { fontSize: 26, fontWeight: '600', fontFamily: 'BakbakOne-Regular', color: theme.text },
     title: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
     providerName: { fontSize: 12, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 2 },
-    providerStats: { fontSize: 9, fontFamily: 'Jura-VariableFont_wght bold', fontWeight: '500', color: theme.secondaryText, marginTop: 3 },
+    providerStats: { fontSize: 9, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginTop: 3 },
     serviceName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
-    serviceDuration: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 6 },
+    serviceDuration: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 6 },
     addOnsTitle: { fontSize: 9, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 5 },
-    baseServicePrice: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght bold', color: theme.secondaryText, marginBottom: 3, fontWeight: '300' },
-    addOnItem: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght bold', color: theme.secondaryText, marginBottom: 2, paddingLeft: 3 },
+    baseServicePrice: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 3, fontWeight: '500' },
+    addOnItem: { fontSize: 8, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 2, paddingLeft: 3 },
     fallbackTitle: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 10, textAlign: 'center' },
-    fallbackLabel: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.text, marginBottom: 3, marginTop: 6 },
+    fallbackLabel: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text, marginBottom: 3, marginTop: 6 },
     notesTitle: { fontSize: 14, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 3 },
-    notesSubtitle: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText },
+    notesSubtitle: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText },
     characterCount: { fontSize: 8, color: theme.secondaryText, textAlign: 'right', marginBottom: 12 },
     cancelText: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text },
-    summaryLabel: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text },
-    summaryValue: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text, fontWeight: '600' },
-    serviceFeeNote: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, textAlign: 'right', marginTop: 2 },
+    summaryLabel: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text },
+    summaryValue: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', color: theme.text, fontWeight: '700' },
+    serviceFeeNote: { fontSize: 13, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, textAlign: 'right', marginTop: 2 },
     totalLabel: { fontSize: 17, fontFamily: 'BakbakOne-Regular', color: theme.text },
     totalValue: { fontSize: 18, fontFamily: 'BakbakOne-Regular', color: theme.text },
     emptyTitle: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 8 },
-    emptyText: { fontSize: 11, fontFamily: 'Jura-VariableFont_wght', color: theme.secondaryText, marginBottom: 16, textAlign: 'center' },
+    emptyText: { fontSize: 11, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.secondaryText, marginBottom: 16, textAlign: 'center' },
     paymentTitle: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text },
     paymentCloseText: { fontSize: 14, color: theme.text, fontWeight: 'bold' },
     orderSummaryTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 8 },
-    orderItemName: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', color: theme.text, flex: 1 },
+    orderItemName: { fontSize: 10, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', color: theme.text, flex: 1 },
     orderItemPrice: { fontSize: 10, fontFamily: 'BakbakOne-Regular', color: theme.text },
     orderTotalLabel: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text },
     orderTotalAmount: { fontSize: 15, fontFamily: 'BakbakOne-Regular', color: theme.text, fontWeight: 'bold' },
     paymentMethodsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
     paymentMethodName: { fontSize: 11, fontFamily: 'BakbakOne-Regular', color: theme.text, flex: 1 },
     cardDetailsTitle: { fontSize: 13, fontFamily: 'BakbakOne-Regular', color: theme.text, marginBottom: 12 },
-    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', borderWidth: 1 },
+    cardInput: { borderRadius: 8, padding: 9, marginBottom: 8, fontSize: 11, fontFamily: 'Jura-VariableFont_wght', fontWeight: '600', borderWidth: 1 },
     liquidGlassSuccessCheckmark: { fontSize: 28, color: theme.text, fontWeight: 'bold' },
     liquidGlassSuccessTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 18, color: theme.text, marginBottom: 6, textAlign: 'center' },
     liquidGlassSuccessButtonText: { fontFamily: 'BakbakOne-Regular', fontSize: 13, color: theme.text, fontWeight: '600' },
@@ -3567,8 +3567,8 @@ const styles = StyleSheet.create({
   },
   providerStats: {
     fontSize: fonts.ratingText,
-    fontFamily: 'Jura-VariableFont_wght bold',
-    fontWeight: '500',
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     marginTop: spacing.sm,
   },
@@ -3643,6 +3643,7 @@ const styles = StyleSheet.create({
   priceSummaryText: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   // Bold/darker so add-ons read as labelled paid extras rather than blending
   // into the plain secondary-text lines around them. Spacing is owned by the
@@ -3660,6 +3661,7 @@ const styles = StyleSheet.create({
   depositNote: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   removeButton: {
     width: dimensions.button.small.width,
@@ -3687,6 +3689,7 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     flexShrink: 1,
     marginRight: spacing.sm,
   },
@@ -3725,6 +3728,7 @@ const styles = StyleSheet.create({
   pickerSubtitle: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
@@ -3738,6 +3742,7 @@ const styles = StyleSheet.create({
   pickerRowHint: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: 1,
   },
 
@@ -3785,6 +3790,7 @@ const styles = StyleSheet.create({
   groupSheetSpanTotal: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupSheetPreviewRow: {
     flexDirection: 'row',
@@ -3797,6 +3803,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupSheetPreviewTime: {
     fontSize: fonts.body.small,
@@ -3844,6 +3851,7 @@ const styles = StyleSheet.create({
   groupHeaderSpan: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: 1,
   },
   groupRows: {
@@ -3867,6 +3875,7 @@ const styles = StyleSheet.create({
   groupRowMeta: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupRowAddOns: {
     fontSize: fonts.body.xsmall,
@@ -3877,6 +3886,7 @@ const styles = StyleSheet.create({
   groupRowDeposit: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     marginTop: 1,
   },
   groupRowPrice: {
@@ -3903,6 +3913,7 @@ const styles = StyleSheet.create({
   groupFooterLabel: {
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   groupFooterTotalLabel: {
     fontSize: fonts.body.xsmall,
@@ -3923,6 +3934,7 @@ const styles = StyleSheet.create({
   pickerRowMeta: {
     fontSize: fonts.body.small,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
   },
   pickerCancel: {
     alignItems: 'center',
@@ -3956,18 +3968,20 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: '#000',
   },
   summaryValue: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
     color: '#000',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   serviceFeeNote: {
     // ADD THIS
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     textAlign: 'right',
     marginTop: spacing.xs,
@@ -4033,6 +4047,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     lineHeight: 16,
   },
 
@@ -4052,6 +4067,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: 'rgba(0,0,0,0.6)',
     marginBottom: spacing.xxl,
     textAlign: 'center',
@@ -4157,6 +4173,7 @@ const styles = StyleSheet.create({
   orderItemName: {
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     color: '#000', // CLEAR BLACK
     flex: 1,
   },
@@ -4241,6 +4258,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontSize: fonts.body.medium,
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardRow: {
@@ -4363,6 +4381,7 @@ const styles = StyleSheet.create({
   },
   reviewModalSubtitle: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
     marginBottom: 20,
   },
@@ -4377,6 +4396,7 @@ const styles = StyleSheet.create({
   },
   reviewInput: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 15,
     borderWidth: 1.5,
     borderRadius: 12,
@@ -4385,6 +4405,7 @@ const styles = StyleSheet.create({
   },
   reviewPhoneWarning: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
     color: '#FF3B30',
     marginTop: 4,
@@ -4422,6 +4443,7 @@ const styles = StyleSheet.create({
   },
   reviewCheckboxLabel: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
   },
   requiredAsterisk: {
@@ -4479,6 +4501,7 @@ const styles = StyleSheet.create({
   },
   reviewFieldValue: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 15,
     paddingVertical: 10,
     paddingHorizontal: 4,
@@ -4507,6 +4530,7 @@ const styles = StyleSheet.create({
   },
   summaryCustomerDetail: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     marginBottom: 2,
   },
@@ -4531,6 +4555,7 @@ const styles = StyleSheet.create({
   },
   summaryItemProvider: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 12,
     marginBottom: 2,
   },
@@ -4542,6 +4567,7 @@ const styles = StyleSheet.create({
   },
   summaryItemDateTime: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 11,
   },
   // Group block: its own rounded, accent-bordered box so the grouped services
@@ -4603,12 +4629,13 @@ const styles = StyleSheet.create({
   },
   summaryTotalLabel: {
     fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '600',
     fontSize: 13,
   },
   summaryTotalValue: {
     fontFamily: 'Jura-VariableFont_wght',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   summaryGrandTotalRow: {
     borderTopWidth: StyleSheet.hairlineWidth,

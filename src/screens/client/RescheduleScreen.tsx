@@ -2,7 +2,7 @@
 // Reschedule flow extracted from BookingsScreen. Receives { bookingId } route param.
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Platform, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -281,7 +281,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           providerRef, selectedDate, selectedTime, booking.duration, booking.serviceId,
         );
         if (staleCheck.hasConflict) {
-          Alert.alert('Time No Longer Available', staleCheck.message || 'Please choose a different time.');
+          showAlert('Time No Longer Available', staleCheck.message || 'Please choose a different time.');
           setIsSubmitting(false);
           return;
         }
@@ -310,7 +310,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       // is stale in that case, so bounce back to Bookings (which re-syncs
       // from Supabase) instead of leaving the user stuck on a dead screen.
       if (err?.message === 'Booking not found') {
-        Alert.alert(
+        showConfirm(
           'Booking No Longer Available',
           "This booking couldn't be found — it may have changed since you opened this screen. Pull to refresh your bookings list.",
           [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
@@ -320,7 +320,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         // the buffer/overlap exclusion constraint (prevent_overlapping_bookings.sql)
         // caught a different-start-time overlap. Either way this is a raw
         // Postgres error with no friendly .message — don't show it as-is.
-        Alert.alert('Time No Longer Available', 'Please choose a different time.');
+        showAlert('Time No Longer Available', 'Please choose a different time.');
       } else if (
         err?.message === 'Waiting for provider to respond with available dates' ||
         err?.message === 'A reschedule request is already in progress for this booking'
@@ -332,7 +332,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         // "already requested" state instead of a scary error toast, and pop
         // back so the parent list re-syncs and this screen would show the
         // pending view above if reopened.
-        Alert.alert(
+        showConfirm(
           'Reschedule Already Requested',
           `You already have a reschedule request in for this booking. Waiting for ${booking.providerName} to respond.`,
           [{ text: 'OK', onPress: () => navigation.goBack() }],
@@ -345,7 +345,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         // the notice window lapsing between screen-open and submit — show
         // the same friendly framing as that blocking screen instead of the
         // raw Postgres message, then bounce back since no chip here can work.
-        Alert.alert(
+        showConfirm(
           'Too Close to Reschedule',
           `${booking.providerName} requires more notice than this appointment now has left. Message them directly if you need to change it.`,
           [{ text: 'OK', onPress: () => navigation.goBack() }],
@@ -353,7 +353,7 @@ export default function RescheduleScreen({ navigation, route }: Props) {
       } else if (err?.message === 'No bookings found in storage') {
         // Local cache is out of sync with the server (the booking was resolved
         // or removed elsewhere). "storage" is a developer term — never show it.
-        Alert.alert(
+        showConfirm(
           'Booking No Longer Available',
           "This booking isn't available anymore. Pull down to refresh your bookings.",
           [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
@@ -365,17 +365,17 @@ export default function RescheduleScreen({ navigation, route }: Props) {
         /has just been taken\. Please pick another day\.$/.test(err?.message ?? '')
       ) {
         // These messages are already written for clients — safe to show as-is.
-        Alert.alert("Can't Reschedule", toUserMessage(err, 'That time is no longer available. Please pick another.', 'RescheduleScreen.submit'));
+        showAlert("Can't Reschedule", toUserMessage(err, 'That time is no longer available. Please pick another.', 'RescheduleScreen.submit'));
       } else {
         // Anything else is unexpected/technical — devs see the real reason in
         // the logs; the client sees a calm, non-technical line.
         logger.error('[Reschedule] failed:', err);
-        Alert.alert('Reschedule Failed', "We couldn't reschedule that just now. Please try again.");
+        showAlert('Reschedule Failed', "We couldn't reschedule that just now. Please try again.");
       }
     } finally {
       setIsSubmitting(false);
     }
-  }, [booking, selectedDate, selectedTime, requestReschedule, confirmReschedule, confirmGroupReschedule, isGroupReschedule, groupSiblings, navigation]);
+  }, [booking, selectedDate, selectedTime, requestReschedule, confirmReschedule, confirmGroupReschedule, isGroupReschedule, groupSiblings, navigation, showAlert, showConfirm]);
 
   const handleDecline = useCallback(() => {
     if (!booking) return;

@@ -33,7 +33,6 @@ import { BellIcon } from '../../components/IconLibrary';
 import CategoryTabPill from '../../components/CategoryTabPill';
 import AddressPicker from '../../components/AddressPicker';
 import TermsScreen from '../shared/TermsScreen';
-import { ACCESSIBILITY_OPTS } from '../../features/business-details/options';
 import { Ionicons } from '@expo/vector-icons';
 
 // Theme imports — this screen always renders in light mode (see
@@ -137,7 +136,6 @@ type CancelNotice     = 'none' | '24h' | '48h' | '72h';
 type CancelPenalty    = 'none' | 'deposit' | 'full';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
-type DepositType      = 'percent' | 'fixed';
 type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
 type WaitlistSelectionMethod = 'fifo' | 'manual';
 
@@ -148,12 +146,6 @@ interface ProviderPolicies {
   rescheduleNotice: RescheduleNotice;
   maxReschedules:   MaxReschedules;
   rescheduleNote:   string;
-  depositRequired:  boolean;
-  /** Client must pay the deposit — no "pay in full" choice at checkout. */
-  depositOnly:      boolean;
-  depositType:      DepositType;
-  depositAmount:    string;
-  depositNote:      string;
   noShowAction:     NoShowAction;
   noShowNote:       string;
   /** Free-text disclosure only — the provider describes their refund policy
@@ -195,11 +187,6 @@ const DEFAULT_POLICIES: ProviderPolicies = {
   rescheduleNotice: '24h',
   maxReschedules:   '1',
   rescheduleNote:   '',
-  depositRequired:  false,
-  depositOnly:      false,
-  depositType:      'percent',
-  depositAmount:    '',
-  depositNote:      '',
   noShowAction:     'none',
   noShowNote:       '',
   refundPolicyNote: '',
@@ -2520,13 +2507,14 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
     loadProviderPolicies(user.id)
       .then(saved => {
         if (!saved) { setPoliciesLoaded(true); return; }
-        const merged = { ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) };
-        // Collapse the old two-toggle state onto the single one. Blobs saved
-        // before "Deposit only" was merged into "Require deposit" can hold
-        // depositRequired:true + depositOnly:false; loading that verbatim
-        // would resurrect the removed middle state with no UI left to change
-        // it. depositRequired is authoritative from here on.
-        setPolicies({ ...merged, depositOnly: merged.depositRequired });
+        // Verbatim round-trip — this screen edits no policy field, so every
+        // key (the deposit ones PaymentsScreen owns included) is carried back
+        // exactly as loaded. The old `depositOnly: merged.depositRequired`
+        // collapse that used to sit here would now silently rewrite a
+        // provider's "deposit optional" choice into "deposit required" on any
+        // profile save, since depositOnly is no longer a mirror of
+        // depositRequired.
+        setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<ProviderPolicies>) });
         setPoliciesLoaded(true);
       })
       // Deliberately leaves policiesLoaded false on failure — this screen no
@@ -3734,7 +3722,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         {providerData.providerService}
                       </Text>
                     </View>
-                    <Text style={styles.inputHint}>Set at sign-up — your business type can't be changed here.</Text>
+                    <Text style={styles.inputHint}>Set at sign-up — contact support to change your service type.</Text>
                   </>
                 ) : (
                   <ScrollView
@@ -4118,8 +4106,11 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
-            {/* Services Section */}
-              <View style={styles.servicesSection}>
+            {/* Services Section — extra top gap because this is the one
+                section whose first element is itself a right-aligned button
+                ("+ Add Category"). Without it, it stacks directly under the
+                right-aligned "Next" above and the two read as one control. */}
+              <View style={[styles.servicesSection, { marginTop: 26 }]}>
                 <View style={styles.servicesSectionHeader}>
                   <Text style={styles.sectionTitleNoCard}>Your Services</Text>
                   <TouchableOpacity
@@ -4481,7 +4472,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   </View>
                 )}
                 {isEditMode && providerData.businessType && (
-                  <Text style={styles.inputHint}>Set at sign-up — contact support to change your business type.</Text>
+                  <Text style={styles.inputHint}>
+                    Not editable here — change it in Business Profile → Business Details → Business Info.
+                  </Text>
                 )}
 
               <View style={[styles.docFieldRow, { marginTop: 14 }]}>
@@ -4619,34 +4612,38 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   providerData purely so an existing value round-trips
                   untouched through this screen's save. */}
 
-              {/* Same '|'-delimited accessibility_notes column and fixed
-                  ACCESSIBILITY_OPTS vocabulary as AboutYouScreen.tsx (Business
-                  Details) — this used to be a free-text field here, which
-                  wrote unparseable prose into a column the other screen reads
-                  as pipe-joined chips. Converted to the same picker so both
-                  screens edit the same data the same way. */}
-              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ACCESSIBILITY</Text>
-              <Text style={styles.addressHint}>Anything clients should know before booking (optional)</Text>
-              <View style={styles.pillRow}>
-                {ACCESSIBILITY_OPTS.map((opt) => {
-                  const selected = providerData.accessibilityNotes.split('|').filter(Boolean).includes(opt);
-                  return (
-                    <TouchableOpacity
-                      key={opt}
-                      style={[styles.policyPill, selected && { backgroundColor: adaptiveAccentColor }]}
-                      onPress={() => setProviderData(prev => {
-                        const current = prev.accessibilityNotes.split('|').filter(Boolean);
-                        const next = current.includes(opt)
-                          ? current.filter(v => v !== opt)
-                          : [...current, opt];
-                        return { ...prev, accessibilityNotes: next.join('|') };
-                      })}
-                    >
-                      <Text style={[styles.policyPillText, selected && { color: '#fff' }]}>{opt}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              {/* ACCESSIBILITY moved out to Business Details → About You,
+                  which is the only editor of the '|'-delimited
+                  accessibility_notes column now. Asking the same chips in two
+                  places is what let this screen write unparseable prose into
+                  that column in the first place. `accessibilityNotes` stays on
+                  providerData purely so an existing value round-trips
+                  untouched through this screen's save. */}
+
+              {/* What replaces it here is the plain-prose question that
+                  actually belongs at first publish — the free-text box this
+                  was before it got turned into a chip picker. It writes
+                  booking_policies.bookingInstructions, the field already shown
+                  to clients on every booking, rather than a second column
+                  saying the same thing. Business Details → Policies is the
+                  ongoing editor of that same field; this is the signup-time
+                  ask, same key, same format. */}
+              <Text style={[styles.policyLabel, { marginTop: 14 }]}>ANYTHING CLIENTS SHOULD KNOW</Text>
+              <Text style={styles.addressHint}>
+                Shown to clients on every booking (optional) — parking, buzzer codes, what to bring, how to find you.
+              </Text>
+              <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlurMultiline, styles.profileInputBox, { marginTop: 8 }]}>
+                <TextInput
+                  style={[styles.textInput, styles.textInputMultiline]}
+                  value={policies.bookingInstructions}
+                  onChangeText={(text) => setPolicies(prev => ({ ...prev, bookingInstructions: text }))}
+                  placeholder="e.g. Please arrive 10 minutes early. Free parking on the street outside."
+                  placeholderTextColor={chrome.fg(0.4)}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </BlurView>
 
               {/* PREFERRED PAYMENT TYPE, WHO YOU WORK WITH and LANGUAGES SPOKEN
                   moved out of registration to Business Details — payment/

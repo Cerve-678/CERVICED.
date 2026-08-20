@@ -6,12 +6,12 @@
  * practice details, credentials, accessibility and location into one scroll;
  * it's now focused sub-screens, each owning its own save:
  *
- *   BusinessInfoScreen      — name, links, emails, external booking
+ *   BusinessInfoScreen      — name, links, emails, external booking, → T&Cs
  *   ServicesPricingScreen   — specialties, clientele, pricing, style
  *   AboutYouScreen          — credentials, patch test, cities covered, access
  *   SchedulingScreen        — availability, booking rules, → working hours
- *   PaymentsScreen          — payment types, deposit requirement
- *   PoliciesScreen          — cancellations, reschedules, deposits, no-shows,
+ *   PaymentsScreen          — payment types, the whole deposit setup
+ *   PoliciesScreen          — cancellations, reschedules, no-shows,
  *                             refund policy, booking instructions
  *
  * Scheduling and Payments came later than the original three: availability had
@@ -96,7 +96,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="document-text-outline"
             title="Policies"
-            subtitle="Cancellations, reschedules, deposits & no-shows"
+            subtitle="Cancellations, reschedules, no-shows & refunds"
             onPress={() => navigation.navigate('Policies')}
             C={C}
           />
@@ -117,7 +117,7 @@ export default function BusinessDetailsScreen({ navigation }: any) {
           <NavRow
             icon="card-outline"
             title="Payments"
-            subtitle="Payment types you accept & deposit requirements"
+            subtitle="Payment types you accept & your deposit"
             onPress={() => navigation.navigate('Payments')}
             C={C}
           />

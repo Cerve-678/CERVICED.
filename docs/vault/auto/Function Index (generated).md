@@ -5,7 +5,7 @@
 
 #generated
 
-**1708 functions** across **240 files**.
+**1711 functions** across **241 files**.
 
 ### `src/components/` (35)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
@@ -238,11 +238,12 @@
 ### `src/types/` (1)
 - `booking.ts` — **hasMapDestination** · **isAddressPending** · **mapDbBookingStatus**
 
-### `src/utils/` (17)
+### `src/utils/` (18)
 - `addressRelease.ts` — **isAddressReleasedByPolicy**
 - `beautyProfileStats.ts` — **computeBeautyProfileStats** · computeCategory · countSelections · isSet
 - `cartUtils.ts` — **getCartSummary**
 - `dateUtils.ts` — **dateToYMD** · **formatLongDate** · **formatLongDateNoYear** · **formatSectionTitle** · **formatShortDate** · **formatTime12** · **ordinalSuffix** · **relativeDayLabel** · **timeAgo** · **to24HourTime** · toLocalDate
+- `depositPolicy.ts` — isDepositMode · **resolveDepositMode** · **resolveEditorDepositMode**
 - `distance.ts` — **formatDistance** · **getDistanceKm** · toRadians
 - `exploreTabBarScroll.ts` — animateTo · **resetExplorePillTracking** · **settleExplorePillTracking** · trackScrollDirection
 - `FontManager.ts` — **createTextStyles** · getFontFamily · to

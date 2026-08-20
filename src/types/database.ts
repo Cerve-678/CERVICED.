@@ -142,6 +142,11 @@ export interface DbProvider {
     rescheduleNotice?: string;
     maxReschedules?: string;
     rescheduleNote?: string;
+    /** 'full_only' | 'client_choice' | 'deposit_required' — the provider's
+     *  three-way deposit choice, edited on PaymentsScreen. Read it through
+     *  resolveDepositMode() in src/utils/depositPolicy.ts, never directly:
+     *  rows saved before 2026-08-20 only carry the boolean pair below. */
+    depositMode?: string;
     depositRequired?: boolean;
     depositType?: string;
     depositAmount?: string;
@@ -149,7 +154,8 @@ export interface DbProvider {
     noShowAction?: string;
     noShowNote?: string;
     /** Client must pay the deposit — no "pay in full" choice at checkout.
-     *  Always mirrors depositRequired; see InfoRegScreen's setPolicy. */
+     *  Legacy: this and depositRequired were written in lockstep, which is
+     *  why depositMode exists. Still written for older client builds. */
     depositOnly?: boolean;
     /** Free-text disclosure only — this app has no refund-processing infra
      *  and never calculates/enforces a refund automatically. */

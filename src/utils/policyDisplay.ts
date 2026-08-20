@@ -5,6 +5,7 @@
 // bookings). Single source of truth so the two views can never silently
 // disagree on how a given policy field is worded.
 import type { Ionicons } from '@expo/vector-icons';
+import { resolveDepositMode } from './depositPolicy';
 
 export interface PolicyDisplayData {
   cancelNotice?: string;
@@ -12,6 +13,7 @@ export interface PolicyDisplayData {
   cancelNote?: string;
   rescheduleNotice?: string;
   maxReschedules?: string;
+  depositMode?: string;
   depositRequired?: boolean;
   depositOnly?: boolean;
   depositType?: string;
@@ -48,13 +50,18 @@ export function buildPolicyDisplayRows(
   const rows: PolicyDisplayRow[] = [];
   if (!policy) return rows;
 
-  if (policy.depositRequired && policy.depositAmount) {
+  // "required" is only true for the deposit_required mode — under
+  // client_choice the client can still pay in full, so labelling the deposit
+  // as required would misstate the provider's own policy back to them.
+  const depositMode = resolveDepositMode(policy);
+  if (depositMode && depositMode !== 'full_only' && policy.depositAmount) {
+    const amount = policy.depositType === 'percent'
+      ? `${policy.depositAmount}%`
+      : `£${policy.depositAmount}`;
     rows.push({
       icon: 'card-outline',
       label: 'Deposit',
-      value: policy.depositType === 'percent'
-        ? `${policy.depositAmount}% required`
-        : `£${policy.depositAmount} required`,
+      value: depositMode === 'deposit_required' ? `${amount} required` : `${amount} (optional)`,
     });
   }
 

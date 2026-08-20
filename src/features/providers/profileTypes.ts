@@ -80,6 +80,7 @@ export interface ProviderProfileData {
     cancelNote?: string;
     rescheduleNotice?: string;
     maxReschedules?: string;
+    depositMode?: string;
     depositRequired?: boolean;
     depositOnly?: boolean;
     depositType?: string;

@@ -30,6 +30,7 @@ import CategoryTabPill from '../../components/CategoryTabPill';
 import SlidingTabs from '../../components/SlidingTabs';
 import AppBackground from '../../components/AppBackground';
 import { logger } from '../../utils/logger';
+import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -550,46 +551,17 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                   </TouchableOpacity>
                 </>
               ) : (
-                /* Policy tab content — mirrors ProviderProfileScreen's row-building exactly */
+                /* Policy tab content. This used to be a hand-copied clone of
+                   buildPolicyDisplayRows "mirroring ProviderProfileScreen
+                   exactly" — which it stopped doing the moment deposits gained
+                   a third mode and the clone kept saying "required" for an
+                   optional one. Same source of truth as the client-facing tab
+                   now, so it can't drift again. */
                 (() => {
-                  const bp = providerData.bookingPolicies;
-                  const rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; tag?: string }[] = [];
-                  if (bp?.depositRequired && bp.depositAmount) {
-                    rows.push({
-                      icon: 'card-outline',
-                      label: 'Deposit',
-                      value: bp.depositType === 'percent' ? `${bp.depositAmount}% required` : `£${bp.depositAmount} required`,
-                    });
-                  }
-                  const cancelPenaltyText =
-                    bp?.cancelPenalty && bp.cancelPenalty !== 'none'
-                      ? ` · ${bp.cancelPenalty === 'deposit' ? 'deposit kept' : 'full charge'}`
-                      : '';
-                  if (providerData.cancellationNoticeHours > 0) {
-                    rows.push({
-                      icon: 'time-outline',
-                      label: 'Cancellation',
-                      value: `${providerData.cancellationNoticeHours} hours' notice${cancelPenaltyText}`,
-                    });
-                  } else if (bp?.cancelNotice && bp.cancelNotice !== 'none') {
-                    rows.push({ icon: 'time-outline', label: 'Cancellation', value: `${bp.cancelNotice} notice${cancelPenaltyText}` });
-                  }
-                  if (bp?.rescheduleNotice || bp?.maxReschedules) {
-                    const parts: string[] = [];
-                    if (bp.rescheduleNotice && bp.rescheduleNotice !== 'same_day') parts.push(`${bp.rescheduleNotice} notice`);
-                    if (bp.maxReschedules && bp.maxReschedules !== 'unlimited') parts.push(`max ${bp.maxReschedules}`);
-                    if (parts.length > 0) rows.push({ icon: 'calendar-outline', label: 'Reschedule', value: parts.join(' · ') });
-                  }
-                  if (bp?.noShowAction && bp.noShowAction !== 'none') {
-                    rows.push({
-                      icon: 'close-circle-outline',
-                      label: 'No-show',
-                      value: bp.noShowAction === 'warn' ? 'Warning issued' : bp.noShowAction === 'charge_deposit' ? 'Deposit charged' : 'Full charge',
-                    });
-                  }
-                  if (bp?.cancelNote) {
-                    rows.push({ icon: 'information-circle-outline', label: 'Note', value: bp.cancelNote });
-                  }
+                  const rows = buildPolicyDisplayRows(
+                    providerData.bookingPolicies,
+                    providerData.cancellationNoticeHours,
+                  );
                   return (
                     <View style={{ paddingTop: 8 }}>
                       {rows.map((row, i) => (
@@ -603,11 +575,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                           <View style={styles.policyRowText}>
                             <View style={styles.policyLabelRow}>
                               <Text style={[styles.policyLabel, { color: PP.sub }]}>{row.label}</Text>
-                              {!!row.tag && (
-                                <View style={[styles.policyTag, { backgroundColor: accentColor }]}>
-                                  <Text style={styles.policyTagText}>{row.tag}</Text>
-                                </View>
-                              )}
                             </View>
                             <Text style={[styles.policyValue, { color: PP.text }]}>{row.value}</Text>
                           </View>
@@ -1256,18 +1223,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 2,
-  },
-  policyTag: {
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    marginBottom: 2,
-  },
-  policyTagText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 9,
-    letterSpacing: 0.5,
-    color: '#fff',
   },
   policyValue: {
     fontFamily: 'Jura-VariableFont_wght',

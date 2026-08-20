@@ -1,6 +1,13 @@
 /**
- * Policies — cancellations, reschedules, deposits, no-shows, refund policy,
- * booking instructions, and a detailed policy image.
+ * Policies — cancellations, reschedules, no-shows, refund policy, booking
+ * instructions, and a detailed policy image.
+ *
+ * NOT deposits. The deposit setup (whether one applies, how much, whether it's
+ * new-clients-only) moved to PaymentsScreen on 2026-08-20 — it's a payment
+ * question, and it was previously split across both screens. The deposit keys
+ * still round-trip through this screen's save because the write below is a
+ * full REPLACE of booking_policies, but nothing here edits them. Do not add a
+ * deposit control back here.
  *
  * Moved out of InfoRegScreen's "05 · Policies" section (previously edited as
  * part of the one-shot registration/profile-editor document) into its own
@@ -11,8 +18,8 @@
  * NOT here on purpose: business type, full address, address release timing,
  * and accessibility notes stayed in InfoRegScreen — they're required (or
  * required-adjacent) first-publish fields, not cancellation/reschedule/
- * deposit-style policy, and a brand-new provider still needs to be asked for
- * their address during signup rather than only discovering this screen later.
+ * no-show policy, and a brand-new provider still needs to be asked for their
+ * address during signup rather than only discovering this screen later.
  *
  * PERSISTENCE — `providers.booking_policies` (JSONB), via
  * saveProviderPolicies/loadProviderPolicies (keyed by user id, not provider
@@ -31,7 +38,6 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -49,7 +55,7 @@ import {
   uploadToStorage,
 } from '../../services/providerRegistrationService';
 import {
-  Card, Field, ToggleRow, SectionLabel, Toast, SaveButton,
+  Card, Field, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
 
@@ -57,7 +63,6 @@ type CancelNotice     = 'none' | '24h' | '48h' | '72h';
 type CancelPenalty    = 'none' | 'deposit' | 'full';
 type RescheduleNotice = 'same_day' | '24h' | '48h' | '72h';
 type MaxReschedules   = '1' | '2' | 'unlimited';
-type DepositType      = 'percent' | 'fixed';
 type NoShowAction     = 'none' | 'warn' | 'charge_deposit' | 'charge_full';
 
 interface PolicyState {
@@ -67,10 +72,6 @@ interface PolicyState {
   rescheduleNotice: RescheduleNotice;
   maxReschedules:   MaxReschedules;
   rescheduleNote:   string;
-  depositRequired:  boolean;
-  depositType:      DepositType;
-  depositAmount:    string;
-  depositNote:      string;
   noShowAction:     NoShowAction;
   noShowGraceMinutes: string;
   noShowNote:       string;
@@ -86,10 +87,6 @@ const DEFAULT_POLICIES: PolicyState = {
   rescheduleNotice: '24h',
   maxReschedules:   '1',
   rescheduleNote:   '',
-  depositRequired:  false,
-  depositType:      'percent',
-  depositAmount:    '',
-  depositNote:      '',
   noShowAction:     'none',
   noShowGraceMinutes: '0',
   noShowNote:       '',
@@ -134,6 +131,11 @@ export default function PoliciesScreen({ navigation }: any) {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [policies, setPolicies] = useState<PolicyState>(DEFAULT_POLICIES);
+  // Everything in booking_policies this screen doesn't edit — the deposit keys
+  // PaymentsScreen owns, plus anything InfoRegScreen writes to the same
+  // column. Held separately and spread back on save, because the write is a
+  // full REPLACE: a key that isn't carried through is a key that's deleted.
+  const [carriedPolicies, setCarriedPolicies] = useState<Record<string, unknown>>({});
   const [policyImageUploading, setPolicyImageUploading] = useState(false);
 
   // Re-affirmation only — first-publish acceptance is InfoRegScreen's
@@ -159,8 +161,12 @@ export default function PoliciesScreen({ navigation }: any) {
         const profile = await getMyProviderProfile();
         if (!profile?.user_id) { setLoading(false); return; }
         setUserId(profile.user_id);
-        const saved = (await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {};
+        const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) });
+        const carried = Object.fromEntries(
+          Object.entries(saved).filter(([k]) => !(k in DEFAULT_POLICIES)),
+        );
+        setCarriedPolicies(carried);
       } catch {
         flash('Could not load your policies', 'error');
       } finally {
@@ -209,14 +215,11 @@ export default function PoliciesScreen({ navigation }: any) {
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      // depositOnly isn't edited here — "Require deposit" IS deposit-only,
-      // one toggle not two — but the client booking path still reads it
-      // directly (BookingSheet/MultiBookingSheet hide "pay in full",
-      // getProviderDepositPoliciesByDisplayNames, Becca), so it has to be
-      // written in lockstep with depositRequired or that path silently breaks.
+      // carriedPolicies first, so an edit made here always wins over the
+      // stale copy loaded alongside it.
       await saveProviderPolicies(userId, {
+        ...carriedPolicies,
         ...policies,
-        depositOnly: policies.depositRequired,
       } as unknown as Record<string, unknown>);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       navigation.goBack();
@@ -226,7 +229,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, policies, navigation]);
+  }, [userId, policies, carriedPolicies, navigation]);
 
   if (loading) {
     return (
@@ -294,36 +297,7 @@ export default function PoliciesScreen({ navigation }: any) {
               <Field label="Note (optional)" value={policies.rescheduleNote} onChange={v => setPolicy('rescheduleNote', v)} />
             </Card>
 
-            <Card title="Deposit">
-              <ToggleRow
-                label="Require deposit"
-                sub="Clients must pay the deposit to book — they won't be able to choose to pay in full."
-                value={policies.depositRequired}
-                onChange={v => setPolicy('depositRequired', v)}
-              />
-              {policies.depositRequired && (
-                <>
-                  <SectionLabel text="Amount" />
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <Pills
-                      options={[{ v: 'percent', l: '%' }, { v: 'fixed', l: '£' }]}
-                      value={policies.depositType}
-                      onChange={v => setPolicy('depositType', v)}
-                    />
-                    <TextInput
-                      style={{ flex: 1, borderWidth: StyleSheet.hairlineWidth, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontFamily: 'Jura-VariableFont_wght', fontSize: 14, color: C.text, backgroundColor: C.surface }}
-                      placeholder={policies.depositType === 'percent' ? 'e.g. 20' : 'e.g. 25'}
-                      placeholderTextColor={C.sub}
-                      value={policies.depositAmount}
-                      onChangeText={v => setPolicy('depositAmount', v)}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <Field label="Note (optional)" value={policies.depositNote} onChange={v => setPolicy('depositNote', v)} />
-                </>
-              )}
-            </Card>
-
+            {/* Deposits live on Business Details → Payments now, not here. */}
             <Card title="No-show">
               <SectionLabel text="Action" />
               <Pills
