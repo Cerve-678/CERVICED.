@@ -41,6 +41,7 @@ import { formatLongDate, formatTime12 } from '../../utils/dateUtils';
 import type { GroupedListItem } from '../../features/bookings/presentationTypes';
 import { BookingCard } from '../../features/bookings/BookingCard';
 import { formatBookingDate, resolveServiceCategory } from '../../features/bookings/presentation';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 
 // ==================== TYPES ====================
 
@@ -166,7 +167,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
       setWaitlistHold(null);
       await reloadBookings();
     } catch (err: any) {
-      Alert.alert('Could not confirm', err?.message || 'This hold may have expired. Please check the provider for other openings.');
+      Alert.alert('Could not confirm', toUserMessageAllowingDbGuard(err, 'This hold may have expired. Please check with the provider for other openings.', 'BookingsScreen.confirmWaitlistHold'));
       setWaitlistHold(null);
     } finally {
       setWaitlistHoldBusy(false);

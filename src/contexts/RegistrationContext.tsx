@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AccountType } from './AuthContext';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { logger } from '../utils/logger';
 
 export interface RegistrationData {
   accountType: AccountType;
@@ -134,7 +135,9 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
           setData(prev => ({ ...prev, ...parsed }));
         }
       })
-      .catch(() => {}); // silent — don't block registration if storage fails
+      // Never block registration on a storage failure — but it must not vanish:
+      // a draft that won't load is why someone reappears at step 1.
+      .catch((err) => logger.error('[Registration] draft restore failed:', err));
   }, []);
 
   const updateData = useCallback((partial: Partial<RegistrationData>) => {
@@ -146,7 +149,7 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
       AsyncStorage.setItem(
         STORAGE_KEYS.REGISTRATION_DRAFT,
         JSON.stringify(safeData)
-      ).catch(() => {});
+      ).catch((err) => logger.error('[Registration] draft save failed:', err));
       return next;
     });
   }, []);
@@ -154,7 +157,7 @@ export function RegistrationProvider({ children }: { children: ReactNode }) {
   const resetData = useCallback(() => {
     setData(initialData);
     setCurrentStep(1);
-    AsyncStorage.removeItem(STORAGE_KEYS.REGISTRATION_DRAFT).catch(() => {});
+    AsyncStorage.removeItem(STORAGE_KEYS.REGISTRATION_DRAFT).catch((err) => logger.error('[Registration] draft clear failed:', err));
   }, []);
 
   const value = useMemo(

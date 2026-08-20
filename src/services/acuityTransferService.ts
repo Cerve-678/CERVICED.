@@ -7,6 +7,7 @@
 // is reused by the batch scrape pipeline.
 import { supabase } from '../lib/supabase';
 import { ProviderRegistrationData } from './providerRegistrationService';
+import { reportError } from '../utils/logger';
 
 interface ExtractedProfile {
   providerName?: string;
@@ -25,7 +26,12 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
     body: { url, sourceType: 'acuity' },
   });
 
-  if (error) throw new Error(error.message || 'Could not extract data from that link. Please try again.');
+  // An edge-function invoke error reads like "Edge Function returned a non-2xx
+  // status code" — true, and useless to a provider. Log the real one, throw copy.
+  if (error) {
+    reportError(error, 'acuityTransferService.invoke');
+    throw new Error('Could not read that page. Please check the link and try again.');
+  }
 
   const extracted: ExtractedProfile = data?.extracted ?? {};
 

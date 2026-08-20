@@ -30,6 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
+import { toUserMessage } from '../../utils/userFacingError';
 import {
   getMyProviderProfile,
   updateProviderContactDetails,
@@ -155,7 +156,7 @@ export default function SchedulingScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(e?.message ?? 'Could not save changes', 'error');
+      flash(toUserMessage(e, 'Could not save your changes.', 'SchedulingScreen.save'), 'error');
     } finally {
       setSaving(false);
     }

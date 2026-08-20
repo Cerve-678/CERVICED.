@@ -21,12 +21,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
 import { supabase } from '../../lib/supabase';
 import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
-import { reportError } from '../../utils/logger';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS } from '../../features/business-details/options';
 import { recognizeLanguage } from '../../data/languages';
+import { toUserMessage } from '../../utils/userFacingError';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
@@ -174,23 +174,6 @@ export default function SignUpStep5Screen({ navigation }: Props) {
     setSelectedSpecialties(prev => prev.includes(item) ? prev.filter(s => s !== item) : [...prev, item]);
   };
 
-  const getFriendlyError = (message: string): string => {
-    const msg = message.toLowerCase();
-    if (msg.includes('user already registered') || msg.includes('already been registered') || msg.includes('already exists'))
-      return 'An account with this email already exists. Try logging in instead.';
-    if (msg.includes('invalid email') || msg.includes('unable to validate email'))
-      return "That email address doesn't look right. Please check it and try again.";
-    if (msg.includes('password') && msg.includes('weak'))
-      return "Your password isn't strong enough. Try mixing letters, numbers, and symbols.";
-    if (msg.includes('password') && (msg.includes('short') || msg.includes('characters')))
-      return 'Your password needs to be at least 8 characters long.';
-    if (msg.includes('rate limit') || msg.includes('too many'))
-      return 'Too many attempts. Please wait a moment and try again.';
-    if (msg.includes('network') || msg.includes('fetch') || msg.includes('connect'))
-      return 'No internet connection. Please check your network and try again.';
-    return 'Something went wrong. Please try again.';
-  };
-
   // 'Other' plus its free-text value is folded into one flat list to store —
   // e.g. ['Balayage', 'Other'] + "Colour matching for grey coverage" becomes
   // ['Balayage', 'Colour matching for grey coverage'], never the literal
@@ -244,8 +227,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } catch (e: any) {
-        reportError(e, 'signup:addClientProfile');
-        Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
+        Alert.alert('Oops!', toUserMessage(e, "We couldn't finish setting up your account. Please try again.", 'signup:addClientProfile'));
       } finally {
         setIsLoading(false);
       }
@@ -273,8 +255,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } catch (e: any) {
-        reportError(e, 'signup:upgradeToProvider');
-        Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
+        Alert.alert('Oops!', toUserMessage(e, "We couldn't finish setting up your provider account. Please try again.", 'signup:upgradeToProvider'));
       } finally {
         setIsLoading(false);
       }
@@ -320,8 +301,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       });
 
       if (signUpError) {
-        reportError(signUpError, 'signup:authSignUp');
-        Alert.alert('Oops!', getFriendlyError(signUpError.message));
+        Alert.alert('Oops!', toUserMessage(signUpError, "We couldn't create your account. Please try again.", 'signup:authSignUp'));
         return;
       }
 
@@ -337,8 +317,7 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       resetData();
       navigation.navigate('EmailVerification', { email: personalEmail });
     } catch (e: any) {
-      reportError(e, 'signup:submit');
-      Alert.alert('Oops!', getFriendlyError(e?.message ?? ''));
+      Alert.alert('Oops!', toUserMessage(e, "We couldn't create your account. Please try again.", 'signup:submit'));
     } finally {
       setIsLoading(false);
     }

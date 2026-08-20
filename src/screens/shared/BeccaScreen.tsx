@@ -55,6 +55,7 @@ import { useBooking } from "../../contexts/BookingContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { ThemedBackground } from "../../components/ThemedBackground";
 import { useAppDialog } from "../../components/AppDialog";
+import { logger } from '../../utils/logger';
 
 // "Wednesday 5th" — compact day+date for the hero screen's top-right label.
 // No such formatter exists in dateUtils.ts (formatLongDate also includes
@@ -379,7 +380,7 @@ export default function BeccaScreen({
     beccaStorageService
       .loadSessions(user.id, beccaHat)
       .then(setSessions)
-      .catch(() => {})
+      .catch((err) => logger.error('[Becca] session list load failed:', err))
       .finally(() => setHistoryLoading(false));
   }, [user?.id, beccaHat]);
 
@@ -396,7 +397,9 @@ export default function BeccaScreen({
     try {
       const updated = await beccaStorageService.loadSessions(user.id, beccaHat);
       setSessions(updated);
-    } catch {}
+    } catch (err) {
+      logger.error('[Becca] session refresh failed:', err);
+    }
   }, [user?.id, beccaHat]);
 
   const handleImagePick = async () => {
@@ -486,7 +489,7 @@ export default function BeccaScreen({
 
     // Save user message
     if (sessionId) {
-      beccaStorageService.saveMessage(sessionId, userMessage).catch(() => {});
+      beccaStorageService.saveMessage(sessionId, userMessage).catch((err) => logger.error('[Becca] save user message failed:', err));
     }
 
     const progressTimers = thinkingSteps.slice(1).map((label, index) =>
@@ -559,7 +562,7 @@ export default function BeccaScreen({
 
       // Save assistant response
       if (sessionId) {
-        beccaStorageService.saveMessage(sessionId, response).catch(() => {});
+        beccaStorageService.saveMessage(sessionId, response).catch((err) => logger.error('[Becca] save reply failed:', err));
         // Update session preview with last assistant message. Markers are
         // stripped BEFORE truncating, so the 80-char budget counts real text
         // rather than markup — and a preview can never be cut mid-`**`,
@@ -576,7 +579,7 @@ export default function BeccaScreen({
           title.length > 40 ? title.substring(0, 40) + "..." : title;
         beccaStorageService
           .updateSession(sessionId, shortTitle, preview)
-          .catch(() => {});
+          .catch((err) => logger.error('[Becca] session preview update failed:', err));
         refreshSessions();
       }
     }, 800);
@@ -687,7 +690,8 @@ export default function BeccaScreen({
               Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Success,
               ).catch(() => {});
-            } catch {
+            } catch (err) {
+              logger.error('[Becca] clear history failed:', err);
               showAlert(
                 "Couldn't clear history",
                 "Your chats couldn't be deleted. Please try again.",
@@ -746,8 +750,8 @@ export default function BeccaScreen({
     };
     setMessages((prev) => [...prev, navUserMessage, navReply]);
     if (currentSessionId) {
-      beccaStorageService.saveMessage(currentSessionId, navUserMessage).catch(() => {});
-      beccaStorageService.saveMessage(currentSessionId, navReply).catch(() => {});
+      beccaStorageService.saveMessage(currentSessionId, navUserMessage).catch((err) => logger.error('[Becca] save navigation prompt failed:', err));
+      beccaStorageService.saveMessage(currentSessionId, navReply).catch((err) => logger.error('[Becca] save navigation reply failed:', err));
     }
 
     const { screen, params } = data;

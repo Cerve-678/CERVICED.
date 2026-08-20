@@ -24,6 +24,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AddressPicker from '../../components/AddressPicker';
 import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
+import { toUserMessage } from '../../utils/userFacingError';
 
 // Must be at least 16 to have an account (see validateDob in utils/validation.ts) —
 // encoded as the picker's maximumDate so the UI can't select an invalid date at all.
@@ -112,7 +113,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
               // provider mode and this screen unmounts the same way.
             } catch (err: any) {
               setDeletingAccount(false);
-              Alert.alert('Error', err?.message || 'Could not delete your account. Please try again.');
+              Alert.alert('Account not deleted', toUserMessage(err, 'Your account is still here — please try again.', 'ProfileInfoScreen.deleteProfile'));
             }
           },
         },

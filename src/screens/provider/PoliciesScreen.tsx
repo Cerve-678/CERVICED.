@@ -49,6 +49,7 @@ import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
 import TermsScreen from '../shared/TermsScreen';
 import { getMyProviderProfile } from '../../services/databaseService';
+import { toUserMessage } from '../../utils/userFacingError';
 import {
   saveProviderPolicies,
   loadProviderPolicies,
@@ -201,7 +202,7 @@ export default function PoliciesScreen({ navigation }: any) {
       const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
       setPolicy('policyImageUrl', publicUrl);
     } catch (e: any) {
-      Alert.alert('Upload failed', e?.message ?? 'Could not upload the image.');
+      Alert.alert('Upload failed', toUserMessage(e, 'Could not upload that image. Please try again.', 'PoliciesScreen.uploadPolicyImage'));
     } finally {
       setPolicyImageUploading(false);
     }
@@ -225,7 +226,7 @@ export default function PoliciesScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(e?.message ?? 'Could not save changes', 'error');
+      flash(toUserMessage(e, 'Could not save your changes.', 'PoliciesScreen.save'), 'error');
     } finally {
       setSaving(false);
     }

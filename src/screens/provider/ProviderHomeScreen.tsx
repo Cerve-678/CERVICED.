@@ -37,16 +37,27 @@ import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import {
   getProviderBookings,
   getMyProviderProfile,
-  getMyProviderFullAddress,
+  hasMyProviderGoLiveAddress,
   getProviderAvailability,
+  getProviderAvailabilityWindows,
+  getProviderAvailabilityOverrides,
+  getServiceDurationsByIds,
   getProviderBlockedDates,
   getUnreadNotificationCount,
   countProviderServices,
   getOrCreateConversation,
 } from '../../services/databaseService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
-import type { DbProviderAvailability, DbProviderBlockedDate } from '../../types/database';
-import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix } from '../../utils/dateUtils';
+import { findScheduleIssues, primaryIssue, type ScheduleIssue } from '../../utils/scheduleIssues';
+import { resolveWorkingWindows, type WorkingWindow } from '../../services/AvailabilityService';
+import { logger } from '../../utils/logger';
+import type {
+  DbProviderAvailability,
+  DbProviderBlockedDate,
+  DbProviderAvailabilityWindow,
+  DbProviderAvailabilityOverride,
+} from '../../types/database';
+import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
@@ -79,6 +90,14 @@ const DAY_FULL     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday
 
 function formatDateString(date: Date): string {
   return dateToYMD(date);
+}
+
+/** Far enough back to cover every booking the day list can show, without
+ *  pulling a provider's whole history of one-off closures on every focus. */
+function overridesFromDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  return dateToYMD(d);
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -188,6 +207,8 @@ type ExpansionState = 0 | 1 | 2;
 
 interface BookingCardProps {
   booking: ConfirmedBooking;
+  /** Schedule problems found for this booking — empty when there are none. */
+  issues: readonly ScheduleIssue[];
   expansionState: ExpansionState;
   onToggleExpand: () => void;
   onPress: () => void;
@@ -196,7 +217,7 @@ interface BookingCardProps {
   P: AppTheme;
 }
 
-function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
+function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress, onViewMessages, dark, P }: BookingCardProps) {
   const cfg   = statusCfg(booking.status);
   const past  = isPastBooking(booking.bookingDate, booking.bookingTime);
   const eta   = countdownLabel(booking.bookingDate, booking.bookingTime);
@@ -221,8 +242,28 @@ function BookingCard({ booking, expansionState, onToggleExpand, onPress, onViewM
     <TouchableOpacity
       activeOpacity={0.88}
       onPress={onPress}
-      style={[bc.wrap, { backgroundColor: P.card, borderColor: P.border, shadowColor: dark ? 'transparent' : '#000' }]}
+      style={[
+        bc.wrap,
+        { backgroundColor: P.card, borderColor: P.border, shadowColor: dark ? 'transparent' : '#000' },
+        // A clash is a state of the appointment, not a status of it — so it
+        // reads as a warning-toned border and banner rather than replacing
+        // the status pill, which still has to say pending/upcoming/etc.
+        issues.length > 0 && { borderColor: ISSUE_COLOR, borderWidth: 1.5 },
+      ]}
     >
+      {issues.length > 0 && (
+        <View style={bc.issueBanner}>
+          <Ionicons name="warning" size={13} color={ISSUE_COLOR} />
+          <Text style={[bc.issueText, { color: ISSUE_COLOR }]}>
+            {/* Every problem is listed, not just the worst one: a booking
+                that's both double-booked AND on a blocked date needs both
+                facts to be actionable. Ordered worst-first by primaryIssue's
+                severity ranking. */}
+            {orderedIssueLabels(issues).join(' · ')}
+          </Text>
+        </View>
+      )}
+
       {/* Row 1 — pill + time + expand */}
       <View style={bc.topRow}>
         <View style={[bc.pill, { backgroundColor: pillBg }]}>
@@ -317,6 +358,27 @@ function SummaryRow({ label, value, italic, P }: { label: string; value: string;
   );
 }
 
+// Same warning amber the go-live checklist uses for "this needs attention" —
+// a schedule problem is a warning, not an error state like a cancellation.
+const ISSUE_COLOR = '#FF9500';
+
+/** Stable empty array, so a booking with no problems doesn't get a fresh
+ *  prop identity on every render of the list. */
+const EMPTY_ISSUES: readonly ScheduleIssue[] = [];
+
+/** Worst-first, using the same ranking primaryIssue applies. */
+function orderedIssueLabels(issues: readonly ScheduleIssue[]): string[] {
+  const remaining = [...issues];
+  const ordered: string[] = [];
+  while (remaining.length > 0) {
+    const next = primaryIssue(remaining);
+    if (!next) break;
+    ordered.push(next.label);
+    remaining.splice(remaining.indexOf(next), 1);
+  }
+  return ordered;
+}
+
 const bc = StyleSheet.create({
   wrap:       { borderRadius: 16, padding: 14, marginHorizontal: 16, marginBottom: 10, borderWidth: StyleSheet.hairlineWidth, shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   topRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
@@ -331,6 +393,9 @@ const bc = StyleSheet.create({
   client:     { fontSize: 13, flex: 1, marginRight: 8 },
   etaBadge:   { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   etaTxt:     { fontSize: 12, fontWeight: '600' },
+
+  issueBanner: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
+  issueText:   { flex: 1, fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
 
   expand:     { marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, gap: 4 },
   expandHdr:  { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: 6 },
@@ -374,6 +439,10 @@ const BLOCK_COLORS = [
 
 interface DayTimelineProps {
   bookings: ConfirmedBooking[];
+  /** Schedule problems per booking id, from the same findScheduleIssues pass
+   *  the list view uses — the timeline used to re-derive "outside working
+   *  hours" itself, which meant two separate definitions of the same idea. */
+  scheduleIssues: ReadonlyMap<string, ScheduleIssue[]>;
   onPress: (booking: ConfirmedBooking) => void;
   dark: boolean;
   P: AppTheme;
@@ -383,7 +452,7 @@ interface DayTimelineProps {
   isBlocked: boolean;
 }
 
-function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availability, isBlocked }: DayTimelineProps) {
+function DayTimeline({ bookings, scheduleIssues, onPress, dark, P, refreshing, onRefresh, availability, isBlocked }: DayTimelineProps) {
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const nowTop = ((nowMinutes - TL_START_HOUR * 60) / 60) * HOUR_H;
@@ -521,13 +590,8 @@ function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availa
             const blockW = bookingAreaW / cols - 4;
             const left   = col * (bookingAreaW / cols) + 2;
             const past   = isPastBooking(booking.bookingDate, booking.bookingTime);
-            const startMin = parseTimeToMinutes(booking.bookingTime);
-            const endMin   = startMin + parseDurationToMinutes(booking.duration);
-            const isClash  = availability && !availability.is_closed && !isBlocked && (() => {
-              const openMin  = parseInt(availability.open_time.split(':')[0]!)  * 60 + parseInt(availability.open_time.split(':')[1]!);
-              const closeMin = parseInt(availability.close_time.split(':')[0]!) * 60 + parseInt(availability.close_time.split(':')[1]!);
-              return startMin < openMin || endMin > closeMin;
-            })();
+            const issues   = scheduleIssues.get(booking.id) ?? EMPTY_ISSUES;
+            const topIssue = primaryIssue(issues);
 
             return (
               <TouchableOpacity
@@ -544,6 +608,13 @@ function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availa
                   backgroundColor: color.dark + '40',
                   borderLeftWidth: 3,
                   borderLeftColor: color.dark,
+                  // A problem rings the whole block. It has to be the whole
+                  // ring, not just a badge: two double-booked appointments
+                  // already sit side by side in columns, which on its own
+                  // looks identical to two ordinary back-to-back blocks.
+                  ...(topIssue
+                    ? { borderWidth: 1.5, borderColor: ISSUE_COLOR, borderLeftWidth: 3, borderLeftColor: ISSUE_COLOR }
+                    : {}),
                   paddingHorizontal: 8,
                   paddingVertical: 5,
                   overflow: 'hidden',
@@ -566,8 +637,12 @@ function DayTimeline({ bookings, onPress, dark, P, refreshing, onRefresh, availa
                     <Text style={{ fontSize: 10, fontWeight: '700', color: color.dark }}>{cfg.label}</Text>
                   </View>
                 )}
-                {isClash && (
-                  <View style={{ position: 'absolute', bottom: 4, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFB340', alignItems: 'center', justifyContent: 'center' }}>
+                {topIssue && (
+                  <View
+                    style={{ position: 'absolute', bottom: 4, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFB340', alignItems: 'center', justifyContent: 'center' }}
+                    accessible
+                    accessibilityLabel={issues.map(i => i.label).join('. ')}
+                  >
                     <Text style={{ fontSize: 9, fontWeight: '900', color: '#2E1E08' }}>!</Text>
                   </View>
                 )}
@@ -676,14 +751,29 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // Provider availability
   const [availability,  setAvailability]  = useState<DbProviderAvailability[]>([]);
   const [blockedDates,  setBlockedDates]  = useState<DbProviderBlockedDate[]>([]);
+  // The newer multi-window weekly schedule and its per-date overrides. Loaded
+  // alongside the legacy availability rows purely so schedule problems are
+  // judged against the schedule the provider actually keeps — a provider on
+  // split shifts has a real midday break that the legacy open/close row
+  // (09:00-18:00) knows nothing about.
+  const [availabilityWindows, setAvailabilityWindows] = useState<DbProviderAvailabilityWindow[]>([]);
+  const [availabilityOverrides, setAvailabilityOverrides] = useState<DbProviderAvailabilityOverride[]>([]);
+  const [serviceDurations, setServiceDurations] = useState<ReadonlyMap<string, number>>(new Map());
 
-  // Go-live setup checklist. Clients see NO slots and can't book until the
-  // schedule exists, so surface exactly what's missing until it's all done.
+  // Go-live setup checklist. The three `*Set` flags mirror, one for one, the
+  // conditions check_and_set_provider_live() enforces server-side before it
+  // will flip has_gone_live — an open schedule, at least one service, and a
+  // private address WITH geocoded coordinates. Anything the server doesn't
+  // gate on must not be counted towards "done" here (see brandingSet), or
+  // the card contradicts the database in one direction or the other.
   const [setupStatus, setSetupStatus] = useState<{
     scheduleSet: boolean;
     servicesSet: boolean;
     addressSet: boolean;
+    /** Recommended, NOT a go-live requirement — the server never checks it. */
     brandingSet: boolean;
+    /** The database's own answer, not our reconstruction of it. */
+    isLive: boolean;
   } | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
 
@@ -723,12 +813,12 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       // Give the checklist/FAB/bell time to finish their entrance layout
       // before the tour measures where they actually landed on screen.
       setTimeout(() => setShowTour(true), 500);
-    }).catch(() => {});
+    }).catch((err) => logger.error('[ProviderHome] tour-seen flag read failed:', err));
   }, [user?.id, setupStatus]);
 
   const finishTour = useCallback(() => {
     setShowTour(false);
-    if (user?.id) storage.setItem(`@provider_tour_seen_${user.id}`, true).catch(() => {});
+    if (user?.id) storage.setItem(`@provider_tour_seen_${user.id}`, true).catch((err) => logger.error('[ProviderHome] tour-seen flag write failed:', err));
   }, [user?.id]);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
@@ -887,16 +977,39 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     try {
       const rows = await getProviderBookings();
       setBookings(rows.map(mapDbBookingToConfirmed));
-    } catch {}
+    } catch (err) {
+      logger.error('[ProviderHome] bookings load failed:', err);
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => { loadBookings(true); }, [loadBookings]);
+
+  // Recover the real length of any booking whose row has no end_time — an
+  // empty `duration` is exactly that, since mapDbBookingToConfirmed computes
+  // it from end minus start. One batched query for the distinct services
+  // involved, and none at all in the normal case where every booking has an
+  // end time. Without this such a booking looks zero-length and can never be
+  // found to clash with anything.
+  useEffect(() => {
+    let cancelled = false;
+    const ids = Array.from(new Set(
+      bookings.filter(b => !b.duration && b.serviceId).map(b => b.serviceId!),
+    ));
+    if (ids.length === 0) {
+      setServiceDurations(prev => (prev.size === 0 ? prev : new Map()));
+      return () => { cancelled = true; };
+    }
+    getServiceDurationsByIds(ids)
+      .then(map => { if (!cancelled) setServiceDurations(map); })
+      .catch(err => logger.error('[ProviderHome] service duration lookup failed:', err));
+    return () => { cancelled = true; };
+  }, [bookings]);
   useFocusEffect(useCallback(() => { loadBookings(); }, [loadBookings]));
 
   // Keep the header bell's unread badge in sync (provider-role notifications only)
   useFocusEffect(useCallback(() => {
-    getUnreadNotificationCount('provider').then(setUnreadCount).catch(() => {});
+    getUnreadNotificationCount('provider').then(setUnreadCount).catch((err) => logger.error('[ProviderHome] unread count load failed:', err));
   }, []));
 
   // Reload availability/blocked dates whenever screen is focused (e.g. after editing in ProviderScheduleScreen)
@@ -908,13 +1021,23 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         getProviderAvailability(profile.id),
         getProviderBlockedDates(profile.id),
         countProviderServices(profile.id),
+        getProviderAvailabilityWindows(profile.id),
+        // Overrides only from a fortnight back — far enough to cover every
+        // booking the day list can show, without pulling a provider's whole
+        // history of one-off closures on each focus.
+        getProviderAvailabilityOverrides(profile.id, overridesFromDate()),
         // full_address is no longer on `providers` — it lives in the owner-only
         // provider_private_details table (restrict_provider_full_address.sql).
-        getMyProviderFullAddress().catch(() => null),
-      ]).then(([avail, blocked, serviceCount, fullAddress]) => {
+        // Checked via the go-live helper rather than a bare address read: the
+        // server also requires latitude/longitude, so an address saved without
+        // coordinates is not a completed step no matter how it reads on screen.
+        hasMyProviderGoLiveAddress().catch(() => false),
+      ]).then(([avail, blocked, serviceCount, windows, overrides, goLiveAddress]) => {
         if (cancelled) return;
         setAvailability(avail);
         setBlockedDates(blocked);
+        setAvailabilityWindows(windows);
+        setAvailabilityOverrides(overrides);
         setSetupStatus({
           scheduleSet: avail.some(a => !a.is_closed),
           servicesSet: serviceCount > 0,
@@ -927,8 +1050,9 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           // The vague public location_text doesn't count — it's already
           // required just to save a profile, so accepting it made this
           // trivially true for almost everyone.
-          addressSet: !!fullAddress,
+          addressSet: goLiveAddress,
           brandingSet: !!profile.logo_url,
+          isLive: !!profile.has_gone_live,
         });
 
         // Go-live celebration: only on a genuine false->true transition,
@@ -941,18 +1065,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           if (profile.has_gone_live && alreadyCelebrated == null) {
             // First time we've ever checked this account and it's already
             // live — seed as celebrated, don't fire retroactively.
-            storage.setItem(celebrationKey, true).catch(() => {});
+            storage.setItem(celebrationKey, true).catch((err) => logger.error('[ProviderHome] go-live seed write failed:', err));
           } else if (profile.has_gone_live && alreadyCelebrated === false) {
             setShowGoLiveCelebration(true);
-            storage.setItem(celebrationKey, true).catch(() => {});
+            storage.setItem(celebrationKey, true).catch((err) => logger.error('[ProviderHome] go-live celebrated write failed:', err));
           } else if (!profile.has_gone_live && alreadyCelebrated == null) {
             // Not live yet — record false so a later flip is detected as a
             // real transition rather than looking like a fresh-seed case.
-            storage.setItem(celebrationKey, false).catch(() => {});
+            storage.setItem(celebrationKey, false).catch((err) => logger.error('[ProviderHome] go-live pending write failed:', err));
           }
-        }).catch(() => {});
+        }).catch((err) => logger.error('[ProviderHome] go-live celebration flag read failed:', err));
       });
-    }).catch(() => {});
+    }).catch((err) => logger.error('[ProviderHome] provider profile load failed:', err));
     return () => { cancelled = true; };
   }, []));
 
@@ -966,7 +1090,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `provider_id=eq.${profile.id}` },
           () => { loadBookings(); })
         .subscribe();
-    }).catch(() => {});
+    }).catch((err) => logger.error('[ProviderHome] realtime subscribe failed:', err));
     return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
   }, [loadBookings]);
 
@@ -993,9 +1117,90 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     return map;
   }, [bookings]);
 
+  // Everything wrong with a booking that only shows up by comparing it to
+  // something else — a double-booking, a slot the schedule no longer offers,
+  // a date the provider blocked off, a request that went unanswered past its
+  // own start, work that finished but was never closed out. Computed across
+  // every loaded booking (not just the visible day) so a problem is marked
+  // wherever in the list it appears, and shared by both the list and the
+  // timeline so the two can never disagree.
+  const blockedDateStrings = useMemo(
+    () => blockedDates.map(b => b.blocked_date),
+    [blockedDates],
+  );
+
+  // Real bookable periods per date, resolved through AvailabilityService's own
+  // precedence (date override > recurring weekly windows > legacy open/close)
+  // rather than re-deriving hours here. Only dates that actually have a
+  // booking are resolved — every other date is left out of the map entirely,
+  // which findScheduleIssues reads as "not checked" rather than "closed".
+  const windowsByDate = useMemo(() => {
+    const map = new Map<string, WorkingWindow[]>();
+    const overridesByDate = new Map<string, DbProviderAvailabilityOverride[]>();
+    for (const o of availabilityOverrides) {
+      const list = overridesByDate.get(o.availability_date);
+      if (list) list.push(o);
+      else overridesByDate.set(o.availability_date, [o]);
+    }
+    const recurringByDow = new Map<number, WorkingWindow[]>();
+    for (const w of availabilityWindows) {
+      const list = recurringByDow.get(w.day_of_week);
+      const entry = { start_time: w.start_time, end_time: w.end_time };
+      if (list) list.push(entry);
+      else recurringByDow.set(w.day_of_week, [entry]);
+    }
+    const legacyByDow = new Map<number, DbProviderAvailability>();
+    for (const a of availability) legacyByDow.set(a.day_of_week, a);
+
+    for (const booking of bookings) {
+      if (map.has(booking.bookingDate)) continue;
+      const [y, mo, d] = booking.bookingDate.split('-').map(Number);
+      if (!y || !mo || !d) continue;
+      const dow = new Date(y, mo - 1, d).getDay();
+      const legacy = legacyByDow.get(dow);
+      map.set(booking.bookingDate, resolveWorkingWindows(
+        recurringByDow.get(dow) ?? [],
+        overridesByDate.get(booking.bookingDate) ?? [],
+        legacy ? { open_time: legacy.open_time, close_time: legacy.close_time, is_closed: legacy.is_closed } : null,
+      ));
+    }
+    return map;
+  }, [bookings, availability, availabilityWindows, availabilityOverrides]);
+
+  // Real length for any booking whose row never got an end_time written (see
+  // insertDirectBooking) — one batched lookup, never a per-row fetch. Also
+  // overrides `.duration` itself (not just the extra serviceDurationMinutes
+  // field findScheduleIssues reads) so the recovered length shows up in the
+  // booking card's own Duration row too — this array, not raw `bookings`, is
+  // what listRows below is built from.
+  const bookingsWithServiceDuration = useMemo(
+    () => bookings.map(b => {
+      const serviceDurationMinutes = b.serviceId ? serviceDurations.get(b.serviceId) : undefined;
+      return {
+        ...b,
+        ...(!b.duration && serviceDurationMinutes
+          ? { duration: formatDurationMinutes(serviceDurationMinutes) }
+          : {}),
+        serviceDurationMinutes,
+      };
+    }),
+    [bookings, serviceDurations],
+  );
+
+  const scheduleIssues = useMemo(
+    () => findScheduleIssues(bookingsWithServiceDuration, {
+      windowsByDate,
+      blockedDates: blockedDateStrings,
+    }),
+    [bookingsWithServiceDuration, windowsByDate, blockedDateStrings],
+  );
+
   // Build list rows: show ALL upcoming bookings grouped by day (from selectedDate onwards)
+  // Sourced from bookingsWithServiceDuration (not raw `bookings`) so a legacy
+  // NULL-end_time row's recovered duration reaches the card, not just the
+  // schedule-issue check above.
   const listRows = useMemo((): ListRow[] => {
-    const sorted = [...bookings].sort((a, b) => {
+    const sorted = [...bookingsWithServiceDuration].sort((a, b) => {
       const da = a.bookingDate + a.bookingTime;
       const db_ = b.bookingDate + b.bookingTime;
       return da.localeCompare(db_);
@@ -1031,7 +1236,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     }
 
     return rows;
-  }, [bookings, selectedDate]);
+  }, [bookingsWithServiceDuration, selectedDate]);
 
   // Month calendar cells
   const monthCells = useMemo(
@@ -1121,8 +1326,14 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         </View>
 
         {/* ── Go-live setup checklist ──────────────────────────── */}
+        {/* Visible until the provider is genuinely live. The condition is the
+            three server-gated steps AND the database's own has_gone_live —
+            not our reconstruction alone, so a provider whose steps all look
+            complete but who still isn't published keeps a card on screen
+            rather than being left with no explanation. The logo is
+            deliberately absent from this test: it's recommended, not gating. */}
         {setupStatus && !setupDismissed &&
-         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && setupStatus.brandingSet) && (
+         !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && setupStatus.isLive) && (
           <View
             ref={checklistCardRef}
             style={{
@@ -1131,7 +1342,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>Finish setting up to go live</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: P.text }}>
+                {setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet
+                  ? 'Almost live'
+                  : 'Finish setting up to go live'}
+              </Text>
               {/* Only dismissible once bookable (schedule set) — the schedule is the hard blocker */}
               {setupStatus.scheduleSet && (
                 <TouchableOpacity onPress={() => setSetupDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -1142,6 +1357,17 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             {!setupStatus.scheduleSet && (
               <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
                 Clients can't see any time slots or book you until your schedule is set.
+              </Text>
+            )}
+            {/* Every gated step is done but the database still hasn't published
+                them. In practice that means the saved address never geocoded,
+                since that's the one requirement a provider can satisfy on
+                screen without satisfying it in the data. Say so plainly
+                instead of showing a checklist with nothing left to tick. */}
+            {setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && !setupStatus.isLive && (
+              <Text style={{ fontSize: 12, color: '#FF9500', marginTop: 4 }}>
+                Everything's filled in, but we couldn't confirm your address on the map yet.
+                Re-save it in Business Details and we'll publish you.
               </Text>
             )}
             {([
@@ -1164,14 +1390,18 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 label: 'Add your business address',
                 onPress: () => navigation.navigate('EditProfile' as never),
               },
+              // Recommended, not required: check_and_set_provider_live() never
+              // looks at logo_url, so a provider can be fully live without
+              // one. Labelled as optional rather than sitting unlabelled
+              // among three steps that genuinely do block go-live.
               {
                 done: setupStatus.brandingSet,
-                label: 'Add your logo',
+                label: 'Add your logo (optional)',
                 onPress: () => navigation.navigate('Branding' as never),
               },
-            ]).map((step, i) => (
+            ]).map(step => (
               <TouchableOpacity
-                key={i}
+                key={step.label}
                 onPress={step.onPress}
                 disabled={step.done}
                 activeOpacity={0.7}
@@ -1334,7 +1564,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
             </ScrollView>
           ) : viewMode === 'timeline' ? (
             <DayTimeline
-              bookings={bookings.filter(b => b.bookingDate === selectedDate)}
+              bookings={bookingsWithServiceDuration.filter(b => b.bookingDate === selectedDate)}
               onPress={b => navigation.navigate('BookingDetail', { bookingId: b.id, booking: b })}
               dark={dark}
               P={P}
@@ -1342,6 +1572,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               onRefresh={onRefresh}
               availability={todayAvailability}
               isBlocked={isSelectedDateBlocked}
+              scheduleIssues={scheduleIssues}
             />
           ) : (
             <FlatList
@@ -1375,6 +1606,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 return (
                   <BookingCard
                     booking={item.booking}
+                    issues={scheduleIssues.get(item.booking.id) ?? EMPTY_ISSUES}
                     expansionState={expansionStates[item.booking.id] ?? 0}
                     onToggleExpand={() => toggleExpand(item.booking.id)}
                     onPress={() => navigation.navigate('BookingDetail', { bookingId: item.booking.id, booking: item.booking })}

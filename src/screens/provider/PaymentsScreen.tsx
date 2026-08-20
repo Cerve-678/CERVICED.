@@ -61,6 +61,7 @@ import {
 } from '../../features/business-details/BusinessDetailsKit';
 import { PAYMENT_OPTS } from '../../features/business-details/options';
 import { resolveEditorDepositMode, type DepositMode } from '../../utils/depositPolicy';
+import { toUserMessage } from '../../utils/userFacingError';
 
 const DEPOSIT_MODE_OPTS: { value: DepositMode; label: string; sub: string }[] = [
   { value: 'full_only',        label: 'No deposit',        sub: 'Clients pay the full price when they book.' },
@@ -195,7 +196,7 @@ export default function PaymentsScreen({ navigation }: any) {
       navigation.goBack();
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      flash(e?.message ?? 'Could not save changes', 'error');
+      flash(toUserMessage(e, 'Could not save your changes.', 'PaymentsScreen.save'), 'error');
     } finally {
       setSaving(false);
     }

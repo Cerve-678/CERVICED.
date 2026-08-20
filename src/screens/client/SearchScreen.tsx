@@ -38,6 +38,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getDistanceKm } from '../../utils/distance';
 import { CityMultiSelect } from '../../components/CityMultiSelect';
 import { HAIR_TYPES } from '../../constants/hairTypes';
+import { logger } from '../../utils/logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ProviderCardData {
@@ -549,9 +550,9 @@ export default function SearchScreen({ navigation, route }: Props) {
     };
 
     if (searchQuery.trim()) {
-      searchDebounceRef.current = setTimeout(() => { run().catch(() => {}); }, 400);
+      searchDebounceRef.current = setTimeout(() => { run().catch((err) => logger.error('[Search] debounced provider search failed:', err)); }, 400);
     } else {
-      run().catch(() => {});
+      run().catch((err) => logger.error('[Search] provider load failed:', err));
     }
 
     return () => {
@@ -771,7 +772,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     // Track for user learning once query is meaningful
     if (text.trim().length >= 3) {
       const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-      userLearningService.trackSearch(text, catCode).catch(() => {});
+      userLearningService.trackSearch(text, catCode).catch((err) => logger.error('[Search] trackSearch failed:', err));
     }
   }, [selectedFilter]);
 
@@ -782,7 +783,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     setSelectedFilter(next);
     if (next !== 'All') {
       const cat = CATEGORY_CODE_MAP[next];
-      if (cat) userLearningService.trackFilter(cat).catch(() => {});
+      if (cat) userLearningService.trackFilter(cat).catch((err) => logger.error('[Search] trackFilter failed:', err));
     }
   }, [selectedFilter]);
 
@@ -878,18 +879,18 @@ export default function SearchScreen({ navigation, route }: Props) {
   // Search is registered in two different navigator stacks (HomeNavigator
   // and ExploreNavigator) with divergent static header config — Home's
   // entry sets headerTransparent + a native headerSearchBarOptions field,
-  // Explore's is a fullScreenModal with a "Close" back title. Every option
-  // below is set explicitly (not left to inherit) so this screen looks and
-  // behaves the same regardless of which stack it was opened from.
-  // ExploreNavigator opens this screen as a fullScreenModal (a modal
-  // presentation doesn't automatically get the native back chevron a pushed
-  // screen does), so it needs the explicit headerLeft below. HomeNavigator
-  // pushes it as a normal screen, which already gets a working native back
-  // button on its own — adding the same custom one there doubled it up.
-  // routeNames belongs to whichever stack actually owns this screen
-  // instance, so this reliably tells the two entry paths apart without a
-  // route param.
-  const isExploreEntry = navigation.getState()?.routeNames?.includes('ExploreMain') ?? false;
+  // Explore's sets its own title and back title. Every option below is set
+  // explicitly (not left to inherit) so this screen looks and behaves the
+  // same regardless of which stack it was opened from.
+  // Both stacks now push this screen as a plain 'card', so the native back
+  // chevron is always present and is the only back control this screen
+  // needs. It used to be a fullScreenModal on the Explore side (which draws
+  // no back chevron), which is why a custom headerLeft '\u2039' was added for
+  // that entry path only — once Explore switched to a card push that custom
+  // button started rendering *alongside* the native one, giving Explore
+  // \u2192 Search two back buttons side by side. Don't reintroduce it: if a
+  // custom headerLeft is ever needed here again it must come with
+  // headerBackVisible: false, the way ProviderProfileScreen does it.
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -910,18 +911,6 @@ export default function SearchScreen({ navigation, route }: Props) {
       headerShadowVisible: false,
       headerTintColor: P.accentText,
       headerBackButtonDisplayMode: 'minimal',
-      ...(isExploreEntry ? {
-        headerLeft: () => (
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.6}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[styles.backBtnText, { color: P.accentText }]}>‹</Text>
-          </TouchableOpacity>
-        ),
-      } : {}),
       headerRight: () => (
         <TouchableOpacity
           style={styles.filterBtn}
@@ -940,7 +929,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, P, hasActiveFilters, activeFilterChips.length, isExploreEntry]);
+  }, [navigation, P, hasActiveFilters, activeFilterChips.length]);
 
   // ── List header: just result count ─────────────────────────────────────────
   const renderHeader = useCallback(() => (
@@ -1385,21 +1374,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
   },
-  // Header back button — explicit rather than relying on the native default,
-  // see the headerLeft comment above.
-  backBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  backBtnText: {
-    fontSize: 30,
-    fontWeight: '300',
-    lineHeight: 32,
-  },
-
   // Filter sheet — a single bottom sheet holding every filter group,
   // opened from the header icon.
   filterModalBackdrop: {

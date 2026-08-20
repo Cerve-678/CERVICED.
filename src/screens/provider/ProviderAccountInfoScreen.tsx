@@ -118,7 +118,7 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
               // client mode and this screen unmounts the same way.
             } catch (err: any) {
               setDeletingAccount(false);
-              Alert.alert('Error', err?.message || 'Could not delete your account. Please try again.');
+              Alert.alert('Account not deleted', toUserMessage(err, 'Your account is still here — please try again.', 'ProviderAccountInfoScreen.deleteProfile'));
             }
           },
         },
