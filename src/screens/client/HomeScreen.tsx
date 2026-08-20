@@ -33,7 +33,7 @@ import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
-import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, prefetchProviderBySlug } from '../../services/databaseService';
+import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, prefetchProviderBySlug } from '../../services/databaseService';
 import type { DbProvider, DbPromotionWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
@@ -281,6 +281,7 @@ export default function HomeScreen() {
   const [newProviders,    setNewProviders]    = useState<Provider[]>([]);
   const [topRated,        setTopRated]        = useState<Provider[]>([]);
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
+  const [trending,        setTrending]        = useState<Provider[]>([]);
 
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
@@ -375,6 +376,7 @@ export default function HomeScreen() {
 
     getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
     getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
+    getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))).catch(() => {});
   }, [loadBookmarks, user]);
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
@@ -1478,6 +1480,32 @@ export default function HomeScreen() {
                         {provider.name}
                       </Text>
                     </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
+            {/* TRENDING THIS WEEK */}
+            {trending.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
+                >
+                  {trending.map(provider => (
+                    <ProviderCard
+                      key={`trending-${provider.id}`}
+                      provider={provider}
+                      onPress={() => navigateToProvider(provider)}
+                      style={styles.providerCard}
+                      blurStyle={styles.providerBlur}
+                    />
                   ))}
                 </ScrollView>
               </View>

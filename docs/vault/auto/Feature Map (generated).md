@@ -111,7 +111,7 @@ Curated: [[Payments]] · **107 files**
 Curated: [[Booking Flow]] · **222 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(837)_
 - `src/contexts/BookingContext.tsx` _(688)_
-- `src/services/databaseService.ts` _(526)_
+- `src/services/databaseService.ts` _(530)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(458)_
 - `src/screens/client/CartScreen.tsx` _(374)_
@@ -177,7 +177,7 @@ Curated: [[Notifications]] · **141 files**
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **64 files**
-- `src/services/databaseService.ts` _(43)_
+- `src/services/databaseService.ts` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(25)_
 - `src/contexts/RegistrationContext.tsx` _(24)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(20)_

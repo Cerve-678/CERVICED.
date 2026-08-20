@@ -42,6 +42,7 @@ jest.mock('../services/databaseService', () => ({
   getNewProviders: jest.fn(() => new Promise(() => {})),
   getProviders: jest.fn(() => new Promise(() => {})),
   getTopRatedProviders: jest.fn(() => new Promise(() => {})),
+  getTrendingProviders: jest.fn(() => new Promise(() => {})),
   getUnreadNotificationCount: jest.fn(() => new Promise(() => {})),
 }));
 

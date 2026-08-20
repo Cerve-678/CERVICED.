@@ -142,6 +142,41 @@ export async function getTopRatedProviders(limit = 10): Promise<DbProvider[]> {
   return (data ?? []) as DbProvider[];
 }
 
+/** Providers with the most bookings in the last 7 days — "Trending This Week".
+ *  Ranking comes from the get_trending_providers() RPC, which is SECURITY
+ *  DEFINER because it aggregates booking counts across every provider's
+ *  bookings, and the owner-scoped RLS on `bookings` would otherwise restrict
+ *  that per-caller. The RPC returns ids only, so rows are hydrated here in a
+ *  single batched query and re-sorted back into the RPC's ranking order
+ *  (a `.in()` filter does not preserve the order of the ids passed to it). */
+export async function getTrendingProviders(limit = 10): Promise<DbProvider[]> {
+  const { data: ranked, error: rankError } = await supabase.rpc(
+    "get_trending_providers",
+    { p_limit: limit },
+  );
+  if (rankError) throw new Error(rankError.message);
+
+  const rankedIds: string[] = (ranked ?? []).map(
+    (r: { provider_id: string }) => r.provider_id,
+  );
+  if (rankedIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("providers")
+    .select("*")
+    .in("id", rankedIds)
+    .eq("has_gone_live", true)
+    .eq("is_active", true);
+  if (error) throw new Error(error.message);
+
+  const byId = new Map<string, DbProvider>(
+    ((data ?? []) as DbProvider[]).map((p: DbProvider) => [p.id, p]),
+  );
+  return rankedIds
+    .map((id: string) => byId.get(id))
+    .filter((p): p is DbProvider => p !== undefined);
+}
+
 // ─────────────────────────────────────────────────────────
 // PROVIDERS
 // ─────────────────────────────────────────────────────────
