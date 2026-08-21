@@ -428,7 +428,12 @@ export async function saveProviderToSupabase(
     const { error } = await supabase
       .from('providers')
       .update({
-        display_name: data.providerName,
+        // display_name is deliberately absent from the UPDATE path. The name
+        // is set once here on insert (below), then locked in InfoRegScreen —
+        // Business Profile → Business Details → Business Info is its only
+        // ongoing editor, and it's under a 14-day cooldown enforced by the
+        // providers_display_name_cooldown trigger. Re-sending the name this
+        // screen loaded would make any unrelated save race that cooldown.
         service_category: data.providerService,
         custom_service_type: data.customServiceType || null,
         location_text: data.location,
@@ -443,6 +448,11 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        // Shared with ProviderCommunicationsScreen, which writes the same
+        // column. loadProviderFromSupabase has always read it back into
+        // `whatsapp`, but this payload never wrote it — so a number typed in
+        // InfoReg was silently dropped on save.
+        whatsapp_number: data.whatsapp?.trim() || null,
         external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,
@@ -495,6 +505,11 @@ export async function saveProviderToSupabase(
         email: data.email || null,
         instagram: data.instagram || null,
         website: data.website || null,
+        // Shared with ProviderCommunicationsScreen, which writes the same
+        // column. loadProviderFromSupabase has always read it back into
+        // `whatsapp`, but this payload never wrote it — so a number typed in
+        // InfoReg was silently dropped on save.
+        whatsapp_number: data.whatsapp?.trim() || null,
         external_booking_url: data.externalBookingUrl?.trim() || null,
         years_experience: data.yearsExperience ? parseInt(data.yearsExperience) : null,
         business_type: data.businessType || null,

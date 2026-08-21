@@ -18,7 +18,6 @@ import {
   Switch,
   Animated,
   PanResponder,
-  Linking,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import ReAnimated, { LinearTransition } from 'react-native-reanimated';
@@ -54,7 +53,7 @@ import type { ProviderRegistrationData } from '../../services/providerRegistrati
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
 import { supabase } from '../../lib/supabase';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 
 import {
@@ -75,6 +74,7 @@ import { ChipSelect } from '../../features/provider-registration/ChipSelect';
 import { LocationPicker } from '../../features/provider-registration/LocationPicker';
 import { RequiredLabel } from '../../features/provider-registration/RequiredLabel';
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
+import { toUserMessage } from '../../utils/userFacingError';
 
 type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
@@ -88,17 +88,6 @@ import {
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-/**
- * Where CERVICED's own Terms & Conditions live publicly.
- *
- * Deliberately null until someone supplies the real published URL — a guessed
- * address that 404s is worse than the in-app copy, because a provider is being
- * asked to agree to it. While it's null, tapping the link opens the same
- * read-only TermsScreen shown from account settings, which is the complete
- * document and is already kept in sync. Set this string and the link opens
- * externally instead; nothing else has to change.
- */
-const CERVICED_TERMS_URL: string | null = null;
 
 
 /**
@@ -149,7 +138,7 @@ const BUSINESS_TYPE_LABELS: Record<string, string> = {
 const EDITOR_SECTIONS = [
   { key: 'identity' as const, num: '01', title: 'Identity',          sub: 'Business identity · how clients first find you' },
   { key: 'about' as const,    num: '02', title: 'About & Portfolio', sub: 'Your introduction and the work clients see' },
-  { key: 'contact' as const,  num: '03', title: 'Contact',           sub: 'How clients reach you off-app' },
+  { key: 'contact' as const,  num: '03', title: 'Contact',           sub: 'Public details — anyone browsing can use these' },
   { key: 'services' as const, num: '04', title: 'Services',          sub: 'What you offer, and what it costs' },
   { key: 'policies' as const, num: '05', title: 'Address Confirmation', sub: 'Business setup, address release' },
 ];
@@ -1687,7 +1676,7 @@ const TransferDataModal: React.FC<TransferDataModalProps> = ({
       setStatusMsg('Reading your services…');
       await onTransfer(trimmed);
     } catch (e: any) {
-      setErrorMsg(e?.message || 'Something went wrong. Please try again.');
+      setErrorMsg(toUserMessage(e, "We couldn't read that page. Check the link and try again.", 'InfoRegScreen.acuityTransfer'));
       setIsLoading(false);
       setStatusMsg('');
     }
@@ -2214,19 +2203,19 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                     <Text style={[styles.previewContactValue, { color: PP.text }]} numberOfLines={1}>{providerData.location}</Text>
                   </View>
                 ) : null}
-                {providerData.phone && providerData.preferredContactMethods.includes('phone') ? (
+                {providerData.phone ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
                     <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Phone</Text>
                     <Text style={[styles.previewContactAction, { color: PP.text }]}>Message ›</Text>
                   </View>
                 ) : null}
-                {providerData.whatsapp && providerData.preferredContactMethods.includes('whatsapp') ? (
+                {providerData.whatsapp ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
                     <Text style={[styles.previewContactLabel, { color: PP.sub }]}>WhatsApp</Text>
                     <Text style={[styles.previewContactAction, { color: PP.text }]}>Open ›</Text>
                   </View>
                 ) : null}
-                {providerData.email && providerData.preferredContactMethods.includes('email') ? (
+                {providerData.email ? (
                   <View style={[styles.previewContactRow, { borderBottomColor: PP.sep }]}>
                     <Text style={[styles.previewContactLabel, { color: PP.sub }]}>Email</Text>
                     <Text style={[styles.previewContactAction, { color: PP.text }]}>Send ›</Text>
@@ -2452,14 +2441,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
   // mounted, so unsaved edits can't be lost by scrolling.
   const [activeSpySection, setActiveSpySection] = useState<EditorSectionKey>(FIRST_EDITOR_SECTION);
   const [releaseDayPickerVisible, setReleaseDayPickerVisible] = useState(false);
-
-  // External when a public URL exists, in-app otherwise — see
-  // CERVICED_TERMS_URL. Falls back to the modal if the OS can't open the link
-  // rather than leaving the tap dead.
-  const openCervicedTerms = useCallback(() => {
-    if (!CERVICED_TERMS_URL) { setShowTermsModal(true); return; }
-    Linking.openURL(CERVICED_TERMS_URL).catch(() => setShowTermsModal(true));
-  }, []);
   // Loaded/round-tripped, never edited here — Cancellation, Reschedule,
   // Deposit, No-show, Refund, Booking Instructions and the Policy Image all
   // moved to Business Profile → Policies. handleSubmit still writes this
@@ -2510,8 +2491,27 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             if (data) {
               setProviderData(data);
               setIsEditMode(true);
+              // Being in edit mode means this profile was published, which
+              // required agreeing. Seed the real state rather than faking a
+              // tick in the render — a box that draws checked but holds false
+              // does nothing on the first tap and looks broken.
+              setTermsAccepted(true);
               const firstCat = Object.keys(data.categories)[0];
               if (firstCat) setSelectedCategory(firstCat);
+              // A contact field that exists elsewhere should already be in the
+              // box, not blank with a note telling you where to go and type it.
+              // The signup prefill below only runs on the very first save, so
+              // an existing provider who never set an enquiry address saw an
+              // empty field even though their business email was on file.
+              if (!data.email) {
+                getUserBusinessInfo(user.id)
+                  .then(info => {
+                    const businessEmail = info?.business_email;
+                    if (!businessEmail) return;
+                    setProviderData(prev => (prev.email ? prev : { ...prev, email: businessEmail }));
+                  })
+                  .catch(() => {});
+              }
               return;
             }
             // No providers row yet — this is the first save. Prefill from
@@ -2539,6 +2539,12 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   accessibilityNotes: prev.accessibilityNotes || prefill.accessibility_notes || '',
                   languagesSpoken: prev.languagesSpoken.length ? prev.languagesSpoken : (prefill.languages_spoken ?? []),
                   priceRange: prev.priceRange || prefilledPriceRange || '',
+                  // Round-trip only — this screen neither shows nor owns contact
+                  // channels (Communications does). It's carried purely because
+                  // saveProviderToSupabase writes preferred_contact_methods on
+                  // every save, so dropping it here would reset the provider's
+                  // Communications toggles to ['in_app'] whenever they edit
+                  // anything in InfoReg.
                   preferredContactMethods: (prev.preferredContactMethods.length && prev.preferredContactMethods[0] !== 'in_app')
                     ? prev.preferredContactMethods
                     : (prefill.preferred_contact_methods?.length ? prefill.preferred_contact_methods : prev.preferredContactMethods),
@@ -2680,7 +2686,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         setPortfolioItems(prev => prev.map(p => (p.id === tempId ? item : p)));
       } catch (e: any) {
         setPortfolioItems(prev => prev.filter(p => p.id !== tempId));
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload one of the images.');
+        Alert.alert('Upload failed', toUserMessage(e, 'Could not upload one of those images. Please try again.', 'InfoRegScreen.uploadPortfolio'));
       }
     }));
     setPortfolioUploading(false);
@@ -2996,8 +3002,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Not Logged In', 'Please log in to save your profile.');
       return;
     }
-    if (!isEditMode && !termsAccepted) {
-      Alert.alert('Terms & Conditions', 'Please agree to the Terms & Conditions before publishing your profile.');
+    // Gates in edit mode too. It's a live checkbox either way, and a tick a
+    // provider can clear without consequence isn't a control, it's decoration.
+    if (!termsAccepted) {
+      Alert.alert('Terms & Conditions', 'Please agree to the Terms & Conditions before saving your profile.');
       return;
     }
 
@@ -3017,10 +3025,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e: any) {
-      logger.error('Error saving provider profile:', e);
-      // Surface the real reason (saveProviderToSupabase prefixes it with the
-      // failing step) instead of a generic message, so failures are diagnosable.
-      Alert.alert('Couldn\'t save your profile', e?.message ?? 'Please try again.');
+      // saveProviderToSupabase prefixes its error with the failing step, which
+      // is what makes these diagnosable — but that belongs in the log, not in
+      // front of a provider. toUserMessage reports it and returns safe copy.
+      Alert.alert('Couldn\'t save your profile', toUserMessage(e, 'Please try again.', 'InfoRegScreen.saveProfile'));
     } finally {
       setIsSubmitting(false);
     }
@@ -3740,7 +3748,9 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                         {providerData.providerName}
                       </Text>
                     </View>
-                    <Text style={styles.inputHint}>Set at sign-up — contact support to change your business name.</Text>
+                    <Text style={styles.inputHint}>
+                      Not editable here — change it in Business Profile → Business Details → Business Info. Once changed, it’s fixed for 14 days.
+                    </Text>
                   </>
                 ) : (
                   <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
@@ -4000,7 +4010,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             >
               <Text style={[styles.docNum, { color: adaptiveAccentColor }]}>03</Text>
               <Text style={styles.docHeading}>Contact</Text>
-              <Text style={styles.docSub}>How clients reach you off-app</Text>
+              <Text style={styles.docSub}>Public details — anyone browsing can use these</Text>
 
               <TouchableOpacity
                 style={styles.docNextButton}
@@ -4014,9 +4024,17 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Ionicons name="arrow-down" size={13} color={adaptiveAccentColor} />
               </TouchableOpacity>
 
-            {/* Contact Information */}
+            {/* Contact Information — the PUBLIC audience. Anything filled in
+                here is published: it's what the Get In Touch button on your
+                profile offers to anyone browsing, booked or not. The separate
+                Business Profile → Communications toggles govern the other
+                audience (clients who already hold an appointment, via Booking
+                Details → Contact) and do not hide anything from this list. */}
               <Text style={styles.sectionSubtitle}>
-                What clients see on your public profile
+                Public — anything you fill in here appears on your profile under
+                Get In Touch, for general enquiries from anyone browsing. Contact
+                options for clients who've already booked are set separately in
+                Communications.
               </Text>
 
               <View
@@ -4037,11 +4055,35 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 </BlurView>
               </View>
 
+              {/* Same providers.whatsapp_number the Communications screen edits —
+                  one value, two editors, by design. The contact *details* are a
+                  shared pool (signup fills what it collects, either screen can
+                  fill the rest); what differs is who each screen publishes them
+                  to. Filling it here makes it public; ticking WhatsApp in
+                  Communications offers it to booked clients. */}
+              <View
+                style={styles.inputGroup}
+                ref={registerField('whatsapp')}
+              >
+                <Text style={styles.inputLabel}>WhatsApp Number</Text>
+                <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={providerData.whatsapp}
+                    onChangeText={(text) => setProviderData({ ...providerData, whatsapp: text })}
+                    placeholder="+44 7XXX XXXXXX"
+                    placeholderTextColor={chrome.fg(0.4)}
+                    keyboardType="phone-pad"
+                    onFocus={() => handleInputFocus('whatsapp')}
+                  />
+                </BlurView>
+              </View>
+
               <View
                 style={styles.inputGroup}
                 ref={registerField('contactEmail')}
               >
-                <Text style={styles.inputLabel}>Contact Email</Text>
+                <Text style={styles.inputLabel}>Public Enquiry Email</Text>
                 <BlurView intensity={15} tint={chrome.blurTint} style={[styles.inputBlur, styles.profileInputBox]}>
                   <TextInput
                     style={styles.textInput}
@@ -4549,6 +4591,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   ? 'Shared with clients only when you release it — never shown publicly. Include your postcode.'
                   : 'Your business address. Shown to clients once booking is confirmed. Include your postcode.'}
               </Text>
+              {/* Stays editable here, unlike the business type above it. This
+                  screen is the only editor of the private address — moving it
+                  behind a lock would leave nowhere to correct a typo in the
+                  one field Publish hard-requires. */}
               <AddressPicker
                 value={providerData.fullAddress}
                 onChange={({ address, coordinates }) => setProviderData(prev => ({
@@ -4558,6 +4604,65 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 }))}
                 accentColor={adaptiveAccentColor}
               />
+
+              {/* Which timings each business type may offer is
+                  ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
+                  This used to be a hand-maintained `show:` flag per row —
+                  a second copy of the same table that had to be edited in
+                  lockstep with the real one, and wasn't. One source now.
+                  Mobile is no longer excluded — it's offered exactly
+                  'manual' plus the "Never share" pill below, because a
+                  mobile provider's address should only ever leave by
+                  hand, per booking. */}
+              {providerData.businessType && (
+                <>
+                  <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
+                  <View style={styles.pillRow}>
+                    {[
+                      ...ADDRESS_RELEASE_OPTS
+                        .filter(o => isAddressReleaseAllowed(providerData.businessType as BusinessType, o.value))
+                        .map(o => ({ value: o.value as string, label: o.label })),
+                      // Mobile only — see BusinessInfoScreen. '' is stored
+                      // as NULL, i.e. never released.
+                      ...(providerData.businessType === 'mobile'
+                        ? [{ value: '', label: 'Never share' }]
+                        : []),
+                    ].map(({ value: v, label: l }) => (
+                      <TouchableOpacity
+                        key={v}
+                        style={[styles.policyPill, (providerData.addressReleasePolicy ?? '') === v && { backgroundColor: adaptiveAccentColor }]}
+                        onPress={() => { tapSelect(); setProviderData(prev => ({
+                          ...prev,
+                          // '' is the "Never share" pill — stored as null,
+                          // which is what the column means by it.
+                          addressReleasePolicy: v === '' ? null : (v as AddressReleasePolicy),
+                        })); }}
+                      >
+                        <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: '#fff' }]}>{l}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {/* One lookup, from the same ADDRESS_RELEASE_OPTS the
+                      pills above are built from. This was two copies of
+                      the same object literal — an outer one used as a
+                      presence check and an inner one rendered — and they
+                      had already drifted: the inner copy was missing
+                      five_days_before, so picking "5 days before" passed
+                      the guard and then rendered an empty line. */}
+                  {(() => {
+                    if (providerData.addressReleasePolicy == null) {
+                      return (
+                        <Text style={styles.addressHint}>
+                          Your address is never sent to clients. They give you theirs instead.
+                        </Text>
+                      );
+                    }
+                    const sub = ADDRESS_RELEASE_OPTS
+                      .find(o => o.value === providerData.addressReleasePolicy)?.sub;
+                    return sub ? <Text style={styles.addressHint}>{sub}</Text> : null;
+                  })()}
+                </>
+              )}
 
               {/* Address/venue photos — stored as portfolio_items tagged
                   category: 'venue', so they appear under Portfolio (filtered
@@ -4570,7 +4675,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
               <Text style={styles.addressHint}>
                 Photos of your venue or workspace, shown publicly under Portfolio — clients booking mobile or home-based providers often look for these before choosing who to book, so adding some can help boost bookings.
               </Text>
-              <View style={styles.portfolioGrid}>
+              <View style={[styles.portfolioGrid, styles.addressPhotoGrid]}>
                 {venuePhotos.map(item => (
                   <View key={item.id} style={styles.portfolioThumbWrap}>
                     <Image source={{ uri: item.image_url }} style={styles.portfolioThumb} fadeDuration={0} />
@@ -4610,64 +4715,6 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                 <Text style={styles.inputHint}>Save your profile once before adding address photos.</Text>
               )}
 
-                  {/* Which timings each business type may offer is
-                      ADDRESS_RELEASE_BY_BUSINESS_TYPE's job, not this screen's.
-                      This used to be a hand-maintained `show:` flag per row —
-                      a second copy of the same table that had to be edited in
-                      lockstep with the real one, and wasn't. One source now.
-                      Mobile is no longer excluded — it's offered exactly
-                      'manual' plus the "Never share" pill below, because a
-                      mobile provider's address should only ever leave by
-                      hand, per booking. */}
-                  {providerData.businessType && (
-                    <>
-                      <Text style={[styles.policyLabel, { marginTop: 14 }]}>ADDRESS RELEASE</Text>
-                      <View style={styles.pillRow}>
-                        {[
-                          ...ADDRESS_RELEASE_OPTS
-                            .filter(o => isAddressReleaseAllowed(providerData.businessType as BusinessType, o.value))
-                            .map(o => ({ value: o.value as string, label: o.label })),
-                          // Mobile only — see BusinessInfoScreen. '' is stored
-                          // as NULL, i.e. never released.
-                          ...(providerData.businessType === 'mobile'
-                            ? [{ value: '', label: 'Never share' }]
-                            : []),
-                        ].map(({ value: v, label: l }) => (
-                          <TouchableOpacity
-                            key={v}
-                            style={[styles.policyPill, (providerData.addressReleasePolicy ?? '') === v && { backgroundColor: adaptiveAccentColor }]}
-                            onPress={() => { tapSelect(); setProviderData(prev => ({
-                              ...prev,
-                              // '' is the "Never share" pill — stored as null,
-                              // which is what the column means by it.
-                              addressReleasePolicy: v === '' ? null : (v as AddressReleasePolicy),
-                            })); }}
-                          >
-                            <Text style={[styles.policyPillText, (providerData.addressReleasePolicy ?? '') === v && { color: '#fff' }]}>{l}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      {/* One lookup, from the same ADDRESS_RELEASE_OPTS the
-                          pills above are built from. This was two copies of
-                          the same object literal — an outer one used as a
-                          presence check and an inner one rendered — and they
-                          had already drifted: the inner copy was missing
-                          five_days_before, so picking "5 days before" passed
-                          the guard and then rendered an empty line. */}
-                      {(() => {
-                        if (providerData.addressReleasePolicy == null) {
-                          return (
-                            <Text style={styles.addressHint}>
-                              Your address is never sent to clients. They give you theirs instead.
-                            </Text>
-                          );
-                        }
-                        const sub = ADDRESS_RELEASE_OPTS
-                          .find(o => o.value === providerData.addressReleasePolicy)?.sub;
-                        return sub ? <Text style={styles.addressHint}>{sub}</Text> : null;
-                      })()}
-                    </>
-                  )}
 
               {/* WHERE YOU WORK (cities covered) moved up to 01 · Identity,
                   alongside "Where you're based" — the two location questions
@@ -4726,17 +4773,20 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   note live at the natural end of the scroll, immediately
                   before the reader reaches Publish.
 
-                  ONE row, not two. This used to be a checkbox box shown only
-                  on first publish plus a separate bare link further down that
+                  ONE row, not two. This used to be a checkbox shown only on
+                  first publish plus a separate bare link further down that
                   showed always — so an existing provider got a link with no
                   checkbox, and a new one got a checkbox and then a second,
-                  redundant link. Now the checkbox is always beside the link;
-                  what changes is what it means. On first publish it's the
-                  real gate (handleSubmit refuses without it). Afterwards it
-                  reflects the stored providers.terms_accepted_at — checked,
-                  dated, and not re-askable, because nothing clears that
-                  timestamp and re-consenting on every profile edit would be
-                  theatre rather than a gate. */}
+                  redundant link.
+
+                  The box is a live control in BOTH modes and gates saving in
+                  both. An existing provider starts ticked (they agreed to get
+                  published) with the stored providers.terms_accepted_at date
+                  beside it, but the tick is real state they can clear — at
+                  which point Save refuses, same as first publish. It was
+                  briefly drawn checked-but-disabled off isEditMode, which
+                  meant the underlying value was still false and the first tap
+                  did nothing visible. */}
               <View style={styles.docEnd}>
                 <Text style={styles.docEndMark}>— END OF PROFILE —</Text>
                 <Text style={styles.reviewFootnote}>
@@ -4744,31 +4794,39 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   change any of this at any time.
                 </Text>
 
-                <View style={[styles.termsBox, { marginTop: 16 }]}>
+                {/* alignSelf:'stretch' is load-bearing. docEnd is
+                    alignItems:'center', so without it this box sizes to its
+                    content — and termsRowText's flex:1 inside an
+                    unconstrained row collapses the label to zero width. The
+                    checkbox rendered, the words didn't. */}
+                <View style={[styles.termsBox, { marginTop: 16, alignSelf: 'stretch' }]}>
                   <TouchableOpacity
                     style={styles.termsRow}
-                    activeOpacity={isEditMode ? 1 : 0.75}
-                    disabled={isEditMode}
+                    activeOpacity={0.75}
                     onPress={() => { tapSelect(); setTermsAccepted(prev => !prev); }}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: termsAccepted }}
                   >
                     <View
                       style={[
                         styles.termsCheckbox,
-                        (termsAccepted || isEditMode) && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                        termsAccepted && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
                       ]}
                     >
-                      {(termsAccepted || isEditMode) && <Ionicons name="checkmark" size={13} color="#fff" />}
+                      {termsAccepted && <Ionicons name="checkmark" size={13} color="#fff" />}
                     </View>
                     <Text style={styles.termsRowText}>
-                      {isEditMode ? 'You agreed to the ' : 'I agree to the '}
+                      I agree to the{' '}
+                      {/* Its own onPress so tapping the words opens the terms
+                          instead of toggling the box underneath. */}
                       <Text
                         style={[styles.termsRowLink, { color: adaptiveAccentColor }]}
-                        onPress={() => { tapSelect(); openCervicedTerms(); }}
+                        onPress={() => { tapSelect(); setShowTermsModal(true); }}
                       >
                         CERVICED Terms &amp; Conditions
                       </Text>
-                      {isEditMode && providerData.termsAcceptedAt
-                        ? ` on ${formatLongDate(providerData.termsAcceptedAt)}`
+                      {providerData.termsAcceptedAt
+                        ? ` — agreed ${formatLongDate(providerData.termsAcceptedAt)}`
                         : ''}
                     </Text>
                   </TouchableOpacity>
@@ -5353,6 +5411,12 @@ const makeStyles = (isDark: boolean) => {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  // Address photos sit directly under their hint text with no card or divider
+  // between them, so the grid needs its own breathing room — the Portfolio
+  // grid gets that from the section heading above it instead.
+  addressPhotoGrid: {
+    marginTop: 10,
   },
   portfolioThumbWrap: {
     position: 'relative',
@@ -7057,28 +7121,6 @@ const makeStyles = (isDark: boolean) => {
     marginTop: 10,
     marginBottom: 18,
   },
-  releaseDayGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 9,
-  },
-  releaseDayOption: {
-    width: (screenWidth - 40 - 54) / 7,
-    aspectRatio: 1,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: fg(0.045),
-    borderWidth: 1,
-    borderColor: fg(0.06),
-  },
-  releaseDayOptionText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 13,
-    color: fg(0.72),
-  },
-  releaseDayOptionTextSelected: { color: '#FFFFFF' },
   releasePickerClearButton: {
     alignItems: 'center',
     justifyContent: 'center',
