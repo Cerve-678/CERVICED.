@@ -11,6 +11,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   PanResponder,
+  Platform,
 } from 'react-native';
 // expo-image instead of RN's Image — see PortfolioCard.tsx for why (Explore's
 // masonry grid is unvirtualized, so caching matters more here than elsewhere).
@@ -142,9 +143,36 @@ export const ImageDetailModal = ({
     if (visible) scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [item?.id, visible]);
 
+  // Navigating straight after onClose() loses the push. This <Modal> is a
+  // native pageSheet — a presented view controller sitting on top of the
+  // navigation controller — so a navigate() issued while it is still
+  // dismissing lands on a stack that is not yet in charge of the screen and
+  // is silently dropped. Same failure this app already hit with
+  // ExploreNavigator's fullScreenModal group swallowing card pushes; the
+  // symptom is identical (a tap that simply does nothing).
+  //
+  // So: stash the navigation, close, and run it once the dismissal has
+  // actually finished. onDismiss is iOS-only, hence the Platform fallback.
+  const pendingNavigationRef = useRef<(() => void) | null>(null);
+  const runPendingNavigation = () => {
+    const pending = pendingNavigationRef.current;
+    pendingNavigationRef.current = null;
+    pending?.();
+  };
+  const closeThen = (navigate: () => void) => {
+    pendingNavigationRef.current = navigate;
+    onClose();
+    if (Platform.OS !== 'ios') {
+      // Android's Modal never fires onDismiss — a frame after the close is
+      // enough for it to be off the screen stack.
+      requestAnimationFrame(runPendingNavigation);
+    }
+  };
+
   if (!item) return null;
 
   const hasProvider = !!item.providerName;
+
   const isSaved = isPortfolioSaved(item.id);
   // A specific bookable service (has its own serviceId) goes straight to
   // Book Now; a bare portfolio/provider photo has nothing specific to book,
@@ -160,34 +188,37 @@ export const ImageDetailModal = ({
   };
 
   const handleViewProfile = () => {
-    if (hasProvider) {
-      onClose();
-      const logoSource = item.providerLogoUri
-        ? { uri: item.providerLogoUri }
-        : null;
+    if (!hasProvider) return;
+    const logoSource = item.providerLogoUri
+      ? { uri: item.providerLogoUri }
+      : null;
+    closeThen(() =>
       onViewProfile(
         item.providerSlug ?? item.providerId,
         item.providerName ?? '',
         item.category,
         logoSource,
-      );
-    }
+      ),
+    );
   };
 
   const handleBookNow = () => {
-    if (hasProvider) {
-      onClose();
-      const logoSource = item.providerLogoUri
-        ? { uri: item.providerLogoUri }
-        : null;
+    if (!hasProvider) return;
+    const logoSource = item.providerLogoUri
+      ? { uri: item.providerLogoUri }
+      : null;
+    // Always goes to the profile first, own account or not — the
+    // can't-book-yourself toast is raised there on arrival, so the client
+    // still lands somewhere useful instead of being stopped in the modal.
+    closeThen(() =>
       onBookNow(
         item.providerSlug ?? item.providerId,
         item.providerName ?? '',
         item.category,
         logoSource,
         item.serviceId,
-      );
-    }
+      ),
+    );
   };
 
   return (
@@ -196,6 +227,7 @@ export const ImageDetailModal = ({
       presentationStyle="pageSheet"
       animationType="slide"
       onRequestClose={onClose}
+      onDismiss={runPendingNavigation}
     >
       {/* Modal content renders into its own native surface, separate from
           the app's root — the outer SafeAreaProvider (App.tsx) doesn't

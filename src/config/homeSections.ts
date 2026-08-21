@@ -31,6 +31,13 @@ export const HOME_SECTIONS: HomeSectionConfig[] = [
     maxCollapsed: 7,
   },
   {
+    id: 'trending',
+    title: 'TRENDING THIS WEEK',
+    dataKey: 'trending',
+    cardStyle: 'provider',
+    showWhen: (_u, data) => (data.trending?.length ?? 0) > 0,
+  },
+  {
     id: 'new-providers',
     title: 'NEW ON CERVICED',
     dataKey: 'newProviders',
@@ -74,12 +81,5 @@ export const HOME_SECTIONS: HomeSectionConfig[] = [
     dataKey: 'recentlyViewed',
     cardStyle: 'round',
     showWhen: (_u, data) => (data.recentlyViewed?.length ?? 0) > 0,
-  },
-  {
-    id: 'trending',
-    title: 'TRENDING THIS WEEK',
-    dataKey: 'trending',
-    cardStyle: 'provider',
-    showWhen: (_u, data) => (data.trending?.length ?? 0) > 0,
   },
 ];

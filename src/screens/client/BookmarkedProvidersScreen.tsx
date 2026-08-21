@@ -131,7 +131,14 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       headerTransparent: true,
       headerTitleAlign: 'center',
       headerTitle: () => (
-        <View style={styles.headerTitleRow}>
+        // pointerEvents="none" is load-bearing, not decoration. A function
+        // headerTitle is mounted into the iOS navigation bar's titleView,
+        // whose container is laid out across the bar rather than shrink-
+        // wrapped to this row — so an interactive title sits on top of the
+        // back chevron and silently eats its taps, which is exactly how this
+        // screen ended up with a back button that drew fine and did nothing.
+        // A title is never interactive, so it should never take touches.
+        <View style={styles.headerTitleRow} pointerEvents="none">
           <Text style={[styles.screenTitle, { color: P.text }]}>YOUR PROVIDERS</Text>
           {liveProviders.length > 0 && (
             <View style={[styles.countBadge, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
@@ -140,10 +147,19 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
           )}
         </View>
       ),
+      // The system back control, deliberately — it carries the platform
+      // chevron, the back-swipe affordance and the long-press history menu,
+      // none of which a hand-drawn TouchableOpacity reproduces. The reason it
+      // used to do nothing was the titleView above swallowing its taps, which
+      // pointerEvents="none" fixes at the source; replacing the button was
+      // treating the symptom.
       headerBackButtonDisplayMode: 'minimal',
       headerTintColor: P.text,
       headerStyle: { backgroundColor: 'transparent' },
-      headerBackground: () => null,
+      // No headerBackground: `() => null` still counts as "a custom header
+      // background" to native-stack, which then renders an empty absolutely
+      // positioned View over the top of the screen for no reason. Leaving it
+      // unset with headerTransparent already gives a transparent bar.
     });
   }, [navigation, P, liveProviders.length]);
 

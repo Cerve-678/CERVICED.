@@ -122,6 +122,15 @@ const StarIcon = ({ size, color }: { size: number; color: string }) => (
 );
 
 type ProviderData = ProviderProfileData;
+
+// Client-facing wording for providers.team_size. Module scope, not inside the
+// component — it never varies, and as a component-local object it would be a
+// new identity on every render for the memo that reads it.
+const TEAM_SIZE_LABELS: Record<string, string> = {
+  solo: "Solo practitioner",
+  small_team: "Small team",
+  large_team: "Large team",
+};
 type ServiceData = ProviderProfileService;
 
 // 60px circle pill for multi-image services — tap opens modal, swipe pages through images
@@ -1530,7 +1539,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     null,
   );
   const [notificationMessageType, setNotificationMessageType] = useState<
-    "bell" | "bookmark" | "ownProfile"
+    "bell" | "bookmark"
   >("bell");
 
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
@@ -1577,9 +1586,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Venue/workspace shots are stamped with their own category by
   // InfoRegScreen's "Address & venue photos" uploader. They're a picture of
-  // the room, not of the provider's work, so they get their own section on
-  // the profile rather than sitting in the Portfolio grid between finished
-  // results. Explore already excludes them from the discovery feed.
+  // the room, not of the provider's work, so they render inside Additional
+  // Information at the foot of the profile rather than sitting in the
+  // Portfolio grid between finished results — same reasoning as the rest of
+  // that card: facts about the business, not samples of the work. Explore
+  // already excludes them from the discovery feed.
   const venuePortfolio = useMemo(
     () => portfolio.filter((item) => item.category === VENUE_PORTFOLIO_CATEGORY),
     [portfolio],
@@ -1592,6 +1603,73 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     () => venuePortfolio.map((item) => ({ uri: item.image_url })),
     [venuePortfolio],
   );
+
+  // ── Additional Information ──────────────────────────────────────────────────
+  // Practice details the provider fills in across Business Profile (About You /
+  // Services & Pricing). They're facts about how the business operates rather
+  // than anything bookable, so they sit at the foot of the profile, below the
+  // portfolio, with the venue shots.
+  //
+  // Insured / DBS are ALWAYS suffixed "(self-declared)". Cerviced verifies
+  // neither, and an unqualified "DBS checked" chip on a beauty marketplace
+  // reads as a platform guarantee — see AboutYouScreen.tsx, which carries the
+  // same warning at the point of collection.
+  //
+  // Grouped, not one undifferentiated chip row: "Polish", "Just me",
+  // "Insured (self-declared)" and "Step-free access" are four different kinds
+  // of fact, and side by side with no subheading a client has to work out
+  // what each chip is even answering. Each group prints its own subheading,
+  // matching the Qualifications / Good to know / Venue blocks below it.
+  const additionalInfoGroups = useMemo(() => {
+    if (!provider) return [];
+    const groups: { label: string; chips: string[] }[] = [];
+    if (provider.languagesSpoken.length > 0) {
+      groups.push({ label: "Languages", chips: [...provider.languagesSpoken] });
+    }
+    const teamLabel = provider.teamSize
+      ? TEAM_SIZE_LABELS[provider.teamSize]
+      : null;
+    if (teamLabel) groups.push({ label: "Team", chips: [teamLabel] });
+    const credentials: string[] = [];
+    if (provider.isInsuredSelfDeclared) {
+      credentials.push("Insured (self-declared)");
+    }
+    if (provider.dbsCheckedSelfDeclared) {
+      credentials.push("DBS checked (self-declared)");
+    }
+    if (credentials.length > 0) {
+      groups.push({ label: "Credentials", chips: credentials });
+    }
+    if (provider.accessibilityTags.length > 0) {
+      groups.push({
+        label: "Accessibility",
+        chips: [...provider.accessibilityTags],
+      });
+    }
+    return groups;
+  }, [provider]);
+
+  // One natural-language paragraph rather than a label/value dump — these are
+  // five unrelated one-liners, and as rows they read like a spec sheet for
+  // facts a client only skims.
+  const goodToKnowText = useMemo(() => {
+    if (!provider) return "";
+    const sentences: string[] = [];
+    if (provider.walkInsWelcome) sentences.push("Walk-ins are welcome");
+    if (provider.groupBookingsAvailable) {
+      sentences.push("Group bookings are available");
+    }
+    if (provider.veganCrueltyFree) {
+      sentences.push("Products used are vegan and cruelty-free");
+    }
+    if (provider.travelRadius.trim()) {
+      sentences.push(`Travels up to ${provider.travelRadius.trim()}`);
+    }
+    if (provider.productsUsed.trim()) {
+      sentences.push(`Works with ${provider.productsUsed.trim()}`);
+    }
+    return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
+  }, [provider]);
 
   // ── Pinterest-style two-column portfolio ────────────────────────────────────
   // Items are dealt into whichever column is currently shorter, with tile height
@@ -1830,7 +1908,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // not from JS state); usePreventRemove is the hook that actually
   // coordinates with native-stack to prevent that. showConfirm is the
   // app's own themed bottom-sheet dialog (AppDialog), not the OS Alert.
-  const { showConfirm, DialogHost } = useAppDialog();
+  const { showAlert, showConfirm, DialogHost } = useAppDialog();
   const hasUnsavedSelection =
     (selectMode && selectedServiceIds.size > 0) || showMultiBookingSheet;
   usePreventRemove(hasUnsavedSelection, ({ data }) => {
@@ -1901,6 +1979,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   const handleBookmarkToggle = useCallback(async () => {
     if (isBookmarkLoading) return;
+    // Saving yourself to "Your Providers" is the bookmark equivalent of
+    // booking yourself — the list is for providers you want to come back to
+    // as a client, and your own profile is always one tap away in provider
+    // mode anyway.
+    if (isOwnProvider) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => {},
+      );
+      showAlert(
+        "That's your profile",
+        "You can't add your own profile to Your Providers.",
+        "center",
+      );
+      return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsBookmarkLoading(true);
@@ -1971,6 +2064,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     addBookmark,
     removeBookmark,
     slideRightAnimation,
+    isOwnProvider,
+    showRightNotification,
+    showAlert,
   ]);
 
   // Share handler with native share options
@@ -2119,6 +2215,35 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // you're looking at your own profile.
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
 
+  // Tapping a published contact row. On your own profile these rows stay
+  // fully visible and keep their normal affordance — greying them out made
+  // the card read as broken to the one person who filled it in, and it's
+  // genuinely useful to see exactly what a client sees. The tap itself is
+  // what's blocked: firing an SMS or email to yourself is never what was
+  // meant, so it raises the same centred dialog every other own-profile
+  // action uses. Instagram and Website deliberately do NOT come through
+  // here — those are public pages, and opening your own is a real action,
+  // not an attempt to contact yourself.
+  const handleContactLink = useCallback(
+    (url: string) => {
+      if (isOwnProvider) {
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Warning,
+        ).catch(() => {});
+        showAlert(
+          "That's your profile",
+          "These are your own contact details — this is what a client taps to reach you.",
+          "center",
+        );
+        return;
+      }
+      Linking.openURL(url).catch(() => {
+        Alert.alert("Couldn't open", "Please try again in a moment.");
+      });
+    },
+    [isOwnProvider, showAlert],
+  );
+
   const handleGetInTouch = useCallback(() => {
     if (!provider || !providerDbId) {
       Alert.alert("Not available", "Provider details are still loading.");
@@ -2148,9 +2273,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // The communication options this provider actually publishes, in the order
   // the Contact card lists them. Built once so the sheet and that card can't
   // drift apart on which methods count as available.
+  //
+  // PUBLIC contact, deliberately NOT gated on preferred_contact_methods. There
+  // are two audiences with two different sources of truth:
+  //   • this profile / Get In Touch — general enquiries from anyone browsing,
+  //     driven by the contact details set in Business Profile → InfoReg step 03
+  //     ("What clients see on your public profile"). Filling a field in there
+  //     is what publishes it.
+  //   • Booking Details → Contact — clients who already hold a confirmed
+  //     appointment, driven by the Contact Preferences toggles
+  //     (providers.preferred_contact_methods, see ProviderCommunicationsScreen).
+  // Those toggles used to gate this card too, which collapsed both audiences
+  // onto one setting and contradicted what both screens' own copy promised.
   const contactOptions = useMemo(() => {
     if (!provider) return [];
-    const methods = provider.preferredContactMethods ?? [];
     const options: {
       key: string;
       icon: keyof typeof Ionicons.glyphMap;
@@ -2158,7 +2294,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       detail: string;
       url: string;
     }[] = [];
-    if (provider.phone && methods.includes("phone")) {
+    if (provider.phone) {
       options.push({
         key: "phone",
         icon: "chatbubble-outline",
@@ -2167,7 +2303,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         url: `sms:${provider.phone.replace(/\s/g, "")}`,
       });
     }
-    if (provider.whatsapp && methods.includes("whatsapp")) {
+    if (provider.whatsapp) {
       options.push({
         key: "whatsapp",
         icon: "logo-whatsapp",
@@ -2176,7 +2312,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         url: `https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, "")}`,
       });
     }
-    if (provider.email && methods.includes("email")) {
+    if (provider.email) {
       options.push({
         key: "email",
         icon: "mail-outline",
@@ -2211,16 +2347,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     navigation.setOptions({
       headerShown: true,
       headerTransparent: true,
-      // The stack's own screen options (HomeNavigator etc.) set a
-      // headerBackTitle, which otherwise renders its own native back
-      // control alongside/behind this custom headerLeft pill — explicitly
-      // hiding it here is what makes the custom button the only one drawn.
-      // Cast needed because this screen is typed with the older
-      // @react-navigation/stack's StackScreenProps even though every
-      // navigator that registers it actually uses createNativeStackNavigator
-      // — headerBackVisible is a real native-stack option, just missing from
-      // this mismatched type (pre-existing, not something to fix here).
-      ...({ headerBackVisible: false } as object),
+      // The system back control, not a hand-drawn one. It carries the
+      // platform chevron, the interactive back-swipe affordance and the
+      // long-press history menu; a TouchableOpacity calling goBack() looks
+      // similar and reproduces none of it. Tinted to this provider's own
+      // palette (OP) like the title beside it, so it stays readable over
+      // whatever cover photo sits behind the transparent header, and set to
+      // 'minimal' so the stack's headerBackTitle ("Explore", "Home", …)
+      // doesn't print next to the chevron.
+      headerTintColor: OP.text,
+      headerBackButtonDisplayMode: 'minimal',
       headerTitle:
         isScrolledRef.current && provider ? provider.displayName : "",
       headerTitleStyle: {
@@ -2228,20 +2364,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         fontSize: 17,
         color: OP.text,
       },
-      headerLeft: () => (
-        <TouchableOpacity
-          style={styles.navBackButton}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            navigation.goBack();
-          }}
-          activeOpacity={0.7}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <Ionicons name="chevron-back" size={26} color="#000" style={{ marginLeft: -2 }} />
-        </TouchableOpacity>
-      ),
       headerRight: () => (
         <View style={styles.navHeaderActions}>
           <TouchableOpacity
@@ -2367,8 +2489,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      setNotificationMessageType("ownProfile");
-      showRightNotification();
+      showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
 
@@ -2436,6 +2557,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           forceNewInstance: true,
           ...(slot ? { selectedDate: slot.date, selectedTime: slot.time } : {}),
           ...(requiresDepositOnly ? { isDepositOnly: true } : {}),
+          // Both booking sheets stamp this so the resulting booking row
+          // remembers the policy that was in force even if the provider
+          // edits it later. Quick Book skips the sheets entirely, so without
+          // this it produced bookings with policy_snapshot null — the one
+          // checkout path that left no record of the policy the client was
+          // charged under. (It is a record of fact, not of consent; consent
+          // is still the cart's own Terms checkbox.)
+          ...(provider.bookingPolicies
+            ? { policySnapshot: provider.bookingPolicies as Record<string, unknown> }
+            : {}),
         };
 
         // Add to cart
@@ -2475,7 +2606,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       hideSuccessMessage,
       navigation,
       isOwnProvider,
-      showRightNotification,
+      showAlert,
     ],
   );
 
@@ -2573,8 +2704,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      setNotificationMessageType("ownProfile");
-      showRightNotification();
+      showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
     if (tryOpenExternalBooking()) return;
@@ -2586,7 +2716,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error opening booking sheet:", error);
       Alert.alert("Error", "Failed to open booking options. Please try again.");
     }
-  }, [tryOpenExternalBooking, isOwnProvider, showRightNotification]);
+  }, [tryOpenExternalBooking, isOwnProvider, showAlert]);
 
   // ───────────────── Multi-select: add several services to cart at once ────
   const toggleSelectMode = useCallback(() => {
@@ -2726,8 +2856,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => {},
       );
-      setNotificationMessageType("ownProfile");
-      showRightNotification();
+      showAlert("That's your profile", "You can't book yourself.", "center");
       return;
     }
     // Defensive only — the "Select" entry point is already hidden for these
@@ -2746,7 +2875,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     setMultiBookingServices(selectedServicesFlat);
     setShowMultiBookingSheet(true);
-  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showRightNotification]);
+  }, [provider, selectedServicesFlat, tryOpenExternalBooking, isOwnProvider, showAlert]);
 
   // Floating "N selected • £total — Book" bar. Rendered from two places (the
   // main screen and the fullscreen "All Services" sheet, which is a separate
@@ -2796,6 +2925,31 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     </BlurView>
   );
 
+  // Arriving from Explore's "Book Now" on your OWN card. The openServiceId
+  // path below already blocks (handleBook raises the dialog), but only once
+  // the services have loaded AND the id actually matches one of them — a
+  // portfolio-backed card carries no serviceId at all, and a stale id
+  // matches nothing, so on those routes the provider landed on a silent
+  // profile with no explanation for why Book Now did nothing. The intent
+  // flag is enough to answer that on its own, so it's handled here rather
+  // than being made a fourth special case inside the match effect.
+  const ownProfileBookIntentHandled = useRef(false);
+  useEffect(() => {
+    if (ownProfileBookIntentHandled.current) return;
+    if (!route.params?.bookIntent || !viewerChecked || !isOwnProvider) return;
+    ownProfileBookIntentHandled.current = true;
+    // Same beat the auto-open below waits for, and for the same reason: the
+    // dialog appearing before the profile has rendered reads as an error on
+    // the previous screen rather than an answer about this one.
+    const timer = setTimeout(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => {},
+      );
+      showAlert("That's your profile", "You can't book yourself.", "center");
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [route.params?.bookIntent, viewerChecked, isOwnProvider, showAlert]);
+
   // Arriving with route.params.openServiceId (e.g. tapping "Book Now" on a
   // specific service card in Explore) — open that exact service's booking
   // modal automatically once the provider's services have loaded, instead
@@ -2809,6 +2963,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const openServiceIdHandled = useRef(false);
   useEffect(() => {
     if (openServiceIdHandled.current) return;
+    // Your own profile is answered by the book-intent effect above — letting
+    // this one run too would fire the identical dialog a second time.
+    if (isOwnProvider) return;
     const targetId = route.params?.openServiceId;
     // Never auto-fire for external-booking providers — handleBook would
     // silently launch Linking.openURL the moment this screen mounts, before
@@ -2838,7 +2995,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     }
     // else: provider.categories may still be loading — leave the ref unset
     // so this effect re-checks on the next provider update.
-  }, [route.params?.openServiceId, provider, handleBook, viewerChecked]);
+  }, [route.params?.openServiceId, provider, handleBook, viewerChecked, isOwnProvider]);
 
   const handleBookingSheetSubmit = useCallback(
     (service: ServiceData, result: BookingSheetResult) => {
@@ -2878,7 +3035,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           selectedTime: result.time,
           notes: result.notes || undefined,
           isDepositOnly: result.isDepositOnly,
-          policyAcceptedAt: result.policyAcceptedAt,
           policySnapshot: result.policySnapshot,
         };
 
@@ -2949,8 +3105,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             // singleton regardless of whether the sheet minted one for its
             // grouped siblings.
             bookingBatchId: isSeparate ? undefined : result.groupBatchId,
-            policyAcceptedAt: result.policyAcceptedAt,
-            policySnapshot: result.policySnapshot,
+              policySnapshot: result.policySnapshot,
           });
         });
 
@@ -2995,13 +3150,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // reviews is now state — seeded with defaults above, overwritten by Supabase fetch in useEffect
 
   const notificationMessage = useMemo(() => {
-    // Blocking your own profile is an ordinary in-app state, not an error
-    // worth a native OS dialog — it uses the same slide-in toast as the bell
-    // and bookmark so it looks like part of the app rather than a system
-    // interruption stacked on top of it.
-    if (notificationMessageType === "ownProfile") {
-      return `That's your profile —\nyou can't book yourself`;
-    }
+    // No hardcoded line breaks: a forced second line can't shrink to fit, so a
+    // long provider name pushed the text past the toast's edge and got clipped.
+    // Let it wrap to whatever width the toast actually has.
     if (notificationMessageType === "bell") {
       const fullName = provider?.providerName ?? "this provider";
       // Name what the client actually signed up to receive. "Notifications
@@ -3009,15 +3160,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       // who drops their diary on a fixed day, that day IS the notification.
       const releaseDay = provider?.scheduleReleaseDay;
       if (!isNotificationsEnabled) {
-        return `You'll no longer be notified about\n${fullName}`;
+        return `You'll no longer be notified about ${fullName}`;
       }
       return releaseDay != null
-        ? `We'll tell you when ${fullName}\nreleases new slots on the ${ordinalSuffix(releaseDay)}`
-        : `We'll tell you when ${fullName}\nreleases new slots`;
+        ? `We'll tell you when ${fullName} releases new slots on the ${ordinalSuffix(releaseDay)}`
+        : `We'll tell you when ${fullName} releases new slots`;
     } else {
       return providerIsBookmarked
-        ? `Added to your\nproviders list`
-        : `Removed from your\nproviders list`;
+        ? `Added to your providers list`
+        : `Removed from your providers list`;
     }
   }, [
     notificationMessageType,
@@ -3753,14 +3904,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 Your contact options
               </Text>
               <Text style={[styles.contactSheetSub, { color: OP.sub }]}>
-                This is how clients can reach you. In-app messaging isn't
-                available on your own profile.
+                What anyone browsing your profile sees for general enquiries,
+                from the contact details you set in Business Profile → Contact.
+                In-app messaging isn't available on your own profile.
               </Text>
 
               {contactOptions.length === 0 ? (
                 <Text style={[styles.contactSheetEmpty, { color: OP.sub }]}>
-                  You haven't published any contact methods yet. Add them in
-                  Business Profile so clients can get in touch.
+                  You haven't published any contact details yet. Add them in
+                  Business Profile → Contact so people browsing can get in touch.
                 </Text>
               ) : (
                 <View style={styles.contactSheetList}>
@@ -3772,10 +3924,16 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         { backgroundColor: OP.card, borderColor: OP.border },
                       ]}
                       activeOpacity={0.75}
+                      // Read-only, like the Contact card rows behind it —
+                      // this sheet only ever renders on your own profile, so
+                      // every option here would be a message to yourself.
+                      // The dialog is another native modal, so it can't be
+                      // presented in the same tick this one is dismissed —
+                      // iOS drops the second presentation and nothing appears.
+                      // Wait for the dismissal to finish first.
                       onPress={() => {
-                        Haptics.selectionAsync().catch(() => {});
                         setContactSheetVisible(false);
-                        Linking.openURL(option.url).catch(() => {});
+                        setTimeout(() => handleContactLink(option.url), 350);
                       }}
                     >
                       <View
@@ -4602,10 +4760,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     </BlurView>
                     {showInstagram ? (
                       <TouchableOpacity
-                        style={[
-                          styles.instagramButtonOutside,
-                          { backgroundColor: cardBg, borderColor: OP.border },
-                        ]}
+                        style={styles.instagramButtonOutside}
                         onPress={() => {
                           Haptics.selectionAsync().catch(() => {});
                           Linking.openURL(
@@ -4621,11 +4776,26 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                         accessibilityLabel={`Open @${provider.instagram} on Instagram`}
                         accessibilityRole="button"
                       >
-                        <Ionicons
-                          name="logo-instagram"
-                          size={17}
-                          color={OP.sub}
-                        />
+                        <BlurView
+                          intensity={cardBlurIntensity}
+                          tint={cardBlurTint}
+                          style={[
+                            styles.instagramButtonSurface,
+                            { backgroundColor: cardBg, borderColor: OP.border },
+                          ]}
+                        >
+                          <LinearGradient
+                            colors={cardHighlightColors}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={styles.slotsCardHighlight}
+                          />
+                          <Ionicons
+                            name="logo-instagram"
+                            size={20}
+                            color={OP.sub}
+                          />
+                        </BlurView>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -4964,11 +5134,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </View>
                 ) : null}
 
-                {provider.phone && provider.preferredContactMethods.includes("phone") ? (
+                {provider.phone ? (
                   <TouchableOpacity
                     style={[styles.contactRow, { borderBottomColor: OP.sep }]}
                     onPress={() =>
-                      Linking.openURL(
+                      handleContactLink(
                         `sms:${provider.phone.replace(/\s/g, "")}`,
                       )
                     }
@@ -4977,17 +5147,20 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
                       Phone
                     </Text>
-                    <Text style={[styles.contactRowAction, { color: OP.text }]}>
+                    <Text
+                      style={[styles.contactRowAction, { color: OP.text }]}
+                      numberOfLines={1}
+                    >
                       Message ›
                     </Text>
                   </TouchableOpacity>
                 ) : null}
 
-                {provider.whatsapp && provider.preferredContactMethods.includes("whatsapp") ? (
+                {provider.whatsapp ? (
                   <TouchableOpacity
                     style={[styles.contactRow, { borderBottomColor: OP.sep }]}
                     onPress={() =>
-                      Linking.openURL(
+                      handleContactLink(
                         `https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, "")}`,
                       )
                     }
@@ -4996,22 +5169,28 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
                       WhatsApp
                     </Text>
-                    <Text style={[styles.contactRowAction, { color: OP.text }]}>
+                    <Text
+                      style={[styles.contactRowAction, { color: OP.text }]}
+                      numberOfLines={1}
+                    >
                       Open ›
                     </Text>
                   </TouchableOpacity>
                 ) : null}
 
-                {provider.email && provider.preferredContactMethods.includes("email") ? (
+                {provider.email ? (
                   <TouchableOpacity
                     style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                    onPress={() => Linking.openURL(`mailto:${provider.email}`)}
+                    onPress={() => handleContactLink(`mailto:${provider.email}`)}
                     activeOpacity={0.75}
                   >
                     <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
                       Email
                     </Text>
-                    <Text style={[styles.contactRowAction, { color: OP.text }]}>
+                    <Text
+                      style={[styles.contactRowAction, { color: OP.text }]}
+                      numberOfLines={1}
+                    >
                       Send ›
                     </Text>
                   </TouchableOpacity>
@@ -5118,44 +5297,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
               ) : null}
 
               {/* Portfolio — Pinterest-style two-column masonry of client work */}
-              {venuePortfolio.length > 0 && (
-                <View style={styles.portfolioSection}>
-                  <Text
-                    style={[
-                      styles.sectionTitleNoCard,
-                      { color: OP.text, paddingHorizontal: 0 },
-                    ]}
-                  >
-                    The Space
-                  </Text>
-                  {/* A horizontal strip, not the masonry grid — these are a
-                      handful of shots of one room, and stacking them in two
-                      ragged columns reads as portfolio work, which is exactly
-                      the confusion this section exists to remove. */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.venueStrip}
-                  >
-                    {venuePortfolio.map((item, index) => (
-                      <TouchableOpacity
-                        key={item.id}
-                        onPress={() => openImageViewer(venueImages, index)}
-                        style={styles.venueTile}
-                        activeOpacity={0.9}
-                      >
-                        <Image
-                          source={{ uri: item.image_url }}
-                          style={styles.venueImage}
-                          contentFit="cover"
-                          transition={0}
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
               {workPortfolio.length > 0 && (
                 <View style={styles.portfolioSection}>
                   <Text
@@ -5204,6 +5345,143 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                   </View>
                 </View>
               )}
+
+              {/* Additional Information — the practice details a provider
+                  fills in outside their service list: who they are, how they
+                  work, what the room looks like. Last section on the profile
+                  on purpose; it's reference material a client checks once,
+                  not something they act on, so it sits below the work rather
+                  than competing with it. Renders nothing at all when the
+                  provider has filled none of it in. */}
+              {(additionalInfoGroups.length > 0 ||
+                !!goodToKnowText ||
+                !!provider.qualifications.trim() ||
+                venuePortfolio.length > 0) && (
+                <BlurView
+                  intensity={cardBlurIntensity}
+                  tint={cardBlurTint}
+                  style={[
+                    styles.contactCard,
+                    { backgroundColor: cardBg, borderColor: OP.border },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={cardHighlightColors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={styles.cardHighlight}
+                  />
+                  <Text style={[styles.sectionTitle, { color: OP.text }]}>
+                    Additional Information
+                  </Text>
+
+                  {additionalInfoGroups.map((group, groupIndex) => (
+                    <View
+                      key={group.label}
+                      style={[
+                        styles.additionalNote,
+                        // The section title above already spaces the first
+                        // group; stacking its margin on top reads as a gap.
+                        groupIndex === 0 && styles.additionalNoteFirst,
+                      ]}
+                    >
+                      <Text
+                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
+                      >
+                        {group.label}
+                      </Text>
+                      <View style={styles.additionalChipsRow}>
+                        {group.chips.map((chip) => (
+                          <View
+                            key={chip}
+                            style={[
+                              styles.specialtyChip,
+                              {
+                                borderColor: adaptiveAccentColor + "55",
+                                backgroundColor: adaptiveAccentColor + "18",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.specialtyChipText,
+                                { color: OP.text },
+                              ]}
+                            >
+                              {chip}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+
+                  {provider.qualifications.trim() ? (
+                    <View style={styles.additionalNote}>
+                      <Text
+                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
+                      >
+                        Qualifications
+                      </Text>
+                      <Text
+                        style={[styles.additionalNoteText, { color: OP.text }]}
+                      >
+                        {provider.qualifications.trim()}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {goodToKnowText ? (
+                    <View style={styles.additionalNote}>
+                      <Text
+                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
+                      >
+                        Good to know
+                      </Text>
+                      <Text
+                        style={[styles.additionalNoteText, { color: OP.text }]}
+                      >
+                        {goodToKnowText}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {venuePortfolio.length > 0 && (
+                    <View style={styles.additionalNote}>
+                      <Text
+                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
+                      >
+                        Venue
+                      </Text>
+                      {/* A horizontal strip, not the masonry grid above — a
+                          few shots of one room stacked in two ragged columns
+                          reads as portfolio, which is exactly what these
+                          aren't. */}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.venueStrip}
+                      >
+                        {venuePortfolio.map((item, index) => (
+                          <TouchableOpacity
+                            key={item.id}
+                            onPress={() => openImageViewer(venueImages, index)}
+                            style={styles.venueTile}
+                            activeOpacity={0.9}
+                          >
+                            <Image
+                              source={{ uri: item.image_url }}
+                              style={styles.venueImage}
+                              contentFit="cover"
+                              transition={0}
+                            />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </BlurView>
+              )}
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -5215,6 +5493,33 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 const styles = StyleSheet.create({
   background: {
     flex: 1,
+  },
+  additionalChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 4,
+  },
+  additionalNote: {
+    marginTop: 16,
+  },
+  additionalNoteFirst: {
+    marginTop: 0,
+  },
+  // Every subheading in this card — Languages, Team, Credentials,
+  // Accessibility, Qualifications, Good to know, Venue — is the display face,
+  // so they read as headings rather than as more body copy. No fontWeight:
+  // BakbakOne ships one weight and asking for 600 substitutes the system font.
+  additionalNoteLabel: {
+    fontFamily: "BakbakOne-Regular",
+    fontSize: 13,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  additionalNoteText: {
+    fontSize: 14,
+    lineHeight: 21,
   },
   venueStrip: {
     gap: 10,
@@ -5252,15 +5557,6 @@ const styles = StyleSheet.create({
     marginTop: -60, // Back to original value
     paddingTop: 60, // Back to original value
     opacity: 1, // Full opacity for seamless blend
-  },
-  navBackButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
-    borderRadius: 20,
   },
   navHeaderActions: {
     flexDirection: "row",
@@ -5462,9 +5758,13 @@ const styles = StyleSheet.create({
   },
   // Holds the availability pill and, beside it, the Instagram button.
   // marginBottom moves here from slotsRow so the pair share one gap below.
+  // "stretch", not "center": it makes the Instagram button exactly as tall as
+  // the pill whatever the pill happens to measure. The pill's height is
+  // content-driven (bell icon + padding + border), so any fixed number on the
+  // button is a guess that drifts the moment the pill's contents change.
   slotsRowOuter: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     gap: 8,
     marginBottom: 4,
   },
@@ -5479,13 +5779,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     flexShrink: 1,
   },
-  // Matches the pill's own surface and border so it reads as a sibling of
-  // it, not a floating icon. Square-ish so it's a circle at this size.
+  // The same container as the availability pill beside it — same blurred
+  // surface, same border, same 20pt corners, same height (from the row's
+  // "stretch") — not a round button sitting next to one.
   instagramButtonOutside: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    borderRadius: 20,
+  },
+  instagramButtonSurface: {
+    flex: 1,
+    borderRadius: 20,
     borderWidth: 1,
+    overflow: "hidden",
+    paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -5552,12 +5857,15 @@ const styles = StyleSheet.create({
   notificationAlert: {
     position: "absolute",
     top: 120,
-    right: 5, // Moved even closer to the right edge
+    right: 12,
     zIndex: 1000,
     borderRadius: 20,
     overflow: "hidden",
-    maxWidth: screenWidth * 0.7, // Further reduced width
-    minWidth: 200, // Further reduced minimum width
+    // Was 70% of the screen, which wasn't enough room for a real provider name
+    // in either the enabled or the disabled message — the tail of the sentence
+    // ran under the toast's clipped (overflow: hidden) edge.
+    maxWidth: screenWidth - 24,
+    minWidth: 200,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -5587,9 +5895,12 @@ const styles = StyleSheet.create({
     fontSize: 12, // Reduced from 13
     fontWeight: "bold",
     flex: 1,
-    flexWrap: "wrap", // Allow text wrapping
-    lineHeight: 16, // Reduced line height
-    textAlign: "left", // Ensure proper alignment for multi-line text
+    flexShrink: 1,
+    flexWrap: "wrap",
+    // BakbakOne is a tall face — 16 clipped the ascenders/descenders on every
+    // wrapped line, which read as the text being cut off vertically too.
+    lineHeight: 18,
+    textAlign: "left",
   },
 
   serviceText: {

@@ -1300,99 +1300,31 @@ export default function HomeScreen() {
             </View>
             )}
 
-            {/* Provider of the Week */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY PROVIDER</Text>
-                <TouchableOpacity
-                  onPress={toggleViewAllProviders}
-                  style={styles.viewAllButton}
-                  activeOpacity={0.7}
+            {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
+            {/* TRENDING THIS WEEK */}
+            {trending.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoryScroll}
+                  nestedScrollEnabled={true}
                 >
-                  <Text style={[styles.viewAll, { color: P.sub }]}>
-                    {viewAllProviders ? 'VIEW LESS <' : 'VIEW ALL >'}
-                  </Text>
-                </TouchableOpacity>
+                  {trending.map(provider => (
+                    <ProviderCard
+                      key={`trending-${provider.id}`}
+                      provider={provider}
+                      onPress={() => navigateToProvider(provider)}
+                      style={styles.providerCard}
+                      blurStyle={styles.providerBlur}
+                    />
+                  ))}
+                </ScrollView>
               </View>
-
-              {providersLoading ? (
-                <SkeletonSection cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
-              ) : viewAllProviders ? (
-                <View>
-                  {Object.entries(allCategorizedProviders).map(([category, providers]) => {
-                    if (!providers || providers.length === 0) return null;
-
-                    return (
-                      <View key={category} style={styles.categorySection}>
-                        <Text style={[styles.categoryLabel, { color: P.text }]}>{category}</Text>
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          style={styles.categoryScroll}
-                          nestedScrollEnabled={true}
-                        >
-                          {providers.slice(0, 15).map((provider: Provider) => (
-                            <ProviderCard
-                              key={`${category}-${provider.id}`}
-                              provider={provider}
-                              onPress={() => navigateToProvider(provider)}
-                              style={styles.providerCard}
-                              blurStyle={styles.providerBlur}
-                            />
-                          ))}
-                        </ScrollView>
-                      </View>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View>
-                  {providersData.hairProviders.length > 0 && (
-                    <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR</Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.categoryScroll}
-                        nestedScrollEnabled={true}
-                      >
-                        {providersData.hairProviders.slice(0, 15).map(provider => (
-                          <ProviderCard
-                            key={`hair-${provider.id}`}
-                            provider={provider}
-                            onPress={() => navigateToProvider(provider)}
-                            style={styles.providerCard}
-                            blurStyle={styles.providerBlur}
-                          />
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {providersData.nailProviders.length > 0 && (
-                    <View>
-                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAILS</Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.categoryScroll}
-                        nestedScrollEnabled={true}
-                      >
-                        {providersData.nailProviders.slice(0, 15).map(provider => (
-                          <ProviderCard
-                            key={`nail-${provider.id}`}
-                            provider={provider}
-                            onPress={() => navigateToProvider(provider)}
-                            style={styles.providerCard}
-                            blurStyle={styles.providerBlur}
-                          />
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
+            )}
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'new-providers') */}
             {/* NEW ON CERVICED */}
@@ -1485,31 +1417,99 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* § config-driven — see src/config/homeSections.ts (id: 'trending') */}
-            {/* TRENDING THIS WEEK */}
-            {trending.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
+            {/* BROWSE BY PROVIDER */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: P.text }]}>BROWSE BY PROVIDER</Text>
+                <TouchableOpacity
+                  onPress={toggleViewAllProviders}
+                  style={styles.viewAllButton}
+                  activeOpacity={0.7}
                 >
-                  {trending.map(provider => (
-                    <ProviderCard
-                      key={`trending-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.providerCard}
-                      blurStyle={styles.providerBlur}
-                    />
-                  ))}
-                </ScrollView>
+                  <Text style={[styles.viewAll, { color: P.sub }]}>
+                    {viewAllProviders ? 'VIEW LESS <' : 'VIEW ALL >'}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            )}
+
+              {providersLoading ? (
+                <SkeletonSection cardWidth={282} cardHeight={147} borderRadius={20} count={3} />
+              ) : viewAllProviders ? (
+                <View>
+                  {Object.entries(allCategorizedProviders).map(([category, providers]) => {
+                    if (!providers || providers.length === 0) return null;
+
+                    return (
+                      <View key={category} style={styles.categorySection}>
+                        <Text style={[styles.categoryLabel, { color: P.text }]}>{category}</Text>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          style={styles.categoryScroll}
+                          nestedScrollEnabled={true}
+                        >
+                          {providers.slice(0, 15).map((provider: Provider) => (
+                            <ProviderCard
+                              key={`${category}-${provider.id}`}
+                              provider={provider}
+                              onPress={() => navigateToProvider(provider)}
+                              style={styles.providerCard}
+                              blurStyle={styles.providerBlur}
+                            />
+                          ))}
+                        </ScrollView>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View>
+                  {providersData.hairProviders.length > 0 && (
+                    <View>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>HAIR</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.categoryScroll}
+                        nestedScrollEnabled={true}
+                      >
+                        {providersData.hairProviders.slice(0, 15).map(provider => (
+                          <ProviderCard
+                            key={`hair-${provider.id}`}
+                            provider={provider}
+                            onPress={() => navigateToProvider(provider)}
+                            style={styles.providerCard}
+                            blurStyle={styles.providerBlur}
+                          />
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {providersData.nailProviders.length > 0 && (
+                    <View>
+                      <Text style={[styles.categoryLabel, { color: P.text }]}>NAILS</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.categoryScroll}
+                        nestedScrollEnabled={true}
+                      >
+                        {providersData.nailProviders.slice(0, 15).map(provider => (
+                          <ProviderCard
+                            key={`nail-${provider.id}`}
+                            provider={provider}
+                            onPress={() => navigateToProvider(provider)}
+                            style={styles.providerCard}
+                            blurStyle={styles.providerBlur}
+                          />
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'male-services') */}
             {/* Male Services Section */}

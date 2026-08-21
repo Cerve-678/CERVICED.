@@ -100,15 +100,24 @@ export interface DialogButton {
   onPress?: () => void;
 }
 
+/** Where the dialog sits on screen.
+ *  'sheet'  — anchored to the bottom edge with a grabber. The default, and the
+ *             right shape for a decision the user is being walked through.
+ *  'center' — a classic alert box floating mid-screen. For short "you can't do
+ *             that here" statements, where a bottom sheet reads as the start of
+ *             a flow rather than a full stop. */
+export type DialogPlacement = 'sheet' | 'center';
+
 interface ConfirmState {
   title: string;
   message?: string;
   buttons: DialogButton[];
   visible: boolean;
+  placement: DialogPlacement;
 }
 
 function ConfirmDialog({
-  title, message, buttons, visible, onDismiss, isDarkMode, accent, onAccent, text, secondaryText, cardBackground, border,
+  title, message, buttons, visible, placement, onDismiss, isDarkMode, accent, onAccent, text, secondaryText, cardBackground, border,
 }: ConfirmState & {
   onDismiss: () => void;
   isDarkMode: boolean;
@@ -130,56 +139,77 @@ function ConfirmDialog({
     }).start();
   }, [anim, visible]);
 
+  const isCentered = placement === 'center';
+
+  const card = (
+    <Animated.View
+      style={[
+        isCentered ? dlgSt.centerCard : dlgSt.sheet,
+        {
+          opacity: anim,
+          // A centred box scales up from slightly small. Sliding in something
+          // that isn't attached to an edge looks like it missed its mark; the
+          // sheet keeps its rise from the bottom edge it IS attached to.
+          transform: isCentered
+            ? [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }]
+            : [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
+        },
+      ]}
+      pointerEvents={visible ? 'auto' : 'none'}
+    >
+      <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      <View style={[dlgSt.content, isCentered && dlgSt.contentCentered, { backgroundColor: cardBackground }]}>
+        {/* Grabber only on the sheet — it's an affordance for dragging a panel
+            back to an edge, and a floating box has no edge to drag to. */}
+        {!isCentered && <View style={[dlgSt.handle, { backgroundColor: border }]} />}
+        <Text style={[dlgSt.title, { color: text }]}>{title}</Text>
+        {!!message && <Text style={[dlgSt.message, { color: secondaryText }]}>{message}</Text>}
+        <View style={dlgSt.btnRow}>
+          {buttons.map((btn, i) => {
+            const isCancel = btn.style === 'cancel';
+            const isDestructive = btn.style === 'destructive';
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[
+                  dlgSt.btn,
+                  isCancel && [dlgSt.btnCancel, { borderColor: border }],
+                  isDestructive && dlgSt.btnDestructive,
+                  !isCancel && !isDestructive && { backgroundColor: accent },
+                ]}
+                onPress={() => { btn.onPress?.(); onDismiss(); }}
+                activeOpacity={0.75}
+              >
+                <Text
+                  style={[
+                    dlgSt.btnText,
+                    isCancel && [dlgSt.btnTextCancel, { color: secondaryText }],
+                    isDestructive && dlgSt.btnTextDestructive,
+                    !isCancel && !isDestructive && { color: onAccent },
+                  ]}
+                >
+                  {btn.text}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </Animated.View>
+  );
+
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
       <TouchableOpacity style={dlgSt.backdrop} activeOpacity={1} onPress={onDismiss} />
-      <Animated.View
-        style={[
-          dlgSt.sheet,
-          {
-            opacity: anim,
-            transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
-          },
-        ]}
-        pointerEvents={visible ? 'auto' : 'none'}
-      >
-        <BlurView intensity={70} tint={isDarkMode ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-        <View style={[dlgSt.content, { backgroundColor: cardBackground }]}>
-          <View style={[dlgSt.handle, { backgroundColor: border }]} />
-          <Text style={[dlgSt.title, { color: text }]}>{title}</Text>
-          {!!message && <Text style={[dlgSt.message, { color: secondaryText }]}>{message}</Text>}
-          <View style={dlgSt.btnRow}>
-            {buttons.map((btn, i) => {
-              const isCancel = btn.style === 'cancel';
-              const isDestructive = btn.style === 'destructive';
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    dlgSt.btn,
-                    isCancel && [dlgSt.btnCancel, { borderColor: border }],
-                    isDestructive && dlgSt.btnDestructive,
-                    !isCancel && !isDestructive && { backgroundColor: accent },
-                  ]}
-                  onPress={() => { btn.onPress?.(); onDismiss(); }}
-                  activeOpacity={0.75}
-                >
-                  <Text
-                    style={[
-                      dlgSt.btnText,
-                      isCancel && [dlgSt.btnTextCancel, { color: secondaryText }],
-                      isDestructive && dlgSt.btnTextDestructive,
-                      !isCancel && !isDestructive && { color: onAccent },
-                    ]}
-                  >
-                    {btn.text}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </Animated.View>
+      {/* The sheet anchors itself to the bottom edge, so it needs no wrapper.
+          A centred box has nothing to anchor to and has to be centred by a
+          full-screen parent — box-none so every tap outside the card still
+          falls through to the dismiss backdrop underneath it. */}
+      {isCentered ? (
+        <View style={dlgSt.centerWrap} pointerEvents="box-none">{card}</View>
+      ) : (
+        card
+      )}
     </Modal>
   );
 }
@@ -198,10 +228,28 @@ const dlgSt = StyleSheet.create({
     borderTopRightRadius: 24,
     overflow: 'hidden',
   },
+  centerWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  centerCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
   content: {
     paddingBottom: 40,
     paddingHorizontal: 20,
     paddingTop: 12,
+  },
+  // No bottom-edge inset to clear and no grabber above the title, so the
+  // centred box is padded evenly instead.
+  contentCentered: {
+    paddingTop: 24,
+    paddingBottom: 20,
   },
   handle: {
     width: 36,
@@ -260,7 +308,7 @@ const dlgSt = StyleSheet.create({
 export function useAppDialog() {
   const { palette, isDarkMode } = useTheme();
   const [toast, setToast] = useState<ToastState>({ message: '', type: 'info', visible: false });
-  const [confirm, setConfirm] = useState<ConfirmState>({ title: '', message: '', buttons: [], visible: false });
+  const [confirm, setConfirm] = useState<ConfirmState>({ title: '', message: '', buttons: [], visible: false, placement: 'sheet' });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
@@ -269,13 +317,14 @@ export function useAppDialog() {
     toastTimer.current = setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
   }, []);
 
-  const showConfirm = useCallback((title: string, message: string | undefined, buttons: DialogButton[]) => {
-    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons, visible: true });
+  const showConfirm = useCallback((title: string, message: string | undefined, buttons: DialogButton[], placement: DialogPlacement = 'sheet') => {
+    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons, visible: true, placement });
   }, []);
 
-  /** Drop-in replacement for a single-button Alert.alert(title, message) */
-  const showAlert = useCallback((title: string, message?: string) => {
-    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons: [{ text: 'OK' }], visible: true });
+  /** Drop-in replacement for a single-button Alert.alert(title, message).
+   *  Pass 'center' for a centred alert box instead of the default bottom sheet. */
+  const showAlert = useCallback((title: string, message?: string, placement: DialogPlacement = 'sheet') => {
+    setConfirm({ title, ...(message !== undefined ? { message } : {}), buttons: [{ text: 'OK' }], visible: true, placement });
   }, []);
 
   const dismissConfirm = useCallback(() => {

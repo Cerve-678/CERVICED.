@@ -75,6 +75,13 @@ const PROVIDER_WEIGHT = 1;
 // source wins by argument order: portfolio photos (the richest cards — real
 // aspect ratio, caption, tags) are passed first and therefore beat a
 // provider cover or service photo pointing at the same file.
+// A card with no image file behind it has nothing to show in a masonry feed
+// — it renders as an empty box. Filtered out rather than papered over with a
+// placeholder, so the feed only ever contains real photographs.
+function hasFeedImage(card: PortfolioItem): boolean {
+  return !!(card.image as { uri?: string } | undefined)?.uri;
+}
+
 function dedupeByImageUri(cards: PortfolioItem[]): PortfolioItem[] {
   const seen = new Set<string>();
   return cards.filter(card => {
@@ -300,7 +307,12 @@ const ExploreScreen = memo(() => {
   // in line with typical portfolio photos rather than defaulting to square.
   const mapDbProviderToCard = useCallback((p: DbProvider): PortfolioItem => ({
     id: `provider-${p.id}`,
-    image: { uri: p.background_image_url ?? p.logo_url ?? '' },
+    // Cover photo ONLY — never the logo. A logo is a brand mark sized for a
+    // 40px avatar; stretched into a feed tile it reads as a mistake, and it
+    // also duplicates the avatar already drawn on the same card. Rows with no
+    // cover are dropped from the feed by hasFeedImage below rather than
+    // falling back to one.
+    image: { uri: p.background_image_url ?? '' },
     caption: p.about_text ?? '',
     category: p.service_category as unknown as ServiceCategory,
     aspectRatio: 0.8,
@@ -325,7 +337,11 @@ const ExploreScreen = memo(() => {
   // (getUnclaimedProviderDetail) expects.
   const mapDbUnclaimedProviderToCard = useCallback((p: DiscoverUnclaimedProvider): PortfolioItem => ({
     id: `provider-${p.id}`,
-    image: { uri: p.logo_url ?? '' },
+    // Same rule as claimed providers: no logo-as-feed-image. A scraped row
+    // has no cover photo column at all, so these always fall out of the
+    // discovery feed via hasFeedImage — the claim directory is where they're
+    // meant to be browsed, not as logo tiles between real work photos.
+    image: { uri: '' },
     caption: p.about_text ?? '',
     category: p.service_category as unknown as ServiceCategory,
     aspectRatio: 0.8,
@@ -419,7 +435,7 @@ const ExploreScreen = memo(() => {
     const providerCards = shuffle([
       ...providerData.map(mapDbProviderToCard),
       ...unclaimedData.map(mapDbUnclaimedProviderToCard),
-    ]);
+    ]).filter(hasFeedImage);
     const deduped = dedupeByImageUri([
       ...portfolioCards,
       ...serviceCards,
@@ -616,8 +632,14 @@ const ExploreScreen = memo(() => {
   }, []);
 
   const handleCloseDetail = useCallback(() => {
+    // Deliberately does NOT clear selectedImage. ImageDetailModal returns
+    // null without an item, so nulling it here tore the <Modal> out of the
+    // tree the instant close was tapped — the dismissal animation never
+    // completed and its onDismiss never fired, which is what silently ate
+    // the "view profile" / "book now" navigation queued behind it. Hiding it
+    // via `visible` lets the dismissal finish properly; the stale item is
+    // never seen, and the next open overwrites it.
     setIsDetailVisible(false);
-    setSelectedImage(null);
   }, []);
 
   const handleViewProfile = useCallback(
@@ -645,6 +667,11 @@ const ExploreScreen = memo(() => {
       navigation.navigate('ProviderProfile', {
         providerId,
         source: 'explore',
+        // Flags the intent, not just the target: a provider who taps Book Now
+        // on their own card needs the can't-book-yourself toast on arrival
+        // even when there's no serviceId to auto-open (or it fails to match),
+        // otherwise they land on a silent profile and the tap looks broken.
+        bookIntent: true,
         ...(serviceId ? { openServiceId: serviceId } : {}),
       });
     },
