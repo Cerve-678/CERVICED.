@@ -257,6 +257,11 @@ removed on purpose — see the Terms & Conditions "Deposits & Remaining
 Balances" clause. Don't rebuild anything that has the app attest to
 off-platform payment status.
 
+The same reasoning removed two provider reminders on 2026-08-21: "Payment
+Not Collected" (`balance_reminder`) and "Appointment Not Started"
+(`booking_not_started`). Neither could verify what it claimed. See
+`docs/vault/Notifications.md`.
+
 ### Theme system — two exist, only one is real
 `src/theme/tokens.ts` + `useEnterpriseTheme()` exists but almost nothing uses
 it. The actual convention, used everywhere, is per-screen `const L = {...}` /

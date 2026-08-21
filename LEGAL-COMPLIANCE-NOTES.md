@@ -104,6 +104,15 @@ reason (see `src/screens/ProviderBookingDetailScreen.tsx` history). Keep this
 consistent: don't reintroduce any UI/notification that implies the app
 verifies or guarantees that payment.
 
+Two provider reminders that breached exactly this were removed on
+2026-08-21: **"Payment Not Collected"** (fired off `payment_status`, which
+isn't evidence of whether anyone was actually paid, and offered a "Collect
+Payment" action) and **"Appointment Not Started"** (asserted an appointment
+hadn't happened because a button hadn't been tapped — a claim the app would
+have had to defend in any client/provider dispute). See
+`docs/vault/Notifications.md`. The generalised rule: a notification must not
+assert a fact the app has no way to verify.
+
 ## 5. Age verification and cosmetic-treatment minimum ages
 
 Per `APP_STATE.md`, sign-up enforces 16+ generally. Two separate legal questions

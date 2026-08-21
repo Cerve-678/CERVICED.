@@ -34,8 +34,6 @@ const BOOKING_TYPES = new Set([
   'reschedule_provider_response',
   'reschedule_confirmed',
   'reschedule_declined',
-  'booking_not_started',
-  'balance_reminder',
   'pending_booking_reminder',
   'intake_form_received',
   'info_pack_received',

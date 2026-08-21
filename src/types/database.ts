@@ -23,12 +23,11 @@ export type PaymentStatus =
 export type NotificationType =
   | 'booking_pending'    | 'booking_confirmed'  | 'booking_declined'
   | 'booking_cancelled'  | 'booking_reminder'   | 'booking_in_progress'
-  | 'booking_not_started'
   | 'no_show'            | 'provider_no_show'   | 'payment_success'    | 'new_provider'
   | 'reschedule_request' | 'reschedule_provider_response' | 'reschedule_confirmed'
   | 'reschedule_declined'
   | 'review_request'     | 'review_received'    | 'promotion'
-  | 'provider_message'   | 'balance_reminder'
+  | 'provider_message'
   | 'intake_form_reminder'
   | 'waitlist_slot_available'
   | 'new_message'

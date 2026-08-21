@@ -15,6 +15,16 @@ Address-release notifications were a repeat offender of the opposite mistake —
 - **Tap handling**: `src/services/notificationTapHandler.ts` routes a tapped push to the right screen.
 - **Reminders**: pg_cron jobs `process_provider_24hr_reminders` / `process_user_24hr_reminders` (`automation_jobs.sql`, `provider_reminder_jobs.sql`).
 
+## Two reminders were removed for making unverifiable claims (2026-08-21)
+Both were provider-facing pg_cron reminders, both are gone — cron unscheduled, producer function dropped, app-side type/routing/CTA removed, and the rows they'd already written deleted (57 live). **Don't rebuild either.**
+
+- **"Payment Not Collected"** (`balance_reminder`, `process_provider_unpaid_deposit_reminders`) fired on any confirmed booking still at `payment_status = 'pending'`. That column is not evidence the provider went unpaid — a provider-created booking is written with `amount_paid` 0 (see [[Payments]]), and a client may have paid off-app entirely. The notification even offered a **"Collect Payment"** CTA. Same liability boundary that killed "mark balance collected" and the earlier outstanding-balance reminder.
+- **"Appointment Not Started"** (`booking_not_started`, `process_provider_not_started_reminders`) fired 15 minutes past a confirmed booking's start time when nobody had tapped *start*. It asserted an appointment hadn't happened based purely on whether a button was pressed — so in any client/provider dispute the app would be holding a system-generated record it has no way to stand behind.
+
+The rule underneath: **a notification must not assert a fact the app can't verify.** A button that wasn't pressed is not an appointment that didn't happen; a `payment_status` the app never processed is not money that wasn't paid. Both type values are deliberately left in the `notifications` type CHECK — nothing produces them, and the constraint was never what held this line.
+
+Migrations: `20260821100444_remove_unverifiable_payment_and_not_started_reminders.sql`, `20260821133926_purge_unverifiable_payment_and_not_started_notifications.sql`.
+
 ## Known blind spot
 The push Edge Function reads the send **ticket**, not the **receipt** — so real delivery failures are silent. Diagnose via **DevSettings → "Send Test Push (+ receipt)"**. #todo
 
