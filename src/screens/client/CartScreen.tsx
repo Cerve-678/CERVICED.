@@ -47,7 +47,7 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
 import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
-import { durationToMinutes, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
+import { durationToMinutes, findCartOverlapIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
 
@@ -712,7 +712,13 @@ interface ServiceCardProps {
   onEdit: (item: CartItem) => void;
   allCartItems: CartItem[];
   depositPolicy?: ProviderDepositPolicy;
-  hasConflict?: boolean;
+  /** Why this item can't be checked out, in the client's words — undefined
+   *  when it's fine. Carried as the message rather than a boolean because the
+   *  reasons are not interchangeable: "no time picked yet", "clashes with
+   *  another service in your cart" and "someone else took this slot" need
+   *  different actions, and a card that states the wrong one sends the client
+   *  to re-pick a time that was never the problem. */
+  issue?: string;
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = memo(
@@ -723,7 +729,7 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
     onEdit,
     allCartItems,
     depositPolicy,
-    hasConflict,
+    issue,
   }) => {
     const { theme, palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
@@ -798,14 +804,12 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
         <View style={[
           styles.serviceCard,
           styles.serviceCardShadow,
-          { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
+          { backgroundColor: P.surface, borderColor: issue ? '#F44336' : P.border, borderWidth: issue ? 1.5 : StyleSheet.hairlineWidth },
         ]}>
-          {hasConflict && (
+          {issue && (
             <View style={styles.conflictBanner}>
               <Ionicons name="alert-circle" size={14} color="#F44336" />
-              <Text style={styles.conflictBannerText}>
-                This time is no longer available — pick a new time
-              </Text>
+              <Text style={styles.conflictBannerText}>{issue}</Text>
             </View>
           )}
           {/* Header binds the service to its price on one line, with the
@@ -910,11 +914,15 @@ interface GroupedServiceCardProps {
   /** Opens the chooser for this group — which service (or the whole group). */
   onEditGroup: (items: CartItem[]) => void;
   depositPolicy?: ProviderDepositPolicy;
-  conflictedIds: Set<string>;
+  /** itemId → why that service can't be checked out. A group card is one
+   *  appointment made of several services, so the card banner names which
+   *  service is at fault and the row itself repeats the reason — otherwise a
+   *  four-service group flags red with nothing saying which row to fix. */
+  issuesByItemId: ReadonlyMap<string, string>;
 }
 
 const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
-  ({ items, getBooking, onRemove, onEditGroup, depositPolicy, conflictedIds }) => {
+  ({ items, getBooking, onRemove, onEditGroup, depositPolicy, issuesByItemId }) => {
     const { theme, palette: P } = useTheme();
     const { showConfirm, DialogHost } = useAppDialog();
 
@@ -971,7 +979,15 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
     const endMinutes = to24hMinutes(lastBooking.selectedTime) + durationToMinutes(last.duration);
     const isScheduled = Boolean(firstBooking.selectedDate && firstBooking.selectedTime);
     const spanKnown = isScheduled && startMinutes !== Number.MAX_SAFE_INTEGER && endMinutes > startMinutes;
-    const hasConflict = items.some(i => conflictedIds.has(i.id));
+    // Every flagged service in this group, in render order, so the banner can
+    // name them rather than the client having to guess which of four rows the
+    // red border is about.
+    const flagged = useMemo(
+      () => items.map(i => ({ item: i, issue: issuesByItemId.get(i.id) }))
+                 .filter((f): f is { item: CartItem; issue: string } => Boolean(f.issue)),
+      [items, issuesByItemId],
+    );
+    const hasConflict = flagged.length > 0;
 
     const handleRemoveOne = useCallback((item: CartItem) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -998,11 +1014,13 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
         styles.serviceCardShadow,
         { backgroundColor: P.surface, borderColor: hasConflict ? '#F44336' : P.border, borderWidth: hasConflict ? 1.5 : StyleSheet.hairlineWidth },
       ]}>
-        {hasConflict && (
+        {flagged.length > 0 && (
           <View style={styles.conflictBanner}>
             <Ionicons name="alert-circle" size={14} color="#F44336" />
             <Text style={styles.conflictBannerText}>
-              This time is no longer available — pick a new time
+              {flagged.length === 1
+                ? `${flagged[0]!.item.serviceName}: ${flagged[0]!.issue}`
+                : `${flagged.length} services in this appointment need attention`}
             </Text>
           </View>
         )}
@@ -1057,6 +1075,9 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
                   <Text style={[styles.groupRowMeta, { color: theme.secondaryText }]} numberOfLines={1}>
                     {item.duration}
                   </Text>
+                  {issuesByItemId.get(item.id) && (
+                    <Text style={styles.groupRowIssue}>{issuesByItemId.get(item.id)}</Text>
+                  )}
                   {/* Same labelled add-on line as the single card, so both
                       card types read consistently. */}
                   {(() => {
@@ -1463,12 +1484,58 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   // the same cart.
   const [isReservingSlots, setIsReservingSlots] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  // Cart item ids that failed to book on the last checkout attempt (e.g.
-  // "time slot no longer available") — flagged with a banner on their
-  // ServiceCard so the client can see which item needs a new time, instead
-  // of just reading a one-off alert and having no visible next step. Cleared
-  // whenever the item is edited/removed or a new checkout attempt starts.
-  const [conflictedItemIds, setConflictedItemIds] = useState<Set<string>>(new Set());
+  // Cart item id → what's wrong with it, flagged on that item's own card so
+  // the client can see WHICH booking needs attention and why, instead of
+  // reading a one-off alert that names no service and leaves no visible next
+  // step. Written by every checkout precondition (unscheduled, invalid date,
+  // scheduling conflict) as well as by a failed booking attempt. Cleared when
+  // the item is edited or removed, and at the start of each checkout attempt.
+  const [itemIssues, setItemIssues] = useState<ReadonlyMap<string, string>>(new Map());
+
+  const clearItemIssue = useCallback((itemId: string) => {
+    setItemIssues(prev => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }, []);
+
+  /** The cart's scheduling check in one place: two items for the same provider
+   *  overlapping each other, or a slot taken in Supabase since it was picked.
+   *  Returns itemId → reason, empty when everything is still bookable. Shared
+   *  so the pre-checkout gate and the slot-hold failure path can never disagree
+   *  about which service is at fault. */
+  const identifyCartConflicts = useCallback(async (
+    cartItems: CartItem[],
+    getBooking: (itemId: string) => ServiceBooking | undefined,
+  ): Promise<Map<string, string>> => {
+    const check = await AvailabilityService.validateCartBookings(
+      cartItems.map(item => {
+        const booking = getBooking(item.id);
+        return {
+          providerName: item.providerId ?? item.providerName,
+          date: booking?.selectedDate ?? '',
+          time: booking?.selectedTime ?? '',
+          duration: item.duration,
+          cartItemId: item.id,
+          serviceId: item.serviceId,
+        };
+      })
+    );
+    const issues = new Map<string, string>();
+    check.conflicts.forEach(c => {
+      if (!issues.has(c.cartItemId)) issues.set(c.cartItemId, c.message);
+    });
+    return issues;
+  }, []);
+
+  // Removing an item takes its flag with it, so a stale reason can never
+  // reappear against a re-added service.
+  const handleRemoveFromCart = useCallback((itemId: string) => {
+    removeFromCart(itemId);
+    clearItemIssue(itemId);
+  }, [removeFromCart, clearItemIssue]);
 
   // Customer details review modal state
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -1785,6 +1852,36 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }, 0);
   }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
 
+  // Two services in the cart booked over each other with the same provider.
+  // Computed here rather than waiting for the checkout tap because it needs no
+  // network at all — everything it compares is already in memory — so there is
+  // no reason to let a client sit on a cart that cannot possibly check out.
+  // The other half of the check (a slot taken by someone ELSE since it was
+  // picked) is a Supabase round trip per item, so that one stays on the
+  // checkout attempt rather than running on every cart render.
+  const localOverlapIssues = useMemo(
+    () => findCartOverlapIssues(items.map(item => {
+      const booking = getServiceBooking(item.id);
+      return {
+        itemId: item.id,
+        providerKey: item.providerId ?? item.providerName,
+        date: booking.selectedDate,
+        time: booking.selectedTime,
+        duration: item.duration,
+      };
+    })),
+    [items, getServiceBooking],
+  );
+
+  // What the cards actually render. A reason recorded from a checkout attempt
+  // wins over the local overlap check — it's the more specific finding, and
+  // it's the one the client just saw an alert about.
+  const displayedItemIssues = useMemo(() => {
+    if (itemIssues.size === 0) return localOverlapIssues;
+    if (localOverlapIssues.size === 0) return itemIssues;
+    return new Map([...localOverlapIssues, ...itemIssues]);
+  }, [localOverlapIssues, itemIssues]);
+
   // The fee is separate from provider money: tiered for a full-payment
   // checkout, or £0.99 for an all-deposit checkout.
   const platformFee = useMemo(() => {
@@ -1884,15 +1981,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const handleEditItem = useCallback((item: CartItem) => {
     setEditingItem(item);
     setShowBookingSheet(true);
-    // Editing is how the client acts on a conflict flag — clear it so the
-    // banner doesn't linger once they've picked a new time.
-    setConflictedItemIds(prev => {
-      if (!prev.has(item.id)) return prev;
-      const next = new Set(prev);
-      next.delete(item.id);
-      return next;
-    });
-  }, []);
+    // Editing is how the client acts on a flag — clear it so the banner
+    // doesn't linger once they've picked a new time.
+    clearItemIssue(item.id);
+  }, [clearItemIssue]);
 
   // Picking a single service out of the chooser. If that service is currently
   // part of a group, editing it means it no longer runs back-to-back with the
@@ -2111,6 +2203,16 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       logger.log('Items:', items.map(i => i.serviceName));
     }
 
+    // Every checkout precondition below flags the offending item(s) as well as
+    // raising the alert. The alert is dismissed and gone; the flag is what's
+    // still on screen when the client goes looking for what to fix, and in a
+    // cart of six services across three providers "one of your dates isn't
+    // valid" is otherwise unactionable.
+    //
+    // Starting a fresh attempt clears the previous one's flags first, so a
+    // resolved item doesn't stay red.
+    setItemIssues(new Map());
+
     // Validate all items have schedules
     const unscheduled = items.filter(item => {
       const booking = getServiceBooking(item.id);
@@ -2118,21 +2220,30 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     });
 
     if (unscheduled.length > 0) {
+      setItemIssues(new Map(unscheduled.map(item => [item.id, 'Pick a date and time for this service'])));
       showAlert(
         'Schedule Required',
-        `Please schedule ${unscheduled.length} appointment(s) before checkout.`
+        unscheduled.length === 1
+          ? `${unscheduled[0]!.serviceName} doesn't have a time yet — it's marked in your cart.`
+          : `${unscheduled.length} services don't have a time yet — they're marked in your cart.`
       );
       return;
     }
 
     // Validate booking data
-    const hasInvalidDate = items.some(item => {
+    const invalidDated = items.filter(item => {
       const booking = getServiceBooking(item.id);
       return booking.selectedDate && isNaN(new Date(booking.selectedDate).getTime());
     });
 
-    if (hasInvalidDate) {
-      showAlert('Check your appointment times', 'One of your appointment dates isn\'t valid. Please pick it again.');
+    if (invalidDated.length > 0) {
+      setItemIssues(new Map(invalidDated.map(item => [item.id, "This date isn't valid — pick it again"])));
+      showAlert(
+        'Check your appointment times',
+        invalidDated.length === 1
+          ? `${invalidDated[0]!.serviceName} has a date we can't read — it's marked in your cart. Please pick it again.`
+          : `${invalidDated.length} services have a date we can't read — they're marked in your cart. Please pick them again.`
+      );
       return;
     }
 
@@ -2142,22 +2253,20 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // the first conflict either of those produces is only discovered by
     // the claim RPC's own insert-time check, mid-checkout, after the card
     // has already been authorised.
-    const conflictCheck = await AvailabilityService.validateCartBookings(
-      items.map(item => {
-        const booking = getServiceBooking(item.id);
-        return {
-          providerName: item.providerId ?? item.providerName,
-          date: booking.selectedDate,
-          time: booking.selectedTime,
-          duration: item.duration,
-          cartItemId: item.id,
-          serviceId: item.serviceId,
-        };
-      })
-    );
-    if (!conflictCheck.isValid) {
-      const messages = [...new Set(conflictCheck.conflicts.map(c => c.message))].join('\n');
-      showAlert('Scheduling Conflict', messages);
+    // Each conflict names the cart item it belongs to, so the reason goes onto
+    // that item's own card rather than being flattened into one de-duplicated
+    // blob of text with nothing tying a line back to a service.
+    const issues = await identifyCartConflicts(items, getServiceBooking);
+    if (issues.size > 0) {
+      setItemIssues(issues);
+      const firstFlagged = items.find(i => issues.has(i.id));
+      const firstReason = firstFlagged ? issues.get(firstFlagged.id)!.replace(/\.$/, '') : '';
+      showAlert(
+        'Scheduling Conflict',
+        issues.size === 1 && firstFlagged
+          ? `${firstFlagged.serviceName}: ${firstReason}. It's marked in your cart — tap Edit to pick another time.`
+          : `${issues.size} services clash. They're marked in your cart — tap Edit on each to pick another time.`
+      );
       return;
     }
 
@@ -2225,7 +2334,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, hasMobileProvider]);
+}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, hasMobileProvider, identifyCartConflicts]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -2481,7 +2590,14 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       const failedIds = checkoutSnapshot.items
         .map(i => i.id)
         .filter(id => !error.succeededCartItemIds.includes(id));
-      setConflictedItemIds(new Set(failedIds));
+      // 23505 is the overlap constraint — someone else took the slot between
+      // the availability check and the insert. Anything else failed for a
+      // reason we can't attribute to the time, so don't tell the client to
+      // re-pick one.
+      const reason = pgCode === '23505'
+        ? 'This time was taken while you were paying — pick a new time'
+        : "This service couldn't be booked — try again";
+      setItemIssues(new Map(failedIds.map(id => [id, reason])));
     }
     // The caller (PaymentModal.handlePayment) owns showing the single
     // "Booking Failed" alert and closing the payment sheet — this only needs
@@ -2947,6 +3063,21 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         // uses on its own failure path.
                         setShowBookingSummaryModal(false);
                         showAlert(title, message);
+                        // The hold RPC reserves the whole cart in one call, so
+                        // its failure names no service — flagging all of them
+                        // would blame services that are fine. Re-run the same
+                        // per-item availability check the checkout button used
+                        // to find which slot actually went, and flag only
+                        // those. A round trip on a failure path is worth the
+                        // client knowing which card to fix; if it comes back
+                        // clean (the hold failed for some other reason) the
+                        // alert stands on its own and nothing is flagged.
+                        void identifyCartConflicts(
+                          checkoutSnapshot.items,
+                          itemId => checkoutSnapshot.bookings[itemId],
+                        )
+                          .then(found => { if (found.size > 0) setItemIssues(found); })
+                          .catch(e => logger.error('Could not identify which cart item conflicts:', e));
                       } finally {
                         setIsReservingSlots(false);
                       }
@@ -3545,19 +3676,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                                   <GroupedServiceCard
                                     items={unit.items}
                                     getBooking={getServiceBooking}
-                                    onRemove={removeFromCart}
+                                    onRemove={handleRemoveFromCart}
                                     onEditGroup={setPickerItems}
-                                    conflictedIds={conflictedItemIds}
+                                    issuesByItemId={displayedItemIssues}
                                     {...(policy !== undefined ? { depositPolicy: policy } : {})}
                                   />
                                 ) : (
                                   <ServiceCard
                                     item={unit.item}
                                     bookingInfo={getServiceBooking(unit.item.id)}
-                                    onRemove={removeFromCart}
+                                    onRemove={handleRemoveFromCart}
                                     onEdit={handleEditItem}
                                     allCartItems={items}
-                                    hasConflict={conflictedItemIds.has(unit.item.id)}
+                                    {...(displayedItemIssues.has(unit.item.id) ? { issue: displayedItemIssues.get(unit.item.id)! } : {})}
                                     {...(policy !== undefined ? { depositPolicy: policy } : {})}
                                   />
                                 )}
@@ -4202,6 +4333,15 @@ const styles = StyleSheet.create({
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
+  },
+  // Same red as the card banner and border, so a flagged row reads as part of
+  // the same signal rather than a second, unrelated warning colour.
+  groupRowIssue: {
+    color: '#F44336',
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 2,
   },
   groupRowAddOns: {
     fontSize: fonts.body.xsmall,

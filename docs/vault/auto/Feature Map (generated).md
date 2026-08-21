@@ -65,11 +65,11 @@ Curated: [[Availability & Slots]] · **143 files**
 - `src/utils/logger.ts` _(25)_
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/components/MultiBookingSheet.tsx` _(24)_
+- `src/screens/client/CartScreen.tsx` _(23)_
 - `src/features/providers/useProviderProfileData.ts` _(22)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
 - `src/screens/client/BookingsScreen.tsx` _(19)_
-- `src/screens/client/CartScreen.tsx` _(19)_
 - `src/services/becca/capabilities/provider.ts` _(18)_
 - … +113 more
 
@@ -114,7 +114,7 @@ Curated: [[Booking Flow]] · **228 files**
 - `src/services/databaseService.ts` _(504)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(484)_
-- `src/screens/client/CartScreen.tsx` _(424)_
+- `src/screens/client/CartScreen.tsx` _(437)_
 - `src/screens/client/BookingDetailScreen.tsx` _(307)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(269)_
@@ -346,8 +346,8 @@ Curated: [[Services]] · **36 files**
 - … +6 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **57 files**
-- `src/screens/client/CartScreen.tsx` _(223)_
+Curated: [[Payments]] · **58 files**
+- `src/screens/client/CartScreen.tsx` _(245)_
 - `src/contexts/BookingContext.tsx` _(57)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(56)_
 - `src/services/databaseService.ts` _(45)_
@@ -361,6 +361,7 @@ Curated: [[Payments]] · **57 files**
 - `src/services/becca/capabilities/client.ts` _(13)_
 - `src/components/MultiBookingSheet.tsx` _(12)_
 - `src/services/stripeService.ts` _(10)_
+- `src/features/cart/presentation.ts` _(8)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/navigation/types.ts` _(7)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
@@ -376,5 +377,4 @@ Curated: [[Payments]] · **57 files**
 - `supabase/fix_claim_cart_booking_slots_uses_real_address.sql` _(3)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(3)_
 - `supabase/provider_busy_spans_rpc.sql` _(3)_
-- `src/constants/featureFlags.ts` _(2)_
-- … +27 more
+- … +28 more
