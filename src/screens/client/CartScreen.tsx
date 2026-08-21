@@ -1882,6 +1882,40 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     return new Map([...localOverlapIssues, ...itemIssues]);
   }, [localOverlapIssues, itemIssues]);
 
+  // Which provider sections hold a flagged service. Keyed exactly as
+  // itemsByProvider groups them, so a section can be looked up by it.
+  const flaggedProviderKeys = useMemo(() => {
+    const keys = new Set<string>();
+    items.forEach(item => {
+      if (displayedItemIssues.has(item.id)) keys.add(item.providerName || 'Unknown Provider');
+    });
+    return keys;
+  }, [items, displayedItemIssues]);
+
+  // A flagged card is worthless behind a collapsed section — the client is
+  // told something needs attention and shown a closed header. Opening it is
+  // the whole point of flagging, so any provider that gains an issue is
+  // expanded. Keyed on the set of flagged providers rather than running
+  // continuously, so re-collapsing the section by hand still sticks; the
+  // header keeps its own marker for that case.
+  const flaggedProvidersKey = useMemo(
+    () => [...flaggedProviderKeys].sort().join('\u0000'),
+    [flaggedProviderKeys],
+  );
+  useEffect(() => {
+    if (flaggedProviderKeys.size === 0) return;
+    setCollapsedProviders(prev => {
+      if (![...flaggedProviderKeys].some(k => prev.has(k))) return prev;
+      const next = new Set(prev);
+      flaggedProviderKeys.forEach(k => next.delete(k));
+      return next;
+    });
+    // flaggedProvidersKey is the value dependency — the Set identity changes on
+    // every render that recomputes it, which would re-open a hand-collapsed
+    // section forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flaggedProvidersKey]);
+
   // The fee is separate from provider money: tiered for a full-payment
   // checkout, or £0.99 for an all-deposit checkout.
   const platformFee = useMemo(() => {
@@ -2204,10 +2238,10 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
 
     // Every checkout precondition below flags the offending item(s) as well as
-    // raising the alert. The alert is dismissed and gone; the flag is what's
-    // still on screen when the client goes looking for what to fix, and in a
-    // cart of six services across three providers "one of your dates isn't
-    // valid" is otherwise unactionable.
+    // raising the alert. The alert stays short on purpose — it says THAT
+    // something is wrong and is then dismissed and gone; the per-service detail
+    // (which service, why, what to do) lives on the flagged cards, which are
+    // still there when the client goes looking for what to fix.
     //
     // Starting a fresh attempt clears the previous one's flags first, so a
     // resolved item doesn't stay red.
@@ -2223,9 +2257,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
       setItemIssues(new Map(unscheduled.map(item => [item.id, 'Pick a date and time for this service'])));
       showAlert(
         'Schedule Required',
-        unscheduled.length === 1
-          ? `${unscheduled[0]!.serviceName} doesn't have a time yet — it's marked in your cart.`
-          : `${unscheduled.length} services don't have a time yet — they're marked in your cart.`
+        `Please schedule ${unscheduled.length} appointment(s) before checkout.`
       );
       return;
     }
@@ -2238,12 +2270,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
 
     if (invalidDated.length > 0) {
       setItemIssues(new Map(invalidDated.map(item => [item.id, "This date isn't valid — pick it again"])));
-      showAlert(
-        'Check your appointment times',
-        invalidDated.length === 1
-          ? `${invalidDated[0]!.serviceName} has a date we can't read — it's marked in your cart. Please pick it again.`
-          : `${invalidDated.length} services have a date we can't read — they're marked in your cart. Please pick them again.`
-      );
+      showAlert('Check your appointment times', 'One of your appointment dates isn\'t valid. Please pick it again.');
       return;
     }
 
@@ -2259,14 +2286,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     const issues = await identifyCartConflicts(items, getServiceBooking);
     if (issues.size > 0) {
       setItemIssues(issues);
-      const firstFlagged = items.find(i => issues.has(i.id));
-      const firstReason = firstFlagged ? issues.get(firstFlagged.id)!.replace(/\.$/, '') : '';
-      showAlert(
-        'Scheduling Conflict',
-        issues.size === 1 && firstFlagged
-          ? `${firstFlagged.serviceName}: ${firstReason}. It's marked in your cart — tap Edit to pick another time.`
-          : `${issues.size} services clash. They're marked in your cart — tap Edit on each to pick another time.`
-      );
+      showAlert('Scheduling Conflict', [...new Set(issues.values())].join('\n'));
       return;
     }
 
@@ -3617,9 +3637,10 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
 
                   const isCollapsed = collapsedProviders.has(providerName);
                   const renderUnits = buildRenderUnits(providerItems);
+                  const flaggedCount = providerItems.filter(i => displayedItemIssues.has(i.id)).length;
 
                   return (
-                    <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                    <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: flaggedCount > 0 ? '#F44336' : P.border, borderWidth: flaggedCount > 0 ? 1.5 : StyleSheet.hairlineWidth }]}>
                       {/* Provider Header — no Edit button here: editing acts on
                           a card (a single service, or a whole group), not on
                           the provider as a whole. */}
@@ -3656,6 +3677,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                             {providerData.instanceCount} appointments • £
                             {providerData.total.toFixed(2)}
                           </Text>
+
+                          {/* The section auto-opens when a service here is
+                              flagged, but the client can collapse it again —
+                              and a closed section would then hide the only
+                              thing telling them what to fix. The count stays
+                              on the header either way. */}
+                          {flaggedCount > 0 && (
+                            <Text style={styles.providerIssueCount}>
+                              {flaggedCount === 1
+                                ? '1 service needs attention'
+                                : `${flaggedCount} services need attention`}
+                            </Text>
+                          )}
                         </View>
                       </View>
 
@@ -4333,6 +4367,13 @@ const styles = StyleSheet.create({
     fontSize: fonts.body.xsmall,
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '600',
+  },
+  providerIssueCount: {
+    color: '#F44336',
+    fontSize: fonts.body.xsmall,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '700',
+    marginTop: 4,
   },
   // Same red as the card banner and border, so a flagged row reads as part of
   // the same signal rather than a second, unrelated warning colour.

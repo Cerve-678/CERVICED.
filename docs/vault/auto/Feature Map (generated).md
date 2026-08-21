@@ -41,10 +41,10 @@ Curated: [[Address Release]] · **81 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **143 files**
-- `src/services/AvailabilityService.ts` _(310)_
+- `src/services/AvailabilityService.ts` _(323)_
+- `src/components/ModernBeautyCalendar.tsx` _(144)_
 - `src/services/databaseService.ts` _(115)_
 - `src/screens/provider/AddBookingScreen.tsx` _(112)_
-- `src/components/ModernBeautyCalendar.tsx` _(109)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(106)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/client/SearchScreen.tsx` _(104)_
@@ -111,10 +111,10 @@ Curated: [[Payments]] · **109 files**
 Curated: [[Booking Flow]] · **228 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(682)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(507)_
 - `src/services/databaseService.ts` _(504)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(484)_
-- `src/screens/client/CartScreen.tsx` _(437)_
+- `src/screens/client/CartScreen.tsx` _(438)_
 - `src/screens/client/BookingDetailScreen.tsx` _(307)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(269)_
@@ -132,8 +132,8 @@ Curated: [[Booking Flow]] · **228 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(107)_
 - `supabase/automation_jobs.sql` _(107)_
+- `src/services/AvailabilityService.ts` _(97)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
-- `src/services/AvailabilityService.ts` _(92)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
@@ -347,7 +347,7 @@ Curated: [[Services]] · **36 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **58 files**
-- `src/screens/client/CartScreen.tsx` _(245)_
+- `src/screens/client/CartScreen.tsx` _(239)_
 - `src/contexts/BookingContext.tsx` _(57)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(56)_
 - `src/services/databaseService.ts` _(45)_
