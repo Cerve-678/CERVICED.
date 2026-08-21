@@ -134,6 +134,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // recreating the availability fetch on every render.
   const generateWeeklyAvailabilityRef = useRef<() => Promise<void>>(async () => {});
   const getWeekDaysRef = useRef<() => WeekDay[]>(() => []);
+  // Which weekly fetch is current. generateWeeklyAvailability awaits up to
+  // seven per-day lookups and then REPLACES the whole slots map, so two runs
+  // overlapping (paging weeks quickly, or slotResolver changing when a
+  // service is pulled out of a group) let the slower, older run land last —
+  // the map then holds the previous week's dates, every visible day falls
+  // through to the 'unavailable' default in getWeekDays, and a week with real
+  // openings renders as completely closed.
+  const fetchSeqRef = useRef(0);
 
   // Resolve the provider ONCE up front so a bad/stale name shows a clear
   // message instead of rendering as an indistinguishable "fully booked"
@@ -217,6 +225,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   }, [selectedDate]);
 
   const generateWeeklyAvailability = async () => {
+    const seq = ++fetchSeqRef.current;
     setIsLoadingSlots(true);
     const startOfWeek = getStartOfWeek(currentWeek);
     const slots: SlotsMap = {};
@@ -285,6 +294,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       }
     }
 
+    // A newer run started while this one was awaiting — its result is the
+    // one that matches what's on screen, so drop this entirely (including
+    // the spinner, which the newer run still owns).
+    if (seq !== fetchSeqRef.current) return;
     setAvailableSlots(slots);
     setIsLoadingSlots(false);
   };
@@ -342,6 +355,23 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return days;
   };
 
+  // A day the user actually TAPPED invalidates whatever time is already
+  // selected: the same clock time usually isn't offered on the new day, and
+  // someone moving quickly (tap a new day, go straight for Done/Continue)
+  // would otherwise submit a slot that was never available on it. Clearing
+  // the time is also what keeps the caller's Done/Continue disabled — every
+  // caller already gates on having a time — until a real pick is made.
+  //
+  // Deliberately done here in the tap handlers rather than in the
+  // selectedDate effect above: that effect cannot tell a user tap from the
+  // caller auto-resolving an earliest-available date AND time together (they
+  // land in the same render), so clearing there would wipe the time the
+  // caller had just resolved.
+  const selectDateFromTap = useCallback((dateString: string) => {
+    onDateSelect(dateString);
+    if (dateString !== selectedDate && selectedTime) onTimeSelect('');
+  }, [onDateSelect, onTimeSelect, selectedDate, selectedTime]);
+
   const handleCalendarDaySelect = (date: Date) => {
     const dateString = toLocalDateString(date);
     const today = new Date();
@@ -357,7 +387,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
     // Set the week to contain this date
     setCurrentWeek(date);
-    onDateSelect(dateString);
+    selectDateFromTap(dateString);
     // Deliberately does NOT close the popup — the client picks a date (and
     // can keep browsing months / re-pick) then taps Done explicitly, rather
     // than the first tap silently dismissing the whole picker.
@@ -366,7 +396,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const handleDateClick = (dateString: string, dayData: DayData) => {
     if (dayData.status === 'past' || dayData.status === 'closed') return;
     Haptics.selectionAsync().catch(() => {});
-    onDateSelect(dateString);
+    selectDateFromTap(dateString);
   };
 
   // Picking a time is the last step of the flow, so it's what collapses the
