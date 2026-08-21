@@ -714,3 +714,34 @@ worth carrying forward if/when this gets rebuilt.
 ---
 
 *Last updated: 2026-08-18*
+
+---
+
+## Get In Touch enquiry threads are unlimited (in-app messaging has no scope boundary)
+
+### What it means
+
+`Get In Touch` on a provider's public profile is for **general enquiries from anyone browsing** — someone who hasn't booked, or a booked client asking something that isn't about their appointment. Booking-specific contact is a different surface: `Booking Details → Contact`, driven by the provider's Communications toggles.
+
+The product intent is that the enquiry channel is *limited* — it isn't meant to become a free, unbounded inbox that any account can open against any live provider. Today there is no such limit.
+
+### What currently happens
+
+`ProviderProfileScreen.tsx`'s `handleGetInTouch` navigates straight to `ProviderChat` via `get_or_create_provider_conversation` for any client viewing any live provider. There is no check for whether a booking exists, no message cap, no thread expiry, and no rate limit — client-side or server-side. A provider's only defence is muting/ignoring the thread.
+
+As of 2026-08-20 the split between the two audiences is **copy and data-source only**:
+- Public / enquiry channel = the contact details set in `InfoRegScreen.tsx` step 03 (phone, email, Instagram, website). Filling a field in there publishes it.
+- Booked-client channel = `providers.preferred_contact_methods`, set in `ProviderCommunicationsScreen.tsx`, read by `getProviderContactById` for the Booking Details contact sheet.
+
+`in_app` is locked on in the Communications toggles, so a provider cannot currently opt out of receiving enquiry messages at all.
+
+### What needs to exist
+
+- A defined rule for what "limited" means — candidates: a message cap per enquiry thread from a client with no booking; a thread that auto-closes after N days with no booking; or read-only-until-booked.
+- **Server-side enforcement**, not UI copy — a client can call the conversation RPC directly, so the limit has to live in `get_or_create_provider_conversation` / the message-insert path, not in the screen.
+- A provider-facing switch for whether they accept profile enquiries at all, separate from the locked `in_app` toggle that governs booked clients.
+- Abuse/spam considerations before launch: an unlimited, unauthenticated-intent DM channel into a real person's inbox is a moderation surface, not just a feature.
+
+### Related
+
+Scoped out of the 2026-08-20 Get In Touch / Communications source-of-truth split, which fixed *which setting drives which audience* and made the distinction explicit in both screens' copy, but deliberately changed no messaging behaviour.
