@@ -162,6 +162,19 @@ export function to24HourTime(input: string): string {
   return `${String(h).padStart(2, '0')}:${minutes}`;
 }
 
+/** Minutes → "1h 30m" / "2h" / "45m". Empty string for a non-positive
+ *  length, so a caller with nothing to show renders nothing rather than
+ *  "0m". The single source for this format: mapDbBookingToConfirmed derives
+ *  a booking's duration through it, and the provider screens that recover a
+ *  length for a legacy booking with no end_time format it through it too, so
+ *  a recovered duration is indistinguishable from a stored one. */
+export function formatDurationMinutes(totalMinutes: number): string {
+  if (!(totalMinutes > 0)) return '';
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h > 0 ? `${h}h` : ''}${h > 0 && m > 0 ? ' ' : ''}${m > 0 ? `${m}m` : ''}`;
+}
+
 /** "YYYY-MM-DD" from a Date, in local time (no UTC shift). */
 export function dateToYMD(date: Date): string {
   const y = date.getFullYear();

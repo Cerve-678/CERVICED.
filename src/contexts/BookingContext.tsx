@@ -8,6 +8,7 @@ import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProvide
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
+import { parseRescheduleRequestToken } from '../utils/rescheduleWindow';
 
 import {
   BookingStatus,
@@ -304,8 +305,21 @@ const determineBookingStatus = (
   try {
     const now = new Date();
     const appointmentStart = createBookingDateTime(bookingDate, bookingTime);
-    const appointmentEnd = createBookingDateTime(bookingDate, endTime);
-    
+    let appointmentEnd = createBookingDateTime(bookingDate, endTime);
+
+    // A booking row written before insertDirectBooking started requiring
+    // end_time has bookings.end_time NULL, and mapDbBookingToConfirmed then
+    // sets endTime to the START time. That made the appointment zero-length
+    // here: `now <= appointmentEnd` was true for one millisecond, so the
+    // booking skipped IN_PROGRESS entirely and flipped from UPCOMING to
+    // COMPLETED the instant its start time passed — a client sitting in the
+    // chair saw their live appointment filed under Past. Treat a
+    // non-positive span as one hour, the same assumed length the provider
+    // side's scheduleIssues.resolveSpan falls back to.
+    if (appointmentEnd.getTime() <= appointmentStart.getTime()) {
+      appointmentEnd = new Date(appointmentStart.getTime() + 60 * 60 * 1000);
+    }
+
     if (now < appointmentStart) {
       return BookingStatus.UPCOMING;
     } else if (now >= appointmentStart && now <= appointmentEnd) {
@@ -738,8 +752,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // RescheduleScreen.tsx handleSubmit) — split so the UI can show the
       // requested date and time separately, mirroring how the RPC now splits
       // them into requested_dates/requested_times server-side.
-      const requestedDatesOnly = preferredDates.map(d => d.split(' ')[0] ?? d);
-      const requestedTimesOnly = preferredDates.map(d => d.split(' ')[1] ?? '');
+      // Split on the FIRST space only (see parseRescheduleRequestToken).
+      // `d.split(' ')[1]` kept just the first token of the time, so a
+      // 12-hour "2026-09-01 2:30 PM" was stored locally as "2:30" — which
+      // formatTime12Safe then rendered back to the client as 2:30 AM.
+      const requestedDatesOnly = preferredDates.map(d => parseRescheduleRequestToken(d)[0]);
+      const requestedTimesOnly = preferredDates.map(d => parseRescheduleRequestToken(d)[1]);
 
       // ✅ Update only the specific booking
       const updatedBooking = {

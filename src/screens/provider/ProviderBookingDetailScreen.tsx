@@ -52,6 +52,7 @@ import {
   getOrCreateConversation,
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
+  getServiceDurationsByIds,
   ClientBeautyProfile,
   IntakeForm,
   BookingInfoPack,
@@ -60,7 +61,7 @@ import {
 } from '../../services/databaseService';
 import type { DbBooking, ServiceCategory , DbBookingRescheduleRequest } from '../../types/database';
 import { isAddressReleasedByPolicy } from '../../utils/addressRelease';
-import { formatTime12, dateToYMD } from '../../utils/dateUtils';
+import { formatTime12, formatTime12Safe, dateToYMD, formatDurationMinutes } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
 import { toUserMessage, toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '../../features/bookings/datePresentation';
@@ -967,6 +968,22 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     }
   }, [booking]);
 
+  // Recover the real length of a booking whose row never got an end_time
+  // written (see insertDirectBooking / the ProviderHomeScreen counterpart of
+  // this fetch) — only fires when this specific booking actually needs it,
+  // never a per-list-row fetch.
+  const [recoveredServiceDurationMinutes, setRecoveredServiceDurationMinutes] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    setRecoveredServiceDurationMinutes(undefined);
+    if (booking?.duration || !booking?.serviceId) return;
+    if (booking.bookingTime && booking.endTime && booking.bookingTime !== booking.endTime) return;
+    let cancelled = false;
+    getServiceDurationsByIds([booking.serviceId])
+      .then(map => { if (!cancelled) setRecoveredServiceDurationMinutes(map.get(booking.serviceId!)); })
+      .catch(err => logger.error('[ProviderBookingDetail] service duration lookup failed:', err));
+    return () => { cancelled = true; };
+  }, [booking?.serviceId, booking?.duration, booking?.bookingTime, booking?.endTime]);
+
   // Must be above early returns — hooks cannot be called after conditional returns
   const displayDuration = useMemo(() => {
     if (!booking) return '';
@@ -993,8 +1010,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         return `${m}m`;
       }
     }
+    if (recoveredServiceDurationMinutes) return formatDurationMinutes(recoveredServiceDurationMinutes);
     return '';
-  }, [booking]);
+  }, [booking, recoveredServiceDurationMinutes]);
 
   if (fetching) {
     return (
@@ -1769,7 +1787,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                           <View key={i} style={[styles.slotChip, styles.slotChipRow, { backgroundColor: '#34C75915', borderColor: '#34C75944' }]}>
                             <Ionicons name="checkmark-circle" size={14} color="#34C759" />
                             <Text style={[styles.slotChipText, { color: P.text }]}>
-                              {formatBookingDisplayDate(slot.date)}  ·  {(slot.times ?? []).join(', ')}
+                              {formatBookingDisplayDate(slot.date)}  ·  {(slot.times ?? []).map(t => formatTime12Safe(t) ?? t).join(', ')}
                             </Text>
                           </View>
                         ))}

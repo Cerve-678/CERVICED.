@@ -14,7 +14,7 @@ import type { BookingWithAddOns, DbBookingRescheduleRequest } from '../types/dat
 import type { ProviderLocationData } from './databaseService';
 import { getMyBookings } from './databaseService';
 import { logger } from '../utils/logger';
-import { formatTime12, formatShortDate } from '../utils/dateUtils';
+import { formatTime12, formatShortDate, formatDurationMinutes } from '../utils/dateUtils';
 import { calculatePlatformFee } from '../features/cart/platformFee';
 
 
@@ -369,11 +369,12 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     if (isPM && h !== 12) h += 12;
     return h * 60 + m;
   };
+  // Formatted through the shared helper, not inline: the provider screens
+  // recover a length for legacy bookings written with no end_time and format
+  // it the same way, so a recovered duration has to be indistinguishable from
+  // a stored one. Two copies of this arithmetic is how they drift apart.
   const diffMin = toMin(endTime) - toMin(startTime);
-  const durationStr = diffMin > 0
-    ? (Math.floor(diffMin / 60) > 0 ? `${Math.floor(diffMin / 60)}h ` : '') +
-      (diffMin % 60 > 0 ? `${diffMin % 60}m` : '')
-    : '';
+  const durationStr = formatDurationMinutes(diffMin);
 
   return {
     id: db.id,

@@ -37,7 +37,7 @@ import {
   setBookingTip,
   getBookingTip,
 } from '../../services/databaseService';
-import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
+import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
 import {
   calculateBookingPaymentBreakdown,
@@ -668,7 +668,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 ['Service', booking.serviceName],
                 ['Date', formatBookingDisplayDate(booking.bookingDate)],
                 ['Time', booking.bookingTime],
-                ['Duration', booking.duration],
+                // mapDbBookingToConfirmed derives `duration` from
+                // end_time − booking_time, and leaves it '' for the legacy
+                // rows written before end_time was required — which rendered
+                // as a labelled row with nothing beside it.
+                ['Duration', booking.duration || '—'],
               ].map(([label, value]) => (
                 <View key={label} style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>{label}</Text>
@@ -1006,7 +1010,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       const t = (booking as any).rescheduleRequest.requestedTimes?.[i];
                       return (
                         <Text key={`${d}-${i}`} style={{ fontSize: 12, color: C.text, fontWeight: '600', marginTop: 2 }}>
-                          You requested: {formatBookingDisplayDate(d)}{t ? ` at ${t}` : ''}
+                          You requested: {formatBookingDisplayDate(d)}{formatTime12Safe(t) ? ` at ${formatTime12Safe(t)}` : ''}
                         </Text>
                       );
                     })}
