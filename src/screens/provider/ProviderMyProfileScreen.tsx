@@ -186,7 +186,10 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   // five, Business Details' sub-screens for the rest) so the missing-items
   // list can navigate there directly instead of just naming the gap.
   const profileReadiness = useMemo(() => {
-    type ReadinessItem = { done: boolean; label: string; screen: string; tab?: string };
+    type ReadinessItem = {
+      done: boolean; label: string; screen: string;
+      tab?: string; params?: Record<string, unknown>;
+    };
     if (!providerData) return { complete: 0, total: 6, services: 0, missing: [] as ReadinessItem[] };
     const services = Object.values(providerData.categories).reduce((count, category) => count + category.length, 0);
     const items: ReadinessItem[] = [
@@ -207,9 +210,13 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     if (hasTermsForm !== null) {
       items.push({
         done: hasTermsForm,
-        label: 'set up your terms & conditions',
+        label: hasTermsForm ? 'review your terms & conditions' : 'set up your terms & conditions',
         screen: 'ProviderIntakeForm',
         tab: 'Profile',
+        // Straight into writing them — the checklist already named the
+        // document, so dropping the provider on the form library would make
+        // them find it a second time.
+        params: { openTerms: true },
       });
     }
     return {
@@ -498,7 +505,11 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
                         if (item.tab) {
-                          navigation.getParent()?.navigate(item.tab, { screen: item.screen, initial: false });
+                          navigation.getParent()?.navigate(item.tab, {
+                            screen: item.screen,
+                            ...(item.params ? { params: item.params } : {}),
+                            initial: false,
+                          });
                         } else {
                           navigation.navigate(item.screen);
                         }

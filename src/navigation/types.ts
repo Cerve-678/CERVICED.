@@ -30,7 +30,7 @@ export type RootStackParamList = {
 // Home Stack
 export type HomeStackParamList = {
   HomeMain: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -58,7 +58,7 @@ export type HomeStackParamList = {
 // Explore Stack
 export type ExploreStackParamList = {
   ExploreMain: { category?: string };
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -73,7 +73,7 @@ export type ExploreStackParamList = {
 // Becca Stack
 export type BeccaStackParamList = {
   BeccaMain: { conversationId?: string };
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -134,7 +134,7 @@ export type ProviderBeccaStackParamList = {
 // Cart Stack
 export type CartStackParamList = {
   CartMain: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -173,7 +173,7 @@ export type ProfileStackParamList = {
   Terms: undefined;
   ReportProblem: undefined;
   Points: undefined;
-  ProviderProfile: { providerId: string; source?: string; openServiceId?: string };
+  ProviderProfile: { providerId: string; source?: string; openServiceId?: string; bookIntent?: boolean };
   ProviderChat: {
     providerId: string;
     providerDbId: string;
@@ -220,6 +220,11 @@ export type ProviderHomeStackParamList = {
         serviceName: string;
         formId?: string;
       }
+    // Straight into the Terms & Conditions builder, skipping the library —
+    // the entry points for terms (Business Info, the profile-health
+    // checklist) name the document, so landing on a list of every form and
+    // asking the provider to find it again is a step backwards.
+    | { openTerms: true }
     | undefined;
   Notifications: undefined;
   ProviderInbox:
@@ -272,12 +277,16 @@ export type ProviderAccountStackParamList = {
   ProviderSchedule: undefined;
   AddBooking: undefined;
   BookingDetail: { bookingId: string; booking?: any; groupSiblings?: any[] };
-  ProviderIntakeForm: {
-    bookingId: string;
-    clientUserId: string;
-    serviceName: string;
-    formId?: string;
-  };
+  ProviderIntakeForm:
+    | {
+        bookingId: string;
+        clientUserId: string;
+        serviceName: string;
+        formId?: string;
+      }
+    // See the ProviderAccount stack's copy of this route.
+    | { openTerms: true }
+    | undefined;
   ProviderInbox:
     | { initialFilter?: "all" | "pending" | "confirmed" | "done" | "messages" }
     | undefined;

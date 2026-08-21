@@ -311,7 +311,18 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
   // Opened two ways: from a booking (all params set — builder pre-fills the
   // service, sending goes straight to that client) or from Quick Access with
   // no params at all (pure library — sending opens a booking picker below).
-  const { bookingId, clientUserId, serviceName = '', formId: existingFormId } = route.params ?? {};
+  // The route is a union — booking context, or the terms deep-link, or
+  // nothing — so read it as one loose bag rather than destructuring a shape
+  // only one of the three arms actually has.
+  const params = (route.params ?? {}) as Partial<{
+    bookingId: string;
+    clientUserId: string;
+    serviceName: string;
+    formId: string;
+    openTerms: boolean;
+  }>;
+  const { bookingId, clientUserId, formId: existingFormId, openTerms } = params;
+  const serviceName = params.serviceName ?? '';
   const hasBookingContext = !!bookingId && !!clientUserId;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -381,42 +392,6 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     };
   }, []);
 
-  // ── Init ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    async function init() {
-      try {
-        const [forms, profile, services, existing] = await Promise.all([
-          getProviderFormLibrary(),
-          getMyProviderProfile(),
-          getMyProviderServices(),
-          existingFormId && bookingId ? getIntakeFormByBooking(bookingId) : Promise.resolve(null),
-        ]);
-
-        setLibraryForms(forms);
-        const svcNames = services.map(s => s.name);
-        setProviderServiceNames(svcNames);
-        setRelevantTemplates(getRelevantTemplates(profile?.service_category ?? '', svcNames));
-        setPolicyTemplate(
-          buildPolicyTemplate(buildPolicyDisplayRows((profile as any)?.booking_policies ?? null)),
-        );
-
-        if (existing) {
-          setExistingForm(existing);
-          setTitle(existing.title);
-          setQuestions(existing.questions);
-          setRequiresSignature(existing.requiresSignature);
-          setMode('readonly');
-        } else {
-          setPickerTab(forms.length > 0 ? 'myForms' : 'templates');
-          setMode('picker');
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    init();
-  }, [bookingId, existingFormId]);
-
   // ── Builder helpers ───────────────────────────────────────────────────────
   const openBuilderBlank = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
@@ -454,6 +429,50 @@ export default function ProviderIntakeFormScreen({ route, navigation }: Props) {
     setIsTerms(form.isTerms);
     setMode('builder');
   }, []);
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function init() {
+      try {
+        const [forms, profile, services, existing] = await Promise.all([
+          getProviderFormLibrary(),
+          getMyProviderProfile(),
+          getMyProviderServices(),
+          existingFormId && bookingId ? getIntakeFormByBooking(bookingId) : Promise.resolve(null),
+        ]);
+
+        setLibraryForms(forms);
+        const svcNames = services.map(s => s.name);
+        setProviderServiceNames(svcNames);
+        setRelevantTemplates(getRelevantTemplates(profile?.service_category ?? '', svcNames));
+        setPolicyTemplate(
+          buildPolicyTemplate(buildPolicyDisplayRows((profile as any)?.booking_policies ?? null)),
+        );
+
+        if (existing) {
+          setExistingForm(existing);
+          setTitle(existing.title);
+          setQuestions(existing.questions);
+          setRequiresSignature(existing.requiresSignature);
+          setMode('readonly');
+        } else if (openTerms) {
+          // Straight into writing/editing the terms. Reuses the same two
+          // paths the Forms card does — the saved form if there is one, the
+          // empty template if not — rather than duplicating that choice.
+          const saved = forms.find(f => f.isTerms);
+          if (saved) openBuilderFromLibrary(saved);
+          else openBuilderFromTemplate(TERMS_TEMPLATE);
+        } else {
+          setPickerTab(forms.length > 0 ? 'myForms' : 'templates');
+          setMode('picker');
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, [bookingId, existingFormId, openTerms, openBuilderFromLibrary, openBuilderFromTemplate]);
+
 
   const toggleService = useCallback((name: string) => {
     setSelectedServices(prev =>

@@ -5664,12 +5664,12 @@ COMMENT ON COLUMN public.providers.hair_types_catered IS
 -- ============================================================
 
 -- ════════════════════════════════════════════════════
--- provider_terms_and_conditions.sql
+-- migrations/20260820161251_provider_terms_and_conditions.sql
 -- ════════════════════════════════════════════════════
 -- ============================================================
 -- CERVICED — A provider's own Terms & Conditions, readable by a client
 -- BEFORE they book.
--- Run in the Supabase SQL editor. Safe to re-run.
+-- Safe to re-run.
 --
 -- CONTEXT
 -- A provider authors their own T&Cs as a form (ProviderIntakeFormScreen's
@@ -5737,5 +5737,5 @@ REVOKE ALL ON FUNCTION public.get_provider_terms(UUID) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_provider_terms(UUID) TO authenticated;
 
 -- ============================================================
--- DONE — provider_terms_and_conditions.sql applied.
+-- DONE — 20260820161251_provider_terms_and_conditions.sql applied.
 -- ============================================================

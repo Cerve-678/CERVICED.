@@ -145,7 +145,6 @@ export interface BookingSheetResult {
    *  agreement, plus a frozen copy of the policy agreed to (see
    *  BookingSheetProps.bookingPolicies). Absent if there was no policy to
    *  agree to (provider hasn't set one). */
-  policyAcceptedAt?: string;
   policySnapshot?: Record<string, unknown>;
 }
 
@@ -184,12 +183,6 @@ interface BookingSheetProps {
         selectedTime?: string | undefined;
         notes?: string | undefined;
         isDepositOnly?: boolean | undefined;
-        /** Whether this cart item already had terms/cancellation policy
-         *  agreed to (mode="edit" only — seeded from the item's own
-         *  policyAcceptedAt, not any cross-booking/device-wide memory).
-         *  Re-editing an already-agreed item shouldn't force re-ticking the
-         *  same box it was added with. */
-        agreedToPolicy?: boolean | undefined;
       }
     | undefined;
   /** When set, this provider requires a consultation before this client's
@@ -241,7 +234,6 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
   const [isDepositOnly, setIsDepositOnly] = useState(false);
-  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [isResolvingSlot, setIsResolvingSlot] = useState(false);
   const [depositPolicy, setDepositPolicy] = useState<ProviderDepositPolicy | undefined>(undefined);
 
@@ -269,6 +261,12 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const termsFetched = useRef(false);
   const [providerTerms, setProviderTerms] = useState<{ title: string; body: string } | null>(null);
   const [showProviderTerms, setShowProviderTerms] = useState(false);
+  // Agreement to the provider's OWN terms, gating add-to-cart. Separate from
+  // the cart's checkout checkbox (CERVICED's Terms + cancellation policy):
+  // that one is app-wide and stamps policyAcceptedAt, this one is about this
+  // provider's own document, which the client should not be able to add a
+  // booking to the cart without having accepted.
+  const [agreedToProviderTerms, setAgreedToProviderTerms] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
@@ -279,7 +277,6 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     setSelectedTime(initial?.selectedTime ?? '');
     setNotes(initial?.notes ?? '');
     setIsDepositOnly(initial?.isDepositOnly ?? false);
-    setAgreedToPolicy(initial?.agreedToPolicy ?? false);
     setLocalPromo(undefined);
     setConsultationDate('');
     setConsultationTime('');
@@ -287,6 +284,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     resolvedOnce.current = false;
     depositFetched.current = false;
     termsFetched.current = false;
+    setAgreedToProviderTerms(false);
     consultationResolvedOnce.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, service?.id]);
@@ -433,6 +431,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   const consultationScheduleMissing = !!consultationRequired && (!consultationDate || !consultationTime);
 
+  // Only gates mode="add": an item already in the cart cleared this gate when
+  // it was added, so re-editing its date shouldn't demand the tick again.
+  // Nothing to agree to when the provider hasn't written any terms.
+  const providerTermsGateUnmet = mode === 'add' && !!providerTerms && !agreedToProviderTerms;
+
   // ── Step navigation ────────────────────────────────────────────────────
   // The order is computed, not hardcoded, so "addons" can drop out entirely
   // for a service that has none without every back/next call having to know
@@ -448,13 +451,6 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     [service?.addOns?.length]
   );
 
-  // The checkbox reads "...and this provider's cancellation policy" — when
-  // the provider hasn't set one, there's nothing provider-specific to agree
-  // to, so it shouldn't be shown or block booking. (CERVICED's own Terms &
-  // Conditions agreement is separate and always required — that's the cart's
-  // own checkout checkbox, untouched by this.)
-  const requiresPolicyAgreement = !!bookingPolicies;
-
   // What's missing before this step can be left. null = good to continue.
   // Each step gates only its OWN requirements, so the client is told what's
   // wrong while they're still looking at it, instead of at the very end.
@@ -468,17 +464,19 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       if (!selectedDate || !selectedTime) return 'Choose a date and time';
       if (consultationScheduleMissing) return 'Choose a consultation time';
     }
-    if (step === 'confirm' && requiresPolicyAgreement && !agreedToPolicy) return 'Agree to the terms to continue';
+    // Fixable right here on "confirm", so unlike scheduling this one disables
+    // the button rather than routing back to an earlier step.
+    if (step === 'confirm' && providerTermsGateUnmet) return 'Agree to the Terms & Conditions';
     return null;
-  }, [step, selectedDate, selectedTime, consultationScheduleMissing, requiresPolicyAgreement, agreedToPolicy]);
+  }, [step, selectedDate, selectedTime, consultationScheduleMissing, providerTermsGateUnmet]);
 
   // Whether handleSubmit's own requirements are met right now, regardless of
   // which step is showing — used by the edit-mode "Done" shortcut so a
   // client fixing one field (e.g. just the date) isn't forced to click
-  // through every remaining step to save it, as long as terms were already
-  // agreed and scheduling is already valid from an earlier pass.
+  // through every remaining step to save it, as long as scheduling is
+  // already valid from an earlier pass.
   const canFinishNow =
-    !!selectedDate && !!selectedTime && !consultationScheduleMissing && (!requiresPolicyAgreement || agreedToPolicy);
+    !!selectedDate && !!selectedTime && !consultationScheduleMissing;
 
   const goToStep = useCallback((next: BookingStep) => {
     Haptics.selectionAsync().catch(() => {});
@@ -512,7 +510,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const handleSubmit = useCallback(() => {
     if (!service) return;
     if (consultationScheduleMissing) return; // guarded by disabling the button too
-    if (requiresPolicyAgreement && !agreedToPolicy) return; // guarded by disabling the button too
+    if (providerTermsGateUnmet) return; // ditto — the provider's own T&Cs gate
     onSubmit({
       selectedAddOns,
       date: selectedDate,
@@ -523,13 +521,14 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       ...(consultationRequired && consultationDate && consultationTime
         ? { consultationBooking: { date: consultationDate, time: consultationTime } }
         : {}),
-      // Only stamped when this provider actually has a policy to agree to —
-      // no checkbox is shown otherwise, so there's nothing to timestamp.
-      ...(requiresPolicyAgreement ? { policyAcceptedAt: new Date().toISOString() } : {}),
+      // The policy in force at booking time, recorded as fact — not as
+      // consent. Agreement itself is captured once, by the cart's own
+      // bundled Terms + cancellation-policy checkbox at checkout, which
+      // is what stamps policyAcceptedAt.
       ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, requiresPolicyAgreement, agreedToPolicy, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -868,49 +867,51 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </View>
               )}
 
-              {/* Only shown when this provider actually has a cancellation
-                  policy on file — the checkbox text names "this provider's
-                  cancellation policy" specifically, so with no policy set
-                  there's nothing provider-specific to agree to and booking
-                  should proceed like normal. CERVICED's own Terms &
-                  Conditions agreement lives separately on the cart's own
-                  checkout screen and is unaffected by this. */}
-              {requiresPolicyAgreement && (
-                <TouchableOpacity
-                  style={styles.policyCheckboxRow}
-                  onPress={() => setAgreedToPolicy(!agreedToPolicy)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.addOnCheckbox,
-                    { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
-                  ]}>
-                    {agreedToPolicy && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
-                  </View>
-                  {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
-                  <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
-                    I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Read-only, and shown whether or not there's a policy to agree
-                  to — a provider can have written terms without having filled
-                  in any structured booking policy. Deliberately not a second
-                  checkbox: nothing here records agreement to these terms, so
-                  presenting it as consent would claim something the app can't
-                  back up. Sending them as a signable form is the follow-on
-                  feature (FUTURE_LOGIC.md). */}
+              {/* Shown whether or not there's a structured booking policy — a
+                  provider can have written terms without having filled one in.
+                  The tick is what gates Add to Cart; it records agreement for
+                  this sheet only (the cart's checkout checkbox is still what
+                  stamps policyAcceptedAt on the booking). Sending these as a
+                  signable form is the follow-on feature (FUTURE_LOGIC.md). */}
               {providerTerms && (
-                <TouchableOpacity
-                  style={styles.providerTermsLinkRow}
-                  onPress={() => setShowProviderTerms(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
-                    Read {providerDisplayName}'s Terms &amp; Conditions
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.providerTermsBlock}>
+                  <TouchableOpacity
+                    style={styles.providerTermsLinkRow}
+                    onPress={() => setShowProviderTerms(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
+                      Read {providerDisplayName}'s Terms &amp; Conditions
+                    </Text>
+                  </TouchableOpacity>
+
+                  {mode === 'add' && (
+                    <TouchableOpacity
+                      style={styles.providerTermsAgreeRow}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setAgreedToProviderTerms(prev => !prev);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreedToProviderTerms }}
+                      accessibilityLabel={`I agree to ${providerDisplayName}'s Terms and Conditions`}
+                    >
+                      <View
+                        style={[
+                          styles.addOnCheckbox,
+                          { borderColor: tokens.border },
+                          agreedToProviderTerms && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                        ]}
+                      >
+                        {agreedToProviderTerms && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
+                      </View>
+                      <Text style={[styles.providerTermsAgreeText, { color: tokens.text }]}>
+                        I agree to {providerDisplayName}'s Terms &amp; Conditions
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
             </>
           )}
@@ -1086,10 +1087,11 @@ const styles = StyleSheet.create({
   addOnPrice: { fontSize: 13, fontWeight: '700', marginRight: 10 },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   addOnCheckmark: { fontSize: 12, fontWeight: '700' },
-  policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8 },
-  policyCheckboxLabel: { flex: 1, fontSize: 13 },
+  providerTermsBlock: { marginTop: 4 },
   providerTermsLinkRow: { paddingVertical: 10 },
   providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
   termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
@@ -1101,7 +1103,6 @@ const styles = StyleSheet.create({
   termsBody: { paddingHorizontal: 20, paddingVertical: 18, paddingBottom: 40 },
   termsBodyText: { fontSize: 14, lineHeight: 21 },
   termsFootnote: { fontSize: 12, lineHeight: 18, marginTop: 22, fontStyle: 'italic' },
-  requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   resolvingText: { fontSize: 13 },
   consultationNotice: { fontSize: 13, lineHeight: 18, marginBottom: 12 },

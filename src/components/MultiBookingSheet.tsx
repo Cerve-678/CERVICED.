@@ -78,7 +78,6 @@ export interface MultiBookingSheetResult {
   isDepositOnly: boolean;
   /** Stamped only when the policy checkbox was ticked — mirrors
    *  BookingSheetResult's fields, see MultiBookingSheetProps.bookingPolicies. */
-  policyAcceptedAt?: string;
   policySnapshot?: Record<string, unknown>;
 }
 
@@ -187,7 +186,6 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const [notes, setNotes] = useState('');
   const [step, setStep] = useState<MultiBookingStep>('when');
   const [isDepositOnly, setIsDepositOnly] = useState(false);
-  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
   const [depositPolicy, setDepositPolicy] = useState<ProviderDepositPolicy | undefined>(undefined);
 
   // Services pulled out of the shared-day group to be scheduled on their
@@ -221,18 +219,30 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const termsFetched = useRef(false);
   const [providerTerms, setProviderTerms] = useState<{ title: string; body: string } | null>(null);
   const [showProviderTerms, setShowProviderTerms] = useState(false);
+  // Agreement to the provider's OWN terms, gating add-to-cart — same gate as
+  // the single-service sheet. Distinct from the cart's checkout checkbox
+  // (CERVICED's Terms + cancellation policy), which is what stamps
+  // policyAcceptedAt. This sheet is add-only, so it always applies.
+  const [agreedToProviderTerms, setAgreedToProviderTerms] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  // Reset local state each time the sheet opens. Unlike BookingSheet,
-  // `services` is set once by the caller right before opening and never
-  // swapped while still visible, so this only needs to key on `isVisible`.
+  // Reset local state each time the sheet OPENS — keyed on `isVisible` alone.
+  // Unlike BookingSheet, `services` is set once by the caller right before
+  // opening and never swapped while still visible.
+  //
+  // `initialAddOnsByService` is deliberately NOT a dependency even though it's
+  // read here: it's the caller's own state object, and any change to its
+  // identity while this sheet is open (ProviderProfileScreen drops a
+  // now-fully-booked service from the selection when its async availability
+  // check settles, which rebuilds the map) re-ran this whole reset mid-flow —
+  // wiping the client's picked day, time, notes and payment choice and
+  // throwing them back to step "when" with no explanation.
   useEffect(() => {
     if (!isVisible) return;
     setAddOnsByService(initialAddOnsByService ?? {});
     setNotes('');
     setStep('when');
     setIsDepositOnly(false);
-    setAgreedToPolicy(false);
     setSeparateServiceKeys(new Set());
     setSeparateSelectMode(false);
     setGroupDate('');
@@ -245,7 +255,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     separateResolvedRef.current = new Set();
     depositFetched.current = false;
     termsFetched.current = false;
-  }, [initialAddOnsByService, isVisible]);
+    setAgreedToProviderTerms(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible]);
 
   const toggleSeparate = useCallback((serviceKey: string) => {
     setSeparateServiceKeys(prev => {
@@ -434,12 +446,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     s => !!separateDates[serviceKeyOf(s)] && !!separateTimes[serviceKeyOf(s)]
   );
   const scheduleReady = groupReady && separateReady;
-  // The checkbox reads "...and this provider's cancellation policy" — with
-  // no policy on file there's nothing provider-specific to agree to, so it
-  // isn't shown and doesn't block booking. See BookingSheet.tsx's identical
-  // requiresPolicyAgreement for the single-service version of this.
-  const requiresPolicyAgreement = !!bookingPolicies;
-  const submitReady = scheduleReady && (!requiresPolicyAgreement || agreedToPolicy);
+  // Nothing to agree to when the provider hasn't written any terms.
+  const providerTermsGateUnmet = !!providerTerms && !agreedToProviderTerms;
+  const submitReady = scheduleReady && !providerTermsGateUnmet;
 
   // ── Guided flow ────────────────────────────────────────────────────────
   // Same three steps as the single-service BookingSheet, deliberately — the
@@ -455,9 +464,11 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     if (step === 'when' || step === 'confirm') {
       if (!scheduleReady) return 'Choose a date for each service';
     }
-    if (step === 'confirm' && requiresPolicyAgreement && !agreedToPolicy) return 'Agree to the terms to continue';
+    // Fixable right here on "confirm", so unlike scheduling this one disables
+    // the button rather than routing back to an earlier step.
+    if (step === 'confirm' && providerTermsGateUnmet) return 'Agree to the Terms & Conditions';
     return null;
-  }, [step, scheduleReady, requiresPolicyAgreement, agreedToPolicy]);
+  }, [step, scheduleReady, providerTermsGateUnmet]);
 
   // A scheduling blocker on confirm keeps the button tappable and routes back
   // to "when" — what needs fixing lives on an earlier step, so disabling it
@@ -505,15 +516,16 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       groupBatchId,
       notes: notes.trim(),
       isDepositOnly,
-      // Only stamped when this provider actually has a policy to agree to —
-      // no checkbox is shown otherwise, so there's nothing to timestamp.
-      ...(requiresPolicyAgreement ? { policyAcceptedAt: new Date().toISOString() } : {}),
+      // The policy in force at booking time, recorded as fact — not as
+      // consent. Agreement itself is captured once, by the cart's own
+      // bundled Terms + cancellation-policy checkbox at checkout, which
+      // is what stamps policyAcceptedAt.
       ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
     });
     onClose();
   }, [
     submitReady, services, addOnsByService, separateServiceKeys, separateDates, separateTimes,
-    groupServices, groupDate, groupSchedule, notes, isDepositOnly, requiresPolicyAgreement, bookingPolicies, onSubmit, onClose,
+    groupServices, groupDate, groupSchedule, notes, isDepositOnly, bookingPolicies, onSubmit, onClose,
   ]);
 
   if (services.length === 0) return null;
@@ -969,46 +981,49 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     paying" figure in the sheet. */}
               </View>
 
-              {/* Only shown when this provider actually has a cancellation
-                  policy on file — see BookingSheet.tsx's identical
-                  requiresPolicyAgreement comment. CERVICED's own Terms &
-                  Conditions checkbox on the cart's checkout screen is
-                  separate and unaffected. */}
-              {requiresPolicyAgreement && (
-                <TouchableOpacity
-                  style={styles.policyCheckboxRow}
-                  onPress={() => setAgreedToPolicy(!agreedToPolicy)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.addOnCheckbox,
-                    { borderColor: tokens.border, backgroundColor: agreedToPolicy ? adaptiveAccentColor : 'transparent' },
-                  ]}>
-                    {agreedToPolicy && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
-                  </View>
-                  {/* TODO(copy): placeholder legal copy — needs user-directed final wording, not to be treated as reviewed/final */}
-                  <Text style={[styles.policyCheckboxLabel, { color: tokens.text }]}>
-                    I agree to the Terms & Conditions<Text style={styles.requiredAsterisk}> *</Text> and this provider's cancellation policy
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Read-only, and shown whether or not there's a policy to agree
-                  to — a provider can have written terms without filling in any
-                  structured booking policy. Deliberately not a second
-                  checkbox: nothing records agreement to these, so presenting
-                  it as consent would claim something the app can't back up.
-                  See FUTURE_LOGIC.md for sending them as a signable form. */}
+              {/* Shown whether or not there's a structured booking policy — a
+                  provider can have written terms without filling one in. The
+                  tick is what gates Add to Cart; it records agreement for this
+                  sheet only (the cart's checkout checkbox is still what stamps
+                  policyAcceptedAt). See FUTURE_LOGIC.md for sending these as a
+                  signable form. */}
               {providerTerms && (
-                <TouchableOpacity
-                  style={styles.providerTermsLinkRow}
-                  onPress={() => setShowProviderTerms(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
-                    Read {providerDisplayName}'s Terms &amp; Conditions
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.providerTermsBlock}>
+                  <TouchableOpacity
+                    style={styles.providerTermsLinkRow}
+                    onPress={() => setShowProviderTerms(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.providerTermsLink, { color: adaptiveAccentColor }]}>
+                      Read {providerDisplayName}'s Terms &amp; Conditions
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.providerTermsAgreeRow}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setAgreedToProviderTerms(prev => !prev);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: agreedToProviderTerms }}
+                    accessibilityLabel={`I agree to ${providerDisplayName}'s Terms and Conditions`}
+                  >
+                    <View
+                      style={[
+                        styles.addOnCheckbox,
+                        { borderColor: tokens.border },
+                        agreedToProviderTerms && { backgroundColor: adaptiveAccentColor, borderColor: adaptiveAccentColor },
+                      ]}
+                    >
+                      {agreedToProviderTerms && <Text style={[styles.addOnCheckmark, { color: onAccentColor }]}>✓</Text>}
+                    </View>
+                    <Text style={[styles.providerTermsAgreeText, { color: tokens.text }]}>
+                      I agree to {providerDisplayName}'s Terms &amp; Conditions
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
               </>
               )}
@@ -1162,10 +1177,11 @@ const styles = StyleSheet.create({
   separateToggleText: { fontSize: 11, fontWeight: '700' },
   addOnCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   addOnCheckmark: { fontSize: 12, fontWeight: '700' },
-  policyCheckboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, marginBottom: 8 },
-  policyCheckboxLabel: { flex: 1, fontSize: 13 },
+  providerTermsBlock: { marginTop: 4 },
   providerTermsLinkRow: { paddingVertical: 10 },
   providerTermsLink: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  providerTermsAgreeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  providerTermsAgreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
   termsOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   termsSheet: { height: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
   termsHeader: {
@@ -1177,7 +1193,6 @@ const styles = StyleSheet.create({
   termsBody: { paddingHorizontal: 20, paddingVertical: 18, paddingBottom: 40 },
   termsBodyText: { fontSize: 14, lineHeight: 21 },
   termsFootnote: { fontSize: 12, lineHeight: 18, marginTop: 22, fontStyle: 'italic' },
-  requiredAsterisk: { color: '#FF3B30', fontWeight: '700' },
   resolvingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   resolvingText: { fontSize: 13 },
   groupRangeText: { fontSize: 15, fontWeight: '700', marginTop: 10 },
