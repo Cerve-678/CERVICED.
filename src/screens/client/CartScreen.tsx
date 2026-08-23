@@ -47,7 +47,7 @@ import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { logger } from '../../utils/logger';
 import { env } from '../../utils/env';
 import { formatLongDateNoYear, formatTime12 } from '../../utils/dateUtils';
-import { durationToMinutes, findCartOverlapIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
+import { CART_ISSUE, durationToMinutes, findCartItemIssues, formatTimeSpan, to24hMinutes } from '../../features/cart/presentation';
 import { getCartAddOnsSummary, getCartItemFullPrice } from '../../features/cart/pricing';
 import { calculatePlatformFee } from '../../features/cart/platformFee';
 
@@ -80,6 +80,25 @@ interface ServiceBooking {
   selectedTime: string;
   notes: string;
   isDepositOnly?: boolean;
+}
+
+/** AvailabilityService phrases its findings for its own callers; the cart has
+ *  one vocabulary of its own (CART_ISSUE) so a reason on a card never rewrites
+ *  itself into different words when the server confirms what the local pass
+ *  already said. Anything unrecognised passes through — a real message the
+ *  client can read beats a shrug, and it shows up in the logs as a phrasing
+ *  that should be added here. */
+function toCartIssue(serviceMessage: string): string {
+  switch (serviceMessage.trim()) {
+    case 'This time slot conflicts with another service in your cart': return CART_ISSUE.overlap;
+    case 'This time slot is no longer available.':                     return CART_ISSUE.slotTaken;
+    case 'Time slot is no longer available':                           return CART_ISSUE.slotTaken;
+    case "This time is outside the provider's working hours.":         return CART_ISSUE.outsideHours;
+    case 'This time is outside the provider\u2019s working hours.':        return CART_ISSUE.outsideHours;
+    case 'Provider is not available on this date.':                    return CART_ISSUE.dayUnavailable;
+    case "This provider isn't set up for booking yet.":                return CART_ISSUE.providerUnbookable;
+    default:                                                           return serviceMessage;
+  }
 }
 
 // How recently a cart item must have been added for the cart to treat it as
@@ -1525,7 +1544,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     );
     const issues = new Map<string, string>();
     check.conflicts.forEach(c => {
-      if (!issues.has(c.cartItemId)) issues.set(c.cartItemId, c.message);
+      if (!issues.has(c.cartItemId)) issues.set(c.cartItemId, toCartIssue(c.message));
     });
     return issues;
   }, []);
@@ -1852,15 +1871,15 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }, 0);
   }, [items, getServiceBooking, providerDepositPolicies, itemPromoDiscounts]);
 
-  // Two services in the cart booked over each other with the same provider.
-  // Computed here rather than waiting for the checkout tap because it needs no
-  // network at all — everything it compares is already in memory — so there is
-  // no reason to let a client sit on a cart that cannot possibly check out.
-  // The other half of the check (a slot taken by someone ELSE since it was
-  // picked) is a Supabase round trip per item, so that one stays on the
-  // checkout attempt rather than running on every cart render.
-  const localOverlapIssues = useMemo(
-    () => findCartOverlapIssues(items.map(item => {
+  // Everything wrong with the cart that needs no network: a line with no time,
+  // a date that didn't survive being stored, and two services for the same
+  // provider booked over each other. All of it compares values already in
+  // memory, so there is no reason to make the client tap checkout to find out.
+  // Only the checks that genuinely need Supabase (has someone ELSE taken this
+  // slot, is the provider still working that day, is the promo still live) wait
+  // for the checkout attempt.
+  const localItemIssues = useMemo(
+    () => findCartItemIssues(items.map(item => {
       const booking = getServiceBooking(item.id);
       return {
         itemId: item.id,
@@ -1873,14 +1892,33 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     [items, getServiceBooking],
   );
 
+  // A stored date/time the app can't parse back shouldn't be possible — the
+  // sheet only ever writes formats it understands. The client is shown the
+  // ordinary "pick a date and time" for it (see findCartItemIssues), so this is
+  // the only place the real value is recoverable. Logged, never surfaced.
+  useEffect(() => {
+    items.forEach(item => {
+      const booking = getServiceBooking(item.id);
+      if (!booking.selectedDate || !booking.selectedTime) return;
+      const badDate = isNaN(new Date(booking.selectedDate).getTime());
+      const badTime = to24hMinutes(booking.selectedTime) === Number.MAX_SAFE_INTEGER;
+      if (badDate || badTime) {
+        logger.error(
+          'Cart item has an unparseable schedule:',
+          { itemId: item.id, service: item.serviceName, date: booking.selectedDate, time: booking.selectedTime },
+        );
+      }
+    });
+  }, [items, getServiceBooking]);
+
   // What the cards actually render. A reason recorded from a checkout attempt
-  // wins over the local overlap check — it's the more specific finding, and
-  // it's the one the client just saw an alert about.
+  // wins over the local pass — it's the more specific finding, and it's the one
+  // the client just saw an alert about.
   const displayedItemIssues = useMemo(() => {
-    if (itemIssues.size === 0) return localOverlapIssues;
-    if (localOverlapIssues.size === 0) return itemIssues;
-    return new Map([...localOverlapIssues, ...itemIssues]);
-  }, [localOverlapIssues, itemIssues]);
+    if (itemIssues.size === 0) return localItemIssues;
+    if (localItemIssues.size === 0) return itemIssues;
+    return new Map([...localItemIssues, ...itemIssues]);
+  }, [localItemIssues, itemIssues]);
 
   // Which provider sections hold a flagged service. Keyed exactly as
   // itemsByProvider groups them, so a section can be looked up by it.
@@ -2243,34 +2281,17 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // (which service, why, what to do) lives on the flagged cards, which are
     // still there when the client goes looking for what to fix.
     //
-    // Starting a fresh attempt clears the previous one's flags first, so a
-    // resolved item doesn't stay red.
+    // Starting a fresh attempt clears flags recorded by the LAST attempt, so a
+    // resolved item doesn't stay red. The local pass is derived from the cart
+    // itself, so it survives this and is still on screen below.
     setItemIssues(new Map());
 
-    // Validate all items have schedules
-    const unscheduled = items.filter(item => {
-      const booking = getServiceBooking(item.id);
-      return !booking.selectedDate || !booking.selectedTime;
-    });
-
-    if (unscheduled.length > 0) {
-      setItemIssues(new Map(unscheduled.map(item => [item.id, 'Pick a date and time for this service'])));
-      showAlert(
-        'Schedule Required',
-        `Please schedule ${unscheduled.length} appointment(s) before checkout.`
-      );
-      return;
-    }
-
-    // Validate booking data
-    const invalidDated = items.filter(item => {
-      const booking = getServiceBooking(item.id);
-      return booking.selectedDate && isNaN(new Date(booking.selectedDate).getTime());
-    });
-
-    if (invalidDated.length > 0) {
-      setItemIssues(new Map(invalidDated.map(item => [item.id, "This date isn't valid — pick it again"])));
-      showAlert('Check your appointment times', 'One of your appointment dates isn\'t valid. Please pick it again.');
+    // No date/time, or a date that didn't survive being stored. The cards have
+    // already been red since the moment either appeared — this is the same
+    // finding, not a second one, so it reuses it rather than re-deriving it
+    // with wording that could drift out of step.
+    if (localItemIssues.size > 0) {
+      showAlert('Schedule Required', 'Some services in your cart need attention before checkout.');
       return;
     }
 
@@ -2280,6 +2301,54 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // the first conflict either of those produces is only discovered by
     // the claim RPC's own insert-time check, mid-checkout, after the card
     // has already been authorised.
+    // A promo validated when the item was added, or auto-applied from a "Book
+    // Now" tap — neither of which says anything about whether it is still live
+    // now. An expired code silently discounts the total the client is shown
+    // while prepare_checkout charges the real price, so this has to be caught
+    // before the payment sheet, not after. One query per provider holding a
+    // code, which is one or two in practice, run together.
+    const promoProviders = Object.keys(appliedPromos);
+    if (promoProviders.length > 0) {
+      const rechecked = await Promise.all(
+        promoProviders.map(async providerKey => {
+          const providerItems = itemsByProvider[providerKey];
+          const displayName = providerItems?.[0]?.providerDisplayName ?? providerKey;
+          const code = appliedPromos[providerKey]?.promo_code;
+          if (!code) return { providerKey, stillValid: false };
+          try {
+            return { providerKey, stillValid: Boolean(await validatePromoCode(displayName, code)) };
+          } catch (error) {
+            // Couldn't reach the check. Treating that as "expired" would strip
+            // a discount the client is entitled to over a dropped connection,
+            // so it passes — prepare_checkout re-derives the price server-side
+            // and is the actual authority on what gets charged.
+            logger.error('Could not re-check promo code at checkout:', error);
+            return { providerKey, stillValid: true };
+          }
+        }),
+      );
+
+      const expired = rechecked.filter(r => !r.stillValid).map(r => r.providerKey);
+      if (expired.length > 0) {
+        // Dropped from state as well as flagged: leaving it applied would keep
+        // showing a discount that no longer exists, and the client would be
+        // told to fix something the cart still claims is fine.
+        setAppliedPromos(prev => {
+          const next = { ...prev };
+          expired.forEach(key => delete next[key]);
+          return next;
+        });
+        const expiredSet = new Set(expired);
+        setItemIssues(new Map(
+          items
+            .filter(item => expiredSet.has(item.providerName))
+            .map(item => [item.id, CART_ISSUE.promoExpired] as const),
+        ));
+        showAlert('Promo code no longer valid', 'The price has been updated. Check your cart before paying.');
+        return;
+      }
+    }
+
     // Each conflict names the cart item it belongs to, so the reason goes onto
     // that item's own card rather than being flattened into one de-duplicated
     // blob of text with nothing tying a line back to a service.
@@ -2354,7 +2423,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   } finally {
     setIsLoading(false);
   }
-}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, hasMobileProvider, identifyCartConflicts]);
+}, [items, getServiceBooking, effectiveFinalTotal, bookingsByItemId, user, appliedPromos, itemPromoDiscounts, showAlert, hasMobileProvider, identifyCartConflicts, localItemIssues, itemsByProvider]);
 
   // Handle review modal confirmation
   const handleReviewConfirm = useCallback(async () => {
@@ -2614,9 +2683,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       // the availability check and the insert. Anything else failed for a
       // reason we can't attribute to the time, so don't tell the client to
       // re-pick one.
-      const reason = pgCode === '23505'
-        ? 'This time was taken while you were paying — pick a new time'
-        : "This service couldn't be booked — try again";
+      const reason = pgCode === '23505' ? CART_ISSUE.takenWhilePaying : CART_ISSUE.bookingFailed;
       setItemIssues(new Map(failedIds.map(id => [id, reason])));
     }
     // The caller (PaymentModal.handlePayment) owns showing the single

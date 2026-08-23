@@ -39,8 +39,8 @@ export function formatTimeSpan(startMinutes: number, endMinutes: number): string
   return `${toLabel(startMinutes)} – ${toLabel(endMinutes)} · ${lengthLabel}`;
 }
 
-/** One scheduled cart line, reduced to just what an overlap check needs. */
-export interface CartOverlapEntry {
+/** One cart line, reduced to just what the local checks need. */
+export interface CartIssueEntry {
   itemId: string;
   /** Provider id where one is resolved, name otherwise — only ever compared
    *  against other entries built the same way. */
@@ -50,32 +50,67 @@ export interface CartOverlapEntry {
   duration: string | undefined;
 }
 
-/** The reason shown on a cart card for this finding. Word-for-word what
- *  AvailabilityService.validateCartBookings returns for the same clash, so the
- *  message doesn't rewrite itself when the server-side check confirms it at
- *  checkout. */
-export const CART_OVERLAP_MESSAGE = 'This time slot conflicts with another service in your cart';
+/** Every reason a cart card can be flagged with, in one place.
+ *
+ *  Most of these are word-for-word what AvailabilityService already returns
+ *  for the same finding — deliberately, so the reason on a card never rewrites
+ *  itself into different words when the server confirms what the local pass
+ *  already said. Keeping them here rather than inlining them is what lets the
+ *  two passes stay identical: change one of these and both move together.
+ *  CartScreen maps the service's phrasings onto these via toCartIssue(). */
+export const CART_ISSUE = {
+  noSchedule: 'Pick a date and time for this service',
+  overlap: 'This time slot conflicts with another service in your cart',
+  slotTaken: 'This time slot is no longer available.',
+  outsideHours: "This time is outside the provider's working hours.",
+  dayUnavailable: 'Provider is not available on this date.',
+  providerUnbookable: "This provider isn't taking bookings right now",
+  promoExpired: 'The promo code on this booking has expired — remove it or pick another',
+  takenWhilePaying: 'This time was taken while you were paying — pick a new time',
+  bookingFailed: "This service couldn't be booked — try again",
+} as const;
 
-/** Cart lines booked over each other with the same provider on the same day,
- *  as itemId → reason. Needs no network — everything compared is already in
- *  the cart — so a cart that cannot possibly check out can say so before the
- *  client taps anything.
+/** Everything wrong with a cart that can be found WITHOUT a network call, as
+ *  itemId → reason. Runs on every render, so a cart that cannot possibly check
+ *  out says so before the client taps anything.
+ *
+ *  Ordered by what the client should fix first: a line with no time at all
+ *  can't also be judged for overlapping something, so it reports that and
+ *  nothing else.
+ *
+ *  A date or time that can't be parsed back reports as noSchedule rather than
+ *  getting wording of its own. It shouldn't be possible — the sheet only ever
+ *  writes formats this understands — and inventing copy for it would put a
+ *  sentence about the app's internals in front of a client. From where they're
+ *  standing the situation is identical to never having picked a time, and that
+ *  message is both true and actionable. CartScreen logs the raw value for
+ *  developers, which is where an impossible state actually needs to surface.
  *
  *  Back-to-back is NOT an overlap: a service ending at the minute the next one
- *  starts is exactly how a grouped appointment is built. Lines with no date,
- *  no time, or an unparseable time are skipped rather than guessed at — those
- *  are a different problem, reported separately at checkout. */
-export function findCartOverlapIssues(entries: CartOverlapEntry[]): Map<string, string> {
+ *  starts is exactly how a grouped appointment is built. */
+export function findCartItemIssues(entries: CartIssueEntry[]): Map<string, string> {
   const issues = new Map<string, string>();
 
-  const spans = entries
-    .map(entry => {
-      if (!entry.date || !entry.time) return null;
-      const start = to24hMinutes(entry.time);
-      if (start === Number.MAX_SAFE_INTEGER) return null;
-      return { ...entry, start, end: start + durationToMinutes(entry.duration) };
-    })
-    .filter((span): span is NonNullable<typeof span> => span !== null);
+  const spans: { itemId: string; providerKey: string; date: string; start: number; end: number }[] = [];
+
+  for (const entry of entries) {
+    if (!entry.date || !entry.time) {
+      issues.set(entry.itemId, CART_ISSUE.noSchedule);
+      continue;
+    }
+    if (isNaN(new Date(entry.date).getTime()) || to24hMinutes(entry.time) === Number.MAX_SAFE_INTEGER) {
+      issues.set(entry.itemId, CART_ISSUE.noSchedule);
+      continue;
+    }
+    const start = to24hMinutes(entry.time);
+    spans.push({
+      itemId: entry.itemId,
+      providerKey: entry.providerKey,
+      date: entry.date,
+      start,
+      end: start + durationToMinutes(entry.duration),
+    });
+  }
 
   for (let i = 0; i < spans.length; i++) {
     for (let j = i + 1; j < spans.length; j++) {
@@ -83,8 +118,8 @@ export function findCartOverlapIssues(entries: CartOverlapEntry[]): Map<string, 
       const b = spans[j]!;
       if (a.providerKey !== b.providerKey || a.date !== b.date) continue;
       if (a.start >= b.end || b.start >= a.end) continue;
-      issues.set(a.itemId, CART_OVERLAP_MESSAGE);
-      issues.set(b.itemId, CART_OVERLAP_MESSAGE);
+      issues.set(a.itemId, CART_ISSUE.overlap);
+      issues.set(b.itemId, CART_ISSUE.overlap);
     }
   }
 

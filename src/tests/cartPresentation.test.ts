@@ -1,7 +1,7 @@
 import {
-  CART_OVERLAP_MESSAGE,
+  CART_ISSUE,
   durationToMinutes,
-  findCartOverlapIssues,
+  findCartItemIssues,
   formatTimeSpan,
   to24hMinutes,
 } from '../features/cart/presentation';
@@ -27,9 +27,9 @@ describe('cart presentation helpers', () => {
 });
 
 // A cart that cannot possibly check out should say so on the offending cards
-// before the client taps anything, so these clashes are found with no network.
-describe('findCartOverlapIssues', () => {
-  const entry = (over: Partial<Parameters<typeof findCartOverlapIssues>[0][number]>) => ({
+// before the client taps anything, so these are all found with no network.
+describe('findCartItemIssues', () => {
+  const entry = (over: Partial<Parameters<typeof findCartItemIssues>[0][number]>) => ({
     itemId: 'a',
     providerKey: 'provider-1',
     date: '2026-09-01',
@@ -39,43 +39,52 @@ describe('findCartOverlapIssues', () => {
   });
 
   it('flags both services when two overlap for the same provider on the same day', () => {
-    const issues = findCartOverlapIssues([
+    const issues = findCartItemIssues([
       entry({ itemId: 'a', time: '2:00 PM', duration: '1h' }),
       entry({ itemId: 'b', time: '2:30 PM', duration: '1h' }),
     ]);
-    expect(issues.get('a')).toBe(CART_OVERLAP_MESSAGE);
-    expect(issues.get('b')).toBe(CART_OVERLAP_MESSAGE);
+    expect(issues.get('a')).toBe(CART_ISSUE.overlap);
+    expect(issues.get('b')).toBe(CART_ISSUE.overlap);
   });
 
   it('treats back-to-back as fine — that is how a grouped appointment is built', () => {
-    const issues = findCartOverlapIssues([
+    expect(findCartItemIssues([
       entry({ itemId: 'a', time: '2:00 PM', duration: '1h' }),
       entry({ itemId: 'b', time: '3:00 PM', duration: '30min' }),
-    ]);
-    expect(issues.size).toBe(0);
+    ]).size).toBe(0);
   });
 
   it('does not flag the same time across different providers or different days', () => {
-    expect(findCartOverlapIssues([
+    expect(findCartItemIssues([
       entry({ itemId: 'a', providerKey: 'provider-1' }),
       entry({ itemId: 'b', providerKey: 'provider-2' }),
     ]).size).toBe(0);
 
-    expect(findCartOverlapIssues([
+    expect(findCartItemIssues([
       entry({ itemId: 'a', date: '2026-09-01' }),
       entry({ itemId: 'b', date: '2026-09-02' }),
     ]).size).toBe(0);
   });
 
-  it('skips lines with no time or an unreadable one rather than guessing a span', () => {
-    expect(findCartOverlapIssues([
-      entry({ itemId: 'a', time: undefined }),
-      entry({ itemId: 'b' }),
-    ]).size).toBe(0);
+  it('flags a line with no time at all, rather than silently ignoring it', () => {
+    expect(findCartItemIssues([entry({ time: undefined })]).get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(findCartItemIssues([entry({ date: undefined })]).get('a')).toBe(CART_ISSUE.noSchedule);
+  });
 
-    expect(findCartOverlapIssues([
-      entry({ itemId: 'a', time: 'whenever' }),
-      entry({ itemId: 'b' }),
-    ]).size).toBe(0);
+  // A stored value the app can't parse back shouldn't be possible, so it gets
+  // no wording of its own — from the client's side it's the same situation as
+  // never having picked a time. The raw value is logged for developers.
+  it('reports an unparseable date or time as simply having no schedule', () => {
+    expect(findCartItemIssues([entry({ date: 'not-a-date' })]).get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(findCartItemIssues([entry({ time: 'whenever' })]).get('a')).toBe(CART_ISSUE.noSchedule);
+  });
+
+  it('reports the missing schedule and stops — an item with no time cannot also be judged for overlapping', () => {
+    const issues = findCartItemIssues([
+      entry({ itemId: 'a', time: undefined }),
+      entry({ itemId: 'b', time: '2:00 PM' }),
+    ]);
+    expect(issues.get('a')).toBe(CART_ISSUE.noSchedule);
+    expect(issues.has('b')).toBe(false);
   });
 });
