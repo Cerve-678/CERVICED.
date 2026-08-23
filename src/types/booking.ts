@@ -53,6 +53,28 @@ export function isAddressPending(address: string | null | undefined): boolean {
 }
 
 /**
+ * Who travels to whom.
+ *
+ * A mobile provider comes to the CLIENT, so the venue is the client's own
+ * address — the provider's location is their private base and is never the
+ * appointment's location. Every other business type is the reverse.
+ *
+ * `providerBusinessType` is the real answer, carried through the
+ * client_bookings view. The clientAddress fallback only covers a booking read
+ * before that column existed; never branch on clientAddress presence directly
+ * — a non-mobile booking could carry one (see the checkout fix in
+ * BookingContext.createBookingsFromCart), and a mobile booking legitimately
+ * has none until the client sends it.
+ */
+export function isMobileBooking(b: {
+  providerBusinessType?: string | null | undefined;
+  clientAddress?: string | null | undefined;
+}): boolean {
+  if (b.providerBusinessType) return b.providerBusinessType === 'mobile';
+  return !!b.clientAddress?.trim();
+}
+
+/**
  * Whether a booking can actually be opened in a maps app.
  *
  * `ConfirmedBooking.coordinates` is TYPED non-null but is genuinely null at
@@ -61,9 +83,17 @@ export function isAddressPending(address: string | null | undefined): boolean {
  * `as unknown as BookingCoordinates`. Callers must check, not trust the type.
  */
 export function hasMapDestination(b: {
-  address?: string | null;
-  coordinates?: BookingCoordinates | null;
+  address?: string | null | undefined;
+  coordinates?: BookingCoordinates | null | undefined;
+  providerBusinessType?: string | null | undefined;
+  clientAddress?: string | null | undefined;
 }): boolean {
+  // A mobile booking has no mappable provider destination by definition — the
+  // provider travels to the client. Any coordinates on such a booking are the
+  // provider's own base (legacy rows snapshotted them before checkout stopped
+  // doing so), and pointing the client's Directions button at them sends them
+  // to the person who is on their way over.
+  if (isMobileBooking(b)) return false;
   return (
     !isAddressPending(b.address) &&
     b.coordinates?.latitude != null &&
@@ -190,6 +220,12 @@ export interface ConfirmedBooking {
   // Client address (for mobile providers who travel to the client)
   clientAddress?: string | undefined;
 
+  // The provider's business_type, read live through the client_bookings view
+  // rather than snapshotted — it decides whose address is the appointment's
+  // location. Undefined on a booking read from a source that doesn't carry it
+  // (see isMobileBooking).
+  providerBusinessType?: string | undefined;
+
   // Address release tracking (for non-mobile providers)
   addressReleasedAt?: string | undefined;
 
@@ -211,6 +247,12 @@ export interface ConfirmedBooking {
   // before this existed.
   policyAcceptedAt?: string | undefined;
   policySnapshot?: Record<string, unknown> | undefined;
+
+  /** The client asked for a time this provider's own scheduling rules
+   *  exclude, under one of their allow_*_requests opt-ins. Always pending
+   *  until the provider accepts it — so the provider-facing screens have to
+   *  say so before the Confirm button, not after. */
+  isEmergencyRequest?: boolean | undefined;
 }
 
 export interface BookingsByDate {

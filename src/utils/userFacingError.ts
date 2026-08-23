@@ -81,6 +81,31 @@ export function toUserMessage(
  * Note a PostgREST error is a plain `{ message, code, details }` object, not an
  * `Error` instance, so this matches on the SQLSTATE rather than the shape.
  */
+/**
+ * P0001 guards whose wording was written for a developer reading a log, not
+ * for the person the app shows it to — mapped to copy that is. Checked before
+ * the verbatim pass-through below, so a guard reaches a user unchanged only
+ * when we haven't decided it shouldn't.
+ *
+ * Keep this list to guards that genuinely read badly (a raw status pair, a
+ * UUID, "caller"). Translating a guard that already speaks to the user throws
+ * away the specific number or name that made it worth showing.
+ */
+const GUARD_TRANSLATIONS: { test: RegExp; message: string }[] = [
+  // provider_update_booking_status()'s state machine: "Invalid status
+  // transition: in_progress -> in_progress". Raw DB status strings, and the
+  // real cause is almost always a screen acting on a status that has since
+  // moved on somewhere else.
+  { test: /invalid status transition/i,
+    message: 'This booking has already been updated somewhere else. Check its current status and try again.' },
+  // The group RPCs name the offending booking by UUID, which is meaningless
+  // to a provider and needlessly exposes an internal id.
+  { test: /not owned by caller|no provider profile for caller|is not part of group/i,
+    message: "You don't have permission to change this booking. Try signing out and back in." },
+  { test: /^no (proposals|selections) supplied/i,
+    message: 'Add at least one date and time first.' },
+];
+
 export function toUserMessageAllowingDbGuard(
   error: unknown,
   fallback: string = GENERIC,
@@ -90,7 +115,8 @@ export function toUserMessageAllowingDbGuard(
   const raw = (error as { message?: unknown } | null)?.message;
   if (code === 'P0001' && typeof raw === 'string' && raw.trim()) {
     reportError(error, context);
-    return raw;
+    const translated = GUARD_TRANSLATIONS.find(g => g.test.test(raw));
+    return translated ? translated.message : raw;
   }
   return toUserMessage(error, fallback, context);
 }

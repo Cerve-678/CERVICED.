@@ -4,11 +4,11 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   StatusBar,
   StyleSheet,
-  Alert,
   Modal,
   TextInput,
   ActivityIndicator,
@@ -20,16 +20,17 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
+import type { EmergencyRequest } from '../../contexts/CartContext';
 import { useBooking, AppointmentData , BookingError } from '../../contexts/BookingContext';
 import { BookingService, DepositPolicy } from '../../services/bookingService';
 import { AvailabilityService, type BackToBackSlot } from '../../services/AvailabilityService';
 import { createPaymentIntent, capturePaymentIntent, cancelPaymentIntent } from '../../services/stripeService';
 import {
-  getProviderDepositPoliciesByDisplayNames,
+  getProviderCheckoutMetadata,
   ProviderDepositPolicy,
   validatePromoCode,
   getServiceSafetyFlags,
- getMobileProviderDisplayNames, prepareCheckout, cancelCheckout, getMyLastClientAddress } from '../../services/databaseService';
+  prepareCheckout, cancelCheckout, getMyLastClientAddress } from '../../services/databaseService';
 import type { DbPromotion } from '../../types/database';
 import type { CartScreenProps } from '../../navigation/types';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -80,6 +81,9 @@ interface ServiceBooking {
   selectedTime: string;
   notes: string;
   isDepositOnly?: boolean;
+  /** Present when this time is only bookable as a request the provider has
+   *  to accept (see CartItem.emergencyRequest). */
+  emergencyRequest?: EmergencyRequest;
 }
 
 /** AvailabilityService phrases its findings for its own callers; the cart has
@@ -1183,6 +1187,237 @@ const GroupedServiceCard: React.FC<GroupedServiceCardProps> = memo(
 
 GroupedServiceCard.displayName = 'GroupedServiceCard';
 
+interface CartProviderSectionProps {
+  providerName: string;
+  providerItems: CartItem[];
+  providerData: { instanceCount: number; total: number };
+  renderUnits: CartRenderUnit[];
+  isCollapsed: boolean;
+  issuesByItemId: ReadonlyMap<string, string>;
+  depositPolicy?: ProviderDepositPolicy;
+  allCartItems: CartItem[];
+  getBooking: (itemId: string) => ServiceBooking;
+  onNavigateProvider: (items: CartItem[]) => void;
+  onRemove: (itemId: string) => void;
+  onEdit: (item: CartItem) => void;
+  onEditGroup: (items: CartItem[]) => void;
+  onToggleCollapsed: (providerName: string) => void;
+}
+
+const CartProviderSection = memo(function CartProviderSection({
+  providerName,
+  providerItems,
+  providerData,
+  renderUnits,
+  isCollapsed,
+  issuesByItemId,
+  depositPolicy,
+  allCartItems,
+  getBooking,
+  onNavigateProvider,
+  onRemove,
+  onEdit,
+  onEditGroup,
+  onToggleCollapsed,
+}: CartProviderSectionProps) {
+  const { palette: P } = useTheme();
+  const flaggedCount = providerItems.filter(item => issuesByItemId.has(item.id)).length;
+  const displayName = providerItems[0]?.providerDisplayName ?? providerName;
+
+  return (
+    <View style={[styles.providerSection, {
+      backgroundColor: P.card,
+      borderColor: flaggedCount > 0 ? '#F44336' : P.border,
+      borderWidth: flaggedCount > 0 ? 1.5 : StyleSheet.hairlineWidth,
+    }]}>
+      <View style={styles.providerHeader}>
+        <TouchableOpacity onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onNavigateProvider(providerItems);
+        }}>
+          <View style={styles.providerLogoContainer}>
+            {providerItems[0]?.providerImage ? (
+              <Image source={providerItems[0].providerImage} style={[styles.providerLogo, { borderColor: P.accentDim }]} />
+            ) : (
+              <View style={[styles.providerLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
+            )}
+          </View>
+        </TouchableOpacity>
+        <View style={styles.providerInfo}>
+          <Text style={[styles.providerName, { color: P.text }]}>{displayName}</Text>
+          <View style={[styles.serviceTypePill, { backgroundColor: P.accentDim, borderColor: P.accentDim }]}>
+            <Text style={[styles.serviceTypeText, { color: P.accentText }]}>
+              {providerItems[0]?.providerService || 'SERVICES'}
+            </Text>
+          </View>
+          <Text style={[styles.providerStats, { color: P.sub }]}>
+            {providerData.instanceCount} appointments • £{providerData.total.toFixed(2)}
+          </Text>
+          {flaggedCount > 0 ? (
+            <Text style={styles.providerIssueCount}>
+              {flaggedCount === 1 ? '1 service needs attention' : `${flaggedCount} services need attention`}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      {!isCollapsed ? (
+        <View style={styles.servicesList}>
+          {renderUnits.map((unit, index) => (
+            <View key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id} style={styles.serviceItemWrapper}>
+              {unit.kind === 'group' ? (
+                <GroupedServiceCard
+                  items={unit.items}
+                  getBooking={getBooking}
+                  onRemove={onRemove}
+                  onEditGroup={onEditGroup}
+                  issuesByItemId={issuesByItemId}
+                  {...(depositPolicy !== undefined ? { depositPolicy } : {})}
+                />
+              ) : (
+                <ServiceCard
+                  item={unit.item}
+                  bookingInfo={getBooking(unit.item.id)}
+                  onRemove={onRemove}
+                  onEdit={onEdit}
+                  allCartItems={allCartItems}
+                  {...(issuesByItemId.has(unit.item.id) ? { issue: issuesByItemId.get(unit.item.id)! } : {})}
+                  {...(depositPolicy !== undefined ? { depositPolicy } : {})}
+                />
+              )}
+              {index < renderUnits.length - 1 ? <View style={[styles.serviceSeparator, { backgroundColor: P.accentDim }]} /> : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <TouchableOpacity
+        style={[styles.collapseHandle, { borderTopColor: P.border }]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onToggleCollapsed(providerName);
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
+          {isCollapsed
+            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
+            : 'Hide'}
+        </Text>
+        <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={P.sub} />
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+const CartCheckoutFooter = memo(function CartCheckoutFooter({
+  appliedPromos,
+  itemsByProvider,
+  itemPromoDiscounts,
+  subtotal,
+  promoSavings,
+  platformFee,
+  finalTotal,
+  isLoading,
+  bottomInset,
+  showGuide,
+  onCheckout,
+}: {
+  appliedPromos: Record<string, DbPromotion>;
+  itemsByProvider: Record<string, CartItem[]>;
+  itemPromoDiscounts: Record<string, number>;
+  subtotal: number;
+  promoSavings: number;
+  platformFee: number;
+  finalTotal: number;
+  isLoading: boolean;
+  bottomInset: number;
+  showGuide: boolean;
+  onCheckout: () => void;
+}) {
+  const { palette: P } = useTheme();
+  return (
+    <>
+      {Object.keys(appliedPromos).length > 0 ? (
+        <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
+          {Object.entries(appliedPromos).map(([providerKey, promo]) => {
+            const providerItems = itemsByProvider[providerKey];
+            if (!providerItems?.length) return null;
+            const discount = providerItems.reduce((sum, item) => sum + (itemPromoDiscounts[item.id] ?? 0), 0);
+            return (
+              <View key={providerKey} style={styles.appliedPromoRow}>
+                <Text style={[styles.appliedPromoCode, { color: P.accentText }]}>{promo.promo_code?.toUpperCase()}</Text>
+                <Text style={[styles.appliedPromoProvider, { color: P.sub }]} numberOfLines={1}>
+                  {providerItems[0]?.providerDisplayName ?? providerKey}
+                </Text>
+                <Text style={styles.appliedPromoSaving}>−£{discount.toFixed(2)}</Text>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
+      <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+        <View style={styles.summaryRow}>
+          <Text style={[styles.summaryLabel, { color: P.text }]}>Subtotal</Text>
+          <Text style={[styles.summaryValue, { color: P.text }]}>£{subtotal.toFixed(2)}</Text>
+        </View>
+        {promoSavings > 0 ? (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: '#30D158' }]}>Promo Discount</Text>
+            <Text style={[styles.summaryValue, { color: '#30D158' }]}>−£{promoSavings.toFixed(2)}</Text>
+          </View>
+        ) : null}
+        {platformFee > 0 ? (
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, { color: P.text }]}>Platform Fee</Text>
+            <Text style={[styles.summaryValue, { color: P.text }]}>£{platformFee.toFixed(2)}</Text>
+          </View>
+        ) : null}
+        <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: P.border }]}>
+          <Text style={[styles.totalLabel, { color: P.text }]}>Total</Text>
+          <Text style={[styles.totalValue, { color: P.text }]}>£{finalTotal.toFixed(2)}</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.checkoutButton,
+          { backgroundColor: P.accent, marginBottom: Math.max(spacing.xxl, FLOATING_TAB_BAR_CLEARANCE - bottomInset) },
+          isLoading && styles.disabledButton,
+        ]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          onCheckout();
+        }}
+        disabled={isLoading}
+      >
+        {isLoading ? <ActivityIndicator color={P.onAccent} size="small" /> : (
+          <Text style={[styles.checkoutText, { color: P.onAccent }]}>Book All • £{finalTotal.toFixed(2)}</Text>
+        )}
+      </TouchableOpacity>
+
+      {showGuide ? (
+        <View style={styles.multiBookingGuide}>
+          <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>Booking more than one service?</Text>
+          <View style={styles.multiBookingGuideList}>
+            {[
+              'Each service above gets its own appointment time',
+              'Mix services from different providers in one cart',
+              'Set a date and time for every service, then check out once',
+            ].map(tip => (
+              <View key={tip} style={styles.multiBookingGuideRow}>
+                <Text style={[styles.multiBookingGuideTick, { color: P.accentText }]}>✓</Text>
+                <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </>
+  );
+});
+
 // Main Cart Screen Component
 const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const { theme, isDarkMode, palette: P } = useTheme();
@@ -1204,7 +1439,19 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     clearCart,
     getItemsByProvider,
     getBookingSummary,
+    cartError,
+    clearCartError,
   } = useCart();
+
+  // The cart reducer has no access to a dialog system of its own (it's a
+  // plain function outside React), so a failure there surfaces through
+  // cartError instead — show it the same way as every other cart failure,
+  // then clear it so it doesn't reappear on the next unrelated render.
+  useEffect(() => {
+    if (!cartError) return;
+    showAlert('Cart Error', cartError);
+    clearCartError();
+  }, [cartError, clearCartError, showAlert]);
 
   const { createBookingsFromCart, holdCartCheckoutSlots, releaseCartCheckoutSlots } = useBooking();
   const { user, updateUser } = useAuth();
@@ -1728,13 +1975,26 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     );
   }, [items, itemsByProvider]);
 
-  // Fetch deposit policies for all providers in the cart whenever items change
+  // Fetch checkout-facing provider metadata in one bounded request whenever
+  // the providers represented in the cart change.
   useEffect(() => {
-    if (items.length === 0) { setProviderDepositPolicies({}); return; }
+    if (items.length === 0) {
+      setProviderDepositPolicies({});
+      setMobileProviderNames([]);
+      return;
+    }
     const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
-    getProviderDepositPoliciesByDisplayNames(names)
-      .then(policies => setProviderDepositPolicies(policies))
-      .catch(() => {}); // silently fall back to default 20% on error
+    let cancelled = false;
+    getProviderCheckoutMetadata(names)
+      .then(({ depositPolicies, mobileProviderNames }) => {
+        if (cancelled) return;
+        setProviderDepositPolicies(depositPolicies);
+        setMobileProviderNames(names.filter(name => mobileProviderNames.has(name)));
+      })
+      .catch(() => {
+        if (!cancelled) setMobileProviderNames([]);
+      });
+    return () => { cancelled = true; };
   }, [items]);
 
   // ── Promo codes ────────────────────────────────────────────────────────────
@@ -1839,6 +2099,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         selectedTime: item.selectedTime ?? '',
         notes: item.notes ?? '',
         isDepositOnly: item.isDepositOnly ?? false,
+        ...(item.emergencyRequest ? { emergencyRequest: item.emergencyRequest } : {}),
       };
     });
     return map;
@@ -2213,6 +2474,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           notes: result.notes,
           isDepositOnly: result.isDepositOnly,
           ...(result.policySnapshot ? { policySnapshot: result.policySnapshot } : {}),
+          // Passed unconditionally, not spread-when-present: editing a
+          // request-only time back to an ordinary one has to CLEAR the flag,
+          // and omitting the key would silently leave the old one attached to
+          // a time it no longer describes.
+          emergencyRequest: result.emergencyRequest,
         });
       } catch (error) {
         logger.error('Error saving booking edit:', error);
@@ -2221,17 +2487,6 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     },
     [editingItem, updateCartItem, showAlert]
   );
-
-  // Which providers in the cart are mobile (travel to the client). Kept in
-  // cart order so the sentence below reads in the same order as the sections
-  // above it.
-  useEffect(() => {
-    if (items.length === 0) { setMobileProviderNames([]); return; }
-    const names = [...new Set(items.map(i => i.providerDisplayName ?? i.providerName))];
-    getMobileProviderDisplayNames(names)
-      .then(mobileSet => setMobileProviderNames(names.filter(n => mobileSet.has(n))))
-      .catch(() => setMobileProviderNames([]));
-  }, [items]);
 
   // Navigation handlers - BACK TO HOME
   const onRefresh = useCallback(async () => {
@@ -2419,7 +2674,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     }
   } catch (error) {
     logger.error('Checkout error:', error);
-    showAlert('Something went wrong', 'We couldn\'t start checkout. Please try again.');
+    // This is the outer catch for the whole precondition chain above, but in
+    // practice the only step in it that can actually fail here is
+    // identifyCartConflicts()'s Supabase round-trip (a network/availability
+    // check) — everything else between here and the top is synchronous local
+    // state. Name that instead of a generic "something went wrong," since
+    // it's almost always what actually happened.
+    showAlert('Could not check availability', "We couldn't check your appointment times. Please check your connection and try again.");
   } finally {
     setIsLoading(false);
   }
@@ -2607,7 +2868,18 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
       // batch is either now claimed, or claim found nothing live and every
       // item fell back to a normal insert; either way there's nothing left
       // to release.
-      await createBookingsFromCart(itemsToBook, appointmentData, clientAddress.trim() || undefined, holdBatchId ?? undefined);
+      // Scoped to the mobile providers in this cart, not the cart as a whole:
+      // `clientAddress` is seeded from the account's saved default whether or
+      // not anyone in the cart travels, so passing it unconditionally stamped
+      // the client's home address onto salon bookings too.
+      await createBookingsFromCart(
+        itemsToBook,
+        appointmentData,
+        hasMobileProvider && clientAddress.trim()
+          ? { address: clientAddress.trim(), providerNames: mobileProviderNames }
+          : undefined,
+        holdBatchId ?? undefined,
+      );
       setHoldBatchId(null);
       if (__DEV__) {
         logger.log('STEP 3 COMPLETE - createBookingsFromCart returned');
@@ -2691,7 +2963,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     // to propagate the error up to it (after the diagnostics above).
     throw error;
   }
-}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress]);
+}, [checkoutSnapshot, createBookingsFromCart, holdBatchId, serverCheckoutBatchId, effectiveFinalTotal, items, confirmedCustomerInfo, user, removeFromCart, clientAddress, hasMobileProvider, mobileProviderNames]);
 
   const navigateToProvider = useCallback(
     (providerItems: CartItem[]) => {
@@ -2758,6 +3030,54 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
     [items, getServiceBooking]
   );
 
+  const cartProviderRows = useMemo(
+    () => Object.entries(itemsByProvider).filter(([providerName, providerItems]) => (
+      providerItems.length > 0 && bookingSummary.providers?.[providerName] != null
+    )),
+    [bookingSummary.providers, itemsByProvider],
+  );
+
+  const renderCartProviderRow = useCallback(({
+    item: [providerName, providerItems],
+  }: {
+    item: [string, CartItem[]];
+  }) => {
+    const providerData = bookingSummary.providers?.[providerName];
+    if (!providerData) return null;
+    const policyKey = providerItems[0]?.providerDisplayName ?? providerName;
+    const policy = providerDepositPolicies[policyKey];
+    return (
+      <CartProviderSection
+        providerName={providerName}
+        providerItems={providerItems}
+        providerData={providerData}
+        renderUnits={buildRenderUnits(providerItems)}
+        isCollapsed={collapsedProviders.has(providerName)}
+        issuesByItemId={displayedItemIssues}
+        allCartItems={items}
+        getBooking={getServiceBooking}
+        onNavigateProvider={navigateToProvider}
+        onRemove={handleRemoveFromCart}
+        onEdit={handleEditItem}
+        onEditGroup={setPickerItems}
+        onToggleCollapsed={toggleProviderCollapsed}
+        {...(policy !== undefined ? { depositPolicy: policy } : {})}
+      />
+    );
+  }, [
+    bookingSummary.providers,
+    buildRenderUnits,
+    collapsedProviders,
+    displayedItemIssues,
+    getServiceBooking,
+    handleEditItem,
+    handleRemoveFromCart,
+    items,
+    navigateToProvider,
+    providerDepositPolicies,
+    toggleProviderCollapsed,
+  ]);
+
   return (
     <ErrorBoundary>
       <ThemedBackground style={{ flex: 1 }}>
@@ -2788,7 +3108,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                     navigation.navigate('Bookings'); // NAVIGATES TO BOOKINGS SCREEN
                   } catch (error) {
                     logger.error('Bookings navigation error:', error);
-                    Alert.alert('Navigation Error', 'Unable to open bookings');
+                    showAlert('Navigation Error', 'Unable to open bookings');
                   }
                 }}
               >
@@ -3058,28 +3378,19 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       // the Terms and each provider's cancellation policy —
                       // the booking sheets deliberately no longer ask a second
                       // time. It gates this button, so reaching here means
-                      // consent was given; stamp every item with the moment it
-                      // happened so the booking carries a real record.
-                      const policyAcceptedAt = new Date().toISOString();
-                      checkoutSnapshot.items.forEach(item => {
-                        updateCartItem(item.id, { policyAcceptedAt });
-                      });
-                      // …and onto the SNAPSHOT, which is what actually gets
-                      // booked. handlePaymentSuccess passes
-                      // checkoutSnapshot.items to createBookingsFromCart, and
-                      // that reads item.policyAcceptedAt for the row's
-                      // policy_accepted_at. The snapshot was captured back in
-                      // handleCheckout, before this stamp existed, and
-                      // updateCartItem only replaces the object in cart state
-                      // — so without this every booking was written with
-                      // policy_accepted_at NULL even though the client had
-                      // just ticked the box, and a SECOND checkout attempt
-                      // wrote the PREVIOUS attempt's timestamp (the stale one
-                      // left on the cart item) instead of this one.
-                      setCheckoutSnapshot(prev => ({
-                        ...prev,
-                        items: prev.items.map(i => ({ ...i, policyAcceptedAt })),
-                      }));
+                      // consent was given.
+                      //
+                      // The moment it happened is NOT stamped here. This used
+                      // to write a timestamp onto the live cart items, which
+                      // checkout never read (it books from checkoutSnapshot,
+                      // captured earlier), so every row landed with
+                      // policy_accepted_at NULL — and a second attempt in the
+                      // same session sent the FIRST attempt's leftover time.
+                      // Both are now unrepresentable: the timestamp comes from
+                      // the database clock inside hold_cart_booking_slots(),
+                      // which also refuses the whole batch if the consent flags
+                      // below are absent. See
+                      // 20260823180000_consent_recorded_before_payment.sql.
                       // Reserve every item's slot as an on_hold booking
                       // BEFORE opening the payment sheet — closes the
                       // window between "committed to paying" and
@@ -3110,6 +3421,16 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                               // service actually needs this and rejects
                               // if missing, regardless of this value.
                               safety_ack: agreedToPolicy,
+                              // Set when the client accepted the out-of-hours
+                              // confirmation in the booking sheet. The ack
+                              // travels with it because prepare_checkout
+                              // requires one whenever the flag is set, and
+                              // this checkbox is a different agreement (the
+                              // Cerviced-wide terms) from the one that was
+                              // shown then.
+                              ...(booking.emergencyRequest
+                                ? { emergency: true, emergency_ack: true }
+                                : {}),
                             };
                           });
                           const prepared = await prepareCheckout(intent);
@@ -3119,7 +3440,12 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           console.log('[CartScreen] calling holdCartCheckoutSlots', JSON.stringify(checkoutSnapshot.bookings));
                           const batchId = await holdCartCheckoutSlots(
                             checkoutSnapshot.items,
-                            checkoutSnapshot.bookings
+                            checkoutSnapshot.bookings,
+                            // Same single checkbox the Stripe branch above
+                            // sends as safety_ack — it can't be ticked while
+                            // a safety requirement is unread, so it answers
+                            // both questions.
+                            { policyAccepted: agreedToPolicy, safetyAcknowledged: agreedToPolicy }
                           );
                           console.log('[CartScreen] holdCartCheckoutSlots succeeded', batchId);
                           setHoldBatchId(batchId);
@@ -3127,17 +3453,21 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                         setShowBookingSummaryModal(false);
                         setShowPaymentModal(true);
                       } catch (err) {
-                        console.log('[CartScreen] holdCartCheckoutSlots FAILED', err);
-                        // prepareCheckout() throws the raw Supabase RPC
-                        // error (not a BookingError), so a rejection like
-                        // the safety-ack gate's RAISE EXCEPTION message
-                        // needs unwrapping too, not just BookingError —
-                        // otherwise the client never learns WHY, only
-                        // that something failed. Mirrors AddBookingScreen's
-                        // catch for the same class of RPC rejection.
+                        logger.error('[CartScreen] holdCartCheckoutSlots FAILED:', err);
+                        // prepareCheckout() throws the raw Supabase PostgrestError
+                        // (which DOES extend Error) rather than a BookingError, so a
+                        // deliberate DB guard message — the safety-ack gate's plain
+                        // RAISE EXCEPTION, which Postgres defaults to SQLSTATE P0001 —
+                        // needs unwrapping too, not just BookingError, or the client
+                        // never learns WHY. But PostgrestError carries the SAME shape
+                        // for a genuine technical failure (RLS, a constraint
+                        // violation, anything else with a real Postgres code), so
+                        // unwrapping has to stop at P0001 — anything else falls back
+                        // to the generic line instead of showing raw Postgres text.
+                        const isTechnical = (err as any)?.code && (err as any).code !== 'P0001';
                         const message = err instanceof BookingError
                           ? err.message
-                          : err instanceof Error
+                          : err instanceof Error && !isTechnical
                             ? err.message.replace(/^Error:\s*/, '')
                             : "We couldn't reserve that time. Please try again.";
                         const title = err instanceof BookingError ? 'Scheduling Conflict' : 'Booking Not Completed';
@@ -3672,16 +4002,22 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 selectedTime: editingItem.selectedTime,
                 notes: editingItem.notes,
                 isDepositOnly: editingItem.isDepositOnly,
+                emergencyRequest: editingItem.emergencyRequest,
               }}
             />
           )}
 
-          <ScrollView
+          <FlatList
             style={styles.content}
+            data={items.length > 0 ? cartProviderRows : []}
+            keyExtractor={([providerName]) => providerName}
+            renderItem={renderCartProviderRow}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
-            nestedScrollEnabled={true}
             keyboardShouldPersistTaps="handled"
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={5}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -3691,244 +4027,22 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 progressBackgroundColor={P.card}
               />
             }
-          >
-            {items.length > 0 ? (
-              <>
-                {/* Provider Sections — collapsible, so a cart with several
-                    providers stays scannable instead of becoming a wall of
-                    cards. Collapsed shows the header (and its totals) only. */}
-                {Object.entries(itemsByProvider).map(([providerName, providerItems]) => {
-                  const providerData = bookingSummary.providers?.[providerName];
-
-                  if (!providerData || !providerItems?.length) return null;
-
-                  const isCollapsed = collapsedProviders.has(providerName);
-                  const renderUnits = buildRenderUnits(providerItems);
-                  const flaggedCount = providerItems.filter(i => displayedItemIssues.has(i.id)).length;
-
-                  return (
-                    <View key={providerName} style={[styles.providerSection, { backgroundColor: P.card, borderColor: flaggedCount > 0 ? '#F44336' : P.border, borderWidth: flaggedCount > 0 ? 1.5 : StyleSheet.hairlineWidth }]}>
-                      {/* Provider Header — no Edit button here: editing acts on
-                          a card (a single service, or a whole group), not on
-                          the provider as a whole. */}
-                      <View style={styles.providerHeader}>
-                        <TouchableOpacity onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                          navigateToProvider(providerItems);
-                        }}>
-                          <View style={styles.providerLogoContainer}>
-                            {providerItems[0]?.providerImage ? (
-                              <Image
-                                source={providerItems[0].providerImage}
-                                style={[styles.providerLogo, { borderColor: P.accentDim }]}
-                              />
-                            ) : (
-                              <View style={[styles.providerLogo, { backgroundColor: P.surface, borderColor: P.accentDim }]} />
-                            )}
-                          </View>
-                        </TouchableOpacity>
-
-                        <View style={styles.providerInfo}>
-                          <Text style={dynamicStyles.providerName}>
-                            {providerItems[0]?.providerDisplayName ?? providerName}
-                          </Text>
-
-                          {/* Service Type with Translucent Pill Background */}
-                          <View style={[styles.serviceTypePill, { backgroundColor: P.accentDim, borderColor: P.accentDim }]}>
-                            <Text style={[styles.serviceTypeText, { color: P.accentText }]}>
-                              {providerItems[0]?.providerService || 'SERVICES'}
-                            </Text>
-                          </View>
-
-                          <Text style={dynamicStyles.providerStats}>
-                            {providerData.instanceCount} appointments • £
-                            {providerData.total.toFixed(2)}
-                          </Text>
-
-                          {/* The section auto-opens when a service here is
-                              flagged, but the client can collapse it again —
-                              and a closed section would then hide the only
-                              thing telling them what to fix. The count stays
-                              on the header either way. */}
-                          {flaggedCount > 0 && (
-                            <Text style={styles.providerIssueCount}>
-                              {flaggedCount === 1
-                                ? '1 service needs attention'
-                                : `${flaggedCount} services need attention`}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-
-                      {/* Services — one card per render unit: a grouped card
-                          for services scheduled together, a single card for
-                          everything else. Hidden entirely when collapsed. */}
-                      {!isCollapsed && (
-                        <View style={styles.servicesList}>
-                          {renderUnits.map((unit, index) => {
-                            const policyKey = providerItems[0]?.providerDisplayName ?? providerName;
-                            const policy = providerDepositPolicies[policyKey];
-                            return (
-                              <View
-                                key={unit.kind === 'group' ? `group-${unit.batchId}` : unit.item.id}
-                                style={styles.serviceItemWrapper}
-                              >
-                                {unit.kind === 'group' ? (
-                                  <GroupedServiceCard
-                                    items={unit.items}
-                                    getBooking={getServiceBooking}
-                                    onRemove={handleRemoveFromCart}
-                                    onEditGroup={setPickerItems}
-                                    issuesByItemId={displayedItemIssues}
-                                    {...(policy !== undefined ? { depositPolicy: policy } : {})}
-                                  />
-                                ) : (
-                                  <ServiceCard
-                                    item={unit.item}
-                                    bookingInfo={getServiceBooking(unit.item.id)}
-                                    onRemove={handleRemoveFromCart}
-                                    onEdit={handleEditItem}
-                                    allCartItems={items}
-                                    {...(displayedItemIssues.has(unit.item.id) ? { issue: displayedItemIssues.get(unit.item.id)! } : {})}
-                                    {...(policy !== undefined ? { depositPolicy: policy } : {})}
-                                  />
-                                )}
-                                {/* Visual Separator */}
-                                {index < renderUnits.length - 1 && (
-                                  <View style={[styles.serviceSeparator, { backgroundColor: P.accentDim }]} />
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-
-                      {/* Collapse/expand handle — sits at the bottom of the
-                          card so collapsing a long section leaves the control
-                          under your thumb rather than scrolled off the top. */}
-                      <TouchableOpacity
-                        style={[styles.collapseHandle, { borderTopColor: P.border }]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                          toggleProviderCollapsed(providerName);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.collapseHandleText, { color: P.sub }]}>
-                          {isCollapsed
-                            ? `Show ${providerData.instanceCount} appointment${providerData.instanceCount === 1 ? '' : 's'}`
-                            : 'Hide'}
-                        </Text>
-                        <Ionicons
-                          name={isCollapsed ? 'chevron-down' : 'chevron-up'}
-                          size={16}
-                          color={P.sub}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-
-                {/* Applied promo codes recap — one code per provider, entered
-                    once on that provider's section above; this rolls up
-                    what's active across all of them. */}
-                {Object.keys(appliedPromos).length > 0 && (
-                  <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth, marginBottom: 10 }]}>
-                    {Object.entries(appliedPromos).map(([providerKey, promo]) => {
-                      const providerItems = itemsByProvider[providerKey];
-                      if (!providerItems?.length) return null;
-                      const providerDiscount = providerItems.reduce((s, it) => s + (itemPromoDiscounts[it.id] ?? 0), 0);
-                      return (
-                        <View key={providerKey} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: P.accentText }}>
-                            {promo.promo_code?.toUpperCase()}
-                          </Text>
-                          <Text style={{ flex: 1, fontSize: 12, color: P.sub }} numberOfLines={1}>
-                            {providerItems[0]?.providerDisplayName ?? providerKey}
-                          </Text>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#30D158' }}>
-                            −£{providerDiscount.toFixed(2)}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {/* Summary - USE EFFECTIVE TOTALS + SERVICE FEE NOTE */}
-                <View style={[styles.summary, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                  <View style={styles.summaryRow}>
-                    <Text style={dynamicStyles.summaryLabel}>Subtotal</Text>
-                    <Text style={dynamicStyles.summaryValue}>£{effectiveTotalNoPromo.toFixed(2)}</Text>
-                  </View>
-                  {promoSavingsShown > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={[dynamicStyles.summaryLabel, { color: '#30D158' }]}>Promo Discount</Text>
-                      <Text style={[dynamicStyles.summaryValue, { color: '#30D158' }]}>−£{promoSavingsShown.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {platformFee > 0 && <View style={styles.summaryRow}>
-                    <Text style={dynamicStyles.summaryLabel}>Platform Fee</Text>
-                    <Text style={dynamicStyles.summaryValue}>£{platformFee.toFixed(2)}</Text>
-                  </View>}
-                  <View style={[styles.summaryRow, styles.totalRow, { borderTopColor: P.border }]}>
-                    <Text style={dynamicStyles.totalLabel}>Total</Text>
-                    <Text style={dynamicStyles.totalValue}>£{effectiveFinalTotal.toFixed(2)}</Text>
-                  </View>
-                </View>
-
-                {/* Checkout Button - USE EFFECTIVE TOTAL. marginBottom tops up
-                    to FLOATING_TAB_BAR_CLEARANCE on top of whatever the
-                    screen's own SafeAreaView already reserves for the home
-                    indicator (insets.bottom) — this screen sits under
-                    IslandPillTabBar's floating pill, and a flat spacing.xxl
-                    margin left "Book All" sitting right under it. */}
-                <TouchableOpacity
-                  style={[
-                    styles.checkoutButton,
-                    { backgroundColor: P.accent, marginBottom: Math.max(spacing.xxl, FLOATING_TAB_BAR_CLEARANCE - insets.bottom) },
-                    isLoading && styles.disabledButton,
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    handleCheckout();
-                  }}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color={P.onAccent} size="small" />
-                  ) : (
-                    <Text style={[styles.checkoutText, { color: P.onAccent }]}>
-                      Book All • £{effectiveFinalTotal.toFixed(2)}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Multi-booking guide — only relevant once there's still an
-                    unscheduled item; items added from the provider profile
-                    already arrive with their own date/time, so this stays
-                    hidden for the now-common fully-scheduled cart. */}
-                {hasUnscheduledItems && (
-                  <View style={styles.multiBookingGuide}>
-                    <Text style={[styles.multiBookingGuideTitle, { color: P.text }]}>
-                      Booking more than one service?
-                    </Text>
-                    <View style={styles.multiBookingGuideList}>
-                      {[
-                        'Each service above gets its own appointment time',
-                        'Mix services from different providers in one cart',
-                        'Set a date and time for every service, then check out once',
-                      ].map((tip) => (
-                        <View key={tip} style={styles.multiBookingGuideRow}>
-                          <Text style={[styles.multiBookingGuideTick, { color: P.accentText }]}>✓</Text>
-                          <Text style={[styles.multiBookingGuideBody, { color: P.sub }]}>{tip}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </>
-            ) : (
+            ListFooterComponent={items.length > 0 ? (
+              <CartCheckoutFooter
+                appliedPromos={appliedPromos}
+                itemsByProvider={itemsByProvider}
+                itemPromoDiscounts={itemPromoDiscounts}
+                subtotal={effectiveTotalNoPromo}
+                promoSavings={promoSavingsShown}
+                platformFee={platformFee}
+                finalTotal={effectiveFinalTotal}
+                isLoading={isLoading}
+                bottomInset={insets.bottom}
+                showGuide={hasUnscheduledItems}
+                onCheckout={handleCheckout}
+              />
+            ) : null}
+            ListEmptyComponent={(
               <View style={styles.emptyCart}>
                 <Text style={dynamicStyles.emptyTitle}>Cart is Empty</Text>
                 <Text style={dynamicStyles.emptyText}>Add services to get started</Text>
@@ -3943,7 +4057,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                 </TouchableOpacity>
               </View>
             )}
-          </ScrollView>
+          />
         </SafeAreaView>
       </ThemedBackground>
       <DialogHost />
@@ -4534,6 +4648,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+  appliedPromoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 },
+  appliedPromoCode: { fontSize: 13, fontWeight: '700' },
+  appliedPromoProvider: { flex: 1, fontSize: 12 },
+  appliedPromoSaving: { fontSize: 12, fontWeight: '700', color: '#30D158' },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

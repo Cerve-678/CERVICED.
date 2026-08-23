@@ -23,7 +23,10 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
+import { EmergencyBookingPrompt } from './EmergencyBookingPrompt';
 import { AvailabilityService } from '../services/AvailabilityService';
+import type { EmergencyReason } from '../services/AvailabilityService';
+import type { EmergencyRequest } from '../contexts/CartContext';
 import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
   getProviderDepositPoliciesByDisplayNames,
@@ -146,6 +149,11 @@ export interface BookingSheetResult {
    *  BookingSheetProps.bookingPolicies). Absent if there was no policy to
    *  agree to (provider hasn't set one). */
   policySnapshot?: Record<string, unknown>;
+  /** Present only when the chosen time is one this provider's own scheduling
+   *  rules exclude and they've opted into being asked — the client accepted
+   *  the "scheduling conflict" confirmation for THIS date/time. Carried onto
+   *  the cart item and, from there, into prepare_checkout. */
+  emergencyRequest?: EmergencyRequest;
 }
 
 interface BookingSheetProps {
@@ -183,6 +191,11 @@ interface BookingSheetProps {
         selectedTime?: string | undefined;
         notes?: string | undefined;
         isDepositOnly?: boolean | undefined;
+        /** An acceptance already given for this item's existing time (edit
+         *  mode). Without it, reopening a request booking just to change its
+         *  notes would drop the flag and the unchanged time would then be
+         *  rejected by the very rule it was accepted under. */
+        emergencyRequest?: EmergencyRequest | undefined;
       }
     | undefined;
   /** When set, this provider requires a consultation before this client's
@@ -263,10 +276,19 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [showProviderTerms, setShowProviderTerms] = useState(false);
   // Agreement to the provider's OWN terms, gating add-to-cart. Separate from
   // the cart's checkout checkbox (CERVICED's Terms + cancellation policy):
-  // that one is app-wide and stamps policyAcceptedAt, this one is about this
+  // that one is app-wide and is what records policy_accepted_at server-side,
+  // this one is about this
   // provider's own document, which the client should not be able to add a
   // booking to the cart without having accepted.
   const [agreedToProviderTerms, setAgreedToProviderTerms] = useState(false);
+  // A time the provider only accepts as a request. `pendingEmergency` is the
+  // slot awaiting the client's answer; `emergencyRequest` is their accepted
+  // answer, and is what travels to the cart. Both are cleared whenever the
+  // date changes or another time is picked — a reason belongs to the time it
+  // was accepted for, never to the booking in general.
+  const [pendingEmergency, setPendingEmergency] = useState<{ time: string; reasons: EmergencyReason[] } | null>(null);
+  const [emergencyAck, setEmergencyAck] = useState(false);
+  const [emergencyRequest, setEmergencyRequest] = useState<EmergencyRequest | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
@@ -285,6 +307,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     depositFetched.current = false;
     termsFetched.current = false;
     setAgreedToProviderTerms(false);
+    setPendingEmergency(null);
+    setEmergencyAck(false);
+    setEmergencyRequest(initial?.emergencyRequest ?? null);
     consultationResolvedOnce.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, service?.id]);
@@ -499,6 +524,46 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 
   const isFirstStep = stepOrder.indexOf(step) === 0;
 
+  // Picking a time the provider only accepts as a request doesn't schedule
+  // anything yet — it opens the confirmation. The time IS set straight away
+  // so the picker collapses to it as usual, but it's backed out again if the
+  // client declines, since it isn't bookable on any other terms.
+  const handleSelectTime = useCallback((time: string, requestReasons?: EmergencyReason[]) => {
+    setSelectedTime(time);
+    if (requestReasons && requestReasons.length > 0) {
+      setEmergencyAck(false);
+      setPendingEmergency({ time, reasons: requestReasons });
+    } else {
+      setPendingEmergency(null);
+      setEmergencyRequest(null);
+    }
+  }, []);
+
+  // A different day is a different set of rules — whatever was accepted for
+  // the old date can't carry over to the new one.
+  const handleSelectDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    setPendingEmergency(null);
+    setEmergencyAck(false);
+    setEmergencyRequest(null);
+  }, []);
+
+  const confirmEmergency = useCallback(() => {
+    if (!pendingEmergency) return;
+    setEmergencyRequest({
+      reasons: pendingEmergency.reasons,
+      acknowledgedAt: new Date().toISOString(),
+    });
+    setPendingEmergency(null);
+  }, [pendingEmergency]);
+
+  const cancelEmergency = useCallback(() => {
+    setSelectedTime('');
+    setEmergencyRequest(null);
+    setEmergencyAck(false);
+    setPendingEmergency(null);
+  }, []);
+
   // A scheduling blocker reached on the confirm step is the one case where the
   // button must stay tappable rather than disabled: what needs fixing lives on
   // an earlier step, so greying it out here would strand the client with no
@@ -523,12 +588,15 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
         : {}),
       // The policy in force at booking time, recorded as fact — not as
       // consent. Agreement itself is captured once, by the cart's own
-      // bundled Terms + cancellation-policy checkbox at checkout, which
-      // is what stamps policyAcceptedAt.
+      // bundled Terms + cancellation-policy checkbox at checkout, which is
+      // what hold_cart_booking_slots() records policy_accepted_at from.
       ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
+      // Only when it still matches the time being submitted — a stale
+      // acceptance from a time since changed must never travel.
+      ...(emergencyRequest ? { emergencyRequest } : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, emergencyRequest, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -689,9 +757,10 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 )}
                 <ModernBeautyCalendar
                   selectedDate={selectedDate}
-                  onDateSelect={setSelectedDate}
-                  onTimeSelect={setSelectedTime}
+                  onDateSelect={handleSelectDate}
+                  onTimeSelect={handleSelectTime}
                   selectedTime={selectedTime}
+                  allowRequests
                   providerName={providerIdentifier}
                   serviceDuration={service.duration}
                   accentColor={adaptiveAccentColor}
@@ -867,11 +936,27 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </View>
               )}
 
+              {/* Carried onto the confirm step so the client isn't reminded
+                  only in a modal they dismissed several taps ago — what
+                  they're adding to the cart is a request, and that has to be
+                  visible at the moment they add it. */}
+              {emergencyRequest && (
+                <View style={[styles.emergencyNotice, { borderColor: withAlpha(adaptiveAccentColor, 0.5) }]}>
+                  <Text style={[styles.emergencyNoticeTitle, { color: tokens.text }]}>
+                    Requested outside {providerDisplayName}'s availability
+                  </Text>
+                  <Text style={[styles.emergencyNoticeText, { color: tokens.sub }]}>
+                    {providerDisplayName} has to accept this before it's confirmed. You'll be
+                    told either way.
+                  </Text>
+                </View>
+              )}
+
               {/* Shown whether or not there's a structured booking policy — a
                   provider can have written terms without having filled one in.
                   The tick is what gates Add to Cart; it records agreement for
                   this sheet only (the cart's checkout checkbox is still what
-                  stamps policyAcceptedAt on the booking). Sending these as a
+                  records policy_accepted_at on the booking). Sending these as a
                   signable form is the follow-on feature (FUTURE_LOGIC.md). */}
               {providerTerms && (
                 <View style={styles.providerTermsBlock}>
@@ -980,7 +1065,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                       : stepBlocker
                       ? stepBlocker
                       : step === 'confirm'
-                      ? (mode === 'add' ? 'Add to Cart' : 'Save Changes')
+                      ? (mode === 'add'
+                          ? (emergencyRequest ? 'Add Request to Cart' : 'Add to Cart')
+                          : 'Save Changes')
                       : 'Continue'}
                   </Text>
                 </TouchableOpacity>
@@ -1009,6 +1096,29 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           </SafeAreaView>
         </View>
       </KeyboardDismissView>
+
+      {/* Same nesting rule as the terms sheet below: rendered inside the
+          sheet's own Modal so the confirmation lands ON the booking sheet,
+          and opening the provider's policy from it lands on top of BOTH. */}
+      {pendingEmergency && (
+        <EmergencyBookingPrompt
+          visible
+          providerName={providerDisplayName}
+          date={selectedDate}
+          time={pendingEmergency.time}
+          reasons={pendingEmergency.reasons}
+          hasPolicy={!!providerTerms}
+          onReadPolicy={() => setShowProviderTerms(true)}
+          acknowledged={emergencyAck}
+          onToggleAcknowledged={() => setEmergencyAck(prev => !prev)}
+          onConfirm={confirmEmergency}
+          onCancel={cancelEmergency}
+          accentColor={adaptiveAccentColor}
+          backgroundColor={sheetBackground}
+          textColor={tokens.text}
+          subColor={tokens.sub}
+        />
+      )}
 
       {/* Nested inside the sheet's own Modal so it lands on top of it rather
           than replacing it — the client is mid-booking and goes straight back
@@ -1052,6 +1162,9 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
 };
 
 const styles = StyleSheet.create({
+  emergencyNotice: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 20 },
+  emergencyNoticeTitle: { fontSize: 14, fontWeight: '700', marginBottom: 5 },
+  emergencyNoticeText: { fontSize: 12, lineHeight: 17 },
   // Dimmed backdrop + rounded sheet sliding up from the bottom — same
   // transparent-overlay idiom as CartScreen's PaymentModal, instead of an
   // opaque full-screen pageSheet.

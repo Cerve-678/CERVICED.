@@ -12,6 +12,29 @@ How open times are computed, and how a taken slot is blocked.
 
 So **a taken slot cannot be booked even if the client skips its own check.** The client-side checks in [[Booking Flow]] are UX only.
 
+## Emergency requests — asking past the rules
+#server-authoritative
+
+Four of the trigger's rejections are no longer absolute. Since `20260821143821_emergency_booking_requests.sql` a provider can opt into being **asked** for a time their own rules exclude — one independent opt-in per rule, all default `false`:
+
+| `providers` column | Relaxes |
+|---|---|
+| `allow_out_of_hours_requests` | outside working hours |
+| `allow_blocked_date_requests` | blocked date, or a one-off `is_closed` override |
+| `allow_short_notice_requests` | under `min_booking_notice_hrs` |
+| `allow_beyond_window_requests` | beyond `booking_window_days` |
+| `out_of_hours_extension_mins` | the **bound**, not an opt-in (default 120) |
+
+Still hard for everyone: a past date, an already-elapsed same-day time, and a genuinely taken slot. The overlap rule above is untouched — no opt-in reaches past it.
+
+**The envelope is the bound.** An out-of-hours request may only reach `out_of_hours_extension_mins` either side of the provider's *recurring weekly envelope* (earliest start, latest end across the whole week) — never a blank 24h clock. No recurring schedule means no envelope, and no out-of-hours slots at all. `resolveWeeklyEnvelope()` and the trigger compute this identically; **if they drift, the picker offers times the DB rejects**, which is the dead end the feature exists to remove. Covered by `src/tests/emergencyRequestSlots.test.ts`.
+
+**Slots carry their reason.** `getAvailableSlots` returns these as normal `TimeSlot`s with `isByRequest: true` + `requestReasons`. `ModernBeautyCalendar` shows them in a separate dashed "By request" group, and **only when the caller passes `allowRequests`** — default `false`, because a caller that shows them must be able to carry the flag to checkout. Everything else (consultation prerequisite, both reschedule pickers, provider AddBooking's Available tab, the grouped back-to-back chain picker, and `resolveNextAvailableSlot`) never sees them.
+
+**Always pending.** `finalize_checkout()` forces auto-accept off for `is_emergency_request`, so an opted-in provider with `auto_accept_bookings = true` is never silently committed. `emergency_ack_at` mirrors `safety_ack_at`, enforced inside `prepare_checkout`.
+
+Provider control lives in `SchedulingScreen.tsx`; the client confirmation is `EmergencyBookingPrompt.tsx`. See [[Cart & Checkout]] for how the flag travels.
+
 ## Schema
 - `provider_availability_windows` / `provider_availability_overrides` (new, `availability_v2.sql`); legacy `provider_availability`.
 - Buffers: `service_buffer_settings.sql`, provider `buffer_mins`, per-service `buffer_before_mins`/`buffer_after_mins`.
@@ -23,4 +46,4 @@ So **a taken slot cannot be booked even if the client skips its own check.** The
 - Open UX question: should taken slots **disappear** or **show greyed as unavailable**? Currently `getAvailableSlots` omits them. #needs-verification
 
 ## Connections
-[[Booking Flow]] · [[Client vs Server Authority]] · [[Data Layer — Supabase]] · [[Provider Onboarding & Go-Live]]
+[[Booking Flow]] · [[Cart & Checkout]] · [[Client vs Server Authority]] · [[Data Layer — Supabase]] · [[Provider Onboarding & Go-Live]]

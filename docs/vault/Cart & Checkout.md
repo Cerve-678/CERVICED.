@@ -132,6 +132,23 @@ Back-to-back is deliberately **not** an overlap. That's how a group is built.
 - Prices are client-supplied on the non-Stripe path. `prepareCheckout()` returns
   a server-computed `amountDue`; the mock path does not.
 
+## Emergency requests pass through here, they don't originate here
+The cart is a **carrier** for this, not the owner — the decision was made back
+in the booking sheet. `CartItem.emergencyRequest` (reasons + `acknowledgedAt`)
+rides along to `prepareCheckout` as `emergency` / `emergency_ack`, and on the
+legacy non-Stripe path as `is_emergency_request` on the **hold** (that's the
+insert the bookability trigger fires on, not the claim). Two things to keep
+right when touching cart scheduling:
+
+- Editing a cart item's date/time must **clear** the flag — it's passed to
+  `updateCartItem` unconditionally, not spread-when-present, so a stale
+  acceptance can't survive onto a time it no longer describes.
+- Reopening an item in edit mode must **restore** it (`initial.emergencyRequest`),
+  or changing only the notes would strip the flag and the unchanged time would
+  then be rejected by the very rule it was accepted under.
+
+Mechanism and the provider opt-ins → [[Availability & Slots]].
+
 ## Connections
 
 [[Booking Flow]] · [[Availability & Slots]] · [[Payments]] · [[Cancellations]] ·

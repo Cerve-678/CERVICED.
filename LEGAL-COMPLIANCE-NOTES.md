@@ -54,6 +54,47 @@ it can be a statutory minimum (item 5) and needs a DOB-verified mechanism,
 not a soft acknowledgement checkbox; folding it into this same pattern would
 be the wrong legal posture.
 
+**2026-08-21 correction — the 2026-08-17 update above overstated what is
+live.** The safety-acknowledgement gate it describes was only ever in
+`prepare_checkout`, which is reachable only when `USE_STRIPE_PAYMENTS` is on
+— and `EXPO_PUBLIC_STRIPE_PAYMENTS_ENABLED` is set in no `.env` file and no
+`eas.json` profile, so it is **off in every build**. Real bookings went
+through `hold_cart_booking_slots` -> `claim_cart_booking_slots`, neither of
+which referenced `safety_ack_required`/`safety_ack_at` at all. Three live
+bookings exist against a service the provider flagged **not pregnancy-safe**
+with `safety_ack_required = false` and `safety_ack_at` NULL: nothing rejected
+them and nothing recorded that anyone was shown the flag. All affected rows
+are the developer's own test accounts (confirmed 2026-08-21), so no real
+person's record is involved — but the enforcement described above should not
+have been read as live, and this file said it was.
+
+Separately, `bookings.policy_accepted_at` — the record that a client agreed
+to CERVICED's Terms and the provider's cancellation policy — was NULL on 45
+of 59 live bookings, carried the *previous* checkout attempt's timestamp on a
+retry, and on 4 rows sat NULL beside a populated `policy_snapshot` (which
+reads as "consent on file" to anything checking only for a snapshot). Cause:
+the app stamped the live cart items but booked from a snapshot captured
+before the stamp.
+
+Both are closed by
+`supabase/migrations/20260823180000_consent_recorded_before_payment.sql`,
+which moves both records server-side into `hold_cart_booking_slots` — the
+last step before the client is charged. The database now derives *whether* an
+acknowledgement is required from the service row rather than trusting the
+payload, refuses the batch without the client's acknowledgement, and stamps
+*when* consent happened from its own clock. A client-supplied consent
+timestamp is no longer representable.
+
+**Still open**: `prepare_checkout` (Stripe path) records the safety
+acknowledgement but still writes no `policy_accepted_at`. Harmless while that
+path is unreachable; it must be closed before `USE_STRIPE_PAYMENTS` is turned
+on, or the consent-record gap returns on the path that handles real money.
+
+**Not done, on purpose**: the pre-fix rows were left as they are. Backfilling
+a `policy_accepted_at` would assert that a client agreed at a time nobody can
+evidence — fabricating a consent record, which is a worse position than an
+honest NULL. Left for a lawyer to direct if it ever matters.
+
 **2026-08-18 update — three non-agreeing definitions of "unset"**: Becca can
 now report these flags conversationally (`provider.safety` in
 `src/services/becca/capabilities/client.ts`). Building it surfaced that the
@@ -212,6 +253,44 @@ No specific findings, but a consumer-facing app taking payments should be
 checked against WCAG-equivalent accessibility expectations (and the European
 Accessibility Act if the user base includes the EU) — screen reader labels,
 contrast, tap-target sizing.
+
+## 12. Unanswered requests have no expiry, and no stated deadline
+
+**Raised 2026-08-21.** Verified live: a `booking_reschedule_requests` row has
+no deadline and no expiry job — it stays `pending` (waiting on the provider) or
+`provider_responded` (waiting on the client) indefinitely. See
+[BOOKINGS.md](BOOKINGS.md) §7a for the engineering detail and the rule agreed
+but not yet built.
+
+Why it belongs on this list rather than being purely an engineering fix:
+
+- **Nothing in the T&Cs says how long a provider has to respond to anything** —
+  not a reschedule request, not a booking request. The 48-hour auto-cancel of
+  an unaccepted booking request is enforced in a cron job (`process_expire_
+  stale_pending_bookings()`) that no user-facing document mentions. A deadline
+  the app enforces but never states is the wrong way round: users should be
+  told the rule before it's applied to them, and it should be the same number
+  in both places.
+- **Provider silence currently penalises the client.** While a request is open
+  the client cannot submit another one, the appointment auto-completes on
+  schedule regardless (recorded as attended), and the provider's own notice
+  window can lapse in the meantime — so a client who asked in good time can end
+  up with no reschedule, no refund path, and a "completed" appointment they
+  didn't attend. If the intended answer is that the client gets a no-penalty
+  cancellation when a provider never responds, that's a consumer-facing promise
+  and needs stating in the T&Cs, not just coding.
+- **Wording of the expiry notice matters.** The intended message is that the
+  provider was unable to meet the request. That's a statement the platform
+  makes about a provider, generated automatically from silence — worth a
+  lawyer's eye on the phrasing so it reads as "this request expired without a
+  response" rather than an assertion about the provider's conduct.
+- Interacts with §6 (cancellation/refund delegation): if expiry is going to
+  entitle a client to anything, that entitlement lands in the same gap where
+  no refund mechanism currently exists.
+
+Decisions needed from you (not to be guessed at): the response deadline itself,
+whether it varies per provider, whether expiry entitles the client to a
+no-penalty cancellation or refund, and the exact notice wording.
 
 ---
 

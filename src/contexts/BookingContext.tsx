@@ -3,8 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CartItem } from './CartContext';
 import { AvailabilityService, parseDurationToMinutes } from '../services/AvailabilityService';
-import { supabase } from '../lib/supabase';
-import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow } from '../services/databaseService';
+import { getMyBookings, getOlderBookings, getProviderIdByDisplayName, getProviderBySlug, updateBookingStatus as dbUpdateBookingStatus, insertBookingUserNotification, getProviderLocationsByIds, getProviderBookingCapSettingsForProviders, countProviderBookingsOnDates, getActiveRescheduleRequestsForBookings, getServiceIdsByNames, isSlotTaken, getSlotsTaken, cancelOwnBooking, providerCancelOwnBooking, requestRescheduleOwnBooking, confirmRescheduleOwnBooking, declineRescheduleOffer, confirmGroupReschedule as dbConfirmGroupReschedule, declineGroupRescheduleOffer, updateBookingGroupInfo, holdCartBookingSlots, claimCartBookingSlots, releaseCartBookingSlots, CartHoldItem, markProviderNoShow as dbMarkProviderNoShow, getCurrentAuthUserId, subscribeToUserBookingChanges, subscribeToRescheduleRequestChanges } from '../services/databaseService';
 import { mapDbBookingToConfirmed, applyRescheduleRequestRow } from '../services/bookingService';
 import { useBookingStore } from '../stores/useBookingStore';
 import { STORAGE_KEYS } from '../utils/storageKeys';
@@ -57,6 +56,26 @@ export { BookingStatus, PaymentStatus } from '../types/booking';
 // can import it from here without changing their import paths.
 export { mapDbBookingToConfirmed };
 
+/**
+ * The client's own address, and which providers in the cart it actually
+ * applies to.
+ *
+ * Only a MOBILE provider travels to the client, so only a mobile provider's
+ * booking gets a client address. This used to be a bare `clientAddress?:
+ * string` applied to every row in the cart — and because CartScreen seeds the
+ * field from the account's saved default regardless of what's in the cart,
+ * every booking a client with a saved address ever made was stamped with it.
+ * That address then read as the appointment's location on the client's own
+ * booking screens, hiding the salon's real (already released) address.
+ *
+ * `providerNames` holds `providerDisplayName ?? providerName` per cart item —
+ * the same key CartScreen resolves mobile providers by.
+ */
+export interface MobileClientAddress {
+  address: string;
+  providerNames: readonly string[];
+}
+
 export interface BookingContextType {
   bookings: ConfirmedBooking[];
   confirmedBookings: ConfirmedBooking[];
@@ -68,7 +87,7 @@ export interface BookingContextType {
   allTodayBookingsCompleted: boolean;
 
   // Actions
-  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], clientAddress?: string, holdBatchId?: string) => Promise<void>;
+  createBookingsFromCart: (cartItems: CartItem[], appointmentData: AppointmentData[], mobileClientAddress?: MobileClientAddress, holdBatchId?: string) => Promise<void>;
   validateBookingsBeforeCheckout: (cartItems: CartItem[], appointmentData: AppointmentData[]) => Promise<BookingConflictResult>;
   // Reserves every cart item's slot as an on_hold booking, all-or-nothing,
   // for the 10-minute window while the user is on the payment screen —
@@ -82,7 +101,12 @@ export interface BookingContextType {
   // if any item can't be held.
   holdCartCheckoutSlots: (
     cartItems: CartItem[],
-    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>
+    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>,
+    /** The Confirm & Pay checkbox, passed through rather than assumed. It
+     *  gates the button that calls this, so it is always true in practice —
+     *  but hold_cart_booking_slots() rejects a batch without it, and reading
+     *  the real state keeps the assertion honest if that gating ever changes. */
+    consent: { policyAccepted: boolean; safetyAcknowledged: boolean }
   ) => Promise<string>;
   // Best-effort release of a hold batch when the user backs out of payment
   // before claiming it (close button, payment failure/cancel). Never throws
@@ -187,6 +211,60 @@ const resolveCartProviderIds = async (
   ];
 
   return { providerIdCache, unresolvedNames };
+};
+
+/** cartItemId → real `services.id` UUID, for every item we can resolve one for.
+ *
+ *  A cart item's `serviceId` is whatever id the screen that added it had.
+ *  Usually that's the live UUID, but some paths (rebook from a booking whose
+ *  own service link was already missing, anything falling back to a local or
+ *  synthetic id) carry something that is not a UUID — and `bookings.service_id`
+ *  is a uuid FK, so those were written as NULL and the booking ended up with no
+ *  link to the service it is for. Resolving by (provider, service name) puts
+ *  the link back; an item that still can't be matched is written NULL exactly
+ *  as before, so this can only ever improve a row.
+ *
+ *  One query per distinct provider, not one per item.
+ */
+const resolveCartServiceIds = async (
+  cartItems: CartItem[],
+  providerIdCache: Record<string, string | null>,
+): Promise<Record<string, string>> => {
+  const resolved: Record<string, string> = {};
+  const needsLookup = new Map<string, CartItem[]>();
+
+  for (const item of cartItems) {
+    if (item.serviceId && UUID_RE.test(item.serviceId)) {
+      resolved[item.id] = item.serviceId;
+      continue;
+    }
+    const providerId = providerIdCache[item.providerName];
+    if (!providerId || !item.serviceName) continue;
+    const forProvider = needsLookup.get(providerId) ?? [];
+    forProvider.push(item);
+    needsLookup.set(providerId, forProvider);
+  }
+
+  await Promise.all(
+    [...needsLookup.entries()].map(async ([providerId, items]) => {
+      try {
+        const byName = await getServiceIdsByNames(
+          providerId,
+          [...new Set(items.map(i => i.serviceName))],
+        );
+        for (const item of items) {
+          const id = byName[item.serviceName];
+          if (id) resolved[item.id] = id;
+        }
+      } catch (err) {
+        // A failed lookup means the row keeps the NULL it would have had
+        // anyway — never a reason to fail the checkout.
+        logger.error('[Booking] service id resolution failed:', err);
+      }
+    }),
+  );
+
+  return resolved;
 };
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -453,8 +531,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         // (not yet synced) are kept as-is. Local reschedule/UI state is kept.
         let mergedBookings: ConfirmedBooking[] = migratedBookings;
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
+          const userId = await getCurrentAuthUserId();
+          if (userId) {
             const dbBookings = await getMyBookings();
             if (dbBookings.length > 0) {
               const dbById = new Map(dbBookings.map(d => [d.id, d]));
@@ -489,6 +567,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   // The client's own address for mobile bookings is never masked
                   // by the view, so keep a local value that hasn't synced yet.
                   clientAddress: fromDb.clientAddress ?? b.clientAddress,
+                  // Read live off the joined provider by the view, so it can
+                  // only be absent on a client running against a DB that
+                  // predates the column — keep the local value in that case.
+                  providerBusinessType: fromDb.providerBusinessType ?? b.providerBusinessType,
                   remainingBalance: fromDb.remainingBalance,
                   paymentStatus: fromDb.paymentStatus,
                 };
@@ -561,8 +643,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       } else {
         logger.log('No bookings in storage — trying Supabase fallback...');
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
+          const userId = await getCurrentAuthUserId();
+          if (userId) {
             const dbBookings = await getMyBookings();
             if (dbBookings.length > 0) {
               const mapped = dbBookings.map(mapDbBookingToConfirmed);
@@ -596,33 +678,22 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
   // Realtime: re-fetch bookings whenever a booking row changes for the current user
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let unsubscribe: (() => void) | null = null;
+    let active = true;
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-
-      channel = supabase
-        .channel('booking-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'bookings',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
+    getCurrentAuthUserId().then(userId => {
+      if (!active || !userId) return;
+      unsubscribe = subscribeToUserBookingChanges(userId, () => {
             // A booking was inserted/updated — reload to reflect latest status.
             // Also update the Zustand store so non-context consumers stay fresh.
             loadBookings().catch(() => {});
-            useBookingStore.getState().refreshBookings(user.id).catch(() => {});
-          }
-        )
-        .subscribe();
-    });
+            useBookingStore.getState().refreshBookings(userId).catch(() => {});
+      });
+    }).catch(() => {});
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      active = false;
+      unsubscribe?.();
     };
   }, [loadBookings]);
 
@@ -969,30 +1040,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     // The membership check below is a local optimisation, not a security
     // boundary: it stops a row for someone else's booking from triggering an
     // AsyncStorage read/write cycle that would find nothing to update.
-    const channel = supabase
-      .channel('reschedule-responses')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'booking_reschedule_requests' },
-        (payload) => {
-          const row = payload.new as {
-            booking_id?: string;
-            status?: string;
-            provider_available_slots?: AvailableDate[] | null;
-          } | null;
+    const unsubscribe = subscribeToRescheduleRequestChanges(
+        (row) => {
           if (!row?.booking_id || !bookingIdsRef.current.has(row.booking_id)) return;
           if (row.status === 'provider_responded') {
             applyProviderResponse(row.booking_id, row.provider_available_slots);
           } else if (row.status === 'rejected') {
             applyRejection(row.booking_id);
           }
-        }
-      )
-      .subscribe();
+        },
+    );
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
   }, [providerRespondToReschedule, saveBookings]);
 
@@ -1418,11 +1479,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   const createBookingsFromCart = useCallback(async (
     cartItems: CartItem[],
     appointmentData: AppointmentData[],
-    clientAddress?: string,
+    mobileClientAddress?: MobileClientAddress,
     holdBatchId?: string
   ) => {
     try {
       logger.log('Creating bookings from cart...');
+
+      // Which providers in this cart travel to the client. Keyed by
+      // `providerDisplayName ?? providerName`, matching how CartScreen resolves
+      // them. Empty when nobody in the cart is mobile — which is exactly when
+      // no booking here should carry a client address.
+      const clientAddressText = mobileClientAddress?.address.trim() || null;
+      const mobileProviderNames = new Set(mobileClientAddress?.providerNames ?? []);
 
       // Validate bookings before creating to prevent double-booking. Skipped
       // when a hold batch is present: hold_cart_booking_slots() already did
@@ -1622,9 +1690,20 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           bookingTime: appointment.time,
           endTime,
           status: initialStatus,
-          address: providerLocations[itemProviderId ?? '']?.address ?? appointment.address,
-          coordinates: (providerLocations[itemProviderId ?? '']?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
+          // Mirrors the DB row built below: a mobile provider's own location
+          // is not this appointment's venue, so the optimistic local copy
+          // doesn't claim it is either — otherwise the booking flips address
+          // the moment the real row loads back.
+          address: mobileProviderNames.has(fullProviderName)
+            ? ''
+            : providerLocations[itemProviderId ?? '']?.address ?? appointment.address,
+          coordinates: (mobileProviderNames.has(fullProviderName)
+            ? null
+            : providerLocations[itemProviderId ?? '']?.coordinates ?? appointment.coordinates) as unknown as BookingCoordinates,
           phone: providerLocations[itemProviderId ?? '']?.phone ?? appointment.phone,
+          ...(mobileProviderNames.has(fullProviderName) && clientAddressText
+            ? { clientAddress: clientAddressText, providerBusinessType: 'mobile' as const }
+            : {}),
           // Customer information
           customerName: appointment.customerName,
           customerEmail: appointment.customerEmail,
@@ -1667,8 +1746,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // id after a successful save (reschedules/cancellations reference it)
       const dbIdByCartItemId: Record<string, string> = {};
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        const userId = await getCurrentAuthUserId();
+        if (userId) {
           // If this checkout reserved a hold batch (CartScreen calls
           // holdCartCheckoutSlots when the user commits to payment), claim
           // it now: every item with a still-live held row gets converted in
@@ -1678,6 +1757,9 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           // e.g. an old client build) simply fall through to the normal
           // insert path unchanged, same as if no hold existed at all.
           const claimedByKey = new Map<string, string>();
+          const claimServiceIdByCartItem = holdBatchId
+            ? await resolveCartServiceIds(cartItems, providerIdCache)
+            : {};
           if (holdBatchId) {
             try {
               const claimItems = cartItems
@@ -1697,9 +1779,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                         ? (item.providerImage as { uri?: string }).uri ?? null
                         : null);
                   const dbPayStatus = apt.paymentType === 'full' ? 'fully_paid' : 'deposit_paid';
+                  // Only a mobile provider travels to the client, so only a
+                  // mobile provider's booking carries the client's address —
+                  // and conversely, a mobile provider's own location is their
+                  // private base, not this appointment's venue, so it isn't
+                  // snapshotted as one. Getting this wrong in either direction
+                  // is what made a salon booking render the client's own home
+                  // address as its location.
+                  const isMobile = mobileProviderNames.has(
+                    item.providerDisplayName ?? item.providerName,
+                  );
                   return {
                     provider_id: providerId,
-                    service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
+                    service_id: claimServiceIdByCartItem[item.id] ?? null,
                     booking_date: apt.date,
                     booking_time: pgTime,
                     end_time: pgEndTime,
@@ -1721,17 +1813,25 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     service_name_snapshot: item.serviceName,
                     service_category_snapshot: item.providerService || null,
                     provider_logo_snapshot: logoUrl,
-                    provider_address_snapshot: providerLocations[providerId]?.address ?? apt.address ?? null,
+                    provider_address_snapshot: isMobile
+                      ? null
+                      : providerLocations[providerId]?.address ?? apt.address ?? null,
                     provider_phone_snapshot: providerLocations[providerId]?.phone ?? apt.phone ?? null,
-                    provider_coordinates: (() => {
-                      const c = providerLocations[providerId]?.coordinates;
-                      return c ? { lat: c.latitude, lng: c.longitude } : null;
-                    })(),
+                    provider_coordinates: isMobile
+                      ? null
+                      : (() => {
+                          const c = providerLocations[providerId]?.coordinates;
+                          return c ? { lat: c.latitude, lng: c.longitude } : null;
+                        })(),
                     customer_name: apt.customerName,
                     customer_email: apt.customerEmail,
                     customer_phone: apt.customerPhone,
-                    client_address: clientAddress ?? null,
-                    policy_accepted_at: item.policyAcceptedAt ?? null,
+                    client_address: isMobile ? clientAddressText : null,
+                    // policy_accepted_at is deliberately absent:
+                    // hold_cart_booking_slots() stamps it from the DB clock
+                    // before payment, and the claim no longer overwrites it.
+                    // policy_snapshot is the policy's CONTENT rather than
+                    // evidence of consent, and is only assembled by here.
                     policy_snapshot: item.policySnapshot ?? null,
                   };
                 })
@@ -1756,8 +1856,6 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
 
             const providerId = providerIdCache[item.providerName];
             if (!providerId) continue; // unreachable — resolution guaranteed above
-            const groupInfo = groupInfoForItem(item);
-
             try {
 
             const pgTime = timeTo24(apt.time);
@@ -1775,7 +1873,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                   service: item.serviceName,
                   date: formatLongDate(apt.date),
                   time: formatTime12(apt.time),
-                  location: apt.address || 'Address shared on confirmation',
+                  // A mobile provider comes to the client, so the address
+                  // that belongs in their confirmation is their own.
+                  location: (mobileProviderNames.has(item.providerDisplayName ?? item.providerName)
+                    ? clientAddressText
+                    : apt.address) || 'Address shared on confirmation',
                 });
                 sendEmail(apt.customerEmail, subject, html).catch(() => {});
               }
@@ -1813,16 +1915,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                 typeof itemError?.message === 'string'
                 && itemError.message.length > 0
                 && !itemError.message.includes('Network')
+                // itemError.message is safe to show verbatim for the claim
+                // RPC's own `new Error(...)` validations (closed day,
+                // blocked date, overlap — no .code at all) and for a
+                // deliberate DB guard (RAISE EXCEPTION, which Postgres
+                // defaults to SQLSTATE P0001) — both are written for people.
+                // Supabase's PostgrestError DOES extend Error and carries a
+                // real .code for a genuine technical failure (RLS,
+                // constraint violation, anything else Postgres raised)
+                // that's unsafe to surface raw — those fall through to the
+                // generic message below instead.
+                && !(itemError?.code && itemError.code !== 'P0001')
               ) {
-                // Any other error with a real message — the claim RPC's own
-                // `new Error(...)` validations (closed day, blocked date,
-                // overlap), or a raw Supabase/PostgrestError, which is a plain
-                // object with {message, code, details} and is NOT
-                // `instanceof Error`, so that check alone silently dropped
-                // every genuine Postgres-side message (e.g. a NOT NULL or
-                // check-constraint violation) into the generic connection
-                // fallback below even though Postgres had already said
-                // exactly what went wrong.
                 message = itemError.message;
               } else {
                 message = `Your booking with ${name} couldn't be placed. Please check your connection and try again.`;
@@ -1964,7 +2068,8 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
   // — CartScreen's existing "Scheduling Conflict" alert handles both.
   const holdCartCheckoutSlots = useCallback(async (
     cartItems: CartItem[],
-    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>
+    scheduleByItemId: Record<string, { selectedDate: string; selectedTime: string }>,
+    consent: { policyAccepted: boolean; safetyAcknowledged: boolean }
   ): Promise<string> => {
     const { providerIdCache, unresolvedNames } = await resolveCartProviderIds(cartItems);
     if (unresolvedNames.length > 0) {
@@ -1973,6 +2078,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
         `Please re-add the service from the provider's profile and try again.`
       );
     }
+
+    // Recover a real services.id for any item whose cart copy doesn't carry
+    // one, so the held (and then claimed) row is linked to the service it is
+    // actually for. See resolveCartServiceIds.
+    const serviceIdByCartItem = await resolveCartServiceIds(cartItems, providerIdCache);
 
     const holdItems: CartHoldItem[] = cartItems.map(item => {
       const schedule = scheduleByItemId[item.id];
@@ -1988,10 +2098,18 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       }
       return {
         provider_id: providerId,
-        service_id: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : null,
+        service_id: serviceIdByCartItem[item.id] ?? null,
         booking_date: schedule.selectedDate,
         booking_time: pgTime,
         end_time: pgEndTime,
+        // Carried from the cart item, not re-derived: the reasons were fixed
+        // when the client accepted the confirmation for THIS time.
+        ...(item.emergencyRequest ? { is_emergency_request: true } : {}),
+        // One checkbox covers the whole checkout, so every item carries the
+        // same answer. The server decides per item whether the safety half
+        // was needed at all — it reads that off the service, not off this.
+        policy_accepted: consent.policyAccepted,
+        safety_ack: consent.safetyAcknowledged,
       };
     });
 

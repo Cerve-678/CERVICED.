@@ -24,6 +24,9 @@ How a booking goes from cart to confirmed appointment.
 ## Weak spots → [[Client vs Server Authority]]
 - Prices are client-supplied (#1). Cap/auto-accept are client-enforced (#2). Status transitions are unconstrained (#3). Cancel/reschedule eligibility is client-computed (#5).
 
+## Emergency requests (outside the provider's rules)
+A client can now ask for a time the provider's own scheduling rules exclude — but only where that provider opted in (`providers.allow_*_requests`). Such a booking carries `bookings.is_emergency_request` and is **always pending**: `finalize_checkout()` forces auto-accept off for it, so an opted-in provider is never silently committed to a slot outside their hours. Provider-facing surfaces flag it before the Confirm button (inbox badge, detail banner). Full mechanism → [[Availability & Slots]].
+
 ## Cancelling a booking
 Its own note now, not just a bullet here → [[Cancellations]] (notice-window gate, deposit disclosure copy, provider-cancel → client-notify wiring).
 

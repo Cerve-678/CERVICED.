@@ -23,8 +23,8 @@ import {
   deleteNotification as dbDeleteNotification,
   getBookingWithAddOnsById,
   getProviderBasicById,
+  subscribeToNotificationChanges,
 } from '../../services/databaseService';
-import { supabase } from '../../lib/supabase';
 import type { DbNotification } from '../../types/database';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 
@@ -227,37 +227,20 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     Notifications.setBadgeCountAsync(0).catch(() => {});
 
     const role = isProvider ? 'provider' : 'client';
-    const channel = supabase
-      .channel(`notifications-screen-${role}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user?.id}`,
-        },
-        (payload) => {
-          const row = payload.new as DbNotification;
-          // Only prepend if it belongs to the currently viewed role
-          if (row.recipient_role === role) {
-            setNotifications(prev => [mapDbNotification(row), ...prev]);
-          }
+    if (!user?.id) return;
+    return subscribeToNotificationChanges(
+      user.id,
+      (row) => {
+        if (row.recipient_role === role) {
+          setNotifications(prev => [mapDbNotification(row), ...prev].slice(0, 100));
         }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user?.id}` },
-        (payload) => {
-          const updated = mapDbNotification(payload.new as DbNotification);
-          setNotifications(prev =>
-            prev.map(n => n.id === updated.id ? updated : n)
-          );
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+      },
+      (row) => {
+        if (row.recipient_role !== role) return;
+        const updated = mapDbNotification(row);
+        setNotifications(prev => prev.map(n => n.id === updated.id ? updated : n));
+      },
+    );
   }, [isProvider, loadNotifications, user?.id]);
 
   // Reset active filter tab whenever the user switches between provider/client mode

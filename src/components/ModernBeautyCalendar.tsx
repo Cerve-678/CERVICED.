@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutAnimation, Modal, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View, ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { AvailabilityService } from '../services/AvailabilityService';
+import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
 
@@ -11,11 +12,19 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type TimeSlot = string;
+/** One offerable start time. `reasons` is empty for an ordinary slot, and
+ *  names the provider's own rules the time breaks when it's only bookable as
+ *  a request they have to accept (see AvailabilityService.TimeSlot). */
+type TimeSlot = { time: string; reasons: EmergencyReason[] };
 
 type DayData = {
+  /** Ordinary, unconditional slots only — a day that can ONLY be requested
+   *  is not "available", and must not read as one on the day strip or drive
+   *  the auto-jump below. */
   available: number;
-  status: 'past' | 'available' | 'closed' | 'unavailable';
+  /** Slots offered only as a request. */
+  requestable: number;
+  status: 'past' | 'available' | 'request' | 'closed' | 'unavailable';
   times: TimeSlot[];
 };
 
@@ -28,14 +37,20 @@ type WeekDay = {
   dayNumber: number;
   isToday: boolean;
   available: number;
-  status: 'past' | 'available' | 'closed' | 'unavailable';
+  requestable: number;
+  status: 'past' | 'available' | 'request' | 'closed' | 'unavailable';
   times: TimeSlot[];
 };
 
 type ModernBeautyCalendarProps = {
   selectedDate?: string;
   onDateSelect: (date: string) => void;
-  onTimeSelect: (time: string) => void;
+  /** `requestReasons` is present only when the client picked a slot the
+   *  provider's own rules exclude and they've opted into being asked anyway
+   *  — the caller is responsible for confirming that with them before the
+   *  booking goes anywhere. Absent for every ordinary slot, so a caller that
+   *  ignores it keeps working unchanged. */
+  onTimeSelect: (time: string, requestReasons?: EmergencyReason[]) => void;
   selectedTime?: string;
   providerName?: string;
   serviceDuration?: string; // Duration of the service being booked (e.g., "2 hours", "45 mins")
@@ -60,6 +75,14 @@ type ModernBeautyCalendarProps = {
    *  offering times only the first service could take. Must be stable
    *  (useCallback) — it's a dependency of the weekly availability fetch. */
   slotResolver?: (date: string) => Promise<string[]>;
+  /** Opt IN to offering times the provider only accepts as a request (see
+   *  AvailabilityService's EmergencyRequestPolicy). Defaults to false, and
+   *  deliberately so: a caller that shows these has to carry the resulting
+   *  flag all the way through to checkout, or the booking is rejected by the
+   *  same rule that made it a request in the first place. Every picker that
+   *  can't do that — reschedule, group chains, the consultation prerequisite
+   *  — simply never sees them. */
+  allowRequests?: boolean;
 };
 
 // Local YYYY-MM-DD — date.toISOString() converts to UTC first, which shifts
@@ -83,6 +106,23 @@ const toLocalDateString = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
+/**
+ * A day's summary from its offerable times. A day whose ONLY times are
+ * by-request is 'request', not 'available': it stays tappable, but it must
+ * not claim ordinary availability on the day strip, in the month dots, or to
+ * the auto-jump — those all mean "you can just book this".
+ */
+const dayDataFrom = (times: TimeSlot[]): DayData => {
+  const available = times.filter(slot => slot.reasons.length === 0).length;
+  const requestable = times.length - available;
+  return {
+    available,
+    requestable,
+    status: available > 0 ? 'available' : requestable > 0 ? 'request' : 'closed',
+    times,
+  };
+};
+
 export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   selectedDate,
   onDateSelect,
@@ -98,6 +138,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   subColor,
   surfaceColor,
   slotResolver,
+  allowRequests = false,
 }) => {
   // Popup border — a low-alpha tint of the text colour, so it reads as a
   // hairline on either a light or dark backdrop without a separate flag.
@@ -118,6 +159,15 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // once per provider via the same getAvailabilitySummary state the
   // provider's own profile already computes ('unpublished' vs 'closed').
   const [providerUnpublished, setProviderUnpublished] = useState<boolean>(false);
+  // This provider's emergency-request opt-ins. Needed here — not just inside
+  // getAvailableSlots — because the booking-window rule is enforced on the
+  // DATE before any slot lookup happens (see maxDate below), so a provider
+  // who accepts requests beyond their window would otherwise still have
+  // those dates greyed out. Starts fully closed and stays that way for any
+  // provider that hasn't opted in.
+  const [emergencyPolicy, setEmergencyPolicy] = useState<EmergencyRequestPolicy>({
+    outsideHours: false, blockedDates: false, shortNotice: false, beyondWindow: false, extensionMins: 0,
+  });
   // Once the client has actively picked a time, the whole picker collapses to
   // a one-line summary — a week strip plus ~20 time chips is the single
   // largest block in the booking sheet, and it's pure noise once the choice
@@ -158,13 +208,16 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       AvailabilityService.getAvailabilitySummary(providerName).then(summary => {
         if (!cancelled && summary?.state === 'unpublished') setProviderUnpublished(true);
       });
+      AvailabilityService.getEmergencyRequestPolicy(providerName).then(policy => {
+        if (!cancelled) setEmergencyPolicy(policy);
+      });
     });
     return () => { cancelled = true; };
   }, [providerName]);
 
   useEffect(() => {
     generateWeeklyAvailabilityRef.current();
-  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate, slotResolver]);
+  }, [currentWeek, providerName, serviceDuration, serviceId, maxDate, slotResolver, emergencyPolicy, allowRequests]);
 
   // A new provider/service is a genuinely different schedule to check —
   // allow one fresh auto-jump attempt for it.
@@ -180,7 +233,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     if (autoJumpedRef.current || isLoadingSlots || !providerName || providerFound !== true || providerUnpublished) return;
     if (Object.keys(availableSlots).length === 0) return;
 
-    const thisWeekHasOpening = getWeekDaysRef.current().some(day => day.status === 'available');
+    // A week whose only openings are by-request still counts: jumping past
+    // it would hide times the provider has explicitly offered to consider.
+    const thisWeekHasOpening = getWeekDaysRef.current()
+      .some(day => day.status === 'available' || day.status === 'request');
     if (thisWeekHasOpening) {
       autoJumpedRef.current = true;
       return;
@@ -237,16 +293,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       const isPast = date < new Date() && date.toDateString() !== new Date().toDateString();
 
       if (isPast) {
-        slots[dateString] = { available: 0, status: 'past', times: [] };
+        slots[dateString] = { available: 0, requestable: 0, status: 'past', times: [] };
         continue;
       }
 
-      // Enforce booking window: dates beyond maxDate are unavailable
-      if (maxDate !== undefined) {
+      // Enforce booking window: dates beyond maxDate are unavailable — unless
+      // this provider takes requests beyond it, in which case the date is
+      // left in and getAvailableSlots decides (it applies the same window
+      // rule itself, and returns by-request slots when the opt-in is on).
+      // Without this the picker would grey out dates the provider has
+      // explicitly said they'll consider.
+      if (maxDate !== undefined && !(allowRequests && emergencyPolicy.beyondWindow)) {
         const maxDateMidnight = new Date(maxDate);
         maxDateMidnight.setHours(23, 59, 59, 999);
         if (date > maxDateMidnight) {
-          slots[dateString] = { available: 0, status: 'unavailable', times: [] };
+          slots[dateString] = { available: 0, requestable: 0, status: 'unavailable', times: [] };
           continue;
         }
       }
@@ -256,8 +317,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       // one service fitting (see slotResolver).
       if (providerName) {
         try {
-          const openSlots = slotResolver
-            ? await slotResolver(dateString)
+          // A custom resolver only ever yields ordinary slots — it has no
+          // notion of the provider's emergency opt-ins, so nothing it
+          // returns may be presented as a request.
+          const openSlots: TimeSlot[] = slotResolver
+            ? (await slotResolver(dateString)).map(time => ({ time, reasons: [] }))
             : (await AvailabilityService.getAvailableSlots(
                 providerName,
                 dateString,
@@ -265,32 +329,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 serviceId
               ))
                 .filter(slot => !slot.isBooked)
-                .map(slot => slot.time);
+                .filter(slot => allowRequests || !slot.isByRequest)
+                .map(slot => ({ time: slot.time, reasons: slot.requestReasons ?? [] }));
 
-          slots[dateString] = {
-            available: openSlots.length,
-            status: openSlots.length > 0 ? 'available' : 'closed',
-            times: openSlots
-          };
+          slots[dateString] = dayDataFrom(openSlots);
         } catch {
           // Fallback to base schedule without booking filter
           const dayOfWeek = date.getDay();
           const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
-          slots[dateString] = {
-            available: times.length,
-            status: times.length > 0 ? 'available' : 'closed',
-            times
-          };
+          slots[dateString] = dayDataFrom(times);
         }
       } else {
         // No provider specified, use default slots
         const dayOfWeek = date.getDay();
         const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
-        slots[dateString] = {
-          available: times.length,
-          status: times.length > 0 ? 'available' : 'closed',
-          times
-        };
+        slots[dateString] = dayDataFrom(times);
       }
     }
 
@@ -320,7 +373,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     return [
       '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
       '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM'
-    ];
+    ].map(time => ({ time, reasons: [] }));
   };
 
   const navigateWeek = (direction: number) => {
@@ -403,9 +456,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // picker down to the summary row. Re-tapping the already-selected time
   // collapses too (rather than being a no-op) — that's the obvious gesture
   // for "yes, this one" once a slot was auto-resolved for you.
-  const handleTimeClick = (time: string) => {
+  const handleTimeClick = (time: string, requestReasons: EmergencyReason[]) => {
     Haptics.selectionAsync().catch(() => {});
-    onTimeSelect(time);
+    onTimeSelect(time, requestReasons.length > 0 ? requestReasons : undefined);
     LayoutAnimation.configureNext(COLLAPSE_ANIM);
     setIsCollapsed(true);
   };
@@ -439,6 +492,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       const dateString = toLocalDateString(date);
       const dayData = availableSlots[dateString] || {
         available: 0,
+        requestable: 0,
         status: 'unavailable' as const,
         times: []
       };
@@ -474,7 +528,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       const dateString = toLocalDateString(date);
       // If the real week-slot data already loaded for this date, use it
       if (availableSlots[dateString] !== undefined) {
-        result[dateString] = availableSlots[dateString].available > 0;
+        result[dateString] = availableSlots[dateString].available + availableSlots[dateString].requestable > 0;
       } else {
         // Fall back to the sync schedule
         const times = generateBeautyTimeSlots(dateString, date.getDay(), providerName);
@@ -558,7 +612,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 const isToday    = date.toDateString() === new Date().toDateString();
                 const isSelected = selectedDate === dateString;
                 const hasSlots   = !isPast && monthAvailability[dateString] === true;
-                const isBeyondMax = maxDate !== undefined && (() => {
+                const isBeyondMax = maxDate !== undefined && !(allowRequests && emergencyPolicy.beyondWindow) && (() => {
                   const maxMidnight = new Date(maxDate);
                   maxMidnight.setHours(23, 59, 59, 999);
                   return date > maxMidnight;
@@ -684,11 +738,15 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               <Text style={[styles.dayNumberText, { color: isSel ? accentColor : textColor }]}>
                 {day.dayNumber}
               </Text>
-              {/* Availability dot */}
+              {/* Availability dot — hollow when the day can only be
+                  requested, so "just book it" and "ask and see" don't read
+                  as the same offer at a glance. */}
               <View style={styles.dotWrap}>
                 {day.available > 0
                   ? <View style={[styles.dot, { backgroundColor: accentColor }]} />
-                  : <View style={styles.dotPlaceholder} />
+                  : day.requestable > 0
+                    ? <View style={[styles.dot, styles.dotHollow, { borderColor: accentColor }]} />
+                    : <View style={styles.dotPlaceholder} />
                 }
               </View>
             </TouchableOpacity>
@@ -701,32 +759,63 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {providerFound !== false && !providerUnpublished && showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
         if (!currentSlots?.times || currentSlots.times.length === 0) return null;
-        const chunkedTimes = chunkArray(currentSlots.times, Math.ceil(currentSlots.times.length / 3));
+
+        // Ordinary slots and by-request slots are two different offers, so
+        // they get two separate groups rather than one grid the client has to
+        // read chip-by-chip. A day with nothing but requests renders only the
+        // second group, header and all — the header is what explains why
+        // these times exist at all.
+        const openTimes    = currentSlots.times.filter(slot => slot.reasons.length === 0);
+        const requestTimes = currentSlots.times.filter(slot => slot.reasons.length > 0);
+
+        const renderGroup = (group: TimeSlot[], byRequest: boolean) => {
+          const rows = chunkArray(group, Math.ceil(group.length / 3));
+          return rows.map((timeRow, idx) => (
+            <View key={`${byRequest ? 'req' : 'open'}-${idx}`} style={styles.timeRow}>
+              {timeRow.map(slot => {
+                const timeSel = selectedTime === slot.time;
+                return (
+                  <TouchableOpacity
+                    key={slot.time}
+                    style={[
+                      styles.timeTab,
+                      byRequest
+                        ? [styles.timeTabRequest, { borderColor: withAlpha(accentColor, 0.5) }]
+                        : { backgroundColor: surfaceColor },
+                      timeSel && { borderWidth: 2, borderColor: accentColor },
+                    ]}
+                    onPress={() => handleTimeClick(slot.time, slot.reasons)}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={byRequest ? `${slot.time}, by request only` : slot.time}
+                  >
+                    <Text style={[styles.timeText, { color: timeSel ? accentColor : textColor }]}>
+                      {slot.time}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ));
+        };
+
         return (
           <View style={styles.timeContainer}>
-            {chunkedTimes.map((timeRow, idx) => (
-              <View key={idx} style={styles.timeRow}>
-                {timeRow.map(time => {
-                  const timeSel = selectedTime === time;
-                  return (
-                    <TouchableOpacity
-                      key={time}
-                      style={[
-                        styles.timeTab,
-                        { backgroundColor: surfaceColor },
-                        timeSel && { borderWidth: 2, borderColor: accentColor },
-                      ]}
-                      onPress={() => handleTimeClick(time)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[styles.timeText, { color: timeSel ? accentColor : textColor }]}>
-                        {time}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
+            {openTimes.length > 0 && renderGroup(openTimes, false)}
+            {requestTimes.length > 0 && (
+              <>
+                <View style={styles.requestDivider}>
+                  <View style={[styles.requestRule, { backgroundColor: withAlpha(textColor, 0.12) }]} />
+                  <Text style={[styles.requestLabel, { color: subColor }]}>By request</Text>
+                  <View style={[styles.requestRule, { backgroundColor: withAlpha(textColor, 0.12) }]} />
+                </View>
+                {renderGroup(requestTimes, true)}
+                <Text style={[styles.requestNote, { color: subColor }]}>
+                  These times fall outside this provider's usual availability. They have to
+                  accept the request before the booking is confirmed.
+                </Text>
+              </>
+            )}
           </View>
         );
       })()}
@@ -784,13 +873,21 @@ const styles = StyleSheet.create({
   dayNumberText:   { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   dotWrap:         { height: 6, justifyContent: 'center', alignItems: 'center', marginTop: 3 },
   dot:             { width: 4, height: 4, borderRadius: 2 },
+  dotHollow:       { backgroundColor: 'transparent', borderWidth: 1 },
   dotPlaceholder:  { width: 4, height: 4 },
 
   // ── Time slots ──────────────────────────────────────────────────────
   timeContainer: { paddingTop: 10, paddingHorizontal: 2 },
   timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
   timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
+  // Outlined rather than filled — the same shape as a normal slot, visibly
+  // not the same offer.
+  timeTabRequest: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed' },
   timeText:      { fontSize: 13, fontWeight: '500' },
+  requestDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8, paddingHorizontal: 6 },
+  requestRule:    { flex: 1, height: StyleSheet.hairlineWidth },
+  requestLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
+  requestNote:    { fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: 12, marginTop: 2 },
 
   // ── Full calendar modal ─────────────────────────────────────────────
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },

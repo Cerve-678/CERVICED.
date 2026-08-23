@@ -36,7 +36,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardDismissView } from './KeyboardDismissView';
 import { ModernBeautyCalendar } from './ModernBeautyCalendar';
-import { AvailabilityService, type BackToBackSlot } from '../services/AvailabilityService';
+import { EmergencyBookingPrompt } from './EmergencyBookingPrompt';
+import type { EmergencyRequest } from '../contexts/CartContext';
+import {
+  AvailabilityService,
+  type BackToBackSlot,
+  type EmergencyReason,
+} from '../services/AvailabilityService';
 import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
   getProviderDepositPoliciesByDisplayNames,
@@ -68,6 +74,10 @@ export interface MultiBookingSheetResult {
     /** True if this service was pulled into "Schedule Separately" — stays a
      *  standalone singleton booking, not part of the group. */
     isSeparate: boolean;
+    /** Present only for a separately-scheduled service whose time the
+     *  provider accepts only as a request, and whose confirmation the client
+     *  accepted. Never set on a grouped item — see emergencyByKey. */
+    emergencyRequest?: EmergencyRequest;
   }[];
   /** Shared by every non-separate item in `items` from this one submission —
    *  undefined if every item ended up separate (nothing to group), or if the
@@ -212,6 +222,17 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   // a single service, but editable via that service's own calendar after.
   const [separateDates, setSeparateDates] = useState<Record<string, string>>({});
   const [separateTimes, setSeparateTimes] = useState<Record<string, string>>({});
+  // Emergency requests are only possible on the SEPARATE pickers. The group
+  // picker resolves times through a back-to-back chain resolver, which knows
+  // nothing about per-slot request reasons and returns plain strings — so a
+  // grouped service is never offered one, by construction rather than by a
+  // flag. `pendingSeparateEmergency` is the slot awaiting an answer (one at a
+  // time — the prompt is modal); emergencyByKey holds the accepted answers
+  // that travel to the cart.
+  const [pendingSeparateEmergency, setPendingSeparateEmergency] =
+    useState<{ key: string; serviceName: string; date: string; time: string; reasons: EmergencyReason[] } | null>(null);
+  const [separateEmergencyAck, setSeparateEmergencyAck] = useState(false);
+  const [emergencyByKey, setEmergencyByKey] = useState<Record<string, EmergencyRequest>>({});
   const [resolvingSeparate, setResolvingSeparate] = useState<Record<string, boolean>>({});
   const separateResolvedRef = useRef<Set<string>>(new Set());
 
@@ -221,8 +242,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   const [showProviderTerms, setShowProviderTerms] = useState(false);
   // Agreement to the provider's OWN terms, gating add-to-cart — same gate as
   // the single-service sheet. Distinct from the cart's checkout checkbox
-  // (CERVICED's Terms + cancellation policy), which is what stamps
-  // policyAcceptedAt. This sheet is add-only, so it always applies.
+  // (CERVICED's Terms + cancellation policy), which is what records
+  // policy_accepted_at server-side. This sheet is add-only, so it always
+  // applies.
   const [agreedToProviderTerms, setAgreedToProviderTerms] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -251,6 +273,9 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     setGroupChains(null);
     setSeparateDates({});
     setSeparateTimes({});
+    setPendingSeparateEmergency(null);
+    setSeparateEmergencyAck(false);
+    setEmergencyByKey({});
     setResolvingSeparate({});
     separateResolvedRef.current = new Set();
     depositFetched.current = false;
@@ -267,6 +292,11 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
         // Back in the group — drop its standalone slot so re-separating it
         // later resolves a fresh one rather than reusing a stale pick.
         separateResolvedRef.current.delete(serviceKey);
+        setEmergencyByKey(prev2 => {
+          const n = { ...prev2 };
+          delete n[serviceKey];
+          return n;
+        });
         setSeparateDates(prev2 => {
           const n = { ...prev2 };
           delete n[serviceKey];
@@ -506,7 +536,12 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       const selectedAddOns = addOnsByService[key] ?? [];
       const isSeparate = separateServiceKeys.has(key);
       if (isSeparate) {
-        return { service, selectedAddOns, date: separateDates[key] ?? '', time: separateTimes[key] ?? '', isSeparate };
+        const emergencyRequest = emergencyByKey[key];
+        return {
+          service, selectedAddOns,
+          date: separateDates[key] ?? '', time: separateTimes[key] ?? '', isSeparate,
+          ...(emergencyRequest ? { emergencyRequest } : {}),
+        };
       }
       const idx = groupServices.findIndex(s => serviceKeyOf(s) === key);
       return { service, selectedAddOns, date: groupDate, time: groupSchedule?.[idx]?.time ?? '', isSeparate };
@@ -518,15 +553,66 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       isDepositOnly,
       // The policy in force at booking time, recorded as fact — not as
       // consent. Agreement itself is captured once, by the cart's own
-      // bundled Terms + cancellation-policy checkbox at checkout, which
-      // is what stamps policyAcceptedAt.
+      // bundled Terms + cancellation-policy checkbox at checkout, which is
+      // what hold_cart_booking_slots() records policy_accepted_at from.
       ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
     });
     onClose();
   }, [
     submitReady, services, addOnsByService, separateServiceKeys, separateDates, separateTimes,
-    groupServices, groupDate, groupSchedule, notes, isDepositOnly, bookingPolicies, onSubmit, onClose,
+    emergencyByKey, groupServices, groupDate, groupSchedule, notes, isDepositOnly, bookingPolicies,
+    onSubmit, onClose,
   ]);
+
+  // Same three-step handling as BookingSheet, keyed per service: the time is
+  // set straight away so the picker collapses, the confirmation decides
+  // whether it survives, and changing the day clears whatever was accepted
+  // for the old one.
+  const handleSeparateTime = useCallback((
+    key: string,
+    serviceName: string,
+    time: string,
+    reasons?: EmergencyReason[],
+  ) => {
+    setSeparateTimes(prev => ({ ...prev, [key]: time }));
+    if (reasons && reasons.length > 0) {
+      setSeparateEmergencyAck(false);
+      setPendingSeparateEmergency({ key, serviceName, date: separateDates[key] ?? '', time, reasons });
+    } else {
+      setPendingSeparateEmergency(null);
+      setEmergencyByKey(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  }, [separateDates]);
+
+  const handleSeparateDate = useCallback((key: string, date: string) => {
+    setSeparateDates(prev => ({ ...prev, [key]: date }));
+    setPendingSeparateEmergency(null);
+    setSeparateEmergencyAck(false);
+    setEmergencyByKey(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  const confirmSeparateEmergency = useCallback(() => {
+    if (!pendingSeparateEmergency) return;
+    const { key, reasons } = pendingSeparateEmergency;
+    setEmergencyByKey(prev => ({ ...prev, [key]: { reasons, acknowledgedAt: new Date().toISOString() } }));
+    setPendingSeparateEmergency(null);
+  }, [pendingSeparateEmergency]);
+
+  const cancelSeparateEmergency = useCallback(() => {
+    if (!pendingSeparateEmergency) return;
+    const { key } = pendingSeparateEmergency;
+    setSeparateTimes(prev => ({ ...prev, [key]: '' }));
+    setSeparateEmergencyAck(false);
+    setPendingSeparateEmergency(null);
+  }, [pendingSeparateEmergency]);
 
   if (services.length === 0) return null;
 
@@ -726,9 +812,10 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                     )}
                     <ModernBeautyCalendar
                       selectedDate={separateDates[key] ?? ''}
-                      onDateSelect={d => setSeparateDates(prev => ({ ...prev, [key]: d }))}
-                      onTimeSelect={t => setSeparateTimes(prev => ({ ...prev, [key]: t }))}
+                      onDateSelect={d => handleSeparateDate(key, d)}
+                      onTimeSelect={(t, reasons) => handleSeparateTime(key, service.name, t, reasons)}
                       selectedTime={separateTimes[key] ?? ''}
+                      allowRequests
                       providerName={providerIdentifier}
                       serviceDuration={service.duration}
                       accentColor={adaptiveAccentColor}
@@ -984,8 +1071,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
               {/* Shown whether or not there's a structured booking policy — a
                   provider can have written terms without filling one in. The
                   tick is what gates Add to Cart; it records agreement for this
-                  sheet only (the cart's checkout checkbox is still what stamps
-                  policyAcceptedAt). See FUTURE_LOGIC.md for sending these as a
+                  sheet only (the cart's checkout checkbox is still what
+                  records policy_accepted_at). See FUTURE_LOGIC.md for sending these as a
                   signable form. */}
               {providerTerms && (
                 <View style={styles.providerTermsBlock}>
@@ -1091,6 +1178,28 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
           )}
         </View>
       </KeyboardDismissView>
+
+      {/* One at a time by construction: the prompt is modal, so a second
+          service's picker can't be tapped while it's up. */}
+      {pendingSeparateEmergency && (
+        <EmergencyBookingPrompt
+          visible
+          providerName={providerDisplayName}
+          date={pendingSeparateEmergency.date}
+          time={pendingSeparateEmergency.time}
+          reasons={pendingSeparateEmergency.reasons}
+          hasPolicy={!!providerTerms}
+          onReadPolicy={() => setShowProviderTerms(true)}
+          acknowledged={separateEmergencyAck}
+          onToggleAcknowledged={() => setSeparateEmergencyAck(prev => !prev)}
+          onConfirm={confirmSeparateEmergency}
+          onCancel={cancelSeparateEmergency}
+          accentColor={adaptiveAccentColor}
+          backgroundColor={sheetBackground}
+          textColor={tokens.text}
+          subColor={tokens.sub}
+        />
+      )}
 
       {/* Nested inside the sheet's own Modal so it lands on top of it rather
           than replacing it — the client is mid-booking and goes straight back

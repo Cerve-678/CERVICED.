@@ -18,7 +18,6 @@ import { useBooking, AvailableDate } from '../../contexts/BookingContext';
 import {
   getProviderReschedulePolicyById,
   getProviderReschedulePolicyByDisplayName,
-  getAvailableSlots,
   ProviderReschedulePolicy,
 } from '../../services/databaseService';
 import { AvailabilityService } from '../../services/AvailabilityService';
@@ -27,8 +26,7 @@ import {
   rescheduleProbeStart, rescheduleCandidateDates, rescheduleWindowLabel, rescheduleRequestToken,
   RESCHEDULE_MAX_DATES,
 } from '../../utils/rescheduleWindow';
-import { logger } from '../../utils/logger';
-import { toUserMessage } from '../../utils/userFacingError';
+import { logger, reportError } from '../../utils/logger';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Props = {
@@ -70,21 +68,36 @@ function providerRespondedDates(providerAvailableDates: AvailableDate[]): DateOp
 async function fetchRealRescheduleDates(
   providerId: string,
   currentDate: string,
+  isActive: () => boolean = () => true,
 ): Promise<DateOption[]> {
   const candidateDates = rescheduleCandidateDates(currentDate);
 
-  // Independent per-date queries — fetch in parallel, not sequentially.
-  const results = await Promise.all(
-    candidateDates.map(async date => ({
-      date,
-      times: await getAvailableSlots(providerId, date).catch(() => [] as string[]),
-    })),
-  );
-
-  return results
-    .filter(r => r.times.length > 0)
-    .slice(0, RESCHEDULE_MAX_DATES)
-    .map(r => ({ date: r.date, displayDate: formatDisplayDate(r.date), times: r.times }));
+  // Probe in small batches and stop once the UI has enough open dates. The
+  // old all-at-once Promise.all fanned a 14-day horizon into dozens of
+  // concurrent availability reads even when the first week was wide open.
+  const openDates: DateOption[] = [];
+  const batchSize = 3;
+  for (let offset = 0; offset < candidateDates.length; offset += batchSize) {
+    if (!isActive()) return openDates;
+    const batch = candidateDates.slice(offset, offset + batchSize);
+    const results = await Promise.all(
+      batch.map(async date => ({
+        date,
+        times: await AvailabilityService.getAvailableSlotTimes(providerId, date).catch(() => [] as string[]),
+      })),
+    );
+    if (!isActive()) return openDates;
+    for (const result of results) {
+      if (result.times.length === 0) continue;
+      openDates.push({
+        date: result.date,
+        displayDate: formatDisplayDate(result.date),
+        times: result.times,
+      });
+      if (openDates.length >= RESCHEDULE_MAX_DATES) return openDates;
+    }
+  }
+  return openDates;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
@@ -156,13 +169,28 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   const [customPickerStep, setCustomPickerStep] = useState<'date' | 'time' | null>(null);
   const [customDate, setCustomDate] = useState<Date | null>(null);
 
+  // A reused route must never carry a date/time (or a confirmation phase)
+  // from one booking into another. Keep this keyed to the route id rather than
+  // the booking object, which can legitimately refresh while the user chooses.
+  useEffect(() => {
+    setSelectedDate(null);
+    setSelectedTime(null);
+    setPhase('pick');
+    setCustomPickerStep(null);
+    setCustomDate(null);
+  }, [bookingId]);
+
   // Load policy and build date options
   useEffect(() => {
     if (!booking) return;
+    let active = true;
+    setReschedulePolicy(null);
     (booking.providerId
       ? getProviderReschedulePolicyById(booking.providerId)
       : getProviderReschedulePolicyByDisplayName(booking.providerName)
-    ).then(setReschedulePolicy).catch(() => {});
+    ).then(policy => {
+      if (active) setReschedulePolicy(policy);
+    }).catch(() => {});
 
     // If the provider has already responded, use the specific slots they
     // offered — those are the only valid choices at that point, and no live
@@ -171,30 +199,33 @@ export default function RescheduleScreen({ navigation, route }: Props) {
     const providerDates = booking.rescheduleRequest?.providerAvailableDates;
     if (providerDates && providerDates.length > 0) {
       setDateOptions(providerRespondedDates(providerDates));
+      setProviderUnpublished(false);
       setLoadingDates(false);
-      return;
+    } else {
+      // getAvailableSlots resolves a provider by id or display name, so fall
+      // back to the name when this booking snapshot has no providerId.
+      const providerRef = booking.providerId || booking.providerName;
+      if (!providerRef) {
+        setDateOptions([]);
+        setProviderUnpublished(false);
+        setLoadingDates(false);
+      } else {
+        setLoadingDates(true);
+        setProviderUnpublished(false);
+        Promise.all([
+          fetchRealRescheduleDates(providerRef, booking.bookingDate, () => active),
+          AvailabilityService.getAvailabilitySummary(providerRef).catch(() => null),
+        ])
+          .then(([options, summary]) => {
+            if (!active) return;
+            setDateOptions(options);
+            setProviderUnpublished(options.length === 0 && summary?.state === 'unpublished');
+          })
+          .catch(() => { if (active) setDateOptions([]); })
+          .finally(() => { if (active) setLoadingDates(false); });
+      }
     }
-
-    // getAvailableSlots resolves a provider by id or display name, so fall back
-    // to the name when this booking snapshot has no providerId.
-    const providerRef = booking.providerId || booking.providerName;
-    if (!providerRef) { setDateOptions([]); setLoadingDates(false); return; }
-
-    let cancelled = false;
-    setLoadingDates(true);
-    setProviderUnpublished(false);
-    Promise.all([
-      fetchRealRescheduleDates(providerRef, booking.bookingDate),
-      AvailabilityService.getAvailabilitySummary(providerRef).catch(() => null),
-    ])
-      .then(([options, summary]) => {
-        if (cancelled) return;
-        setDateOptions(options);
-        if (options.length === 0 && summary?.state === 'unpublished') setProviderUnpublished(true);
-      })
-      .catch(() => { if (!cancelled) setDateOptions([]); })
-      .finally(() => { if (!cancelled) setLoadingDates(false); });
-    return () => { cancelled = true; };
+    return () => { active = false; };
   }, [booking]);
 
   const handleDateSelect = useCallback((date: string) => {
@@ -367,14 +398,30 @@ export default function RescheduleScreen({ navigation, route }: Props) {
           "This booking isn't available anymore. Pull down to refresh your bookings.",
           [{ text: 'OK', onPress: () => navigation.popTo('Bookings') }],
         );
+      } else if (err?.code === 'P0001' && /maximum of \d+ reschedule/i.test(err?.message ?? '')) {
+        // request_reschedule_own_booking() enforces the provider's
+        // max-reschedules-per-booking policy. Telling the client "try again"
+        // would be a lie — no retry from this screen can ever succeed.
+        showConfirm(
+          'No Reschedules Left',
+          `${booking.providerName} allows a limited number of reschedules per booking, and this one has used them. Message them directly if you need to change it.`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
       } else if (
         err?.message === 'Only upcoming bookings can be rescheduled' ||
+        err?.message === 'Only confirmed bookings can be rescheduled' ||
         err?.message === 'That time has just been taken. Please pick another slot.' ||
         /^You can reschedule again in /.test(err?.message ?? '') ||
         /has just been taken\. Please pick another day\.$/.test(err?.message ?? '')
       ) {
-        // These messages are already written for clients — safe to show as-is.
-        showAlert("Can't Reschedule", toUserMessage(err, 'That time is no longer available. Please pick another.', 'RescheduleScreen.submit'));
+        // These messages are already written for clients — shown as-is on
+        // purpose. Passing them through toUserMessage would sanitize them
+        // back into the generic fallback (it matches on wording, and none of
+        // these match a friendly pattern), which is how "You can reschedule
+        // again in 6 hours" used to reach the client as "That time is no
+        // longer available" — advice for a problem they don't have.
+        reportError(err, 'RescheduleScreen.submit');
+        showAlert("Can't Reschedule", err.message);
       } else {
         // Anything else is unexpected/technical — devs see the real reason in
         // the logs; the client sees a calm, non-technical line.

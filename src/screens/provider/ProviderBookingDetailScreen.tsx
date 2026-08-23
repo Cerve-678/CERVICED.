@@ -19,10 +19,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
 import { ProviderHomeScreenProps } from '../../navigation/types';
-import { supabase } from '../../lib/supabase';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
 import { AvailabilityService, BackToBackSlot } from '../../services/AvailabilityService';
@@ -30,7 +30,6 @@ import {
   getActiveRescheduleRequest,
   respondToRescheduleRequest,
   rejectRescheduleRequest,
-  getAvailableSlots,
   upsertProviderRescheduleRequest,
   getClientBeautyProfile,
   getClientBookingHistory,
@@ -53,6 +52,7 @@ import {
   getProviderInfoPacksByUserId,
   attachInfoPackToBooking,
   getServiceDurationsByIds,
+  subscribeToProviderBookingDetailChanges,
   ClientBeautyProfile,
   IntakeForm,
   BookingInfoPack,
@@ -225,6 +225,7 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
 };
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
+  const { user } = useAuth();
   const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -266,6 +267,13 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     destructive?: boolean;
     onConfirm: () => void;
   } | null>(null);
+
+  // A confirm dialog's action fires exactly once. Without this a double-tap
+  // on the dialog button ran the RPC twice: the second call arrives after the
+  // first has already moved the booking, so the server's state-machine guard
+  // rejects it ("Invalid status transition: in_progress -> in_progress") and
+  // the provider sees a failure for an action that actually succeeded.
+  const confirmInFlight = useRef(false);
 
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   // Single merged reschedule-proposal modal — the `init*` naming is a holdover
@@ -327,15 +335,59 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // (scoped to this provider's own rows — see getGroupBookingSiblings).
   const [fetchedGroupSiblings, setFetchedGroupSiblings] = useState<ConfirmedBooking[] | null>(null);
 
+  // Re-read the live status/date/time and apply it over whatever the screen is
+  // showing. Unlike the mount seed below this always wins, because it's called
+  // when the screen has just been *proved* stale — the server rejected an
+  // action based on the status being rendered.
+  const refreshBookingStatus = useCallback(() => {
+    if (!bookingId) return;
+    getBookingWithAddOnsById(bookingId)
+      .then(raw => {
+        if (!raw) return;
+        const mapped = mapDbBookingToConfirmed(raw);
+        setLiveBookingOverrides(prev => ({
+          ...prev,
+          status: mapped.status,
+          bookingDate: mapped.bookingDate,
+          bookingTime: mapped.bookingTime,
+          endTime: mapped.endTime,
+        }));
+      })
+      .catch(err => logger.error('[ProviderBookingDetail] status refresh failed:', err));
+  }, [bookingId]);
+
+  // Always read the live row, even when the caller passed a booking object in.
+  // That object is a snapshot of whatever the list had cached when it was
+  // rendered, and its status goes stale the moment the booking moves on
+  // anywhere else (the other hat, another device, a cron job, this same
+  // provider on the bookings list). Acting on a stale status is how "Start
+  // Appointment" reached the server as in_progress -> in_progress: the button
+  // renders off booking.status, which said 'confirmed' long after the DB said
+  // otherwise. The realtime subscription above only catches changes that
+  // happen while this screen is open — it can't seed what was already true.
+  //
+  // The passed object still renders instantly (no spinner when we have
+  // something to show); the fetch only corrects it, and only seeds when no
+  // newer local truth exists — an override set by an action or a realtime
+  // event always wins over a fetch that started before it.
   useEffect(() => {
-    if (passedProviderBooking || !bookingId) return;
-    setFetching(true);
+    if (!bookingId) return;
+    if (!passedProviderBooking) setFetching(true);
     getBookingWithAddOnsById(bookingId)
       .then(raw => {
         if (!raw) { setFetching(false); return; }
         const mapped = { ...mapDbBookingToConfirmed(raw), isPendingReschedule: false };
-        setFetchedBooking(mapped);
-        if ((raw as any).user_id) setClientUserId((raw as any).user_id);
+        if (passedProviderBooking) {
+          setLiveBookingOverrides(prev => prev ?? {
+            status: mapped.status,
+            bookingDate: mapped.bookingDate,
+            bookingTime: mapped.bookingTime,
+            endTime: mapped.endTime,
+          });
+        } else {
+          setFetchedBooking(mapped);
+          if ((raw as any).user_id) setClientUserId((raw as any).user_id);
+        }
         setFetching(false);
       })
       .catch((err) => { logger.error('[ProviderBookingDetail] booking load failed:', err); setFetching(false); });
@@ -356,31 +408,21 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
 
     const to12 = (t: string) => formatTime12(t);
 
-    const channel = supabase
-      .channel(`provider-booking-live-${bookingId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'booking_reschedule_requests', filter: `booking_id=eq.${bookingId}` },
-        (payload) => {
-          const row = payload.new as DbBookingRescheduleRequest | null;
+    return subscribeToProviderBookingDetailChanges(bookingId, {
+        onReschedule: (row) => {
           // A deleted row clears the UI outright. Any other row (including
           // one that just turned confirmed/rejected/cancelled) is still set
           // as-is — hasRescheduleRequest/canRespondToReschedule below only
           // match 'pending'/'provider_responded', so a closed request's
           // banner/actions disappear on the next render without needing a
           // separate branch here.
-          if (!row || (payload.eventType === 'DELETE')) {
+          if (!row) {
             setDbReschedule(null);
           } else {
             setDbReschedule(row);
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'bookings', filter: `id=eq.${bookingId}` },
-        (payload) => {
-          const d = payload.new as any;
+        },
+        onBookingUpdate: (d) => {
           if (!d) return;
           const rawStart = d.booking_time ? (d.booking_time as string).slice(0, 5) : '';
           const rawEnd = d.end_time ? (d.end_time as string).slice(0, 5) : '';
@@ -391,11 +433,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             ...(rawEnd && { endTime: to12(rawEnd) }),
             ...(d.status && { status: mapDbBookingStatus(d.status) }),
           }));
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+        },
+    });
   }, [bookingId]);
 
   useEffect(() => {
@@ -448,7 +487,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         const [category, packs] = await Promise.all([
           getProviderServiceCategoryByUserId(user.id),
@@ -460,7 +498,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         logger.error('[ProviderBookingDetail] provider category / info pack load failed:', err);
       }
     })();
-  }, []);
+  }, [user]);
 
   const baseBooking = passedProviderBooking ?? fetchedBooking;
   // Keep the derived booking reference stable. The action handlers below are
@@ -581,7 +619,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     if (!initSlotDate || !booking?.providerId) { setInitSuggestedTimes([]); setInitSelectedTimes([]); return; }
     let cancelled = false;
     setInitLoadingTimes(true);
-    getAvailableSlots(booking.providerId, initSlotDate)
+    AvailabilityService.getAvailableSlotTimes(booking.providerId, initSlotDate)
       .then(slots => { if (!cancelled) { setInitSuggestedTimes(slots); setInitSelectedTimes([]); } })
       .catch((err) => { logger.error('[ProviderBookingDetail] available slots load failed:', err); if (!cancelled) setInitSuggestedTimes([]); })
       .finally(() => { if (!cancelled) setInitLoadingTimes(false); });
@@ -1820,6 +1858,23 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
         </View>{/* receiptScene */}
 
         {/* ── Action buttons below the receipt ── */}
+        {/* Sits directly above Confirm/Decline on purpose. This booking only
+            reached the provider because they opted into being asked, and the
+            client was shown a confirmation saying exactly that — the provider
+            has to see the same fact before they accept, not discover it when
+            the appointment doesn't fit their day. */}
+        {isPendingConfirmation && booking.isEmergencyRequest && (
+          <View style={[styles.emergencyBanner, { borderColor: '#C2811A' }]}>
+            <Text style={[styles.emergencyBannerTitle, { color: '#C2811A' }]}>
+              Outside your availability
+            </Text>
+            <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
+              {booking.customerName || 'This client'} asked for a time your scheduling rules
+              would normally rule out. You said you're open to being asked — confirming it
+              books it exactly as requested.
+            </Text>
+          </View>
+        )}
         {isPendingConfirmation && (
           <View style={styles.actions}>
             {pendingExpired ? (
@@ -2471,6 +2526,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 style={styles.dialogBtn}
                 activeOpacity={0.65}
                 onPress={() => {
+                  if (confirmInFlight.current) return;
+                  confirmInFlight.current = true;
                   const fn = pendingConfirm.onConfirm;
                   setPendingConfirm(null);
                   Promise.resolve(fn()).catch((err: any) => {
@@ -2493,7 +2550,12 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                       'ProviderBookingDetail.confirmAction',
                     );
                     Alert.alert('Action failed', message);
-                  });
+                    // The most common cause of a rejected transition is this
+                    // screen acting on a status that has since moved on, so
+                    // re-read the row rather than leaving the provider looking
+                    // at the same wrong buttons that just failed.
+                    if ((err as { code?: string } | null)?.code === 'P0001') refreshBookingStatus();
+                  }).finally(() => { confirmInFlight.current = false; });
                 }}
               >
                 <Text style={[styles.dialogBtnText, { color: pendingConfirm.destructive ? '#FF3B30' : '#007AFF', fontWeight: '600' }]}>
@@ -2688,6 +2750,12 @@ function ActionButton({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  emergencyBanner: {
+    borderWidth: 1, borderRadius: 14, padding: 14,
+    marginHorizontal: 20, marginBottom: 12,
+  },
+  emergencyBannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 5 },
+  emergencyBannerText: { fontSize: 12, lineHeight: 17 },
   root:      { flex: 1 },
   container: { flex: 1 },
   content:   { paddingHorizontal: 16, paddingBottom: 40 },

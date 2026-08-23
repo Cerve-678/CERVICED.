@@ -79,6 +79,71 @@ checks, the multi-service scheduler) rather than reimplemented per screen.
   the actual source of truth; the app-side version is for UI responsiveness,
   not the real gate).
 
+### 3a. Emergency requests — asking past the rules
+
+Four of the rules above (working hours, blocked dates, minimum notice, booking
+window) normally stop a client dead: `getAvailableSlots` never offers the time,
+and `enforce_booking_bookability()` rejects it if one somehow arrives. Since
+[20260821143821_emergency_booking_requests.sql](supabase/migrations/20260821143821_emergency_booking_requests.sql)
+a provider can opt into being **asked** instead, one opt-in per rule:
+
+| Column on `providers` | Relaxes |
+|---|---|
+| `allow_out_of_hours_requests` | *"This appointment is outside the provider's working hours"* |
+| `allow_blocked_date_requests` | *"Provider is unavailable on this date"* — both `provider_blocked_dates` and a one-off `is_closed` override |
+| `allow_short_notice_requests` | *"This appointment does not meet the provider's minimum notice"* |
+| `allow_beyond_window_requests` | *"Booking is outside this provider's booking window"* |
+| `out_of_hours_extension_mins` | Not an opt-in — the **bound** on the first two (default 120) |
+
+All four default `false`, so nothing changes for an existing provider until
+they turn one on in
+[SchedulingScreen.tsx](src/screens/provider/SchedulingScreen.tsx).
+
+**Still hard for everyone, no opt-in:** a past date, a same-day time that has
+already elapsed, and a genuinely taken slot (`bookings_no_overlap` + the
+trigger's own overlap check). Same three exclusions the provider-side manual
+override (§4, `p_override_scheduling`) already respects.
+
+**Bounded, not open-ended.** An out-of-hours request may only reach
+`out_of_hours_extension_mins` either side of the provider's *recurring weekly
+envelope* — the earliest start and latest end across their whole week, not a
+blank 24-hour clock. A provider with no recurring schedule has no envelope and
+gets no out-of-hours slots at all rather than an unbounded day. The envelope is
+computed identically in `resolveWeeklyEnvelope()`
+([AvailabilityService.ts](src/services/AvailabilityService.ts)) and in the
+trigger; if those two ever disagree, the picker offers times the database then
+rejects — which is the exact dead end this feature exists to remove.
+
+**Client side.** Such times come back from `getAvailableSlots` as ordinary
+`TimeSlot`s with `isByRequest: true` and the rules they break in
+`requestReasons`. `ModernBeautyCalendar` renders them in their own dashed "By
+request" group below the real slots, and only when the caller opts in with
+`allowRequests` — which defaults to **false** precisely because a caller that
+shows them must be able to carry the resulting flag through to checkout.
+Picking one opens
+[EmergencyBookingPrompt](src/components/EmergencyBookingPrompt.tsx): *"Scheduling
+conflict … do you want this to be considered an emergency booking? … read
+{provider}'s policy before confirming"*, with a link into the provider's own
+T&Cs and a tick that gates the request.
+
+Pickers that deliberately never see these times: the consultation prerequisite,
+both reschedule flows, the provider's own AddBooking "Available" tab, and
+MultiBookingSheet's grouped back-to-back picker (whose chain resolver returns
+plain strings and has no notion of a per-slot reason). `resolveNextAvailableSlot`
+also skips them — auto-resolution picks *for* the client, and must never hand
+them a slot that needs the provider's acceptance without the explanation.
+
+**Always pending.** `finalize_checkout()` forces `v_auto_accept := false` for a
+booking with `is_emergency_request`, so an opted-in provider with
+`auto_accept_bookings = true` is still never silently committed to a 9pm
+Sunday. Both notification variants say so, and the provider sees an "Outside
+your availability" badge in their inbox and a banner directly above
+Confirm/Decline.
+
+**Acknowledgement.** `bookings.emergency_ack_at` mirrors `safety_ack_at`
+exactly, including being enforced inside `prepare_checkout` — a hand-built RPC
+payload with `emergency: true` and no `emergency_ack` is rejected.
+
 ## 4. Booking creation
 
 ### Single service
@@ -219,7 +284,115 @@ Client: confirm_reschedule_own_booking(booking_id, new_date, new_time, new_end_t
 A raw `23505`/`23P01` from the confirm step (someone else took that slot
 between the provider proposing it and the client confirming) is mapped to a
 friendly "time no longer available" alert rather than shown as a raw
-Postgres error ([RescheduleScreen.tsx:166](src/screens/RescheduleScreen.tsx#L166)).
+Postgres error ([RescheduleScreen.tsx](src/screens/client/RescheduleScreen.tsx)'s
+submit `catch`, which is the single place client-facing reschedule copy is
+decided — see §7b).
+
+### 7a. Response deadlines — open requests currently never expire
+
+**A `booking_reschedule_requests` row has no deadline and no expiry job.** It
+sits in `pending` (waiting on the provider) or `provider_responded` (waiting on
+the client) until somebody acts, forever. Verified live 2026-08-21: the status
+CHECK allows only `pending | provider_responded | confirmed | rejected |
+cancelled` — there is no `expired` — and `cron.job` has no expiry job for this
+table, only the *reminder* job `provider-stale-reschedule-reminders` (jobid 7,
+every 2h, nudges the provider 4h after a client request and re-nudges at most
+every 8h). Nudging forever is not a deadline.
+
+Every other "waiting on someone" state in the app already has one:
+
+| State | Waiting on | Deadline today |
+|---|---|---|
+| Booking `pending` | Provider to accept | ✅ `process_expire_stale_pending_bookings()` (jobid 70, every 30m) → `cancelled` at 48h after creation, or once the appointment time passes |
+| Waitlist hold | Client to claim | ✅ `expire_waitlist_holds()` (jobid 146, every 15m) |
+| Cart checkout hold | Client to pay | ✅ `expire_cart_holds()` (jobid 147, every 5m), 10-minute TTL |
+| Booking `confirmed`/`in_progress` past its end | Nobody | ✅ `process_auto_complete_bookings()` (jobid 11, every 30m) → `completed` |
+| Reschedule `pending` | **Provider to offer dates** | ❌ none — reminders only |
+| Reschedule `provider_responded` | **Client to pick one** | ❌ none — not even a reminder |
+| Group reschedule batch | Either side | ❌ none (same rows, same gap) |
+
+**Why this is a live defect, not just untidiness.** The three interactions all
+run the same direction — against the client who asked:
+
+1. `process_auto_complete_bookings()` flips `confirmed` → `completed` purely on
+   the clock, with no check for an open reschedule request. A client who asked
+   to move an appointment, got no reply, and didn't attend ends up with a
+   booking recorded as **completed** — and the reschedule row still `pending`
+   underneath it.
+2. `request_reschedule_own_booking()` refuses a second request while one is
+   open ("A reschedule request is already in progress for this booking"). A
+   provider who simply never responds therefore blocks the client from asking
+   again — silence is a stronger veto than refusing.
+3. The provider's own `rescheduleNotice` window keeps running while the request
+   sits there. A request made in good time becomes un-actionable by both sides
+   once the window lapses, with nothing telling either of them that happened.
+
+**The rule to implement** (product decision made 2026-08-21, not yet built):
+an unanswered reschedule request expires, and expiry is *communicated as an
+outcome*, not left as silence.
+
+- **Provider hasn't offered dates** (`pending`): expire at the earlier of
+  N days after the request and the start of the appointment day. The client is
+  told the provider couldn't meet the request, the booking stays exactly as
+  originally scheduled, and the client can ask again or cancel under the normal
+  policy.
+- **Client hasn't picked an offered date** (`provider_responded`): same shape —
+  expire at the earlier of N days after the offer and the appointment day, tell
+  the provider, release the offered slots, booking unchanged.
+- Expiry must be a **distinct terminal status** (`expired`), not `rejected` or
+  `cancelled`: those mean somebody decided, and the difference matters for both
+  the notification copy and any later dispute.
+
+Decisions still to settle before building:
+
+- **N.** "Before the appointment day" is the hard backstop; the softer
+  N-days-after-request limit is a separate number and hasn't been picked.
+  It should probably track the provider's own `rescheduleNotice` setting rather
+  than being a global constant, so a provider who demands 72h notice can't take
+  72h to answer.
+- Does an expired request count toward `maxReschedules` or restart the 24h
+  cooldown? It shouldn't — the client did nothing wrong — which means
+  `request_reschedule_own_booking()` needs to exclude `expired` rows from both
+  checks explicitly.
+- Should expiry of a `pending` request also give the client a no-penalty
+  cancellation, given the provider's non-response is what stranded them? This
+  is the part with actual liability attached — see
+  `LEGAL-COMPLIANCE-NOTES.md` §12.
+- `process_auto_complete_bookings()` needs to stop auto-completing a booking
+  with an open reschedule request regardless of which N is chosen.
+
+Implementation shape (mirrors the pending-booking expiry that already works):
+migration to widen the status CHECK with `expired`, a
+`process_expire_stale_reschedule_requests()` SECURITY DEFINER function, one
+`cron.schedule` entry, and notification rows inserted by that function — **not**
+by the app, same as every other booking-lifecycle notification (§9).
+
+### 7b. Client-facing failure copy
+
+Reschedule is the flow with the most server-side rejections, so what the client
+actually reads matters. Every rejection is a `RAISE EXCEPTION` (SQLSTATE
+`P0001`) from `request_reschedule_own_booking()`/`confirm_reschedule_own_booking()`,
+and each one has a named branch in `RescheduleScreen`'s submit `catch`:
+
+| Guard | What the client sees |
+|---|---|
+| `This provider requires N hours notice to reschedule` | "Too Close to Reschedule" + message-them-directly, then back |
+| `This provider allows a maximum of N reschedule(s) per booking` | "No Reschedules Left" + message-them-directly, then back |
+| `A reschedule request is already in progress for this booking` | "Reschedule Already Requested" — framed as normal state, not an error |
+| `You can reschedule again in N hours` | Shown verbatim (already written for a client) |
+| `Booking not found` | "Booking No Longer Available" + bounce to Bookings to re-sync |
+| `23505` / `23P01` | "Time No Longer Available. Please choose a different time." |
+| anything else | Generic "We couldn't reschedule that just now." + full error logged |
+
+The verbatim rows go through `err.message` directly, **not**
+`toUserMessage()` — that helper matches on wording and would replace an
+unmatched message with its fallback, which is how "You can reschedule again in
+6 hours" used to reach the client as "That time is no longer available."
+(fixed 2026-08-21). Provider-side actions use
+`toUserMessageAllowingDbGuard()`, which shows `P0001` guards verbatim *except*
+the ones in `GUARD_TRANSLATIONS` ([userFacingError.ts](src/utils/userFacingError.ts))
+— developer-formatted guards like `Invalid status transition: in_progress ->
+in_progress` are translated before a provider ever sees them.
 
 ## 8. Cancellation
 
