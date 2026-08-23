@@ -745,3 +745,81 @@ As of 2026-08-20 the split between the two audiences is **copy and data-source o
 ### Related
 
 Scoped out of the 2026-08-20 Get In Touch / Communications source-of-truth split, which fixed *which setting drives which audience* and made the distinction explicit in both screens' copy, but deliberately changed no messaging behaviour.
+
+---
+
+## Signup Step 2b: "Take bookings here, or link out?" (provider path)
+
+### What it means
+
+Right after someone picks **provider** at signup, offer a second page asking how
+they want to take bookings:
+
+- **Use Cerviced's booking system** — the current, only path. Availability,
+  services, slots, cart/checkout, the whole flow.
+- **Link to my existing booking system** — they already run Acuity/Fresha/their
+  own site, and want a Cerviced profile that discovers them and hands off.
+
+The same fork could later be offered to a client-account signup, but the
+decision only means something on the provider side, so scope it there first.
+
+### Why it's worth building
+
+The app already has half of it. `acuityTransferService.ts` + the
+`extract-provider-profile` edge function import a provider's services from an
+Acuity link, and `ClaimProviderScreen` exists for unclaimed listings. Both
+assume the provider then *migrates onto* Cerviced bookings. A provider who
+wants to keep their existing system has no honest option today — they either
+fake availability they won't honour, or they don't sign up. The second is
+what's actually happening.
+
+An externally-linked provider is still worth having: they're discoverable in
+Explore/Search, they carry a portfolio, and the handoff is measurable.
+
+### What has to exist
+
+**1. A mode on the provider, not a screen flag.** Something like
+`providers.booking_mode: 'cerviced' | 'external'` plus
+`providers.external_booking_url`. It must be a real column — the client-hat bug
+fixed on 2026-08-20 is exactly what happens when a mode is inferred from
+whatever field happens to be filled in (see the auto-memory
+`hat-switch-dob-is-the-client-hat-marker`).
+
+**2. The go-live gate has to branch.** `check_and_set_provider_live()` currently
+requires schedule + service + address-with-lat/lng. An external provider has no
+schedule and may have no services in our sense — that gate would permanently
+hold them at "not live". Either the gate takes the mode into account, or
+external providers go live on a different, smaller set of conditions.
+
+**3. Every client-facing booking affordance has to know.** "Book now", the
+booking sheets, the cart, Becca's booking capabilities, availability badges,
+waitlist — all of it currently assumes an internal booking is possible. For an
+external provider these become a single outbound link. A half-wired version of
+this is worse than none: a Book button that opens a sheet with no slots reads
+as broken, not as "they book elsewhere".
+
+**4. Legal/consent check before shipping.** Sending a user off-platform to
+transact means the booking, payment, cancellation and data handling all happen
+outside our Terms. That needs wording, not an assumption — see
+`LEGAL-COMPLIANCE-NOTES.md`. It also interacts with the deposit/liability
+boundary the product has deliberately drawn.
+
+**5. Migration path both ways.** A provider who starts external and later wants
+Cerviced bookings (or the reverse) must be able to switch without rebuilding
+their profile — which is the whole reason this is a column and not a signup-only
+answer.
+
+### Where it would go
+
+`SignUpStep3Screen` is already the branch point (it renders the client DOB block
+or the business-details block, and since 2026-08-20 both, on the upgrade path).
+The mode question is better as its own short page immediately after the account
+type is chosen, so it can set the mode *before* the rest of the provider
+questions — several of which (availability, services) are only meaningful in
+`cerviced` mode.
+
+### Related
+
+- `acuityTransferService.ts` — existing import-from-Acuity path.
+- Go-live gate: auto-memory `go-live-gate-is-three-things-not-four`.
+- `hat-switch-dob-is-the-client-hat-marker` — why this must be a real column.

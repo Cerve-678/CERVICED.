@@ -3,7 +3,6 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { Alert, AppState } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../lib/supabase';
 import { registerForPushNotifications, unregisterPushToken, startExpoGoNotificationBridge } from '../services/pushNotificationService';
 import { updateBiometricToken } from '../services/biometricService';
 import { registerModeSetter, resolveModeChange } from '../navigation/modeController';
@@ -15,6 +14,10 @@ import {
   cancelAccountDeletionRequest,
   deleteClientAccountProfile,
   deleteProviderAccountProfile,
+  clearUserStorageFolder,
+  setAuthAutoRefresh,
+  signOutCurrentSession,
+  subscribeToAuthStateChanges,
 } from '../services/databaseService';
 import { STORAGE_KEYS } from '../utils/storageKeys';
 import { logger } from '../utils/logger';
@@ -114,17 +117,7 @@ function accountDeletionError(data: any): Error {
  *  vanish silently — log them so an orphaned file is at least debuggable. */
 async function clearStorageFolder(bucket: string, uid: string): Promise<void> {
   try {
-    const { data, error: listError } = await supabase.storage.from(bucket).list(uid);
-    if (listError) {
-      logger.warn(`[AuthContext] storage list failed (${bucket}/${uid}):`, listError.message);
-      return;
-    }
-    if (data && data.length > 0) {
-      const { error: removeError } = await supabase.storage.from(bucket).remove(data.map(f => `${uid}/${f.name}`));
-      if (removeError) {
-        logger.warn(`[AuthContext] storage cleanup failed (${bucket}/${uid}):`, removeError.message);
-      }
-    }
+    await clearUserStorageFolder(bucket, uid);
   } catch (err: any) {
     logger.warn(`[AuthContext] storage cleanup threw (${bucket}/${uid}):`, err?.message ?? err);
   }
@@ -186,19 +179,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // and the first API call on foreground will get a 401 before the refresh completes.
     const appStateSub = AppState.addEventListener('change', state => {
       if (state === 'active') {
-        supabase.auth.startAutoRefresh();
+        setAuthAutoRefresh(true);
         // Keep the push token fresh on every resume, not just on cold launch / login.
         // This self-heals tokens after an APNs-key rotation or EAS project migration
         // without requiring the user to sign out and back in. Safe no-op when logged out.
         registerForPushNotifications().catch((err) => console.warn('[Push] foreground refresh failed:', err));
       } else {
-        supabase.auth.stopAutoRefresh();
+        setAuthAutoRefresh(false);
       }
     });
 
     // onAuthStateChange fires INITIAL_SESSION immediately on subscribe,
     // so we only use it as the single source of truth — no separate getSession() call.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const unsubscribeAuth = subscribeToAuthStateChanges(async (event, session) => {
       logger.log('[AuthContext] onAuthStateChange event:', event, '| user:', session?.user?.id ?? 'none');
       // Don't auto-login during password recovery — let ResetPasswordOTP navigate to NewPassword
       if (event === 'PASSWORD_RECOVERY') {
@@ -212,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'TOKEN_REFRESHED') {
         if (!session) {
           intentionalLogoutRef.current = true;
-          await supabase.auth.signOut().catch(() => {});
+          await signOutCurrentSession().catch(() => {});
           setUser(null);
           setIsLoggedIn(false);
           setSession(null);
@@ -254,7 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribeAuth();
       appStateSub.remove();
     };
   }, []);
@@ -300,9 +293,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loginMethod: 'email',
           businessName: meta?.['business_name'],
           businessEmail: meta?.['business_email'],
+          // hasClientProfile is deliberately absent: session metadata doesn't
+          // carry it, and this branch only runs when the profile row couldn't be
+          // read. Leaving it falsy means a provider briefly sees no client hat
+          // rather than one the database hasn't confirmed — don't "fix" this by
+          // guessing from role or dob, which is the inference the column replaced.
         });
         setIsLoggedIn(true);
-        registerForPushNotifications().catch((err) => console.warn('[Push] registration failed:', err));
+        registerForPushNotifications().catch((err) => logger.warn('[Push] registration failed:', err));
         return;
       }
 
@@ -341,16 +339,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...(profile.business_name != null ? { businessName: profile.business_name } : {}),
           ...(profile.business_email != null ? { businessEmail: profile.business_email } : {}),
           needsEmailVerification: !session.user.email_confirmed_at,
-          // A real `users` row existing at all already means this account has
-          // a client profile — NOT whether dob happens to be filled in. Apple
-          // Sign-In never provides a date of birth (Apple's identity token
-          // doesn't carry one), so gating on `!!profile.dob` made every
-          // Apple-authenticated client look "incomplete" on every sign-in,
-          // permanently — not a one-time race. Only a provider-only account
-          // (role === 'provider') that hasn't set up a client hat yet should
-          // read as not having a client profile; for those, dob is still the
-          // right signal since addClientProfile is what writes it.
-          hasClientProfile: role !== 'provider' || profile.dob != null,
+          // Read straight from the column that owns this (migration
+          // 20260823105742). It used to be inferred as `role !== 'provider' ||
+          // dob != null`, which made a provider's date of birth double as their
+          // client-hat marker — so the client->provider upgrade, which never
+          // asked for a DOB, dropped the hat on the next launch. Never infer it
+          // again; a non-provider row is still true by backfill, not by rule.
+          hasClientProfile: profile.has_client_profile === true,
           gender: (profile as any).gender ?? null,
           has_kids: (profile as any).has_kids ?? null,
           birth_year: (profile as any).birth_year ?? null,
@@ -544,6 +539,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       referral_source: profileData.referralSource || null,
       ...(profileData.gender != null ? { gender: profileData.gender } : {}),
       ...(profileData.has_kids != null ? { has_kids: profileData.has_kids } : {}),
+      // The hat itself, not a side effect of some other field being filled in.
+      has_client_profile: true,
       });
     // Keep the user-facing copy friendly, but record the real Postgres reason
     // (Metro/console only) so any future failure here is diagnosable at a glance.
@@ -604,7 +601,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Await signOut so the session is fully cleared in AsyncStorage before the
     // function returns. If the app is killed immediately after logout, the session
     // won't linger and re-log the user in on next launch.
-    await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
+    await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
   }, [user]);
 
   // Called from ReactivateAccountScreen when someone mid-grace-period logs
@@ -635,7 +632,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setIsLoggedIn(false);
-    await supabase.auth.signOut().catch(err => logger.warn('signOut error:', err));
+    await signOutCurrentSession().catch(err => logger.warn('signOut error:', err));
   }, []);
 
   // Deletes only the CLIENT side of the account via a SECURITY DEFINER RPC

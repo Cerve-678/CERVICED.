@@ -1,58 +1,100 @@
 // Auto-generated Supabase database types for CERVICED
 // Keep in sync with supabase/phase1_schema.sql
 
-export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json }
+  | Json[];
 
 // ── Enums ────────────────────────────────────────────────
 
-export type UserRole = 'user' | 'provider';
+export type UserRole = "user" | "provider";
 
 export type ServiceCategory =
-  | 'HAIR' | 'NAILS' | 'LASHES' | 'BROWS'
-  | 'MUA' | 'AESTHETICS' | 'MALE' | 'KIDS' | 'OTHER';
+  | "HAIR"
+  | "NAILS"
+  | "LASHES"
+  | "BROWS"
+  | "MUA"
+  | "AESTHETICS"
+  | "MALE"
+  | "KIDS"
+  | "OTHER";
 
 export type BookingStatus =
-  | 'pending' | 'confirmed' | 'in_progress'
-  | 'completed' | 'cancelled' | 'no_show' | 'provider_no_show';
+  | "pending"
+  | "confirmed"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+  | "no_show"
+  | "provider_no_show";
 
-export type PaymentType = 'full' | 'deposit';
+export type PaymentType = "full" | "deposit";
 
 export type PaymentStatus =
-  | 'pending' | 'deposit_paid' | 'fully_paid' | 'refunded' | 'failed';
+  | "pending"
+  | "deposit_paid"
+  | "fully_paid"
+  | "refunded"
+  | "failed";
 
 export type NotificationType =
-  | 'booking_pending'    | 'booking_confirmed'  | 'booking_declined'
-  | 'booking_cancelled'  | 'booking_reminder'   | 'booking_in_progress'
-  | 'no_show'            | 'provider_no_show'   | 'payment_success'    | 'new_provider'
-  | 'reschedule_request' | 'reschedule_provider_response' | 'reschedule_confirmed'
-  | 'reschedule_declined'
-  | 'review_request'     | 'review_received'    | 'promotion'
-  | 'provider_message'
-  | 'intake_form_reminder'
-  | 'waitlist_slot_available'
-  | 'new_message'
-  | 'announcement'          // provider broadcast to clients (client-facing)
-  | 'intake_form_received'  // provider sent client a form to fill (client-facing)
-  | 'intake_form_completed' // client sent a filled form back (provider-facing)
-  | 'info_pack_received'    // provider sent client prep/aftercare info (client-facing)
-  | 'address_released'      // booking address is now visible to the client
-  | 'birthday_greeting'     // provider's automated birthday message (client-facing)
-  | 'post_appt_check_in'    // provider's automated post-appointment check-in (client-facing)
-  | 'rebooking_nudge'       // "it's been a while" nudge to rebook (client-facing)
-  | 'daily_recap'           // provider's automated today's-schedule summary (provider-facing)
-  | 'schedule_fully_booked' // provider's whole calendar has no openings in their alert window (provider-facing)
-  | 'pending_booking_reminder'; // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
+  | "booking_pending"
+  | "booking_confirmed"
+  | "booking_declined"
+  | "booking_cancelled"
+  | "booking_reminder"
+  | "booking_in_progress"
+  | "no_show"
+  | "provider_no_show"
+  | "payment_success"
+  | "new_provider"
+  | "reschedule_request"
+  | "reschedule_provider_response"
+  | "reschedule_confirmed"
+  | "reschedule_declined"
+  | "review_request"
+  | "review_received"
+  | "promotion"
+  | "provider_message"
+  | "intake_form_reminder"
+  | "waitlist_slot_available"
+  | "new_message"
+  | "announcement" // provider broadcast to clients (client-facing)
+  | "intake_form_received" // provider sent client a form to fill (client-facing)
+  | "intake_form_completed" // client sent a filled form back (provider-facing)
+  | "info_pack_received" // provider sent client prep/aftercare info (client-facing)
+  | "address_released" // booking address is now visible to the client
+  | "birthday_greeting" // provider's automated birthday message (client-facing)
+  | "post_appt_check_in" // provider's automated post-appointment check-in (client-facing)
+  | "rebooking_nudge" // "it's been a while" nudge to rebook (client-facing)
+  | "daily_recap" // provider's automated today's-schedule summary (provider-facing)
+  | "schedule_fully_booked" // provider's whole calendar has no openings in their alert window (provider-facing)
+  | "pending_booking_reminder"; // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
 
-export type NotificationPriority = 'high' | 'medium' | 'low';
+export type NotificationPriority = "high" | "medium" | "low";
 
 export type RescheduleStatus =
-  | 'pending' | 'provider_responded' | 'confirmed' | 'rejected' | 'cancelled';
+  | "pending"
+  | "provider_responded"
+  | "confirmed"
+  | "rejected"
+  | "cancelled";
 
-export type EventTaskStatus = 'pending' | 'booked' | 'completed';
+export type EventTaskStatus = "pending" | "booked" | "completed";
 
-export type TransactionStatus = 'pending' | 'succeeded' | 'failed' | 'refunded';
+export type TransactionStatus = "pending" | "succeeded" | "failed" | "refunded";
 
-export type TransactionType = 'full' | 'deposit' | 'remaining' | 'tip' | 'refund';
+export type TransactionType =
+  | "full"
+  | "deposit"
+  | "remaining"
+  | "tip"
+  | "refund";
 
 // ── Table Row Types ──────────────────────────────────────
 
@@ -62,6 +104,10 @@ export interface DbUser {
   name: string;
   phone: string | null;
   dob: string | null;
+  // The client hat's own storage (migration 20260823105742). Do NOT re-derive
+  // this from `dob` — that inference is exactly what dropped a provider's client
+  // hat when the client->provider upgrade never collected a date of birth.
+  has_client_profile: boolean;
   // Client's saved default address for mobile bookings. Owner-readable only
   // (every SELECT policy on `users` is auth.uid() = id) — providers see the
   // per-booking snapshot in bookings.client_address, which the address-release
@@ -74,17 +120,17 @@ export interface DbUser {
   avatar_url: string | null;
   push_token: string | null;
   service_interests: string[] | null;
-  gender:     'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
-  has_kids:   boolean | null;
+  gender: "female" | "male" | "non-binary" | "prefer-not-to-say" | null;
+  has_kids: boolean | null;
   birth_year: number | null;
   // Provider-signup-only fields — staged here until a `providers` row
   // exists, then prefilled across by InfoRegScreen's first-save flow
   // (see getUserSignupPrefillInfo).
-  team_size: 'solo' | 'small_team' | 'large_team' | null;
+  team_size: "solo" | "small_team" | "large_team" | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
   specialties: string[] | null;
-  price_range: 'budget' | 'mid' | 'premium' | 'luxury' | null;
+  price_range: "budget" | "mid" | "premium" | "luxury" | null;
   preferred_contact_methods: string[] | null;
   preferred_payment_methods: string[] | null;
   is_verified: boolean;
@@ -170,14 +216,23 @@ export interface DbProvider {
      *  ProviderPolicies.waitlistSelectionMethod for the full explanation. */
     waitlistSelectionMethod?: string;
   } | null;
-  business_type: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  business_type: "salon" | "studio" | "home_based" | "mobile" | null;
   // full_address is deliberately NOT here. It moved to provider_private_details
   // (owner-only RLS) because `providers` is readable by every authenticated user
   // and RLS cannot hide a single column — so keeping it here leaked every
   // provider's home address to clients via `.select('*')` on browse. See
   // supabase/restrict_provider_full_address.sql. Read via
   // getMyProviderFullAddress(), write via setMyProviderFullAddress().
-  address_release_policy: 'always' | 'on_confirmation' | 'day_before' | 'two_days_before' | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual' | null;
+  address_release_policy:
+    | "always"
+    | "on_confirmation"
+    | "day_before"
+    | "two_days_before"
+    | "three_days_before"
+    | "five_days_before"
+    | "week_before"
+    | "manual"
+    | null;
   online_consultations_available: boolean;
   consultation_required_new_clients: boolean;
   style_tags: string[] | null;
@@ -185,8 +240,8 @@ export interface DbProvider {
   expertise_tags: string[] | null;
   technique_tags: string[] | null;
   inclusive_flags: string[] | null;
-  price_tier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
-  team_size: 'solo' | 'small_team' | 'large_team' | null;
+  price_tier: "budget" | "mid" | "premium" | "luxury" | null;
+  team_size: "solo" | "small_team" | "large_team" | null;
   accessibility_notes: string | null;
   languages_spoken: string[] | null;
   // Service-coverage cities (src/constants/ukCities.ts) — drives the client
@@ -203,7 +258,12 @@ export interface DbProvider {
   // is_insured_self_declared / dbs_checked_self_declared are provider
   // SELF-ATTESTATIONS that Cerviced does not verify; never render them to a
   // client as a platform-verified credential.
-  patch_test_policy: 'always' | 'new_clients' | 'optional' | 'not_needed' | null;
+  patch_test_policy:
+    | "always"
+    | "new_clients"
+    | "optional"
+    | "not_needed"
+    | null;
   qualifications: string | null;
   is_insured_self_declared: boolean;
   dbs_checked_self_declared: boolean;
@@ -215,7 +275,7 @@ export interface DbProvider {
   // suitable below is the narrower per-service refinement.
   hair_types_catered: string[] | null;
   availability_windows: string[] | null;
-  accepts_new_clients: 'yes' | 'waitlist' | 'no' | null;
+  accepts_new_clients: "yes" | "waitlist" | "no" | null;
   walk_ins_welcome: boolean;
   group_bookings_available: boolean;
   products_used: string | null;
@@ -226,12 +286,23 @@ export interface DbProvider {
   slot_interval_mins: number;
   buffer_mins: number;
   min_booking_notice_hrs: number;
+  /** Emergency-request opt-ins — each lets a CLIENT ask for a time one of the
+   *  four scheduling rules above would otherwise reject outright. All default
+   *  false; an accepted request always lands pending, never auto-confirmed.
+   *  See supabase/migrations/20260821143821_emergency_booking_requests.sql. */
+  allow_out_of_hours_requests: boolean;
+  allow_blocked_date_requests: boolean;
+  allow_short_notice_requests: boolean;
+  allow_beyond_window_requests: boolean;
+  /** How far either side of the provider's recurring weekly envelope an
+   *  out-of-hours request may reach. 0 disables the extension. */
+  out_of_hours_extension_mins: number;
   cancellation_notice_hours: number;
   /** Mirror of the provider's Automations screen settings — readable by
    *  client screens and pg_cron jobs (auth user_metadata is not). */
   automation_settings: {
     clientReminderTiming?: string[]; // e.g. ['24h','48h','2h']
-    rebookingNudgeWeeks?: string;    // 'never' | '2' | '4' | ...
+    rebookingNudgeWeeks?: string; // 'never' | '2' | '4' | ...
     autoReviewRequest?: boolean;
     postApptCheckIn?: boolean;
     birthdayGreeting?: boolean;
@@ -260,7 +331,7 @@ export interface DbProvider {
   // see searchUnclaimedProviders/getUnclaimedProviderDetail in
   // databaseService.ts and the claim flow in ClaimProviderScreen.tsx.
   is_claimed: boolean;
-  source: 'self_signup' | 'scraped' | null;
+  source: "self_signup" | "scraped" | null;
   created_at: string;
   updated_at: string;
 }
@@ -306,7 +377,13 @@ export interface DbService {
   hair_types_suitable: string[] | null;
   // Context
   aftercare_notes: string | null;
-  service_type: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | null;
+  service_type:
+    | "treatment"
+    | "enhancement"
+    | "maintenance"
+    | "restorative"
+    | "consultation"
+    | null;
   // Only populated by queries that explicitly join service_add_ons (e.g.
   // getMyProviderServices) — most service reads leave it undefined.
   add_ons?: DbServiceAddOn[];
@@ -340,7 +417,7 @@ export interface DbProviderAvailability {
   id: string;
   provider_id: string;
   day_of_week: number; // 0=Sun, 6=Sat
-  open_time: string;   // 'HH:MM:SS'
+  open_time: string; // 'HH:MM:SS'
   close_time: string;
   is_closed: boolean;
 }
@@ -393,7 +470,7 @@ export interface DbPortfolioItem {
   occasion_tags: string[] | null;
   trend_names: string[] | null;
   hair_type_shown: string | null;
-  skin_tone_shown: 'fair' | 'light' | 'medium' | 'tan' | 'deep' | 'rich' | null;
+  skin_tone_shown: "fair" | "light" | "medium" | "tan" | "deep" | "rich" | null;
 }
 
 export interface DbBooking {
@@ -402,8 +479,8 @@ export interface DbBooking {
   provider_id: string;
   service_id: string | null;
   status: BookingStatus;
-  booking_date: string;   // 'YYYY-MM-DD'
-  booking_time: string;   // 'HH:MM:SS'
+  booking_date: string; // 'YYYY-MM-DD'
+  booking_time: string; // 'HH:MM:SS'
   end_time: string | null;
   notes: string | null;
   booking_instructions: string | null;
@@ -434,7 +511,16 @@ export interface DbBooking {
   address_released_at: string | null;
   client_address: string | null;
   // Client intent — feeds search personalisation and Becca context
-  occasion_type: 'wedding' | 'prom' | 'photoshoot' | 'date-night' | 'birthday' | 'festival' | 'everyday' | 'other' | null;
+  occasion_type:
+    | "wedding"
+    | "prom"
+    | "photoshoot"
+    | "date-night"
+    | "birthday"
+    | "festival"
+    | "everyday"
+    | "other"
+    | null;
   style_request: string | null;
   reference_image_url: string | null;
   // When the client agreed to the provider's cancellation/booking policy at
@@ -444,6 +530,15 @@ export interface DbBooking {
   // separate, deferred Cerviced-wide terms checkbox, not a provider policy).
   policy_accepted_at: string | null;
   policy_snapshot: Record<string, unknown> | null;
+  /** The client asked for a time this provider's own scheduling rules
+   *  exclude — outside their hours, on a blocked date, at short notice, or
+   *  beyond their booking window — under one of the providers.allow_*_requests
+   *  opt-ins. Never auto-confirmed, whatever auto_accept_bookings says. See
+   *  supabase/migrations/20260821143821_emergency_booking_requests.sql. */
+  is_emergency_request: boolean;
+  /** When the client accepted that confirmation, having been pointed at the
+   *  provider's policy. Required server-side whenever the flag above is set. */
+  emergency_ack_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -459,7 +554,7 @@ export interface DbBookingAddOn {
 export interface DbBookingRescheduleRequest {
   id: string;
   booking_id: string;
-  requested_by: 'user' | 'provider';
+  requested_by: "user" | "provider";
   original_date: string;
   original_time: string;
   requested_dates: string[] | null;
@@ -507,7 +602,7 @@ export interface DbNotification {
   provider_id: string | null;
   metadata: Json;
   created_at: string;
-  recipient_role: 'provider' | 'client';
+  recipient_role: "provider" | "client";
 }
 
 export interface DbBookmark {
@@ -537,6 +632,12 @@ export interface DbPromotion {
   created_at: string;
 }
 
+/** Promotion fields safe and necessary on a browsing client's profile. */
+export type ClientPromotion = Omit<
+  DbPromotion,
+  "scheduled_notify_at" | "notify_sent_at"
+>;
+
 export interface ClienteleMember {
   user_id: string;
   customer_name: string;
@@ -546,13 +647,16 @@ export interface ClienteleMember {
   total_spent: number;
 }
 
-export interface DbPromotionWithProvider extends DbPromotion {
+export interface PublicPromotionWithProvider extends ClientPromotion {
   providers?: {
     display_name: string | null;
     logo_url: string | null;
     slug: string | null;
   } | null;
 }
+
+/** @deprecated Client-facing code should use PublicPromotionWithProvider. */
+export type DbPromotionWithProvider = PublicPromotionWithProvider;
 
 export interface DbEventPlan {
   id: string;
@@ -626,76 +730,115 @@ export interface DbTransaction {
  */
 export type ProviderWithServices = Pick<
   DbProvider,
+  | "id"
+  | "slug"
+  | "display_name"
+  | "service_category"
+  | "custom_service_type"
+  | "location_text"
+  | "about_text"
+  | "logo_url"
+  | "gradient"
+  | "accent_color"
+  | "background_image_url"
+  | "profile_theme"
+  | "phone"
+  | "email"
+  | "instagram"
+  | "website"
+  | "preferred_contact_methods"
+  | "whatsapp_number"
+  | "external_booking_url"
+  | "rating"
+  | "years_experience"
+  | "is_verified"
+  | "booking_policies"
+  | "business_type"
+  | "online_consultations_available"
+  | "cancellation_notice_hours"
+  | "accessibility_notes"
+  | "languages_spoken"
+  | "qualifications"
+  | "is_insured_self_declared"
+  | "dbs_checked_self_declared"
+  | "team_size"
+  | "walk_ins_welcome"
+  | "group_bookings_available"
+  | "vegan_cruelty_free"
+  | "travel_radius"
+  | "products_used"
+  | "hair_types_catered"
+> & {
+  /** Only the automation flags needed by the public profile UI. */
+  automation_settings: Pick<
+    NonNullable<DbProvider["automation_settings"]>,
+    "scheduleReleaseDay" | "waitlistEnabled"
+  > | null;
+  services: (Pick<
+    DbService,
+    | "id"
+    | "category_name"
+    | "category_description"
+    | "name"
+    | "description"
+    | "price"
+    | "duration_minutes"
+    | "is_active"
+    | "sort_order"
+    | "is_pregnancy_safe"
+    | "patch_test_required"
+    | "min_age"
+    | "contraindications"
+    | "aftercare_notes"
+    | "service_type"
+  > & {
+    images: Pick<
+      DbServiceImage,
+      "id" | "url" | "sort_order" | "aspect_ratio"
+    >[];
+    add_ons: Pick<
+      DbServiceAddOn,
+      "id" | "name" | "price" | "description" | "is_active"
+    >[];
+  })[];
+  specialties: Pick<DbProviderSpecialty, "specialty">[];
+};
+
+/** Public provider card/search payload shared by Home, Search and Becca. */
+export type PublicProviderSummary = Pick<
+  DbProvider,
   | 'id'
   | 'slug'
   | 'display_name'
   | 'service_category'
-  | 'custom_service_type'
-  | 'location_text'
-  | 'about_text'
   | 'logo_url'
-  | 'gradient'
-  | 'accent_color'
-  | 'background_image_url'
-  | 'profile_theme'
-  | 'phone'
-  | 'email'
-  | 'instagram'
-  | 'website'
-  | 'preferred_contact_methods'
-  | 'whatsapp_number'
-  | 'external_booking_url'
+  | 'location_text'
+  | 'service_locations'
+  | 'latitude'
+  | 'longitude'
   | 'rating'
-  | 'years_experience'
-  | 'is_verified'
-  | 'booking_policies'
+  | 'review_count'
+  | 'price_tier'
   | 'business_type'
-  | 'online_consultations_available'
-  | 'cancellation_notice_hours'
-  | 'automation_settings'
-  | 'accessibility_notes'
-  | 'languages_spoken'
-  | 'qualifications'
-  | 'is_insured_self_declared'
-  | 'dbs_checked_self_declared'
-  | 'team_size'
   | 'walk_ins_welcome'
   | 'group_bookings_available'
   | 'vegan_cruelty_free'
-  | 'travel_radius'
-  | 'products_used'
-  | 'hair_types_catered'
-> & {
-  services: (Pick<
-    DbService,
-    | 'id'
-    | 'category_name'
-    | 'category_description'
-    | 'name'
-    | 'description'
-    | 'price'
-    | 'duration_minutes'
-    | 'is_active'
-    | 'sort_order'
-    | 'is_pregnancy_safe'
-    | 'patch_test_required'
-    | 'min_age'
-    | 'contraindications'
-    | 'aftercare_notes'
-    | 'service_type'
-  > & {
-    images: Pick<DbServiceImage, 'id' | 'url' | 'sort_order' | 'aspect_ratio'>[];
-    add_ons: Pick<
-      DbServiceAddOn,
-      'id' | 'name' | 'price' | 'description' | 'is_active'
-    >[];
-  })[];
-  specialties: Pick<DbProviderSpecialty, 'specialty'>[];
-};
+  | 'is_featured'
+  | 'created_at'
+>;
 
 /** Portfolio item with provider info — used by ExploreScreen */
 export interface PortfolioItemWithProvider extends DbPortfolioItem {
-  provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url' | 'rating' | 'review_count'>;
+  provider: Pick<
+    DbProvider,
+    | "id"
+    | "slug"
+    | "display_name"
+    | "service_category"
+    | "logo_url"
+    | "rating"
+    | "review_count"
+  >;
 }
 
 /** Service with photo(s) and provider info — powers ExploreScreen's mixed discovery feed */
@@ -705,8 +848,17 @@ export interface DiscoverServiceWithProvider {
   name: string;
   description: string | null;
   price: number;
-  service_images: Pick<DbServiceImage, 'url' | 'sort_order' | 'aspect_ratio'>[];
-  provider: Pick<DbProvider, 'id' | 'slug' | 'display_name' | 'service_category' | 'logo_url' | 'rating' | 'review_count'>;
+  service_images: Pick<DbServiceImage, "url" | "sort_order" | "aspect_ratio">[];
+  provider: Pick<
+    DbProvider,
+    | "id"
+    | "slug"
+    | "display_name"
+    | "service_category"
+    | "logo_url"
+    | "rating"
+    | "review_count"
+  >;
 }
 
 /** Booking with add-ons — used by BookingsScreen and ProviderHomeScreen */
@@ -718,11 +870,23 @@ export interface BookingWithAddOns extends DbBooking {
 
 /** Review with user name — used by ProviderProfileScreen */
 export interface ReviewWithUser extends DbReview {
-  user: Pick<DbUser, 'name' | 'avatar_url'>;
+  user: Pick<DbUser, "name" | "avatar_url">;
+}
+
+/** Public review payload: deliberately excludes booking and payment linkage. */
+export interface PublicReviewWithUser
+  extends Pick<
+    DbReview,
+    "id" | "user_id" | "provider_id" | "rating" | "comment" | "created_at"
+  > {
+  user: Pick<DbUser, "name" | "avatar_url">;
 }
 
 /** Notification with optional booking/provider data */
 export interface NotificationWithContext extends DbNotification {
-  booking?: Pick<DbBooking, 'booking_date' | 'booking_time' | 'service_name_snapshot'> | null;
-  provider?: Pick<DbProvider, 'slug' | 'display_name' | 'logo_url'> | null;
+  booking?: Pick<
+    DbBooking,
+    "booking_date" | "booking_time" | "service_name_snapshot"
+  > | null;
+  provider?: Pick<DbProvider, "slug" | "display_name" | "logo_url"> | null;
 }

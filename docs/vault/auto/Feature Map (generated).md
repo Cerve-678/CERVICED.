@@ -122,7 +122,7 @@ Curated: [[Booking Flow]] · **230 files**
 - `src/screens/provider/ProviderHomeScreen.tsx` _(185)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
-- `src/screens/client/RescheduleScreen.tsx` _(171)_
+- `src/screens/client/RescheduleScreen.tsx` _(175)_
 - `supabase/waitlist_holds.sql` _(134)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
@@ -250,7 +250,7 @@ Curated: [[Booking Flow]] · **146 files**
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `src/services/databaseService.ts` _(194)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
-- `src/screens/client/RescheduleScreen.tsx` _(144)_
+- `src/screens/client/RescheduleScreen.tsx` _(140)_
 - `src/screens/client/BookingDetailScreen.tsx` _(136)_
 - `src/services/becca/capabilities/client.ts` _(132)_
 - `src/screens/client/CartScreen.tsx` _(109)_
@@ -281,7 +281,7 @@ Curated: [[Booking Flow]] · **146 files**
 Curated: [[Contexts]] · **152 files**
 - `src/services/databaseService.ts` _(208)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
-- `src/contexts/AuthContext.tsx` _(136)_
+- `src/contexts/AuthContext.tsx` _(134)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
 - `src/screens/shared/BeccaScreen.tsx` _(75)_
 - `supabase/storage_policies.sql` _(63)_
@@ -295,7 +295,7 @@ Curated: [[Contexts]] · **152 files**
 - `supabase/phase1_schema.sql` _(32)_
 - `src/services/beccaStorageService.ts` _(30)_
 - `src/services/biometricService.ts` _(29)_
-- `src/screens/auth/EmailVerificationScreen.tsx` _(24)_
+- `src/screens/auth/EmailVerificationScreen.tsx` _(25)_
 - `src/screens/shared/ChangePasswordScreen.tsx` _(21)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_
