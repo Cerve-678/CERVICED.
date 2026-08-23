@@ -17,7 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { validateEmail } from '../../utils/validation';
-import { supabase } from '../../lib/supabase';
+import {
+  refreshAuthSession,
+  signInWithAppleIdToken,
+  signInWithEmailPassword,
+} from '../../services/databaseService';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import {
   isBiometricAvailable,
@@ -126,13 +130,14 @@ export default function LoginScreen({ navigation }: Props) {
     }
 
     setIsLoading(true);
-    const { error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-    setIsLoading(false);
-
-    if (error) {
+    try {
+      await refreshAuthSession(refreshToken);
+    } catch {
       Alert.alert('Session expired', 'Please sign in with your password to reconnect Face ID.');
       await disableBiometric();
       setBiometricEnabled(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -148,11 +153,12 @@ export default function LoginScreen({ navigation }: Props) {
 
     logger.log('[Login] Attempting signInWithPassword for:', email.trim());
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    logger.log('[Login] signInWithPassword result — error:', error?.message ?? 'none', '| session:', data?.session?.user?.id ?? 'no session');
-    setIsLoading(false);
-
-    if (error) {
+    try {
+      const session = await signInWithEmailPassword(email.trim(), password);
+      logger.log('[Login] signInWithPassword result — session:', session.userId);
+      maybePromptEnableBiometric(session.refreshToken ?? undefined);
+      logger.log('[Login] Success — waiting for onAuthStateChange...');
+    } catch (error) {
       // A 4xx (bad credentials / unconfirmed) is the user's details; a 5xx,
       // rate-limit, or no-status (network) is our problem, not their password —
       // log those so we can see them, and give an accurate, non-blaming message.
@@ -163,11 +169,9 @@ export default function LoginScreen({ navigation }: Props) {
       } else {
         Alert.alert('Login failed', 'Incorrect email or password. Please try again.');
       }
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    maybePromptEnableBiometric(data.session?.refresh_token);
-    logger.log('[Login] Success — waiting for onAuthStateChange...');
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -198,17 +202,9 @@ export default function LoginScreen({ navigation }: Props) {
         return;
       }
       setIsLoading(true);
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'apple',
-        token: credential.identityToken,
-      });
+      const session = await signInWithAppleIdToken(credential.identityToken);
       setIsLoading(false);
-      if (error) {
-        logger.error('[Login] Apple sign-in failed:', error);
-        Alert.alert('Sign in failed', "We couldn't sign you in just now. Please try again.");
-        return;
-      }
-      maybePromptEnableBiometric(data.session?.refresh_token);
+      maybePromptEnableBiometric(session.refreshToken ?? undefined);
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
       // A concurrent/duplicate attempt (or one that lands after the user is
@@ -218,6 +214,7 @@ export default function LoginScreen({ navigation }: Props) {
         Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
       }
     } finally {
+      setIsLoading(false);
       isAppleInFlightRef.current = false;
     }
   };

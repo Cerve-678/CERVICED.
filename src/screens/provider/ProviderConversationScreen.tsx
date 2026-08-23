@@ -19,7 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useProviderDialog } from '../../components/ProviderDialog';
-import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   markConversationReadByProvider,
   getConversationMessages,
@@ -27,6 +27,7 @@ import {
   sendProviderMessage,
   updateConversationLastMessage,
   DbProviderMessage,
+  subscribeToConversationMessages,
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12 } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
@@ -49,6 +50,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   // light/dark mode the same way every other provider surface does, instead of a
   // hand-rolled OL/OD copy that could drift from the canonical palette.
   const { palette: OP } = useTheme();
+  const { user } = useAuth();
   const { showToast, DialogHost } = useProviderDialog();
 
   const insets = useSafeAreaInsets();
@@ -56,7 +58,7 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [providerUserId, setProviderUserId] = useState<string | null>(null);
+  const providerUserId = user?.id ?? null;
   const [savedTemplates, setSavedTemplates] = useState<{ label: string; content: string }[]>([]);
   const flatListRef = useRef<FlatList>(null);
   // The floating tab bar auto-hides while the keyboard is up (tabBarHideOnKeyboard),
@@ -74,13 +76,6 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
-
-  // Get current user (the provider's own auth id)
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setProviderUserId(user.id);
-    });
   }, []);
 
   useEffect(() => {
@@ -114,18 +109,10 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
   useEffect(() => {
     if (!conversationId) return;
 
-    const channel = supabase
-      .channel(`provider-chat:${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'provider_messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const msg = payload.new as Message;
+    return subscribeToConversationMessages(
+      conversationId,
+      (row) => {
+          const msg = row as Message;
           setMessages(prev => {
             if (prev.find(m => m.id === msg.id)) return prev;
             return [...prev, msg];
@@ -137,11 +124,8 @@ export default function ProviderConversationScreen({ navigation, route }: Props)
             );
           }
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+      },
+    );
   }, [conversationId]);
 
 

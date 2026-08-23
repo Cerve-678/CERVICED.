@@ -247,6 +247,20 @@ function InboxRow({
           </Text>
         </View>
 
+        {/* This one broke the provider's own scheduling rules and only exists
+            because they opted into being asked. Confirm/Decline sit right
+            here, so the reason has to be visible BEFORE the tap — a request
+            that looks identical to an ordinary booking is one they'd accept
+            without registering that it's 8pm on a day they'd blocked out. */}
+        {booking.is_emergency_request && (
+          <View style={[row.requestPill, { backgroundColor: dark ? '#3A2E1A' : '#FFF4E0' }]}>
+            <Ionicons name="alert-circle-outline" size={11} color="#C2811A" />
+            <Text style={[row.requestText, { color: '#C2811A' }]}>
+              Outside your availability
+            </Text>
+          </View>
+        )}
+
         {isPending && (
           <View style={row.inlineActions}>
             <TouchableOpacity
@@ -298,6 +312,11 @@ const row = StyleSheet.create({
   statusPill:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 },
   statusText:  { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
   dateChip:    { fontSize: 11 },
+  requestPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 6,
+  },
+  requestText: { fontSize: 10.5, fontWeight: '700' },
 
   inlineActions: { flexDirection: 'row', gap: 8, marginTop: 8 },
   inlineBtn:     { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8, borderWidth: 1.5 },
@@ -481,12 +500,13 @@ export default function ProviderInboxScreen({ navigation, route }: any) {
     }
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchBookings(), fetchConversations()]).finally(() => setLoading(false));
-  }, [fetchBookings, fetchConversations]);
-
-  useFocusEffect(useCallback(() => { fetchBookings(); fetchConversations(); }, [fetchBookings, fetchConversations]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void Promise.all([fetchBookings(), fetchConversations()]).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchBookings, fetchConversations]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

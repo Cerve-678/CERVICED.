@@ -1,8 +1,12 @@
 // App.tsx - WITH BookingProvider
+// These two runtime requires are intentional: Reactotron is dev-only and the
+// Stripe native module must not be evaluated in Expo Go. Both must remain
+// conditional, ahead of normal app initialisation.
+/* eslint-disable import/first, @typescript-eslint/no-require-imports */
 if (__DEV__) {
   try {
     require('./src/utils/reactotron');
-  } catch (e) {
+  } catch {
     console.log('Reactotron not configured');
   }
 }

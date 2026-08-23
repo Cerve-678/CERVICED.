@@ -14,12 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
 import {
   updateProviderAutoAccept,
   updateProviderCancellationPolicy,
   updateProviderAutomationSettings,
-  getMyProviderProfile,
+  getMyProviderProfileContext,
+  updateCurrentUserMetadata,
 } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -193,12 +193,22 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const [{ data: { user } }, profile] = await Promise.all([
-          supabase.auth.getUser(),
-          getMyProviderProfile(),
-        ]);
+        const context = await getMyProviderProfileContext();
+        const profile = context?.profile ?? null;
         if (profile) setProviderId(profile.id);
-        const m = user?.user_metadata ?? {};
+        const m = (context?.userMetadata ?? {}) as {
+          pa_client_reminder_timing?: string[];
+          pa_rebooking_nudge_weeks?: string;
+          pa_auto_review_request?: boolean;
+          pa_post_appt_check_in?: boolean;
+          pa_birthday_greeting?: boolean;
+          pa_new_booking_recap?: boolean;
+          pa_auto_confirm_bookings?: boolean;
+          pa_cancellation_notice_hours?: string | number;
+          pa_waitlist_enabled?: boolean;
+          pa_auto_accept_waitlist?: boolean;
+          pa_deposit_required_new?: boolean;
+        };
         // Prefer the providers-table mirror (what cron jobs and clients act
         // on); fall back to legacy user_metadata, then defaults.
         const a = (profile as any)?.automation_settings ?? {};
@@ -234,8 +244,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       const saves: Promise<unknown>[] = [
-        supabase.auth.updateUser({
-          data: {
+        updateCurrentUserMetadata({
             pa_client_reminder_timing:    d.clientReminderTiming,
             pa_rebooking_nudge_weeks:     d.rebookingNudgeWeeks,
             pa_auto_review_request:       d.autoReviewRequest,
@@ -252,8 +261,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
             // SchedulingScreen and PaymentsScreen now. Writing them here too
             // would push this screen's stale in-memory copy over whatever
             // those screens last saved.
-          },
-        }).then(({ error }) => { if (error) throw error; }),
+        }),
       ];
       if (providerId) {
         saves.push(updateProviderAutoAccept(providerId, d.autoConfirmBookings));

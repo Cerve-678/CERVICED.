@@ -32,7 +32,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import * as Location from 'expo-location';
 import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
-import type { DbProvider } from '../../types/database';
+import type { PublicProviderSummary } from '../../types/database';
 import userLearningService from '../../services/userLearningService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDistanceKm } from '../../utils/distance';
@@ -443,7 +443,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // location, which resolves independently (and possibly later) than this
   // fetch; see providersWithDistance below, which derives them from
   // latitude/longitude once userCoords is known.
-  const mapDbToCardData = useCallback((p: DbProvider): ProviderCardData => {
+  const mapDbToCardData = useCallback((p: PublicProviderSummary): ProviderCardData => {
     return {
       id: p.slug,
       providerId: p.id,
@@ -530,7 +530,7 @@ export default function SearchScreen({ navigation, route }: Props) {
         const q = searchQuery.trim();
         const data = q ? await searchProviders(q, catCode) : await getProviders(catCode);
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData(data.map((p) => mapDbToCardData(p as DbProvider)));
+        setProviderData(data.map(mapDbToCardData));
         if (q) {
           // Zero-result searches are valuable learning signals too.
           logSearchEvent({
@@ -539,6 +539,9 @@ export default function SearchScreen({ navigation, route }: Props) {
             ...(catCode && { categoryFilter: catCode }),
             ...(user?.id && { userId: user.id }),
           });
+          void userLearningService.trackSearch(q, catCode).catch((error) =>
+            logger.error('[Search] trackSearch failed:', error),
+          );
         }
       } catch {
         if (requestId !== providerRequestIdRef.current) return;
@@ -769,12 +772,7 @@ export default function SearchScreen({ navigation, route }: Props) {
   // ── Search input handler ─────────────────────────────────────────────────────
   const handleSearchChange = useCallback((text: string) => {
     setSearchQuery(text);
-    // Track for user learning once query is meaningful
-    if (text.trim().length >= 3) {
-      const catCode = selectedFilter !== 'All' ? CATEGORY_CODE_MAP[selectedFilter] : undefined;
-      userLearningService.trackSearch(text, catCode).catch((err) => logger.error('[Search] trackSearch failed:', err));
-    }
-  }, [selectedFilter]);
+  }, []);
 
   // ── Tracked filter chip selection ───────────────────────────────────────────
   const handleFilterPress = useCallback((f: string) => {
@@ -798,7 +796,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     fn
       .then(data => {
         if (requestId !== providerRequestIdRef.current) return;
-        setProviderData(data.map((p) => mapDbToCardData(p as DbProvider)));
+        setProviderData(data.map(mapDbToCardData));
         setProvidersError(null);
       })
       .catch(() => {
@@ -1267,6 +1265,11 @@ export default function SearchScreen({ navigation, route }: Props) {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         bounces={true}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={7}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={P.accent} colors={[P.accent]} />
         }

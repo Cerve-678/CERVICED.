@@ -6,7 +6,7 @@
 // booking already selected. See BECCA_CAPABILITIES.md §2.1.
 
 import { BookingStatus, type ConfirmedBooking } from "../../../types/booking";
-import type { DbProvider } from "../../../types/database";
+import type { PublicProviderSummary } from "../../../types/database";
 import {
   dateToYMD,
   formatShortDate,
@@ -853,7 +853,7 @@ const findProviders: Capability = {
     // price filter above rather than a new entity-resolver abstraction —
     // these are plain provider-level booleans, not a general concept that
     // needs scoring against other capabilities.
-    const practiceFilters: { keywords: RegExp; matches: (p: DbProvider) => boolean; label: string }[] = [
+    const practiceFilters: { keywords: RegExp; matches: (p: PublicProviderSummary) => boolean; label: string }[] = [
       { keywords: /\bwalk[\s-]?in/i, matches: (p) => !!p.walk_ins_welcome, label: "walk-ins welcome" },
       { keywords: /\bgroup\s?(booking|appointment)/i, matches: (p) => !!p.group_bookings_available, label: "group bookings" },
       { keywords: /\bvegan\b|\bcruelty[\s-]?free\b/i, matches: (p) => !!p.vegan_cruelty_free, label: "vegan/cruelty-free" },

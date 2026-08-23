@@ -37,7 +37,7 @@
 type Mode = 'provider' | 'client';
 
 let setter: ((mode: Mode) => void) | null = null;
-let pendingResolvers: Array<(landed: Mode) => void> = [];
+let pendingResolvers: ((landed: Mode) => void)[] = [];
 
 /** Called once by AuthContext so external code can drive the active mode. */
 export function registerModeSetter(fn: (mode: Mode) => void): void {

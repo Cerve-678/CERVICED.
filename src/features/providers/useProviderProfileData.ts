@@ -16,7 +16,7 @@ import {
 import { getUnclaimedProviderDetail } from "../../services/providerClaimService";
 import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import userLearningService from "../../services/userLearningService";
-import type { DbPortfolioItem, DbPromotion } from "../../types/database";
+import type { ClientPromotion, DbPortfolioItem } from "../../types/database";
 import { logger } from "../../utils/logger";
 import { mapProviderProfileData } from "./profileMapper";
 import type { ProviderProfileData } from "./profileTypes";
@@ -55,7 +55,7 @@ export interface ProviderProfileDataState {
   reviews: ProviderReviewItem[];
   reviewsLoading: boolean;
   reviewsLoadedAll: boolean;
-  promotions: DbPromotion[];
+  promotions: ClientPromotion[];
   portfolio: DbPortfolioItem[];
   availability: AvailabilitySummary | null;
   availabilityLoading: boolean;
@@ -63,6 +63,7 @@ export interface ProviderProfileDataState {
   currentUserId: string | null;
   currentUserName: string;
   isOwnProvider: boolean;
+  viewerChecked: boolean;
   isNotificationsEnabled: boolean;
   setIsNotificationsEnabled: (enabled: boolean) => void;
   loadAllReviews: () => Promise<void>;
@@ -86,7 +87,7 @@ export function useProviderProfileData(
   const [reviews, setReviews] = useState<ProviderReviewItem[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsLoadedAll, setReviewsLoadedAll] = useState(false);
-  const [promotions, setPromotions] = useState<DbPromotion[]>([]);
+  const [promotions, setPromotions] = useState<ClientPromotion[]>([]);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(
     null,
@@ -98,6 +99,7 @@ export function useProviderProfileData(
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState("");
   const [isOwnProvider, setIsOwnProvider] = useState(false);
+  const [viewerChecked, setViewerChecked] = useState(false);
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
 
   useEffect(() => {
@@ -119,6 +121,7 @@ export function useProviderProfileData(
     setCurrentUserId(null);
     setCurrentUserName("");
     setIsOwnProvider(false);
+    setViewerChecked(false);
     setIsNotificationsEnabled(false);
 
     const loadProfile = async (): Promise<void> => {
@@ -126,9 +129,7 @@ export function useProviderProfileData(
         const data = await getProviderBySlug(providerSlug);
         if (cancelled) return;
         if (!data) {
-          const unclaimed = await getUnclaimedProviderDetail(
-            providerSlug,
-          ).catch(() => null);
+          const unclaimed = await getUnclaimedProviderDetail(providerSlug);
           if (!cancelled) setUnclaimedProvider(unclaimed);
           return;
         }
@@ -208,14 +209,21 @@ export function useProviderProfileData(
 
         void getProviderProfileViewerContext(data.id)
           .then((viewer) => {
-            if (cancelled || !viewer) return;
-            setCurrentUserId(viewer.userId);
-            setCurrentUserName(viewer.displayName);
-            setIsOwnProvider(viewer.isOwnProvider);
-            setIsNotificationsEnabled(viewer.notificationsEnabled);
+            if (cancelled) return;
+            if (viewer) {
+              setCurrentUserId(viewer.userId);
+              setCurrentUserName(viewer.displayName);
+              setIsOwnProvider(viewer.isOwnProvider);
+              setIsNotificationsEnabled(viewer.notificationsEnabled);
+            }
+            setViewerChecked(true);
           })
           .catch((error: unknown) => {
             logger.warn("Failed to load provider viewer context:", error);
+            // Fail open in the UI only. Server-side booking authority still
+            // prevents self-booking, while a transient viewer-state failure
+            // must not freeze every legitimate client's booking entry point.
+            if (!cancelled) setViewerChecked(true);
           });
       } catch (error: unknown) {
         if (!cancelled) setLoadFailed(true);
@@ -228,6 +236,7 @@ export function useProviderProfileData(
     void loadProfile();
     return () => {
       cancelled = true;
+      profileGenerationRef.current += 1;
     };
   }, [providerSlug]);
 
@@ -266,6 +275,7 @@ export function useProviderProfileData(
     currentUserId,
     currentUserName,
     isOwnProvider,
+    viewerChecked,
     isNotificationsEnabled,
     setIsNotificationsEnabled,
     loadAllReviews,

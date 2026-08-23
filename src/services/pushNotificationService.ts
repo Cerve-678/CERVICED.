@@ -8,9 +8,12 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
-import { supabase } from '../lib/supabase';
 import { logger } from '../utils/logger';
-import { setPushTokenIfChanged } from './databaseService';
+import {
+  getCurrentAuthUserId,
+  setPushTokenIfChanged,
+  subscribeToNotificationInserts,
+} from './databaseService';
 
 // Expo Go dropped remote push support in SDK 53 — getExpoPushTokenAsync() fails
 // there and no APNs/FCM delivery is possible, by design, no matter how the
@@ -92,10 +95,10 @@ export async function registerForPushNotifications(): Promise<string | null> {
     logger.log('[Push] Token obtained:', token);
 
     // Save token to the current user's row in Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+    const userId = await getCurrentAuthUserId();
+    if (userId) {
       try {
-        const wrote = await setPushTokenIfChanged(user.id, token);
+        const wrote = await setPushTokenIfChanged(userId, token);
         logger.log(wrote ? '[Push] Token saved to Supabase' : '[Push] Token unchanged — skipped write');
       } catch (error) {
         logger.warn('[Push] Failed to save token to DB:', error);
@@ -119,20 +122,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 export function startExpoGoNotificationBridge(userId: string): () => void {
   if (!isExpoGo) return () => {};
 
-  const channel = supabase
-    .channel(`expo-go-notification-bridge-${userId}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-      (payload) => {
-        const row = payload.new as {
-          id: string;
-          title: string;
-          message: string;
-          type: string;
-          booking_id: string | null;
-          recipient_role: 'provider' | 'client';
-        };
+  return subscribeToNotificationInserts(userId, row => {
         if (!claimExpoGoMirror(row.id)) {
           logger.log('[Push] Skipped duplicate Expo Go notification row:', row.id);
           return;
@@ -149,11 +139,7 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
           },
           trigger: null,
         }).catch(() => {});
-      }
-    )
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
+      });
 }
 
 /**
@@ -162,9 +148,9 @@ export function startExpoGoNotificationBridge(userId: string): () => void {
  */
 export async function unregisterPushToken(): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await setPushTokenIfChanged(user.id, null);
+    const userId = await getCurrentAuthUserId();
+    if (userId) {
+      await setPushTokenIfChanged(userId, null);
     }
   } catch {
     // Ignore — logging out should never fail because of this

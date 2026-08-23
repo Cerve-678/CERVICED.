@@ -31,8 +31,8 @@ import {
 } from '../../contexts/BookingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ProviderHomeScreenProps } from '../../navigation/types';
-import { supabase } from '../../lib/supabase';
 import { storage } from '../../utils/storage';
+import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import {
   getProviderBookings,
@@ -43,6 +43,7 @@ import {
   getProviderAvailabilityOverrides,
   getServiceDurationsByIds,
   getProviderBlockedDates,
+  subscribeToProviderBookingChanges,
   getUnreadNotificationCount,
   countProviderServices,
   getOrCreateConversation,
@@ -800,25 +801,31 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const [showTour, setShowTour] = useState(false);
   const tourCheckedRef = useRef(false);
-  const checklistCardRef = useRef<View>(null);
+  const viewModeBtnRef = useRef<View>(null);
   const fabRef = useRef<View>(null);
   const bellRef = useRef<View>(null);
 
+  // Deliberately NOT gated on setupStatus any more. It used to be, because
+  // the tour's second step spotlighted the go-live checklist card and that
+  // card can't be measured until its fetch resolves. Every remaining target
+  // (tab bar, view-mode toggle, FAB, bell) is header chrome that renders
+  // immediately — so waiting on setupStatus would only mean a provider whose
+  // setup fetch fails never sees the tour at all.
   useEffect(() => {
-    if (tourCheckedRef.current || !user?.id || !setupStatus) return;
+    if (tourCheckedRef.current || !user?.id) return;
     tourCheckedRef.current = true;
-    const seenKey = `@provider_tour_seen_${user.id}`;
+    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.PROVIDER_HOME, user.id);
     storage.getItem<boolean>(seenKey).then(seen => {
       if (seen) return;
-      // Give the checklist/FAB/bell time to finish their entrance layout
-      // before the tour measures where they actually landed on screen.
+      // Give the header controls and FAB time to finish their entrance
+      // layout before the tour measures where they actually landed.
       setTimeout(() => setShowTour(true), 500);
     }).catch((err) => logger.error('[ProviderHome] tour-seen flag read failed:', err));
-  }, [user?.id, setupStatus]);
+  }, [user?.id]);
 
   const finishTour = useCallback(() => {
     setShowTour(false);
-    if (user?.id) storage.setItem(`@provider_tour_seen_${user.id}`, true).catch((err) => logger.error('[ProviderHome] tour-seen flag write failed:', err));
+    if (user?.id) storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.PROVIDER_HOME, user.id), true).catch((err) => logger.error('[ProviderHome] tour-seen flag write failed:', err));
   }, [user?.id]);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
@@ -844,13 +851,15 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
           },
         },
         radius: TAB_H / 2,
+        icon: 'apps',
       },
       {
-        key: 'checklist',
-        title: 'Finish setting up to go live',
-        body: "Set your weekly schedule and add at least one service — clients can't find or book you until both are done.",
-        target: { ref: checklistCardRef },
-        radius: 14,
+        key: 'view-mode',
+        title: 'Two ways to see your day',
+        body: 'Switch between the hour-by-hour timeline and a plain list of what\'s booked.',
+        target: { ref: viewModeBtnRef },
+        radius: 17,
+        icon: 'list',
       },
       {
         key: 'fab',
@@ -858,6 +867,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         body: 'Tap the + button anytime for your schedule, promotions, clientele, forms, and inbox.',
         target: { ref: fabRef },
         radius: 26,
+        icon: 'add-circle',
       },
       {
         key: 'bell',
@@ -865,6 +875,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         body: 'New bookings, messages, and reminders show up in your notifications.',
         target: { ref: bellRef },
         radius: 17,
+        icon: 'notifications',
       },
     ];
   }, []);
@@ -929,6 +940,8 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
   const stripRef = useRef<FlatList>(null);
   const listRef  = useRef<FlatList>(null);
+  const hasLoadedBookingsRef = useRef(false);
+  const realtimeReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // List entrance animation
   const listOpacity = useRef(new Animated.Value(1)).current;
@@ -983,8 +996,6 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadBookings(true); }, [loadBookings]);
-
   // Recover the real length of any booking whose row has no end_time — an
   // empty `duration` is exactly that, since mapDbBookingToConfirmed computes
   // it from end minus start. One batched query for the distinct services
@@ -1005,7 +1016,11 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
       .catch(err => logger.error('[ProviderHome] service duration lookup failed:', err));
     return () => { cancelled = true; };
   }, [bookings]);
-  useFocusEffect(useCallback(() => { loadBookings(); }, [loadBookings]));
+  useFocusEffect(useCallback(() => {
+    const showInitialLoad = !hasLoadedBookingsRef.current;
+    hasLoadedBookingsRef.current = true;
+    void loadBookings(showInitialLoad);
+  }, [loadBookings]));
 
   // Keep the header bell's unread badge in sync (provider-role notifications only)
   useFocusEffect(useCallback(() => {
@@ -1082,16 +1097,27 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let unsubscribe: (() => void) | null = null;
     getMyProviderProfile().then(profile => {
       if (!profile || cancelled) return;
-      channel = supabase
-        .channel('provider-home-v2')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `provider_id=eq.${profile.id}` },
-          () => { loadBookings(); })
-        .subscribe();
+      unsubscribe = subscribeToProviderBookingChanges(profile.id, () => {
+        if (realtimeReloadTimerRef.current) {
+          clearTimeout(realtimeReloadTimerRef.current);
+        }
+        realtimeReloadTimerRef.current = setTimeout(() => {
+          realtimeReloadTimerRef.current = null;
+          void loadBookings();
+        }, 150);
+      });
     }).catch((err) => logger.error('[ProviderHome] realtime subscribe failed:', err));
-    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+      if (realtimeReloadTimerRef.current) {
+        clearTimeout(realtimeReloadTimerRef.current);
+        realtimeReloadTimerRef.current = null;
+      }
+    };
   }, [loadBookings]);
 
   const onRefresh = useCallback(async () => {
@@ -1305,6 +1331,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
               <Text style={[s.todayChipTxt, { color: P.ice }]}>Today</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              ref={viewModeBtnRef}
               onPress={() => setViewMode(v => v === 'list' ? 'timeline' : 'list')}
               style={[s.iconBtn, { backgroundColor: viewMode === 'timeline' ? P.accent : P.iconBg }]}
             >
@@ -1335,7 +1362,6 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         {setupStatus && !setupDismissed &&
          !(setupStatus.scheduleSet && setupStatus.servicesSet && setupStatus.addressSet && setupStatus.isLive) && (
           <View
-            ref={checklistCardRef}
             style={{
               marginHorizontal: 16, marginBottom: 10, padding: 14, borderRadius: 14,
               backgroundColor: P.surface, borderWidth: 1, borderColor: P.border,

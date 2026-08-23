@@ -444,3 +444,69 @@ duplication), and optionally a canonical card radius/shadow formula, then write
 the decision into `DESIGN_SYSTEM.md` as an explicit "use X for Y situation"
 guide. Not blocking launch, but do it before InfoRegScreen's redesign so that
 work has a real target to build against instead of adding a fifth variant.
+
+---
+
+## 11. Go-live gate — nothing ever un-publishes, and two checklists disagree (2026-08-23)
+
+Verified against the live DB, not the SQL files. `check_and_set_provider_live()`
+has exactly three gates, all required:
+
+1. an open day — a `provider_availability` row with `is_closed = false`
+2. at least one row in `services`
+3. `provider_private_details` with a non-blank `full_address` **and** non-null
+   `latitude` **and** `longitude`
+
+Logo is not gated; the function never reads `logo_url`. It re-runs from four
+triggers: `on_provider_availability_upsert`, `on_availability_window_change`,
+`on_provider_address_change`, `on_provider_service_insert`.
+
+**Live data is currently clean** (checked 2026-08-23): 4 live providers, none
+violating a gate, none eligible-but-unpublished. Both items below are latent,
+not active — which is exactly why they're easy to miss until they aren't.
+
+### 11a. A provider can never be un-published
+
+`check_and_set_provider_live()` only ever flips `false → true` (its WHERE has
+`AND p.has_gone_live = FALSE`), and all four triggers are INSERT/UPDATE — there
+is **no DELETE trigger** on `services` or `provider_availability`. So:
+
+- a live provider who deletes their last service stays live and bookable with
+  nothing to book;
+- one who closes every day of the week stays live with no slots.
+
+Only `delete_provider_profile()` and `dev_reset_provider()` ever set the flag
+back to false.
+
+**Needs a product decision before it's built, not just a trigger.** Silently
+un-publishing someone mid-trade is aggressive — the options are un-publish
+outright, un-publish + notify, or leave published and surface a warning. Pick
+one first; the SQL is the easy half.
+
+### 11b. Profile Health is not a go-live checklist, but reads like one
+
+Two checklists exist and only one mirrors the gate:
+
+- **`ProviderHomeScreen`'s go-live card — correct.** Three gating rows plus
+  "add your logo (optional)", and it checks the address through
+  `hasMyProviderGoLiveAddress()` (`full_address` + lat + lng), the same test
+  the server runs. It also reads the DB's own `has_gone_live`, so an
+  all-ticked-but-unpublished provider is told the address didn't geocode
+  rather than being left staring at a complete list.
+- **`ProviderMyProfileScreen`'s PROFILE HEALTH (`profileReadiness`) — a
+  profile-*quality* checklist.** Its 7 items are logo, intro, location,
+  services & prices, portfolio photos, booking policies, T&Cs. Against the
+  three real gates:
+  - **weekly schedule is absent entirely** — and it's the hard blocker (no
+    schedule means no bookable slots at all);
+  - **"add your location" checks the wrong field** — it reads
+    `providerData.location`, mapped from `providers.location_text`
+    (`profileMapper.ts:51`), the vague *public* string. The Home card
+    explicitly rejects location_text as insufficient, since it's already
+    required just to save a profile;
+  - only "add services and prices" genuinely overlaps a gate.
+
+**Next step:** either add a schedule row and point the location item at the
+geocoded address so the two agree, or relabel Profile Health so it doesn't
+read as a launch gate. Don't leave them silently disagreeing — a provider who
+completes Profile Health can still be unpublished and have no idea why.

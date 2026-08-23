@@ -1,6 +1,5 @@
 // src/services/providerRegistrationService.ts
 // Phase 2: Provider registration — save to and load from Supabase
-import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
@@ -8,7 +7,22 @@ import * as Location from 'expo-location';
 // renders nothing.
 import { Image as RNImage } from 'react-native';
 import { logger } from '../utils/logger';
-import { setMyProviderFullAddress } from './databaseService';
+import {
+  getProviderBookingPolicies,
+  getProviderLogoUrlByUserId,
+  getProviderRegistrationCore,
+  getProviderRegistrationDetails,
+  getProviderRegistrationRecord,
+  insertProviderRegistrationRow,
+  promoteUserToProvider,
+  providerSlugExists,
+  removeStorageObjects,
+  replaceProviderServiceCatalog,
+  saveProviderBookingPolicies,
+  setMyProviderFullAddress,
+  updateProviderRegistrationRow,
+  uploadPublicStorageObject,
+} from './databaseService';
 import type { DbProvider } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
@@ -184,14 +198,12 @@ export async function uploadToStorage(
     bytes[i] = binaryStr.charCodeAt(i);
   }
 
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(storagePath, bytes, { contentType, upsert: true });
-
-  if (error) throw new Error(`Upload failed (${bucket}/${storagePath}): ${error.message}`);
-
-  const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-  return data.publicUrl;
+  try {
+    return await uploadPublicStorageObject(bucket, storagePath, bytes, contentType);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown storage error';
+    throw new Error(`Upload failed (${bucket}/${storagePath}): ${message}`);
+  }
 }
 
 function parseDurationToMinutes(duration: string): number {
@@ -347,14 +359,10 @@ export async function saveProviderToSupabase(
     // Grab the current logo path before it's replaced, so the now-orphaned
     // object (versioned paths are no longer overwritten in place) can be
     // cleaned up below once the new one is safely saved.
-    const { data: providerForLogo } = await supabase
-      .from('providers')
-      .select('logo_url')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (providerForLogo?.logo_url) {
+    const previousLogoUrl = await getProviderLogoUrlByUserId(userId);
+    if (previousLogoUrl) {
       try {
-        previousLogoStoragePath = new URL(providerForLogo.logo_url).pathname
+        previousLogoStoragePath = new URL(previousLogoUrl).pathname
           .split('/provider-logos/')[1] ?? null;
       } catch {
         previousLogoStoragePath = null;
@@ -394,19 +402,17 @@ export async function saveProviderToSupabase(
   }
 
   // 2. Upsert provider row
-  const { data: existingProvider, error: existingProviderError } = await supabase
-    .from('providers')
-    .select('id, automation_settings')
-    .eq('user_id', userId)
-    .maybeSingle();
+  let existingProvider: Awaited<ReturnType<typeof getProviderRegistrationCore>>;
+  try {
+    existingProvider = await getProviderRegistrationCore(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    throw new Error(`Provider lookup failed: ${message}`);
+  }
   // maybeSingle() errors (rather than returning null) if more than one row
   // matches — if we ignore that, the code below falls through to inserting a
   // duplicate provider row instead of updating the existing one, and future
   // edits silently split across rows. Fail loudly instead.
-  if (existingProviderError) {
-    throw new Error(`Provider lookup failed: ${existingProviderError.message}`);
-  }
-
   let providerId: string;
 
   // Merged in, never overwritten whole — automation_settings also holds
@@ -425,9 +431,8 @@ export async function saveProviderToSupabase(
   }
 
   if (existingProvider) {
-    const { error } = await supabase
-      .from('providers')
-      .update({
+    try {
+      await updateProviderRegistrationRow(existingProvider.id, {
         // display_name is deliberately absent from the UPDATE path. The name
         // is set once here on insert (below), then locked in InfoRegScreen —
         // Business Profile → Business Details → Business Info is its only
@@ -471,23 +476,19 @@ export async function saveProviderToSupabase(
           : (data.addressReleasePolicy ?? null),
         automation_settings: mergedAutomationSettings,
         is_active: true,
-      })
-      .eq('id', existingProvider.id);
-    if (error) throw new Error(`Provider update failed: ${error.message}`);
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database error';
+      throw new Error(`Provider update failed: ${message}`);
+    }
     providerId = existingProvider.id;
   } else {
     // Generate unique slug
     let slug = generateSlug(data.providerName);
-    const { data: slugExists } = await supabase
-      .from('providers')
-      .select('id')
-      .eq('slug', slug)
-      .maybeSingle();
-    if (slugExists) slug = `${slug}-${userId.substring(0, 8)}`;
+    if (await providerSlugExists(slug)) slug = `${slug}-${userId.substring(0, 8)}`;
 
-    const { data: newProvider, error } = await supabase
-      .from('providers')
-      .insert({
+    try {
+      providerId = await insertProviderRegistrationRow({
         user_id: userId,
         slug,
         display_name: data.providerName,
@@ -529,11 +530,11 @@ export async function saveProviderToSupabase(
         automation_settings: mergedAutomationSettings,
         is_active: true,
         terms_accepted_at: acceptedTerms ? new Date().toISOString() : null,
-      })
-      .select('id')
-      .single();
-    if (error) throw new Error(`Provider insert failed: ${error.message}`);
-    providerId = newProvider.id;
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown database error';
+      throw new Error(`Provider insert failed: ${message}`);
+    }
   }
 
   // Now that the new logo_url is durably saved, remove the old versioned
@@ -543,7 +544,7 @@ export async function saveProviderToSupabase(
   // overwritten in place.
   if (previousLogoStoragePath) {
     try {
-      await supabase.storage.from('provider-logos').remove([previousLogoStoragePath]);
+      await removeStorageObjects('provider-logos', [previousLogoStoragePath]);
     } catch {
       // Orphaned object, not a failed save — safe to ignore.
     }
@@ -563,7 +564,7 @@ export async function saveProviderToSupabase(
   );
 
   // 3. Update user role to 'provider'
-  await supabase.from('users').update({ role: 'provider' }).eq('id', userId);
+  await promoteUserToProvider(userId);
 
   // 4-5. Replace services ATOMICALLY. Storage isn't transactional, so upload
   // every image first (collecting resolved URLs), then hand the whole service
@@ -638,11 +639,12 @@ export async function saveProviderToSupabase(
     }
   }
 
-  const { error: svcError } = await supabase.rpc('replace_provider_services', {
-    p_provider_id: providerId,
-    p_services: servicesPayload,
-  });
-  if (svcError) throw new Error(`Saving services failed: ${svcError.message}`);
+  try {
+    await replaceProviderServiceCatalog(providerId, servicesPayload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error';
+    throw new Error(`Saving services failed: ${message}`);
+  }
 
   // 6. Refresh AsyncStorage cache with resolved URLs
   const cached: ProviderRegistrationData = { ...data, logo: logoUrl };
@@ -656,14 +658,11 @@ export async function saveProviderToSupabase(
 export async function loadProviderFromSupabase(
   userId: string
 ): Promise<ProviderRegistrationData | null> {
-  const { data: provider, error } = await supabase
-    .from('providers')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error) {
-    logger.warn('loadProviderFromSupabase error:', error.message);
+  let provider: Awaited<ReturnType<typeof getProviderRegistrationRecord>>;
+  try {
+    provider = await getProviderRegistrationRecord(userId);
+  } catch (error) {
+    logger.warn('loadProviderFromSupabase error:', error);
     return getCachedProviderData(userId);
   }
   if (!provider) return getCachedProviderData(userId);
@@ -671,54 +670,18 @@ export async function loadProviderFromSupabase(
   // Street address, the services list, and the AsyncStorage fallback each
   // only depend on `provider.id` / `userId` — none on each other's result —
   // so fetch them together instead of one after another.
-  const [{ data: privateDetails }, servicesResult, cached] = await Promise.all([
-    // Street address comes from the owner-only side table, not `providers`.
-    supabase
-      .from('provider_private_details')
-      .select('full_address')
-      .eq('provider_id', provider.id)
-      .maybeSingle(),
-    supabase
-      .from('services')
-      .select(`
-        id,
-        category_name,
-        category_description,
-        name,
-        description,
-        price,
-        duration_minutes,
-        buffer_before_mins,
-        buffer_after_mins,
-        sort_order,
-        tags,
-        technique_tags,
-        outcome_tags,
-        occasion_tags,
-        trend_names,
-        is_pregnancy_safe,
-        patch_test_required,
-        min_age,
-        contraindications,
-        aftercare_notes,
-        service_type,
-        hair_types_suitable,
-        service_images ( url, sort_order ),
-        service_add_ons ( name, price )
-      `)
-      .eq('provider_id', provider.id)
-      .eq('is_active', true)
-      .order('sort_order'),
+  const [detailsResult, cached] = await Promise.all([
+    getProviderRegistrationDetails(provider.id)
+      .then(value => ({ value, error: null as unknown }))
+      .catch(error => ({ value: null, error })),
     getCachedProviderData(userId).catch(() => null),
   ]);
-  const fullAddress =
-    (privateDetails as { full_address?: string | null } | null)?.full_address ?? '';
-  const { data: services, error: svcError } = servicesResult;
-
-  if (svcError) {
-    logger.warn('loadProviderFromSupabase services error:', svcError.message);
+  if (detailsResult.error || !detailsResult.value) {
+    logger.warn('loadProviderFromSupabase details error:', detailsResult.error);
     return cached;
   }
+  const { fullAddress } = detailsResult.value;
+  const services = detailsResult.value.services as any[];
 
   // Reconstruct categories
   const categories: Record<string, ServiceData[]> = {};
@@ -815,30 +778,16 @@ export async function loadProviderFromSupabase(
 // ── Booking policies — saved to Supabase booking_policies column ─────────────
 
 export async function saveProviderPolicies(userId: string, policies: Record<string, unknown>): Promise<void> {
-  const { data: existing, error: selectError } = await supabase
-    .from('providers')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (selectError) throw selectError;
-  if (!existing) return;
-  const { error: updateError } = await supabase
-    .from('providers')
-    .update({ booking_policies: policies })
-    .eq('id', existing.id);
-  if (updateError) throw updateError;
+  const saved = await saveProviderBookingPolicies(userId, policies);
+  if (!saved) return;
   // Keep local copy in sync
   await AsyncStorage.setItem(`provider_policies_${userId}`, JSON.stringify(policies));
 }
 
 export async function loadProviderPolicies(userId: string): Promise<Record<string, unknown> | null> {
   try {
-    const { data } = await supabase
-      .from('providers')
-      .select('booking_policies')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if ((data as any)?.booking_policies) return (data as any).booking_policies;
+    const policies = await getProviderBookingPolicies(userId);
+    if (policies) return policies;
   } catch {}
   // Fallback to local cache
   try {

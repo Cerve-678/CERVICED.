@@ -24,10 +24,11 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useFont } from '../../contexts/FontContext';
 import { useBooking, ConfirmedBooking, BookingStatus } from '../../contexts/BookingContext';
-import { hasMapDestination } from '../../types/booking';
+import { hasMapDestination, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { submitReview, getProviderIdByDisplayName, hasReviewedBooking, getActiveRescheduleRequest, getProviderContactByDisplayName, getProviderContactById, ProviderContactInfo, getMyBookingActionItems, getRebookableService, RebookableService, setBookingTip, getUserWaitlistEntries, leaveWaitlist, type WaitlistEntry, getBookingById, claimWaitlistHold, declineWaitlistHold, type RawBooking } from '../../services/databaseService';
@@ -46,6 +47,10 @@ import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 // ==================== TYPES ====================
 
 type Props = HomeScreenProps<'Bookings'>;
+type BookingsListRow =
+  | GroupedListItem
+  | { kind: 'waitlist-header' }
+  | { kind: 'waitlist'; entry: WaitlistEntry };
 
 // ==================== CONSTANTS ====================
 
@@ -97,10 +102,103 @@ const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: T
   );
 };
 
+/**
+ * The one line of address text on a booking card.
+ *
+ * A mobile provider comes to the client, so the venue is the client's own
+ * address — their provider's location is a private base, not somewhere to
+ * send the client. Non-mobile bookings keep the release-gated provider
+ * address (null until the policy unlocks it, hence the fallback).
+ */
+const bookingLocationLine = (b: ConfirmedBooking): string => {
+  if (isMobileBooking(b)) {
+    return b.clientAddress?.trim() || 'Send your address in Messages';
+  }
+  return b.address || 'Address to be confirmed';
+};
+
 const CATEGORY_TABS = [
   { key: 'all' as const,  label: 'Upcoming Bookings' },
   { key: 'past' as const, label: 'Past Bookings' },
 ];
+
+const WaitlistCard = React.memo(function WaitlistCard({
+  entry,
+  onBook,
+  onLeave,
+}: {
+  entry: WaitlistEntry;
+  onBook: (entry: WaitlistEntry) => void;
+  onLeave: (entry: WaitlistEntry) => void;
+}) {
+  const { theme, palette: P } = useTheme();
+  const notified = entry.status === 'notified';
+
+  return (
+    <View style={{ paddingHorizontal: 16 }}>
+      <View style={{
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: P.border,
+        backgroundColor: P.surface,
+        padding: 16,
+        marginBottom: 10,
+      }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, color: theme.text, marginBottom: 2 }}>
+              {entry.service_name_snapshot}
+            </Text>
+            <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
+              {entry.provider_name_snapshot}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <View style={{
+                backgroundColor: notified ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+                borderRadius: 10,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+              }}>
+                <Text style={{
+                  fontFamily: 'BakbakOne-Regular',
+                  fontSize: 10,
+                  letterSpacing: 0.4,
+                  color: notified ? '#34C759' : '#FF9500',
+                }}>
+                  {notified ? 'SLOT OPENED' : `#${entry.position} IN QUEUE`}
+                </Text>
+              </View>
+            </View>
+          </View>
+          {notified ? (
+            <TouchableOpacity
+              style={{
+                backgroundColor: P.accent,
+                borderRadius: 20,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                marginLeft: 12,
+              }}
+              onPress={() => onBook(entry)}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: P.onAccent }}>Book Now</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TouchableOpacity
+          style={{ marginTop: 10, alignSelf: 'flex-start' }}
+          onPress={() => onLeave(entry)}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
+            Leave waitlist
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
 
 // ==================== MAIN COMPONENT ====================
 
@@ -126,9 +224,8 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
   const filteredUpcomingBookings = useMemo(() => upcomingBookings, [upcomingBookings]);
 
   const mapRef = useRef<MapView>(null);
-  const mainScrollRef = useRef<ScrollView>(null);
+  const mainScrollRef = useRef<FlatList<BookingsListRow>>(null);
   const modalScrollRef = useRef<ScrollView>(null);
-  const bookingsListRef = useRef<FlatList>(null);
 
   // Give-up timer for the "open booking from notification" effect below — a
   // booking that never resolves (e.g. it belongs to another user's stale
@@ -668,27 +765,28 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [currentBooking]);
 
-  // ✅ Request location permissions, get user location, and refresh every 1 minute
-  // Uses a ref to avoid restarting the interval when currentBooking changes
+  // Keep map location current only while this tab is visible. Tab screens
+  // remain mounted, so a permanent timer otherwise polls GPS while the
+  // client is browsing elsewhere in the app.
   const currentBookingRef = useRef(currentBooking);
   currentBookingRef.current = currentBooking;
 
-  useEffect(() => {
-    let isMounted = true;
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    let subscription: Location.LocationSubscription | null = null;
 
-    const getUserLocation = async () => {
+    const startLocationUpdates = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted' && isMounted) {
-          const location = await Location.getCurrentPositionAsync({});
-          const newLocation = {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          };
-          if (isMounted) {
+        if (status === 'granted' && active) {
+          const applyLocation = (location: Location.LocationObject) => {
+            if (!active) return;
+            const newLocation = {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            };
             setUserLocation(newLocation);
 
-            // Center map on user location if no active booking
             if (mapRef.current && !currentBookingRef.current) {
               mapRef.current.animateToRegion(
                 {
@@ -699,22 +797,31 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                 1000
               );
             }
-          }
+          };
+
+          applyLocation(await Location.getCurrentPositionAsync({}));
+          subscription = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 60_000,
+              distanceInterval: 100,
+            },
+            applyLocation,
+          );
+          if (!active) subscription.remove();
         }
       } catch (error) {
         logger.error('Error getting location:', error);
       }
     };
 
-    getUserLocation();
-
-    const locationInterval = setInterval(getUserLocation, 60000);
+    void startLocationUpdates();
 
     return () => {
-      isMounted = false;
-      clearInterval(locationInterval);
+      active = false;
+      subscription?.remove();
     };
-  }, []);
+  }, []));
 
   // ✅ Reset map to user area when all bookings are completed
   useEffect(() => {
@@ -769,13 +876,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
           }, 3000);
         }
 
-        // Scroll to the booking's service category using mainScrollRef
+        // Move past the list header once the history view is active. The
+        // outer FlatList owns scrolling, so this keeps notification-driven
+        // navigation on the same virtualized surface as manual browsing.
         setTimeout(() => {
           if (mainScrollRef.current) {
-            mainScrollRef.current.scrollTo({
-              y: 200,
-              animated: true,
-            });
+            mainScrollRef.current.scrollToOffset({ offset: 200, animated: true });
             logger.log('Scrolled to bookings section');
           }
         }, 400);
@@ -938,6 +1044,15 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     return items;
   }, [activeFilters, filteredUpcomingBookings, filteredPastBookings]);
 
+  const virtualizedListRows = useMemo((): BookingsListRow[] => {
+    const rows: BookingsListRow[] = isFilterView ? [...listItems] : [];
+    if (waitlistEntries.length > 0) {
+      rows.push({ kind: 'waitlist-header' });
+      rows.push(...waitlistEntries.map(entry => ({ kind: 'waitlist' as const, entry })));
+    }
+    return rows;
+  }, [isFilterView, listItems, waitlistEntries]);
+
   // ✅ Check if booking has been rated or tipped
   const hasBookingBeenRated = useCallback((bookingId: string) => ratedBookings.has(bookingId), [ratedBookings]);
   const hasBookingBeenTipped = useCallback((bookingId: string) => tippedBookings.has(bookingId), [tippedBookings]);
@@ -986,19 +1101,57 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
     );
   }, [handleBookingPress, highlightedBookingId, recentlyAddedBookings, bookingActionItems, styles.serviceCategory, styles.serviceCategoryHeader, styles.serviceCategoryName, styles.serviceCategoryTag, styles.serviceImagesContainer]);
 
+  const handleBookWaitlistEntry = useCallback((entry: WaitlistEntry) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate('ProviderProfile', { providerId: entry.provider_id });
+  }, [navigation]);
+
+  const handleLeaveWaitlistEntry = useCallback((entry: WaitlistEntry) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    leaveWaitlist(entry.id).then(() => {
+      setWaitlistEntries(prev => prev.filter(candidate => candidate.id !== entry.id));
+    }).catch(() => {});
+  }, []);
+
+  const renderBookingsListRow = useCallback(({ item }: { item: BookingsListRow }) => {
+    if (item.kind === 'category') return renderServiceCategoryRow({ item });
+    if (item.kind === 'waitlist-header') {
+      return (
+        <View style={{ paddingHorizontal: 16 }}>
+          <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>ON WAITLIST</Text>
+        </View>
+      );
+    }
+    return (
+      <WaitlistCard
+        entry={item.entry}
+        onBook={handleBookWaitlistEntry}
+        onLeave={handleLeaveWaitlistEntry}
+      />
+    );
+  }, [handleBookWaitlistEntry, handleLeaveWaitlistEntry, renderServiceCategoryRow, styles.bookingsTitle]);
+
+  const bookingListKeyExtractor = useCallback((item: BookingsListRow) => {
+    if (item.kind === 'category') return `category-${item.serviceType}`;
+    if (item.kind === 'waitlist-header') return 'waitlist-header';
+    return `waitlist-${item.entry.id}`;
+  }, []);
+
   // ==================== RENDER ====================
 
   return (
     <ThemedBackground>
       <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
-        {/* ✅ SINGLE SCROLLVIEW - NO NESTING */}
-        <ScrollView
+        {/* One vertical list owns scrolling. Booking-category and waitlist rows
+            stay virtualized instead of being mounted inside a ScrollView. */}
+        <FlatList
           ref={mainScrollRef}
+          data={virtualizedListRows}
+          keyExtractor={bookingListKeyExtractor}
+          renderItem={renderBookingsListRow}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scrollContent, { flexGrow: 1, paddingBottom: isFilterView ? 120 : 40 }]}
           bounces={true}
-          scrollEnabled={true}
-          nestedScrollEnabled={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -1010,10 +1163,24 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
             />
           }
           keyboardShouldPersistTaps="handled"
+          // The list header owns a native MapView. Detaching that header on
+          // Android can return a blank map when the user scrolls back, so row
+          // virtualization stays enabled while native-view clipping does not.
           removeClippedSubviews={false}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
           scrollEventThrottle={16}
           onScrollBeginDrag={() => Keyboard.dismiss()}
-        >
+          onScrollToIndexFailed={(info) => {
+            logger.warn('Scroll to index failed:', info);
+            mainScrollRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: true,
+            });
+          }}
+          ListHeaderComponent={(
           <View style={styles.content}>
             {/* Refresh indicator — the native RefreshControl spinner sits behind
                 the transparent header and is easy to miss, so mirror its state
@@ -1150,7 +1317,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {booking.providerName} - {booking.status.replace('_', ' ')}
                                     </Text>
                                     <Text style={styles.appointmentAddress}>
-                                      {booking.address || 'Address to be confirmed'}
+                                      {bookingLocationLine(booking)}
                                     </Text>
                                   </View>
                                   <View style={styles.actionButtons}>
@@ -1233,7 +1400,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                       {currentBooking.providerName} - {currentBooking.status.replace('_', ' ')}
                                     </Text>
                                     <Text style={styles.appointmentAddress}>
-                                      {currentBooking.address || 'Address to be confirmed'}
+                                      {bookingLocationLine(currentBooking)}
                                     </Text>
                                   </View>
                                   <View style={styles.actionButtons}>
@@ -1341,7 +1508,7 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                                           {booking.providerName} - {booking.duration}
                                         </Text>
                                         <Text style={styles.nextAppointmentAddress}>
-                                          {booking.address || 'Address to be confirmed'}
+                                          {bookingLocationLine(booking)}
                                         </Text>
                                       </View>
                                       <View style={styles.actionButtons}>
@@ -1490,112 +1657,12 @@ const BookingsScreen: React.FC<Props> = ({ navigation, route }) => {
                           : 'No past bookings'}
                     </Text>
                   </View>
-                ) : (
-                  <FlatList
-                    ref={bookingsListRef}
-                    data={listItems}
-                    keyExtractor={(item) => item.serviceType}
-                    onScrollToIndexFailed={(info) => {
-                      logger.warn('Scroll to index failed:', info);
-                      bookingsListRef.current?.scrollToOffset({
-                        offset: info.averageItemLength * info.index,
-                        animated: true,
-                      });
-                    }}
-                    renderItem={renderServiceCategoryRow}
-                    showsVerticalScrollIndicator={false}
-                    scrollEnabled={false}
-                    removeClippedSubviews={true}
-                    maxToRenderPerBatch={3}
-                    windowSize={5}
-                    initialNumToRender={2}
-                    updateCellsBatchingPeriod={50}
-                    contentContainerStyle={styles.flatListContent}
-                  />
-                )}
+                ) : null}
               </View>
             )}
-          {/* Waitlist Section */}
-          {waitlistEntries.length > 0 && (
-            <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-              <Text style={[styles.bookingsTitle, { marginTop: 24, marginBottom: 12 }]}>ON WAITLIST</Text>
-              {waitlistEntries.map(entry => (
-                <View
-                  key={entry.id}
-                  style={{
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: P.border,
-                    backgroundColor: P.surface,
-                    padding: 16,
-                    marginBottom: 10,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 15, color: theme.text, marginBottom: 2 }}>
-                        {entry.service_name_snapshot}
-                      </Text>
-                      <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, color: theme.secondaryText, marginBottom: 8 }}>
-                        {entry.provider_name_snapshot}
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                        <View style={{
-                          backgroundColor: entry.status === 'notified' ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
-                          borderRadius: 10,
-                          paddingHorizontal: 10,
-                          paddingVertical: 3,
-                        }}>
-                          <Text style={{
-                            fontFamily: 'BakbakOne-Regular',
-                            fontSize: 10,
-                            letterSpacing: 0.4,
-                            color: entry.status === 'notified' ? '#34C759' : '#FF9500',
-                          }}>
-                            {entry.status === 'notified' ? 'SLOT OPENED' : `#${entry.position} IN QUEUE`}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    {entry.status === 'notified' && (
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: P.accent,
-                          borderRadius: 20,
-                          paddingHorizontal: 14,
-                          paddingVertical: 8,
-                          marginLeft: 12,
-                        }}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          navigation.navigate('ProviderProfile', { providerId: entry.provider_id });
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={{ fontFamily: 'BakbakOne-Regular', fontSize: 11, color: P.onAccent }}>Book Now</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    style={{ marginTop: 10, alignSelf: 'flex-start' }}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      leaveWaitlist(entry.id).then(() => {
-                        setWaitlistEntries(prev => prev.filter(e => e.id !== entry.id));
-                      }).catch(() => {});
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 11, color: theme.secondaryText, textDecorationLine: 'underline' }}>
-                      Leave waitlist
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
           </View>
-        </ScrollView>
+          )}
+        />
 
         {/* ─── Contact Sheet ─── */}
         <Modal visible={contactSheetVisible} animationType="fade" transparent onRequestClose={() => setContactSheetVisible(false)}>
@@ -2211,6 +2278,7 @@ const createStyles = (theme: Theme, isDarkMode: boolean, P: AppTheme) => StyleSh
     fontWeight: '800',
   },
   serviceCategory: {
+    paddingHorizontal: 20,
     marginBottom: 24,
   },
   serviceCategoryHeader: {

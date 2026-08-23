@@ -28,14 +28,15 @@ import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { toUserMessage } from '../../utils/userFacingError';
 import {
-  getMyProviderProfile,
+  getMyProviderProfileContext,
+  updateCurrentUserMetadata,
   updateProviderContactDetails,
   updateProviderScheduleSettings,
   updateProviderMaxBookingsPerDay,
+  updateProviderRequestSettings,
 } from '../../services/databaseService';
 import {
   Card, ChipGroup, RadioGroup, ToggleRow, SectionLabel, Toast, SaveButton,
@@ -44,6 +45,7 @@ import {
 import {
   AVAILABILITY_OPTS, NEW_CLIENTS_OPTS,
   BUFFER_OPTS, BOOKING_WINDOW_OPTS, MIN_NOTICE_OPTS, SLOT_INTERVAL_OPTS, MAX_PER_DAY_OPTS,
+  OUT_OF_HOURS_EXTENSION_OPTS,
 } from '../../features/business-details/options';
 
 export default function SchedulingScreen({ navigation }: any) {
@@ -66,6 +68,15 @@ export default function SchedulingScreen({ navigation }: any) {
   const [slotIntervalMins, setSlotInterval]     = useState('60');
   const [maxBookingsPerDay, setMaxPerDay]       = useState('unlimited');
 
+  // Emergency requests — one opt-in per booking rule above, so a provider who
+  // will squeeze someone in after hours isn't also forced to open up the
+  // holiday they blocked out. All default off.
+  const [allowOutOfHours, setAllowOutOfHours]   = useState(false);
+  const [allowBlockedDates, setAllowBlockedDates] = useState(false);
+  const [allowShortNotice, setAllowShortNotice] = useState(false);
+  const [allowBeyondWindow, setAllowBeyondWindow] = useState(false);
+  const [extensionMins, setExtensionMins]       = useState('120');
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -73,17 +84,28 @@ export default function SchedulingScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const [{ data: { user } }, profile] = await Promise.all([
-          supabase.auth.getUser(),
-          getMyProviderProfile(),
-        ]);
-        const m = user?.user_metadata ?? {};
+        const context = await getMyProviderProfileContext();
+        const profile = context?.profile ?? null;
+        const m = (context?.userMetadata ?? {}) as {
+          pa_buffer_mins?: string;
+          pa_booking_window_days?: string;
+          pa_min_booking_notice_hrs?: string;
+          pa_slot_interval_mins?: string;
+          pa_max_bookings_per_day?: string;
+        };
         if (profile) {
           setProviderId(profile.id ?? null);
           setAvailWindows(profile.availability_windows ?? []);
           setAcceptsNew(profile.accepts_new_clients ?? 'yes');
           setWalkIns(profile.walk_ins_welcome ?? false);
           setGroupBookings(profile.group_bookings_available ?? false);
+          // No user_metadata fallback for these — they were born on the
+          // providers row and have never been mirrored anywhere else.
+          setAllowOutOfHours(profile.allow_out_of_hours_requests ?? false);
+          setAllowBlockedDates(profile.allow_blocked_date_requests ?? false);
+          setAllowShortNotice(profile.allow_short_notice_requests ?? false);
+          setAllowBeyondWindow(profile.allow_beyond_window_requests ?? false);
+          setExtensionMins(String(profile.out_of_hours_extension_mins ?? 120));
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
         // the real answer (it's what gets enforced), user_metadata is only a
@@ -125,15 +147,13 @@ export default function SchedulingScreen({ navigation }: any) {
       await Promise.all([
         // Legacy mirror — kept in sync so a provider who saves here doesn't
         // see stale values if any older read path still falls back to it.
-        supabase.auth.updateUser({
-          data: {
+        updateCurrentUserMetadata({
             pa_buffer_mins:            bufferMins,
             pa_booking_window_days:    bookingWindowDays,
             pa_min_booking_notice_hrs: minBookingNoticeHrs,
             pa_slot_interval_mins:     slotIntervalMins,
             pa_max_bookings_per_day:   maxBookingsPerDay,
-          },
-        }).then(({ error }) => { if (error) throw error; }),
+        }),
 
         updateProviderContactDetails(providerId, {
           availability_windows: availWindows,
@@ -150,6 +170,14 @@ export default function SchedulingScreen({ navigation }: any) {
         }),
 
         updateProviderMaxBookingsPerDay(providerId, capInt),
+
+        updateProviderRequestSettings(providerId, {
+          allow_out_of_hours_requests:  allowOutOfHours,
+          allow_blocked_date_requests:  allowBlockedDates,
+          allow_short_notice_requests:  allowShortNotice,
+          allow_beyond_window_requests: allowBeyondWindow,
+          out_of_hours_extension_mins:  parseInt(extensionMins, 10) || 0,
+        }),
       ]);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -163,7 +191,8 @@ export default function SchedulingScreen({ navigation }: any) {
   }, [
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
-    maxBookingsPerDay, navigation,
+    maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
+    allowBeyondWindow, extensionMins, navigation,
   ]);
 
   if (loading) {
@@ -266,6 +295,49 @@ export default function SchedulingScreen({ navigation }: any) {
             <View style={{ height: 18 }} />
             <SectionLabel text="Maximum bookings per day" />
             <RadioGroup options={MAX_PER_DAY_OPTS} value={maxBookingsPerDay} onChange={setMaxPerDay} />
+          </Card>
+
+          <Card
+            title="Requests Outside Your Availability"
+            sub="Every rule above normally stops a client dead. Turn one on here and they can ask instead — you decide each time, and nothing is ever booked automatically."
+          >
+            <ToggleRow
+              label="Outside your working hours"
+              sub="Clients can ask for a time before you open or after you close"
+              value={allowOutOfHours}
+              onChange={setAllowOutOfHours}
+            />
+            <ToggleRow
+              label="On dates you've blocked"
+              sub="Clients can ask for a day you've marked unavailable"
+              value={allowBlockedDates}
+              onChange={setAllowBlockedDates}
+            />
+            <ToggleRow
+              label="At short notice"
+              sub={minBookingNoticeHrs === '0'
+                ? "You have no minimum notice set, so there's nothing for this to relax"
+                : `Clients can ask for a time inside your ${minBookingNoticeHrs}-hour notice period`}
+              value={allowShortNotice}
+              onChange={setAllowShortNotice}
+            />
+            <ToggleRow
+              label="Further ahead than you take bookings"
+              sub={`Clients can ask for a date beyond your ${bookingWindowDays}-day booking window`}
+              value={allowBeyondWindow}
+              onChange={setAllowBeyondWindow}
+            />
+
+            {/* Only meaningful once one of the two "which times" opt-ins is
+                on — short notice and booking window are about WHEN a request
+                is made, not what hours it can reach. */}
+            {(allowOutOfHours || allowBlockedDates) && (
+              <>
+                <View style={{ height: 18 }} />
+                <SectionLabel text="How far past your hours they can ask" />
+                <RadioGroup options={OUT_OF_HOURS_EXTENSION_OPTS} value={extensionMins} onChange={setExtensionMins} />
+              </>
+            )}
           </Card>
 
           <SaveButton saving={saving} onPress={handleSave} />

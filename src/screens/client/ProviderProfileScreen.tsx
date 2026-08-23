@@ -48,7 +48,6 @@ import {
   ShareIcon,
   BellIcon,
 } from "../../components/IconLibrary";
-import TabIcon from "../../components/TabIcon";
 import { useCart } from "../../contexts/CartContext";
 
 // Navigation types
@@ -63,30 +62,20 @@ import { useAppDialog } from "../../components/AppDialog";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
 import CategoryTabItem from "../../components/CategoryTabPill";
 import {
-  getProviderBySlug,
-  getProviderReviews,
-  trackUserInteraction,
-  getProviderActivePromotions,
-  getProviderPortfolio,
-  getUserDisplayName,
   getProviderDepositPoliciesByDisplayNames,
   getUserWaitlistEntries,
   joinWaitlist,
   leaveWaitlist,
   type WaitlistEntry,
-  getProviderProfileViewerContext,
   setProviderFollowNotify,
   VENUE_PORTFOLIO_CATEGORY,
 } from "../../services/databaseService";
-import userLearningService from "../../services/userLearningService";
-import { getUnclaimedProviderDetail, type UnclaimedProviderDetail } from "../../services/providerClaimService";
-import { supabase } from "../../lib/supabase";
+import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { AvailabilityService } from "../../services/AvailabilityService";
-import type { AvailabilitySummary, WeeklyOpeningHoursDay } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
 import { MultiBookingSheet, type MultiBookingSheetResult } from "../../components/MultiBookingSheet";
 import { AddOnPickerModal } from "../../components/AddOnPickerModal";
-import type { DbPromotion, DbPortfolioItem } from "../../types/database";
+import type { ClientPromotion } from "../../types/database";
 import {
   resolveProviderTheme,
   withAlpha,
@@ -97,9 +86,17 @@ import { MULTI_SERVICE_BOOKING_ENABLED } from "../../constants/featureFlags";
 import { logger } from "../../utils/logger";
 import { formatShortDate, formatLongDate, formatTime12, ordinalSuffix } from "../../utils/dateUtils";
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON, getAdaptiveAccentColor, hasProviderPolicyInfo } from "../../features/providers/profilePresentation";
-import { mapProviderProfileData } from "../../features/providers/profileMapper";
-import type { ProviderProfileData, ProviderProfileService } from "../../features/providers/profileTypes";
+import type { ProviderProfileService } from "../../features/providers/profileTypes";
+import { useProviderProfileData } from "../../features/providers/useProviderProfileData";
 import { buildPolicyDisplayRows } from "../../utils/policyDisplay";
+import {
+  ProviderAdditionalInfoSection,
+  ProviderContactSection,
+  ProviderOpeningHoursSection,
+  ProviderPortfolioSection,
+  ProviderReviewPreviewSection,
+  ProviderSpecialtiesSection,
+} from "../../features/providers/ProviderProfileSections";
 
 type ProviderProfileScreenProps = StackScreenProps<
   HomeStackParamList,
@@ -120,8 +117,6 @@ const SHEET_LIP_RADIUS = 36;
 const StarIcon = ({ size, color }: { size: number; color: string }) => (
   <Text style={{ fontSize: size, color }}>★</Text>
 );
-
-type ProviderData = ProviderProfileData;
 
 // Client-facing wording for providers.team_size. Module scope, not inside the
 // component — it never varies, and as a component-local object it would be a
@@ -522,11 +517,11 @@ interface OffersSidePanelProps {
   isVisible: boolean;
   onClose: () => void;
   slideAnim: Animated.Value;
-  promotions: DbPromotion[];
+  promotions: ClientPromotion[];
   providerName: string;
   adaptiveAccentColor: string;
   themeTokens: ProviderThemeTokens;
-  onBookOffer: (promo: DbPromotion) => void;
+  onBookOffer: (promo: ClientPromotion) => void;
 }
 
 const OffersSidePanel: React.FC<OffersSidePanelProps> = React.memo(
@@ -1258,147 +1253,32 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const { theme } = useTheme();
 
   const providerId = route.params?.providerId ?? "";
-  // Provider state — seeded with local hardcoded data, overridden by Supabase if available
-  const [provider, setProvider] = useState<ProviderData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [providerDbId, setProviderDbId] = useState<string | null>(null);
-  // Set only when getProviderBySlug comes back empty AND the id resolves to
-  // an unclaimed (is_claimed = false) row instead. Renders a separate,
-  // minimal read-only view further down — never mixed into `provider`,
-  // since ProviderData assumes a fully onboarded
-  // provider with real services/availability that an unclaimed row has none
-  // of.
-  const [unclaimedProvider, setUnclaimedProvider] = useState<UnclaimedProviderDetail | null>(null);
+  const {
+    provider,
+    providerDbId,
+    loading,
+    loadFailed,
+    unclaimedProvider,
+    reviews,
+    reviewsLoading,
+    reviewsLoadedAll,
+    promotions,
+    portfolio,
+    availability,
+    availabilityLoading,
+    openingHours,
+    currentUserId,
+    currentUserName,
+    isOwnProvider,
+    viewerChecked,
+    isNotificationsEnabled,
+    setIsNotificationsEnabled,
+    loadAllReviews,
+  } = useProviderProfileData(providerId);
 
   // Palette follows the provider's chosen profile theme (preset key or custom set).
   // Until the provider loads this resolves to the 'app' preset.
   const OP = resolveProviderTheme(provider?.profileTheme);
-
-  const [reviews, setReviews] = useState<
-    {
-      id: number | string;
-      name: string;
-      rating: number;
-      comment: string;
-      date: string;
-    }[]
-  >([]);
-
-  // Fetch live data from Supabase
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    getProviderBySlug(providerId)
-      .then(async (data) => {
-        if (cancelled) return;
-        if (!data) {
-          // Not a live claimed provider — providerId may instead be the raw
-          // id of an unclaimed/scraped row (see ExploreScreen's
-          // mapDbUnclaimedProviderToCard, which intentionally omits
-          // providerSlug so it resolves here). getProviderBySlug requires
-          // has_gone_live = true, which unclaimed rows never have, so this
-          // fallback is the only way they're ever found.
-          const unclaimed = await getUnclaimedProviderDetail(providerId).catch(() => null);
-          if (!cancelled) setUnclaimedProvider(unclaimed);
-          return;
-        }
-        setProvider(mapProviderProfileData(data));
-        setProviderDbId(data.id);
-
-        // Track profile view for personalization + analytics
-        userLearningService.trackInteraction({
-          type: "view",
-          providerId: data.id,
-          providerName: data.display_name,
-          serviceCategory: data.service_category,
-          timestamp: new Date().toISOString(),
-        });
-        trackUserInteraction({
-          type: "view",
-          providerId: data.id,
-          serviceCategory: data.service_category,
-        });
-
-        // Reviews, promotions, and portfolio don't depend on each other —
-        // fetch them in parallel instead of one after another so the
-        // screen's loading state clears after the slowest single request
-        // rather than the sum of all three.
-        const [reviewsResult, promosResult, portfolioResult, availabilityResult, openingHoursResult, viewerResult] = await Promise.allSettled([
-          getProviderReviews(data.id),
-          getProviderActivePromotions(data.id),
-          getProviderPortfolio(data.id),
-          AvailabilityService.getAvailabilitySummary(data.id),
-          AvailabilityService.getWeeklyOpeningHours(data.id),
-          // Carries both the bell state and whether this profile belongs to
-          // the person looking at it — one call instead of two, and the
-          // owner check has to be authenticated-user-scoped, never derived
-          // from anything the profile payload itself carries.
-          getProviderProfileViewerContext(data.id),
-        ]);
-
-        if (!cancelled && reviewsResult.status === "fulfilled") {
-          setReviews(
-            reviewsResult.value.map((r) => ({
-              id: r.id,
-              name: r.user?.name ?? "Anonymous",
-              rating: r.rating,
-              comment: r.comment ?? "",
-              date: new Date(r.created_at).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              }),
-            })),
-          );
-        }
-
-        if (!cancelled && promosResult.status === "fulfilled") {
-          setPromotions(promosResult.value);
-        }
-
-        if (!cancelled && portfolioResult.status === "fulfilled") {
-          setPortfolio(portfolioResult.value);
-        }
-
-        // A rejected availability fetch leaves the card hidden rather than
-        // asserting anything about this provider's schedule.
-        if (!cancelled) {
-          setAvailability(
-            availabilityResult.status === "fulfilled" ? availabilityResult.value : null,
-          );
-          setAvailabilityLoading(false);
-          setOpeningHours(
-            openingHoursResult.status === "fulfilled" ? openingHoursResult.value : null,
-          );
-          // A rejected/logged-out check leaves the bell off rather than
-          // asserting the client is subscribed.
-          const viewer =
-            viewerResult.status === "fulfilled" ? viewerResult.value : null;
-          setIsNotificationsEnabled(viewer?.notificationsEnabled ?? false);
-          // Fails CLOSED in the other direction on purpose: an errored check
-          // leaves the profile bookable rather than locking a real client
-          // out of booking. The server-side guard in hold_cart_booking_slots
-          // is the actual enforcement — this is the honest UI on top of it.
-          setIsOwnProvider(viewer?.isOwnProvider ?? false);
-          setViewerChecked(true);
-        }
-      })
-      .catch(() => {
-        /* provider not found — loading=false, provider remains null */
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-          // Also clears on the not-found/early-return paths above, which never
-          // reach the availability assignment — otherwise the card would sit
-          // on "Checking availability…" forever.
-          setAvailabilityLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [providerId]);
 
   // ===== CRITICAL: CART CONTEXT INTEGRATION =====
   const { addToCart, totalItems } = useCart();
@@ -1467,20 +1347,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const isScrolledRef = useRef(false);
   const [showFullAbout, setShowFullAbout] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "policy">("about");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  // True when the signed-in user owns THIS provider profile. A provider
-  // browsing the client side can reach their own profile through Explore,
-  // Search, Becca or a deep link, and every booking entry point below is
-  // disabled when this is set — the server rejects the booking anyway
-  // (hold_cart_booking_slots / claim_cart_booking_slots both raise), so an
-  // enabled button could only ever lead to an error alert.
-  const [isOwnProvider, setIsOwnProvider] = useState(false);
-  // Whether the owner check has actually come back yet. Explore's "Book Now"
-  // auto-opens BookingSheet on a timer as soon as services load, which can
-  // beat the check — without this gate it would fire on a stale
-  // isOwnProvider=false closure and open the sheet on your own profile.
-  const [viewerChecked, setViewerChecked] = useState(false);
-  const [currentUserName, setCurrentUserName] = useState<string>("");
+  // Ownership and viewer identity come from the hook's authenticated,
+  // non-cacheable viewer request. viewerChecked remains a separate gate so
+  // deep-linked booking UI never auto-opens before that check settles.
   const [userWaitlistMap, setUserWaitlistMap] = useState<
     Record<string, WaitlistEntry>
   >({});
@@ -1513,12 +1382,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [waitlistDateTo, setWaitlistDateTo] = useState<Date | null>(null);
   const [showDatePickerFrom, setShowDatePickerFrom] = useState(false);
   const [showDatePickerTo, setShowDatePickerTo] = useState(false);
-  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
-  const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
-  const [availabilityLoading, setAvailabilityLoading] = useState(true);
-  const [openingHours, setOpeningHours] = useState<WeeklyOpeningHoursDay[] | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [showReviewsModal, setShowReviewsModal] = useState(false);
+  const handleOpenReviews = useCallback(() => setShowReviewsModal(true), []);
   const [showBookingSheet, setShowBookingSheet] = useState(false);
   // Services selected via multi-select "Select" mode, passed to
   // MultiBookingSheet when the floating bar's "Book" is tapped — shown and
@@ -1527,8 +1393,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [showMultiBookingSheet, setShowMultiBookingSheet] = useState(false);
   const [multiBookingServices, setMultiBookingServices] = useState<ServiceData[]>([]);
   const [showOffersModal, setShowOffersModal] = useState(false);
-  const [promotions, setPromotions] = useState<DbPromotion[]>([]);
-  const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessageData, setSuccessMessageData] = useState<{
     title: string;
@@ -1541,6 +1405,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [notificationMessageType, setNotificationMessageType] = useState<
     "bell" | "bookmark"
   >("bell");
+
+  // Keep the hot profile request to ten reviews; the virtualized modal asks
+  // the hook for the larger bounded set only when the client opens it.
+  useEffect(() => {
+    if (
+      showReviewsModal &&
+      providerDbId &&
+      !reviewsLoadedAll &&
+      !reviewsLoading
+    ) {
+      void loadAllReviews();
+    }
+  }, [
+    loadAllReviews,
+    providerDbId,
+    reviewsLoadedAll,
+    reviewsLoading,
+    showReviewsModal,
+  ]);
 
   // Scroll plumbing for the offers "Book Now" jump-to-services behaviour
   const scrollRef = useRef<ScrollView>(null);
@@ -1578,11 +1461,36 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const cardBg = withAlpha(OP.card, OP.isDark ? 0.5 : 0.9);
   const cardBlurTint = OP.isDark ? ("dark" as const) : ("light" as const);
   const cardBlurIntensity = OP.isDark ? 35 : 25;
-  const cardHighlightColors = (
-    OP.isDark
+  const cardHighlightColors = useMemo(
+    () => (OP.isDark
       ? ["rgba(255,255,255,0.08)", "transparent"]
       : ["rgba(255,255,255,0.3)", "transparent"]
-  ) as [string, string];
+    ) as [string, string],
+    [OP.isDark],
+  );
+  const sectionPalette = useMemo(() => ({
+    text: OP.text,
+    sub: OP.sub,
+    border: OP.border,
+    separator: OP.sep,
+    background: OP.bg,
+    cardBackground: cardBg,
+    accent: adaptiveAccentColor,
+    blurTint: cardBlurTint,
+    blurIntensity: cardBlurIntensity,
+    highlightColors: cardHighlightColors,
+  }), [
+    OP.text,
+    OP.sub,
+    OP.border,
+    OP.sep,
+    OP.bg,
+    cardBg,
+    adaptiveAccentColor,
+    cardBlurTint,
+    cardBlurIntensity,
+    cardHighlightColors,
+  ]);
 
   // Venue/workspace shots are stamped with their own category by
   // InfoRegScreen's "Address & venue photos" uploader. They're a picture of
@@ -1599,10 +1507,21 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     () => portfolio.filter((item) => item.category !== VENUE_PORTFOLIO_CATEGORY),
     [portfolio],
   );
-  const venueImages = useMemo(
-    () => venuePortfolio.map((item) => ({ uri: item.image_url })),
-    [venuePortfolio],
-  );
+  const contactDetails = useMemo(() => ({
+    location: provider?.location ?? "",
+    phone: provider?.phone ?? "",
+    whatsapp: provider?.whatsapp ?? "",
+    email: provider?.email ?? "",
+    instagram: provider?.instagram ?? "",
+    website: provider?.website ?? "",
+  }), [
+    provider?.location,
+    provider?.phone,
+    provider?.whatsapp,
+    provider?.email,
+    provider?.instagram,
+    provider?.website,
+  ]);
 
   // ── Additional Information ──────────────────────────────────────────────────
   // Practice details the provider fills in across Business Profile (About You /
@@ -1671,29 +1590,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     return sentences.length > 0 ? `${sentences.join(". ")}.` : "";
   }, [provider]);
 
-  // ── Pinterest-style two-column portfolio ────────────────────────────────────
-  // Items are dealt into whichever column is currently shorter, with tile height
-  // from the item's aspect ratio, giving the staggered masonry look.
-  const PORTFOLIO_COL_W = (screenWidth - 40 - 12) / 2;
-  const portfolioColumns = useMemo(() => {
-    const cols: (DbPortfolioItem & { tileHeight: number; globalIndex: number })[][] = [[], []];
-    const colHeights = [0, 0];
-    workPortfolio.forEach((item, i) => {
-      const ratio =
-        item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
-      const tileHeight = Math.min(Math.max(PORTFOLIO_COL_W / ratio, 140), 300);
-      const target = colHeights[0]! <= colHeights[1]! ? 0 : 1;
-      cols[target]!.push({ ...item, tileHeight, globalIndex: i });
-      colHeights[target]! += tileHeight + 12;
-    });
-    return cols;
-  }, [workPortfolio, PORTFOLIO_COL_W]);
-
-  const portfolioImages = useMemo(
-    () => workPortfolio.map((item) => ({ uri: item.image_url })),
-    [workPortfolio],
-  );
-
   // Hero info floats over the photo/gradient. Every theme always carries a
   // gradient now (saved as [backdrop, sheetColor]), so "is there a gradient"
   // can't decide text colour any more — some backdrops (Cream, Sky, Blush…)
@@ -1723,20 +1619,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       offersTabSlide.setValue(80);
     }
   }, [promotions.length, offersTabSlide]);
-
-  // Load auth user + their waitlist entries for this provider
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      setCurrentUserId(user.id);
-      // Try to get display name from users table
-      getUserDisplayName(user.id)
-        .then((name) => {
-          if (name) setCurrentUserName(name);
-        })
-        .catch(() => {});
-    });
-  }, []);
 
   useEffect(() => {
     if (!currentUserId || !providerDbId) return;
@@ -1866,7 +1748,12 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       logger.error("Error updating follow notifications:", error);
       setIsNotificationsEnabled(!newState);
     });
-  }, [isNotificationsEnabled, showRightNotification, providerDbId]);
+  }, [
+    isNotificationsEnabled,
+    showRightNotification,
+    providerDbId,
+    setIsNotificationsEnabled,
+  ]);
 
   // Bookmark toggle handler
   const {
@@ -2065,7 +1952,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     removeBookmark,
     slideRightAnimation,
     isOwnProvider,
-    showRightNotification,
     showAlert,
   ]);
 
@@ -2243,6 +2129,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     },
     [isOwnProvider, showAlert],
   );
+  const handlePublicContactLink = useCallback((url: string) => {
+    Linking.openURL(url).catch(() => {
+      Alert.alert("Couldn't open", "Please try again in a moment.");
+    });
+  }, []);
 
   const handleGetInTouch = useCallback(() => {
     if (!provider || !providerDbId) {
@@ -2481,7 +2372,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // ===== UPDATED CART HANDLERS FOR COMPATIBILITY =====
   const handleQuickBook = useCallback(
-    async (service: ServiceData, promo?: DbPromotion) => {
+    async (service: ServiceData, promo?: ClientPromotion) => {
       logger.log("Quick Book - Redirecting to checkout:", service.name);
       if (!provider) return;
 
@@ -2635,7 +2526,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // own custom per-service category_name groupings, a different vocabulary
   // entirely) — so it must NOT be used to index provider.categories.
   const handleBookOffer = useCallback(
-    (promo: DbPromotion) => {
+    (promo: ClientPromotion) => {
       closeOffersPanel();
       if (!provider) return;
 
@@ -3036,6 +2927,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
           notes: result.notes || undefined,
           isDepositOnly: result.isDepositOnly,
           policySnapshot: result.policySnapshot,
+          // Present only when the sheet's "scheduling conflict" confirmation
+          // was accepted for this exact date/time.
+          emergencyRequest: result.emergencyRequest,
         };
 
         // Add to cart context
@@ -3078,7 +2972,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     (result: MultiBookingSheetResult) => {
       if (!provider) return;
       try {
-        result.items.forEach(({ service, selectedAddOns, date, time, isSeparate }) => {
+        result.items.forEach(({ service, selectedAddOns, date, time, isSeparate, emergencyRequest }) => {
           addToCart({
             providerName: provider.providerName,
             providerDisplayName: provider.displayName,
@@ -3106,6 +3000,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             // grouped siblings.
             bookingBatchId: isSeparate ? undefined : result.groupBatchId,
               policySnapshot: result.policySnapshot,
+            // Only ever set on a separately-scheduled item — the group
+            // picker can't produce a by-request time.
+            emergencyRequest,
           });
         });
 
@@ -3175,6 +3072,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
     isNotificationsEnabled,
     providerIsBookmarked,
     provider?.providerName,
+    provider?.scheduleReleaseDay,
   ]);
 
   if (loading || !provider) {
@@ -3208,7 +3106,9 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
       return (
         <View style={[styles.loading, { backgroundColor: OP.bg }]}>
           <Text style={{ color: OP.sub, fontFamily: "Jura-VariableFont_wght" }}>
-            Provider not found
+            {loadFailed
+              ? "Could not load provider. Please try again."
+              : "Provider not found"}
           </Text>
         </View>
       );
@@ -4992,34 +4892,11 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 </BlurView>
               </View>
 
-              {/* Specialties / Tags */}
-              {provider.specialties.length > 0 && (
-                <View style={styles.specialtiesSection}>
-                  <Text style={[styles.sectionTitleNoCard, { color: OP.text }]}>
-                    Specialties
-                  </Text>
-                  <View style={styles.specialtiesRow}>
-                    {provider.specialties.map((s, i) => (
-                      <View
-                        key={i}
-                        style={[
-                          styles.specialtyChip,
-                          {
-                            borderColor: adaptiveAccentColor + "55",
-                            backgroundColor: adaptiveAccentColor + "18",
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.specialtyChipText, { color: OP.text }]}
-                        >
-                          {s}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
+              <ProviderSpecialtiesSection
+                specialties={provider.specialties}
+                textColor={OP.text}
+                accent={adaptiveAccentColor}
+              />
 
               {/* Services Section */}
               <View
@@ -5037,451 +4914,40 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                 })}
               </View>
 
-              {/* Reviews Section */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[
-                  styles.reviewsCard,
-                  { backgroundColor: cardBg, borderColor: OP.border },
-                ]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.cardHighlight}
-                />
-                <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                  Reviews
-                </Text>
-                {reviews.slice(0, 5).map((review) => (
-                  <View
-                    key={review.id}
-                    style={[styles.reviewItem, { borderBottomColor: OP.sep }]}
-                  >
-                    <View style={styles.reviewHeader}>
-                      <Text style={[styles.reviewerName, { color: OP.text }]}>
-                        {review.name}
-                      </Text>
-                      <View style={styles.reviewRating}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <TabIcon
-                            key={star}
-                            name="star"
-                            size={12}
-                            color={
-                              star <= review.rating ? "#FFD700" : OP.border
-                            }
-                          />
-                        ))}
-                      </View>
-                      <Text style={[styles.reviewDate, { color: OP.sub }]}>
-                        {review.date}
-                      </Text>
-                    </View>
-                    {review.comment ? (
-                      <Text style={[styles.reviewComment, { color: OP.sub }]}>
-                        {review.comment}
-                      </Text>
-                    ) : null}
-                  </View>
-                ))}
+              <ProviderReviewPreviewSection
+                reviews={reviews}
+                loading={reviewsLoading}
+                palette={sectionPalette}
+                onSeeAll={handleOpenReviews}
+              />
 
-                <TouchableOpacity
-                  style={styles.seeAllButton}
-                  onPress={() => setShowReviewsModal(true)}
-                  activeOpacity={0.6}
-                >
-                  <Text style={[styles.seeAllText, { color: OP.text }]}>
-                    See All Reviews
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
+              <ProviderContactSection
+                contact={contactDetails}
+                palette={sectionPalette}
+                onOpenLink={handleContactLink}
+                onOpenPublicLink={handlePublicContactLink}
+                onGetInTouch={handleGetInTouch}
+              />
 
-              {/* Contact */}
-              <BlurView
-                intensity={cardBlurIntensity}
-                tint={cardBlurTint}
-                style={[
-                  styles.contactCard,
-                  { backgroundColor: cardBg, borderColor: OP.border },
-                ]}
-              >
-                <LinearGradient
-                  colors={cardHighlightColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.cardHighlight}
-                />
-                <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                  Contact
-                </Text>
+              <ProviderOpeningHoursSection
+                openingHours={openingHours}
+                palette={sectionPalette}
+              />
 
-                {provider.location ? (
-                  <View
-                    style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                  >
-                    <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
-                      Location
-                    </Text>
-                    <Text
-                      style={[styles.contactRowText, { color: OP.text }]}
-                      numberOfLines={1}
-                    >
-                      {provider.location}
-                    </Text>
-                  </View>
-                ) : null}
+              <ProviderPortfolioSection
+                items={workPortfolio}
+                palette={sectionPalette}
+                onOpenImage={openImageViewer}
+              />
 
-                {provider.phone ? (
-                  <TouchableOpacity
-                    style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                    onPress={() =>
-                      handleContactLink(
-                        `sms:${provider.phone.replace(/\s/g, "")}`,
-                      )
-                    }
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
-                      Phone
-                    </Text>
-                    <Text
-                      style={[styles.contactRowAction, { color: OP.text }]}
-                      numberOfLines={1}
-                    >
-                      Message ›
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {provider.whatsapp ? (
-                  <TouchableOpacity
-                    style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                    onPress={() =>
-                      handleContactLink(
-                        `https://wa.me/${provider.whatsapp.replace(/[^0-9+]/g, "")}`,
-                      )
-                    }
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
-                      WhatsApp
-                    </Text>
-                    <Text
-                      style={[styles.contactRowAction, { color: OP.text }]}
-                      numberOfLines={1}
-                    >
-                      Open ›
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {provider.email ? (
-                  <TouchableOpacity
-                    style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                    onPress={() => handleContactLink(`mailto:${provider.email}`)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
-                      Email
-                    </Text>
-                    <Text
-                      style={[styles.contactRowAction, { color: OP.text }]}
-                      numberOfLines={1}
-                    >
-                      Send ›
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {provider.instagram ? (
-                  <TouchableOpacity
-                    style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                    onPress={() =>
-                      Linking.openURL(
-                        `https://instagram.com/${provider.instagram}`,
-                      )
-                    }
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
-                      Instagram
-                    </Text>
-                    <Text
-                      style={[styles.contactRowAction, { color: OP.text }]}
-                      numberOfLines={1}
-                    >
-                      @{provider.instagram} ›
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {provider.website ? (
-                  <TouchableOpacity
-                    style={[styles.contactRow, { borderBottomColor: OP.sep }]}
-                    onPress={() => Linking.openURL(provider.website)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.contactRowLabel, { color: OP.sub }]}>
-                      Website
-                    </Text>
-                    <Text style={[styles.contactRowAction, { color: OP.text }]}>
-                      Visit ›
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                <TouchableOpacity
-                  style={[
-                    styles.contactButton,
-                    { backgroundColor: adaptiveAccentColor },
-                  ]}
-                  onPress={handleGetInTouch}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.contactButtonText}>Get In Touch</Text>
-                </TouchableOpacity>
-              </BlurView>
-
-              {/* Opening Hours — the provider's recurring weekly schedule,
-                  Monday → Sunday, open/closed and hours per day. Distinct
-                  from the hero's live availability pill above (today's
-                  booking-status headline) — this is the fixed week, not
-                  today's snapshot. */}
-              {openingHours && openingHours.length > 0 ? (
-                <BlurView
-                  intensity={cardBlurIntensity}
-                  tint={cardBlurTint}
-                  style={[
-                    styles.contactCard,
-                    { backgroundColor: cardBg, borderColor: OP.border },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={cardHighlightColors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.cardHighlight}
-                  />
-                  <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                    Opening Hours
-                  </Text>
-                  {openingHours.map((day, index) => {
-                    const isToday = day.dayOfWeek === new Date().getDay();
-                    return (
-                      <View
-                        key={day.dayOfWeek}
-                        style={[
-                          styles.contactRow,
-                          index === openingHours.length - 1 && { borderBottomWidth: 0 },
-                          { borderBottomColor: OP.sep },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.contactRowLabel,
-                            { color: isToday ? adaptiveAccentColor : OP.sub },
-                          ]}
-                        >
-                          {day.label}
-                        </Text>
-                        <Text style={[styles.contactRowText, { color: day.isOpen ? OP.text : OP.sub }]}>
-                          {day.isOpen ? day.hours : "Closed"}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </BlurView>
-              ) : null}
-
-              {/* Portfolio — Pinterest-style two-column masonry of client work */}
-              {workPortfolio.length > 0 && (
-                <View style={styles.portfolioSection}>
-                  <Text
-                    style={[
-                      styles.sectionTitleNoCard,
-                      { color: OP.text, paddingHorizontal: 0 },
-                    ]}
-                  >
-                    Portfolio
-                  </Text>
-                  <View style={styles.portfolioColumns}>
-                    {portfolioColumns.map((column, colIdx) => (
-                      <View
-                        key={`pcol-${colIdx}`}
-                        style={styles.portfolioColumn}
-                      >
-                        {column.map((item) => (
-                          <TouchableOpacity
-                            key={item.id}
-                            activeOpacity={0.88}
-                            onPress={() =>
-                              openImageViewer(portfolioImages, item.globalIndex)
-                            }
-                            style={styles.portfolioTile}
-                          >
-                            <Image
-                              source={{ uri: item.image_url }}
-                              style={{ width: "100%", height: item.tileHeight }}
-                              contentFit="cover"
-                              transition={0}
-                            />
-                            {item.caption ? (
-                              <View style={styles.portfolioCaptionWrap}>
-                                <Text
-                                  style={styles.portfolioCaption}
-                                  numberOfLines={1}
-                                >
-                                  {item.caption}
-                                </Text>
-                              </View>
-                            ) : null}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Additional Information — the practice details a provider
-                  fills in outside their service list: who they are, how they
-                  work, what the room looks like. Last section on the profile
-                  on purpose; it's reference material a client checks once,
-                  not something they act on, so it sits below the work rather
-                  than competing with it. Renders nothing at all when the
-                  provider has filled none of it in. */}
-              {(additionalInfoGroups.length > 0 ||
-                !!goodToKnowText ||
-                !!provider.qualifications.trim() ||
-                venuePortfolio.length > 0) && (
-                <BlurView
-                  intensity={cardBlurIntensity}
-                  tint={cardBlurTint}
-                  style={[
-                    styles.contactCard,
-                    { backgroundColor: cardBg, borderColor: OP.border },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={cardHighlightColors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                    style={styles.cardHighlight}
-                  />
-                  <Text style={[styles.sectionTitle, { color: OP.text }]}>
-                    Additional Information
-                  </Text>
-
-                  {additionalInfoGroups.map((group, groupIndex) => (
-                    <View
-                      key={group.label}
-                      style={[
-                        styles.additionalNote,
-                        // The section title above already spaces the first
-                        // group; stacking its margin on top reads as a gap.
-                        groupIndex === 0 && styles.additionalNoteFirst,
-                      ]}
-                    >
-                      <Text
-                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
-                      >
-                        {group.label}
-                      </Text>
-                      <View style={styles.additionalChipsRow}>
-                        {group.chips.map((chip) => (
-                          <View
-                            key={chip}
-                            style={[
-                              styles.specialtyChip,
-                              {
-                                borderColor: adaptiveAccentColor + "55",
-                                backgroundColor: adaptiveAccentColor + "18",
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.specialtyChipText,
-                                { color: OP.text },
-                              ]}
-                            >
-                              {chip}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  ))}
-
-                  {provider.qualifications.trim() ? (
-                    <View style={styles.additionalNote}>
-                      <Text
-                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
-                      >
-                        Qualifications
-                      </Text>
-                      <Text
-                        style={[styles.additionalNoteText, { color: OP.text }]}
-                      >
-                        {provider.qualifications.trim()}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {goodToKnowText ? (
-                    <View style={styles.additionalNote}>
-                      <Text
-                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
-                      >
-                        Good to know
-                      </Text>
-                      <Text
-                        style={[styles.additionalNoteText, { color: OP.text }]}
-                      >
-                        {goodToKnowText}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {venuePortfolio.length > 0 && (
-                    <View style={styles.additionalNote}>
-                      <Text
-                        style={[styles.additionalNoteLabel, { color: OP.sub }]}
-                      >
-                        Venue
-                      </Text>
-                      {/* A horizontal strip, not the masonry grid above — a
-                          few shots of one room stacked in two ragged columns
-                          reads as portfolio, which is exactly what these
-                          aren't. */}
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.venueStrip}
-                      >
-                        {venuePortfolio.map((item, index) => (
-                          <TouchableOpacity
-                            key={item.id}
-                            onPress={() => openImageViewer(venueImages, index)}
-                            style={styles.venueTile}
-                            activeOpacity={0.9}
-                          >
-                            <Image
-                              source={{ uri: item.image_url }}
-                              style={styles.venueImage}
-                              contentFit="cover"
-                              transition={0}
-                            />
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-                </BlurView>
-              )}
+              <ProviderAdditionalInfoSection
+                groups={additionalInfoGroups}
+                qualifications={provider.qualifications.trim()}
+                goodToKnow={goodToKnowText}
+                venueItems={venuePortfolio}
+                palette={sectionPalette}
+                onOpenImage={openImageViewer}
+              />
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -5493,47 +4959,6 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-  },
-  additionalChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-  },
-  additionalNote: {
-    marginTop: 16,
-  },
-  additionalNoteFirst: {
-    marginTop: 0,
-  },
-  // Every subheading in this card — Languages, Team, Credentials,
-  // Accessibility, Qualifications, Good to know, Venue — is the display face,
-  // so they read as headings rather than as more body copy. No fontWeight:
-  // BakbakOne ships one weight and asking for 600 substitutes the system font.
-  additionalNoteLabel: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 13,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    marginBottom: 6,
-  },
-  additionalNoteText: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  venueStrip: {
-    gap: 10,
-    paddingVertical: 4,
-  },
-  venueTile: {
-    width: 190,
-    height: 140,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  venueImage: {
-    width: "100%",
-    height: "100%",
   },
   heroImage: {
     position: "absolute",
@@ -6013,25 +5438,6 @@ const styles = StyleSheet.create({
   },
 
   // Services Section
-  specialtiesSection: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  specialtiesRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  specialtyChip: {
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  specialtyChipText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
   servicesSection: {
     marginBottom: 20,
   },
@@ -6289,102 +5695,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     opacity: 0.9,
     zIndex: 1,
-  },
-
-  // Portfolio — two-column masonry (sits inside contentSheet, which already pads 20)
-  portfolioSection: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  portfolioColumns: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  portfolioColumn: {
-    flex: 1,
-    gap: 12,
-  },
-  portfolioTile: {
-    borderRadius: 18,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  portfolioCaptionWrap: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 10,
-    paddingTop: 14,
-    paddingBottom: 8,
-    backgroundColor: "rgba(0,0,0,0.32)",
-  },
-  portfolioCaption: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 11,
-    color: "#fff",
-  },
-
-  // Reviews Section
-  reviewsCard: {
-    padding: 22,
-    borderRadius: 26,
-    marginBottom: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
-    shadowColor: "#B87E92",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  reviewItem: {
-    marginBottom: 15,
-    paddingBottom: 15,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  reviewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    // no marginBottom — the comment carries its own marginTop, so rows with and
-    // without a comment keep identical spacing
-  },
-  reviewerName: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-  },
-  reviewRating: {
-    flexDirection: "row",
-    gap: 1,
-  },
-  reviewDate: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 10,
-    marginLeft: "auto",
-  },
-  reviewComment: {
-    fontFamily: "Jura-VariableFont_wght",
-    fontWeight: "700",
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  seeAllButton: {
-    alignItems: "center",
-    paddingTop: 10,
-  },
-  seeAllText: {
-    fontFamily: "BakbakOne-Regular",
-    fontSize: 12,
-    fontWeight: "bold",
-    // Color will be set dynamically using adaptiveAccentColor
   },
 
   // Communication-options sheet (Get In Touch on your own profile)

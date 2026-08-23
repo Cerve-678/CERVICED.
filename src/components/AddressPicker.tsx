@@ -90,7 +90,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
     }
   }, [query]);
 
-  const useCurrentLocation = useCallback(async () => {
+  const handleUseCurrentLocation = useCallback(async () => {
     setSearching(true);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
@@ -180,7 +180,7 @@ export default function AddressPicker({ value, onChange, accentColor = '#C2185B'
             <TouchableOpacity style={[styles.actionButton, { borderColor: accentColor }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); search(); }} disabled={searching}>
               <Text style={[styles.actionText, { color: accentColor }]}>Search address</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.currentButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); useCurrentLocation(); }} disabled={searching}>
+            <TouchableOpacity style={styles.currentButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleUseCurrentLocation(); }} disabled={searching}>
               <Ionicons name="navigate-outline" size={17} color="#1C1C1E" />
               <Text style={styles.currentText}>Use current location</Text>
             </TouchableOpacity>

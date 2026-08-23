@@ -21,7 +21,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { loadProviderFromSupabase } from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../../services/providerRegistrationService';
-import { getProviderPortfolio, getProviderReviews, getProviderIdForUserId, getProviderFormLibrary } from '../../services/databaseService';
+import { getProviderPortfolio, getProviderReviews, getProviderIdForUserId, hasMyProviderTermsForm } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
@@ -32,8 +32,9 @@ import SlidingTabs from '../../components/SlidingTabs';
 import AppBackground from '../../components/AppBackground';
 import { logger } from '../../utils/logger';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
+import { ProviderPortfolioSection } from '../../features/providers/ProviderProfileSections';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('window');
 
 // Hero → content transition, copied from ProviderProfileScreen: the logo/name/
 // rating/slots float directly over the hero photo/gradient, then the content
@@ -48,6 +49,7 @@ const INFO_TABS = [
 const StarIcon = ({ size, color }: { size: number; color: string }) => (
   <Text style={{ fontSize: size, color }}>★</Text>
 );
+const NOOP_OPEN_IMAGE = () => {};
 
 /** True when there's anything worth showing on the Policy tab — either
  *  descriptive booking_policies or the enforced cancellation window. Mirrors
@@ -117,7 +119,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               // waiting on it; a failure leaves the card hidden rather than
               // showing a stale or invented schedule.
               setAvailabilityLoading(true);
-              AvailabilityService.getAvailabilitySummary(providerId)
+              AvailabilityService.getAvailabilitySummary(providerId, {
+                includeExtendedSearch: false,
+              })
                 .then(setAvailability)
                 .catch(() => setAvailability(null))
                 .finally(() => setAvailabilityLoading(false));
@@ -125,7 +129,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               // call getProviderReviews directly instead of
               // getMyProviderReviews(), which would re-resolve the same
               // provider row from scratch via a second, heavier query.
-              getProviderReviews(providerId)
+              getProviderReviews(providerId, { limit: 20 })
                 .then(dbReviews => setReviews(dbReviews.map(r => ({
                   id: r.id,
                   name: r.user?.name ?? 'Anonymous',
@@ -139,8 +143,8 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
               // Fire-and-forget alongside the others. Left as null on failure
               // so the readiness list omits the item entirely rather than
               // telling a provider to write terms they may already have.
-              getProviderFormLibrary()
-                .then(forms => setHasTermsForm(forms.some(f => f.isTerms)))
+              hasMyProviderTermsForm()
+                .then(setHasTermsForm)
                 .catch(() => setHasTermsForm(null));
             }
           }
@@ -148,9 +152,9 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
           setProviderData(parsed);
           if (parsed) {
             const cats = Object.keys(parsed.categories);
-            if (cats.length > 0 && !cats.includes(selectedCategory)) {
-              setSelectedCategory(cats[0] ?? '');
-            }
+            setSelectedCategory(current =>
+              cats.length > 0 && !cats.includes(current) ? (cats[0] ?? '') : current,
+            );
           }
         } catch (e) {
           logger.error('Error loading provider data:', e);
@@ -159,7 +163,7 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
         }
       };
       load();
-    }, [user?.id, selectedCategory])
+    }, [user?.id])
   );
 
   const categoryNames = useMemo(() => {
@@ -227,22 +231,6 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     };
   }, [providerData, portfolio.length, hasTermsForm]);
 
-  // Pinterest-style two-column masonry — same "deal into whichever column is
-  // shorter" layout as ProviderProfileScreen's portfolio grid.
-  const PORTFOLIO_COL_W = (screenWidth - 40 - 12) / 2;
-  const portfolioColumns = useMemo(() => {
-    const cols: (DbPortfolioItem & { tileHeight: number })[][] = [[], []];
-    const colHeights = [0, 0];
-    portfolio.forEach(item => {
-      const ratio = item.aspect_ratio && item.aspect_ratio > 0 ? item.aspect_ratio : 1;
-      const tileHeight = Math.min(Math.max(PORTFOLIO_COL_W / ratio, 140), 300);
-      const target = colHeights[0]! <= colHeights[1]! ? 0 : 1;
-      cols[target]!.push({ ...item, tileHeight });
-      colHeights[target]! += tileHeight + 12;
-    });
-    return cols;
-  }, [portfolio, PORTFOLIO_COL_W]);
-
   const handleEditProfile = useCallback(() => {
     navigation.navigate('EditProfile');
   }, [navigation]);
@@ -258,12 +246,24 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
   const cardBg = withAlpha(PP.card, PP.isDark ? 0.82 : 0.98);
   const cardBlurTint = PP.isDark ? ('dark' as const) : ('light' as const);
   const cardBlurIntensity = PP.isDark ? 35 : 25;
-  const cardHighlightColors = (
+  const cardHighlightColors = useMemo(() => (
     PP.isDark
       ? ['rgba(255,255,255,0.08)', 'transparent']
       : ['rgba(255,255,255,0.3)', 'transparent']
-  ) as [string, string];
+  ) as [string, string], [PP.isDark]);
   const accentColor = providerData?.accentColor || PP.accent;
+  const portfolioPalette = useMemo(() => ({
+    text: PP.text,
+    sub: PP.sub,
+    border: PP.border,
+    separator: PP.sep,
+    background: PP.bg,
+    cardBackground: cardBg,
+    accent: accentColor,
+    blurTint: cardBlurTint,
+    blurIntensity: cardBlurIntensity,
+    highlightColors: cardHighlightColors,
+  }), [PP.text, PP.sub, PP.border, PP.sep, PP.bg, cardBg, accentColor, cardBlurTint, cardBlurIntensity, cardHighlightColors]);
   // Mirror ProviderProfileScreen's hero logic EXACTLY for visual parity:
   //   hasCustomGradient = providers.gradient was genuinely saved; else the
   //   theme's own hero colour. A background photo always forces the dark
@@ -857,38 +857,12 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             </BlurView>
             </View>
 
-            {/* Portfolio — Pinterest-style two-column masonry, matching ProviderProfileScreen */}
-            {portfolio.length > 0 && (
-              <View style={styles.portfolioSection}>
-                <Text style={[styles.sectionTitleNoCard, { color: PP.text, paddingHorizontal: 0 }]}>
-                  Portfolio
-                </Text>
-                <View style={styles.portfolioColumns}>
-                  {portfolioColumns.map((column, colIdx) => (
-                    <View key={`pcol-${colIdx}`} style={styles.portfolioColumn}>
-                      {column.map(item => (
-                        <View key={item.id} style={styles.portfolioTileShadow}>
-                        <View style={styles.portfolioTile}>
-                          <Image
-                            source={{ uri: item.image_url }}
-                            style={{ width: '100%', height: item.tileHeight }}
-                            resizeMode="cover"
-                          />
-                          {item.caption ? (
-                            <View style={styles.portfolioCaptionWrap}>
-                              <Text style={styles.portfolioCaption} numberOfLines={1}>
-                                {item.caption}
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
+            <ProviderPortfolioSection
+              items={portfolio}
+              palette={portfolioPalette}
+              onOpenImage={NOOP_OPEN_IMAGE}
+              interactiveImages={false}
+            />
             </View>
           </View>
         </ScrollView>

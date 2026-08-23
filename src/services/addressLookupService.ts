@@ -1,4 +1,7 @@
-import { supabase } from '../lib/supabase';
+import {
+  lookupPostcodeAddress,
+  lookupPostcodeAddresses,
+} from './databaseService';
 
 export type PostcodeAddress = {
   address: string;
@@ -17,18 +20,7 @@ export type PostcodeAddress = {
  */
 export async function findAddressesByPostcode(postcode: string): Promise<PostcodeAddress[]> {
   try {
-    const { data, error } = await supabase.functions.invoke('find-address-by-postcode', {
-      body: { postcode },
-    });
-    if (error) {
-      console.warn('[addressLookupService] find-address-by-postcode error:', error, (error as any)?.context?.status);
-      return [];
-    }
-    if (!Array.isArray(data?.addresses)) {
-      console.warn('[addressLookupService] unexpected response shape:', data);
-      return [];
-    }
-    return data.addresses;
+    return await lookupPostcodeAddresses(postcode);
   } catch (err) {
     console.warn('[addressLookupService] invoke threw:', err);
     return [];
@@ -38,18 +30,7 @@ export async function findAddressesByPostcode(postcode: string): Promise<Postcod
 /** Resolves the selected GetAddress.io suggestion to its exact coordinates. */
 export async function resolvePostcodeAddress(addressId: string): Promise<PostcodeAddress | null> {
   try {
-    const { data, error } = await supabase.functions.invoke('find-address-by-postcode', {
-      body: { addressId },
-    });
-    if (error || !data?.address || typeof data.address.latitude !== 'number' || typeof data.address.longitude !== 'number') {
-      console.warn('[addressLookupService] resolve address error:', error, data);
-      return null;
-    }
-    return {
-      address: data.address.formatted,
-      latitude: data.address.latitude,
-      longitude: data.address.longitude,
-    };
+    return await lookupPostcodeAddress(addressId);
   } catch (err) {
     console.warn('[addressLookupService] resolve address threw:', err);
     return null;

@@ -226,3 +226,17 @@ export function reconcileAddressReleasePolicy(
   if (isAddressReleaseAllowed(businessType, current)) return current;
   return businessType === 'mobile' ? null : 'on_confirmation';
 }
+
+/** How far either side of a provider's normal working envelope an
+ *  out-of-hours request may reach (providers.out_of_hours_extension_mins).
+ *  "None" is meaningful rather than a way of turning the feature off: it
+ *  still lets clients ask for the provider's usual hours on a day they'd
+ *  otherwise be closed, without opening up the evening. */
+export const OUT_OF_HOURS_EXTENSION_OPTS = [
+  { value: '0',   label: 'None'   },
+  { value: '30',  label: '30 min' },
+  { value: '60',  label: '1 hr'   },
+  { value: '120', label: '2 hrs'  },
+  { value: '180', label: '3 hrs'  },
+  { value: '240', label: '4 hrs'  },
+];

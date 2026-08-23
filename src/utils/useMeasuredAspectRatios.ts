@@ -96,6 +96,7 @@ export function useMeasuredAspectRatios(uris: (string | undefined)[]): {
     // version is a dependency on purpose: the cache is mutable module state,
     // so this callback must get a new identity when new ratios land, or
     // consumers memoising on it keep the stale heights.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [version],
   );
 

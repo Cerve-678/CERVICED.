@@ -22,8 +22,7 @@ import {
   getMyProviderProfile,
   getProviderAvailability,
   getProviderAvailabilityWindows,
-  replaceProviderAvailabilityWindows,
-  upsertProviderAvailability,
+  saveProviderWeeklySchedule,
   getProviderBlockedDates,
   addProviderBlockedDate,
   removeProviderBlockedDate,
@@ -290,13 +289,14 @@ export default function ProviderScheduleScreen() {
           index !== otherIndex && w.day_of_week === other.day_of_week && w.start_time < other.end_time && w.end_time > other.start_time,
         ));
       if (invalid) { showToast('Each working period must be valid and cannot overlap another period.', 'error'); return; }
-      await Promise.all(days.map(d =>
-        upsertProviderAvailability(providerId, d.dow, d.openTime, d.closeTime, !d.isOpen),
-      ));
-      // v2 is the booking source for newly saved schedules. This editor saves
-      // one period per open day; the data model also supports split shifts.
-      await replaceProviderAvailabilityWindows(
+      await saveProviderWeeklySchedule(
         providerId,
+        days.map(d => ({
+          day_of_week: d.dow,
+          open_time: d.openTime,
+          close_time: d.closeTime,
+          is_closed: !d.isOpen,
+        })),
         allWindows,
       );
       setDays(prev => prev.map(d => ({ ...d, dirty: false })));

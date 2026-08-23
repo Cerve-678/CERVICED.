@@ -5194,7 +5194,14 @@ export async function getProviderLocationsByIds(
   return result;
 }
 
-/** Returns a set of display names that belong to mobile providers. */
+/**
+ * Returns a set of display names that belong to mobile providers.
+ *
+ * Client-facing (Becca answers "do they travel?" from it), so it carries the
+ * same has_gone_live/is_active gate as every other client-facing provider
+ * query — it was the one mobile-provider lookup missing it, while the
+ * checkout-side getProviderCheckoutMetadata already had it.
+ */
 export async function getMobileProviderDisplayNames(
   displayNames: string[],
 ): Promise<Set<string>> {
@@ -5202,7 +5209,9 @@ export async function getMobileProviderDisplayNames(
   const { data, error } = await supabase
     .from("providers")
     .select("display_name, business_type")
-    .in("display_name", displayNames);
+    .eq("has_gone_live", true)
+    .eq("is_active", true)
+    .in("display_name", [...new Set(displayNames)].slice(0, 50));
   if (error || !data) return new Set();
   return new Set(
     (data as { display_name: string; business_type: string | null }[])

@@ -510,6 +510,11 @@ export interface DbBooking {
   confirmed_at: string | null;
   address_released_at: string | null;
   client_address: string | null;
+  // Read live off the joined providers row by the client_bookings view, not
+  // snapshotted onto the booking — it decides whose address is the
+  // appointment's location (see isMobileBooking). Absent when a booking is
+  // read straight from `bookings` rather than the view.
+  provider_business_type?: "salon" | "studio" | "home_based" | "mobile" | null;
   // Client intent — feeds search personalisation and Becca context
   occasion_type:
     | "wedding"

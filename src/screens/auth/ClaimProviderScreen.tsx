@@ -95,20 +95,38 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
     return () => { cancelled = true; };
   }, [knownProviderId]);
 
-  const runSearch = useCallback(async (text: string) => {
-    setQuery(text);
-    if (text.trim().length < 2) { setResults([]); return; }
-    setIsSearching(true);
-    try {
-      const found = await searchUnclaimedProviders(text);
-      setResults(found);
-    } catch (e: any) {
-      logger.error('[ClaimProvider] search failed:', e);
-      Alert.alert('Search failed', friendlyClaimError(e) ?? 'Please try again.');
-    } finally {
+  // Debounce remote search and ignore stale responses so fast typing neither
+  // floods PostgREST nor lets an older result overwrite the latest query.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
       setIsSearching(false);
+      return;
     }
-  }, []);
+
+    let active = true;
+    const timer = setTimeout(() => {
+      setIsSearching(true);
+      searchUnclaimedProviders(trimmed)
+        .then(found => {
+          if (active) setResults(found);
+        })
+        .catch((e: any) => {
+          if (!active) return;
+          logger.error('[ClaimProvider] search failed:', e);
+          Alert.alert('Search failed', friendlyClaimError(e) ?? 'Please try again.');
+        })
+        .finally(() => {
+          if (active) setIsSearching(false);
+        });
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   const handlePickResult = useCallback(async (result: UnclaimedProviderSummary) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -214,7 +232,7 @@ export default function ClaimProviderScreen({ navigation, route }: Props) {
                 placeholder="Business name or city"
                 placeholderTextColor={t.sub}
                 value={query}
-                onChangeText={runSearch}
+                onChangeText={setQuery}
                 autoCapitalize="words"
               />
               {isSearching && <ActivityIndicator style={{ marginTop: 16 }} color={t.accent} />}

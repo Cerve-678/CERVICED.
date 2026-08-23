@@ -3,7 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
+  type ListRenderItem,
   TouchableOpacity,
   Image,
   StatusBar,
@@ -19,8 +20,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { HomeStackParamList } from '../../navigation/types';
 import { useBooking, BookingStatus } from '../../contexts/BookingContext';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
-import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark, getActivePromotions } from '../../services/databaseService';
-import type { DbProvider } from '../../types/database';
+import { getBookmarkedProviders, removeBookmark as dbRemoveBookmark, getProviderIdsWithActivePromotions } from '../../services/databaseService';
+import type { PublicProviderSummary } from '../../types/database';
 import Icon from '../../components/IconLibrary';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
@@ -49,7 +50,7 @@ interface Provider {
   rating: number;
 }
 
-function mapDbProvider(p: DbProvider): Provider {
+function mapDbProvider(p: PublicProviderSummary): Provider {
   return {
     id: p.id,
     slug: p.slug,
@@ -116,9 +117,12 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     return counts;
   }, [bookings]);
 
-  const filteredProviders = selectedService === 'ALL'
-    ? liveProviders
-    : liveProviders.filter(p => p.service === selectedService);
+  const filteredProviders = useMemo(
+    () => selectedService === 'ALL'
+      ? liveProviders
+      : liveProviders.filter(p => p.service === selectedService),
+    [liveProviders, selectedService],
+  );
 
   const handleServicePress = useCallback((service: ServiceType) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -168,13 +172,15 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
       const load = async () => {
         try {
           setLoading(true);
-          await loadBookmarks();
-          const supabaseData = await getBookmarkedProviders();
+          const [, supabaseData] = await Promise.all([
+            loadBookmarks(),
+            getBookmarkedProviders(),
+          ]);
           setLiveProviders(supabaseData.map(mapDbProvider));
-          try {
-            const promos = await getActivePromotions();
-            setProviderIdsWithOffers(new Set(promos.map(p => p.provider_id)));
-          } catch { /* silent */ }
+          setLoading(false);
+          void getProviderIdsWithActivePromotions()
+            .then(ids => setProviderIdsWithOffers(new Set(ids)))
+            .catch(() => {});
         } catch (error) {
           logger.error('Failed to load bookmarks:', error);
         } finally {
@@ -185,19 +191,58 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
     }, [loadBookmarks])
   );
 
-  const handleRemoveBookmark = async (providerId: string) => {
+  const handleRemoveBookmark = useCallback(async (provider: Provider) => {
     try {
-      await dbRemoveBookmark(providerId).catch(() => {});
-      setLiveProviders(prev => prev.filter(p => p.id !== providerId));
-      await removeBookmark(providerId);
+      await dbRemoveBookmark(provider.id).catch(() => {});
+      setLiveProviders(prev => prev.filter(p => p.id !== provider.id));
+      await removeBookmark(provider.id);
     } catch (error) {
       logger.error('Failed to remove bookmark:', error);
     }
-  };
+  }, [removeBookmark]);
 
-  const handleViewProfile = (providerId: string) => {
-    navigation.navigate('ProviderProfile', { providerId });
-  };
+  const handleViewProfile = useCallback((provider: Provider) => {
+    navigation.navigate('ProviderProfile', { providerId: provider.slug });
+  }, [navigation]);
+
+  const renderProviderCard: ListRenderItem<Provider> = useCallback(({ item, index }) => (
+    <BookmarkGridCard
+      provider={item}
+      index={index}
+      hasOffer={providerIdsWithOffers.has(item.id)}
+      appointmentCount={appointmentCounts[item.id] ?? 0}
+      P={P}
+      onPress={handleViewProfile}
+      onRemove={handleRemoveBookmark}
+    />
+  ), [P, appointmentCounts, handleRemoveBookmark, handleViewProfile, providerIdsWithOffers]);
+
+  const renderEmptyState = useCallback(() => (
+    <View style={styles.emptyState}>
+      <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
+        <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
+          <Icon name="bookmark" size={26} color={P.accentText} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: P.text }]}>
+          {liveProviders.length === 0 ? 'No Saved Providers' : `No ${selectedService} providers saved`}
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: P.sub }]}>
+          {liveProviders.length === 0
+            ? 'Save providers you love to find them quickly here'
+            : `You haven't bookmarked any ${selectedService.toLowerCase()} providers yet`}
+        </Text>
+        {liveProviders.length === 0 ? (
+          <TouchableOpacity
+            style={[styles.exploreButton, { backgroundColor: P.accent }]}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>Explore Providers</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  ), [P, liveProviders.length, navigation, selectedService]);
 
   if (loading) {
     return (
@@ -235,68 +280,22 @@ export default function BookmarkedProvidersScreen({ navigation }: Props) {
         </View>
 
         {/* ── Gallery grid ── */}
-        <ScrollView
+        <FlatList
           style={styles.scrollContainer}
+          data={filteredProviders}
+          renderItem={renderProviderCard}
+          keyExtractor={provider => provider.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridColumnWrapper}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           removeClippedSubviews={Platform.OS === 'android'}
-        >
-          {filteredProviders.length > 0 ? (
-            <View style={styles.gridRow}>
-              {filteredProviders.map((provider, index) => (
-                <BookmarkGridCard
-                  key={provider.id}
-                  provider={provider}
-                  index={index}
-                  hasOffer={providerIdsWithOffers.has(provider.id)}
-                  appointmentCount={appointmentCounts[provider.id] ?? 0}
-                  P={P}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    handleViewProfile(provider.slug);
-                  }}
-                  onRemove={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    handleRemoveBookmark(provider.id);
-                  }}
-                />
-              ))}
-            </View>
-
-          ) : liveProviders.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
-                  <Icon name="bookmark" size={26} color={P.accentText} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: P.text }]}>No Saved Providers</Text>
-                <Text style={[styles.emptySubtitle, { color: P.sub }]}>
-                  Save providers you love to find them quickly here
-                </Text>
-                <TouchableOpacity
-                  style={[styles.exploreButton, { backgroundColor: P.accent }]}
-                  onPress={() => navigation.goBack()}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.exploreButtonText, { color: P.onAccent }]}>Explore Providers</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-          ) : (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyCard, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: P.surface }]}>
-                  <Icon name="bookmark" size={26} color={P.accentText} />
-                </View>
-                <Text style={[styles.emptyTitle, { color: P.text }]}>No {selectedService} providers saved</Text>
-                <Text style={[styles.emptySubtitle, { color: P.sub }]}>
-                  You haven't bookmarked any {selectedService.toLowerCase()} providers yet
-                </Text>
-              </View>
-            </View>
-          )}
-        </ScrollView>
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={7}
+          updateCellsBatchingPeriod={50}
+          ListEmptyComponent={renderEmptyState}
+        />
       </SafeAreaView>
     </ThemedBackground>
   );
@@ -309,11 +308,11 @@ interface BookmarkGridCardProps {
   hasOffer: boolean;
   appointmentCount: number;
   P: AppTheme;
-  onPress: () => void;
-  onRemove: () => void;
+  onPress: (provider: Provider) => void;
+  onRemove: (provider: Provider) => void;
 }
 
-function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
+const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPress, onRemove }: BookmarkGridCardProps) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -327,7 +326,13 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
 
   return (
     <Animated.View style={[styles.gridCard, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.88}>
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress(provider);
+        }}
+        activeOpacity={0.88}
+      >
         <View style={styles.imageWrap}>
           {provider.logo ? (
             <Image source={provider.logo} style={styles.image} resizeMode="cover" />
@@ -361,7 +366,11 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
 
             <TouchableOpacity
               style={styles.bookmarkFloating}
-              onPress={(e) => { e.stopPropagation(); onRemove(); }}
+              onPress={(e) => {
+                e.stopPropagation();
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onRemove(provider);
+              }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.7}
             >
@@ -398,7 +407,7 @@ function BookmarkGridCard({ provider, index, hasOffer, appointmentCount, P, onPr
       </TouchableOpacity>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -446,6 +455,9 @@ const styles = StyleSheet.create({
   gridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridColumnWrapper: {
     justifyContent: 'space-between',
   },
   gridCard: {

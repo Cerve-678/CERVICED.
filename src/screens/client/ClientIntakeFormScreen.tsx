@@ -32,6 +32,8 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   const [answers, setAnswers]   = useState<Record<string, string>>({});
   const [signature, setSignature] = useState('');
   const [loading, setLoading]   = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   // True once this form has ever been completed — loaded from the DB on
   // mount if it already was, or set the moment a fresh submit succeeds.
@@ -60,15 +62,24 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   }, []);
 
   useEffect(() => {
-    getIntakeFormById(formId).then(f => {
-      if (f) {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    getIntakeFormById(formId)
+      .then(f => {
+        if (cancelled) return;
         setForm(f);
-        if (f.status === 'completed' && f.answers) setAnswers(f.answers);
-        if (f.status === 'completed') setSubmitted(true);
-      }
-      setLoading(false);
-    });
-  }, [formId]);
+        if (f?.status === 'completed' && f.answers) setAnswers(f.answers);
+        if (f?.status === 'completed') setSubmitted(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [formId, retryNonce]);
 
   const setAnswer = useCallback((questionId: string, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
@@ -112,7 +123,17 @@ export default function ClientIntakeFormScreen({ route, navigation }: Props) {
   if (!form) {
     return (
       <ThemedBackground style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: P.text, fontSize: 16 }}>Form not found.</Text>
+        <Text style={{ color: P.text, fontSize: 16 }}>
+          {loadError ? "We couldn't load this form." : 'Form not found.'}
+        </Text>
+        {loadError && (
+          <TouchableOpacity
+            style={[styles.doneBtn, { backgroundColor: P.accent, marginTop: 16 }]}
+            onPress={() => setRetryNonce(value => value + 1)}
+          >
+            <Text style={[styles.doneBtnText, { color: P.onAccent }]}>Try Again</Text>
+          </TouchableOpacity>
+        )}
       </ThemedBackground>
     );
   }

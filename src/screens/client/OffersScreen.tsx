@@ -23,7 +23,7 @@ import SlidingTabs from '../../components/SlidingTabs';
 import { HomeStackParamList } from '../../navigation/types';
 import { getActivePromotions } from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import type { DbPromotionWithProvider } from '../../types/database';
+import type { PublicPromotionWithProvider } from '../../types/database';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 interface Offer {
@@ -41,7 +41,7 @@ interface Offer {
   service?: string;
 }
 
-function mapPromotion(p: DbPromotionWithProvider): Offer {
+function mapPromotion(p: PublicPromotionWithProvider): Offer {
   return {
     id: p.id,
     title: p.title,
@@ -151,7 +151,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Offers'>;
 export default function OffersScreen({ navigation }: Props) {
   const { isDarkMode, palette: P } = useTheme();
 
-  const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
+  const [rawPromotions, setRawPromotions] = useState<PublicPromotionWithProvider[]>([]);
   const [selectedTab, setSelectedTab]     = useState('ALL');
   const [refreshing, setRefreshing]       = useState(false);
   const [sortBy, setSortBy]               = useState<SortKey>('newest');

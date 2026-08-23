@@ -1,6 +1,6 @@
 // BookingDetailScreen.tsx
 // Full-screen booking detail view extracted from BookingsScreen modal.
-import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
@@ -8,6 +8,7 @@ import {
   LayoutAnimation, UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -16,22 +17,17 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { hasMapDestination, isAddressPending } from '../../types/booking';
+import { hasMapDestination, isAddressPending, isMobileBooking } from '../../types/booking';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   submitReview, getProviderIdByDisplayName, hasReviewedBooking,
   getIntakeFormByBooking, IntakeForm, getProviderContactByDisplayName,
   getProviderContactById,
-  ProviderContactInfo, getProviderAddressPolicyByDisplayName,
-  getProviderAddressPolicy,
-  getProviderCancellationPolicyById,
-  getProviderReschedulePolicyById,
-  getProviderBookingPoliciesById,
+  ProviderContactInfo,
+  getProviderBookingDetailMetadata,
   ProviderAddressPolicy,
-  getProviderCancellationPolicy,
   getInfoPacksByBooking, markInfoPackViewed, BookingInfoPack,
-  getProviderReschedulePolicyByDisplayName,
   ProviderReschedulePolicy,
   getRebookableService,
   setBookingTip,
@@ -112,6 +108,9 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [bookingIntakeForm, setBookingIntakeForm] = useState<IntakeForm | null>(null);
   const [bookingInfoPacks, setBookingInfoPacks] = useState<BookingInfoPack[]>([]);
   const [todoLoaded, setTodoLoaded] = useState(false);
+  const [todoLoadError, setTodoLoadError] = useState(false);
+  const [todoRetryNonce, setTodoRetryNonce] = useState(0);
+  const todoBookingIdRef = useRef<string | null>(null);
   const [reschedulePolicy, setReschedulePolicy] = useState<ProviderReschedulePolicy | null>(null);
   const [addrSettings, setAddrSettings] = useState<ProviderAddressPolicy | null>(null);
   const [addrCountdown, setAddrCountdown] = useState('');
@@ -147,37 +146,41 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [contactSheetInfo, setContactSheetInfo] = useState<ProviderContactInfo | null>(null);
   const [contactSheetLoading, setContactSheetLoading] = useState(false);
 
-  // Load booking data on mount / bookingId change
-  useEffect(() => {
-    if (!bookingId) return;
-    setTodoLoaded(false);
-    // Load both to-do sources together and reveal the section only once BOTH
-    // have settled — loading them independently makes the section pop in (and
-    // shove the layout down) twice as each request resolves separately.
+  // One focus-aware loader owns both to-do requests. This runs once on first
+  // focus and once when returning from the intake form, without a separate
+  // mount effect racing a navigation focus listener. The active flag prevents
+  // a slow response for booking A from appearing after this route changes to B.
+  useFocusEffect(useCallback(() => {
+    // Reading the nonce makes the Retry action intentionally restart this
+    // focus effect without giving it any other semantic meaning.
+    void todoRetryNonce;
+    if (!bookingId) return undefined;
+    const bookingChanged = todoBookingIdRef.current !== bookingId;
+    todoBookingIdRef.current = bookingId;
+    if (bookingChanged) {
+      setBookingIntakeForm(null);
+      setBookingInfoPacks([]);
+      setTodoLoaded(false);
+    }
+    setTodoLoadError(false);
+
+    let active = true;
     Promise.allSettled([
-      getIntakeFormByBooking(bookingId).then(setBookingIntakeForm),
-      getInfoPacksByBooking(bookingId).then(setBookingInfoPacks),
-    ]).finally(() => {
-      // The section still has to wait on this network round-trip, but at
-      // least it eases into place instead of snapping in and shoving the
-      // rest of the screen down a beat after everything else has settled.
+      getIntakeFormByBooking(bookingId),
+      getInfoPacksByBooking(bookingId),
+    ]).then(([intakeResult, packsResult]) => {
+      if (!active) return;
+      if (intakeResult.status === 'fulfilled') setBookingIntakeForm(intakeResult.value);
+      if (packsResult.status === 'fulfilled') setBookingInfoPacks(packsResult.value);
+      setTodoLoadError(intakeResult.status === 'rejected' || packsResult.status === 'rejected');
+    }).finally(() => {
+      if (!active) return;
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setTodoLoaded(true);
     });
-  }, [bookingId]);
 
-  // Re-fetch on refocus — without this, returning from ClientIntakeFormScreen
-  // after submitting kept showing the form as pending: this screen's state was
-  // only ever set on mount, never after the DB row flipped to 'completed'.
-  useEffect(() => {
-    if (!bookingId) return;
-    const unsubscribe = navigation.addListener('focus', () => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      getIntakeFormByBooking(bookingId).then(setBookingIntakeForm).catch(() => {});
-      getInfoPacksByBooking(bookingId).then(setBookingInfoPacks).catch(() => {});
-    });
-    return unsubscribe;
-  }, [navigation, bookingId]);
+    return () => { active = false; };
+  }, [bookingId, todoRetryNonce]));
 
   // Hydrate rated/tipped state from the DB. These were local-only, so after any
   // remount an already-rated booking showed an active "Rate" button again (the
@@ -211,37 +214,47 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     // every booking already on the books. The id never changes.
     const pid = booking.providerId;
 
-    (pid
-      ? getProviderReschedulePolicyById(pid)
-      : getProviderReschedulePolicyByDisplayName(booking.providerName)
-    ).then(setReschedulePolicy).catch(() => {});
-
-    (pid
-      ? getProviderCancellationPolicyById(pid)
-      : getProviderCancellationPolicy(booking.providerName)
-    ).then(setCancellationNoticeHrs).catch(() => {});
-
-    // Only fetched when this booking has no frozen snapshot to show instead —
-    // most bookings from here on will, so this is a fallback for older rows,
-    // not a query every booking detail view pays for.
-    if (!booking.policySnapshot && pid) {
-      getProviderBookingPoliciesById(pid).then(setLivePolicyFallback).catch(() => {});
-    }
-
-    if (!booking.clientAddress) {
-      // Policy only. This screen needs the release policy to render the
-      // countdown; a client must never be sent an address the policy hasn't
-      // unlocked. The address itself arrives gated via the client_bookings view.
-      (pid
-        ? getProviderAddressPolicy(pid)
-        : getProviderAddressPolicyByDisplayName(booking.providerName)
-      ).then(setAddrSettings).catch(() => {});
-    }
+    let cancelled = false;
+    getProviderBookingDetailMetadata({
+      ...(pid ? { providerId: pid } : {}),
+      displayName: booking.providerName,
+    })
+      .then(metadata => {
+        if (cancelled) return;
+        setReschedulePolicy(metadata.reschedulePolicy);
+        setCancellationNoticeHrs(metadata.cancellationNoticeHours);
+        setLivePolicyFallback(
+          booking.policySnapshot ? null : metadata.bookingPolicies,
+        );
+        // Kept even for a booking that already has a client address: its
+        // business_type is what says whose address is the venue. Dropping it
+        // whenever a client address existed is what let a salon booking be
+        // mistaken for a mobile one.
+        setAddrSettings(metadata.addressPolicy);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [booking]);
 
-  // Address countdown timer
+  // Who travels to whom. The booking carries the provider's business_type
+  // (client_bookings view); addrSettings is the same answer fetched by id, and
+  // covers a booking read before the view exposed it.
+  const isMobile = useMemo(
+    () =>
+      !!booking &&
+      isMobileBooking({
+        providerBusinessType:
+          booking.providerBusinessType ?? addrSettings?.business_type ?? null,
+        clientAddress: booking.clientAddress ?? null,
+      }),
+    [booking, addrSettings],
+  );
+
+  // Address countdown timer — release timings belong to a provider the client
+  // travels to. A mobile provider's own address is never the venue, so there
+  // is nothing here to count down to.
   useEffect(() => {
-    if (!booking || booking.clientAddress) return;
+    if (!booking || isMobile) return;
     const policy = addrSettings?.address_release_policy ?? null; // ProviderAddressPolicy field
     if (!policy || policy === 'always' || policy === 'manual') return;
     const offsetDays: Record<string, number> = {
@@ -265,7 +278,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     tick();
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
-  }, [booking, addrSettings]);
+  }, [booking, addrSettings, isMobile]);
 
   const getStatusColor = useCallback((status: string, isPending?: boolean) => {
     if (isPending) return C.accent;
@@ -717,6 +730,23 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               badge) instead of disappearing — it used to only render while
               status === 'pending', so once submitted there was no way back
               into ClientIntakeFormScreen to see the answers you'd just filled in. */}
+          {todoLoaded && todoLoadError && (
+            <View style={st.section}>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border, padding: 14, flexDirection: 'row', alignItems: 'center' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.text, fontSize: 13, fontWeight: '700' }}>Some appointment tasks couldn’t load</Text>
+                  <Text style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>Retry to make sure you don’t miss a required form or provider information.</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setTodoRetryNonce(value => value + 1)}
+                  style={{ marginLeft: 12, paddingHorizontal: 12, paddingVertical: 8 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: C.accentText, fontSize: 13, fontWeight: '700' }}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           {todoLoaded && (bookingIntakeForm || bookingInfoPacks.length > 0) && (
             <View style={st.section}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
@@ -966,9 +996,18 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   </TouchableOpacity>
                 </View>
                 <View style={[st.row, { borderBottomWidth: 0 }]}>
-                  <Text style={[st.rowLabel, { color: C.sub }]}>{booking.clientAddress ? 'Your Address' : 'Location'}</Text>
-                  {booking.clientAddress ? (
-                    <Text style={[st.rowValue, { color: C.text }]}>{booking.clientAddress}</Text>
+                  <Text style={[st.rowLabel, { color: C.sub }]}>{isMobile ? 'Your Address' : 'Location'}</Text>
+                  {isMobile ? (
+                    booking.clientAddress ? (
+                      <Text style={[st.rowValue, { color: C.text }]}>{booking.clientAddress}</Text>
+                    ) : (
+                      // Mobile, but the client never gave an address — they
+                      // send it through Messages. Never the release countdown:
+                      // the provider's address isn't what's missing here.
+                      <Text style={[st.rowValue, { color: C.sub, fontStyle: 'italic' }]}>
+                        Send {booking.providerName} your address in Messages
+                      </Text>
+                    )
                   ) : hasMapDestination(booking) ? (
                     <TouchableOpacity onPress={() => openInMaps(booking)} activeOpacity={0.7}>
                       <Text style={[st.rowValue, { color: C.accent }]}>{booking.address}</Text>

@@ -1,6 +1,6 @@
 // Mobile-side adapter for the secure `becca-ai` Edge Function.
 // The NVIDIA key never enters this bundle. See BECCA_AI_INTEGRATION.md.
-import { supabase } from "../../lib/supabase";
+import { invokeBeccaAi } from "../databaseService";
 import type {
   BeccaAIComposition,
   BeccaAICompositionRequest,
@@ -31,15 +31,13 @@ function validComposition(data: unknown): BeccaAIComposition | null {
 export const nvidiaBeccaInterpreter: BeccaAIInterpreter = {
   async interpret(request: BeccaAIInterpretationRequest): Promise<BeccaAIInterpretation | null> {
     try {
-      const { data, error } = await supabase.functions.invoke("becca-ai", {
-        body: {
-          message: request.message,
-          hat: request.hat,
-          tools: request.tools,
-          resolvedEntityKinds: request.resolvedEntityKinds,
-        },
+      const data = await invokeBeccaAi({
+        message: request.message,
+        hat: request.hat,
+        tools: request.tools,
+        resolvedEntityKinds: request.resolvedEntityKinds,
       });
-      return error ? null : validInterpretation(data);
+      return validInterpretation(data);
     } catch {
       return null;
     }
@@ -51,16 +49,14 @@ export const nvidiaBeccaInterpreter: BeccaAIInterpreter = {
   // than correctness.
   async compose(request: BeccaAICompositionRequest): Promise<BeccaAIComposition | null> {
     try {
-      const { data, error } = await supabase.functions.invoke("becca-ai", {
-        body: {
-          mode: "compose",
-          message: request.message,
-          hat: request.hat,
-          capabilityId: request.capabilityId,
-          factualContent: request.factualContent,
-        },
+      const data = await invokeBeccaAi({
+        mode: "compose",
+        message: request.message,
+        hat: request.hat,
+        capabilityId: request.capabilityId,
+        factualContent: request.factualContent,
       });
-      return error ? null : validComposition(data);
+      return validComposition(data);
     } catch {
       return null;
     }

@@ -13,12 +13,11 @@ import * as Haptics from 'expo-haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
+import { signInWithAppleIdToken } from '../../services/databaseService';
 import { useAuth } from '../../contexts/AuthContext';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { reportError } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'Welcome'>;
 
@@ -57,16 +56,8 @@ export default function WelcomeScreen({ navigation }: Props) {
         return;
       }
       setIsAppleLoading(true);
-      const { error } = await supabase.auth.signInWithIdToken({
-        provider: 'apple',
-        token: credential.identityToken,
-      });
+      await signInWithAppleIdToken(credential.identityToken);
       setIsAppleLoading(false);
-      if (error) {
-        reportError(error, 'WelcomeScreen:appleSignIn');
-        Alert.alert('Sign in failed', 'Something went wrong. Please try again.');
-        return;
-      }
       // On success, AuthContext.onAuthStateChange handles navigation
     } catch (e: any) {
       // A concurrent/duplicate attempt (or one that lands after the user is

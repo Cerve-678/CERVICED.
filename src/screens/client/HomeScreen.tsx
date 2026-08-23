@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Dimensions,
@@ -33,8 +34,9 @@ import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
+import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
 import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, prefetchProviderBySlug } from '../../services/databaseService';
-import type { DbProvider, DbPromotionWithProvider } from '../../types/database';
+import type { PublicProviderSummary, PublicPromotionWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm } from '../../utils/distance';
@@ -91,6 +93,80 @@ interface Provider {
   distanceKm?: number; // populated by nearbyProviders when the user's location is known
 }
 
+const ProviderRail = React.memo(function ProviderRail({
+  providers,
+  keyPrefix,
+  onProviderPress,
+  cardStyle,
+  blurStyle,
+}: {
+  providers: Provider[];
+  keyPrefix: string;
+  onProviderPress: (provider: Provider) => void;
+  cardStyle: any;
+  blurStyle: any;
+}) {
+  return (
+    <FlatList
+      horizontal
+      data={providers}
+      keyExtractor={provider => `${keyPrefix}-${provider.id}`}
+      renderItem={({ item }) => (
+        <ProviderCard
+          provider={item}
+          onPress={() => onProviderPress(item)}
+          style={cardStyle}
+          blurStyle={blurStyle}
+        />
+      )}
+      showsHorizontalScrollIndicator={false}
+      style={styles.categoryScroll}
+      initialNumToRender={4}
+      maxToRenderPerBatch={4}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS === 'android'}
+    />
+  );
+});
+
+const RoundProviderRail = React.memo(function RoundProviderRail({
+  providers,
+  keyPrefix,
+  onProviderPress,
+  surface,
+  border,
+  text,
+}: {
+  providers: Provider[];
+  keyPrefix: string;
+  onProviderPress: (provider: Provider) => void;
+  surface: string;
+  border: string;
+  text: string;
+}) {
+  return (
+    <FlatList
+      horizontal
+      data={providers}
+      keyExtractor={provider => `${keyPrefix}-${provider.id}`}
+      showsHorizontalScrollIndicator={false}
+      style={styles.categoryScroll}
+      initialNumToRender={5}
+      maxToRenderPerBatch={5}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS === 'android'}
+      renderItem={({ item }) => (
+        <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
+          <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
+            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} resizeMode="cover" fadeDuration={0} /> : null}
+          </View>
+          <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
+        </TouchableOpacity>
+      )}
+    />
+  );
+});
+
 export default function HomeScreen() {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { palette: P } = useTheme();
@@ -112,7 +188,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (tourCheckedRef.current || !user?.id) return;
     tourCheckedRef.current = true;
-    const seenKey = `@client_tour_seen_${user.id}`;
+    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_HOME, user.id);
     storage.getItem<boolean>(seenKey).then(seen => {
       if (seen) return;
       // Give the header/category section time to finish their entrance
@@ -123,7 +199,7 @@ export default function HomeScreen() {
 
   const finishTour = useCallback(() => {
     setShowTour(false);
-    if (user?.id) storage.setItem(`@client_tour_seen_${user.id}`, true).catch(() => {});
+    if (user?.id) storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_HOME, user.id), true).catch(() => {});
   }, [user?.id]);
 
   const tourSteps = useMemo<CoachMarkStep[]>(() => {
@@ -149,6 +225,7 @@ export default function HomeScreen() {
           },
         },
         radius: TAB_H / 2,
+        icon: 'apps',
       },
       {
         key: 'search',
@@ -156,6 +233,7 @@ export default function HomeScreen() {
         body: 'Search by name, treatment, or category to find who you want to book.',
         target: { ref: searchIconRef },
         radius: 18,
+        icon: 'search',
       },
       {
         key: 'bell',
@@ -163,6 +241,7 @@ export default function HomeScreen() {
         body: 'Booking confirmations, reminders, and messages show up in your notifications.',
         target: { ref: bellIconRef },
         radius: 18,
+        icon: 'notifications',
       },
       {
         key: 'bookings',
@@ -170,6 +249,7 @@ export default function HomeScreen() {
         body: 'Everything you\'ve booked — upcoming and past — lives here.',
         target: { ref: bookingsChipRef },
         radius: 18,
+        icon: 'calendar',
       },
     ];
   }, []);
@@ -210,7 +290,7 @@ export default function HomeScreen() {
   });
 
   // Offers from Supabase — live promotions data
-  const [rawPromotions, setRawPromotions] = useState<DbPromotionWithProvider[]>([]);
+  const [rawPromotions, setRawPromotions] = useState<PublicPromotionWithProvider[]>([]);
 
   const allOffers: Offer[] = useMemo(() =>
     rawPromotions.map(p => ({
@@ -310,7 +390,7 @@ export default function HomeScreen() {
         // Silent failure — keeps default service order
       });
 
-    const mapDbProvider = (p: DbProvider): Provider => ({
+    const mapDbProvider = (p: PublicProviderSummary): Provider => ({
       id: p.id,
       slug: p.slug,
       name: p.display_name,
@@ -793,22 +873,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryScroll}
-              nestedScrollEnabled={true}
-            >
-              {providersData.yourProviders.slice(0, 15).map(provider => (
-                <ProviderCard
-                  key={`your-${provider.id}`}
-                  provider={provider}
-                  onPress={() => navigateToProvider(provider)}
-                  style={styles.brandCard}
-                  blurStyle={styles.brandCardBlur}
-                />
-              ))}
-            </ScrollView>
+            <ProviderRail providers={providersData.yourProviders.slice(0, 15)} keyPrefix="your" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
           </View>
         )}
 
@@ -1280,22 +1345,7 @@ export default function HomeScreen() {
                   ))}
                 </View>
               ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {recommendedProvidersList.map((provider) => (
-                    <ProviderCard
-                      key={`recommended-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.brandCard}
-                      blurStyle={styles.brandCardBlur}
-                    />
-                  ))}
-                </ScrollView>
+                <ProviderRail providers={recommendedProvidersList} keyPrefix="recommended" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               )}
             </View>
             )}
@@ -1307,22 +1357,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TRENDING THIS WEEK</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {trending.map(provider => (
-                    <ProviderCard
-                      key={`trending-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.providerCard}
-                      blurStyle={styles.providerBlur}
-                    />
-                  ))}
-                </ScrollView>
+                <ProviderRail providers={trending} keyPrefix="trending" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
               </View>
             )}
 
@@ -1333,22 +1368,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>NEW ON CERVICED</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {newProviders.map(provider => (
-                    <ProviderCard
-                      key={`new-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.brandCard}
-                      blurStyle={styles.brandCardBlur}
-                    />
-                  ))}
-                </ScrollView>
+                <ProviderRail providers={newProviders} keyPrefix="new" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
               </View>
             )}
 
@@ -1359,22 +1379,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>TOP RATED</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {topRated.map(provider => (
-                    <ProviderCard
-                      key={`toprated-${provider.id}`}
-                      provider={provider}
-                      onPress={() => navigateToProvider(provider)}
-                      style={styles.providerCard}
-                      blurStyle={styles.providerBlur}
-                    />
-                  ))}
-                </ScrollView>
+                <ProviderRail providers={topRated} keyPrefix="toprated" onProviderPress={navigateToProvider} cardStyle={styles.providerCard} blurStyle={styles.providerBlur} />
               </View>
             )}
 
@@ -1385,35 +1390,7 @@ export default function HomeScreen() {
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { color: P.text }]}>RECENTLY VIEWED</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {recentlyViewed.map(provider => (
-                    <TouchableOpacity
-                      key={`recent-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                            fadeDuration={0}
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <RoundProviderRail providers={recentlyViewed} keyPrefix="recent" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
             )}
 
@@ -1600,35 +1577,7 @@ export default function HomeScreen() {
                   </Text>
                 </TouchableOpacity>
               ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {nearbyProviders.slice(0, 15).map(provider => (
-                    <TouchableOpacity
-                      key={`near-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                            fadeDuration={0}
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <RoundProviderRail providers={nearbyProviders.slice(0, 15)} keyPrefix="near" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               )}
             </View>
 
@@ -1672,22 +1621,7 @@ export default function HomeScreen() {
                     ))}
                   </View>
                 ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoryScroll}
-                    nestedScrollEnabled={true}
-                  >
-                    {kidsProvidersDisplay.map(provider => (
-                      <ProviderCard
-                        key={`kids-${provider.id}`}
-                        provider={provider}
-                        onPress={() => navigateToProvider(provider)}
-                        style={styles.brandCard}
-                        blurStyle={styles.brandCardBlur}
-                      />
-                    ))}
-                  </ScrollView>
+                  <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
                 )}
               </View>
             )}
@@ -1748,35 +1682,7 @@ export default function HomeScreen() {
                   <Text style={[styles.sectionTitle, { color: P.text }]}>BOOK AGAIN</Text>
                 </View>
 
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll}
-                  nestedScrollEnabled={true}
-                >
-                  {previouslyBookedProviders.slice(0, 15).map(provider => (
-                    <TouchableOpacity
-                      key={`booked-${provider.id}`}
-                      style={styles.roundCard}
-                      onPress={() => navigateToProvider(provider)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.roundCardBlur, { backgroundColor: P.surface, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                        {provider.logo && (
-                          <Image
-                            source={provider.logo}
-                            style={styles.roundCardImage}
-                            resizeMode="cover"
-                            fadeDuration={0}
-                          />
-                        )}
-                      </View>
-                      <Text style={[styles.roundCardName, { color: P.text }]} numberOfLines={1}>
-                        {provider.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <RoundProviderRail providers={previouslyBookedProviders.slice(0, 15)} keyPrefix="booked" onProviderPress={navigateToProvider} surface={P.surface} border={P.border} text={P.text} />
               </View>
             )}
           </>

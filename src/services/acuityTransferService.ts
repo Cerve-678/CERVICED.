@@ -5,8 +5,8 @@
 // extract-provider-profile Edge Function — keeping it server-side means the
 // Anthropic API key never ships inside the app bundle, and the same function
 // is reused by the batch scrape pipeline.
-import { supabase } from '../lib/supabase';
 import { ProviderRegistrationData } from './providerRegistrationService';
+import { extractProviderProfileFromUrl } from './databaseService';
 import { reportError } from '../utils/logger';
 
 interface ExtractedProfile {
@@ -22,18 +22,18 @@ interface ExtractedProfile {
 }
 
 export async function transferFromAcuity(url: string): Promise<ProviderRegistrationData> {
-  const { data, error } = await supabase.functions.invoke('extract-provider-profile', {
-    body: { url, sourceType: 'acuity' },
-  });
-
-  // An edge-function invoke error reads like "Edge Function returned a non-2xx
-  // status code" — true, and useless to a provider. Log the real one, throw copy.
-  if (error) {
+  let data: unknown;
+  try {
+    data = await extractProviderProfileFromUrl(url, 'acuity');
+  } catch (error) {
+    // An edge-function invoke error reads like "Edge Function returned a non-2xx
+    // status code" — true, and useless to a provider. Log the real one, throw copy.
     reportError(error, 'acuityTransferService.invoke');
     throw new Error('Could not read that page. Please check the link and try again.');
   }
 
-  const extracted: ExtractedProfile = data?.extracted ?? {};
+  const extracted: ExtractedProfile =
+    (data as { extracted?: ExtractedProfile } | null)?.extracted ?? {};
 
   const categories: ProviderRegistrationData['categories'] = {};
   let serviceId = 1;

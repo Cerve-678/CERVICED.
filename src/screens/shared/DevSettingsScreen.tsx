@@ -11,6 +11,7 @@ import {
   Platform,
   StatusBar,
   Modal,
+  DevSettings,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,11 +19,11 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { useBooking } from '../../contexts/BookingContext';
-import { STORAGE_KEYS } from '../../utils/storageKeys';
+import { STORAGE_KEYS, TOUR_SEEN_PREFIXES } from '../../utils/storageKeys';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { getCurrentUserStoredPushToken, runDevReset } from '../../services/databaseService';
 import {
   registerForPushNotifications,
   unregisterPushToken,
@@ -163,6 +164,37 @@ export default function DevSettingsScreen({ navigation }: any) {
     );
   };
 
+  // Re-arms every coach-mark walkthrough (client home, Explore, provider
+  // home) by dropping the per-user "already seen" flags — the non-destructive
+  // way to look at a tour again, as opposed to Reset App below, which signs
+  // you out and wipes the device to get the same effect.
+  //
+  // Clearing the flags alone isn't enough to make a tour reappear: each
+  // screen checks its flag once per mount behind a ref, and the tab screens
+  // stay mounted for the life of the session. So this offers a reload, which
+  // is what actually re-runs those checks.
+  const replayWalkthroughs = async () => {
+    try {
+      const prefixes = Object.values(TOUR_SEEN_PREFIXES);
+      const keys = await AsyncStorage.getAllKeys();
+      const tourKeys = keys.filter((k) => prefixes.some((prefix) => k.startsWith(prefix)));
+      if (tourKeys.length > 0) {
+        await AsyncStorage.multiRemove(tourKeys);
+      }
+      Alert.alert(
+        'Walkthroughs Re-armed',
+        `Cleared ${tourKeys.length} flag(s). Reload now to see them — the client tour runs on Home, and the Explore tour runs the first time you open Explore once its feed has loaded.`,
+        [
+          { text: 'Later', style: 'cancel' },
+          { text: 'Reload', onPress: () => DevSettings.reload() },
+        ]
+      );
+    } catch (error) {
+      logger.error('[DevSettings] replayWalkthroughs failed:', error);
+      Alert.alert('Error', 'Failed to clear the walkthrough flags — check Debug Logs for details.');
+    }
+  };
+
   const viewAllStorageKeys = async () => {
     try {
       const keys = await AsyncStorage.getAllKeys();
@@ -215,15 +247,7 @@ export default function DevSettingsScreen({ navigation }: any) {
       }
 
       // Token stored in the DB — what the Edge Function actually sends to.
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data } = await supabase
-          .from('users')
-          .select('push_token')
-          .eq('id', authUser.id)
-          .single();
-        setDbToken(data?.push_token ?? null);
-      }
+      setDbToken(await getCurrentUserStoredPushToken());
     } catch (err) {
       if (__DEV__) console.warn('[Dev] loadPushInfo failed:', err);
     }
@@ -413,18 +437,7 @@ export default function DevSettingsScreen({ navigation }: any) {
           onPress: async () => {
             setPushBusy(true);
             try {
-              const { data, error } = await supabase.rpc('dev_reset_client');
-              if (error) {
-                logger.error('[DevSettings] dev_reset_client RPC error:', error);
-                Alert.alert(
-                  'Reset failed',
-                  /dev_reset_client|function|does not exist|schema cache/i.test(error.message)
-                    ? 'RPC not found. Run supabase/dev_reset_client.sql in the Supabase SQL editor first.'
-                    : error.message
-                );
-                return;
-              }
-              const res = data as any;
+              const res = await runDevReset('client');
               if (res?.ok === false) {
                 Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
                 return;
@@ -467,18 +480,7 @@ export default function DevSettingsScreen({ navigation }: any) {
           onPress: async () => {
             setPushBusy(true);
             try {
-              const { data, error } = await supabase.rpc('dev_reset_provider_bookings_only');
-              if (error) {
-                logger.error('[DevSettings] dev_reset_provider_bookings_only RPC error:', error);
-                Alert.alert(
-                  'Reset failed',
-                  /dev_reset_provider_bookings_only|function|does not exist|schema cache/i.test(error.message)
-                    ? 'RPC not found. Run supabase/dev_reset_provider_bookings_only.sql in the Supabase SQL editor first.'
-                    : error.message
-                );
-                return;
-              }
-              const res = data as any;
+              const res = await runDevReset('provider_bookings');
               if (res?.ok === false) {
                 Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
                 return;
@@ -515,20 +517,7 @@ export default function DevSettingsScreen({ navigation }: any) {
           onPress: async () => {
             setPushBusy(true);
             try {
-              const { data, error } = await supabase.rpc('dev_reset_provider');
-              if (error) {
-                logger.error('[DevSettings] dev_reset_provider RPC error:', error);
-                Alert.alert(
-                  'Reset failed',
-                  /dev_reset_provider|function|does not exist|schema cache/i.test(error.message)
-                    ? 'RPC not found. Run supabase/dev_reset_provider.sql in the Supabase SQL editor first.'
-                    : /notifications_type_check/i.test(error.message)
-                    ? 'A notification row has a type the DB check constraint rejects (see supabase/fix_notifications_type_check.sql — run it once in the SQL editor, then retry).'
-                    : error.message
-                );
-                return;
-              }
-              const res = data as any;
+              const res = await runDevReset('provider');
               if (res?.ok === false) {
                 Alert.alert('Nothing reset', res?.error ?? 'Unknown reason.');
                 return;
@@ -838,6 +827,13 @@ export default function DevSettingsScreen({ navigation }: any) {
                 onPress={viewAllStorageKeys}
               >
                 <Text style={[styles.primaryButtonText, { color: P.text }]}>View All Keys</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: P.iconBg, borderColor: P.border }]}
+                onPress={replayWalkthroughs}
+              >
+                <Text style={[styles.primaryButtonText, { color: P.text }]}>Replay Walkthroughs</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

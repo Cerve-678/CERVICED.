@@ -30,9 +30,15 @@ interface PortfolioCardProps {
   imageHeight: number;
   onPress: (item: PortfolioItem) => void;
   index: number;
+  // Coach-mark targets. Supplied for exactly one card in the Explore feed
+  // (see ExploreScreen's tourCardId) so the first-visit tour can spotlight a
+  // real heart button and a real price badge, rather than a guessed rect.
+  // Every other card gets neither and is unaffected.
+  heartRef?: React.RefObject<View | null>;
+  priceRef?: React.RefObject<View | null>;
 }
 
-const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index }: PortfolioCardProps) => {
+const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index, heartRef, priceRef }: PortfolioCardProps) => {
   const { theme, palette: P } = useTheme();
   // Blue-grey secondary — the highlight for the saved-heart and category chip
   // over photos. Hat-aware via palette; on the client hat this is the blue-grey
@@ -127,7 +133,7 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index }: 
 
         {/* Price badge */}
         {item.price && (
-          <View style={styles.priceBadge}>
+          <View ref={priceRef} collapsable={false} style={styles.priceBadge}>
             <Text style={styles.priceBadgeText}>{item.price}</Text>
           </View>
         )}
@@ -146,6 +152,7 @@ const PortfolioCardInner = ({ item, columnWidth, imageHeight, onPress, index }: 
             action's icon in ImageDetailModal (was a bookmark glyph here,
             a heart there, for the identical underlying action). */}
         <TouchableOpacity
+          ref={heartRef}
           style={styles.bookmarkButton}
           onPress={handleBookmark}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -190,7 +197,12 @@ export const PortfolioCard = React.memo(PortfolioCardInner, (prev, next) => {
     // would keep rendering at its initial placeholder height while the
     // grid's packer had already re-laid-out around the corrected one.
     prev.imageHeight === next.imageHeight &&
-    prev.index === next.index
+    prev.index === next.index &&
+    // Ref objects are stable per screen, so this only differs when the tour
+    // target moves to a different card — which must re-render both the card
+    // losing the refs and the one gaining them.
+    prev.heartRef === next.heartRef &&
+    prev.priceRef === next.priceRef
   );
 });
 

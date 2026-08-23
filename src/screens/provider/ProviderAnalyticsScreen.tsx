@@ -1227,36 +1227,39 @@ export default function ProviderAnalyticsScreen({ navigation }: any) {
   const [refreshing, setRefreshing]     = useState(false);
   const [range, setRange]               = useState<Range>('30d');
 
-  const fetchAll = useCallback(async () => {
+  const fetchBookingsForRange = useCallback(async () => {
     try {
-      // Analytics needs full lifetime history — the "All" range, the
-      // month-over-month comparison, and the 6-month chart all read `bookings`
-      // directly rather than the windowed `inRange`, so this can't rely on
-      // getProviderBookings()'s default 90-day-back window without silently
-      // under-counting older revenue.
-      const [b, r, fc] = await Promise.all([
-        getProviderBookings(Infinity),
+      // The default dashboard and six-month chart need only a bounded recent
+      // window. Fetch lifetime history only when the provider explicitly
+      // selects All; long-tenured accounts should not pay that cost on entry.
+      setBookings(await getProviderBookings(range === 'all' ? Infinity : 210));
+    } catch {}
+  }, [range]);
+
+  const fetchSupportingMetrics = useCallback(async () => {
+    try {
+      const [r, fc] = await Promise.all([
         getMyProviderReviews(),
         getMyBookmarkCount(),
       ]);
-      setBookings(b);
       setReviews(r);
       setFollowerCount(fc);
     } catch {}
   }, []);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
-
-  useFocusEffect(useCallback(() => { fetchAll(); }, [fetchAll]));
+  useFocusEffect(useCallback(() => {
+    void fetchBookingsForRange();
+  }, [fetchBookingsForRange]));
+  useFocusEffect(useCallback(() => {
+    void fetchSupportingMetrics();
+  }, [fetchSupportingMetrics]));
 
   const onRefresh = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setRefreshing(true);
-    await fetchAll();
+    await Promise.all([fetchBookingsForRange(), fetchSupportingMetrics()]);
     setRefreshing(false);
-  }, [fetchAll]);
+  }, [fetchBookingsForRange, fetchSupportingMetrics]);
 
   // Filter by range
   const inRange = useMemo(() => {

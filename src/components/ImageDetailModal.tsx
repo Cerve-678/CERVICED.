@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -425,6 +425,34 @@ function ModalBody({
   const activeImageIndexRef = useRef(initialImageIndex);
   const carouselRef = useRef<CarouselController | null>(null);
   const panStartOffsetRef = useRef(0);
+  const pendingCarouselOffsetRef = useRef<number | null>(null);
+  const carouselFrameRef = useRef<number | null>(null);
+
+  const cancelPendingCarouselFrame = useCallback(() => {
+    if (carouselFrameRef.current !== null) {
+      cancelAnimationFrame(carouselFrameRef.current);
+      carouselFrameRef.current = null;
+    }
+    pendingCarouselOffsetRef.current = null;
+  }, []);
+
+  const trackCarouselOffset = useCallback((offset: number) => {
+    // PanResponder can emit more move events than the display can paint.
+    // Coalescing them to one native FlatList update per frame keeps the image
+    // attached to the finger without flooding the JS/native bridge.
+    pendingCarouselOffsetRef.current = offset;
+    if (carouselFrameRef.current !== null) return;
+    carouselFrameRef.current = requestAnimationFrame(() => {
+      carouselFrameRef.current = null;
+      const nextOffset = pendingCarouselOffsetRef.current;
+      pendingCarouselOffsetRef.current = null;
+      if (nextOffset !== null) {
+        carouselRef.current?.scrollToOffset(nextOffset, false);
+      }
+    });
+  }, []);
+
+  useEffect(() => cancelPendingCarouselFrame, [cancelPendingCarouselFrame]);
 
   useEffect(() => {
     activeImageIndexRef.current = initialImageIndex;
@@ -435,9 +463,13 @@ function ModalBody({
       PanResponder.create({
         // This transparent surface covers only the exposed image, never the
         // card, so it can own a gallery gesture without affecting card scroll.
+        // This view sits above the card so it must claim the touch from the
+        // start; waiting for a move lets the overlapping ScrollView consume
+        // the gesture before the carousel ever sees it.
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
+          cancelPendingCarouselFrame();
           panStartOffsetRef.current = activeImageIndexRef.current * SCREEN_WIDTH;
         },
         onPanResponderMove: (_, gesture) => {
@@ -446,38 +478,37 @@ function ModalBody({
             0,
             Math.min(maxOffset, panStartOffsetRef.current - gesture.dx),
           );
-          carouselRef.current?.scrollToOffset(offset, false);
+          trackCarouselOffset(offset);
         },
         onPanResponderRelease: (_, gesture) => {
-          const isTap = Math.abs(gesture.dx) < 8 && Math.abs(gesture.dy) < 8;
+          cancelPendingCarouselFrame();
           const maxIndex = images.length - 1;
-          // Match the native gallery feel: the image follows the whole drag,
-          // then a deliberate flick or a modest drag commits to the adjacent
-          // photo. A tiny accidental movement simply springs back.
+          // A light, unmistakably horizontal flick or a short drag commits
+          // one page. Anything smaller settles back to the page it began on.
           const isDeliberateSwipe =
-            Math.abs(gesture.dx) > SCREEN_WIDTH * 0.1 ||
-            Math.abs(gesture.vx) > 0.2;
+            Math.abs(gesture.dx) >= SCREEN_WIDTH * 0.09 ||
+            Math.abs(gesture.vx) >= 0.18;
+          const startIndex = Math.round(panStartOffsetRef.current / SCREEN_WIDTH);
+          const isTap = Math.abs(gesture.dx) < 8 && Math.abs(gesture.dy) < 8;
           const rawIndex = isTap
-            ? activeImageIndexRef.current +
-              (gesture.x0 < SCREEN_WIDTH / 2 ? -1 : 1)
+            ? startIndex + (gesture.x0 < SCREEN_WIDTH / 2 ? -1 : 1)
             : isDeliberateSwipe
-              ? activeImageIndexRef.current + (gesture.dx < 0 ? 1 : -1)
-            : Math.round(
-                (panStartOffsetRef.current - gesture.dx) / SCREEN_WIDTH,
-              );
+              ? startIndex + (gesture.dx < 0 ? 1 : -1)
+              : startIndex;
           const nextIndex = Math.max(0, Math.min(maxIndex, rawIndex));
           activeImageIndexRef.current = nextIndex;
           setActiveImageIndex(nextIndex);
           carouselRef.current?.scrollToOffset(nextIndex * SCREEN_WIDTH, true);
         },
         onPanResponderTerminate: () => {
+          cancelPendingCarouselFrame();
           carouselRef.current?.scrollToOffset(
             activeImageIndexRef.current * SCREEN_WIDTH,
             true,
           );
         },
       }),
-    [images.length],
+    [cancelPendingCarouselFrame, images.length, trackCarouselOffset],
   );
 
   return (
@@ -575,14 +606,31 @@ function ModalBody({
         />
       </View>
       {images.length > 1 && (
-        <View
-          style={[
-            styles.carouselTapZones,
-            { height: imageHeight - CARD_OVERLAP },
-          ]}
-          {...carouselPanResponder.panHandlers}
-        >
-        </View>
+        <>
+          <View
+            style={[
+              styles.carouselTapZones,
+              { height: imageHeight - CARD_OVERLAP },
+            ]}
+            {...carouselPanResponder.panHandlers}
+          />
+          {/* Visual cue only — the full exposed image remains the swipe/tap
+              target, so these never steal the gesture. */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.carouselArrowRow,
+              { height: imageHeight - CARD_OVERLAP },
+            ]}
+          >
+            <View style={styles.carouselArrow}>
+              <Text style={styles.carouselArrowText}>‹</Text>
+            </View>
+            <View style={styles.carouselArrow}>
+              <Text style={styles.carouselArrowText}>›</Text>
+            </View>
+          </View>
+        </>
       )}
       <ScrollView
         ref={scrollRef}
@@ -899,6 +947,31 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     zIndex: 5,
+  },
+  carouselArrowRow: {
+    position: 'absolute',
+    top: 0,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 6,
+  },
+  carouselArrow: {
+    width: 34,
+    height: 52,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  carouselArrowText: {
+    color: '#FFFFFF',
+    fontSize: 34,
+    fontWeight: '300',
+    lineHeight: 38,
+    marginTop: -3,
   },
   // This stays above the image visually, but box-none lets taps in its empty
   // top padding fall through to the carousel's native FlatList.

@@ -52,8 +52,7 @@ import { saveProviderToSupabase, loadProviderFromSupabase, saveProviderPolicies,
 import type { ProviderRegistrationData } from '../../services/providerRegistrationService';
 import { transferFromAcuity } from '../../services/acuityTransferService';
 import { getPendingClaim, claimProviderProfile, clearPendingClaim } from '../../services/providerClaimService';
-import { supabase } from '../../lib/supabase';
-import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo } from '../../services/databaseService';
+import { getProviderPortfolio, addPortfolioItem, deletePortfolioItem, getProviderIdForUserId, getUserSignupPrefillInfo, getUserBusinessInfo, removePortfolioStorageObject } from '../../services/databaseService';
 import type { DbPortfolioItem } from '../../types/database';
 
 import {
@@ -76,8 +75,6 @@ import { RequiredLabel } from '../../features/provider-registration/RequiredLabe
 import { createServiceDraft } from '../../features/provider-registration/serviceDraft';
 import { toUserMessage } from '../../utils/userFacingError';
 
-type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
-
 import {
   ADDRESS_RELEASE_OPTS,
   isAddressReleaseAllowed,
@@ -85,6 +82,8 @@ import {
   type AddressReleasePolicy,
   type BusinessType,
 } from '../../features/business-details/options';
+
+type InfoRegScreenProps = StackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -2707,7 +2706,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       const idx = item.image_url.indexOf(marker);
       if (idx !== -1) {
         const path = decodeURIComponent(item.image_url.slice(idx + marker.length));
-        try { await supabase.storage.from('portfolio').remove([path]); } catch { /* ignore */ }
+        try { await removePortfolioStorageObject(path); } catch { /* ignore */ }
       }
     } catch {
       Alert.alert('Error', 'Could not remove photo.');
@@ -2994,6 +2993,10 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
       Alert.alert('Missing Information', 'Please enter your location.');
       return;
     }
+    if (!providerData.businessType) {
+      Alert.alert('Missing Information', 'Please choose your business type — it decides whether clients come to you or you travel to them, and which address-sharing options you get.');
+      return;
+    }
     if (!providerData.fullAddress.trim()) {
       Alert.alert('Missing Information', 'Please enter your full address — required for every business type, including mobile. It is never shown publicly.');
       return;
@@ -3150,7 +3153,15 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
           section: 'policies',
           title: 'Business setup',
           rows: [
-            { label: 'Business type', value: filled(providerData.businessType) ? (BUSINESS_TYPE_LABELS[providerData.businessType] ?? providerData.businessType) : '' },
+            // Required to publish: business_type decides which address-release
+            // timings exist and, more importantly, WHO TRAVELS TO WHOM — a
+            // mobile provider goes to the client, everyone else is a venue the
+            // client travels to. Left unset, a provider silently inherits the
+            // column's 'on_confirmation' default and starts releasing an
+            // address under a type nobody chose. It was already required at
+            // signup (Step 4); the claim/transfer paths bypassed that, which
+            // is how live rows ended up NULL.
+            { label: 'Business type', value: filled(providerData.businessType) ? (BUSINESS_TYPE_LABELS[providerData.businessType] ?? providerData.businessType) : '', required: true },
             { label: 'Full address', value: filled(providerData.fullAddress) ? 'Added (stays private)' : '', required: true },
           ],
         },
@@ -4525,12 +4536,22 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                   publish, so a new provider is still asked for it during
                   signup. */}
               <Text style={styles.policySectionTitle}>Business Setup</Text>
-              <Text style={styles.policyLabel}>TYPE</Text>
-                {/* Locked post-first-save: business_type decides whether a
-                    private address is required (mobile is exempt) and drives
-                    address-release timing options below — changing it later
-                    could silently leave an already-live profile in an
-                    inconsistent state. */}
+              <View style={styles.docFieldRow}>
+                <Text style={styles.policyLabel}>
+                  TYPE <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                {missingRequiredSet.has('Business type') && (
+                  <Text style={styles.docFieldFlag}>Required</Text>
+                )}
+              </View>
+                {/* Locked post-first-save: business_type decides who travels to
+                    whom (mobile goes to the client; every other type is a venue
+                    the client comes to) and drives the address-release timings
+                    below — changing it later could silently leave an
+                    already-live profile in an inconsistent state. The private
+                    address itself is required for every type, mobile included;
+                    an earlier version of this comment said mobile was exempt,
+                    which has not been true since require_provider_address.sql. */}
                 {isEditMode && providerData.businessType ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' }}>
                     <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>

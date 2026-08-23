@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
+import { updatePasswordAndSignOut } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -49,13 +49,14 @@ export default function NewPasswordScreen({ navigation }: Props) {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (error) {
+    try {
+      await updatePasswordAndSignOut(password);
+    } catch {
       Alert.alert('Error', "Couldn't update your password. Please try again.");
       return;
+    } finally {
+      setLoading(false);
     }
-    await supabase.auth.signOut();
     Alert.alert('Password updated!', 'Please log in with your new password.', [
       { text: 'OK', onPress: () => navigation.navigate('Login') },
     ]);

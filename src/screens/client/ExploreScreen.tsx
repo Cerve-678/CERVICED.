@@ -17,9 +17,12 @@ import { exploreScrollHandler, resetExplorePillTracking, settleExplorePillTracki
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
 import { useMeasuredAspectRatios } from '../../utils/useMeasuredAspectRatios';
 import { shuffle } from '../../utils/shuffle';
+import { pickTourCardId } from '../../utils/coachMarkTargets';
 import { ExploreStackParamList } from '../../navigation/types';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import TabIcon from '../../components/TabIcon';
 import SlidingTabs from '../../components/SlidingTabs';
 import { dimensions, fonts, spacing } from '../../constants/PlatformDimensions';
@@ -44,6 +47,9 @@ import type { PortfolioItemWithProvider, DiscoverServiceWithProvider, DbProvider
 
 // Stores
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
+import { storage } from '../../utils/storage';
+import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
+import { logger } from '../../utils/logger';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -170,6 +176,8 @@ function SkeletonMasonryGrid() {
 interface SubTabProps {
   activeTab: 'discover' | 'favourites';
   onTabChange: (tab: 'discover' | 'favourites') => void;
+  // Coach-mark target for the first-visit tour's "where your saves land" step.
+  favouritesRef?: React.RefObject<View | null>;
 }
 
 const SUB_TABS = [
@@ -180,7 +188,7 @@ const SUB_TABS = [
 // Both tabs match — same heavier BakbakOne treatment, sitting side by side
 // on the left. Underline-when-active, no shared SlidingTabs pill (that
 // treatment is used elsewhere — Bookings, the filter chips below).
-const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
+const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange, favouritesRef }) => {
   const { palette: P } = useTheme();
   return (
     <View style={[styles.subTabBar, { backgroundColor: P.bg }]}>
@@ -189,6 +197,7 @@ const SubTabBar = memo<SubTabProps>(({ activeTab, onTabChange }) => {
         return (
           <TouchableOpacity
             key={tab.key}
+            {...(tab.key === 'favourites' && favouritesRef ? { ref: favouritesRef } : {})}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onTabChange(tab.key);
@@ -253,6 +262,23 @@ const ExploreScreen = memo(() => {
 
   // Stores
   const { loadSavedPortfolio, savedPortfolioIds } = useBookmarkStore();
+
+  // ---------------------------------------------------------------------
+  // First-visit coach-mark tour for Explore.
+  //
+  // Deliberately a SEPARATE flag from HomeScreen's `@client_tour_seen_*`:
+  // the home tour runs the moment a new client lands in the app, and the
+  // grid's own affordances (heart, price badge) only exist once this screen
+  // has been opened and its feed has actually loaded. So this one is armed
+  // on the first visit to Explore instead of piggy-backing on the other.
+  // ---------------------------------------------------------------------
+  const { user } = useAuth();
+  const [showTour, setShowTour] = useState(false);
+  const tourCheckedRef = useRef(false);
+  const tourHeartRef = useRef<View>(null);
+  const tourPriceRef = useRef<View>(null);
+  const tourFavouritesRef = useRef<View>(null);
+  const tourSavedRef = useRef<View>(null);
 
   // Favourites — anything the user hearted, resolved from useBookmarkStore's
   // saved ids (a mix of portfolio/provider/service ids from the mixed feed)
@@ -483,45 +509,9 @@ const ExploreScreen = memo(() => {
     return () => { cancelled = true; };
   }, [selectedFilter, loadDiscoverFeed]);
 
-  // Background-prefetch every other filter once the first one has loaded, so
-  // a first-time tap on a filter chip is usually already cached by the time
-  // it happens instead of paying for 4 parallel network round-trips in the
-  // moment (the DB side of these queries is sub-2ms at current table sizes —
-  // the felt delay is network/request overhead, not query time). Guarded by
-  // a ref (not just checking portfolioLoading) so this genuinely fires once
-  // per screen session — portfolioLoading flips false after every filter
-  // switch too, and re-running the full prefetch sweep on each one would be
-  // wasteful even though the cache check makes it harmless. Sequential, not
-  // Promise.all across filters: this is speculative, lower-priority than the
-  // real fetch above, and 7 filters × 4 queries all at once would contend
-  // with whatever the user is actually waiting on. Every prefetch call goes
-  // through the same loadDiscoverFeed (and discoverFeedCache) as a real
-  // filter tap, so if the user taps a filter that's already mid-prefetch,
-  // the normal fetch effect just runs redundantly in parallel — no broken
-  // state, just one extra request.
-  const hasStartedPrefetch = useRef(false);
-  useEffect(() => {
-    if (portfolioLoading || hasStartedPrefetch.current) return;
-    hasStartedPrefetch.current = true;
-    let cancelled = false;
-
-    const prefetchRemaining = async () => {
-      for (const filter of filters) {
-        if (cancelled) return;
-        if (discoverFeedCache.current.has(filter)) continue;
-        try {
-          await loadDiscoverFeed(filter);
-        } catch {
-          // Best-effort — a failed prefetch just means that filter falls
-          // back to the normal fetch-on-tap path, same as before prefetch
-          // existed.
-        }
-      }
-    };
-    prefetchRemaining();
-
-    return () => { cancelled = true; };
-  }, [portfolioLoading, filters, loadDiscoverFeed]);
+  // Other filters load on demand and remain cached for this screen session.
+  // Eagerly prefetching every alternative cost 24 speculative database
+  // requests and competed with images in the feed being viewed.
 
   // Pull-to-refresh is the only user action allowed to force a new shuffle
   // for the currently-selected filter — discards that filter's cache entry
@@ -678,6 +668,66 @@ const ExploreScreen = memo(() => {
     [navigation]
   );
 
+  // The one card the tour spotlights — see pickTourCardId for the rule.
+  const tourCardId = useMemo(() => pickTourCardId(portfolioItems), [portfolioItems]);
+
+  useEffect(() => {
+    // Wait for a real feed: the grid's affordances are the whole point of
+    // this tour, so there's nothing to spotlight until cards exist.
+    if (tourCheckedRef.current || !user?.id || portfolioLoading || !tourCardId) return;
+    tourCheckedRef.current = true;
+    const seenKey = tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_EXPLORE, user.id);
+    storage.getItem<boolean>(seenKey).then(seen => {
+      if (seen) return;
+      // Let the cards finish their staggered entrance (PortfolioCard fades
+      // in with an index-based delay) before measuring where they landed.
+      setTimeout(() => setShowTour(true), 700);
+    }).catch((err) => logger.error('[Explore] tour-seen flag read failed:', err));
+  }, [user?.id, portfolioLoading, tourCardId]);
+
+  const finishTour = useCallback(() => {
+    setShowTour(false);
+    if (user?.id) {
+      storage.setItem(tourSeenKey(TOUR_SEEN_PREFIXES.CLIENT_EXPLORE, user.id), true)
+        .catch((err) => logger.error('[Explore] tour-seen flag write failed:', err));
+    }
+  }, [user?.id]);
+
+  const tourSteps = useMemo<CoachMarkStep[]>(() => [
+    {
+      key: 'heart',
+      title: 'Save it with a tap',
+      body: 'Heart any look, provider or service to keep it — no need to remember who posted it.',
+      target: { ref: tourHeartRef },
+      radius: 15,
+      icon: 'heart',
+    },
+    {
+      key: 'price',
+      title: 'A price means you can book it',
+      body: 'Cards showing a price are a real service. Tap one and you book that exact service — not just the provider.',
+      target: { ref: tourPriceRef },
+      radius: 10,
+      icon: 'pricetag',
+    },
+    {
+      key: 'favourites',
+      title: 'Everything you saved',
+      body: 'Your hearted looks, providers and services all collect under Favourites.',
+      target: { ref: tourFavouritesRef },
+      radius: 10,
+      icon: 'sparkles',
+    },
+    {
+      key: 'saved',
+      title: 'Your providers',
+      body: 'Bookmarked providers live here, ready to rebook without searching again.',
+      target: { ref: tourSavedRef },
+      radius: 18,
+      icon: 'bookmark',
+    },
+  ], []);
+
   // imageHeight is passed in rather than recomputed inside the card: the
   // packer's reserved slot and the card's rendered box must be the exact
   // same number (see masonryHeight.ts), and only this screen holds the
@@ -690,9 +740,10 @@ const ExploreScreen = memo(() => {
         imageHeight={getItemHeight(item, columnWidth)}
         onPress={handleImagePress}
         index={index}
+        {...(item.id === tourCardId ? { heartRef: tourHeartRef, priceRef: tourPriceRef } : {})}
       />
     ),
-    [columnWidth, handleImagePress, getItemHeight]
+    [columnWidth, handleImagePress, getItemHeight, tourCardId]
   );
 
 
@@ -702,7 +753,7 @@ const ExploreScreen = memo(() => {
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
         {/* Sub-tab bar */}
-        <SubTabBar activeTab={activeTab} onTabChange={setActiveTab} />
+        <SubTabBar activeTab={activeTab} onTabChange={setActiveTab} favouritesRef={tourFavouritesRef} />
 
         {/* ============ DISCOVER TAB ============ */}
         {activeTab === 'discover' && (
@@ -721,6 +772,7 @@ const ExploreScreen = memo(() => {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                ref={tourSavedRef}
                 style={styles.savedButton}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -827,6 +879,10 @@ const ExploreScreen = memo(() => {
         similarItems={portfolioItems}
         onSelectItem={setSelectedImage}
       />
+
+      {/* First-visit walkthrough of the grid's own affordances. Rendered
+          outside SafeAreaView so its scrim covers the full window. */}
+      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
     </ThemedBackground>
   );
 });

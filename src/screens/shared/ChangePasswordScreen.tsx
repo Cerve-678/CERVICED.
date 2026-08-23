@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { supabase } from '../../lib/supabase';
+import { updateCurrentPassword } from '../../services/databaseService';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { PasswordRequirements } from '../../components/PasswordRequirements';
 import { validatePassword } from '../../utils/validation';
@@ -53,11 +53,15 @@ export default function ChangePasswordScreen({ navigation }: any) {
     }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    const { error } = await supabase.auth.updateUser({ password: next });
-    setLoading(false);
-    if (error) {
+    try {
+      await updateCurrentPassword(next);
+    } catch {
       Alert.alert('Error', 'Couldn\'t update your password. Please try again.');
-    } else {
+      return;
+    } finally {
+      setLoading(false);
+    }
+    {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert('Done', 'Your password has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() },

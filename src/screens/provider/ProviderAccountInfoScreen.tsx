@@ -13,8 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
-import { getUserBasicInfo, updateUserContactDetails, updateUserDob } from '../../services/databaseService';
+import { getMyProviderAccountEditorInfo, updateUserContactDetails, updateUserDob } from '../../services/databaseService';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
@@ -49,22 +48,14 @@ export default function ProviderAccountInfoScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
-        setAuthEmail(user.email ?? '');
-        const data = await getUserBasicInfo(user.id);
-        if (data) {
-          setName(data.name ?? '');
-          setPhone(data.phone ?? '');
-          setDob(data.dob ?? '');
-        }
-        const { data: prov } = await supabase
-          .from('providers')
-          .select('display_name')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        if (prov) setBusinessName(prov.display_name ?? '');
+        const data = await getMyProviderAccountEditorInfo();
+        if (!data) return;
+        setUserId(data.userId);
+        setAuthEmail(data.email);
+        setName(data.name);
+        setPhone(data.phone);
+        setDob(data.dob);
+        setBusinessName(data.businessName);
       } finally {
         setLoading(false);
       }

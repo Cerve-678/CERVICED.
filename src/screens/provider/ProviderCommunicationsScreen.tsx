@@ -258,8 +258,6 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                   method === 'phone'    ? profilePhone :
                   method === 'whatsapp' ? whatsappNumber :
                   '';
-                const needsValue = method !== 'in_app' && !value;
-
                 return (
                   <View key={method}>
                     {idx > 0 && <View style={[s.divider, { backgroundColor: C.border }]} />}

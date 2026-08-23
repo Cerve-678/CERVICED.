@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   PROVIDER_THEMES,
@@ -27,7 +26,7 @@ import {
 } from '../../constants/providerThemes';
 import ProviderThemePicker, { type ThemeSelection } from '../../components/ProviderThemePicker';
 import { uploadToStorage } from '../../services/providerRegistrationService';
-import { getProviderBrandingByUserId, updateProviderBranding } from '../../services/databaseService';
+import { getMyProviderBranding, updateProviderBranding } from '../../services/databaseService';
 import { toUserMessage } from '../../utils/userFacingError';
 
 const LIGHT = {
@@ -80,13 +79,10 @@ export default function BrandingScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
-
-        const data = await getProviderBrandingByUserId(user.id);
+        const data = await getMyProviderBranding();
 
         if (data) {
+          setUserId(data.userId);
           setProviderId(data.id);
           if (data.gradient && data.gradient.length >= 2) {
             setGradient(data.gradient as [string, string, ...string[]]);

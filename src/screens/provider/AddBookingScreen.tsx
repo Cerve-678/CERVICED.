@@ -20,13 +20,13 @@ import {
   getMyProviderProfile,
   getMyProviderServices,
   getProviderClientele,
-  getAvailableSlots,
   getProviderBookings,
   getProviderBlockedDates,
   getProviderAvailabilityWindows,
   getProviderAvailabilityOverrides,
   providerCreateManualBooking,
 } from '../../services/databaseService';
+import { AvailabilityService } from '../../services/AvailabilityService';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import type {
   ClienteleMember,
@@ -194,7 +194,7 @@ export default function AddBookingScreen() {
     if (!providerId) return;
     let cancelled = false;
     setSlotsLoading(true);
-    getAvailableSlots(providerId, dateYMD, selectedServiceDuration, serviceId ?? undefined)
+    AvailabilityService.getAvailableSlotTimes(providerId, dateYMD, selectedServiceDuration, serviceId ?? undefined)
       .then(res => { if (!cancelled) setSlots(res); })
       .catch(() => { if (!cancelled) setSlots([]); })
       .finally(() => { if (!cancelled) setSlotsLoading(false); });

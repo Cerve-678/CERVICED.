@@ -27,7 +27,7 @@ import {
   getProviderWaitlist,
   inviteFromWaitlist,
   leaveWaitlist,
-  getProviderConversations,
+  getProviderUnreadConversationCount,
   updateBookingStatus,
   updateGroupBookingStatus,
   getActiveRescheduleRequestsForBookings,
@@ -393,21 +393,21 @@ export default function ProviderBookingHistoryScreen({ navigation, route }: any)
 
   const fetchUnreadMessages = useCallback(async () => {
     try {
-      const conversations = await getProviderConversations();
-      setUnreadMessages(conversations.filter(c => c.unread_count_provider > 0).length);
+      setUnreadMessages(await getProviderUnreadConversationCount());
     } catch {}
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchBookings(), fetchWaitlist(), fetchUnreadMessages()]).finally(() => setLoading(false));
-  }, [fetchBookings, fetchWaitlist, fetchUnreadMessages]);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void Promise.all([fetchBookings(), fetchUnreadMessages()]).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchBookings, fetchUnreadMessages]));
 
   useFocusEffect(useCallback(() => {
-    fetchBookings();
-    fetchWaitlist();
-    fetchUnreadMessages();
-  }, [fetchBookings, fetchWaitlist, fetchUnreadMessages]));
+    if (providerDbId) void fetchWaitlist();
+  }, [fetchWaitlist, providerDbId]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

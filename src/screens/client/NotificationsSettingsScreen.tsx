@@ -62,23 +62,40 @@ export default function NotificationsSettingsScreen({ navigation }: any) {
   const [saving, setSaving] = useState(false);
   // Debounce: save 800ms after the last toggle
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPrefs = useRef<NotificationPreferences | null>(null);
+  const mounted = useRef(true);
 
   useEffect(() => {
+    mounted.current = true;
     getNotificationPreferences()
-      .then(setPrefs)
+      .then(value => {
+        if (mounted.current && !pendingPrefs.current) setPrefs(value);
+      })
       .catch(() => {});
+    return () => {
+      mounted.current = false;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      // A quick back gesture should not discard the user's last toggle.
+      if (pendingPrefs.current) {
+        void saveNotificationPreferences(pendingPrefs.current).catch(() => {});
+      }
+    };
   }, []);
 
   const toggle = useCallback((key: keyof NotificationPreferences) => {
     setPrefs(prev => {
       const next = { ...prev, [key]: !prev[key] };
+      pendingPrefs.current = next;
       // Debounced save
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         setSaving(true);
         saveNotificationPreferences(next)
+          .then(() => {
+            if (pendingPrefs.current === next) pendingPrefs.current = null;
+          })
           .catch(() => {})
-          .finally(() => setSaving(false));
+          .finally(() => { if (mounted.current) setSaving(false); });
       }, 800);
       return next;
     });

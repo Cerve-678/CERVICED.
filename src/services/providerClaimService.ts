@@ -1,11 +1,12 @@
 // src/services/providerClaimService.ts
 // "Claim your business" flow — searching scraped/unclaimed provider listings,
 // verifying ownership, and attaching a newly-signed-up account to one.
-import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  claimUnclaimedProviderProfile,
   searchUnclaimedProviders as dbSearchUnclaimedProviders,
   getUnclaimedProviderDetail as dbGetUnclaimedProviderDetail,
+  requestProviderClaimVerification,
 } from './databaseService';
 
 const PENDING_CLAIM_KEY = '@pending_provider_claim';
@@ -76,12 +77,13 @@ export async function getUnclaimedProviderDetail(id: string): Promise<UnclaimedP
  *  email so the UI can show "we sent a code to j***@salon.com" without
  *  exposing the full address. */
 export async function requestClaimVerification(providerId: string): Promise<{ maskedEmail: string }> {
-  const { data, error } = await supabase.functions.invoke('request-claim-verification', {
-    body: { providerId },
-  });
-  if (error) throw new Error(error.message || 'Could not send a verification code. Please try again.');
-  if (data?.error) throw new Error(data.error);
-  return { maskedEmail: data.maskedEmail };
+  try {
+    return await requestProviderClaimVerification(providerId);
+  } catch (error) {
+    throw new Error(error instanceof Error && error.message
+      ? error.message
+      : 'Could not send a verification code. Please try again.');
+  }
 }
 
 /** Stashes the pending claim locally — the caller isn't signed in yet at this
@@ -112,10 +114,11 @@ export async function clearPendingClaim(): Promise<void> {
  *  lock a specific row out after 5 wrong guesses — see claim_attempts in
  *  supabase/claimable_provider_profiles.sql. */
 export async function claimProviderProfile(providerId: string, code: string): Promise<string> {
-  const { data, error } = await supabase.rpc('claim_provider_profile', {
-    p_provider_id: providerId,
-    p_claim_token: code,
-  });
-  if (error) throw new Error(error.message || 'Could not verify that code.');
-  return data as string;
+  try {
+    return await claimUnclaimedProviderProfile(providerId, code);
+  } catch (error) {
+    throw new Error(error instanceof Error && error.message
+      ? error.message
+      : 'Could not verify that code.');
+  }
 }

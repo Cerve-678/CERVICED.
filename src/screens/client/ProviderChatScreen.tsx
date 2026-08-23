@@ -21,7 +21,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { FLOATING_TAB_BAR_CLEARANCE } from "../../components/IslandPillTabBar";
 import { KeyboardDismissView } from "../../components/KeyboardDismissView";
 import { ThemedBackground } from "../../components/ThemedBackground";
-import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   getProviderAddressPolicy,
   getClientBookingsForAddressShare,
@@ -36,6 +36,7 @@ import {
   DbProviderMessage,
   ProviderAddressPolicy,
   ClientBookingSummary,
+  subscribeToConversationMessages,
 } from "../../services/databaseService";
 import { formatShortDate, formatTime12 } from "../../utils/dateUtils";
 import { logger } from "../../utils/logger";
@@ -55,6 +56,7 @@ interface Message {
 export default function ProviderChatScreen({ navigation, route }: Props) {
   const { providerDbId, providerName } = route.params;
   const { palette: OP } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -65,7 +67,7 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const userId = user?.id ?? null;
   const flatListRef = useRef<FlatList>(null);
 
   // Address-sharing (mobile providers only — client sends the address they want visited)
@@ -123,13 +125,6 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
       .catch((err) => logger.error('[ProviderChat] booking history load failed:', err));
   }, [providerDbId]);
 
-  // Get current user
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserId(user.id);
-    });
-  }, []);
-
   // Get or create conversation
   useEffect(() => {
     if (!userId || !providerDbId) return;
@@ -182,18 +177,10 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!conversationId) return;
 
-    const channel = supabase
-      .channel(`chat:${conversationId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "provider_messages",
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const msg = payload.new as Message;
+    return subscribeToConversationMessages(
+      conversationId,
+      (row) => {
+          const msg = row as Message;
           setMessages((prev) => {
             if (prev.find((m) => m.id === msg.id)) return prev;
             return [...prev, msg];
@@ -208,13 +195,8 @@ export default function ProviderChatScreen({ navigation, route }: Props) {
             () => flatListRef.current?.scrollToEnd({ animated: true }),
             80,
           );
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      },
+    );
   }, [conversationId]);
 
   // Set header

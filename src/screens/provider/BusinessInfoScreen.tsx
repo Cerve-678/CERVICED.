@@ -23,13 +23,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
 import {
-  getMyProviderProfile,
+  getMyProviderProfileContext,
   getUserBusinessInfo,
   updateUserBusinessInfo,
   updateProviderContactDetails,
-  getProviderFormLibrary,
+  hasMyProviderTermsForm,
 } from '../../services/databaseService';
 import {
   Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
@@ -80,20 +79,15 @@ export default function BusinessInfoScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
-
-        const [userBizInfo, providerData] = await Promise.all([
-          getUserBusinessInfo(user.id),
-          getMyProviderProfile(),
+        const context = await getMyProviderProfileContext();
+        if (!context) return;
+        setUserId(context.userId);
+        const providerData = context.profile;
+        const [userBizInfo, termsExist] = await Promise.all([
+          getUserBusinessInfo(context.userId),
+          hasMyProviderTermsForm().catch(() => null),
         ]);
-
-        // Fire-and-forget — the card renders its neutral wording until this
-        // lands, and a failure must not block the rest of the screen.
-        getProviderFormLibrary()
-          .then(forms => setHasTerms(forms.some(f => f.isTerms)))
-          .catch(() => setHasTerms(null));
+        setHasTerms(termsExist);
 
         if (userBizInfo) {
           setBusinessEmail(userBizInfo.business_email ?? '');

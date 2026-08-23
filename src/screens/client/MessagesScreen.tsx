@@ -14,8 +14,12 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
-import { getUserConversations, UserConversationWithProvider } from '../../services/databaseService';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  getUserConversations,
+  subscribeToUserConversationChanges,
+  UserConversationWithProvider,
+} from '../../services/databaseService';
 import { ThemedBackground } from '../../components/ThemedBackground';
 
 function timeAgo(iso: string | null): string {
@@ -37,6 +41,7 @@ function initials(name: string): string {
 
 export default function MessagesScreen({ navigation }: any) {
   const { palette: OP } = useTheme();
+  const { user } = useAuth();
 
   const [conversations, setConversations] = useState<UserConversationWithProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,24 +53,27 @@ export default function MessagesScreen({ navigation }: any) {
     } catch { /* offline — keep whatever we have */ }
   }, []);
 
-  useEffect(() => {
-    fetchConversations().finally(() => setLoading(false));
-  }, [fetchConversations]);
-
-  useFocusEffect(useCallback(() => { fetchConversations(); }, [fetchConversations]));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    fetchConversations().finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [fetchConversations]));
 
   // Live updates: refresh the list when any of my conversations change
   useEffect(() => {
-    const channel = supabase
-      .channel('user-conversations')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'provider_conversations' },
-        () => { fetchConversations(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchConversations]);
+    if (!user?.id) return;
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeToUserConversationChanges(user.id, () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => { void fetchConversations(); }, 150);
+    });
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      unsubscribe();
+    };
+  }, [fetchConversations, user?.id]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

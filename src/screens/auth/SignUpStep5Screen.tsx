@@ -19,7 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
-import { supabase } from '../../lib/supabase';
+import { signUpWithEmail } from '../../services/databaseService';
 import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -271,11 +271,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
       : '';
 
     try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      const authData = await signUpWithEmail({
         email: personalEmail,
         password: data.password,
-        options: {
-          data: {
+        metadata: {
             name: data.name, phone: data.phone, role: data.accountType, dob,
             business_name: data.businessName || null, business_email: data.businessEmail || null,
             business_type: data.businessType || null,
@@ -296,16 +295,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
             languages_spoken: isProvider ? finalLanguages : null,
             specialties: isProvider ? finalSpecialties : null,
             preferred_payment_methods: isProvider ? data.preferredPaymentMethods : null,
-          },
         },
       });
 
-      if (signUpError) {
-        Alert.alert('Oops!', toUserMessage(signUpError, "We couldn't create your account. Please try again.", 'signup:authSignUp'));
-        return;
-      }
-
-      if ((authData?.user?.identities?.length ?? 0) === 0) {
+      if (!authData.hasIdentity) {
         Alert.alert(
           'Account exists',
           'An account with this email already exists.',
