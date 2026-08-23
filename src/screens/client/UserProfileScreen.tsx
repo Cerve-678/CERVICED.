@@ -21,7 +21,6 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
-import { supabase } from '../../lib/supabase';
 import {
   isBiometricAvailable,
   isBiometricEnabled,
@@ -30,8 +29,9 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getUnreadNotificationCount } from '../../services/databaseService';
+import { getCurrentRefreshToken, getUnreadNotificationCount } from '../../services/databaseService';
 import { useFocusEffect } from '@react-navigation/native';
+import { dobToParts } from '../../utils/dateUtils';
 
 // ── Settings row ────────────────────────────────────────────────────────────
 
@@ -106,8 +106,7 @@ export default function UserProfileScreen({ navigation }: any) {
     if (value) {
       const authenticated = await authenticateWithBiometrics(biometricLabel);
       if (!authenticated) return;
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.refresh_token;
+      const token = await getCurrentRefreshToken();
       if (!token) {
         Alert.alert('Error', 'Could not enable Face ID. Please try again.');
         return;
@@ -325,7 +324,7 @@ export default function UserProfileScreen({ navigation }: any) {
               onPress={() => {
                 setShowProviderModal(false);
                 resetData();
-                updateData({ accountType: 'provider', fromProviderSwitch: true, name: user?.name || '', email: user?.email || '', phone: user?.phone || '' });
+                updateData({ accountType: 'provider', fromProviderSwitch: true, name: user?.name || '', email: user?.email || '', phone: user?.phone || '', ...dobToParts(user?.dob) });
                 navigation.navigate('SignUpStep3');
               }}
               activeOpacity={0.8}

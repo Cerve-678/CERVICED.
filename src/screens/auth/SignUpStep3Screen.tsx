@@ -50,19 +50,26 @@ export default function SignUpStep3Screen({ navigation }: Props) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const isUser = data.accountType === 'user';
+  // The client→provider upgrade enters the flow at this step, skipping Step 2
+  // where a provider normally gives their date of birth — so it has to be asked
+  // for here. Without it the app creates providers with no DOB at all, and
+  // AuthContext (which reads `dob != null` as the provider's client-hat marker)
+  // drops their client hat on the next launch.
+  const needsDob = isUser || data.fromProviderSwitch;
 
   const validate = useCallback((): FormErrors => {
     const errs: FormErrors = {};
-    if (isUser) {
+    if (needsDob) {
       const dobErr = validateDob(dobDay, dobMonth, dobYear);
       if (dobErr) errs.dob = dobErr;
-    } else {
+    }
+    if (!isUser) {
       if (!businessName.trim()) errs.businessName = 'Business name is required';
       if (!businessEmail.trim()) errs.businessEmail = 'Business email is required';
       else if (!validateEmail(businessEmail)) errs.businessEmail = 'Enter a valid email';
     }
     return errs;
-  }, [isUser, dobDay, dobMonth, dobYear, businessName, businessEmail]);
+  }, [isUser, needsDob, dobDay, dobMonth, dobYear, businessName, businessEmail]);
 
   const markTouched = (field: string) => {
     setTouched(prev => ({ ...prev, [field]: true }));
@@ -81,17 +88,20 @@ export default function SignUpStep3Screen({ navigation }: Props) {
     const errs = validate();
     setErrors(errs);
 
-    if (isUser) setTouched({ dob: true });
-    else setTouched({ businessName: true, businessEmail: true });
+    setTouched({
+      ...(needsDob ? { dob: true } : {}),
+      ...(isUser ? {} : { businessName: true, businessEmail: true }),
+    });
 
     if (Object.keys(errs).length > 0) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    if (isUser) {
+    if (needsDob) {
       updateData({ dobDay, dobMonth, dobYear });
-    } else {
+    }
+    if (!isUser) {
       updateData({
         businessName,
         businessEmail,
@@ -123,16 +133,16 @@ export default function SignUpStep3Screen({ navigation }: Props) {
             <Text style={[styles.backIcon, { color: t.text }]}>{'<'}</Text>
           </TouchableOpacity>
 
-          <StepProgressIndicator currentStep={3} totalSteps={totalSteps} stepLabel={isUser ? 'Personal Info' : 'Business Details'} />
+          <StepProgressIndicator currentStep={3} totalSteps={totalSteps} stepLabel={isUser ? 'Personal Info' : needsDob ? 'Your Details' : 'Business Details'} />
 
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { color: t.text }]}>
-              {isUser ? 'Personal Details' : 'Business Details'}
+              {isUser ? 'Personal Details' : needsDob ? 'Your Details' : 'Business Details'}
             </Text>
           </View>
 
           <View style={[styles.formCard, { backgroundColor: t.card, borderColor: t.border }]}>
-            {isUser ? (
+            {needsDob && (
               <View style={styles.fieldGroup}>
                 <Text style={[styles.fieldLabel, { color: t.sub }]}>DATE OF BIRTH</Text>
                 <View style={styles.dobRow}>
@@ -162,7 +172,8 @@ export default function SignUpStep3Screen({ navigation }: Props) {
                 </View>
                 {renderError('dob')}
               </View>
-            ) : (
+            )}
+            {!isUser && (
               <>
                 <View style={styles.fieldGroup}>
                   <Text style={[styles.fieldLabel, { color: t.sub }]}>BUSINESS NAME</Text>

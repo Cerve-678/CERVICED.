@@ -21,7 +21,6 @@ import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { supabase } from '../../lib/supabase';
 import {
   isBiometricAvailable,
   isBiometricEnabled,
@@ -30,8 +29,9 @@ import {
   disableBiometric,
   authenticateWithBiometrics,
 } from '../../services/biometricService';
-import { getUnreadNotificationCount } from '../../services/databaseService';
+import { getCurrentRefreshToken, getProviderDisplayNameByUserId, getUnreadNotificationCount } from '../../services/databaseService';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import { dobToParts } from '../../utils/dateUtils';
 
 // ─── Brand palette (unchanged — provider hat's real theme.ts values) ─────────
 const LIGHT = {
@@ -167,14 +167,9 @@ export default function ProviderAccountScreen({ navigation }: any) {
     useCallback(() => {
       if (!user?.id) return;
       let cancelled = false;
-      supabase
-        .from('providers')
-        .select('display_name')
-        .eq('user_id', user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (!cancelled) setProviderDisplayName(data?.display_name ?? null);
-        });
+      getProviderDisplayNameByUserId(user.id).then(name => {
+        if (!cancelled) setProviderDisplayName(name);
+      });
       return () => { cancelled = true; };
     }, [user?.id])
   );
@@ -184,8 +179,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
     if (value) {
       const authenticated = await authenticateWithBiometrics(biometricLabel);
       if (!authenticated) return;
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.refresh_token;
+      const token = await getCurrentRefreshToken();
       if (!token) {
         Alert.alert('Error', 'Could not enable Face ID. Please try again.');
         return;
@@ -507,6 +501,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                   name: user?.name || '',
                   email: user?.email || '',
                   phone: user?.phone || '',
+                  ...dobToParts(user?.dob),
                 });
                 navigation.navigate('SignUpStep2');
               }}

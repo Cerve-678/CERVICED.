@@ -218,3 +218,17 @@ export function timeAgo(input: string | Date): string {
   if (diffDays < 7) return `${diffDays}d ago`;
   return formatShortDate(date);
 }
+
+
+/**
+ * Splits a stored `YYYY-MM-DD` date of birth back into the three separate
+ * day/month/year fields the signup flow collects.
+ *
+ * Returns an empty object rather than blank strings when there is nothing to
+ * split, so it can be spread into a registration update without clobbering
+ * values already captured there.
+ */
+export function dobToParts(dob?: string | null): { dobDay: string; dobMonth: string; dobYear: string } | Record<string, never> {
+  const [y, m, d] = (dob ?? '').split('-');
+  return y && m && d ? { dobDay: d, dobMonth: m, dobYear: y } : {};
+}
