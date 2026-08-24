@@ -18,6 +18,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import Icon from '../../components/IconLibrary';
+import { supportMailtoUrl } from '../../constants/support';
 
 const FAQS = [
   {
@@ -61,7 +62,7 @@ function FAQItem({ q, a, P }: { q: string; a: string; P: AppTheme }) {
 
 function handleContactSupport() {
   Haptics.selectionAsync().catch(() => {});
-  Linking.openURL('mailto:support@cerviced.app');
+  Linking.openURL(supportMailtoUrl());
 }
 
 function showMoreOptions() {

@@ -292,6 +292,34 @@ Decisions needed from you (not to be guessed at): the response deadline itself,
 whether it varies per provider, whether expiry entitles the client to a
 no-penalty cancellation or refund, and the exact notice wording.
 
+## 13. The contact addresses in the legal copy don't exist (2026-08-24)
+
+A real support address now exists — `support@cerviced.co` — and the app's
+support links point at it. The legal copy does not:
+
+- `src/screens/shared/AboutScreen.tsx:95,97` — the Privacy Policy text names
+  `privacy@cerviced.app` twice: once as the address to request the list of
+  third-party processors, once as the address for access/correction/erasure
+  requests and data exports.
+- `src/screens/shared/TermsScreen.tsx:54` — the Terms name
+  `legal@cerviced.app` for questions about the terms.
+
+`cerviced.app` is not a domain this project controls; the real one is
+`cerviced.co`. So both addresses are unreachable. This was left as-is
+deliberately on 2026-08-24 rather than silently rewritten, because it's legal
+copy — but it should not stay this way:
+
+- A Privacy Policy that names an unreachable contact for data-subject access
+  and erasure requests means those requests cannot actually be made, which is
+  a UK GDPR problem in itself, on top of §1's missing Privacy Policy screen.
+- The decision needed is only whether to point both at `support@cerviced.co`
+  (one working inbox) or to create real `privacy@` and `legal@` aliases on
+  `cerviced.co`. Either is fine; leaving dead addresses is not.
+
+Separately (not legal, but the same wrong-domain root cause): the booking
+receipt in `src/screens/provider/ProviderBookingDetailScreen.tsx:210,1853`
+prints `cerviced.app` as the footer on both the HTML and in-app receipt.
+
 ---
 
 **Next step:** take this list to an actual lawyer rather than resolving items

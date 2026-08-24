@@ -69,6 +69,7 @@ import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATU
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
 import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
+import { supportMailtoUrl } from '../../constants/support';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
 
@@ -1368,27 +1369,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 </>
               )}
 
-              {/* ── NOTES section ── */}
-              {(booking.notes || booking.bookingInstructions) && (
+              {/* ── NOTES section ──
+                  The client's note only. `bookingInstructions` is the
+                  PROVIDER's own booking instructions (PoliciesScreen /
+                  InfoRegScreen) — copy they wrote for clients to read, so
+                  quoting it back at them here told them nothing they didn't
+                  already know while burying the one note on this screen that
+                  came from someone else. It still shows on the client's
+                  BookingDetailScreen, which is its audience. */}
+              {booking.notes ? (
                 <>
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: P.sub }]}>NOTES</Text>
-                    {booking.notes ? (
-                      <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
-                        <Text style={[styles.notesLabel, { color: P.sub }]}>Client note</Text>
-                        <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
-                      </View>
-                    ) : null}
-                    {booking.bookingInstructions ? (
-                      <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,149,0,0.08)' : 'rgba(255,149,0,0.05)', borderColor: isDarkMode ? 'rgba(255,149,0,0.25)' : 'rgba(255,149,0,0.20)', marginTop: booking.notes ? 10 : 0 }]}>
-                        <Text style={[styles.notesLabel, { color: '#FF9500' }]}>Booking instructions</Text>
-                        <Text style={[styles.notesText, { color: P.text }]}>{booking.bookingInstructions}</Text>
-                      </View>
-                    ) : null}
+                    <View style={[styles.notesBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: isDarkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
+                      <Text style={[styles.notesLabel, { color: P.sub }]}>Client note</Text>
+                      <Text style={[styles.notesText, { color: P.text }]}>{booking.notes}</Text>
+                    </View>
                   </View>
                   <Perf color={perf} />
                 </>
-              )}
+              ) : null}
 
               {/* ── CLIENT section ── */}
               <View style={styles.section}>
@@ -2489,7 +2489,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
           )}
           <TouchableOpacity
             style={styles.moreSheetRow}
-            onPress={() => { setShowMoreSheet(false); Linking.openURL('mailto:support@cerviced.app?subject=Booking%20Support'); }}
+            onPress={() => { setShowMoreSheet(false); Linking.openURL(supportMailtoUrl('Booking Support')); }}
             activeOpacity={0.7}
           >
             <View style={[styles.moreSheetIcon, { backgroundColor: '#007AFF18' }]}>

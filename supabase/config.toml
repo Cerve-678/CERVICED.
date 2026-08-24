@@ -7,6 +7,9 @@ project_id = "CERVICED."
 [functions.becca-ai]
 verify_jwt = true
 
+[functions.send-support-request]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

@@ -510,3 +510,82 @@ Two checklists exist and only one mirrors the gate:
 geocoded address so the two agree, or relabel Profile Health so it doesn't
 read as a launch gate. Don't leave them silently disagreeing — a provider who
 completes Profile Health can still be unpublished and have no idea why.
+
+## 12. BLOCKING — `send-email` is an open relay on the cerviced.co domain (2026-08-24)
+
+`supabase/functions/send-email/index.ts` is deployed with **`verify_jwt =
+false`** (confirmed live 2026-08-24) and takes a caller-supplied `to`,
+`subject` and `html`, which it passes straight to Resend as
+`CERVICED <noreply@cerviced.co>`. There is no auth check, no allowlist, and no
+rate limit.
+
+The anon key is public by design — it ships inside the app binary — so anyone
+who pulls it out can send arbitrary HTML email from the project's verified
+sending domain, to any address, with CERVICED branding on it. That is a
+phishing kit and a fast route to `cerviced.co` being blocklisted by receiving
+mail providers.
+
+This matters immediately because the newly wired support address
+(`support@cerviced.co`, see §12 follow-ups below) shares that sending domain's
+reputation: burning it takes the support inbox down with it.
+
+Callers today are all legitimate and all authenticated at the point of use —
+`src/services/emailService.ts` → `invokeSendEmail`, used for the booking
+confirmation email (`BookingContext.tsx:1882`) and the two welcome emails
+(`EmailVerificationScreen.tsx:158`, `SignUpStep5Screen.tsx:225,253`). Nothing
+depends on the function being anonymous, **except** the sign-up welcome path,
+which needs checking: if it runs before the session exists, flipping
+`verify_jwt` on will break it, and it should move server-side (a DB trigger or
+the confirm-email function) rather than stay anonymously callable.
+
+**Fix:** set `verify_jwt = true` for `send-email` in `supabase/config.toml`
+and redeploy, then constrain `to` — a signed-in user should only be able to
+trigger mail to their own account address, not an arbitrary one. The pattern
+to copy is `supabase/functions/send-support-request/index.ts` (added
+2026-08-24): recipient hardcoded server-side, identity taken from the verified
+JWT, body limited to plain text that gets HTML-escaped.
+
+### 12a. Support requests have no rate limit
+
+`send-support-request` requires a signed-in user and can only ever mail
+`support@cerviced.co`, so the blast radius is spam into our own inbox from an
+identifiable account — acceptable for now, deliberately not solved. If it
+becomes a problem, the cooldown pattern in `request-claim-verification`
+(a `*_last_sent_at` column checked before sending) is the shape to follow, and
+would need a `support_requests` table to hang off.
+
+## 13. BLOCKING — no email has ever been sent: `cerviced.co` is unverified in Resend (2026-08-24)
+
+Calling the live `send-email` function returns, verbatim:
+
+> `The cerviced.co domain is not verified. Please, add and verify your domain
+> on https://resend.com/domains`
+
+Resend refuses every send from `noreply@cerviced.co`. That means **all four
+outbound emails in the app have always failed**, and always will until the
+domain is verified:
+
+- booking confirmation — `src/contexts/BookingContext.tsx:1882`
+- client/provider welcome — `src/screens/auth/SignUpStep5Screen.tsx:225,253`
+- welcome on verification — `src/screens/auth/EmailVerificationScreen.tsx:158`
+
+Nobody noticed because **every one of them is fire-and-forget with a swallowed
+error** (`.catch(() => {})`). This is a direct violation of the error-handling
+rule in `error-message-sweep`: the failure was neither shown nor logged. Once
+the domain is verified, these should at minimum `logger.error` on failure —
+a booking confirmation that silently doesn't arrive is a support ticket the
+user has no way to raise.
+
+**Fix (DNS, not code):** add `cerviced.co` at https://resend.com/domains and
+publish the DKIM/SPF records it issues. Resend scopes its SPF and return-path
+MX to the `send.cerviced.co` subdomain, so **the Zoho MX records on the root
+domain stay untouched and receiving keeps working** — do not delete them.
+Verify with:
+
+```
+curl -s -X POST "https://<project>.supabase.co/functions/v1/send-email" \
+  -H "Authorization: Bearer $ANON_KEY" -H "Content-Type: application/json" \
+  -d '{"to":"support@cerviced.co","subject":"test","html":"<p>test</p>"}'
+```
+
+(That this is callable with only the public anon key is §12, the open relay.)

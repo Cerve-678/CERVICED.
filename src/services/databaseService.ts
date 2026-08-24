@@ -7653,6 +7653,59 @@ export async function invokeSendEmail(
   return data;
 }
 
+export interface SupportRequestInput {
+  category: string;
+  description: string;
+  platform: string;
+  appVersion: string;
+  activeMode: string;
+}
+
+export interface SupportRequestResult {
+  /** Human-quotable reference, e.g. 1042 — shown to the reporter as "#1042". */
+  ticketNumber: number;
+  /** False when the report was stored but the support email didn't go out. */
+  notified: boolean;
+}
+
+/**
+ * Files the in-app "Report a Problem" form. The report is stored as a
+ * support_requests row server-side and the support inbox is notified of it;
+ * the recipient is hardcoded and the reporter's identity, hat and business
+ * name are all read server-side, never taken from this payload — see
+ * supabase/functions/send-support-request/index.ts.
+ *
+ * `notified: false` means the row was saved but the email failed. That is a
+ * delivery problem, not a lost report, so callers should not present it as a
+ * failure to the reporter.
+ */
+export async function invokeSendSupportRequest(
+  input: SupportRequestInput,
+): Promise<SupportRequestResult> {
+  const { data, error } = await supabase.functions.invoke('send-support-request', {
+    body: input,
+  });
+
+  if (error) {
+    // The function's 4xx bodies are written for people to read ("You've sent a
+    // lot of reports in the last hour…"). supabase-js hides the response body
+    // behind a generic FunctionsHttpError, so lift it out — but only for 4xx.
+    // A 5xx body can carry a raw upstream error, which must not reach a user.
+    const res = (error as { context?: Response }).context;
+    if (res && res.status >= 400 && res.status < 500) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null;
+      if (typeof body?.error === 'string' && body.error) throw new Error(body.error);
+    }
+    throw error;
+  }
+
+  const result = data as { ticketNumber?: unknown; notified?: unknown } | null;
+  if (typeof result?.ticketNumber !== 'number') {
+    throw new Error('Support request returned no ticket number.');
+  }
+  return { ticketNumber: result.ticketNumber, notified: result.notified !== false };
+}
+
 export interface PostcodeLookupAddressRow {
   address: string;
   id?: string;
