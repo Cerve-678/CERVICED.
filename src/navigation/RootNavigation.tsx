@@ -56,10 +56,37 @@ export default function RootNavigation() {
   // against a device-dependent mount time. Passes the LANDED activeMode
   // through — if two requests overlapped, whichever caller didn't get the
   // mode it asked for is responsible for noticing (see modeController.ts).
+  //
+  // Before resolving, the MainTabs route is reset so the incoming hat opens on
+  // its OWN home tab. Swapping MainTabsComponent alone doesn't do that: React
+  // Navigation keeps the nested tab state on the MainTabs route and rehydrates
+  // the new navigator from it, keeping any route name the two hats happen to
+  // share ('Becca', 'Profile') focused. Since the manual switch control lives
+  // on the Profile tab of both hats, that meant every switch landed on the
+  // other hat's Profile tab instead of Home/ProviderHome — and any shared
+  // screen name pushed inside it carried over too. Resetting to a bare
+  // MainTabs route drops that stale state, so each tab navigator starts at its
+  // own initialRouteName (Home / ProviderHome), which is the same thing the
+  // in-place upgrade flows already do on completion (SignUpStep5Screen).
+  //
+  // Reset synchronously here, before the rAF below resolves requestMode()
+  // callers: a notification tap that switches hats deep-links immediately
+  // after that resolve, so its target must land on top of the fresh home
+  // stack, not get wiped by a reset that happens after it.
+  const previousModeRef = useRef(activeMode);
   useEffect(() => {
+    const modeChanged = previousModeRef.current !== activeMode;
+    previousModeRef.current = activeMode;
+    // isLoggedIn gates it because MainTabs only exists on the authenticated
+    // branch below — a mode change resolved while the auth stack is mounted
+    // (profile restore during login) would otherwise dispatch a RESET no
+    // navigator can handle.
+    if (modeChanged && isLoggedIn && navigationRef.isReady()) {
+      navigationRef.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+    }
     const id = requestAnimationFrame(() => resolveModeChange(activeMode));
     return () => cancelAnimationFrame(id);
-  }, [activeMode]);
+  }, [activeMode, isLoggedIn]);
 
   // Track whether NavigationContainer has finished mounting
   const [isNavReady, setIsNavReady] = useState(false);
@@ -142,7 +169,14 @@ export default function RootNavigation() {
             <Stack.Screen
               name="MainTabs"
               component={MainTabsComponent}
-              options={{ cardStyle: { backgroundColor: '#F5E6FA' } }}
+              // animation 'none' so the hat-switch reset above swaps the tab
+              // tree instantly instead of sliding a new card in from the right
+              // — the switch is an identity change behind a full-screen
+              // overlay, not a push. MainTabs only ever sits at the bottom of
+              // this stack, so nothing else animates on it: screens pushed
+              // above it (SignUpStep*, ClaimProvider) still use their own
+              // horizontal transition in both directions.
+              options={{ cardStyle: { backgroundColor: '#F5E6FA' }, animation: 'none' }}
             />
             {/* MainTabs' own tabs each carry their own ErrorBoundary already;
                 these upgrade-flow screens sit as MainTabs' siblings, not

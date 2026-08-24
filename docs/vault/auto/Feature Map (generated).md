@@ -31,7 +31,7 @@ Curated: [[Address Release]] · **83 files**
 - `src/features/business-details/options 2.ts` _(21)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(21)_
 - `src/services/addressLookupService.ts` _(20)_
-- `src/types/database.ts` _(18)_
+- `src/types/database.ts` _(20)_
 - `src/screens/client/BookingsScreen.tsx` _(17)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(17)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
