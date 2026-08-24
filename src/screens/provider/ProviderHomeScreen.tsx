@@ -337,8 +337,12 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
         <View style={[bc.expand, { borderTopColor: P.sep }]}>
           <Text style={[bc.expandHdr, { color: P.sub }]}>RELEVANT INFORMATION</Text>
           <SummaryRow label="Booked Date" value={formatCreatedAt(booking.createdAt)} P={P} />
-          {!!booking.bookingInstructions && (
-            <Text style={[bc.instructions, { color: P.sub }]}>*{booking.bookingInstructions}*</Text>
+          {/* The client's note, not `bookingInstructions` — that field is this
+              provider's OWN instructions copy (PoliciesScreen), so it read as
+              the app quoting them back to themselves. Same swap as
+              ProviderBookingDetailScreen's NOTES section. */}
+          {!!booking.notes && (
+            <Text style={[bc.instructions, { color: P.sub }]}>“{booking.notes}”</Text>
           )}
           <SummaryRow label="Booking Ref/ID" value={ref} P={P} />
           <TouchableOpacity style={[bc.msgBtn, { backgroundColor: P.accent }]} activeOpacity={0.75} onPress={onViewMessages}>

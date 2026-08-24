@@ -902,6 +902,14 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     });
   }, [booking, addressReleasedAt, addressPolicy]);
 
+  // Read off the provider's OWN business_type (getProviderAddressPolicy), not
+  // off the booking — a booking read through the provider path doesn't carry
+  // provider_business_type, and isMobileBooking's clientAddress fallback would
+  // then answer "mobile?" with "did an address happen to arrive?", which is
+  // the very question the Location row is trying to report on.
+  const isMobileProvider = addressSettings?.business_type === 'mobile';
+  const hasClientAddress = !!booking?.clientAddress?.trim();
+
   // Group-scoped copy for the confirm modal — shown whenever this booking is
   // one of multiple services this provider has in the same client group, so
   // the provider isn't surprised that tapping one button moves every sibling
@@ -1287,6 +1295,27 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 {displayDuration ? (
                   <Row label="Duration" value={displayDuration} textColor={P.text} divColor={rowDiv} />
                 ) : null}
+                {/* A MOBILE provider travels to the client, so the venue is the
+                    client's address and the only thing this row can honestly
+                    report is whether that address has arrived yet. The
+                    provider's own release policy is irrelevant here — their
+                    address is their private base, never where this
+                    appointment happens (see isMobileBooking in
+                    types/booking.ts) — so the release states below are not
+                    rendered for mobile at all. The address itself lives in
+                    the ADDRESS section further down; this is the status line
+                    for it. */}
+                {isMobileProvider ? (
+                  <Row
+                    label="Location"
+                    value={hasClientAddress ? 'Client address received' : 'Waiting for client’s address'}
+                    textColor={P.text}
+                    {...(hasClientAddress ? { valueColor: '#34C759' } : {})}
+                    divColor={rowDiv}
+                    last
+                  />
+                ) : (
+                <>
                 {/* Three distinct states, where there used to be two.
                     'always' isn't handled here at all — the address is simply
                     part of the booking.
@@ -1334,18 +1363,24 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                 ) : booking.address ? (
                   <Row label="Location" value={booking.address} textColor={P.text} divColor={rowDiv} last />
                 ) : null}
+                </>
+                )}
               </View>
 
               {/* ── Perforated divider ── */}
               <Perf color={perf} />
 
-              {/* ── ADDRESS section — mobile providers only; client sends this via messaging ── */}
-              {addressSettings?.business_type === 'mobile' && (
+              {/* ── ADDRESS section — mobile providers only.
+                  This section exists to SHOW the client's address; the
+                  Location row above is what reports its status, so the copy
+                  here says where the address comes from rather than restating
+                  "waiting" a second time. ── */}
+              {isMobileProvider && (
                 <>
                   <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: P.sub }]}>ADDRESS</Text>
 
-                    {booking.clientAddress ? (
+                    {hasClientAddress ? (
                       <>
                         <View style={[addrStyles.addressBlock, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: rowDiv }]}>
                           <Text style={[addrStyles.addressLabel, { color: P.sub }]}>CLIENT ADDRESS</Text>
@@ -1359,7 +1394,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     ) : (
                       <View style={[addrStyles.statusRow, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: rowDiv }]}>
                         <View style={[addrStyles.statusDot, { backgroundColor: P.accent }]} />
-                        <Text style={[addrStyles.statusText, { color: P.sub }]}>Mobile — waiting for client to send their address in Messages</Text>
+                        <Text style={[addrStyles.statusText, { color: P.sub }]}>The client sends this in Messages — it appears here as soon as they do</Text>
                       </View>
                     )}
                   </View>
