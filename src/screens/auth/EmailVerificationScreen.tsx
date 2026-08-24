@@ -155,7 +155,11 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
       const template = meta['role'] === 'provider'
         ? providerWelcomeEmail({ name: meta['name'] ?? '', ...(meta['business_name'] ? { businessName: meta['business_name'] } : {}) })
         : clientWelcomeEmail({ name: meta['name'] ?? '' });
-      sendEmail(toEmail, template.subject, template.html).catch(() => {});
+      // Non-blocking: the account exists either way and nothing here should
+      // stand between the user and being signed in. Logged, never swallowed.
+      sendEmail(toEmail, template.subject, template.html).catch((e) => {
+        logger.error('[email] welcome email failed to send:', e);
+      });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       // onAuthStateChange fires after verifyOtp and handles login state via loadUserProfile.

@@ -27,6 +27,7 @@ import { ThemedBackground } from '../../components/ThemedBackground';
 import { LANGUAGE_OPTS, ACCESSIBILITY_OPTS } from '../../features/business-details/options';
 import { recognizeLanguage } from '../../data/languages';
 import { toUserMessage } from '../../utils/userFacingError';
+import { logger } from '../../utils/logger';
 
 type Props = StackScreenProps<RootStackParamList, 'SignUpStep5'>;
 
@@ -222,7 +223,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         });
         if (user?.email) {
           const { subject, html } = clientWelcomeEmail({ name: data.name || user.name });
-          sendEmail(user.email, subject, html).catch(() => {});
+          // Non-blocking, but logged rather than swallowed.
+          sendEmail(user.email, subject, html).catch((e) => {
+            logger.error('[email] welcome email failed to send:', e);
+          });
         }
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
@@ -250,7 +254,10 @@ export default function SignUpStep5Screen({ navigation }: Props) {
         });
         if (user?.email) {
           const { subject, html } = providerWelcomeEmail({ name: data.name || user.name, businessName: data.businessName.trim() });
-          sendEmail(user.email, subject, html).catch(() => {});
+          // Non-blocking, but logged rather than swallowed.
+          sendEmail(user.email, subject, html).catch((e) => {
+            logger.error('[email] welcome email failed to send:', e);
+          });
         }
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });

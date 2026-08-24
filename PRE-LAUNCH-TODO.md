@@ -511,7 +511,7 @@ geocoded address so the two agree, or relabel Profile Health so it doesn't
 read as a launch gate. Don't leave them silently disagreeing — a provider who
 completes Profile Health can still be unpublished and have no idea why.
 
-## 12. BLOCKING — `send-email` is an open relay on the cerviced.co domain (2026-08-24)
+## 12. RESOLVED 2026-08-24 — `send-email` was an open relay on the cerviced.co domain
 
 `supabase/functions/send-email/index.ts` is deployed with **`verify_jwt =
 false`** (confirmed live 2026-08-24) and takes a caller-supplied `to`,
@@ -538,12 +538,32 @@ which needs checking: if it runs before the session exists, flipping
 `verify_jwt` on will break it, and it should move server-side (a DB trigger or
 the confirm-email function) rather than stay anonymously callable.
 
-**Fix:** set `verify_jwt = true` for `send-email` in `supabase/config.toml`
-and redeploy, then constrain `to` — a signed-in user should only be able to
-trigger mail to their own account address, not an arbitrary one. The pattern
-to copy is `supabase/functions/send-support-request/index.ts` (added
-2026-08-24): recipient hardcoded server-side, identity taken from the verified
-JWT, body limited to plain text that gets HTML-escaped.
+**FIXED 2026-08-24** (send-email v7). Two layers:
+
+1. `verify_jwt = true` — the gateway rejects a missing header, and the
+   function additionally rejects the anon key itself, since an anon JWT is
+   accepted by the gateway but resolves to no user.
+2. The recipient must be an address already on the caller's own account —
+   `user.email`, `users.business_email`, or `providers.email`, all read
+   server-side and never from the request. A mismatch is a logged 403.
+
+(2) is what removes the phishing value: branded HTML delivered to your own
+inbox is not an attack. Verified live — the exact call that worked before now
+returns 401 with the anon key and 401 with no header.
+
+Live data backed the design: across 63 bookings, `customer_email` differed
+from the client's account email in **zero** cases, so no legitimate caller is
+broken by a self-only allowlist.
+
+**Watch on the next signup:** the welcome email in `EmailVerificationScreen`
+fires immediately after `verifyOtp`. If the client session isn't attached yet
+it will now 401 — visibly, via `logger.error`, rather than silently.
+
+**Still open, deliberately:** `html` is still rendered on the device and sent
+up. The industry-standard shape is server-owned templates in `_shared/` with
+the server picking template and recipient from the event, and the booking
+confirmation owned by a DB trigger like this app's notifications already are.
+Until then the blast radius is bounded to the sender's own inbox.
 
 ### 12a. Support requests have no rate limit
 
@@ -554,7 +574,7 @@ becomes a problem, the cooldown pattern in `request-claim-verification`
 (a `*_last_sent_at` column checked before sending) is the shape to follow, and
 would need a `support_requests` table to hang off.
 
-## 13. BLOCKING — no email has ever been sent: `cerviced.co` is unverified in Resend (2026-08-24)
+## 13. RESOLVED 2026-08-24 — no email had ever been sent: `cerviced.co` was unverified in Resend
 
 Calling the live `send-email` function returns, verbatim:
 
@@ -569,12 +589,15 @@ domain is verified:
 - client/provider welcome — `src/screens/auth/SignUpStep5Screen.tsx:225,253`
 - welcome on verification — `src/screens/auth/EmailVerificationScreen.tsx:158`
 
-Nobody noticed because **every one of them is fire-and-forget with a swallowed
-error** (`.catch(() => {})`). This is a direct violation of the error-handling
-rule in `error-message-sweep`: the failure was neither shown nor logged. Once
-the domain is verified, these should at minimum `logger.error` on failure —
-a booking confirmation that silently doesn't arrive is a support ticket the
-user has no way to raise.
+Nobody noticed because **every one of them was fire-and-forget with a
+swallowed error** (`.catch(() => {})`) — neither shown nor logged, a direct
+violation of the error-handling rule in `error-message-sweep`.
+
+**FIXED 2026-08-24 on both counts.** The domain is verified (delivery
+confirmed live), and all four sites now `logger.error` on failure. They stay
+fire-and-forget on purpose — a confirmation email must never block or fail a
+booking that already exists — but a failure is now visible instead of
+invisible, which is the property whose absence hid this for months.
 
 **Fix (DNS, not code):** add `cerviced.co` at https://resend.com/domains and
 publish the DKIM/SPF records it issues. Resend scopes its SPF and return-path

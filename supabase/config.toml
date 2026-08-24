@@ -10,6 +10,11 @@ verify_jwt = true
 [functions.send-support-request]
 verify_jwt = true
 
+# Was verify_jwt = false, which made this an open relay on the cerviced.co
+# sending domain. See the header comment in the function itself.
+[functions.send-email]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

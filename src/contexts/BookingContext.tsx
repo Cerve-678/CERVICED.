@@ -1879,7 +1879,13 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     ? clientAddressText
                     : apt.address) || 'Address shared on confirmation',
                 });
-                sendEmail(apt.customerEmail, subject, html).catch(() => {});
+                // Fire-and-forget by design — a confirmation email must never
+                // block or fail a booking that already exists. But the failure
+                // is logged: swallowing it is how an unverified sending domain
+                // went unnoticed for months.
+                sendEmail(apt.customerEmail, subject, html).catch((e) => {
+                  logger.error('[email] booking confirmation failed to send:', e);
+                });
               }
               continue;
             }
