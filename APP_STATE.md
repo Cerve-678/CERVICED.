@@ -191,8 +191,49 @@ both code paths exist simultaneously on purpose.**
 | Supabase auth + RLS | ✅ | Hardened Aug 2026 — `has_gone_live` gating fixed on 10 tables that were previously app-convention-only; see memory `security-audit-2026-08-02-rls-hardening` |
 | Bookings/notifications DELETE | ❌ by design | No RLS DELETE policy — client-side delete is a silent no-op; use a SECURITY DEFINER RPC |
 | Double-booking prevention | ✅ live | `bookings_no_overlap` constraint, future-only scope; 7 historical conflicts grandfathered (memory `booking-overlap-constraint-undeployed`) |
-| Edge functions | ✅ | `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `extract-provider-profile`, `request-claim-verification`, `run-scrape-job`, `send-email`, `send-push-notification` |
+| Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `extract-provider-profile`, `find-address-by-postcode`, `request-claim-verification`, `run-scrape-job`, `send-email`, `send-push-notification`, `send-support-request`. All are `verify_jwt = true` as of 2026-08-24 — `send-email` was the last one that wasn't, see "Email & support" below. |
 | SQL migration tracking | ⚠️ known gap | Most of `supabase/*.sql` has no run/not-run record; a file's existence or absence from `RUN_ALL_MIGRATIONS.sql` is a signal, not proof — see `cerviced-migration-drift` agent before trusting any one file |
+
+### Email & support (rebuilt 2026-08-24)
+
+| Feature | Status | Where |
+|---|---|---|
+| Support address | ✅ | `support@cerviced.co`. `src/constants/support.ts` is the single source (`SUPPORT_EMAIL`, `supportMailtoUrl()`) — the previous `support@cerviced.app` links pointed at a domain the project does not own |
+| Report a Problem | ✅ | `src/screens/shared/ReportProblemScreen.tsx` → `invokeSendSupportRequest` → edge function `send-support-request`. Was ⚠️ UI-only until 2026-08-24: it awaited an 800ms `setTimeout` and then claimed "Report Sent" |
+| Support tickets | ✅ | `support_requests` table (migrations `20260824141624`, `...41646`). Service-role writes only; reporters SELECT their own rows. Sequential `ticket_number` shown to the reporter as "#N" |
+| Outbound transactional email | ✅ | Resend, from `noreply@cerviced.co`. `cerviced.co` was **unverified until 2026-08-24**, so every email the app had ever sent failed — invisibly, behind `.catch(() => {})` |
+| Reporter acknowledgment email | ❌ | The ticket number exists but is only shown in-app; nothing emails the reporter a receipt |
+| Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer Settings; it is not attached to reports |
+| Helpdesk tooling | ❌ | Tickets are read by SQL or the Zoho inbox. No assignment, SLA, or search |
+
+**The row is the record; the email is a notification of it.**
+`send-support-request` inserts into `support_requests` first and sends second,
+writing the outcome back to `notified_at` / `notify_error`. That is deliberate:
+a report captured but not delivered must be distinguishable from one that never
+arrived — the absence of exactly that property is what hid the Resend outage.
+
+**Identity, hat and business name are read server-side, never from the request
+body.** The hat was originally taken from the payload and a provider's report
+showed no sign of coming from a provider. In a two-hat app, *which hat* is
+account state, so it gets looked up like any other identity claim. The email
+shows both the app-reported hat and the DB's own answer, so a disagreement
+between them is visible rather than silent.
+
+**`send-email` is self-only.** Until 2026-08-24 it ran with `verify_jwt = false`
+and took a caller-supplied `to`/`html` — an open relay on the verified sending
+domain, reachable with the public anon key that ships in the app binary. It now
+requires a session *and* checks the recipient against addresses already on the
+caller's own account (`user.email`, `users.business_email`, `providers.email`).
+Note an anon JWT satisfies the gateway, so the function rejects it itself; both
+layers are needed. See `PRE-LAUNCH-TODO.md` §12.
+
+**Known remaining weakness, in priority order** — the `html` body is still
+rendered on-device and posted up, so the templates in
+`src/services/emailService.ts` should move to `supabase/functions/_shared/`
+with the server picking template *and* recipient from the event. The booking
+confirmation should become a DB trigger like this app's other notifications
+(see "Notifications are DB-trigger-owned"), which also fixes a reliability gap:
+today, if the app closes mid-request, that email simply never sends.
 
 ### Not yet implemented (carried forward, still accurate)
 
@@ -306,6 +347,12 @@ not plaintext AsyncStorage.
   encryption.
 - RLS `has_gone_live` gating was fixed live across 10 tables that were
   previously enforced only by app convention.
+- 2026-08-24: Support and outbound email rebuilt — see "Email & support"
+  above. Three things were found to be untrue rather than merely missing:
+  Report a Problem claimed to send and didn't, `send-email` was an open relay
+  on the verified sending domain, and `cerviced.co` was never verified in
+  Resend so every email the app had ever sent had failed silently. All three
+  are fixed and verified live.
 - 2026-08-18: "Login" row split out Sign in with Apple as a separate, known
   bug (not folded into a blanket ✅) — first-time Apple sign-in bypasses the
   5-step signup flow entirely via `signInWithIdToken`, creating a `users` row
