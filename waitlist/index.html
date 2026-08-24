@@ -67,6 +67,9 @@
 }
 
 *{box-sizing:border-box;}
+/* An author `display` rule beats the UA stylesheet's [hidden]{display:none},
+   so .field{display:flex} would keep hidden fields visible without this. */
+[hidden]{display:none !important;}
 html{-webkit-text-size-adjust:100%;}
 body{
   margin:0;
