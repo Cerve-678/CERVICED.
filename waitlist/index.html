@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The CERVICED Waitlist</title>
+<meta name="description" content="CERVICED is a UK beauty &amp; wellness marketplace built as a shopping experience — several providers, one cart, one checkout. Join the waitlist.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;500;600;700&display=swap">
+<style>
+/* ── Tokens ─────────────────────────────────────────────────────────────
+   Values are the app's own client-hat palette (src/constants/theme.ts →
+   clientLightTheme / clientDarkTheme). Do not drift these by hand.       */
+:root{
+  --bg:#FBF7F8;
+  --surface:#F3EEF0;
+  --card:#FFFFFF;
+  --accent:#4A2340;
+  --accent-text:#4A2340;
+  --on-accent:#FFFFFF;
+  --accent-dim:rgba(74,35,64,0.12);
+  --secondary:#E5ECF4;
+  --secondary-text:#4A6B8F;
+  --text:#000000;
+  --sub:rgba(74,35,64,0.62);
+  --border:rgba(74,35,64,0.14);
+  --sep:rgba(74,35,64,0.08);
+  --shadow:0 1px 2px rgba(74,35,64,0.05), 0 12px 32px -12px rgba(74,35,64,0.18);
+  --ring:rgba(74,35,64,0.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#17151A;
+    --surface:#1E1B21;
+    --card:#26222A;
+    --accent:#E5ECF4;
+    --accent-text:#E5ECF4;
+    --on-accent:#1B2740;
+    --accent-dim:rgba(229,236,244,0.14);
+    --secondary:#E5ECF4;
+    --secondary-text:#E5ECF4;
+    --text:#F0ECE7;
+    --sub:rgba(240,236,231,0.65);
+    --border:rgba(240,236,231,0.16);
+    --sep:rgba(240,236,231,0.10);
+    --shadow:0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.6);
+    --ring:rgba(229,236,244,0.55);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#17151A;
+  --surface:#1E1B21;
+  --card:#26222A;
+  --accent:#E5ECF4;
+  --accent-text:#E5ECF4;
+  --on-accent:#1B2740;
+  --accent-dim:rgba(229,236,244,0.14);
+  --secondary:#E5ECF4;
+  --secondary-text:#E5ECF4;
+  --text:#F0ECE7;
+  --sub:rgba(240,236,231,0.65);
+  --border:rgba(240,236,231,0.16);
+  --sep:rgba(240,236,231,0.10);
+  --shadow:0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.6);
+  --ring:rgba(229,236,244,0.55);
+}
+
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Jura','Avenir Next',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:17px;
+  line-height:1.6;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.display,.label,button,.btn{
+  font-family:'Bakbak One','Haettenschweiler','Arial Narrow',Impact,sans-serif;
+  font-weight:400;
+}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-0.005em;line-height:1.05;}
+p{margin:0;}
+a{color:var(--accent-text);}
+
+.wrap{width:min(1080px,100% - 44px);margin-inline:auto;}
+.label{
+  font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--sub);
+}
+:focus-visible{outline:2px solid var(--ring);outline-offset:3px;border-radius:4px;}
+
+/* ── Masthead ─────────────────────────────────────────────────────── */
+.masthead{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:26px 0 0;
+}
+.wordmark{
+  font-family:'Bakbak One',sans-serif;
+  font-size:20px;letter-spacing:0.26em;text-transform:uppercase;
+  color:var(--text);text-decoration:none;
+}
+.tag{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 12px;border-radius:999px;
+  background:var(--accent-dim);color:var(--accent-text);
+  font-family:'Bakbak One',sans-serif;
+  font-size:10px;letter-spacing:0.16em;text-transform:uppercase;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.hero{
+  display:grid;grid-template-columns:1.05fr 0.95fr;gap:64px;align-items:center;
+  padding:84px 0 96px;
+}
+.hero h1{
+  font-size:clamp(40px,6.2vw,74px);
+  text-transform:uppercase;
+  letter-spacing:-0.015em;
+}
+.hero h1 .quiet{color:var(--sub);}
+.hero-copy{display:flex;flex-direction:column;gap:24px;align-items:flex-start;}
+.lede{font-size:19px;color:var(--sub);max-width:44ch;}
+
+.btn{
+  display:inline-block;border:0;cursor:pointer;
+  padding:15px 30px;border-radius:999px;
+  background:var(--accent);color:var(--on-accent);
+  font-size:14px;letter-spacing:0.11em;text-transform:uppercase;
+  text-decoration:none;
+  transition:transform .18s ease, opacity .18s ease;
+}
+.btn:hover{transform:translateY(-2px);opacity:.92;}
+.btn:active{transform:translateY(0);}
+
+/* ── Hero cart — the thesis ───────────────────────────────────────── */
+.cart{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:22px;
+  box-shadow:var(--shadow);
+  padding:22px;
+  display:flex;flex-direction:column;gap:2px;
+}
+.cart-head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:2px 4px 14px;
+}
+.cart-head .label{color:var(--sub);}
+.cart-head .count{
+  font-family:'Bakbak One',sans-serif;font-size:11px;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--secondary-text);
+}
+.row{
+  display:grid;grid-template-columns:38px 1fr auto;gap:14px;align-items:center;
+  padding:13px 4px;
+  border-top:1px solid var(--sep);
+  opacity:0;transform:translateY(10px);
+  animation:rise .55s cubic-bezier(.22,.68,.35,1) forwards;
+}
+.row:nth-child(2){animation-delay:.15s;}
+.row:nth-child(3){animation-delay:.32s;}
+.row:nth-child(4){animation-delay:.49s;}
+.avatar{
+  width:38px;height:38px;border-radius:12px;
+  background:var(--secondary);color:var(--secondary-text);
+  display:grid;place-items:center;
+  font-family:'Bakbak One',sans-serif;font-size:13px;letter-spacing:0.04em;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .avatar{background:var(--accent-dim);}
+}
+:root[data-theme="dark"] .avatar{background:var(--accent-dim);}
+.svc{font-size:15px;line-height:1.3;color:var(--text);}
+.who{font-size:12.5px;color:var(--sub);letter-spacing:0.01em;}
+.price{
+  font-family:'Bakbak One',sans-serif;font-size:15px;
+  font-variant-numeric:tabular-nums;color:var(--text);
+}
+.cart-total{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:14px;padding:16px 4px 4px;
+  border-top:1.5px solid var(--border);
+  opacity:0;animation:rise .55s cubic-bezier(.22,.68,.35,1) .68s forwards;
+}
+.cart-total .k{font-family:'Bakbak One',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--sub);}
+.cart-total .v{font-family:'Bakbak One',sans-serif;font-size:26px;font-variant-numeric:tabular-nums;}
+.cart-cta{
+  margin-top:14px;padding:13px;border-radius:14px;text-align:center;
+  background:var(--accent);color:var(--on-accent);
+  font-family:'Bakbak One',sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;
+  opacity:0;animation:rise .55s cubic-bezier(.22,.68,.35,1) .82s forwards;
+}
+.cart-note{
+  margin-top:12px;text-align:center;font-size:12px;color:var(--sub);
+  opacity:0;animation:rise .5s ease .96s forwards;
+}
+@keyframes rise{to{opacity:1;transform:translateY(0);}}
+@media (prefers-reduced-motion: reduce){
+  .row,.cart-total,.cart-cta,.cart-note{animation:none;opacity:1;transform:none;}
+  .btn:hover{transform:none;}
+}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+section{padding:72px 0;border-top:1px solid var(--sep);}
+.section-head{display:flex;flex-direction:column;gap:14px;max-width:62ch;margin-bottom:44px;}
+.section-head h2{font-size:clamp(26px,3.4vw,38px);text-transform:uppercase;}
+.section-head p{color:var(--sub);}
+
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;}
+.point{display:flex;flex-direction:column;gap:12px;}
+.point h3{font-size:19px;text-transform:uppercase;letter-spacing:0.01em;}
+.point p{font-size:15.5px;color:var(--sub);}
+.rule{width:34px;height:3px;border-radius:2px;background:var(--accent);}
+
+.audiences{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.aud{
+  background:var(--card);border:1px solid var(--border);border-radius:20px;
+  padding:32px;display:flex;flex-direction:column;gap:16px;
+  box-shadow:var(--shadow);
+}
+.aud h3{font-size:22px;text-transform:uppercase;}
+.aud ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px;}
+.aud li{
+  font-size:15.5px;color:var(--sub);padding-left:20px;position:relative;
+}
+.aud li::before{
+  content:"";position:absolute;left:0;top:9px;
+  width:7px;height:7px;border-radius:2px;background:var(--accent);opacity:.7;
+}
+
+/* ── Form ─────────────────────────────────────────────────────────── */
+.signup{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:24px;padding:clamp(28px,4vw,44px);
+  max-width:660px;margin-inline:auto;
+}
+.toggle{
+  display:grid;grid-template-columns:1fr 1fr;gap:6px;
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:999px;padding:5px;margin-bottom:28px;
+}
+.toggle button{
+  border:0;cursor:pointer;background:transparent;color:var(--sub);
+  padding:11px 12px;border-radius:999px;
+  font-size:12px;letter-spacing:0.12em;text-transform:uppercase;
+  transition:background .2s ease,color .2s ease;
+}
+.toggle button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);}
+
+.fields{display:flex;flex-direction:column;gap:18px;}
+.field{display:flex;flex-direction:column;gap:7px;}
+.field label{
+  font-family:'Bakbak One',sans-serif;
+  font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--sub);
+}
+.field .hint{font-size:12.5px;color:var(--sub);}
+input[type="text"],input[type="email"],select{
+  width:100%;font-family:inherit;font-size:16px;color:var(--text);
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:14px 15px;
+  transition:border-color .18s ease;
+}
+input::placeholder{color:var(--sub);opacity:.75;}
+input:focus,select:focus{border-color:var(--accent);}
+select{appearance:none;cursor:pointer;}
+
+.consent{
+  display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;
+  font-size:14px;color:var(--sub);line-height:1.5;
+}
+.consent input{width:19px;height:19px;margin-top:2px;accent-color:var(--accent);cursor:pointer;}
+.submit{width:100%;margin-top:4px;}
+.formnote{margin-top:16px;font-size:12.5px;color:var(--sub);text-align:center;}
+.status{
+  margin-top:16px;padding:14px 16px;border-radius:12px;
+  background:var(--accent-dim);color:var(--accent-text);
+  font-size:14.5px;text-align:center;display:none;
+}
+.status[data-shown="true"]{display:block;}
+
+/* ── Placeholder legal block — MUST be replaced before deploy ─────── */
+.legal-placeholder{
+  border:1.5px dashed var(--accent);border-radius:16px;
+  padding:24px;max-width:660px;margin:36px auto 0;
+  background:transparent;
+}
+.legal-placeholder .label{color:var(--accent-text);}
+.legal-placeholder p{font-size:14.5px;color:var(--sub);margin-top:10px;}
+
+footer{
+  border-top:1px solid var(--sep);padding:36px 0 56px;
+  display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;
+  font-size:13px;color:var(--sub);
+}
+
+@media (max-width:880px){
+  .hero{grid-template-columns:1fr;gap:44px;padding:56px 0 68px;}
+  .three{grid-template-columns:1fr;gap:32px;}
+  .audiences{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <a class="wordmark" href="#top">Cerviced</a>
+    <span class="tag"><span class="dot"></span>United Kingdom · Pre-launch</span>
+  </header>
+
+  <!-- ── Hero ────────────────────────────────────────────────────── -->
+  <div class="hero" id="top">
+    <div class="hero-copy">
+      <span class="label">The waitlist is open</span>
+      <h1>Several providers.<br><span class="quiet">One cart.</span><br>One checkout.</h1>
+      <p class="lede">CERVICED is a beauty &amp; wellness marketplace built like a shopping
+        experience, not a calendar. Browse independent UK providers, add whatever you want
+        from as many of them as you like, and book it all in one go.</p>
+      <a class="btn" href="#join">Join the waitlist</a>
+    </div>
+
+    <div class="cart" role="img" aria-label="An illustration of the CERVICED cart: gel extensions £45, a lash lift and tint £38, and a cut and blow dry £55, from three different providers, totalling £138 in a single checkout.">
+      <div class="cart-head">
+        <span class="label">Your cart</span>
+        <span class="count">3 providers</span>
+      </div>
+      <div class="row">
+        <span class="avatar" aria-hidden="true">AN</span>
+        <span><span class="svc">Gel Extensions</span><br><span class="who">Amara Nails · Peckham</span></span>
+        <span class="price">£45</span>
+      </div>
+      <div class="row">
+        <span class="avatar" aria-hidden="true">SR</span>
+        <span><span class="svc">Lash Lift &amp; Tint</span><br><span class="who">Studio Ren · Camberwell</span></span>
+        <span class="price">£38</span>
+      </div>
+      <div class="row">
+        <span class="avatar" aria-hidden="true">NH</span>
+        <span><span class="svc">Cut &amp; Blow Dry</span><br><span class="who">Nia Hair · Brixton</span></span>
+        <span class="price">£55</span>
+      </div>
+      <div class="cart-total"><span class="k">Total</span><span class="v">£138</span></div>
+      <div class="cart-cta">Checkout</div>
+      <p class="cart-note">Three appointments. One set of details. One payment.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Problem ───────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="label">Why we're building it</span>
+      <h2>Booking today isn't broken. It's just scattered.</h2>
+      <p>Most people find a provider through a social media link, then piece the rest
+        together by hand — working out what to actually book, retyping the same details
+        for every new provider, and keeping track of everyone's policies themselves.
+        It works. It's also the same manual effort, every single time. CERVICED puts
+        all of it in one place.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Three differences ─────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="label">What's different</span>
+      <h2>Three things, specifically</h2>
+    </div>
+    <div class="three">
+      <div class="point">
+        <span class="rule"></span>
+        <h3>The cart</h3>
+        <p>Add services from several different providers — or several services from one —
+          and check out once. Nothing else in this space works this way.</p>
+      </div>
+      <div class="point">
+        <span class="rule"></span>
+        <h3>Built for how you find people</h3>
+        <p>Discovery is visual and browsable, the way you already find providers online —
+          not a directory bolted onto a calendar.</p>
+      </div>
+      <div class="point">
+        <span class="rule"></span>
+        <h3>Your details, once</h3>
+        <p>Your profile travels with you. No re-typing the same information for every new
+          provider you try.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Audiences ─────────────────────────────────────────────────── -->
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <span class="label">Two sides</span>
+      <h2>Whichever side you're on</h2>
+    </div>
+    <div class="audiences">
+      <div class="aud">
+        <h3>For providers</h3>
+        <p style="color:var(--sub);font-size:15.5px;">A real business presence — not a link in a bio.</p>
+        <ul>
+          <li>A profile with your services, pricing and portfolio</li>
+          <li>Your own availability, buffers and blocked dates</li>
+          <li>Deposits, cancellation and reschedule policies you set</li>
+          <li>A booking dashboard, client history and promotions</li>
+        </ul>
+      </div>
+      <div class="aud">
+        <h3>For clients</h3>
+        <p style="color:var(--sub);font-size:15.5px;">Find someone, book them, get on with your day.</p>
+        <ul>
+          <li>Browse and search independent providers near you</li>
+          <li>Save the ones you like and rebook in a tap</li>
+          <li>Manage, reschedule or cancel from one place</li>
+          <li>Reminders so nothing gets missed</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Signup ────────────────────────────────────────────────────── -->
+<section id="join">
+  <div class="wrap">
+    <div class="section-head" style="text-align:center;align-items:center;margin-inline:auto;">
+      <span class="label">Join the waitlist</span>
+      <h2>Be there on day one</h2>
+      <p>Tell us where you are and we'll let you know when CERVICED opens in your area.</p>
+    </div>
+
+    <form class="signup" id="waitlist-form" novalidate>
+      <div class="toggle" role="group" aria-label="Are you a provider or a client?">
+        <button type="button" id="tab-provider" aria-pressed="true">I'm a provider</button>
+        <button type="button" id="tab-client" aria-pressed="false">I'm looking to book</button>
+      </div>
+
+      <div class="fields">
+        <div class="field">
+          <label for="email">Email address</label>
+          <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+        </div>
+
+        <!-- Provider-only -->
+        <div class="field" data-role="provider">
+          <label for="business">Business name</label>
+          <input type="text" id="business" name="business" placeholder="e.g. Amara Nails" autocomplete="organization">
+        </div>
+        <div class="field" data-role="provider">
+          <label for="services">What do you offer?</label>
+          <input type="text" id="services" name="services" placeholder="e.g. nails, lashes, brows">
+        </div>
+        <div class="field" data-role="provider">
+          <label for="current">How do you take bookings today?</label>
+          <select id="current" name="current">
+            <option value="">Select one</option>
+            <option>DMs or messaging apps</option>
+            <option>A booking site (Fresha, Treatwell, Booksy…)</option>
+            <option>My own website or link in bio</option>
+            <option>Phone, text or in person</option>
+            <option>A mix of things</option>
+          </select>
+        </div>
+
+        <!-- Client-only -->
+        <div class="field" data-role="client" hidden>
+          <label for="books">What do you book most?</label>
+          <input type="text" id="books" name="books" placeholder="e.g. hair, nails, massage">
+        </div>
+
+        <!-- Both -->
+        <div class="field">
+          <label for="postcode">Postcode area</label>
+          <input type="text" id="postcode" name="postcode" placeholder="e.g. SE15" autocomplete="postal-code" required>
+          <span class="hint">Just the first part — it tells us where to open first.</span>
+        </div>
+
+        <label class="consent">
+          <input type="checkbox" id="consent" name="consent">
+          <span>Email me when CERVICED launches, and occasionally before then. I can
+            unsubscribe at any time. See how we handle your details in the
+            <a href="#privacy">privacy notice</a>.</span>
+        </label>
+
+        <button type="submit" class="btn submit">Join the waitlist</button>
+      </div>
+
+      <p class="formnote">No spam, no sharing your details with anyone else.</p>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </form>
+
+    <!-- ─────────────────────────────────────────────────────────────
+         PLACEHOLDER — NOT LEGAL COPY. Replace before this page is
+         deployed anywhere public. See LEGAL-COMPLIANCE-NOTES.md §1:
+         this project has no Privacy Policy written yet, and a UK-facing
+         signup form needs a real one (UK GDPR / PECR).
+         ───────────────────────────────────────────────────────────── -->
+    <div class="legal-placeholder" id="privacy">
+      <span class="label">Privacy notice — placeholder, do not deploy</span>
+      <p><strong>This block is a structural placeholder, not legal copy, and has not been
+        reviewed by anyone qualified.</strong> Before this page goes live it needs a real
+        privacy notice covering: what is collected, the lawful basis for processing it,
+        how long it is kept, which third parties process it, and how someone asks to be
+        removed. Replace this entire block with reviewed wording, or link out to a
+        published policy.</p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <span>Cerviced Ltd · United Kingdom</span>
+    <span>hello@cerviced.com</span>
+  </footer>
+</div>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────────
+   WHERE SIGNUPS GO
+   Fill this in to make the form live. It posts straight to a Supabase
+   table via the REST API — the anon key is publishable by design, but the
+   table needs an INSERT-only RLS policy for `anon` and NO select policy,
+   or anyone could read every signup back out.
+   See waitlist/waitlist_signups.sql in this repo for the table + policy.
+   Leave blank and the form runs in preview mode (validates, no network).
+   ────────────────────────────────────────────────────────────────────── */
+var WAITLIST = {
+  supabaseUrl: '',                 // e.g. 'https://abcdefgh.supabase.co'
+  anonKey:     '',                 // publishable anon key
+  table:       'waitlist_signups'
+};
+
+(function () {
+  var form     = document.getElementById('waitlist-form');
+  var status   = document.getElementById('status');
+  var tabProv  = document.getElementById('tab-provider');
+  var tabClient= document.getElementById('tab-client');
+  var role     = 'provider';
+
+  function setRole(next) {
+    role = next;
+    tabProv.setAttribute('aria-pressed', String(next === 'provider'));
+    tabClient.setAttribute('aria-pressed', String(next === 'client'));
+    document.querySelectorAll('[data-role]').forEach(function (el) {
+      el.hidden = el.getAttribute('data-role') !== next;
+    });
+  }
+  tabProv.addEventListener('click', function () { setRole('provider'); });
+  tabClient.addEventListener('click', function () { setRole('client'); });
+  setRole('provider');
+
+  function say(message) {
+    status.textContent = message;
+    status.setAttribute('data-shown', 'true');
+  }
+
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+
+    var email    = document.getElementById('email').value.trim();
+    var postcode = document.getElementById('postcode').value.trim();
+    var consent  = document.getElementById('consent').checked;
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      say('That email address doesn’t look right — check it and try again.');
+      return;
+    }
+    if (!postcode) {
+      say('Add your postcode area so we know where to open first.');
+      return;
+    }
+    if (!consent) {
+      say('Tick the box so we’re allowed to email you about launch.');
+      return;
+    }
+
+    var payload = {
+      role: role,
+      email: email,
+      postcode_area: postcode.toUpperCase(),
+      business_name: role === 'provider' ? document.getElementById('business').value.trim() || null : null,
+      services:      role === 'provider' ? document.getElementById('services').value.trim() || null : null,
+      current_tool:  role === 'provider' ? document.getElementById('current').value || null : null,
+      books_most:    role === 'client'   ? document.getElementById('books').value.trim() || null : null,
+      consented_at:  new Date().toISOString()
+    };
+
+    if (!WAITLIST.supabaseUrl || !WAITLIST.anonKey) {
+      say('Preview mode — nothing was sent. Add your Supabase details in the page script to go live.');
+      console.log('[waitlist] would submit:', payload);
+      return;
+    }
+
+    var button = form.querySelector('.submit');
+    button.disabled = true;
+    say('Sending…');
+
+    fetch(WAITLIST.supabaseUrl + '/rest/v1/' + WAITLIST.table, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': WAITLIST.anonKey,
+        'Authorization': 'Bearer ' + WAITLIST.anonKey,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(payload)
+    }).then(function (response) {
+      if (response.ok) {
+        form.querySelector('.fields').style.display = 'none';
+        say('You’re on the list. We’ll be in touch before we open in ' + payload.postcode_area + '.');
+        return;
+      }
+      if (response.status === 409) {
+        say('You’re already on the list — nothing more to do.');
+        button.disabled = false;
+        return;
+      }
+      throw new Error('HTTP ' + response.status);
+    }).catch(function (error) {
+      console.error('[waitlist] submit failed', error);
+      say('That didn’t go through. Try again in a moment, or email hello@cerviced.com.');
+      button.disabled = false;
+    });
+  });
+})();
+</script>
+</body>
+</html>
