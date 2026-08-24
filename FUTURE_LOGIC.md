@@ -823,3 +823,116 @@ questions — several of which (availability, services) are only meaningful in
 - `acuityTransferService.ts` — existing import-from-Acuity path.
 - Go-live gate: auto-memory `go-live-gate-is-three-things-not-four`.
 - `hat-switch-dob-is-the-client-hat-marker` — why this must be a real column.
+
+---
+
+## "Slots out every Nth" — a release day that doesn't release anything
+
+### What it means
+
+Lots of real beauty providers (braiders, lash techs, barbers) open their books
+in monthly batches: "slots out on the 30th." Clients wait for the drop. The app
+has UI for this on both sides — a provider picks a day of the month, a client
+sees "New slots drop on the 20th" and taps a bell to be told when it happens.
+
+### What currently happens
+
+The notification half is fully built and live. The release half does not exist.
+
+**Live and working:** provider sets a day in `ProviderAutomationsScreen`
+("Notify followers on schedule release day") → `providers.automation_settings.
+scheduleReleaseDay` (1–31). Cron **jobid 150**
+`provider-follow-schedule-release-nudges`, daily 09:00 UTC, runs
+`process_follow_schedule_release_nudges()`, which notifies every
+`provider_follows` row with `notify_enabled = true` whose provider's day matches
+today — once per calendar month (`last_notified_at` guard), clamping a day past
+month-end (31 in a 30-day month) down to the actual last day. Inserts an
+`announcement` notification, which the `send_push_on_notification` trigger turns
+into a real push. Client-side the day renders as the profile pill
+(`ProviderProfileScreen`, `provider.scheduleReleaseDay`) and shapes the bell
+toast copy.
+
+**The gap:** nothing is released on that day, because availability has no
+monthly shape at all. `provider_availability` / `provider_availability_windows`
+are a **recurring weekly template** keyed on `day_of_week` with no date range and
+no end date — it repeats forever. The only thing bounding how far out a client
+can book is `providers.booking_window_days`, enforced in the bookability trigger
+as `NEW.booking_date > CURRENT_DATE + v_window_days → reject`. That is a
+**rolling** horizon: one more day becomes bookable every night at midnight. There
+is no batch, no event, nothing to release.
+
+So the push on the 20th says *"just released new availability — check their
+latest slots"* and what's actually there is one day more than the 19th. It
+asserts a fact the app never verified — the same failure mode as the
+"Payment Not Collected" notifications removed in `ff2be62` (auto-memory
+`unverifiable-notifications-removed`).
+
+Live at time of writing: 6 providers, 1 with a release day set; all 6 on
+`booking_window_days = 30`; 4 follows, 1 with the bell on. So this has almost
+certainly never misled a real user yet — but it will the moment it's used.
+
+**Second-order problem, same root cause.** Because the window rolls, every date
+a client can book is always live, so a provider has **nowhere to draft**. Any
+edit to the weekly template in `ProviderScheduleScreen` (Working Hours) applies
+instantly to every future date, including dates already booked.
+`findScheduleIssues()` flags the resulting clashes after the fact (auto-memory
+`schedule-issue-highlighting`), which is a mitigation, not a fix. There is no
+"work on next month privately" state.
+
+### What needs to exist
+
+**1. An explicit horizon, as an alternative to the rolling one.**
+Add `providers.bookable_through_date DATE` plus a mode (`rolling` — today's
+behaviour, the default and what every existing provider keeps — or `monthly`).
+The bookability trigger gains a branch: `monthly` providers are bounded by
+`booking_date > bookable_through_date` instead of `CURRENT_DATE +
+booking_window_days`. This touches the check **every booking in the app passes
+through**, so it needs `cerviced-booking-domain` and a real migration, not an
+inline edit.
+
+**2. The cron advances the horizon, then notifies — in that order, one
+transaction.** `process_follow_schedule_release_nudges()` currently only sends.
+It should first push `bookable_through_date` forward a month for that provider,
+and only send if that succeeded. That is what makes the message true: the push
+is *caused by* the release rather than merely coinciding with it. The horizon
+must advance whether or not the provider edited anything — "release day" means
+"next month is now bookable," not "I did my homework." A provider who never
+touches their diary must not silently go unbookable.
+
+**3. Merge the two controls onto one screen.** Today the release day is in
+`ProviderAutomationsScreen` (Automations) and the window is in
+`SchedulingScreen` (Booking Rules → "How far ahead clients can book",
+`BOOKING_WINDOW_OPTS`). They describe the same real-world thing and have never
+met — that split *is* the bug. "How far ahead clients can book" should become a
+choice of shape (a rolling window of N days, **or** a monthly release on the
+Nth), with the day-of-month picker moving there from Automations, because it is
+now a booking rule rather than a notification setting. Automations loses the
+toggle entirely.
+
+**4. Show the wall on both sides.** Provider, in Working Hours: a visible line —
+"clients can book up to here · next release: 20th" — with everything past it
+theirs to edit freely. Client, in the date picker: instead of the picker
+silently ending, an end-cap reading "Books open on the 20th" with the bell
+attached. Without that end-cap the drop does nothing for discovery, which is
+most of the point.
+
+**5. Emergency requests already fit.** `allow_beyond_window_requests` (auto-memory
+`emergency-booking-requests`) would simply mean "past the released horizon" for
+`monthly` providers — a clean reuse, no new opt-in.
+
+### Cheaper alternative, if the trigger stays untouched
+
+Leave the mechanism alone and fix only the claim: "Ivy usually updates her diary
+around the 20th" instead of "just released new availability." Honest, zero
+schema, zero risk — but gives up both the drop and the drafting space. Worth
+doing *now* as a stopgap regardless, since the current copy is the untrue part.
+
+### Related
+
+- Auto-memory `unverifiable-notifications-removed` — the standing rule this
+  currently violates.
+- Auto-memory `schedule-issue-highlighting` — the after-the-fact mitigation for
+  the no-drafting-space problem.
+- Auto-memory `emergency-booking-requests` — the beyond-window opt-in.
+- `## Provider Deactivation / Pause Bookings` above — another case of provider
+  availability needing a state the weekly template can't express.

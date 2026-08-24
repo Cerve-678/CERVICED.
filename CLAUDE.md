@@ -54,6 +54,15 @@ instead of re-deriving their knowledge from scratch:
   management-style pass across a change or the whole repo — it's the "does
   this stay manageable at scale" lens, distinct from the security/scalability
   agents' correctness/performance lenses.
+- **`cerviced-feature-coherence`** — finds features that don't talk to
+  each other: copy that asserts an event nothing actually causes, a setting
+  only some of the paths it implies actually read, one concept split across
+  two screens as two contradictable settings, or two features each assuming
+  the other covers a case. One level up from
+  `cerviced-detail-consistency-audit`'s value-level bugs — here every piece
+  is individually correct and the wiring between them is what's missing.
+  Reach for it when a feature spans two screens or hats, and before adding
+  any notification or new user-facing setting.
 - **`cerviced-design-review`** — checks a screen/component against
   `DESIGN_SYSTEM.md`'s actual documented conventions (exact palette hex
   values, mandatory `ThemedBackground` wrapper, accent color, typography,
