@@ -1,5 +1,7 @@
 // src/screens/auth/SignUpStep4Screen.tsx
 import React, { useState } from 'react';
+import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
+import type { BusinessType } from '../../types/database';
 import {
   LayoutChangeEvent,
   ScrollView,
@@ -36,12 +38,11 @@ const TREATMENT_HISTORY = ['Facials', 'Lash extensions', 'Brow tinting', 'Hair c
 // where each of these lands: price range reuses providers.price_tier,
 // team size/contact prefs are staged on `users` then copied across by
 // InfoRegScreen's first-save prefill).
-const BUSINESS_TYPES: { v: 'salon' | 'studio' | 'home_based' | 'mobile'; l: string }[] = [
-  { v: 'salon', l: 'Salon' },
-  { v: 'studio', l: 'Studio' },
-  { v: 'home_based', l: 'Home Studio' },
-  { v: 'mobile', l: 'Mobile' },
-];
+// Signup offers exactly the types BUSINESS_TYPE_OPTS defines, with its labels
+// — a provider must not be able to pick a type at signup that Business Details
+// then can't render, or vice versa.
+const BUSINESS_TYPES: { v: BusinessType; l: string }[] =
+  BUSINESS_TYPE_OPTS.map(o => ({ v: o.value, l: o.label }));
 const SERVICE_CATEGORIES = ['HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'];
 const PRICE_RANGES: { v: 'budget' | 'mid' | 'premium' | 'luxury'; l: string }[] = [
   { v: 'budget',  l: '£15–£35' },

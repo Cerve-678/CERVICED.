@@ -32,7 +32,8 @@ import SlidingTabs from '../../components/SlidingTabs';
 import * as Location from 'expo-location';
 import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
-import type { PublicProviderSummary } from '../../types/database';
+import type { PublicProviderSummary, BusinessType } from '../../types/database';
+import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
 import userLearningService from '../../services/userLearningService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDistanceKm } from '../../utils/distance';
@@ -64,7 +65,7 @@ interface ProviderCardData {
   // until real data is available.
   priceRange: { min: number; max: number } | null;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  businessType: BusinessType | null;
   specialties: string[];
   // null = not yet resolved (or unknown) — see providersWithAvailability.
   // Never treat null as "no slots"; the badge simply doesn't render yet.
@@ -93,7 +94,7 @@ interface FilterOptions {
   priceRange?: { min: number; max: number };
   rating?: number;
   distance?: number;
-  serviceType?: 'all' | 'salon' | 'studio' | 'home_based' | 'mobile';
+  serviceType?: 'all' | BusinessType;
   // 'available' means "available or limited" (has near-term headroom at
   // all) — providers whose availability hasn't resolved yet are never
   // filtered out, same not-excluded-when-unknown rule Distance follows.
@@ -217,13 +218,13 @@ const DISTANCE_OPTIONS = [
   { label: 'Any distance', value: 999 },
 ];
 
-const SERVICE_TYPE_OPTIONS = [
+// Derived from BUSINESS_TYPE_OPTS rather than restated: the types a client can
+// filter by must be exactly the types a provider can register as, with the same
+// labels the provider saw when picking one.
+const SERVICE_TYPE_OPTIONS: { label: string; value: 'all' | BusinessType }[] = [
   { label: 'All', value: 'all' },
-  { label: 'Salon', value: 'salon' },
-  { label: 'Studio', value: 'studio' },
-  { label: 'Home Studio', value: 'home_based' },
-  { label: 'Mobile', value: 'mobile' },
-] as const;
+  ...BUSINESS_TYPE_OPTS.map(o => ({ label: o.label, value: o.value })),
+];
 
 const FILTER_PILL_LABEL: Record<FilterKey, string> = {
   sort: 'Sort',

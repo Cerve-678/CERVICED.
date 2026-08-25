@@ -1,3 +1,5 @@
+import type { BusinessType } from '../../types/database';
+
 export interface ProviderProfileAddOn {
   id: string | number;
   name: string;
@@ -30,7 +32,7 @@ export interface ProviderProfileData {
   providerService: string;
   providerLogo: any;
   location: string;
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  businessType: BusinessType | null;
   rating: number;
   /** providers.automation_settings.scheduleReleaseDay — day of month (1-31)
    *  new slots go out, or null if the provider hasn't set one. Drives the

@@ -23,7 +23,7 @@ import {
   updateProviderRegistrationRow,
   uploadPublicStorageObject,
 } from './databaseService';
-import type { DbProvider } from '../types/database';
+import type { DbProvider, BusinessType } from '../types/database';
 import {
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
@@ -109,7 +109,9 @@ export interface ProviderRegistrationData {
   externalBookingUrl: string;
   yearsExperience: string;
   // Address privacy
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | '';
+  // '' is this form's "not answered yet"; the four real values are the
+  // canonical BusinessType union.
+  businessType: BusinessType | '';
   // Collected at signup (Step 4's "Who you work with" / "Tell me more" —
   // see supabase/provider_signup_business_fields.sql), editable here too.
   teamSize: 'solo' | 'small_team' | 'large_team' | '';

@@ -13,6 +13,25 @@ export type Json =
 
 export type UserRole = "user" | "provider";
 
+/**
+ * Where a provider works, and therefore whose address the appointment happens
+ * at. This is the DB enum (`users_business_type_check`, and the matching
+ * constraint on `providers.business_type`) and the ONE declaration of it —
+ * every other module imports this rather than restating the union, so adding
+ * a fifth type is a single edit here plus the option table in
+ * `src/features/business-details/options.ts` that TypeScript will then force
+ * you to complete.
+ *
+ * - salon / studio: the client travels to commercial premises.
+ * - home_based:     the client travels to the provider's home.
+ * - mobile:         the PROVIDER travels; the venue is the client's address.
+ *
+ * Nullable everywhere it appears: a provider row can predate the field or
+ * simply not have answered yet, and "unknown" is not the same as any of the
+ * four (see appointmentVenue in features/business-details/options.ts).
+ */
+export type BusinessType = "salon" | "studio" | "home_based" | "mobile";
+
 export type ServiceCategory =
   | "HAIR"
   | "NAILS"
@@ -216,7 +235,7 @@ export interface DbProvider {
      *  ProviderPolicies.waitlistSelectionMethod for the full explanation. */
     waitlistSelectionMethod?: string;
   } | null;
-  business_type: "salon" | "studio" | "home_based" | "mobile" | null;
+  business_type: BusinessType | null;
   // full_address is deliberately NOT here. It moved to provider_private_details
   // (owner-only RLS) because `providers` is readable by every authenticated user
   // and RLS cannot hide a single column — so keeping it here leaked every
@@ -514,7 +533,7 @@ export interface DbBooking {
   // snapshotted onto the booking — it decides whose address is the
   // appointment's location (see isMobileBooking). Absent when a booking is
   // read straight from `bookings` rather than the view.
-  provider_business_type?: "salon" | "studio" | "home_based" | "mobile" | null;
+  provider_business_type?: BusinessType | null;
   // Client intent — feeds search personalisation and Becca context
   occasion_type:
     | "wedding"

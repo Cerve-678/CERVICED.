@@ -20,9 +20,11 @@ export interface RegistrationData {
   instagram: string;
   tiktok: string;
   website: string;
-  // 'salon' | 'studio' | 'home_based' | 'mobile' — asked once here instead of
-  // only in the post-login provider profile screen, since it also decides
-  // whether a private address needs to be collected there.
+  // A BusinessType value (or '' before the picker is answered) — asked once
+  // here instead of only in the post-login provider profile screen, since it
+  // also decides whether a private address needs to be collected there. Kept
+  // as `string` because this context is the raw draft the form writes into;
+  // InfoRegScreen narrows it through the canonical union on save.
   businessType: string;
   // Beauty profile — shown to providers
   hairType: string;

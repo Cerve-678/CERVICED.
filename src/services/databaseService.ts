@@ -27,7 +27,9 @@ import type {
   DbProviderBlockedDate,
   DbProviderAvailabilityWindow,
   DbProviderAvailabilityOverride,
+  BusinessType,
 } from "../types/database";
+import type { AddressReleasePolicy } from "../features/business-details/options";
 import { logger } from "../utils/logger";
 import {
   ADDRESS_PENDING_PLACEHOLDER,
@@ -3577,6 +3579,27 @@ export async function getAvailabilityServiceBufferRows(serviceIds: string[]): Pr
   return data ?? [];
 }
 
+/** Which of these service ids a client can still actually book.
+ *
+ *  One query answers three different ways a cart item can go stale, because
+ *  the `services_public_read` RLS policy already encodes all of them: the row
+ *  is returned only when `is_active = true` AND its provider is both
+ *  `has_gone_live` and `is_active`. So an id missing from the result has been
+ *  deleted, withdrawn by its provider, or belongs to a provider who
+ *  unpublished — and none of those are worth telling a client apart.
+ *
+ *  Ids that were never valid UUIDs are the caller's problem to filter; this
+ *  returns exactly what the database confirmed, never a permissive default. */
+export async function getBookableServiceIds(serviceIds: string[]): Promise<Set<string>> {
+  if (serviceIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("services")
+    .select("id")
+    .in("id", serviceIds);
+  if (error) throw error;
+  return new Set((data ?? []).map((row: { id: string }) => row.id));
+}
+
 export async function getAvailabilityNoticeSettings(providerId: string): Promise<{
   min_booking_notice_hrs: number;
   display_name: string | null;
@@ -5345,17 +5368,8 @@ export async function getProviderConsultationService(
 // ─────────────────────────────────────────────────────────
 
 export interface ProviderAddressPolicy {
-  business_type: "salon" | "studio" | "home_based" | "mobile" | null;
-  address_release_policy:
-    | "always"
-    | "on_confirmation"
-    | "day_before"
-    | "two_days_before"
-    | "three_days_before"
-    | "five_days_before"
-    | "week_before"
-    | "manual"
-    | null;
+  business_type: BusinessType | null;
+  address_release_policy: AddressReleasePolicy | null;
 }
 
 /**
@@ -6829,17 +6843,8 @@ export async function updateProviderContactDetails(
     // values are valid, so changing the type alone can leave a stale timing the
     // new type never offers. See reconcileAddressReleasePolicy in
     // src/features/business-details/options.ts.
-    business_type?: "salon" | "studio" | "home_based" | "mobile" | null;
-    address_release_policy?:
-      | "always"
-      | "on_confirmation"
-      | "day_before"
-      | "two_days_before"
-      | "three_days_before"
-      | "five_days_before"
-      | "week_before"
-      | "manual"
-      | null;
+    business_type?: BusinessType | null;
+    address_release_policy?: AddressReleasePolicy | null;
     years_experience?: number | null;
   },
 ): Promise<void> {

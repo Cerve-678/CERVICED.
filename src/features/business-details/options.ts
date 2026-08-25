@@ -11,6 +11,8 @@
  * before (see preferred_contact_methods) — always map at the render boundary.
  */
 
+import type { BusinessType } from '../../types/database';
+
 export const SPECIALTIES_MAP: Record<string, string[]> = {
   HAIR:       ['Natural & textured', 'Afro hair', 'Colour & balayage', 'Extensions & weaves', 'Locs & braids', 'Bridal & occasion', "Men's cuts", "Children's hair", 'Relaxers & perms', 'Blow-dries & styling'],
   NAILS:      ['Nail art', 'Acrylic sets', 'Gel manicure', 'Infills', 'Gel extensions', 'Pedicures', 'SNS/dip powder', 'Gel-X'],
@@ -143,18 +145,85 @@ export const PATCH_OPTS = [
 // BUSINESS TYPE & ADDRESS RELEASE
 // ─────────────────────────────────────────────────────────
 
-export type BusinessType = 'salon' | 'studio' | 'home_based' | 'mobile';
+// The union itself is declared once, alongside the DB enum it mirrors, in
+// types/database.ts. Re-exported here so the screens that already pull their
+// business-type options from this module need no second import — there is
+// still only one declaration of it.
+export type { BusinessType };
 
 export type AddressReleasePolicy =
   | 'always' | 'on_confirmation' | 'day_before' | 'two_days_before'
   | 'three_days_before' | 'five_days_before' | 'week_before' | 'manual';
 
-export const BUSINESS_TYPE_OPTS: { value: BusinessType; label: string; sub: string }[] = [
-  { value: 'salon',      label: 'Salon',       sub: 'Clients come to a commercial salon premises.' },
-  { value: 'studio',     label: 'Studio',      sub: 'Clients come to a dedicated studio space.' },
-  { value: 'home_based', label: 'Home Studio', sub: 'Clients come to your home — address stays private until you release it.' },
-  { value: 'mobile',     label: 'Mobile',      sub: 'You travel to the client. Your address is never sent automatically — only if you send it yourself.' },
-];
+/** Whose address the appointment happens at. */
+export type AppointmentVenue = 'provider' | 'client';
+
+/**
+ * Everything that distinguishes one business type from another, in one table.
+ *
+ * `label` used to be copy-pasted into five places (SignUpStep4Screen,
+ * InfoRegScreen, HomeScreen's and SearchScreen's filter rows, and
+ * profilePresentation's BUSINESS_TYPE_LABELS), so the same DB value could and
+ * did read differently depending on which screen you were looking at. `venue`
+ * is the load-bearing field: it is the difference between showing the client
+ * somewhere to travel to and asking them for their own address, and it was
+ * previously expressed only as scattered `=== 'mobile'` comparisons.
+ *
+ * Record<BusinessType, …> is deliberate — add a fifth type to the union in
+ * types/database.ts and this table stops compiling until it's described here.
+ */
+export const BUSINESS_TYPE_META: Record<BusinessType, {
+  label: string;
+  /** Provider-facing explanation, shown when picking the type. */
+  sub: string;
+  venue: AppointmentVenue;
+  /** How a client should be told where this booking happens. */
+  clientVenueLabel: string;
+}> = {
+  salon:      { label: 'Salon',       sub: 'Clients come to a commercial salon premises.',                                                       venue: 'provider', clientVenueLabel: 'You travel to the salon' },
+  studio:     { label: 'Studio',      sub: 'Clients come to a dedicated studio space.',                                                          venue: 'provider', clientVenueLabel: 'You travel to the studio' },
+  home_based: { label: 'Home Studio', sub: 'Clients come to your home — address stays private until you release it.',                            venue: 'provider', clientVenueLabel: 'You travel to the provider’s home studio' },
+  mobile:     { label: 'Mobile',      sub: 'You travel to the client. Your address is never sent automatically — only if you send it yourself.', venue: 'client',   clientVenueLabel: 'The provider travels to you' },
+};
+
+export const BUSINESS_TYPE_OPTS: { value: BusinessType; label: string; sub: string }[] =
+  (Object.keys(BUSINESS_TYPE_META) as BusinessType[]).map(value => ({
+    value,
+    label: BUSINESS_TYPE_META[value].label,
+    sub: BUSINESS_TYPE_META[value].sub,
+  }));
+
+/**
+ * Display label for a type, including the "never answered" case. Accepts the
+ * empty string as well as null: the registration form models an unanswered
+ * picker as '', so every caller would otherwise need its own cast.
+ */
+export function businessTypeLabel(type: BusinessType | null | undefined | ''): string {
+  return type ? BUSINESS_TYPE_META[type].label : 'Not set';
+}
+
+/**
+ * Whose address a booking with this provider happens at.
+ *
+ * Returns null for an unset type rather than guessing. A provider who has
+ * never answered has no defined venue, and defaulting them to 'provider'
+ * would show clients an address to travel to for someone who may well be
+ * mobile. Callers decide how to degrade — see isMobileBooking, which falls
+ * back to whether a client address is actually present.
+ */
+export function appointmentVenue(type: BusinessType | null | undefined): AppointmentVenue | null {
+  // Indexed defensively, not with a bare BUSINESS_TYPE_META[type]: callers pass
+  // raw column values (see isMobileBooking), and a legacy or hand-edited row
+  // holding something outside the union would otherwise read `.venue` off
+  // undefined and crash the render rather than falling back to "unknown".
+  const meta = type ? BUSINESS_TYPE_META[type] : undefined;
+  return meta?.venue ?? null;
+}
+
+/** The provider travels to the client — true for mobile only. */
+export function providerTravelsToClient(type: BusinessType | null | undefined): boolean {
+  return appointmentVenue(type) === 'client';
+}
 
 export const ADDRESS_RELEASE_OPTS: { value: AddressReleasePolicy; label: string; sub: string }[] = [
   { value: 'always',            label: 'Always visible',  sub: 'Your address is always visible to booked clients.' },

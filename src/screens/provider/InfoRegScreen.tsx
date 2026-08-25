@@ -77,6 +77,8 @@ import { toUserMessage } from '../../utils/userFacingError';
 
 import {
   ADDRESS_RELEASE_OPTS,
+  BUSINESS_TYPE_OPTS,
+  businessTypeLabel,
   isAddressReleaseAllowed,
   reconcileAddressReleasePolicy,
   type AddressReleasePolicy,
@@ -117,12 +119,8 @@ const SERVICE_CATEGORIES = [
   'HAIR', 'NAILS', 'LASHES', 'BROWS', 'MUA', 'AESTHETICS', 'OTHER'
 ];
 
-const BUSINESS_TYPE_LABELS: Record<string, string> = {
-  salon: 'Salon',
-  studio: 'Studio',
-  home_based: 'Home Studio',
-  mobile: 'Mobile',
-};
+// businessTypeLabel() from the canonical table replaces what used to be a
+// fourth copy of these four strings in this file.
 
 /** The editor is one continuous document, not a hub-and-editor split and not a
  *  wizard: all five sections render sequentially in a single scroll, separated
@@ -2520,7 +2518,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             return getUserSignupPrefillInfo(user.id)
               .then(prefill => {
                 if (!prefill) return;
-                const validBusinessTypes: ProviderRegistrationData['businessType'][] = ['salon', 'studio', 'home_based', 'mobile'];
+                const validBusinessTypes: ProviderRegistrationData['businessType'][] = BUSINESS_TYPE_OPTS.map(o => o.value);
                 const prefilledBusinessType = validBusinessTypes.find(v => v === prefill.business_type);
                 const validTeamSizes: ProviderRegistrationData['teamSize'][] = ['solo', 'small_team', 'large_team'];
                 const prefilledTeamSize = validTeamSizes.find(v => v === prefill.team_size);
@@ -3161,7 +3159,7 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
             // address under a type nobody chose. It was already required at
             // signup (Step 4); the claim/transfer paths bypassed that, which
             // is how live rows ended up NULL.
-            { label: 'Business type', value: filled(providerData.businessType) ? (BUSINESS_TYPE_LABELS[providerData.businessType] ?? providerData.businessType) : '', required: true },
+            { label: 'Business type', value: filled(providerData.businessType) ? businessTypeLabel(providerData.businessType) : '', required: true },
             { label: 'Full address', value: filled(providerData.fullAddress) ? 'Added (stays private)' : '', required: true },
           ],
         },
@@ -4557,18 +4555,13 @@ const InfoRegScreen: React.FC<InfoRegScreenProps> = ({ navigation }) => {
                     <View style={[styles.policyPill, { backgroundColor: adaptiveAccentColor, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
                       <Ionicons name="lock-closed" size={11} color="#fff" />
                       <Text style={[styles.policyPillText, { color: '#fff' }]}>
-                        {BUSINESS_TYPE_LABELS[providerData.businessType] ?? providerData.businessType}
+                        {businessTypeLabel(providerData.businessType)}
                       </Text>
                     </View>
                   </View>
                 ) : (
                   <View style={styles.pillRow}>
-                    {([
-                      { v: 'salon'     as const, l: 'Salon' },
-                      { v: 'studio'    as const, l: 'Studio' },
-                      { v: 'home_based'as const, l: 'Home Studio' },
-                      { v: 'mobile'    as const, l: 'Mobile' },
-                    ]).map(({ v, l }) => (
+                    {BUSINESS_TYPE_OPTS.map(({ value: v, label: l }) => (
                       <TouchableOpacity
                         key={v}
                         style={[styles.policyPill, providerData.businessType === v && { backgroundColor: adaptiveAccentColor }]}

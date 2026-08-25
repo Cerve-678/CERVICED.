@@ -1,4 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
+import type { BusinessType } from '../../types/database';
 import {
   View,
   Text,
@@ -57,13 +59,20 @@ type HomeScreenNavigationProp = NativeStackNavigationProp<HomeStackParamList, 'H
 // vague "Store" option that didn't match what a provider actually picked at
 // registration (InfoRegScreen's own picker: Salon / Studio / Home Studio /
 // Mobile). Mirrors SearchScreen.tsx's FilterOptions.
+// Filter chips for business type: 'all' plus every real business_type value,
+// labelled exactly as the provider's own picker labels them.
+const SERVICE_TYPE_FILTERS: { label: string; value: 'all' | BusinessType }[] = [
+  { label: 'All', value: 'all' },
+  ...BUSINESS_TYPE_OPTS.map(o => ({ label: o.label, value: o.value })),
+];
+
 interface FilterOptions {
   sortBy: 'recommended' | 'nearest' | 'highest-rated' | 'available-now';
   availability: 'any' | 'today' | 'tomorrow' | 'this-week';
   priceRange?: { min: number; max: number };
   rating?: number;
   distance?: number;
-  serviceType?: 'all' | 'salon' | 'studio' | 'home_based' | 'mobile';
+  serviceType?: 'all' | BusinessType;
 }
 
 // Offer type definition
@@ -87,7 +96,7 @@ interface Provider {
   logo: any;
   rating: number;
   priceTier: 'budget' | 'mid' | 'premium' | 'luxury' | null;
-  businessType: 'salon' | 'studio' | 'home_based' | 'mobile' | null;
+  businessType: BusinessType | null;
   latitude: number | null;
   longitude: number | null;
   distanceKm?: number; // populated by nearbyProviders when the user's location is known
@@ -416,11 +425,21 @@ export default function HomeScreen() {
     // If GPS is denied/unavailable, fall back to a previously-picked city
     // (never to the unsorted full provider list) — and if the user has never
     // picked one either, Near You prompts them to instead of guessing.
+    // Guarded because this effect can run more than once: `user` is an object,
+    // and any of AuthContext's setUser calls hands back a fresh identity even
+    // when nothing about the person changed. Two overlapping runs each resolve
+    // location independently, and whichever finishes LAST wins — so a slow GPS
+    // fix from run one could land after run two's saved-city fallback and
+    // replace a precise position with a city centroid, or the reverse. Either
+    // way Near You visibly re-sorts under the client for no reason they can
+    // see. Same sequence-guard shape as the calendar's week paging.
+    let locationRunCancelled = false;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const position = await Location.getCurrentPositionAsync({});
+          if (locationRunCancelled) return;
           setUserCoords({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -434,8 +453,13 @@ export default function HomeScreen() {
       try {
         const savedCity = await storage.getItem<string>(STORAGE_KEYS.MANUAL_LOCATION);
         if (savedCity) {
+          // Note this is a CITY CENTROID, not where the client is — geocoding
+          // "Manchester" returns the middle of Manchester. That's the intended
+          // fallback (better than an unsorted list) but it is why distances can
+          // look wrong-but-plausible when GPS was refused; manualLocationLabel
+          // is what tells the client which of the two they're seeing.
           const [match] = await Location.geocodeAsync(savedCity);
-          if (match) {
+          if (match && !locationRunCancelled) {
             setUserCoords({ latitude: match.latitude, longitude: match.longitude });
             setManualLocationLabel(savedCity);
           }
@@ -457,7 +481,12 @@ export default function HomeScreen() {
     getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
     getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
     getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))).catch(() => {});
-  }, [loadBookmarks, user]);
+    return () => { locationRunCancelled = true; };
+    // Keyed on the id, not the object — the rest of this screen's effects
+    // already do (see the `user?.id` deps above). Depending on `user` itself
+    // re-ran this whole block, GPS prompt and every provider list included,
+    // every time anything handed back a new user object.
+  }, [loadBookmarks, user?.id]);
 
   // Update provider data whenever bookmarkedIds or liveProviders changes
   useEffect(() => {
@@ -1194,13 +1223,11 @@ export default function HomeScreen() {
                         <View style={styles.filterSection}>
                           <Text style={[styles.filterSectionTitle, { color: P.text }]}>SERVICE TYPE</Text>
                           <View style={styles.filterChipsRow}>
-                            {[
-                              { label: 'All', value: 'all' as const },
-                              { label: 'Salon', value: 'salon' as const },
-                              { label: 'Studio', value: 'studio' as const },
-                              { label: 'Home Studio', value: 'home_based' as const },
-                              { label: 'Mobile', value: 'mobile' as const },
-                            ].map((type) => {
+                            {/* Built from BUSINESS_TYPE_OPTS, not a hand-written
+                                copy of it — the filter chips a client picks
+                                from must be exactly the types a provider can
+                                register as. */}
+                            {SERVICE_TYPE_FILTERS.map((type) => {
                               const isActive = activeFilters.serviceType === type.value;
                               return (
                                 <TouchableOpacity

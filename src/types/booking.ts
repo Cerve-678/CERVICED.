@@ -2,6 +2,9 @@
 // Shared booking domain types — imported by both BookingContext and
 // bookingService to avoid circular dependencies.
 
+import { appointmentVenue } from '../features/business-details/options';
+import type { BusinessType } from './database';
+
 export enum BookingStatus {
   PENDING = 'pending',
   UPCOMING = 'upcoming',
@@ -65,12 +68,18 @@ export function isAddressPending(address: string | null | undefined): boolean {
  * — a non-mobile booking could carry one (see the checkout fix in
  * BookingContext.createBookingsFromCart), and a mobile booking legitimately
  * has none until the client sends it.
+ *
+ * The 'mobile' comparison itself lives in `appointmentVenue`
+ * (features/business-details/options.ts) with the rest of what defines a
+ * business type — this function is the booking-shaped wrapper around it, and
+ * owns only the fallback for a booking whose type didn't come through.
  */
 export function isMobileBooking(b: {
   providerBusinessType?: string | null | undefined;
   clientAddress?: string | null | undefined;
 }): boolean {
-  if (b.providerBusinessType) return b.providerBusinessType === 'mobile';
+  const venue = appointmentVenue(b.providerBusinessType as BusinessType | null | undefined);
+  if (venue) return venue === 'client';
   return !!b.clientAddress?.trim();
 }
 

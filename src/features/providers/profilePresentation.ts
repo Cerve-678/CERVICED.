@@ -1,10 +1,18 @@
 import type { ProviderProfileData } from './profileTypes';
+import type { BusinessType } from '../../types/database';
+import { BUSINESS_TYPE_META } from '../business-details/options';
 
-export const BUSINESS_TYPE_LABEL: Record<NonNullable<ProviderProfileData['businessType']>, string> = {
-  salon: 'Salon',
-  studio: 'Studio',
-  home_based: 'Home Studio',
-  mobile: 'Mobile',
+/**
+ * Re-exported, not re-declared: the labels live in BUSINESS_TYPE_META
+ * (features/business-details/options.ts) with the rest of what defines a
+ * business type, so a provider picking "Home Studio" and a client reading it
+ * on a search card can never be shown two different words for one DB value.
+ */
+export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
+  salon: BUSINESS_TYPE_META.salon.label,
+  studio: BUSINESS_TYPE_META.studio.label,
+  home_based: BUSINESS_TYPE_META.home_based.label,
+  mobile: BUSINESS_TYPE_META.mobile.label,
 };
 
 /**
@@ -15,7 +23,7 @@ export const BUSINESS_TYPE_LABEL: Record<NonNullable<ProviderProfileData['busine
  * can never describe different things; keep them in sync when adding a value.
  * These use the consistent outline set from Expo Ionicons.
  */
-export const BUSINESS_TYPE_ICON: Record<NonNullable<ProviderProfileData['businessType']>, string> = {
+export const BUSINESS_TYPE_ICON: Record<BusinessType, string> = {
   salon: 'flower-outline',
   studio: 'business-outline',
   home_based: 'home-outline',
