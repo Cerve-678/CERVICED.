@@ -267,8 +267,13 @@ agent — these are the standing rules of thumb for every session.
 
   Before committing, read `git status --short` and treat any staged entry in
   the **left** column (`M `, `A `, `R `) as someone else's work unless you put
-  it there: don't sweep it in. On 2026-08-26 a pre-staged migration rename and
-  four regenerated vault docs landed inside a cart fix exactly this way.
+  it there: don't sweep it in. On 2026-08-26 a migration rename another session
+  had staged landed inside an unrelated cart fix exactly this way.
+
+  One exception, and it is not a mistake: `.githooks/pre-commit` regenerates
+  the Obsidian vault and runs `git add docs/vault/auto` on any commit touching
+  `src/` or `supabase/`. Those files appearing in your commit is the hook doing
+  its job — leave them alone rather than hunting for who staged them.
   Two caveats: the pathspec form commits the working-tree state of those paths,
   so it ignores a deliberately part-staged hunk; and it only accepts **tracked**
   paths, so a brand-new file still needs `git add` first — then name it in the
