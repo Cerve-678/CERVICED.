@@ -165,6 +165,16 @@ Sunday. Both notification variants say so, and the provider sees an "Outside
 your availability" badge in their inbox and a banner directly above
 Confirm/Decline.
 
+**The cart must know too.** `isSlotAvailable` / `validateCartBookings` re-check
+every cart item against the provider's rules at checkout. An emergency request
+carries `CartItem.emergencyRequest` through to that check
+(`isEmergencyRequest`), or the cart flags the client's own accepted request as
+a conflict and gives them no way forward. It does not skip the checks: each is
+waived only under the matching opt-in, read from the same provider row the
+trigger reads, so a request accepted *before* the provider switched a toggle
+off is still caught — in the cart, where it can be explained, rather than at
+the insert. The overlap check is never waived.
+
 **Acknowledgement.** `bookings.emergency_ack_at` mirrors `safety_ack_at`
 exactly, including being enforced inside `prepare_checkout` — a hand-built RPC
 payload with `emergency: true` and no `emergency_ack` is rejected.

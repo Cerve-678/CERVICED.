@@ -41,8 +41,8 @@ Curated: [[Address Release]] · **81 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **145 files**
-- `src/services/AvailabilityService.ts` _(304)_
-- `src/services/databaseService.ts` _(162)_
+- `src/services/AvailabilityService.ts` _(310)_
+- `src/services/databaseService.ts` _(164)_
 - `src/components/ModernBeautyCalendar.tsx` _(153)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
@@ -114,7 +114,7 @@ Curated: [[Booking Flow]] · **229 files**
 - `src/services/databaseService.ts` _(553)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(508)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/CartScreen.tsx` _(456)_
+- `src/screens/client/CartScreen.tsx` _(457)_
 - `src/screens/client/BookingDetailScreen.tsx` _(315)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(283)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **229 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/services/AvailabilityService.ts` _(98)_
+- `src/services/AvailabilityService.ts` _(101)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
@@ -279,7 +279,7 @@ Curated: [[Booking Flow]] · **147 files**
 
 ## Auth
 Curated: [[Contexts]] · **154 files**
-- `src/services/databaseService.ts` _(208)_
+- `src/services/databaseService.ts` _(209)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(134)_
 - `src/screens/auth/LoginScreen.tsx` _(128)_
@@ -347,14 +347,14 @@ Curated: [[Services]] · **38 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **60 files**
-- `src/screens/client/CartScreen.tsx` _(258)_
+- `src/screens/client/CartScreen.tsx` _(259)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/services/databaseService.ts` _(63)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(56)_
 - `src/contexts/CartContext.tsx` _(32)_
 - `src/components/BookingSheet.tsx` _(31)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
-- `src/services/AvailabilityService.ts` _(18)_
+- `src/services/AvailabilityService.ts` _(20)_
 - `src/screens/client/BookingDetailScreen.tsx` _(15)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
 - `src/components/MultiBookingSheet.tsx` _(14)_

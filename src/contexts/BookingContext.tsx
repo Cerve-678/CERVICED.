@@ -1457,6 +1457,10 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           duration: item.duration,
           cartItemId: item.id,
           serviceId: item.serviceId && UUID_RE.test(item.serviceId) ? item.serviceId : undefined,
+          // Without this the item is re-checked against the very rules the
+          // client already accepted a request under, and reported back to
+          // them as a conflict.
+          isEmergencyRequest: !!item.emergencyRequest,
         };
       }).filter(b => b.date && b.time);
 

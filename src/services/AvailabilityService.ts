@@ -538,6 +538,10 @@ const checkNoticeWindow = async (
   providerId: string,
   date: string,
   time: string,
+  // The client accepted an explicit short-notice request for this exact slot
+  // and the provider takes them. The elapsed-time check below still applies:
+  // no opt-in makes a time that has already gone bookable.
+  allowShortNotice = false,
 ): Promise<BookingConflict | null> => {
   // Same construction as the slot generators above: midnight on the date,
   // then offset by the slot's minutes-from-midnight. Parsing "HH:MM AM/PM"
@@ -571,7 +575,7 @@ const checkNoticeWindow = async (
   // persistent failure here silently disables every provider's notice window
   // at the point where the client could still be given a clear message.
   const noticeHrs = row?.min_booking_notice_hrs ?? 0;
-  if (noticeHrs <= 0) return null;
+  if (noticeHrs <= 0 || allowShortNotice) return null;
 
   if (slotStart.getTime() < Date.now() + noticeHrs * 60 * 60 * 1000) {
     const who = row?.display_name?.trim() || 'This provider';
@@ -984,12 +988,26 @@ export const AvailabilityService = {
    * Fails closed (hasConflict: true) if the provider can't be resolved —
    * providerName accepts either the provider's UUID or their display name.
    */
+  /**
+   * `isEmergencyRequest` marks a slot the client deliberately asked for
+   * outside this provider's rules, having accepted the confirmation. Without
+   * it the cart re-checks the booking against the very rules it was accepted
+   * under and flags it as a conflict — the client is told their own approved
+   * request is unavailable, with no way to proceed.
+   *
+   * It does NOT simply skip the checks. Each one is waived only under the
+   * matching provider opt-in, read from the same row the bookability trigger
+   * reads, so a request accepted before the provider switched the toggle off
+   * is still caught here — in the cart, where it can be explained — rather
+   * than at the insert.
+   */
   async isSlotAvailable(
     providerName: string,
     date: string,
     time: string,
     serviceDuration: string,
-    serviceId?: string
+    serviceId?: string,
+    isEmergencyRequest = false,
   ): Promise<BookingConflict> {
     try {
       const newStartMinutes = parseTimeToMinutes(time);
@@ -1000,7 +1018,11 @@ export const AvailabilityService = {
 
       if (providerId) {
         const bundle = await getAvailabilityDateBundle(providerId, date, serviceId);
-        if (bundle.isBlocked) {
+        const policy = isEmergencyRequest
+          ? readEmergencyPolicy(bundle.settings as unknown as Record<string, unknown> | null)
+          : NO_EMERGENCY_REQUESTS;
+
+        if (bundle.isBlocked && !policy.blockedDates) {
           return { hasConflict: true, message: 'Provider is not available on this date.' };
         }
 
@@ -1012,7 +1034,7 @@ export const AvailabilityService = {
         // stale item sails through checkout and is only rejected by the
         // enforce_booking_bookability trigger, mid-hold, with no way for the
         // client to tell which appointment was at fault.
-        const noticeConflict = await checkNoticeWindow(providerId, date, time);
+        const noticeConflict = await checkNoticeWindow(providerId, date, time, policy.shortNotice);
         if (noticeConflict) return noticeConflict;
 
         // Check the slot falls within the provider's working hours
@@ -1026,7 +1048,12 @@ export const AvailabilityService = {
           newStartMinutes >= parse24HTimeToMinutes(window.start_time)
           && newEndMinutes <= parse24HTimeToMinutes(window.end_time),
         );
-        if (!fitsWorkingPeriod) {
+        // Same precedence as the bookability trigger: a day with no hours of
+        // its own answers to the blocked-date opt-in, anything else to the
+        // out-of-hours one.
+        const dayIsShut = bundle.isBlocked || bundle.overrides.some(row => row.is_closed);
+        const outOfHoursAllowed = dayIsShut ? policy.blockedDates : policy.outsideHours;
+        if (!fitsWorkingPeriod && !outOfHoursAllowed) {
           return { hasConflict: true, message: 'This time is outside the provider\'s working hours.' };
         }
 
@@ -1078,6 +1105,8 @@ export const AvailabilityService = {
       duration: string;
       cartItemId: string;
       serviceId?: string | undefined;
+      /** See isSlotAvailable — set from CartItem.emergencyRequest. */
+      isEmergencyRequest?: boolean | undefined;
     }[]
   ): Promise<{
     isValid: boolean;
@@ -1132,7 +1161,8 @@ export const AvailabilityService = {
         booking.date,
         booking.time,
         booking.duration,
-        booking.serviceId
+        booking.serviceId,
+        booking.isEmergencyRequest ?? false,
       );
 
       if (existingConflict.hasConflict) {

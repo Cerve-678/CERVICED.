@@ -346,6 +346,37 @@ how many requests arrive.
 - **Cap on open requests.** A limit on how many unanswered requests can be
   pending at once (or per week), so opting in doesn't bury a provider in
   decisions.
+- **An emergency surcharge.** Raised 2026-08-26. Providers reasonably want to
+  charge more for a 4am call than a 2pm one, and today an out-of-hours request
+  costs the client exactly the list price. This is the most-wanted of the
+  items here, and the one most likely to be got wrong, because it is a
+  **money** change and not a scheduling one:
+
+  - **Server-owned, or it's not real.** Prices are computed in
+    `prepare_checkout` / `hold_cart_booking_slots` from the service row —
+    the app sends choices, never amounts (see `BOOKINGS.md` §4). A surcharge
+    added app-side would be a number the client could edit.
+  - **Disclosed before the tick, not after.** The client agrees to a total on
+    the Confirm & Pay step. A surcharge that appears later — or only on the
+    receipt — is a price change after agreement. It has to be visible in the
+    booking sheet at the moment they accept the emergency confirmation, and
+    again in the cart line.
+  - **Interacts with three existing numbers.** The tiered platform fee
+    (`features/cart/platformFee.ts`, added on top and never taken out of the
+    provider's money), the deposit (percentage or fixed — does the surcharge
+    count toward the deposit base?), and promo codes (can a discount apply to
+    a surcharge?). Each needs an answer before implementation, not during.
+  - **The provider hasn't accepted yet.** The client pays at checkout and the
+    request lands pending. If the provider declines, the surcharge has to
+    come back with the rest — and there is **no refund path anywhere in the
+    app**. Same blocker as auto-expire below.
+
+  Open decisions: flat fee or percentage (or provider's choice of either);
+  per-provider or per-service; whether it differs by *which* rule was broken
+  (out-of-hours vs blocked date vs short notice); and whether it belongs in
+  the provider's own T&Cs, which would make it a
+  `cerviced-legal-flagger` question rather than only an engineering one.
+
 - **Auto-expire if unanswered.** A request nobody answers should decline
   itself and tell the client, rather than sitting pending until the
   appointment time passes. **Blocked on refunds**: the client has already paid

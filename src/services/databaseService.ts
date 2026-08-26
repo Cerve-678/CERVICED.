@@ -3632,6 +3632,15 @@ const EMERGENCY_POLICY_COLUMNS =
 const EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW =
   "allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests";
 
+/** Whether this database has the request-window columns yet. `null` = not
+ *  determined. Remembered for the session because the answer cannot change
+ *  under a running app: without this, EVERY provider availability read paid
+ *  for two round trips instead of one — and availability is read per day, per
+ *  provider card, and seven-at-a-time by the week picker, so the doubling was
+ *  enough to visibly hang the profile and home screens. Resets on reload, so
+ *  the app picks the columns up on its own once the migration lands. */
+let providerHasRequestWindowColumns: boolean | null = null;
+
 /** Undefined-column (42703) is the one error worth retrying here: it means the
  *  migration hasn't run, not that the read is wrong. Anything else throws, per
  *  the standing rule that this file never swallows errors. */
@@ -3640,13 +3649,28 @@ async function selectProviderColumnsTolerantly(
   columns: string,
   fallbackColumns: string,
 ): Promise<Record<string, unknown> | null> {
+  // Already known to be missing — don't ask again, just read what's there.
+  if (providerHasRequestWindowColumns === false) {
+    const { data, error } = await supabase
+      .from("providers")
+      .select(fallbackColumns)
+      .eq("id", providerId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as Record<string, unknown> | null;
+  }
+
   const { data, error } = await supabase
     .from("providers")
     .select(columns)
     .eq("id", providerId)
     .maybeSingle();
-  if (!error) return data as Record<string, unknown> | null;
+  if (!error) {
+    providerHasRequestWindowColumns = true;
+    return data as Record<string, unknown> | null;
+  }
   if (error.code !== "42703") throw error;
+  providerHasRequestWindowColumns = false;
   const retry = await supabase
     .from("providers")
     .select(fallbackColumns)

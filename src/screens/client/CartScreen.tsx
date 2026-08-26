@@ -1789,6 +1789,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           duration: item.duration,
           cartItemId: item.id,
           serviceId: item.serviceId,
+          // See BookingContext's copy of this list: an accepted out-of-hours
+          // request must not be re-flagged as a conflict by the cart.
+          isEmergencyRequest: !!item.emergencyRequest,
         };
       })
     );
