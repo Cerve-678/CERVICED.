@@ -269,8 +269,10 @@ agent — these are the standing rules of thumb for every session.
   the **left** column (`M `, `A `, `R `) as someone else's work unless you put
   it there: don't sweep it in. On 2026-08-26 a pre-staged migration rename and
   four regenerated vault docs landed inside a cart fix exactly this way.
-  (Caveat: the pathspec form commits the working-tree state of those paths, so
-  it ignores a deliberately part-staged hunk.)
+  Two caveats: the pathspec form commits the working-tree state of those paths,
+  so it ignores a deliberately part-staged hunk; and it only accepts **tracked**
+  paths, so a brand-new file still needs `git add` first — then name it in the
+  commit's pathspec along with everything else.
 - **Don't leave your own work uncommitted "to be safe" either.** The other
   session's next commit picks it up under an unrelated message — that is how
   `getBookableServiceIds`, a cart fix, landed inside a business-type refactor
@@ -281,6 +283,18 @@ agent — these are the standing rules of thumb for every session.
   belongs with, rather than rewriting shared history to separate them —
   rewriting unpushed commits while another session is mid-edit is how this
   repo loses work.
+- **One session owns migrations at a time — see `supabase/MIGRATION_OWNER.md`,
+  and check it before writing or applying one.** The commit rules above stop
+  two sessions mixing *files*; they do nothing about two sessions writing
+  schema against one live Supabase project, which is the sharper risk because
+  git mistakes are recoverable and a migration applied out of order isn't
+  always. `CREATE OR REPLACE` succeeds silently against a newer definition, so
+  a correct migration numbered below the applied frontier reverts someone
+  else's work with no error and no conflict. The consent-gate migration was
+  renumbered twice for exactly this before the rule existed. Number above
+  `max(version)` in `supabase_migrations.schema_migrations`, never off the wall
+  clock, and release the lock when the migration is **applied** rather than
+  when the file is written.
 - **This repo lives under `~/Desktop`, so iCloud forks conflicting writes**
   into numbered copies (`shuffle 2.ts` beside `shuffle.ts`). They are never
   intentional content, and `.gitignore` now drops them — but only for

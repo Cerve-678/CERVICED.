@@ -1,3 +1,21 @@
+-- !! DELIBERATELY NOT APPLIED -- parked 2026-08-26.
+--
+-- This defines replace_provider_weekly_schedule(). It was never applied live,
+-- but the app had ALREADY been changed to call it, so every provider attempt to
+-- save their weekly hours failed with "function not found" -- and since a
+-- weekly schedule is one of the three go-live gates, that silently blocked new
+-- providers from ever publishing.
+--
+-- The app-side dependency was removed on 2026-08-26 (see
+-- saveProviderWeeklySchedule in src/services/databaseService.ts, which now does
+-- the same two writes non-atomically). Nothing calls this function, so the file
+-- is inert until the provider terms & policy work ships and it is applied
+-- deliberately alongside it. Its signature is unchanged, so restoring the RPC
+-- call is a one-line revert at that point.
+--
+-- Do NOT apply it on its own to "tidy up the drift": the whole point of parking
+-- it is that it belongs with that piece of work. Tracked in PRE-LAUNCH-TODO.md.
+
 CREATE OR REPLACE FUNCTION public.replace_provider_weekly_schedule(
   p_provider_id uuid,
   p_days jsonb,

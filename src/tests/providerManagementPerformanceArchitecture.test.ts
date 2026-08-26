@@ -92,17 +92,17 @@ describe('provider management performance contracts', () => {
 
   it('saves the full weekly schedule through one atomic RPC', () => {
     const screen = read('screens/provider/ProviderScheduleScreen.tsx');
-    const migration = fs.readFileSync(
-      path.join(
-        __dirname,
-        '..',
-        '..',
-        'supabase',
-        'migrations',
-        '20260823065212_atomic_provider_weekly_schedule.sql',
-      ),
-      'utf8',
-    );
+    // Found by suffix, not by version. A migration's timestamp is deliberately
+    // mutable — supabase/MIGRATION_OWNER.md requires renumbering above the
+    // applied frontier, and this file has already moved once — so pinning the
+    // full name here fails the suite for a rename that changed nothing this
+    // test cares about. The content is the contract; the number is not.
+    const migrationsDir = path.join(__dirname, '..', '..', 'supabase', 'migrations');
+    const migrationFile = fs
+      .readdirSync(migrationsDir)
+      .find(name => name.endsWith('_atomic_provider_weekly_schedule.sql'));
+    expect(migrationFile).toBeDefined();
+    const migration = fs.readFileSync(path.join(migrationsDir, migrationFile!), 'utf8');
 
     expect(screen).toContain('saveProviderWeeklySchedule(');
     expect(screen).not.toContain('Promise.all(days.map');

@@ -55,15 +55,21 @@
 -- getting that wrong into a loud failure instead of a silent revert of the
 -- emergency feature.
 --
--- This file was originally numbered 20260821143000 — BEFORE that set, which
--- was renumbered while this migration sat unapplied. In that order the
--- emergency hold-path migration redefined hold_cart_booking_slots() straight
--- back over this consent gate: a silent revert, no error, precisely the
--- failure the guard exists to catch (the guard itself would have fired first
--- here, since the columns wouldn't exist yet — but on an already-migrated
--- database it would have passed and then been overwritten). Renumbered to run
--- last on 2026-08-23. If the emergency set is ever renumbered again, this file
--- has to move with it.
+-- This file has been renumbered twice, and both times for the same reason:
+-- it sat unapplied while a parallel session applied migrations past it.
+--   20260821143000 -> the emergency set was then renumbered ABOVE it, so the
+--     hold-path migration would have redefined hold_cart_booking_slots()
+--     straight back over this consent gate. A silent revert, no error.
+--   20260823180000 -> overtaken again, this time by the reschedule-expiry
+--     work, leaving it below the applied frontier where `migration up` skips
+--     it and a fresh replay would produce a different database from production.
+-- Renumbered to 20260826110100 on 2026-08-26, above the then-live frontier of
+-- 20260826102218, and verified that nothing applied since touches either
+-- hold_cart_booking_slots() or claim_cart_booking_slots().
+--
+-- The rule that stops a third time is in supabase/MIGRATION_OWNER.md: one
+-- session owns migrations at a time. File discipline cannot fix this — the
+-- ordering is decided by what someone else applied while you weren't looking.
 
 DO $$
 BEGIN

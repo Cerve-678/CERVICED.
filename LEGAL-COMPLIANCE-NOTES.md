@@ -77,7 +77,7 @@ the app stamped the live cart items but booked from a snapshot captured
 before the stamp.
 
 Both are closed by
-`supabase/migrations/20260823180000_consent_recorded_before_payment.sql`,
+`supabase/migrations/20260826110100_consent_recorded_before_payment.sql`,
 which moves both records server-side into `hold_cart_booking_slots` — the
 last step before the client is charged. The database now derives *whether* an
 acknowledgement is required from the service row rather than trusting the
