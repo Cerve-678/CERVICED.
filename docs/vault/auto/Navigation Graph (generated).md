@@ -5,7 +5,7 @@
 
 #generated
 
-**124 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
+**123 edges** across **42 screens**. Node-graph version: [[Screen Flow (generated)]].
 
 ## Diagram
 > Dense is normal — pan/zoom, or read the list below.
@@ -64,7 +64,6 @@ graph LR
   MessagesScreen --> ProviderChatScreen
   NewPasswordScreen --> Login
   NotificationsScreen --> BookingsScreen
-  NotificationsScreen --> ProviderHome
   NotificationsScreen --> ProviderProfileScreen
   OffersScreen --> ProviderProfileScreen
   PaymentsScreen --> PoliciesScreen
@@ -180,4 +179,4 @@ graph LR
 - `provider/ProviderPromotionsScreen` → `provider/ProviderClienteleScreen`
 - `provider/SchedulingScreen` → `provider/ProviderScheduleScreen`
 - `shared/BeccaScreen` → `client/ProviderProfileScreen`, `Explore`, `Profile`
-- `shared/NotificationsScreen` → `client/BookingsScreen`, `client/ProviderProfileScreen`, `ProviderHome`
+- `shared/NotificationsScreen` → `client/BookingsScreen`, `client/ProviderProfileScreen`

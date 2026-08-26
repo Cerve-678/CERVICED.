@@ -33,6 +33,8 @@ import { initSentry } from './src/lib/sentry';
 import { installAuthErrorFilter } from './src/utils/logger';
 import * as Sentry from '@sentry/react-native';
 import { env } from './src/utils/env';
+import { configureBeccaAI } from './src/services/becca/aiRuntime';
+import { nvidiaBeccaInterpreter } from './src/services/becca/nvidiaInterpreter';
 
 // @stripe/stripe-react-native's native module binding throws at import time
 // (TurboModuleRegistry.getEnforcing) when the native module isn't present —
@@ -78,6 +80,11 @@ Sentry.init({
 // Initialise crash reporting as early as possible (no-ops without a DSN).
 initSentry();
 installAuthErrorFilter();
+
+// BeccaScreen picks this up for every new message. Without a registration she
+// stays fully deterministic, so this single call is the whole on/off switch —
+// gated per build by EXPO_PUBLIC_BECCA_AI_ENABLED.
+configureBeccaAI(env.beccaAiEnabled ? nvidiaBeccaInterpreter : undefined);
 
 SplashScreen.preventAutoHideAsync();
 
