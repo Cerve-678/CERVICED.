@@ -1,6 +1,6 @@
 -- How far before opening / after closing a provider will let clients ASK.
 --
--- NOT a revert of out_of_hours_extension_mins, which 20260826171244 dropped.
+-- NOT a revert of out_of_hours_extension_mins, which 20260826181157 dropped.
 -- That column was a single figure the app measured from a value it DERIVED —
 -- the provider's earliest start and latest finish across the whole week — and
 -- the derivation is what made it wrong: a 9-5 provider could not be asked for

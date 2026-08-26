@@ -3619,73 +3619,22 @@ export async function getAvailabilityNoticeSettings(providerId: string): Promise
 const EMERGENCY_POLICY_COLUMNS =
   "allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests, request_window_before_mins, request_window_after_mins";
 
-/** The same list without the two request-window columns.
- *
- *  TRANSITIONAL — delete this and `selectProviderColumnsTolerantly` below,
- *  along with their call sites' fallback, once
- *  20260826182059_provider_chosen_request_window.sql has been applied. It
- *  exists because that migration could not be applied when the reading code
- *  shipped, and a provider row missing the columns fails the WHOLE select with
- *  42703 — which took out availability entirely rather than degrading. Until
- *  it lands, a database without the columns behaves as "any time", which is
- *  the column default anyway. */
-const EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW =
-  "allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests";
-
-/** Whether this database has the request-window columns yet. `null` = not
- *  determined. Remembered for the session because the answer cannot change
- *  under a running app: without this, EVERY provider availability read paid
- *  for two round trips instead of one — and availability is read per day, per
- *  provider card, and seven-at-a-time by the week picker, so the doubling was
- *  enough to visibly hang the profile and home screens. Resets on reload, so
- *  the app picks the columns up on its own once the migration lands. */
-let providerHasRequestWindowColumns: boolean | null = null;
-
-/** Undefined-column (42703) is the one error worth retrying here: it means the
- *  migration hasn't run, not that the read is wrong. Anything else throws, per
- *  the standing rule that this file never swallows errors. */
-async function selectProviderColumnsTolerantly(
+/** One provider row, selecting exactly the columns asked for. */
+async function selectProviderColumns(
   providerId: string,
   columns: string,
-  fallbackColumns: string,
 ): Promise<Record<string, unknown> | null> {
-  // Already known to be missing — don't ask again, just read what's there.
-  if (providerHasRequestWindowColumns === false) {
-    const { data, error } = await supabase
-      .from("providers")
-      .select(fallbackColumns)
-      .eq("id", providerId)
-      .maybeSingle();
-    if (error) throw error;
-    return data as Record<string, unknown> | null;
-  }
-
   const { data, error } = await supabase
     .from("providers")
     .select(columns)
     .eq("id", providerId)
     .maybeSingle();
-  if (!error) {
-    providerHasRequestWindowColumns = true;
-    return data as Record<string, unknown> | null;
-  }
-  if (error.code !== "42703") throw error;
-  providerHasRequestWindowColumns = false;
-  const retry = await supabase
-    .from("providers")
-    .select(fallbackColumns)
-    .eq("id", providerId)
-    .maybeSingle();
-  if (retry.error) throw retry.error;
-  return retry.data as Record<string, unknown> | null;
+  if (error) throw error;
+  return data as Record<string, unknown> | null;
 }
 
 export async function getAvailabilityEmergencyPolicyRow(providerId: string): Promise<Record<string, unknown> | null> {
-  return selectProviderColumnsTolerantly(
-    providerId,
-    EMERGENCY_POLICY_COLUMNS,
-    EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW,
-  );
+  return selectProviderColumns(providerId, EMERGENCY_POLICY_COLUMNS);
 }
 
 export interface AvailabilityProviderSettingsRow {
@@ -3709,11 +3658,7 @@ export async function getAvailabilityProviderCore(providerId: string): Promise<{
 }> {
   const baseColumns = "booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs";
   const [settingsRow, weeklyRows] = await Promise.all([
-    selectProviderColumnsTolerantly(
-      providerId,
-      `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS}`,
-      `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW}`,
-    ),
+    selectProviderColumns(providerId, `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS}`),
     getAvailabilityWeeklyScheduleRows(providerId),
   ]);
   return {

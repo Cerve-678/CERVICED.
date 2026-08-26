@@ -105,7 +105,7 @@ override (§4, `p_override_scheduling`) already respects.
 
 **How far either side is the provider's own choice.**
 `request_window_before_mins` / `request_window_after_mins`
-([20260826182059](supabase/migrations/20260826182059_provider_chosen_request_window.sql))
+([20260826181210](supabase/migrations/20260826181210_provider_chosen_request_window.sql))
 bound how much of the day is *offered*, measured from **that day's own**
 opening and closing time. `NULL` means any time and is the default. This is a
 display preference, not a rule: the trigger doesn't enforce it, because the
@@ -128,7 +128,7 @@ weekly envelope widened by an extension setting, and that refused a 4am bridal
 call: the most common genuine out-of-hours booking in this industry, rejected
 because the bound was inferred from hours describing a *normal* week. An
 emergency request is by definition not that. Removed in
-[20260826171244](supabase/migrations/20260826171244_emergency_requests_remove_derived_hour_bound.sql),
+[20260826181157](supabase/migrations/20260826181157_emergency_requests_remove_derived_hour_bound.sql),
 which also drops the now-dead `out_of_hours_extension_mins` column.
 
 What still holds regardless of any opt-in, mirrored exactly between

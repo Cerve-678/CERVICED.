@@ -89,8 +89,8 @@ const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequ
   blockedDates: row?.['allow_blocked_date_requests'] === true,
   shortNotice:  row?.['allow_short_notice_requests'] === true,
   beyondWindow: row?.['allow_beyond_window_requests'] === true,
-  // Absent (the column not yet existing) and NULL both mean "any time" —
-  // the same answer, so no distinction is needed here.
+  // NULL means "any time", and is the default — see
+  // providers.request_window_before_mins.
   beforeMins: toWindowMins(row?.['request_window_before_mins']),
   afterMins:  toWindowMins(row?.['request_window_after_mins']),
 });

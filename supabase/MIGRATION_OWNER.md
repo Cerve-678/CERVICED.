@@ -77,8 +77,25 @@ Written but **not applied**, in the order they must run:
 
 | Version | File | Notes |
 |---|---|---|
-| 20260826110000 | `atomic_provider_weekly_schedule` | Conflict-free; nothing else defines `replace_provider_weekly_schedule`. |
-| 20260826110100 | `consent_recorded_before_payment` | Must run after the emergency-request set (`20260821143821..144027`); has a `DO $$` guard that fails loudly if it doesn't. Verified 2026-08-26: nothing applied since touches `hold_cart_booking_slots`/`claim_cart_booking_slots`. |
+| 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
+| 20260826110100 | `consent_recorded_before_payment` | Must run after the emergency-request set (`20260821143821..144027`); has a `DO $$` guard that fails loudly if it doesn't. Verified 2026-08-26: nothing applied since touches `hold_cart_booking_slots`/`claim_cart_booking_slots`. **Genuinely still unapplied 2026-08-26** — live `hold_cart_booking_slots()` references neither `safety_ack%` nor `policy_accepted_at`, so health-adjacent consent is still unrecorded on the path real users take. This one IS a real open gap, unlike the parked file above. |
+
+`20260826110100` is now BELOW the applied frontier (`20260826181210`) and
+**must be renumbered above it before it is applied**, or `supabase migration
+up` skips it and a fresh replay diverges from production. This is the same
+trap that renumbered it twice already.
+
+### Ledger reconciliation, 2026-08-26
+
+`emergency_requests_remove_derived_hour_bound` and
+`provider_chosen_request_window` were found **already applied live but absent
+from `schema_migrations`** — their SQL had run (column comments and the
+trigger body matched the files byte-for-byte) without ever being recorded.
+Both were re-applied through `apply_migration` (both are idempotent, so this
+was a no-op against the schema) purely to write the ledger rows, and the local
+files were renamed from `20260826171244`/`20260826182059` to the versions the
+MCP actually recorded — `20260826181157`/`20260826181210` — so filename and
+record match again.
 
 `20260826090555_reschedule_request_expiry.sql` also needs its cron job
 (`reschedule-request-expiry`, jobid 154) to exist — a migration applying
