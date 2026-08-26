@@ -28,7 +28,7 @@
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal
 - `MasonryGrid.tsx` — and · columns · component · MasonryGridInner · type
-- `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handleRequestDateChange · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · renderGroup · requestTimesForDate · selectDateFromTap
+- `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handlePanelPickTime · handleRequestDateChange · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · renderGroup · requestPanel · requestTimesForDate · selectDateFromTap
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
 - `PasswordRequirements.tsx` — **PasswordRequirements**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
@@ -36,7 +36,7 @@
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
-- `RequestTimeSheet.tsx` — candidates · commitPickedMinutes · commitWheel · handleDateChange · handlePick · openWheel · **RequestTimeSheet**
+- `RequestTimePanel.tsx` — commitPickedMinutes · handleDateChange · handlePick · openWheel · **RequestTimePanel**
 - `SafeHeader.tsx` — SafeHeader
 - `SlidingTabs.tsx` — handleLayout · handleNaturalLayout · row · slideTo · SlidingTabs
 - `StatusBarBlur.tsx` — StatusBarBlur
@@ -68,7 +68,7 @@
 - `clientBookingPresentation.ts` — **formatNoticeWindow** · **isLongBookingInfoPack**
 - `datePresentation.ts` — **bookingIsoToDate** · **dateToBookingIso** · **formatBookingDisplayDate**
 - `paymentPresentation.ts` — **calculateBookingPaymentBreakdown**
-- `presentation.ts` — **formatBookingDate** · **resolveServiceCategory**
+- `presentation.ts` — **formatBookingDate** · **formatBookingRef** · **resolveServiceCategory**
 - `receipt.ts` — **buildClientReceiptHTML** · escapeHtml · money
 
 ### `src/features/business-details/` (2)
@@ -185,7 +185,7 @@
 - `ProviderClienteleScreen.tsx` — AnnouncementSheet · avatarColor · ClientCard · ClientHistorySheet · daysSince · formatShort · handleAnnouncementScheduled · handleAnnouncementSent · handleMessage · handleRebook · handleSend · handleSheetChange · handleViewHistory · initials · load · ProviderClienteleScreen · snapPoints · TabBar · tomorrow9am
 - `ProviderCommunicationsScreen.tsx` — addTemplate · flash · handleSave · ProviderCommunicationsScreen · Toast · toggleMethod · updateTemplate
 - `ProviderConversationScreen.tsx` — ProviderConversationScreen · renderMessage · sendMessage
-- `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getBookingRef · getMonthDays · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · overridesFromDate · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · SkeletonCard · statusCfg · SummaryRow · todayAvailability · toggleExpand · toggleMonth · windowsByDate
+- `ProviderHomeScreen.tsx` — blockedDateStrings · BookingCard · bookingsWithServiceDuration · buildStrip · closeSheet · countByDate · countdownLabel · DayTimeline · displayMonth · finishTour · formatCreatedAt · formatDateString · getMonthDays · handleDateTap · handleExpand · isPastBooking · isSelectedDateBlocked · listRows · loadBookings · monthCells · onRefresh · openConversation · openSheet · orderedIssueLabels · overridesFromDate · parseDurationToMinutes · parseTimeToMinutes · ProviderHomeScreen · scheduleIssues · SectionBanner · sectionLabel · sectionTitle · SkeletonCard · statusCfg · SummaryRow · todayAvailability · toggleExpand · toggleMonth · windowsByDate
 - `ProviderInboxScreen.tsx` — ConversationRow · fetchBookings · fetchConversations · filtered · flatItems · fmtDate · fmtTime · handleConfirmBooking · handleDeclineBooking · handleMarkConversationRead · handleSendReply · InboxRow · initials · onRefresh · pendingIds · ProviderInboxScreen · renderRightActions · runConfirmAction · SectionHeader · SkeletonRow · timeAgo · timeAgoISO · unreadConversations
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleEmail · handleSave · handleSMS · PackCard · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · detectTemplate · getRelevantTemplates · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion

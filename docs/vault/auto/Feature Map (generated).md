@@ -50,7 +50,7 @@ Curated: [[Availability & Slots]] · **146 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(85)_
 - `src/contexts/BookingContext.tsx` _(80)_
 - `src/services/becca/capabilities/client.ts` _(71)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(65)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(64)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(60)_
 - `src/screens/client/RescheduleScreen.tsx` _(54)_
 - `supabase/availability_v2.sql` _(54)_
@@ -112,14 +112,14 @@ Curated: [[Booking Flow]] · **230 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(693)_
 - `src/services/databaseService.ts` _(553)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(508)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(509)_
 - `src/services/becca/capabilities/client.ts` _(502)_
-- `src/screens/client/CartScreen.tsx` _(465)_
-- `src/screens/client/BookingDetailScreen.tsx` _(315)_
+- `src/screens/client/CartScreen.tsx` _(466)_
+- `src/screens/client/BookingDetailScreen.tsx` _(316)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(283)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
-- `src/screens/provider/ProviderHomeScreen.tsx` _(184)_
+- `src/screens/provider/ProviderHomeScreen.tsx` _(189)_
 - `supabase/fix_reschedule_flow_completion.sql` _(179)_
 - `supabase/notification_recipient_role.sql` _(178)_
 - `src/screens/client/RescheduleScreen.tsx` _(175)_
@@ -346,8 +346,8 @@ Curated: [[Services]] · **38 files**
 - … +8 more
 
 ## Cart & checkout
-Curated: [[Payments]] · **61 files**
-- `src/screens/client/CartScreen.tsx` _(263)_
+Curated: [[Payments]] · **63 files**
+- `src/screens/client/CartScreen.tsx` _(264)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/services/databaseService.ts` _(63)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(56)_
@@ -377,4 +377,4 @@ Curated: [[Payments]] · **61 files**
 - `supabase/add_external_booking_url.sql` _(3)_
 - `supabase/fix_claim_cart_booking_slots_uses_real_address.sql` _(3)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(3)_
-- … +31 more
+- … +33 more

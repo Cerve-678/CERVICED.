@@ -5,7 +5,7 @@ import { AvailabilityService } from '../services/AvailabilityService';
 import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
-import { RequestTimeSheet } from './RequestTimeSheet';
+import { RequestTimePanel } from './RequestTimePanel';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
  *  other colour in this picker is derived from whatever sheet it's sitting in,
@@ -176,7 +176,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [showTimeSelection, setShowTimeSelection] = useState<boolean>(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(false);
   const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
-  const [showRequestSheet, setShowRequestSheet] = useState<boolean>(false);
+  const [showRequestPanel, setShowRequestPanel] = useState<boolean>(false);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
@@ -474,13 +474,13 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
   /** The date being requested, defaulting to whatever the picker is already
    *  showing. */
-  const requestSheetDate = selectedDate || toLocalDateString(new Date());
+  const requestPanelDate = selectedDate || toLocalDateString(new Date());
 
-  /** Only this date's by-request times. The sheet never derives its own — see
-   *  RequestTimeSheet's header for why that matters. */
+  /** Only this date's by-request times. The panel never derives its own — see
+   *  RequestTimePanel's header for why that matters. */
   const requestTimesForDate = useMemo(
-    () => (availableSlots[requestSheetDate]?.times ?? []).filter(slot => slot.reasons.length > 0),
-    [availableSlots, requestSheetDate],
+    () => (availableSlots[requestPanelDate]?.times ?? []).filter(slot => slot.reasons.length > 0),
+    [availableSlots, requestPanelDate],
   );
 
   /** Moving the request sheet's date has to move the WEEK with it: the slot
@@ -531,6 +531,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     onTimeSelect(time, requestReasons.length > 0 ? requestReasons : undefined);
     LayoutAnimation.configureNext(COLLAPSE_ANIM);
     setIsCollapsed(true);
+  };
+
+  /** Picking from the panel closes it: the choice is made, and leaving the
+   *  panel up would mean re-opening the picker later landing on the request
+   *  list rather than on the ordinary times. */
+  const handlePanelPickTime = (time: string, reasons: EmergencyReason[]) => {
+    setShowRequestPanel(false);
+    handleTimeClick(time, reasons);
   };
 
   const handleExpand = useCallback(() => {
@@ -841,15 +849,77 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // array used to do) reads as the app failing to load, and leaves them
         // no way to tell "everything's taken" from "they don't work today" —
         // which decides whether waiting for this provider is worth it.
+        const who = providerLabel ?? 'the provider';
+        const takesRequests = emergencyPolicy.outsideHours || emergencyPolicy.blockedDates
+          || emergencyPolicy.shortNotice || emergencyPolicy.beyondWindow;
+        const canRequest = allowRequests && takesRequests;
+
+        // Right-aligned and quiet: an ordinary booking is the main path and
+        // this is the exception beside it, not a second call to action
+        // competing with the times themselves.
+        const requestLink = canRequest && !showRequestPanel ? (
+          <View style={styles.timeHeaderRow}>
+            <TouchableOpacity
+              style={styles.requestLink}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                LayoutAnimation.configureNext(COLLAPSE_ANIM);
+                setShowRequestPanel(true);
+              }}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Request a specific time from ${who}`}
+            >
+              <Text style={[styles.requestLinkText, { color: EMERGENCY_OUTLINE }]}>
+                Request a time
+              </Text>
+              <Text style={[styles.requestLinkChevron, { color: EMERGENCY_OUTLINE }]}>⌄</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null;
+
+        const requestPanel = (
+          <RequestTimePanel
+            date={requestPanelDate}
+            onDateChange={handleRequestDateChange}
+            requestTimes={requestTimesForDate}
+            loading={isLoadingSlots}
+            onPickTime={handlePanelPickTime}
+            onBack={() => {
+              LayoutAnimation.configureNext(COLLAPSE_ANIM);
+              setShowRequestPanel(false);
+            }}
+            providerLabel={who}
+            // No ceiling at all when this provider takes requests beyond
+            // their booking window — same condition the day strip uses, so
+            // the two can't disagree about which dates are askable.
+            {...(maxDate !== undefined && !emergencyPolicy.beyondWindow ? { maxDate } : {})}
+            accentColor={accentColor}
+            surfaceColor={surfaceColor}
+            textColor={textColor}
+            subColor={subColor}
+          />
+        );
+
+        // A booked-out day is the likeliest moment someone wants to ask for
+        // something else, so the link belongs here too — 'full' is measured
+        // over ORDINARY slots, and a provider taking requests can still have
+        // out-of-hours times free on a day whose diary is otherwise solid.
         if (currentSlots?.status === 'full') {
           return (
             <View style={styles.timeContainer}>
-              <Text style={[styles.fullDayNotice, { color: subColor }]}>
-                Fully booked — every time this day is taken.
-              </Text>
-              <Text style={[styles.fullDayHint, { color: subColor }]}>
-                Try another day, or join the waitlist on this provider's profile to be told if a space opens.
-              </Text>
+              {showRequestPanel ? requestPanel : (
+                <>
+                  {requestLink}
+                  <Text style={[styles.fullDayNotice, { color: subColor }]}>
+                    Fully booked — every time this day is taken.
+                  </Text>
+                  <Text style={[styles.fullDayHint, { color: subColor }]}>
+                    Try another day, or join the waitlist on this provider's profile to be told if a space opens.
+                  </Text>
+                </>
+              )}
             </View>
           );
         }
@@ -901,67 +971,30 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // booking. This banner is the only thing that does.
         const selectedIsRequest = !!selectedTime
           && requestTimes.some(slot => slot.time === selectedTime);
-        const who = providerLabel ?? 'the provider';
 
-        // The button, not the times, is what the client sees by default. An
-        // opted-in provider who left their request window at "any time"
-        // generates a by-request candidate for every step of the whole day —
-        // rendered inline those buried the times they are actually free under
-        // a wall of red. Shown whenever this provider takes requests at all,
-        // not only when THIS date has some, since changing the date is one of
-        // the things the sheet is for.
-        const takesRequests = emergencyPolicy.outsideHours || emergencyPolicy.blockedDates
-          || emergencyPolicy.shortNotice || emergencyPolicy.beyondWindow;
-
+        // The panel opens IN PLACE of the ordinary grid rather than over it:
+        // these are two answers to the same question ("when?"), so showing
+        // both at once just asks the client to hold two lists at once. It
+        // also keeps this out of a Modal — see RequestTimePanel's header for
+        // why that matters on iOS.
         return (
           <View style={styles.timeContainer}>
-            {openTimes.length > 0 && renderGroup(openTimes)}
-            {allowRequests && takesRequests && (
-              <TouchableOpacity
-                style={[styles.requestCta, { borderColor: EMERGENCY_OUTLINE }]}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setShowRequestSheet(true);
-                }}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={`Request a specific time from ${who}`}
-              >
-                <Text style={[styles.requestCtaText, { color: EMERGENCY_OUTLINE }]}>
-                  Request a specific time
-                </Text>
-                <Text style={[styles.requestCtaChevron, { color: EMERGENCY_OUTLINE }]}>›</Text>
-              </TouchableOpacity>
+            {requestLink}
+
+            {showRequestPanel ? requestPanel : (
+              openTimes.length > 0 && renderGroup(openTimes)
             )}
-            {selectedIsRequest && (
+
+            {selectedIsRequest && !showRequestPanel && (
               <View style={[styles.selectedRequestBanner, { borderColor: EMERGENCY_OUTLINE }]}>
                 <Text style={[styles.selectedRequestText, { color: EMERGENCY_OUTLINE }]}>
-                  {selectedTime} is {who}'s emergency slot
+                  {selectedTime} is a request — {who} has to accept it
                 </Text>
               </View>
             )}
           </View>
         );
       })()}
-
-      <RequestTimeSheet
-        visible={showRequestSheet}
-        onClose={() => setShowRequestSheet(false)}
-        date={requestSheetDate}
-        onDateChange={handleRequestDateChange}
-        requestTimes={requestTimesForDate}
-        loading={isLoadingSlots}
-        onPickTime={handleTimeClick}
-        providerLabel={providerLabel ?? 'the provider'}
-        // No ceiling at all when this provider takes requests beyond their
-        // booking window — same condition the day strip uses, so the two
-        // can't disagree about which dates are askable.
-        {...(maxDate !== undefined && !emergencyPolicy.beyondWindow ? { maxDate } : {})}
-        accentColor={accentColor}
-        surfaceColor={surfaceColor}
-        textColor={textColor}
-        subColor={subColor}
-      />
     </View>
   );
 };
@@ -1035,18 +1068,13 @@ const styles = StyleSheet.create({
   selectedRequestText: { fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
 
   // ── Full calendar modal ─────────────────────────────────────────────
-  requestCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 14,
-  },
-  requestCtaText:    { fontSize: 13, fontWeight: '600' },
-  requestCtaChevron: { fontSize: 17, fontWeight: '600', marginLeft: 6 },
+  // Right-aligned and quiet: an ordinary booking is the main path, and this
+  // is the exception beside it — not a second call to action competing with
+  // the times themselves.
+  timeHeaderRow:      { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 4, marginBottom: 6 },
+  requestLink:        { flexDirection: 'row', alignItems: 'center' },
+  requestLinkText:    { fontSize: 11.5, fontWeight: '600' },
+  requestLinkChevron: { fontSize: 12, fontWeight: '700', marginLeft: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   calendarPopup: {
     width: 300,
