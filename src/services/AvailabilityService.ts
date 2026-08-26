@@ -47,6 +47,12 @@ export interface TimeSlot {
    *  reason ("outside their working hours") rather than a generic warning.
    *  Non-empty exactly when isByRequest is true. */
   requestReasons?: EmergencyReason[] | undefined;
+  /** Why this time cannot be booked at all, for the pickers that show the
+   *  day's whole shape rather than only what's left of it. Only ever set
+   *  when getAvailableSlots was called with `includeUnbookable` — every
+   *  other caller still receives bookable times only, so nothing that books
+   *  has to learn to skip these. */
+  unbookable?: 'past' | 'notice' | undefined;
 }
 
 /** A provider's emergency-request opt-ins, as stored on their row.
@@ -829,7 +835,13 @@ export const AvailabilityService = {
     providerName: string,
     date: string,
     serviceDuration?: string,
-    serviceId?: string
+    serviceId?: string,
+    /** Return the day's whole grid, with times that can no longer be booked
+     *  marked `unbookable` instead of omitted. Off by default: a caller that
+     *  BOOKS must never be handed one of these by accident. The client
+     *  picker turns it on so a day that's over reads as "these were the
+     *  times, they've gone" rather than as an empty screen. */
+    includeUnbookable = false,
   ): Promise<TimeSlot[]> {
     try {
       // T12:00:00 keeps the weekday stable across timezones (bare YYYY-MM-DD
@@ -971,10 +983,21 @@ export const AvailabilityService = {
       return Array.from(candidates.entries())
         .sort(([a], [b]) => a - b)
         .flatMap(([startMins, reasons]): TimeSlot[] => {
+          const startMs = slotStartMs(date, startMins);
           const allReasons = resolveSlotOffer(
-            reasons, slotStartMs(date, startMins), nowMs, earliestStart, policy.shortNotice,
+            reasons, startMs, nowMs, earliestStart, policy.shortNotice,
           );
-          if (allReasons === null) return [];
+          if (allReasons === null) {
+            if (!includeUnbookable) return [];
+            // The two ways resolveSlotOffer refuses, kept apart because they
+            // want different words: one has been and gone, the other is still
+            // to come but too soon for this provider's notice.
+            return [{
+              time: formatMinutesTo12h(startMins),
+              isBooked: false,
+              unbookable: startMs < nowMs ? 'past' : 'notice',
+            }];
+          }
 
           const slotEnd = startMins + durationMinutes;
           const newEffStart = startMins - newBuffer.before;

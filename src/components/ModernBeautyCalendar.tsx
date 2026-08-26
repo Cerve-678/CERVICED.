@@ -24,16 +24,25 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 /** One offerable start time. `reasons` is empty for an ordinary slot, and
  *  names the provider's own rules the time breaks when it's only bookable as
  *  a request they have to accept (see AvailabilityService.TimeSlot). */
-type TimeSlot = { time: string; reasons: EmergencyReason[] };
+/** One time in the day's grid. `blocked` is set when the time exists but
+ *  can't be taken — already booked, already gone, or inside the provider's
+ *  notice window. Those still render, greyed and inert: a day shown as an
+ *  empty space can't be told apart from one that failed to load, and hiding
+ *  a booked-out morning quietly rewrites how busy the provider looks. */
+export type TimeSlot = {
+  time: string;
+  reasons: EmergencyReason[];
+  blocked?: 'booked' | 'past' | 'notice' | undefined;
+};
 
-type DayData = {
+export type DayData = {
   /** Ordinary, unconditional slots only — a day that can ONLY be requested
    *  is not "available", and must not read as one on the day strip or drive
    *  the auto-jump below. */
   available: number;
   /** Slots offered only as a request. */
   requestable: number;
-  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'unavailable';
+  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'over' | 'unavailable';
   times: TimeSlot[];
 };
 
@@ -47,7 +56,7 @@ type WeekDay = {
   isToday: boolean;
   available: number;
   requestable: number;
-  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'unavailable';
+  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'over' | 'unavailable';
   times: TimeSlot[];
 };
 
@@ -135,9 +144,13 @@ const toLocalDateString = (date: Date): string => {
  * slot grid, so a day with only 20 minutes free is full for a 2-hour service
  * and open for a 15-minute one.
  */
-const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData => {
-  const available = times.filter(slot => slot.reasons.length === 0).length;
-  const requestable = times.length - available;
+export const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData => {
+  // Blocked times are in `times` so they can be shown, but they are not on
+  // offer — counting them would put an availability dot on a day with
+  // nothing left and send the auto-jump to it.
+  const offerable = times.filter(slot => !slot.blocked);
+  const available = offerable.filter(slot => slot.reasons.length === 0).length;
+  const requestable = offerable.length - available;
   return {
     available,
     requestable,
@@ -145,7 +158,13 @@ const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData => {
       ? 'available'
       : requestable > 0
         ? 'request'
-        : isFullyBooked ? 'full' : 'closed',
+        : isFullyBooked
+          ? 'full'
+          // The day had times and none can be reached any more, but nobody
+          // took them — they've simply been and gone (or are inside the
+          // provider's notice window). Not 'closed', which means the provider
+          // never works this day and is what makes a pill untappable.
+          : times.length > 0 ? 'over' : 'closed',
     times,
   };
 };
@@ -341,7 +360,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           providerName,
           dateString,
           serviceDuration,
-          serviceId
+          serviceId,
+          // Ask for the times that have gone as well as the ones left, so a
+          // day that's over still shows its shape.
+          true,
         );
         // Fullness is measured over ORDINARY slots only. By-request times
         // must not answer it in either direction: they'd mask a genuinely
@@ -351,11 +373,22 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         const ordinary = grid.filter(slot => !slot.isByRequest);
         const isFullyBooked = ordinary.length > 0 && ordinary.every(slot => slot.isBooked);
 
-        const openSlots = grid
-          .filter(slot => !slot.isBooked)
+        // Everything the day contains, each carrying whether it can be taken.
+        // A by-request time this caller isn't allowed to offer is dropped
+        // outright rather than greyed — greying it would advertise a time
+        // this picker can't carry through checkout anyway.
+        const slots: TimeSlot[] = grid
           .filter(slot => allowRequests || !slot.isByRequest)
-          .map(slot => ({ time: slot.time, reasons: slot.requestReasons ?? [] }));
-        return dayDataFrom(openSlots, isFullyBooked);
+          .map(slot => ({
+            time: slot.time,
+            reasons: slot.requestReasons ?? [],
+            ...(slot.isBooked
+              ? { blocked: 'booked' as const }
+              : slot.unbookable
+                ? { blocked: slot.unbookable }
+                : {}),
+          }));
+        return dayDataFrom(slots, isFullyBooked);
       } catch {
         // Fallback to base schedule without booking filter
         return dayDataFrom(generateBeautyTimeSlots(dateString, date.getDay(), providerName));
@@ -797,7 +830,12 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
           const isDisabled = providerUnpublished || day.status === 'past' || day.status === 'closed';
-          const isFull = day.status === 'full';
+          // 'over' is deliberately NOT disabled: it has a greyed grid and a
+          // badge to show, and a dead tap would say none of it.
+          // Both mean "this day had times and none of them are open" — the
+          // bar below says exactly that, where an empty space would say the
+          // provider doesn't work this day.
+          const isFull = day.status === 'full' || day.status === 'over';
           return (
             <TouchableOpacity
               key={day.dateString}
@@ -858,8 +896,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // this is the exception beside it, not a second call to action
         // competing with the times themselves.
         const requestLink = canRequest && !showRequestPanel ? (
-          <View style={styles.timeHeaderRow}>
-            <TouchableOpacity
+          <TouchableOpacity
               style={styles.requestLink}
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
@@ -875,8 +912,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 Request a time
               </Text>
               <Text style={[styles.requestLinkChevron, { color: EMERGENCY_OUTLINE }]}>⌄</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         ) : null;
 
         const requestPanel = (
@@ -902,36 +938,29 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           />
         );
 
-        // A booked-out day is the likeliest moment someone wants to ask for
-        // something else, so the link belongs here too — 'full' is measured
-        // over ORDINARY slots, and a provider taking requests can still have
-        // out-of-hours times free on a day whose diary is otherwise solid.
-        if (currentSlots?.status === 'full') {
-          return (
-            <View style={styles.timeContainer}>
-              {showRequestPanel ? requestPanel : (
-                <>
-                  {requestLink}
-                  <Text style={[styles.fullDayNotice, { color: subColor }]}>
-                    Fully booked — every time this day is taken.
-                  </Text>
-                  <Text style={[styles.fullDayHint, { color: subColor }]}>
-                    Try another day, or join the waitlist on this provider's profile to be told if a space opens.
-                  </Text>
-                </>
-              )}
-            </View>
-          );
-        }
         if (!currentSlots?.times || currentSlots.times.length === 0) return null;
 
-        // Ordinary slots and by-request slots are two different offers, so
-        // they get two separate groups rather than one grid the client has to
-        // read chip-by-chip. A day with nothing but requests renders only the
-        // second group, header and all — the header is what explains why
-        // these times exist at all.
+        // Ordinary times keep their blocked entries so the day still shows
+        // its shape; by-request ones don't, because the panel only ever
+        // offers times that can actually be asked for.
         const openTimes    = currentSlots.times.filter(slot => slot.reasons.length === 0);
-        const requestTimes = currentSlots.times.filter(slot => slot.reasons.length > 0);
+        const requestTimes = currentSlots.times.filter(slot => slot.reasons.length > 0 && !slot.blocked);
+        const bookableCount = openTimes.filter(slot => !slot.blocked).length;
+
+        // One badge above the grid, rather than a sentence replacing it. When
+        // nothing ordinary is left the grid alone can't say WHY — "all taken"
+        // and "the day's simply over" look identical greyed out, and they want
+        // opposite responses (wait for this provider vs. just pick tomorrow).
+        // Mixed causes report whichever accounts for most of the day.
+        const blockedTally = { booked: 0, past: 0, notice: 0 };
+        openTimes.forEach(slot => { if (slot.blocked) blockedTally[slot.blocked] += 1; });
+        const dayBadge = openTimes.length > 0 && bookableCount === 0
+          ? (blockedTally.booked >= blockedTally.past && blockedTally.booked >= blockedTally.notice
+              ? 'Fully booked'
+              : blockedTally.past >= blockedTally.notice
+                ? 'These times have passed'
+                : `Too soon — ${who} needs more notice`)
+          : null;
 
         const renderGroup = (group: TimeSlot[]) => {
           const rows = chunkArray(group, Math.ceil(group.length / 3));
@@ -939,22 +968,32 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
             <View key={`open-${idx}`} style={styles.timeRow}>
               {timeRow.map(slot => {
                 const timeSel = selectedTime === slot.time;
+                const blocked = !!slot.blocked;
                 return (
                   <TouchableOpacity
                     key={slot.time}
                     style={[
                       styles.timeTab,
                       { backgroundColor: surfaceColor },
-                      timeSel && { borderWidth: 2, borderColor: accentColor },
+                      blocked && styles.timeTabBlocked,
+                      timeSel && !blocked && { borderWidth: 2, borderColor: accentColor },
                     ]}
                     onPress={() => handleTimeClick(slot.time, slot.reasons)}
+                    disabled={blocked}
                     activeOpacity={0.75}
                     accessibilityRole="button"
-                    accessibilityLabel={slot.time}
+                    accessibilityState={{ disabled: blocked }}
+                    accessibilityLabel={
+                      blocked
+                        ? `${slot.time}, ${slot.blocked === 'booked' ? 'already booked'
+                            : slot.blocked === 'past' ? 'already passed' : 'too soon to book'}`
+                        : slot.time
+                    }
                   >
                     <Text style={[
                       styles.timeText,
-                      { color: timeSel ? accentColor : textColor },
+                      { color: blocked ? subColor : timeSel ? accentColor : textColor },
+                      blocked && styles.timeTextBlocked,
                     ]}>
                       {slot.time}
                     </Text>
@@ -979,10 +1018,25 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // why that matters on iOS.
         return (
           <View style={styles.timeContainer}>
-            {requestLink}
+            {!showRequestPanel && (dayBadge || requestLink) && (
+              <View style={styles.timeHeaderRow}>
+                {dayBadge ? (
+                  <View style={[styles.dayBadge, { borderColor: withAlpha(subColor, 0.35) }]}>
+                    <Text style={[styles.dayBadgeText, { color: subColor }]}>{dayBadge}</Text>
+                  </View>
+                ) : <View />}
+                {requestLink}
+              </View>
+            )}
 
             {showRequestPanel ? requestPanel : (
               openTimes.length > 0 && renderGroup(openTimes)
+            )}
+
+            {!showRequestPanel && dayBadge === 'Fully booked' && (
+              <Text style={[styles.fullDayHint, { color: subColor }]}>
+                Try another day, or join the waitlist on this provider's profile to be told if a space opens.
+              </Text>
             )}
 
             {selectedIsRequest && !showRequestPanel && (
@@ -1056,7 +1110,6 @@ const styles = StyleSheet.create({
 
   // ── Time slots ──────────────────────────────────────────────────────
   timeContainer: { paddingTop: 10, paddingHorizontal: 2 },
-  fullDayNotice: { fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 4 },
   fullDayHint:   { fontSize: 12, textAlign: 'center', paddingTop: 4, paddingHorizontal: 16, lineHeight: 17, opacity: 0.85 },
   timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
   timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
@@ -1071,7 +1124,13 @@ const styles = StyleSheet.create({
   // Right-aligned and quiet: an ordinary booking is the main path, and this
   // is the exception beside it — not a second call to action competing with
   // the times themselves.
-  timeHeaderRow:      { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 4, marginBottom: 6 },
+  timeHeaderRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
+  dayBadge:           { borderWidth: 1, borderRadius: 20, paddingVertical: 3, paddingHorizontal: 9 },
+  dayBadgeText:       { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.2 },
+  // Greyed and inert, not removed: the day keeps its shape so "all taken"
+  // and "never works this day" stay tellable apart.
+  timeTabBlocked:     { opacity: 0.4 },
+  timeTextBlocked:    { textDecorationLine: 'line-through' },
   requestLink:        { flexDirection: 'row', alignItems: 'center' },
   requestLinkText:    { fontSize: 11.5, fontWeight: '600' },
   requestLinkChevron: { fontSize: 12, fontWeight: '700', marginLeft: 4 },
