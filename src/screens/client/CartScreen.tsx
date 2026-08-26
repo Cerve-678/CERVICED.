@@ -124,25 +124,58 @@ function formatNameList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
 }
 
-/** Chrome around the checkout summary's content: a full screen with a pinned
- *  action row. It used to switch to a centred card for small carts, but the
- *  same layout for every cart is what makes the step recognisable, and the
- *  card's fixed 90%-wide / 85%-tall box turned into a cramped inner scroll
- *  the moment appointments carried add-ons or a group block — with the Terms
- *  checkbox and Confirm & Pay pushed below the fold. Kept at module scope
- *  (not inlined in CartScreen's render) so it doesn't remount the content on
- *  every parent render. */
+// The checkout summary goes full screen once it stops being a glance: at or
+// above this many services, OR above this many providers. Each extra
+// provider costs a whole card of chrome (header, logo, subtotal) on top of
+// its own appointments, so provider count runs out of room independently of
+// service count. See the Booking Summary <Modal>.
+const FULL_SCREEN_SUMMARY_THRESHOLD = 5;
+const FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD = 3;
+
+/** Chrome around the checkout summary's content. Two presentations, one
+ *  body: a centred card for a small cart, a full screen with a pinned
+ *  action row for a large one. Kept at module scope (not inlined in
+ *  CartScreen's render) so flipping between them doesn't remount the
+ *  content on every parent render.
+ *
+ *  The card pins its action row too. The card presentation was removed once
+ *  because its fixed 90%-wide / 85%-tall box turned into a cramped inner
+ *  scroll the moment appointments carried add-ons or a group block, with the
+ *  Terms checkbox and Confirm & Pay pushed below the fold and no scrollbar
+ *  or bounce to hint they were there — so the actions live outside the
+ *  card's ScrollView now, not at the bottom of it. */
 function SummaryShell({
+  fullScreen,
   P,
   onBack,
   actions,
   children,
 }: {
+  fullScreen: boolean;
   P: AppTheme;
   onBack: () => void;
   actions: React.ReactNode;
   children: React.ReactNode;
 }) {
+  if (!fullScreen) {
+    return (
+      <View style={styles.modalOverlayNoBlur}>
+        <View style={[styles.reviewModalContainer, styles.summaryModalContainer, { backgroundColor: P.card, borderColor: P.border }]}>
+          <ScrollView style={styles.summaryCardScroll} showsVerticalScrollIndicator={true}>
+            <View style={styles.reviewModalContent}>
+              <Text style={[styles.reviewModalTitle, { color: P.text }]}>Booking Summary</Text>
+              <Text style={[styles.reviewModalSubtitle, { color: P.sub }]}>Review your appointments before payment</Text>
+              {children}
+            </View>
+          </ScrollView>
+          <View style={[styles.summaryCardFooter, { borderTopColor: P.border }]}>
+            <View style={styles.reviewButtonRow}>{actions}</View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     // Own SafeAreaProvider: a fullScreen modal renders into its own native
     // surface that the app-root provider doesn't measure, so insets would
@@ -836,6 +869,20 @@ const ServiceCard: React.FC<ServiceCardProps> = memo(
             <View style={styles.conflictBanner}>
               <Ionicons name="alert-circle" size={14} color="#F44336" />
               <Text style={styles.conflictBannerText}>{issue}</Text>
+            </View>
+          )}
+          {/* An out-of-hours time looks exactly like an ordinary one once it
+              reaches the cart, and it isn't: the client is about to pay for
+              something the provider can still decline. Deliberately amber
+              rather than the by-request red used in the picker — in THIS
+              screen red already means "this item has a conflict, fix it", and
+              a request is not a fault. */}
+          {bookingInfo?.emergencyRequest && (
+            <View style={styles.requestBanner}>
+              <Ionicons name="time-outline" size={14} color="#FF9500" />
+              <Text style={styles.requestBannerText}>
+                Outside their usual hours — they have to accept this before it's booked.
+              </Text>
             </View>
           )}
           {/* Header binds the service to its price on one line, with the
@@ -1638,6 +1685,11 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
                       {formatTime12(gb.selectedTime)} · {groupItem.duration}
                     </Text>
                   )}
+                  {gb.emergencyRequest && (
+                    <Text style={styles.summaryItemRequestNote}>
+                      Request · outside their hours, can be declined
+                    </Text>
+                  )}
                   {renderAddOns(groupItem)}
                 </View>
               );
@@ -1674,6 +1726,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
           {b.selectedDate && b.selectedTime && (
             <Text style={[styles.summaryItemDateTime, { color: P.sub }]}>
               {formatLongDateNoYear(b.selectedDate)} · {formatTime12(b.selectedTime)}
+            </Text>
+          )}
+          {/* Last screen before paying, so it has to say which of these the
+              provider can still turn down. */}
+          {b.emergencyRequest && (
+            <Text style={styles.summaryItemRequestNote}>
+              Request · outside their hours, can be declined
             </Text>
           )}
         </View>
@@ -1829,6 +1888,13 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     name: string; email: string; phone: string;
   } | null>(null);
   const [showBookingSummaryModal, setShowBookingSummaryModal] = useState(false);
+  // A small cart stays a centred card; anything bigger takes the whole
+  // screen. Provider count is counted off checkoutProviderSections rather
+  // than the raw items, so it uses the exact same grouping key the summary
+  // itself renders sections with. See FULL_SCREEN_SUMMARY_THRESHOLD.
+  const useFullScreenSummary =
+    checkoutSnapshot.items.length >= FULL_SCREEN_SUMMARY_THRESHOLD
+    || checkoutProviderSections.length > FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD;
   // Summary → back to the customer-details review step. Shared by the
   // header chevron, the Back button and the Android hardware back gesture,
   // so all three land in the same place.
@@ -3376,16 +3442,27 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
             <ReviewDialogHost />
           </Modal>
 
-          {/* Booking Summary — always full screen, whatever the cart size, so
-              the last step before paying is the same shape every time and
-              never has to fit a long multi-provider cart into a fixed card. */}
+          {/* Booking Summary. A small cart stays a centred card — that reads
+              as a confirmation step, and blowing four lines up to fill a
+              phone screen feels heavier than the decision is. From
+              FULL_SCREEN_SUMMARY_THRESHOLD appointments (or more than
+              FULL_SCREEN_SUMMARY_PROVIDER_THRESHOLD providers) up it goes
+              full screen instead, where the card would otherwise become a
+              cramped inner scroll.
+
+              `key` forces a remount when the presentation flips — React
+              Native's Modal doesn't apply a changed
+              transparent/presentationStyle to an already-mounted modal. */}
           <Modal
+            key={useFullScreenSummary ? 'summary-fullscreen' : 'summary-card'}
             visible={showBookingSummaryModal}
-            animationType="slide"
-            presentationStyle="fullScreen"
+            animationType={useFullScreenSummary ? 'slide' : 'fade'}
+            transparent={!useFullScreenSummary}
+            {...(useFullScreenSummary ? { presentationStyle: 'fullScreen' as const } : {})}
             onRequestClose={backFromSummary}
           >
             <SummaryShell
+              fullScreen={useFullScreenSummary}
               P={P}
               onBack={backFromSummary}
               actions={<>
@@ -4311,6 +4388,18 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
+  summaryItemRequestNote: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: '#FF9500', marginTop: 2 },
+  requestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 149, 0, 0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  requestBannerText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '600', color: '#FF9500' },
   conflictBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5258,7 +5347,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
 
-  // Booking Summary — full-screen presentation (the only one)
+  // Booking Summary — centred-card presentation (small carts)
+  summaryModalContainer: {
+    maxHeight: '85%',
+  },
+  // flexShrink so the pinned footer below it always keeps its own height
+  // inside the card's capped box, instead of the scroll eating it.
+  summaryCardScroll: {
+    flexShrink: 1,
+  },
+  summaryCardFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+
+  // Booking Summary — full-screen presentation (FULL_SCREEN_SUMMARY_THRESHOLD+)
   summaryScreen: {
     flex: 1,
   },
