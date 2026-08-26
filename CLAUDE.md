@@ -255,6 +255,32 @@ agent — these are the standing rules of thumb for every session.
   of work is actually done, and write a message that says what changed.
   `/rewind` covers mid-turn undo without touching git. The branch is
   squash-merged into `main`, so the existing WIP commits never reach it.
+- **Commit your own work only — `git add <paths>` does not scope a commit.**
+  `git commit` commits everything **staged**, not the paths you just added, so
+  anything the other session left staged rides along under your message. Use
+  the pathspec form instead, which commits only the named paths and leaves a
+  concurrently-staged file untouched and still staged:
+
+  ```
+  git commit -m "..." src/thing.ts src/tests/thing.test.ts
+  ```
+
+  Before committing, read `git status --short` and treat any staged entry in
+  the **left** column (`M `, `A `, `R `) as someone else's work unless you put
+  it there: don't sweep it in. On 2026-08-26 a pre-staged migration rename and
+  four regenerated vault docs landed inside a cart fix exactly this way.
+  (Caveat: the pathspec form commits the working-tree state of those paths, so
+  it ignores a deliberately part-staged hunk.)
+- **Don't leave your own work uncommitted "to be safe" either.** The other
+  session's next commit picks it up under an unrelated message — that is how
+  `getBookableServiceIds`, a cart fix, landed inside a business-type refactor
+  on 2026-08-26. Uncommitted is not neutral in a shared tree.
+- **When one file genuinely holds both sessions' changes, say so in the
+  message.** Git can't split a file at commit time, and a silent mixed commit
+  is worse than an acknowledged one. Name the other change and which commit it
+  belongs with, rather than rewriting shared history to separate them —
+  rewriting unpushed commits while another session is mid-edit is how this
+  repo loses work.
 - **This repo lives under `~/Desktop`, so iCloud forks conflicting writes**
   into numbered copies (`shuffle 2.ts` beside `shuffle.ts`). They are never
   intentional content, and `.gitignore` now drops them — but only for
