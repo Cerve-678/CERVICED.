@@ -5,6 +5,7 @@ import { AvailabilityService } from '../services/AvailabilityService';
 import type { EmergencyReason, EmergencyRequestPolicy } from '../services/AvailabilityService';
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
+import { RequestTimeSheet } from './RequestTimeSheet';
 
 /** Emergency/by-request outline. Deliberately NOT the caller's accent: every
  *  other colour in this picker is derived from whatever sheet it's sitting in,
@@ -175,6 +176,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   const [showTimeSelection, setShowTimeSelection] = useState<boolean>(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(false);
   const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
+  const [showRequestSheet, setShowRequestSheet] = useState<boolean>(false);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   // null = still checking, true = resolved to a real provider, false = no match
   const [providerFound, setProviderFound] = useState<boolean | null>(null);
@@ -469,6 +471,27 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     onDateSelect(dateString);
     if (dateString !== selectedDate && selectedTime) onTimeSelect('');
   }, [onDateSelect, onTimeSelect, selectedDate, selectedTime]);
+
+  /** The date being requested, defaulting to whatever the picker is already
+   *  showing. */
+  const requestSheetDate = selectedDate || toLocalDateString(new Date());
+
+  /** Only this date's by-request times. The sheet never derives its own — see
+   *  RequestTimeSheet's header for why that matters. */
+  const requestTimesForDate = useMemo(
+    () => (availableSlots[requestSheetDate]?.times ?? []).filter(slot => slot.reasons.length > 0),
+    [availableSlots, requestSheetDate],
+  );
+
+  /** Moving the request sheet's date has to move the WEEK with it: the slot
+   *  fetch runs a week at a time, so a date outside the current one has no
+   *  resolved times at all until its week is the one being fetched. Without
+   *  this, picking a date a month out showed an empty sheet forever. */
+  const handleRequestDateChange = useCallback((dateString: string) => {
+    const [y, m, d] = dateString.split('-').map(part => parseInt(part, 10));
+    setCurrentWeek(new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+    selectDateFromTap(dateString);
+  }, [selectDateFromTap]);
 
   const handleCalendarDaySelect = (date: Date) => {
     const dateString = toLocalDateString(date);
@@ -840,10 +863,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         const openTimes    = currentSlots.times.filter(slot => slot.reasons.length === 0);
         const requestTimes = currentSlots.times.filter(slot => slot.reasons.length > 0);
 
-        const renderGroup = (group: TimeSlot[], byRequest: boolean) => {
+        const renderGroup = (group: TimeSlot[]) => {
           const rows = chunkArray(group, Math.ceil(group.length / 3));
           return rows.map((timeRow, idx) => (
-            <View key={`${byRequest ? 'req' : 'open'}-${idx}`} style={styles.timeRow}>
+            <View key={`open-${idx}`} style={styles.timeRow}>
               {timeRow.map(slot => {
                 const timeSel = selectedTime === slot.time;
                 return (
@@ -851,24 +874,17 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     key={slot.time}
                     style={[
                       styles.timeTab,
-                      byRequest
-                        ? [styles.timeTabRequest, { borderColor: EMERGENCY_OUTLINE }]
-                        : { backgroundColor: surfaceColor },
-                      // Selecting a by-request time keeps it red rather than
-                      // switching to the accent — the accent is what every
-                      // ordinarily-bookable chip uses, so borrowing it here
-                      // would make the choice look confirmed at the exact
-                      // moment the client needs to know it isn't.
-                      timeSel && { borderWidth: 2, borderColor: byRequest ? EMERGENCY_OUTLINE : accentColor },
+                      { backgroundColor: surfaceColor },
+                      timeSel && { borderWidth: 2, borderColor: accentColor },
                     ]}
                     onPress={() => handleTimeClick(slot.time, slot.reasons)}
                     activeOpacity={0.75}
                     accessibilityRole="button"
-                    accessibilityLabel={byRequest ? `${slot.time}, by request only` : slot.time}
+                    accessibilityLabel={slot.time}
                   >
                     <Text style={[
                       styles.timeText,
-                      { color: byRequest ? EMERGENCY_OUTLINE : timeSel ? accentColor : textColor },
+                      { color: timeSel ? accentColor : textColor },
                     ]}>
                       {slot.time}
                     </Text>
@@ -879,30 +895,43 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           ));
         };
 
-        // Is the time currently chosen one of the red ones? The group header
-        // above explains the section, but once a chip is tapped the client is
-        // looking at their own choice, not at a header several rows up — so
-        // the state has to be restated against the selection itself.
+        // Is the time currently chosen one of the red ones? It was picked
+        // inside the request sheet, which then closed — so nothing else on
+        // this screen still says the chosen time is a request rather than a
+        // booking. This banner is the only thing that does.
         const selectedIsRequest = !!selectedTime
           && requestTimes.some(slot => slot.time === selectedTime);
         const who = providerLabel ?? 'the provider';
 
+        // The button, not the times, is what the client sees by default. An
+        // opted-in provider who left their request window at "any time"
+        // generates a by-request candidate for every step of the whole day —
+        // rendered inline those buried the times they are actually free under
+        // a wall of red. Shown whenever this provider takes requests at all,
+        // not only when THIS date has some, since changing the date is one of
+        // the things the sheet is for.
+        const takesRequests = emergencyPolicy.outsideHours || emergencyPolicy.blockedDates
+          || emergencyPolicy.shortNotice || emergencyPolicy.beyondWindow;
+
         return (
           <View style={styles.timeContainer}>
-            {openTimes.length > 0 && renderGroup(openTimes, false)}
-            {requestTimes.length > 0 && (
-              <>
-                <View style={styles.requestDivider}>
-                  <View style={[styles.requestRule, { backgroundColor: withAlpha(textColor, 0.12) }]} />
-                  <Text style={[styles.requestLabel, { color: EMERGENCY_OUTLINE }]}>By request</Text>
-                  <View style={[styles.requestRule, { backgroundColor: withAlpha(textColor, 0.12) }]} />
-                </View>
-                {renderGroup(requestTimes, true)}
-                <Text style={[styles.requestNote, { color: subColor }]}>
-                  These times fall outside {who}'s usual availability. They have to
-                  accept the request before the booking is confirmed.
+            {openTimes.length > 0 && renderGroup(openTimes)}
+            {allowRequests && takesRequests && (
+              <TouchableOpacity
+                style={[styles.requestCta, { borderColor: EMERGENCY_OUTLINE }]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setShowRequestSheet(true);
+                }}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Request a specific time from ${who}`}
+              >
+                <Text style={[styles.requestCtaText, { color: EMERGENCY_OUTLINE }]}>
+                  Request a specific time
                 </Text>
-              </>
+                <Text style={[styles.requestCtaChevron, { color: EMERGENCY_OUTLINE }]}>›</Text>
+              </TouchableOpacity>
             )}
             {selectedIsRequest && (
               <View style={[styles.selectedRequestBanner, { borderColor: EMERGENCY_OUTLINE }]}>
@@ -914,6 +943,25 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           </View>
         );
       })()}
+
+      <RequestTimeSheet
+        visible={showRequestSheet}
+        onClose={() => setShowRequestSheet(false)}
+        date={requestSheetDate}
+        onDateChange={handleRequestDateChange}
+        requestTimes={requestTimesForDate}
+        loading={isLoadingSlots}
+        onPickTime={handleTimeClick}
+        providerLabel={providerLabel ?? 'the provider'}
+        // No ceiling at all when this provider takes requests beyond their
+        // booking window — same condition the day strip uses, so the two
+        // can't disagree about which dates are askable.
+        {...(maxDate !== undefined && !emergencyPolicy.beyondWindow ? { maxDate } : {})}
+        accentColor={accentColor}
+        surfaceColor={surfaceColor}
+        textColor={textColor}
+        subColor={subColor}
+      />
     </View>
   );
 };
@@ -979,15 +1027,7 @@ const styles = StyleSheet.create({
   fullDayHint:   { fontSize: 12, textAlign: 'center', paddingTop: 4, paddingHorizontal: 16, lineHeight: 17, opacity: 0.85 },
   timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
   timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
-  // Outlined rather than filled — the same shape as a normal slot, visibly
-  // not the same offer. Solid, not dashed: at this chip size a dashed 1px
-  // border reads as a rendering artefact rather than a deliberate state.
-  timeTabRequest: { backgroundColor: 'transparent', borderWidth: 1.5 },
   timeText:      { fontSize: 13, fontWeight: '500' },
-  requestDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8, paddingHorizontal: 6 },
-  requestRule:    { flex: 1, height: StyleSheet.hairlineWidth },
-  requestLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
-  requestNote:    { fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: 12, marginTop: 2 },
   selectedRequestBanner: {
     borderWidth: 1.5, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12,
     marginTop: 10, marginHorizontal: 2,
@@ -995,6 +1035,18 @@ const styles = StyleSheet.create({
   selectedRequestText: { fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
 
   // ── Full calendar modal ─────────────────────────────────────────────
+  requestCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 14,
+  },
+  requestCtaText:    { fontSize: 13, fontWeight: '600' },
+  requestCtaChevron: { fontSize: 17, fontWeight: '600', marginLeft: 6 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
   calendarPopup: {
     width: 300,

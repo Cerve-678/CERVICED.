@@ -2,7 +2,9 @@ import {
   resolveSlotOffer,
   describeEmergencyReason,
   toWindowMins,
+  snapToRequestable,
   type EmergencyReason,
+  type RequestCandidate,
 } from '../services/AvailabilityService';
 
 // There is deliberately NO bound on which hours an emergency request may
@@ -102,5 +104,74 @@ describe('toWindowMins', () => {
     expect(toWindowMins('not a number')).toBeNull();
     expect(toWindowMins(-30)).toBeNull();
     expect(toWindowMins(NaN)).toBeNull();
+  });
+});
+
+// The "request a specific time" wheel resolves a freely-picked minute to a
+// time the provider actually offers. It must never invent one: every slot it
+// can return came from the same candidate set the chips show, which has
+// already been through resolveSlotOffer and the busy-span check. A second
+// route computing its own answer is how the picker and the trigger drift.
+describe('snapToRequestable', () => {
+  const slot = (time: string, mins: number): RequestCandidate => ({
+    time,
+    reasons: ['outside_hours'] as EmergencyReason[],
+    mins,
+  });
+
+  // A provider on a 30-minute grid taking requests 4:00am-6:00am.
+  const candidates: RequestCandidate[] = [
+    slot('4:00 AM', 240),
+    slot('4:30 AM', 270),
+    slot('5:00 AM', 300),
+    slot('5:30 AM', 330),
+    slot('6:00 AM', 360),
+  ];
+
+  it('returns the exact slot when the wheel lands on one', () => {
+    const result = snapToRequestable(300, candidates);
+    expect(result.kind).toBe('snapped');
+    expect(result.kind === 'snapped' && result.slot.time).toBe('5:00 AM');
+  });
+
+  it('snaps a between-grid minute to the nearest real offer', () => {
+    // 4:07 is not on anyone's grid; 4:00 is the offer it means.
+    const result = snapToRequestable(247, candidates);
+    expect(result.kind === 'snapped' && result.slot.time).toBe('4:00 AM');
+  });
+
+  it('snaps upward when the nearer offer is later', () => {
+    const result = snapToRequestable(325, candidates);
+    expect(result.kind === 'snapped' && result.slot.time).toBe('5:30 AM');
+  });
+
+  it('carries the slot\'s own reasons through, never a fresh guess', () => {
+    const result = snapToRequestable(247, candidates);
+    expect(result.kind === 'snapped' && result.slot.reasons).toEqual(['outside_hours']);
+  });
+
+  // The point of asking for a specific time is that the specific time is what
+  // the client needs. Handing them the nearest end instead would answer a
+  // question they didn't ask.
+  it('refuses a time before anything offered rather than snapping to the first', () => {
+    const result = snapToRequestable(120, candidates); // 2:00 AM
+    expect(result.kind).toBe('out-of-range');
+    expect(result.kind === 'out-of-range' && result.earliest.time).toBe('4:00 AM');
+    expect(result.kind === 'out-of-range' && result.latest.time).toBe('6:00 AM');
+  });
+
+  it('refuses a time after anything offered rather than snapping to the last', () => {
+    const result = snapToRequestable(600, candidates); // 10:00 AM
+    expect(result.kind).toBe('out-of-range');
+  });
+
+  it('reports no offers at all separately from out-of-range', () => {
+    expect(snapToRequestable(300, []).kind).toBe('none');
+  });
+
+  it('handles a single offered time without treating it as a range', () => {
+    const one = [slot('4:00 AM', 240)];
+    expect(snapToRequestable(240, one).kind).toBe('snapped');
+    expect(snapToRequestable(241, one).kind).toBe('out-of-range');
   });
 });

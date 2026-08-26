@@ -5,9 +5,9 @@
 
 #generated
 
-**1911 functions** across **248 files**.
+**1921 functions** across **249 files**.
 
-### `src/components/` (36)
+### `src/components/` (37)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
@@ -28,7 +28,7 @@
 - `LiquidGlassCard.tsx` — LiquidGlassCard
 - `LocationModal.tsx` — LocationModal
 - `MasonryGrid.tsx` — and · columns · component · MasonryGridInner · type
-- `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · renderGroup · selectDateFromTap
+- `ModernBeautyCalendar.tsx` — generateWeeklyAvailability · handleCalendarDaySelect · handleDateClick · handleExpand · handleRequestDateChange · handleTimeClick · **ModernBeautyCalendar** · navigateMonth · navigateWeek · popupBorder · renderGroup · requestTimesForDate · selectDateFromTap
 - `MultiBookingSheet.tsx` — cancelSeparateEmergency · confirmSeparateEmergency · depositPolicyArg · goToStep · groupRangeText · groupSchedule · groupServices · groupSlotResolver · handleBack · handleNext · handleSeparateDate · handleSeparateTime · handleSubmit · **MultiBookingSheet** · onAccentColor · separateServicesList · servicesTotal · stepBlocker · toggleSeparate · tokens · totalAddOnsPrice
 - `PasswordRequirements.tsx` — **PasswordRequirements**
 - `PortfolioCard.tsx` — handleBookmark · PortfolioCardInner
@@ -36,6 +36,7 @@
 - `ProviderDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showConfirm · showToast · Toast · **useProviderDialog**
 - `ProviderThemePicker.tsx` — ProviderThemePicker · select · ThemeSwatch
 - `QuickActionButtons.tsx` — handleAddOns · handleQuickBook · **QuickActionButtons**
+- `RequestTimeSheet.tsx` — candidates · commitPickedMinutes · commitWheel · handleDateChange · handlePick · openWheel · **RequestTimeSheet**
 - `SafeHeader.tsx` — SafeHeader
 - `SlidingTabs.tsx` — handleLayout · handleNaturalLayout · row · slideTo · SlidingTabs
 - `StatusBarBlur.tsx` — StatusBarBlur
@@ -104,7 +105,7 @@
 ### `src/navigation/` (4)
 - `AppNavigator.tsx` — AppNavigator
 - `modeController.ts` — **registerModeSetter** · **requestMode** · **resolveModeChange**
-- `rootNavigate.ts` — **navigateAfterDismiss** · **navigateNested**
+- `rootNavigate.ts` — **navigateAfterDismiss** · **navigateNested** · **navigateTab**
 - `RootNavigation.tsx` — RootNavigation
 
 ### `src/navigation/client/` (1)

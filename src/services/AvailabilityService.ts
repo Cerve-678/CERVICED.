@@ -104,6 +104,46 @@ export const toWindowMins = (value: unknown): number | null => {
   return Number.isFinite(mins) && mins >= 0 ? mins : null;
 };
 
+/** One by-request time, with its start pre-parsed to minutes since midnight. */
+export interface RequestCandidate {
+  time: string;
+  reasons: EmergencyReason[];
+  mins: number;
+}
+
+export type SnapResult =
+  | { kind: 'snapped'; slot: RequestCandidate }
+  | { kind: 'none' }
+  | { kind: 'out-of-range'; earliest: RequestCandidate; latest: RequestCandidate };
+
+/**
+ * Resolve a freely-picked time to the nearest time the provider actually
+ * offers. `candidates` must be sorted by `mins`.
+ *
+ * Snapping exists because offers sit on the provider's slot grid and a wheel
+ * doesn't — 4:07 is never a candidate, 4:00 is. The snap cannot smuggle
+ * anything past the client: EmergencyBookingPrompt restates the resolved time
+ * and won't proceed without an explicit tick.
+ *
+ * Outside the offered range is REFUSED rather than snapped to whichever end is
+ * nearest. A client asking for 4am when the provider's stated request window
+ * starts at 8am must be told that, not silently handed 8am — the whole point
+ * of asking for a specific time is that the specific time is what they need.
+ */
+export const snapToRequestable = (pickedMins: number, candidates: RequestCandidate[]): SnapResult => {
+  const earliest = candidates[0];
+  const latest = candidates[candidates.length - 1];
+  if (!earliest || !latest) return { kind: 'none' };
+  if (pickedMins < earliest.mins || pickedMins > latest.mins) {
+    return { kind: 'out-of-range', earliest, latest };
+  }
+  let best = earliest;
+  for (const candidate of candidates) {
+    if (Math.abs(candidate.mins - pickedMins) < Math.abs(best.mins - pickedMins)) best = candidate;
+  }
+  return { kind: 'snapped', slot: best };
+};
+
 /**
  * Whether one candidate start is offerable, and under what reasons.
  * Returns null when it must not be offered at all.
@@ -237,7 +277,7 @@ const fetchWeeklyScheduleRows = async (
 };
 
 // Parse time string to minutes for comparison
-const parseTimeToMinutes = (timeStr: string): number => {
+export const parseTimeToMinutes = (timeStr: string): number => {
   const cleanTime = timeStr.trim().toUpperCase();
   const isPM = cleanTime.includes('PM');
   const isAM = cleanTime.includes('AM');
