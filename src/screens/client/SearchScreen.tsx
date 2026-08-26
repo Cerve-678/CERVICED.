@@ -29,7 +29,7 @@ import type { AppTheme } from '../../constants/theme';
 import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
-import * as Location from 'expo-location';
+import { resolveClientLocation } from '../../services/clientLocationService';
 import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
@@ -489,28 +489,25 @@ export default function SearchScreen({ navigation, route }: Props) {
     if (tab) setSelectedFilter(tab);
   }, [route?.params?.category]);
 
-  // Ask for location once on mount, same permission string HomeScreen
-  // already requests — denied/unavailable is a normal, silent outcome.
+  // Resolve location once on mount, through the same resolver Home uses.
+  // Search previously had GPS or nothing, so refusing the permission disabled
+  // distance filtering here while Home was happily sorting by the client's
+  // saved city — the same app state, two different answers, on adjacent tabs.
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setLocationState('unavailable');
-          return;
-        }
-        const position = await Location.getCurrentPositionAsync({});
-        setUserCoords({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        setLocationState('available');
-      } catch {
+      const location = await resolveClientLocation();
+      if (cancelled) return;
+      if (!location.coords) {
         // Distance controls are disabled with an explanation rather than
         // pretending to apply a filter that cannot be calculated.
         setLocationState('unavailable');
+        return;
       }
+      setUserCoords(location.coords);
+      setLocationState('available');
     })();
+    return () => { cancelled = true; };
   }, []);
 
   // Debounced server search — fires when query or category changes. Also

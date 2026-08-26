@@ -36,6 +36,7 @@ import { SkeletonSection } from '../../features/home/SkeletonSection';
 import LocationModal from '../../components/LocationModal';
 import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
+import { resolveClientLocation } from '../../services/clientLocationService';
 import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
 import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, prefetchProviderBySlug } from '../../services/databaseService';
 import type { PublicProviderSummary, PublicPromotionWithProvider } from '../../types/database';
@@ -280,6 +281,11 @@ export default function HomeScreen() {
   // Set once the user has manually chosen a city (as opposed to GPS) — drives
   // the "· LONDON" label suffix and lets LocationModal show the current pick.
   const [manualLocationLabel, setManualLocationLabel] = useState<string | null>(null);
+  // The device gave a position, but too vague a one to call it "where you are"
+  // — on iOS this is Precise Location switched off, which still reports as
+  // granted. Labelled rather than hidden: the distances are still the best
+  // available, they just shouldn't be presented as exact.
+  const [locationIsCoarse, setLocationIsCoarse] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationRadius, setLocationRadius] = useState(10);
 
@@ -435,38 +441,14 @@ export default function HomeScreen() {
     // see. Same sequence-guard shape as the calendar's week paging.
     let locationRunCancelled = false;
     (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const position = await Location.getCurrentPositionAsync({});
-          if (locationRunCancelled) return;
-          setUserCoords({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-          return;
-        }
-      } catch {
-        // Falls through to the manual-city fallback below
-      }
-
-      try {
-        const savedCity = await storage.getItem<string>(STORAGE_KEYS.MANUAL_LOCATION);
-        if (savedCity) {
-          // Note this is a CITY CENTROID, not where the client is — geocoding
-          // "Manchester" returns the middle of Manchester. That's the intended
-          // fallback (better than an unsorted list) but it is why distances can
-          // look wrong-but-plausible when GPS was refused; manualLocationLabel
-          // is what tells the client which of the two they're seeing.
-          const [match] = await Location.geocodeAsync(savedCity);
-          if (match && !locationRunCancelled) {
-            setUserCoords({ latitude: match.latitude, longitude: match.longitude });
-            setManualLocationLabel(savedCity);
-          }
-        }
-      } catch {
-        // Silent failure — Near You prompts the user to pick a city instead
-      }
+      const location = await resolveClientLocation();
+      if (locationRunCancelled || !location.coords) return;
+      setUserCoords(location.coords);
+      // Only a city centroid gets labelled — that label is the whole reason
+      // the client can tell "distances from the middle of Manchester" from
+      // "distances from where you are".
+      setManualLocationLabel(location.source === 'saved-city' ? location.cityLabel : null);
+      setLocationIsCoarse(location.isCoarse);
     })();
 
     // Fetch active promotions (skipped while OFFERS_ENABLED is off, see FUTURE_LOGIC.md)
@@ -577,6 +559,8 @@ export default function HomeScreen() {
       if (match) {
         setUserCoords({ latitude: match.latitude, longitude: match.longitude });
         setManualLocationLabel(city);
+        // A hand-picked city supersedes whatever the device said, coarse or not.
+        setLocationIsCoarse(false);
         await storage.setItem(STORAGE_KEYS.MANUAL_LOCATION, city);
       }
     } catch {
@@ -1581,7 +1565,9 @@ export default function HomeScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.sectionTitle, { color: P.text }]}>
-                  NEAR YOU{manualLocationLabel ? ` · ${manualLocationLabel.split(',')[0]!.toUpperCase()}` : ''}
+                  NEAR YOU{manualLocationLabel
+                    ? ` · ${manualLocationLabel.split(',')[0]!.toUpperCase()}`
+                    : locationIsCoarse ? ' · APPROXIMATE' : ''}
                 </Text>
                 <Text style={[styles.viewAll, { color: P.sub }]}>
                   {userCoords ? 'CHANGE' : 'SET AREA'}
