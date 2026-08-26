@@ -8,13 +8,13 @@
 ## Address release
 Curated: [[Address Release]] · **81 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(131)_
+- `src/services/databaseService.ts` _(132)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(108)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(74)_
 - `src/services/providerRegistrationService.ts` _(62)_
 - `src/screens/client/CartScreen.tsx` _(51)_
-- `src/contexts/BookingContext.tsx` _(50)_
+- `src/contexts/BookingContext.tsx` _(46)_
 - `src/components/AddressPicker.tsx` _(44)_
 - `supabase/consolidate_address_release_notification.sql` _(43)_
 - `supabase/fix_booking_address_snapshot_uses_real_address.sql` _(43)_
@@ -40,7 +40,7 @@ Curated: [[Address Release]] · **81 files**
 - … +51 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **146 files**
+Curated: [[Availability & Slots]] · **145 files**
 - `src/services/AvailabilityService.ts` _(307)_
 - `src/services/databaseService.ts` _(161)_
 - `src/components/ModernBeautyCalendar.tsx` _(150)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **146 files**
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
 - `src/screens/client/BookingsScreen.tsx` _(19)_
 - `src/services/becca/capabilities/provider.ts` _(18)_
-- … +116 more
+- … +115 more
 
 ## Payments
 Curated: [[Payments]] · **108 files**
@@ -108,14 +108,14 @@ Curated: [[Payments]] · **108 files**
 - … +78 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **229 files**
+Curated: [[Booking Flow]] · **228 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
-- `src/contexts/BookingContext.tsx` _(699)_
+- `src/contexts/BookingContext.tsx` _(693)_
 - `src/services/databaseService.ts` _(553)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(505)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(508)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/CartScreen.tsx` _(456)_
-- `src/screens/client/BookingDetailScreen.tsx` _(313)_
+- `src/screens/client/BookingDetailScreen.tsx` _(315)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(303)_
 - `src/screens/client/BookingsScreen.tsx` _(280)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(193)_
@@ -139,10 +139,10 @@ Curated: [[Booking Flow]] · **229 files**
 - `src/types/booking.ts` _(89)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
 - `src/utils/scheduleIssues.ts` _(87)_
-- … +199 more
+- … +198 more
 
 ## Notifications
-Curated: [[Notifications]] · **142 files**
+Curated: [[Notifications]] · **141 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(250)_
 - `src/services/databaseService.ts` _(151)_
@@ -173,7 +173,7 @@ Curated: [[Notifications]] · **142 files**
 - `supabase/provider_follow_notify_cron.sql` _(24)_
 - `supabase/notifications_full_matrix.sql` _(23)_
 - `src/types/database.ts` _(21)_
-- … +112 more
+- … +111 more
 
 ## Provider onboarding
 Curated: [[Provider Onboarding & Go-Live]] · **68 files**
@@ -244,7 +244,7 @@ Curated: [[Booking Flow]] · **53 files**
 - … +23 more
 
 ## Reschedule / cancel
-Curated: [[Booking Flow]] · **147 files**
+Curated: [[Booking Flow]] · **146 files**
 - `src/contexts/BookingContext.tsx` _(317)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(263)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
@@ -275,7 +275,7 @@ Curated: [[Booking Flow]] · **147 files**
 - `supabase/fix_reschedule_request_rls_forgery_gap.sql` _(37)_
 - `supabase/phase1_schema.sql` _(33)_
 - `src/services/becca/capabilities/provider.ts` _(32)_
-- … +117 more
+- … +116 more
 
 ## Auth
 Curated: [[Contexts]] · **154 files**
@@ -295,7 +295,7 @@ Curated: [[Contexts]] · **154 files**
 - `supabase/phase1_schema.sql` _(32)_
 - `src/services/beccaStorageService.ts` _(30)_
 - `src/services/biometricService.ts` _(29)_
-- `src/screens/auth/EmailVerificationScreen.tsx` _(25)_
+- `src/screens/auth/EmailVerificationScreen.tsx` _(23)_
 - `src/screens/shared/ChangePasswordScreen.tsx` _(21)_
 - `supabase/becca_chat_tables.sql` _(21)_
 - `supabase/fix_reschedule_flow_completion.sql` _(20)_

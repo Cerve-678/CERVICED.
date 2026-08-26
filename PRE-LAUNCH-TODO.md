@@ -511,7 +511,7 @@ geocoded address so the two agree, or relabel Profile Health so it doesn't
 read as a launch gate. Don't leave them silently disagreeing — a provider who
 completes Profile Health can still be unpublished and have no idea why.
 
-## 12. RESOLVED 2026-08-24 — `send-email` was an open relay on the cerviced.co domain
+## 12. RESOLVED — `send-email` was an open relay; the function no longer exists
 
 `supabase/functions/send-email/index.ts` is deployed with **`verify_jwt =
 false`** (confirmed live 2026-08-24) and takes a caller-supplied `to`,
@@ -559,11 +559,16 @@ broken by a self-only allowlist.
 fires immediately after `verifyOtp`. If the client session isn't attached yet
 it will now 401 — visibly, via `logger.error`, rather than silently.
 
-**Still open, deliberately:** `html` is still rendered on the device and sent
-up. The industry-standard shape is server-owned templates in `_shared/` with
-the server picking template and recipient from the event, and the booking
-confirmation owned by a DB trigger like this app's notifications already are.
-Until then the blast radius is bounded to the sender's own inbox.
+**CLOSED PROPERLY 2026-08-26.** The lockdown above was the stopgap; this is
+the fix. Templates moved to `supabase/functions/_shared/emailTemplates.ts`,
+the booking confirmation became a DB trigger, and welcome mail went to
+`send-account-email` — at which point `send-email` had zero callers and was
+**deleted from the project**. `POST /functions/v1/send-email` now returns 404.
+
+There is deliberately no general-purpose "send this HTML to that address"
+endpoint any more. Every email path names an event; the server picks the
+recipient and the wording. That is the property worth preserving — do not
+reintroduce a generic sender for convenience.
 
 ### 12a. Support requests have no rate limit
 
@@ -612,3 +617,75 @@ curl -s -X POST "https://<project>.supabase.co/functions/v1/send-email" \
 ```
 
 (That this is callable with only the public anon key is §12, the open relay.)
+
+---
+
+## 14. Reschedule expiry can leave the client unable to cancel (2026-08-26)
+
+Deferred by decision, not oversight — logged here so it is not rediscovered
+the hard way. Full analysis and the two candidate fixes are in
+`FUTURE_SCALE.md`; the behaviour it sits on top of is `BOOKINGS.md` §7a.
+
+Reschedule expiry shipped 2026-08-26: if a provider never answers, the request
+expires and the booking stays exactly as scheduled. **Cancelling is judged by a
+separate, unconnected clock** — `cancel_own_booking()` reads
+`providers.cancellation_notice_hours`, falling back to
+`booking_policies->>'cancelNotice'`, and hard-blocks with `This provider
+requires N hours notice to cancel`.
+
+So a client acting entirely in good time can end up able to do neither:
+
+| | 24h cancel notice | 72h cancel notice |
+|---|---|---|
+| Appointment | 2pm Wed | 2pm Wed |
+| Client asks to reschedule | 2pm Tue (allowed) | 2pm Sun (allowed) |
+| Provider ignores it | | |
+| Request expires | midnight Tue→Wed | midnight Tue→Wed |
+| Time left | ~14h | ~14h |
+| Can still cancel? | **No — needs 24h** | **No — needs 72h** |
+
+At the moment they asked, the client still had their full cancellation right.
+By the time the provider's silence resolved into an answer, they had lost it —
+the provider's non-response consumed a right belonging to the client. Their
+remaining options are attend an appointment they tried to move, or no-show,
+and a no-show inside 24h increments `late_cancel_count` on
+`client_provider_reliability` — so the provider's silence ends up recorded
+against the **client's** reliability.
+
+Worse the longer the provider's notice period: a 72h provider opens a ~58h gap
+between "you could still have cancelled" and "you now can't".
+
+**Why it is not built:** one of the two fixes is granting a no-penalty
+cancellation, which needs a refund answer, and there is no refund logic
+anywhere in the app (§1b above). It is a product/legal call — see
+`LEGAL-COMPLIANCE-NOTES.md` §12. Do not pick a default unilaterally.
+
+---
+
+## 15. `replace_provider_weekly_schedule` is parked, not missing (2026-08-26)
+
+`supabase/migrations/20260823065212_atomic_provider_weekly_schedule.sql` is
+**deliberately unapplied**. It defines `replace_provider_weekly_schedule()`,
+which makes the two halves of a weekly-schedule save (legacy day rows + v2
+working windows) one transaction.
+
+It was never applied live, but `databaseService.ts` had already been changed to
+call it — so **every provider attempt to save their hours failed with "function
+not found"**, and since a weekly schedule is one of the three go-live gates,
+that silently blocked new providers from publishing at all.
+
+Fixed 2026-08-26 by removing the app-side dependency: `saveProviderWeeklySchedule()`
+does the two writes directly again (one batched upsert for the seven day rows,
+then `replaceProviderAvailabilityWindows`). Provider scheduling works.
+
+**The tradeoff that is now live:** those two writes are not atomic. A failure
+between them leaves day rows and windows out of step. It is recoverable rather
+than silent — both throw, the screen keeps its `dirty` flags and asks the
+provider to retry, and a retry re-sends the whole schedule over whichever half
+landed. Windows are written second so a partial failure can never publish a
+provider against a schedule that isn't there.
+
+**To close this out:** apply the migration as part of the provider terms &
+policy work and restore the RPC call — the signature is unchanged, so it is a
+one-line revert. Do not apply it on its own to "tidy up the drift"; the file
+carries a header saying the same.

@@ -10,9 +10,13 @@ verify_jwt = true
 [functions.send-support-request]
 verify_jwt = true
 
-# Was verify_jwt = false, which made this an open relay on the cerviced.co
-# sending domain. See the header comment in the function itself.
-[functions.send-email]
+[functions.send-account-email]
+verify_jwt = true
+
+# Called by the database (queue_booking_confirmation_email) with the
+# service_role key, never by a user session — the function checks for that key
+# explicitly on top of this.
+[functions.send-booking-confirmation]
 verify_jwt = true
 
 [api]

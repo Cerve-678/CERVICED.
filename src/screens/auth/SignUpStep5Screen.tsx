@@ -19,8 +19,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';
 import { useAuth } from '../../contexts/AuthContext';
 import StepProgressIndicator from '../../components/StepProgressIndicator';
-import { signUpWithEmail } from '../../services/databaseService';
-import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
+import { invokeSendAccountEmail, signUpWithEmail } from '../../services/databaseService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -221,13 +220,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           gender: selectedGender,
           has_kids: hasKids,
         });
-        if (user?.email) {
-          const { subject, html } = clientWelcomeEmail({ name: data.name || user.name });
-          // Non-blocking, but logged rather than swallowed.
-          sendEmail(user.email, subject, html).catch((e) => {
-            logger.error('[email] welcome email failed to send:', e);
-          });
-        }
+        // Non-blocking, logged rather than swallowed. Server-side resolves
+        // the recipient and wording; this only names which welcome it is.
+        invokeSendAccountEmail('client_welcome').catch((e) => {
+          logger.error('[email] welcome email failed to send:', e);
+        });
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } catch (e: any) {
@@ -252,13 +249,11 @@ export default function SignUpStep5Screen({ navigation }: Props) {
           languagesSpoken: finalLanguages, specialties: finalSpecialties,
           referralSource: selectedReferral,
         });
-        if (user?.email) {
-          const { subject, html } = providerWelcomeEmail({ name: data.name || user.name, businessName: data.businessName.trim() });
-          // Non-blocking, but logged rather than swallowed.
-          sendEmail(user.email, subject, html).catch((e) => {
-            logger.error('[email] welcome email failed to send:', e);
-          });
-        }
+        // Non-blocking, logged rather than swallowed. Server-side resolves
+        // the recipient and wording; this only names which welcome it is.
+        invokeSendAccountEmail('provider_welcome').catch((e) => {
+          logger.error('[email] welcome email failed to send:', e);
+        });
         resetData();
         navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       } catch (e: any) {

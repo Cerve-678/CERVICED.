@@ -20,7 +20,6 @@ import {
   type AvailableDate,
   type PaymentBreakdown,
 } from '../types/booking';
-import { sendEmail, bookingConfirmationEmail } from '../services/emailService';
 import { logger } from '../utils/logger';
 import { formatTime12, formatLongDate } from '../utils/dateUtils';
 
@@ -1876,27 +1875,11 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
             const claimedId = claimedByKey.get(`${providerId}|${apt.date}|${pgTime}`);
             if (claimedId) {
               dbIdByCartItemId[item.id] = claimedId;
-              if (apt.customerEmail) {
-                const { subject, html } = bookingConfirmationEmail({
-                  clientName: apt.customerName || 'there',
-                  providerName: item.providerName,
-                  service: item.serviceName,
-                  date: formatLongDate(apt.date),
-                  time: formatTime12(apt.time),
-                  // A mobile provider comes to the client, so the address
-                  // that belongs in their confirmation is their own.
-                  location: (mobileProviderNames.has(item.providerDisplayName ?? item.providerName)
-                    ? clientAddressText
-                    : apt.address) || 'Address shared on confirmation',
-                });
-                // Fire-and-forget by design — a confirmation email must never
-                // block or fail a booking that already exists. But the failure
-                // is logged: swallowing it is how an unverified sending domain
-                // went unnoticed for months.
-                sendEmail(apt.customerEmail, subject, html).catch((e) => {
-                  logger.error('[email] booking confirmation failed to send:', e);
-                });
-              }
+              // The confirmation email is no longer sent from here. The
+              // queue_booking_confirmation_email trigger on `bookings` owns
+              // it, so it no longer depends on this app staying open long
+              // enough to finish the request — and the wording follows the
+              // booking row rather than whatever this screen had in memory.
               continue;
             }
 

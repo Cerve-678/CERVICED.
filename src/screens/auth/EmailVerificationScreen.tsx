@@ -16,11 +16,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  invokeSendAccountEmail,
   resendSignupOtp,
   upsertVerifiedUserProfile,
   verifySignupOtp,
 } from '../../services/databaseService';
-import { sendEmail, clientWelcomeEmail, providerWelcomeEmail } from '../../services/emailService';
 import { isBiometricAvailable, getBiometricLabel, enableBiometric } from '../../services/biometricService';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { RootStackParamList } from '../../navigation/types';
@@ -149,15 +149,12 @@ export default function EmailVerificationScreen({ navigation, route }: Props) {
         }
       }
 
-      const toEmail = meta['role'] === 'provider'
-        ? (meta['business_email'] || session.email || email)
-        : (session.email || email);
-      const template = meta['role'] === 'provider'
-        ? providerWelcomeEmail({ name: meta['name'] ?? '', ...(meta['business_name'] ? { businessName: meta['business_name'] } : {}) })
-        : clientWelcomeEmail({ name: meta['name'] ?? '' });
       // Non-blocking: the account exists either way and nothing here should
-      // stand between the user and being signed in. Logged, never swallowed.
-      sendEmail(toEmail, template.subject, template.html).catch((e) => {
+      // stand between the user and being signed in. The template, recipient
+      // and name are all resolved server-side — this only says which welcome.
+      invokeSendAccountEmail(
+        meta['role'] === 'provider' ? 'provider_welcome' : 'client_welcome',
+      ).catch((e) => {
         logger.error('[email] welcome email failed to send:', e);
       });
 

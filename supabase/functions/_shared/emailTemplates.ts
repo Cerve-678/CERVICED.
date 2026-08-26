@@ -1,10 +1,21 @@
-import { invokeSendEmail } from './databaseService';
-
-export async function sendEmail(to: string, subject: string, html: string) {
-  return invokeSendEmail(to, subject, html);
-}
-
-// ─── Email Templates ────────────────────────────────────────────────────────
+// supabase/functions/_shared/emailTemplates.ts
+// The app's transactional email templates, server-side.
+//
+// These used to live in src/services/emailService.ts and were rendered on the
+// device, which meant the phone decided what our emails said and — worse — an
+// email only got sent if the app stayed open long enough to send it. A booking
+// confirmation that depends on the user not switching apps is not a
+// confirmation. They live here now so the server owns both the wording and
+// the sending.
+//
+// Ported verbatim from the client versions so nothing about the emails
+// people receive changes. Two templates were NOT ported: bookingReminderEmail
+// and newBookingProviderEmail had zero callers and were deleted rather than
+// carried across.
+//
+// Every interpolated value below is a name, service or address that ends up
+// inside HTML, so it goes through escapeHtml() at the call site in the
+// functions that use these — see send-booking-confirmation.
 
 const BASE_STYLE = `
   <style>
@@ -163,59 +174,6 @@ export function bookingConfirmationEmail(params: {
           <tr><td style="padding:8px 0;font-weight:600">Location</td><td>${params.location}</td></tr>
         </table>
         <p style="color:#666;font-size:14px">Need to cancel or reschedule? Open the CERVICED app.</p>
-        <p style="color:#a342c3;font-weight:600">CERVICED</p>
-      </div>
-    `,
-  };
-}
-
-export function bookingReminderEmail(params: {
-  clientName: string;
-  providerName: string;
-  service: string;
-  date: string;
-  time: string;
-}) {
-  return {
-    subject: `Reminder: ${params.service} tomorrow at ${params.time}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:500px;margin:0 auto;color:#1a1a1a">
-        <h2 style="color:#a342c3">Appointment Reminder</h2>
-        <p>Hi ${params.clientName},</p>
-        <p>Just a reminder that you have an appointment tomorrow:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:8px 0;font-weight:600">Service</td><td>${params.service}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Provider</td><td>${params.providerName}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Date</td><td>${params.date}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Time</td><td>${params.time}</td></tr>
-        </table>
-        <p style="color:#a342c3;font-weight:600">CERVICED</p>
-      </div>
-    `,
-  };
-}
-
-export function newBookingProviderEmail(params: {
-  providerName: string;
-  clientName: string;
-  service: string;
-  date: string;
-  time: string;
-}) {
-  return {
-    subject: `New Booking: ${params.clientName} – ${params.service}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:500px;margin:0 auto;color:#1a1a1a">
-        <h2 style="color:#a342c3">New Booking Received</h2>
-        <p>Hi ${params.providerName},</p>
-        <p>You have a new booking:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:8px 0;font-weight:600">Client</td><td>${params.clientName}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Service</td><td>${params.service}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Date</td><td>${params.date}</td></tr>
-          <tr><td style="padding:8px 0;font-weight:600">Time</td><td>${params.time}</td></tr>
-        </table>
-        <p style="color:#666;font-size:14px">Open the CERVICED app to manage your bookings.</p>
         <p style="color:#a342c3;font-weight:600">CERVICED</p>
       </div>
     `,

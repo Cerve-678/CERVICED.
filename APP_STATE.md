@@ -191,7 +191,7 @@ both code paths exist simultaneously on purpose.**
 | Supabase auth + RLS | ✅ | Hardened Aug 2026 — `has_gone_live` gating fixed on 10 tables that were previously app-convention-only; see memory `security-audit-2026-08-02-rls-hardening` |
 | Bookings/notifications DELETE | ❌ by design | No RLS DELETE policy — client-side delete is a silent no-op; use a SECURITY DEFINER RPC |
 | Double-booking prevention | ✅ live | `bookings_no_overlap` constraint, future-only scope; 7 historical conflicts grandfathered (memory `booking-overlap-constraint-undeployed`) |
-| Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `extract-provider-profile`, `find-address-by-postcode`, `request-claim-verification`, `run-scrape-job`, `send-email`, `send-push-notification`, `send-support-request`. All are `verify_jwt = true` as of 2026-08-24 — `send-email` was the last one that wasn't, see "Email & support" below. |
+| Edge functions | ✅ | `becca-ai`, `confirm-email`, `create-payment-intent`, `finalize-payment-intent`, `find-address-by-postcode`, `request-claim-verification`, `send-account-email`, `send-booking-confirmation`, `send-push-notification`, `send-support-request`. All `verify_jwt = true` except `confirm-email`, which is a public link handler by design. The general-purpose `send-email` was **deleted** 2026-08-26 — see "Email & support" below. |
 | SQL migration tracking | ⚠️ known gap | Most of `supabase/*.sql` has no run/not-run record; a file's existence or absence from `RUN_ALL_MIGRATIONS.sql` is a signal, not proof — see `cerviced-migration-drift` agent before trusting any one file |
 
 ### Email & support (rebuilt 2026-08-24)
@@ -201,7 +201,10 @@ both code paths exist simultaneously on purpose.**
 | Support address | ✅ | `support@cerviced.co`. `src/constants/support.ts` is the single source (`SUPPORT_EMAIL`, `supportMailtoUrl()`) — the previous `support@cerviced.app` links pointed at a domain the project does not own |
 | Report a Problem | ✅ | `src/screens/shared/ReportProblemScreen.tsx` → `invokeSendSupportRequest` → edge function `send-support-request`. Was ⚠️ UI-only until 2026-08-24: it awaited an 800ms `setTimeout` and then claimed "Report Sent" |
 | Support tickets | ✅ | `support_requests` table (migrations `20260824141624`, `...41646`). Service-role writes only; reporters SELECT their own rows. Sequential `ticket_number` shown to the reporter as "#N" |
-| Outbound transactional email | ✅ | Resend, from `noreply@cerviced.co`. `cerviced.co` was **unverified until 2026-08-24**, so every email the app had ever sent failed — invisibly, behind `.catch(() => {})` |
+| Outbound transactional email | ✅ server-owned | Resend, from `noreply@cerviced.co`. `cerviced.co` was **unverified until 2026-08-24**, so every email the app had ever sent failed — invisibly, behind `.catch(() => {})` |
+| Booking confirmation email | ✅ DB-owned | Trigger `queue_booking_confirmation_email` on `bookings` → edge function `send-booking-confirmation`. The app is no longer involved |
+| Welcome emails | ✅ | `invokeSendAccountEmail('client_welcome' \| 'provider_welcome')` → `send-account-email`. The caller names only which welcome; template, recipient and name resolve server-side |
+| Email templates | ✅ | `supabase/functions/_shared/emailTemplates.ts`. `src/services/emailService.ts` was **deleted** — nothing renders email on the device any more |
 | Reporter acknowledgment email | ❌ | The ticket number exists but is only shown in-app; nothing emails the reporter a receipt |
 | Screenshot / log attachment | ❌ | `logger.ts` already keeps a ring buffer for Developer Settings; it is not attached to reports |
 | Helpdesk tooling | ❌ | Tickets are read by SQL or the Zoho inbox. No assignment, SLA, or search |
@@ -227,13 +230,29 @@ caller's own account (`user.email`, `users.business_email`, `providers.email`).
 Note an anon JWT satisfies the gateway, so the function rejects it itself; both
 layers are needed. See `PRE-LAUNCH-TODO.md` §12.
 
-**Known remaining weakness, in priority order** — the `html` body is still
-rendered on-device and posted up, so the templates in
-`src/services/emailService.ts` should move to `supabase/functions/_shared/`
-with the server picking template *and* recipient from the event. The booking
-confirmation should become a DB trigger like this app's other notifications
-(see "Notifications are DB-trigger-owned"), which also fixes a reliability gap:
-today, if the app closes mid-request, that email simply never sends.
+**Emails are sent by the server, never by the phone (2026-08-26).** The
+booking confirmation is owned by a DB trigger that mirrors
+`send_push_on_notification_insert()` — same vault key lookup, same `net.http_post`,
+same "skip quietly if the key is missing", because a booking must never fail
+over an email. `bookings.confirmation_email_queued_at` is stamped inside the
+same transaction as the send request, which is what makes it at-most-once: a
+later `UPDATE` cannot re-send. Existing rows were backfilled *before* the
+trigger was created, so no historical booking can fire.
+
+**The generic `send-email` function no longer exists.** Locking it down was the
+2026-08-24 fix; deleting it is the real one. Once templates moved server-side
+it had zero callers, so it was removed from the project entirely rather than
+left as a dormant relay. There is deliberately no "send this HTML to that
+address" endpoint any more — every email path names an *event*, and the server
+picks recipient and wording.
+
+**Known remaining weakness, in priority order** — a multi-service cart writes one
+booking row per service, so a three-service checkout sends three confirmation
+emails. That matches the old client-side behaviour exactly, so it is not a
+regression, but `group_booking_id` is the key to collapse on, the same way
+notification dedup already does. Nothing emails the reporter of a support
+ticket, and nothing retries a failed send (`confirmation_email_error` records
+it; no job acts on it).
 
 ### Not yet implemented (carried forward, still accurate)
 
@@ -347,6 +366,10 @@ not plaintext AsyncStorage.
   encryption.
 - RLS `has_gone_live` gating was fixed live across 10 tables that were
   previously enforced only by app convention.
+- 2026-08-26: All outbound email moved off the device. Templates live in
+  `supabase/functions/_shared/`, the booking confirmation is a DB trigger, and
+  `src/services/emailService.ts` plus the `send-email` edge function were both
+  deleted.
 - 2026-08-24: Support and outbound email rebuilt — see "Email & support"
   above. Three things were found to be untrue rather than merely missing:
   Report a Problem claimed to send and didn't, `send-email` was an open relay

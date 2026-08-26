@@ -4095,7 +4095,26 @@ export async function replaceProviderAvailabilityWindows(
   if (error) throw error;
 }
 
-/** Atomically replace both legacy day rows and v2 working windows. */
+/** Replace both legacy day rows and v2 working windows.
+ *
+ *  NOT atomic, deliberately. This used to call `replace_provider_weekly_schedule()`,
+ *  an RPC that does both in one transaction — but that function was never
+ *  applied to the live database, so every call failed with "function not found"
+ *  and NO provider could save their hours at all. Since a weekly schedule is
+ *  one of the three go-live gates, that also silently blocked new providers
+ *  from ever publishing.
+ *
+ *  The RPC's migration (`20260823065212_atomic_provider_weekly_schedule.sql`)
+ *  is deliberately parked pending the provider terms & policy work rather than
+ *  applied piecemeal, so this goes back to the two writes the app already owns.
+ *  Restore the RPC call when that migration ships — the signature is unchanged.
+ *
+ *  The tradeoff: a failure between the two writes leaves day rows and windows
+ *  out of step. Recoverable rather than silent — both writes throw, the screen
+ *  keeps its `dirty` flags and tells the provider to retry, and a retry re-sends
+ *  the complete schedule, overwriting whichever half landed.
+ *
+ *  Days go in ONE upsert rather than a loop over seven — see the no-N+1 rule. */
 export async function saveProviderWeeklySchedule(
   providerId: string,
   days: {
@@ -4106,12 +4125,17 @@ export async function saveProviderWeeklySchedule(
   }[],
   windows: { day_of_week: number; start_time: string; end_time: string }[],
 ): Promise<void> {
-  const { error } = await supabase.rpc("replace_provider_weekly_schedule", {
-    p_provider_id: providerId,
-    p_days: days,
-    p_windows: windows,
-  });
-  if (error) throw error;
+  if (days.length > 0) {
+    const { error } = await supabase.from("provider_availability").upsert(
+      days.map((d) => ({ provider_id: providerId, ...d })),
+      { onConflict: "provider_id,day_of_week" },
+    );
+    if (error) throw error;
+  }
+  // Windows second: the day rows are what check_and_set_provider_live() reads,
+  // so if the second write fails the provider is at worst still gated the same
+  // way they were before, never published against a schedule that isn't there.
+  await replaceProviderAvailabilityWindows(providerId, windows);
 }
 
 export async function getProviderAvailabilityOverrides(
@@ -7646,16 +7670,22 @@ export async function claimUnclaimedProviderProfile(
   return data;
 }
 
-export async function invokeSendEmail(
-  to: string,
-  subject: string,
-  html: string,
-): Promise<unknown> {
-  const { data, error } = await supabase.functions.invoke('send-email', {
-    body: { to, subject, html },
+export type AccountEmailKind = 'client_welcome' | 'provider_welcome';
+
+/**
+ * Sends the signed-in user their welcome email. The caller names only WHICH
+ * welcome it is — the template, the recipient and the name on it are all
+ * resolved server-side, so nothing about our outgoing mail is decided on the
+ * device. See supabase/functions/send-account-email/index.ts.
+ *
+ * There is deliberately no generic "send this html to this address" function
+ * any more: that was an open relay on the cerviced.co sending domain.
+ */
+export async function invokeSendAccountEmail(kind: AccountEmailKind): Promise<void> {
+  const { error } = await supabase.functions.invoke('send-account-email', {
+    body: { kind },
   });
   if (error) throw error;
-  return data;
 }
 
 export interface SupportRequestInput {
