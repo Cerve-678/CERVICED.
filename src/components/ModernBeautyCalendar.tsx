@@ -24,7 +24,7 @@ type DayData = {
   available: number;
   /** Slots offered only as a request. */
   requestable: number;
-  status: 'past' | 'available' | 'request' | 'closed' | 'unavailable';
+  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'unavailable';
   times: TimeSlot[];
 };
 
@@ -38,7 +38,7 @@ type WeekDay = {
   isToday: boolean;
   available: number;
   requestable: number;
-  status: 'past' | 'available' | 'request' | 'closed' | 'unavailable';
+  status: 'past' | 'available' | 'request' | 'closed' | 'full' | 'unavailable';
   times: TimeSlot[];
 };
 
@@ -111,14 +111,28 @@ const toLocalDateString = (date: Date): string => {
  * by-request is 'request', not 'available': it stays tappable, but it must
  * not claim ordinary availability on the day strip, in the month dots, or to
  * the auto-jump — those all mean "you can just book this".
+ *
+ * `isFullyBooked` separates the two ways a day can end up with nothing to
+ * offer. Without it both collapsed to 'closed', so a provider booked solid on
+ * Tuesday looked exactly like a provider who never works Tuesdays — same grey
+ * pill, same empty dot, same dead tap. Those want opposite responses from a
+ * client (wait for this provider vs. pick another day), so they can't share a
+ * state. Note this is NOT the same question the availability strip's 'full'
+ * answers (booked minutes vs open minutes): this one is about THIS service's
+ * slot grid, so a day with only 20 minutes free is full for a 2-hour service
+ * and open for a 15-minute one.
  */
-const dayDataFrom = (times: TimeSlot[]): DayData => {
+const dayDataFrom = (times: TimeSlot[], isFullyBooked = false): DayData => {
   const available = times.filter(slot => slot.reasons.length === 0).length;
   const requestable = times.length - available;
   return {
     available,
     requestable,
-    status: available > 0 ? 'available' : requestable > 0 ? 'request' : 'closed',
+    status: available > 0
+      ? 'available'
+      : requestable > 0
+        ? 'request'
+        : isFullyBooked ? 'full' : 'closed',
     times,
   };
 };
@@ -320,19 +334,33 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           // A custom resolver only ever yields ordinary slots — it has no
           // notion of the provider's emergency opt-ins, so nothing it
           // returns may be presented as a request.
-          const openSlots: TimeSlot[] = slotResolver
-            ? (await slotResolver(dateString)).map(time => ({ time, reasons: [] }))
-            : (await AvailabilityService.getAvailableSlots(
-                providerName,
-                dateString,
-                serviceDuration,
-                serviceId
-              ))
-                .filter(slot => !slot.isBooked)
-                .filter(slot => allowRequests || !slot.isByRequest)
-                .map(slot => ({ time: slot.time, reasons: slot.requestReasons ?? [] }));
+          let openSlots: TimeSlot[];
+          let isFullyBooked = false;
+          if (slotResolver) {
+            openSlots = (await slotResolver(dateString)).map(time => ({ time, reasons: [] }));
+          } else {
+            // getAvailableSlots returns the day's WHOLE grid, taken times
+            // included and flagged — so an empty grid means the provider
+            // isn't working, while a grid where every entry is taken means
+            // they're booked out. Filtering first threw that away.
+            const grid = await AvailabilityService.getAvailableSlots(
+              providerName,
+              dateString,
+              serviceDuration,
+              serviceId
+            );
+            const unbooked = grid.filter(slot => !slot.isBooked);
+            // Deliberately measured before the allowRequests filter below: a
+            // day whose only free times are by-request when requests are off
+            // is unbookable, but it is not BOOKED — calling it full would
+            // blame other clients for the provider's own opt-in setting.
+            isFullyBooked = grid.length > 0 && unbooked.length === 0;
+            openSlots = unbooked
+              .filter(slot => allowRequests || !slot.isByRequest)
+              .map(slot => ({ time: slot.time, reasons: slot.requestReasons ?? [] }));
+          }
 
-          slots[dateString] = dayDataFrom(openSlots);
+          slots[dateString] = dayDataFrom(openSlots, isFullyBooked);
         } catch {
           // Fallback to base schedule without booking filter
           const dayOfWeek = date.getDay();
@@ -447,6 +475,8 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   };
 
   const handleDateClick = (dateString: string, dayData: DayData) => {
+    // 'full' is deliberately NOT here. A booked-out day has nothing to pick,
+    // but it does have something to say, and a dead tap says nothing.
     if (dayData.status === 'past' || dayData.status === 'closed') return;
     Haptics.selectionAsync().catch(() => {});
     selectDateFromTap(dateString);
@@ -719,6 +749,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
           const isDisabled = providerUnpublished || day.status === 'past' || day.status === 'closed';
+          const isFull = day.status === 'full';
           return (
             <TouchableOpacity
               key={day.dateString}
@@ -727,6 +758,9 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 { backgroundColor: surfaceColor },
                 isSel && { borderWidth: 2, borderColor: accentColor },
                 isDisabled && styles.pastDayPill,
+                // Dimmed, but less than a closed day and still tappable —
+                // it's a real day the client could have booked.
+                isFull && !isSel && styles.fullDayPill,
               ]}
               onPress={() => handleDateClick(day.dateString, day)}
               disabled={isDisabled}
@@ -746,7 +780,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                   ? <View style={[styles.dot, { backgroundColor: accentColor }]} />
                   : day.requestable > 0
                     ? <View style={[styles.dot, styles.dotHollow, { borderColor: accentColor }]} />
-                    : <View style={styles.dotPlaceholder} />
+                    : isFull
+                      // A bar, not a dot: the day HAD times and they're gone.
+                      // An empty space would say the provider doesn't work.
+                      ? <View style={[styles.dotBooked, { backgroundColor: subColor }]} />
+                      : <View style={styles.dotPlaceholder} />
                 }
               </View>
             </TouchableOpacity>
@@ -758,6 +796,23 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       {/* ── Time slots ───────────────────────────────────────────────── */}
       {providerFound !== false && !providerUnpublished && showTimeSelection && selectedDate && (() => {
         const currentSlots = availableSlots[selectedDate];
+        // Selecting a booked-out day has to answer the question the client
+        // just asked by tapping it. Rendering nothing (what an empty times
+        // array used to do) reads as the app failing to load, and leaves them
+        // no way to tell "everything's taken" from "they don't work today" —
+        // which decides whether waiting for this provider is worth it.
+        if (currentSlots?.status === 'full') {
+          return (
+            <View style={styles.timeContainer}>
+              <Text style={[styles.fullDayNotice, { color: subColor }]}>
+                Fully booked — every time this day is taken.
+              </Text>
+              <Text style={[styles.fullDayHint, { color: subColor }]}>
+                Try another day, or join the waitlist on this provider's profile to be told if a space opens.
+              </Text>
+            </View>
+          );
+        }
         if (!currentSlots?.times || currentSlots.times.length === 0) return null;
 
         // Ordinary slots and by-request slots are two different offers, so
@@ -869,15 +924,19 @@ const styles = StyleSheet.create({
   daysRowDimmed:   { opacity: 0.45 },
   dayPill:         { flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 8, marginHorizontal: 2 },
   pastDayPill:     { opacity: 0.38 },
+  fullDayPill:     { opacity: 0.62 },
   dayText:         { fontSize: 10, fontWeight: '500', marginBottom: 3 },
   dayNumberText:   { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
   dotWrap:         { height: 6, justifyContent: 'center', alignItems: 'center', marginTop: 3 },
   dot:             { width: 4, height: 4, borderRadius: 2 },
   dotHollow:       { backgroundColor: 'transparent', borderWidth: 1 },
   dotPlaceholder:  { width: 4, height: 4 },
+  dotBooked:       { width: 7, height: 2, borderRadius: 1, opacity: 0.65 },
 
   // ── Time slots ──────────────────────────────────────────────────────
   timeContainer: { paddingTop: 10, paddingHorizontal: 2 },
+  fullDayNotice: { fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 4 },
+  fullDayHint:   { fontSize: 12, textAlign: 'center', paddingTop: 4, paddingHorizontal: 16, lineHeight: 17, opacity: 0.85 },
   timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
   timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
   // Outlined rather than filled — the same shape as a normal slot, visibly
