@@ -51,6 +51,7 @@ import {
   ProviderDepositPolicy,
 } from '../services/databaseService';
 import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
+import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
 import * as Haptics from 'expo-haptics';
 import type { BookingSheetService } from './BookingSheet';
@@ -555,13 +556,24 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
       // consent. Agreement itself is captured once, by the cart's own
       // bundled Terms + cancellation-policy checkbox at checkout, which is
       // what hold_cart_booking_slots() records policy_accepted_at from.
-      ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
+      //
+      // Carries the provider's own written T&Cs too, when the client ticked
+      // the agree box — same reason as BookingSheet: that tick used to gate
+      // Add to Cart and then be discarded, leaving the agreed version
+      // unrecoverable once the provider edited their terms.
+      ...(() => {
+        const snapshot = buildPolicySnapshot(
+          bookingPolicies,
+          agreedToProviderTerms ? providerTerms : null,
+        );
+        return snapshot ? { policySnapshot: snapshot } : {};
+      })(),
     });
     onClose();
   }, [
     submitReady, services, addOnsByService, separateServiceKeys, separateDates, separateTimes,
     emergencyByKey, groupServices, groupDate, groupSchedule, notes, isDepositOnly, bookingPolicies,
-    onSubmit, onClose,
+    agreedToProviderTerms, providerTerms, onSubmit, onClose,
   ]);
 
   // Same three-step handling as BookingSheet, keyed per service: the time is
@@ -816,6 +828,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       onTimeSelect={(t, reasons) => handleSeparateTime(key, service.name, t, reasons)}
                       selectedTime={separateTimes[key] ?? ''}
                       allowRequests
+                      providerLabel={providerDisplayName}
                       providerName={providerIdentifier}
                       serviceDuration={service.duration}
                       accentColor={adaptiveAccentColor}

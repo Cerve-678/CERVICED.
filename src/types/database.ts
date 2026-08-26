@@ -316,6 +316,14 @@ export interface DbProvider {
   allow_blocked_date_requests: boolean;
   allow_short_notice_requests: boolean;
   allow_beyond_window_requests: boolean;
+  /** How far before opening / after closing a client may be OFFERED an
+   *  out-of-hours request slot, measured from that day's own hours. NULL =
+   *  any time, and is the default — a provider who never touches this is
+   *  asked for whatever the client needs. A display preference only: the
+   *  bookability trigger doesn't enforce it, because the provider approves
+   *  or declines every request regardless. */
+  request_window_before_mins: number | null;
+  request_window_after_mins: number | null;
   cancellation_notice_hours: number;
   /** Mirror of the provider's Automations screen settings — readable by
    *  client screens and pg_cron jobs (auth user_metadata is not). */

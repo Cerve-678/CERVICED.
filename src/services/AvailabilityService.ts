@@ -64,6 +64,13 @@ export interface EmergencyRequestPolicy {
   blockedDates: boolean;
   shortNotice: boolean;
   beyondWindow: boolean;
+  /** How far before that day's opening / after that day's closing a request
+   *  may be offered, in minutes. `null` means any time and is the default —
+   *  it is a real answer, not a missing one, and must never be substituted
+   *  with a number. Provider-stated, measured from the DAY's own hours, and
+   *  not enforced server-side: the provider approves every request anyway. */
+  beforeMins: number | null;
+  afterMins: number | null;
 }
 
 /** Nothing allowed — the shape every provider starts on, and the safe answer
@@ -73,6 +80,8 @@ const NO_EMERGENCY_REQUESTS: EmergencyRequestPolicy = {
   blockedDates: false,
   shortNotice: false,
   beyondWindow: false,
+  beforeMins: null,
+  afterMins: null,
 };
 
 const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequestPolicy => ({
@@ -80,7 +89,20 @@ const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequ
   blockedDates: row?.['allow_blocked_date_requests'] === true,
   shortNotice:  row?.['allow_short_notice_requests'] === true,
   beyondWindow: row?.['allow_beyond_window_requests'] === true,
+  // Absent (the column not yet existing) and NULL both mean "any time" —
+  // the same answer, so no distinction is needed here.
+  beforeMins: toWindowMins(row?.['request_window_before_mins']),
+  afterMins:  toWindowMins(row?.['request_window_after_mins']),
 });
+
+/** A request-window bound in minutes, or null for "any time". Anything
+ *  unparseable is null rather than 0: guessing a ceiling of zero would
+ *  silently switch out-of-hours requests off for that provider. */
+export const toWindowMins = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null;
+  const mins = Number(value);
+  return Number.isFinite(mins) && mins >= 0 ? mins : null;
+};
 
 /**
  * Whether one candidate start is offerable, and under what reasons.
@@ -868,7 +890,28 @@ export const AvailabilityService = {
       // Generated on the same grid as the real slots (midnight + step), so an
       // opened-up day reads 6:00/7:00/8:00 rather than an offset sequence.
       if (dayIsShut ? policy.blockedDates : policy.outsideHours) {
+        // The provider's chosen window, measured from THIS day's own opening
+        // and closing time. A day with no hours (shut, or a weekday they
+        // never work) has nothing to measure from, so the whole day is
+        // offered — the opt-in covering that day is what gates it.
+        const dayOpen = windows.length > 0
+          ? Math.min(...windows.map(w => parse24HTimeToMinutes(w.start_time)))
+          : null;
+        const dayClose = windows.length > 0
+          ? Math.max(...windows.map(w => parse24HTimeToMinutes(w.end_time)))
+          : null;
+
+        const from = dayOpen !== null && policy.beforeMins !== null
+          ? Math.max(0, dayOpen - policy.beforeMins)
+          : 0;
+        const to = dayClose !== null && policy.afterMins !== null
+          ? Math.min(24 * 60, dayClose + policy.afterMins)
+          : 24 * 60;
+
+        // Aligned to the same grid as the real slots (midnight + step) so an
+        // opened-up day reads 6:00/7:00/8:00 rather than an offset sequence.
         for (let mins = 0; mins + durationMinutes <= 24 * 60; mins += step) {
+          if (mins < from || mins + durationMinutes > to) continue;
           offer(mins, dayIsShut ? [...dateReasons] : [...dateReasons, 'outside_hours']);
         }
       }

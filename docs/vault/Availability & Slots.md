@@ -26,7 +26,9 @@ Four of the trigger's rejections are no longer absolute. Since `20260821143821_e
 
 Still hard for everyone: a past date, an already-elapsed same-day time, and a genuinely taken slot. The overlap rule above is untouched — no opt-in reaches past it.
 
-**There is no bound on the time of day.** Working hours decide what's *ordinarily* bookable; everything outside them is requestable once the provider opts in, at any hour, and their approval is the filter. An earlier version bounded requests to the provider's weekly envelope widened by an extension — which refused a **4am bridal call**, the most common genuine out-of-hours booking in this industry, because the bound was inferred from hours describing a NORMAL week. Removed 2026-08-26 (`20260826171244`), which also drops the dead `out_of_hours_extension_mins` column.
+**The provider chooses how far either side.** `request_window_before_mins` / `request_window_after_mins` (`20260826182059`) bound what's OFFERED, measured from **that day's own** opening/closing time; `NULL` = any time and is the default. Display preference only — deliberately not in the trigger, since the provider approves every request anyway and a second copy would just drift. A day with no hours has nothing to measure from, so the whole day is requestable.
+
+**There is no bound the app invents.** Working hours decide what's *ordinarily* bookable; everything outside them is requestable once the provider opts in, at any hour, and their approval is the filter. An earlier version bounded requests to the provider's weekly envelope widened by an extension — which refused a **4am bridal call**, the most common genuine out-of-hours booking in this industry, because the bound was inferred from hours describing a NORMAL week. Removed 2026-08-26 (`20260826171244`), which also drops the dead `out_of_hours_extension_mins` column.
 
 What survives every opt-in, and must stay mirrored between `resolveSlotOffer()` and the trigger — **if they drift, the picker offers times the DB rejects**: a past date, an already-elapsed same-day time, a taken slot. Covered by `src/tests/emergencyRequestSlots.test.ts`.
 

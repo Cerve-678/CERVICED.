@@ -1,6 +1,7 @@
 import {
   resolveSlotOffer,
   describeEmergencyReason,
+  toWindowMins,
   type EmergencyReason,
 } from '../services/AvailabilityService';
 
@@ -75,5 +76,31 @@ describe('describeEmergencyReason', () => {
   it('reads as a clause the confirmation can drop into a sentence', () => {
     expect(describeEmergencyReason('outside_hours', 'Ana')).toBe("outside Ana's working hours");
     expect(describeEmergencyReason('blocked_date', 'Ana')).toBe('on a date Ana has marked unavailable');
+  });
+});
+
+// The provider STATES how far either side of their hours they'll be asked.
+// null is "any time" and is the default — the distinction that matters is
+// that a missing/unreadable value must never collapse to 0, which would
+// silently switch out-of-hours requests off for that provider entirely.
+describe('toWindowMins', () => {
+  it('treats null, undefined and a missing column alike as "any time"', () => {
+    expect(toWindowMins(null)).toBeNull();
+    expect(toWindowMins(undefined)).toBeNull();
+    expect(toWindowMins(({} as Record<string, unknown>)['request_window_before_mins'])).toBeNull();
+  });
+
+  it('keeps a real bound, including an explicit zero', () => {
+    // 0 is a genuine answer — "not a minute past my closing time" — and is
+    // NOT the same as "any time".
+    expect(toWindowMins(0)).toBe(0);
+    expect(toWindowMins(120)).toBe(120);
+    expect(toWindowMins('240')).toBe(240);
+  });
+
+  it('falls back to "any time" rather than 0 on an unusable value', () => {
+    expect(toWindowMins('not a number')).toBeNull();
+    expect(toWindowMins(-30)).toBeNull();
+    expect(toWindowMins(NaN)).toBeNull();
   });
 });

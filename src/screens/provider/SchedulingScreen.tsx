@@ -45,6 +45,7 @@ import {
 import {
   AVAILABILITY_OPTS, NEW_CLIENTS_OPTS,
   BUFFER_OPTS, BOOKING_WINDOW_OPTS, MIN_NOTICE_OPTS, SLOT_INTERVAL_OPTS, MAX_PER_DAY_OPTS,
+  REQUEST_WINDOW_OPTS,
 } from '../../features/business-details/options';
 
 export default function SchedulingScreen({ navigation }: any) {
@@ -74,6 +75,10 @@ export default function SchedulingScreen({ navigation }: any) {
   const [allowBlockedDates, setAllowBlockedDates] = useState(false);
   const [allowShortNotice, setAllowShortNotice] = useState(false);
   const [allowBeyondWindow, setAllowBeyondWindow] = useState(false);
+  // How far either side of THAT DAY's hours a request may be offered.
+  // 'any' (stored NULL) is the default — see REQUEST_WINDOW_OPTS.
+  const [requestBefore, setRequestBefore]       = useState('any');
+  const [requestAfter, setRequestAfter]         = useState('any');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -103,6 +108,8 @@ export default function SchedulingScreen({ navigation }: any) {
           setAllowBlockedDates(profile.allow_blocked_date_requests ?? false);
           setAllowShortNotice(profile.allow_short_notice_requests ?? false);
           setAllowBeyondWindow(profile.allow_beyond_window_requests ?? false);
+          setRequestBefore(profile.request_window_before_mins == null ? 'any' : String(profile.request_window_before_mins));
+          setRequestAfter(profile.request_window_after_mins == null ? 'any' : String(profile.request_window_after_mins));
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
         // the real answer (it's what gets enforced), user_metadata is only a
@@ -173,6 +180,11 @@ export default function SchedulingScreen({ navigation }: any) {
           allow_blocked_date_requests:  allowBlockedDates,
           allow_short_notice_requests:  allowShortNotice,
           allow_beyond_window_requests: allowBeyondWindow,
+          // 'any' is stored as NULL, not as a large number — "no ceiling" and
+          // "a 24-hour ceiling" are different answers, and only NULL keeps
+          // reading as the former if the slot grid ever changes.
+          request_window_before_mins: requestBefore === 'any' ? null : parseInt(requestBefore, 10),
+          request_window_after_mins:  requestAfter  === 'any' ? null : parseInt(requestAfter, 10),
         }),
       ]);
 
@@ -188,7 +200,7 @@ export default function SchedulingScreen({ navigation }: any) {
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
-    allowBeyondWindow, navigation,
+    allowBeyondWindow, requestBefore, requestAfter, navigation,
   ]);
 
   if (loading) {
@@ -299,13 +311,13 @@ export default function SchedulingScreen({ navigation }: any) {
           >
             <ToggleRow
               label="Outside your working hours"
-              sub="Clients can ask for a time before you open or after you close"
+              sub="On a day you do work — before you open or after you close. Also covers days of the week you never work."
               value={allowOutOfHours}
               onChange={setAllowOutOfHours}
             />
             <ToggleRow
               label="On dates you've blocked"
-              sub="Clients can ask for a day you've marked unavailable"
+              sub="One-off dates you marked unavailable — a holiday, or a single day off. Separate from the setting above."
               value={allowBlockedDates}
               onChange={setAllowBlockedDates}
             />
@@ -324,6 +336,25 @@ export default function SchedulingScreen({ navigation }: any) {
               onChange={setAllowBeyondWindow}
             />
 
+            {/* Only means anything once out-of-hours requests are on: it
+                measures from that day's opening and closing time, and the
+                other three opt-ins aren't about the time of day. */}
+            {allowOutOfHours && (
+              <>
+                <View style={{ height: 18 }} />
+                <SectionLabel text="How early they can ask" />
+                <RadioGroup options={REQUEST_WINDOW_OPTS} value={requestBefore} onChange={setRequestBefore} />
+
+                <View style={{ height: 18 }} />
+                <SectionLabel text="How late they can ask" />
+                <RadioGroup options={REQUEST_WINDOW_OPTS} value={requestAfter} onChange={setRequestAfter} />
+
+                <Text style={{ fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 16, marginTop: 8, color: C.sub }}>
+                  Measured from your opening and closing time on the day being booked.
+                  On a day you don't work at all, the whole day is requestable.
+                </Text>
+              </>
+            )}
           </Card>
 
           <SaveButton saving={saving} onPress={handleSave} />

@@ -295,3 +295,20 @@ export function reconcileAddressReleasePolicy(
   if (isAddressReleaseAllowed(businessType, current)) return current;
   return businessType === 'mobile' ? null : 'on_confirmation';
 }
+
+/** How far before opening / after closing a provider will let clients ASK for
+ *  a time (providers.request_window_before_mins / _after_mins).
+ *
+ *  'any' — stored as NULL — is the default and is a real answer, not an
+ *  absence of one: a bridal specialist takes 4am calls, and any ceiling the
+ *  app picks for them is a ceiling derived from hours that describe their
+ *  NORMAL week. The provider approves every request either way; this only
+ *  decides how much of the day is worth showing. */
+export const REQUEST_WINDOW_OPTS = [
+  { value: 'any', label: 'Any time' },
+  { value: '60',  label: '1 hr'   },
+  { value: '120', label: '2 hrs'  },
+  { value: '180', label: '3 hrs'  },
+  { value: '240', label: '4 hrs'  },
+  { value: '360', label: '6 hrs'  },
+];

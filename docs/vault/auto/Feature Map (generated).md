@@ -41,9 +41,9 @@ Curated: [[Address Release]] · **81 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **145 files**
-- `src/services/AvailabilityService.ts` _(303)_
-- `src/services/databaseService.ts` _(161)_
-- `src/components/ModernBeautyCalendar.tsx` _(150)_
+- `src/services/AvailabilityService.ts` _(304)_
+- `src/services/databaseService.ts` _(162)_
+- `src/components/ModernBeautyCalendar.tsx` _(153)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/client/SearchScreen.tsx` _(102)_
@@ -54,8 +54,8 @@ Curated: [[Availability & Slots]] · **145 files**
 - `src/screens/provider/ProviderHomeScreen.tsx` _(60)_
 - `src/screens/client/RescheduleScreen.tsx` _(54)_
 - `supabase/availability_v2.sql` _(54)_
+- `src/screens/provider/SchedulingScreen.tsx` _(44)_
 - `src/screens/provider/InfoRegScreen.tsx` _(43)_
-- `src/screens/provider/SchedulingScreen.tsx` _(43)_
 - `supabase/waitlist_holds.sql` _(43)_
 - `supabase/prevent_overlapping_bookings.sql` _(40)_
 - `src/screens/client/CartScreen.tsx` _(37)_
@@ -67,10 +67,10 @@ Curated: [[Availability & Slots]] · **145 files**
 - `src/components/AvailabilityCard.tsx` _(24)_
 - `src/features/providers/useProviderProfileData.ts` _(22)_
 - `src/screens/provider/ProviderScheduleScreen.tsx` _(21)_
+- `src/types/database.ts` _(20)_
 - `supabase/provider_busy_spans_rpc.sql` _(20)_
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
 - `src/screens/client/BookingsScreen.tsx` _(19)_
-- `src/services/becca/capabilities/provider.ts` _(18)_
 - … +115 more
 
 ## Payments

@@ -83,6 +83,10 @@ type ModernBeautyCalendarProps = {
    *  offering times only the first service could take. Must be stable
    *  (useCallback) — it's a dependency of the weekly availability fetch. */
   slotResolver?: (date: string) => Promise<string[]>;
+  /** How to NAME the provider in by-request copy. `providerName` above is an
+   *  identifier and is frequently a raw UUID, so it can't be shown to anyone.
+   *  Falls back to "the provider" when absent. */
+  providerLabel?: string;
   /** Opt IN to offering times the provider only accepts as a request (see
    *  AvailabilityService's EmergencyRequestPolicy). Defaults to false, and
    *  deliberately so: a caller that shows these has to carry the resulting
@@ -160,6 +164,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   subColor,
   surfaceColor,
   slotResolver,
+  providerLabel,
   allowRequests = false,
 }) => {
   // Popup border — a low-alpha tint of the text colour, so it reads as a
@@ -189,6 +194,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // provider that hasn't opted in.
   const [emergencyPolicy, setEmergencyPolicy] = useState<EmergencyRequestPolicy>({
     outsideHours: false, blockedDates: false, shortNotice: false, beyondWindow: false,
+    beforeMins: null, afterMins: null,
   });
   // Once the client has actively picked a time, the whole picker collapses to
   // a one-line summary — a week strip plus ~20 time chips is the single
@@ -873,6 +879,14 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           ));
         };
 
+        // Is the time currently chosen one of the red ones? The group header
+        // above explains the section, but once a chip is tapped the client is
+        // looking at their own choice, not at a header several rows up — so
+        // the state has to be restated against the selection itself.
+        const selectedIsRequest = !!selectedTime
+          && requestTimes.some(slot => slot.time === selectedTime);
+        const who = providerLabel ?? 'the provider';
+
         return (
           <View style={styles.timeContainer}>
             {openTimes.length > 0 && renderGroup(openTimes, false)}
@@ -885,10 +899,17 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 </View>
                 {renderGroup(requestTimes, true)}
                 <Text style={[styles.requestNote, { color: subColor }]}>
-                  These times fall outside this provider's usual availability. They have to
+                  These times fall outside {who}'s usual availability. They have to
                   accept the request before the booking is confirmed.
                 </Text>
               </>
+            )}
+            {selectedIsRequest && (
+              <View style={[styles.selectedRequestBanner, { borderColor: EMERGENCY_OUTLINE }]}>
+                <Text style={[styles.selectedRequestText, { color: EMERGENCY_OUTLINE }]}>
+                  {selectedTime} is {who}'s emergency slot
+                </Text>
+              </View>
             )}
           </View>
         );
@@ -967,6 +988,11 @@ const styles = StyleSheet.create({
   requestRule:    { flex: 1, height: StyleSheet.hairlineWidth },
   requestLabel:   { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
   requestNote:    { fontSize: 11, lineHeight: 15, textAlign: 'center', paddingHorizontal: 12, marginTop: 2 },
+  selectedRequestBanner: {
+    borderWidth: 1.5, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12,
+    marginTop: 10, marginHorizontal: 2,
+  },
+  selectedRequestText: { fontSize: 12.5, fontWeight: '700', textAlign: 'center' },
 
   // ── Full calendar modal ─────────────────────────────────────────────
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },

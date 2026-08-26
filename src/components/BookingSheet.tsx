@@ -38,6 +38,7 @@ import {
 import { PromoCodeRow } from './PromoCodeRow';
 import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
 import type { DbPromotion } from '../types/database';
+import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -144,10 +145,10 @@ export interface BookingSheetResult {
   /** Present when consultationRequired was passed in and the client picked
    *  a date/time for it in this same sheet. */
   consultationBooking?: { date: string; time: string };
-  /** Stamped only when the policy checkbox was ticked — the moment of
-   *  agreement, plus a frozen copy of the policy agreed to (see
-   *  BookingSheetProps.bookingPolicies). Absent if there was no policy to
-   *  agree to (provider hasn't set one). */
+  /** Frozen copy of what applied to this booking: the provider's structured
+   *  policy (see BookingSheetProps.bookingPolicies) and, under `providerTerms`,
+   *  their own written T&Cs when the client ticked the agree box. Absent only
+   *  when the provider has neither. Built by buildPolicySnapshot(). */
   policySnapshot?: Record<string, unknown>;
   /** Present only when the chosen time is one this provider's own scheduling
    *  rules exclude and they've opted into being asked — the client accepted
@@ -590,13 +591,24 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       // consent. Agreement itself is captured once, by the cart's own
       // bundled Terms + cancellation-policy checkbox at checkout, which is
       // what hold_cart_booking_slots() records policy_accepted_at from.
-      ...(bookingPolicies ? { policySnapshot: bookingPolicies } : {}),
+      //
+      // Now carries the provider's own written T&Cs too, when the client
+      // ticked the box above. Previously that tick gated Add to Cart and was
+      // then discarded, so a provider editing their terms afterwards left the
+      // agreed version unrecoverable.
+      ...(() => {
+        const snapshot = buildPolicySnapshot(
+          bookingPolicies,
+          agreedToProviderTerms ? providerTerms : null,
+        );
+        return snapshot ? { policySnapshot: snapshot } : {};
+      })(),
       // Only when it still matches the time being submitted — a stale
       // acceptance from a time since changed must never travel.
       ...(emergencyRequest ? { emergencyRequest } : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, emergencyRequest, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, agreedToProviderTerms, providerTerms, emergencyRequest, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -761,6 +773,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   onTimeSelect={handleSelectTime}
                   selectedTime={selectedTime}
                   allowRequests
+                  providerLabel={providerDisplayName}
                   providerName={providerIdentifier}
                   serviceDuration={service.duration}
                   accentColor={adaptiveAccentColor}

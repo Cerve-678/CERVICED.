@@ -103,7 +103,24 @@ already elapsed, and a genuinely taken slot (`bookings_no_overlap` + the
 trigger's own overlap check). Same three exclusions the provider-side manual
 override (§4, `p_override_scheduling`) already respects.
 
-**No bound on the time of day, deliberately.** Working hours decide what is
+**How far either side is the provider's own choice.**
+`request_window_before_mins` / `request_window_after_mins`
+([20260826182059](supabase/migrations/20260826182059_provider_chosen_request_window.sql))
+bound how much of the day is *offered*, measured from **that day's own**
+opening and closing time. `NULL` means any time and is the default. This is a
+display preference, not a rule: the trigger doesn't enforce it, because the
+provider approves or declines every request regardless — putting it there would
+only create a second place for the two to drift apart. A day with no hours (a
+blocked date, or a weekday they never work) has nothing to measure from, so the
+whole day is requestable under whichever opt-in covers it.
+
+Note what this is *not*: the dropped `out_of_hours_extension_mins` measured a
+single figure from a value the app **derived** (the widest hours across the
+whole week), which is what made 4am unaskable regardless of what the provider
+set. These are stated by the provider, anchored to the day, and default to no
+ceiling at all.
+
+**No bound the app invents, deliberately.** Working hours decide what is
 *ordinarily* bookable; everything outside them is requestable once the provider
 opts in, at any hour, and the provider answers each request — that approval is
 the filter. The first version bounded requests to the provider's recurring

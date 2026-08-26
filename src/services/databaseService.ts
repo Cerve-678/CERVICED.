@@ -3614,14 +3614,54 @@ export async function getAvailabilityNoticeSettings(providerId: string): Promise
   return data;
 }
 
-export async function getAvailabilityEmergencyPolicyRow(providerId: string): Promise<Record<string, unknown> | null> {
+/** The emergency-request opt-ins plus the provider's chosen request window.
+ *  Listed once because two call sites read it and they must not drift. */
+const EMERGENCY_POLICY_COLUMNS =
+  "allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests, request_window_before_mins, request_window_after_mins";
+
+/** The same list without the two request-window columns.
+ *
+ *  TRANSITIONAL — delete this and `selectProviderColumnsTolerantly` below,
+ *  along with their call sites' fallback, once
+ *  20260826182059_provider_chosen_request_window.sql has been applied. It
+ *  exists because that migration could not be applied when the reading code
+ *  shipped, and a provider row missing the columns fails the WHOLE select with
+ *  42703 — which took out availability entirely rather than degrading. Until
+ *  it lands, a database without the columns behaves as "any time", which is
+ *  the column default anyway. */
+const EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW =
+  "allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests";
+
+/** Undefined-column (42703) is the one error worth retrying here: it means the
+ *  migration hasn't run, not that the read is wrong. Anything else throws, per
+ *  the standing rule that this file never swallows errors. */
+async function selectProviderColumnsTolerantly(
+  providerId: string,
+  columns: string,
+  fallbackColumns: string,
+): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabase
     .from("providers")
-    .select("allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests")
+    .select(columns)
     .eq("id", providerId)
     .maybeSingle();
-  if (error) throw error;
-  return data as Record<string, unknown> | null;
+  if (!error) return data as Record<string, unknown> | null;
+  if (error.code !== "42703") throw error;
+  const retry = await supabase
+    .from("providers")
+    .select(fallbackColumns)
+    .eq("id", providerId)
+    .maybeSingle();
+  if (retry.error) throw retry.error;
+  return retry.data as Record<string, unknown> | null;
+}
+
+export async function getAvailabilityEmergencyPolicyRow(providerId: string): Promise<Record<string, unknown> | null> {
+  return selectProviderColumnsTolerantly(
+    providerId,
+    EMERGENCY_POLICY_COLUMNS,
+    EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW,
+  );
 }
 
 export interface AvailabilityProviderSettingsRow {
@@ -3633,6 +3673,9 @@ export interface AvailabilityProviderSettingsRow {
   allow_blocked_date_requests: boolean;
   allow_short_notice_requests: boolean;
   allow_beyond_window_requests: boolean;
+  /** NULL = any time. See providers.request_window_before_mins. */
+  request_window_before_mins: number | null;
+  request_window_after_mins: number | null;
 }
 
 export async function getAvailabilityProviderCore(providerId: string): Promise<{
@@ -3640,17 +3683,17 @@ export async function getAvailabilityProviderCore(providerId: string): Promise<{
   windowRows: { day_of_week: number; start_time: string; end_time: string }[];
   legacyRows: { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
 }> {
-  const [settingsResult, weeklyRows] = await Promise.all([
-    supabase
-      .from("providers")
-      .select("booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs, allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests")
-      .eq("id", providerId)
-      .maybeSingle(),
+  const baseColumns = "booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs";
+  const [settingsRow, weeklyRows] = await Promise.all([
+    selectProviderColumnsTolerantly(
+      providerId,
+      `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS}`,
+      `${baseColumns}, ${EMERGENCY_POLICY_COLUMNS_PRE_REQUEST_WINDOW}`,
+    ),
     getAvailabilityWeeklyScheduleRows(providerId),
   ]);
-  if (settingsResult.error) throw settingsResult.error;
   return {
-    settings: settingsResult.data as AvailabilityProviderSettingsRow | null,
+    settings: settingsRow as AvailabilityProviderSettingsRow | null,
     ...weeklyRows,
   };
 }
@@ -4220,6 +4263,9 @@ export async function updateProviderRequestSettings(
     allow_blocked_date_requests: boolean;
     allow_short_notice_requests: boolean;
     allow_beyond_window_requests: boolean;
+    /** null = any time. */
+    request_window_before_mins: number | null;
+    request_window_after_mins: number | null;
   },
 ): Promise<void> {
   const { error } = await supabase
