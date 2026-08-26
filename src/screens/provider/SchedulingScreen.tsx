@@ -45,7 +45,6 @@ import {
 import {
   AVAILABILITY_OPTS, NEW_CLIENTS_OPTS,
   BUFFER_OPTS, BOOKING_WINDOW_OPTS, MIN_NOTICE_OPTS, SLOT_INTERVAL_OPTS, MAX_PER_DAY_OPTS,
-  OUT_OF_HOURS_EXTENSION_OPTS,
 } from '../../features/business-details/options';
 
 export default function SchedulingScreen({ navigation }: any) {
@@ -75,7 +74,6 @@ export default function SchedulingScreen({ navigation }: any) {
   const [allowBlockedDates, setAllowBlockedDates] = useState(false);
   const [allowShortNotice, setAllowShortNotice] = useState(false);
   const [allowBeyondWindow, setAllowBeyondWindow] = useState(false);
-  const [extensionMins, setExtensionMins]       = useState('120');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -105,7 +103,6 @@ export default function SchedulingScreen({ navigation }: any) {
           setAllowBlockedDates(profile.allow_blocked_date_requests ?? false);
           setAllowShortNotice(profile.allow_short_notice_requests ?? false);
           setAllowBeyondWindow(profile.allow_beyond_window_requests ?? false);
-          setExtensionMins(String(profile.out_of_hours_extension_mins ?? 120));
         }
         // Same precedence as ProviderAutomationsScreen: the providers row is
         // the real answer (it's what gets enforced), user_metadata is only a
@@ -176,7 +173,6 @@ export default function SchedulingScreen({ navigation }: any) {
           allow_blocked_date_requests:  allowBlockedDates,
           allow_short_notice_requests:  allowShortNotice,
           allow_beyond_window_requests: allowBeyondWindow,
-          out_of_hours_extension_mins:  parseInt(extensionMins, 10) || 0,
         }),
       ]);
 
@@ -192,7 +188,7 @@ export default function SchedulingScreen({ navigation }: any) {
     providerId, availWindows, acceptsNew, walkIns, groupBookings,
     bufferMins, bookingWindowDays, minBookingNoticeHrs, slotIntervalMins,
     maxBookingsPerDay, allowOutOfHours, allowBlockedDates, allowShortNotice,
-    allowBeyondWindow, extensionMins, navigation,
+    allowBeyondWindow, navigation,
   ]);
 
   if (loading) {
@@ -328,16 +324,6 @@ export default function SchedulingScreen({ navigation }: any) {
               onChange={setAllowBeyondWindow}
             />
 
-            {/* Only meaningful once one of the two "which times" opt-ins is
-                on — short notice and booking window are about WHEN a request
-                is made, not what hours it can reach. */}
-            {(allowOutOfHours || allowBlockedDates) && (
-              <>
-                <View style={{ height: 18 }} />
-                <SectionLabel text="How far past your hours they can ask" />
-                <RadioGroup options={OUT_OF_HOURS_EXTENSION_OPTS} value={extensionMins} onChange={setExtensionMins} />
-              </>
-            )}
           </Card>
 
           <SaveButton saving={saving} onPress={handleSave} />

@@ -41,7 +41,7 @@ Curated: [[Address Release]] · **81 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **145 files**
-- `src/services/AvailabilityService.ts` _(307)_
+- `src/services/AvailabilityService.ts` _(303)_
 - `src/services/databaseService.ts` _(161)_
 - `src/components/ModernBeautyCalendar.tsx` _(150)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **229 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/services/AvailabilityService.ts` _(97)_
+- `src/services/AvailabilityService.ts` _(98)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
@@ -251,7 +251,7 @@ Curated: [[Booking Flow]] · **147 files**
 - `src/services/databaseService.ts` _(194)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(187)_
 - `src/screens/client/RescheduleScreen.tsx` _(140)_
-- `src/screens/client/BookingDetailScreen.tsx` _(136)_
+- `src/screens/client/BookingDetailScreen.tsx` _(135)_
 - `src/services/becca/capabilities/client.ts` _(132)_
 - `src/screens/client/CartScreen.tsx` _(112)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(81)_

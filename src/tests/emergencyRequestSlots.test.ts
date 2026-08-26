@@ -1,73 +1,72 @@
 import {
-  resolveWeeklyEnvelope,
+  resolveSlotOffer,
   describeEmergencyReason,
+  type EmergencyReason,
 } from '../services/AvailabilityService';
 
-// The envelope is what stops "I'll take the odd late one" from meaning "any
-// client may ask for 4am". It's calculated identically here and in
-// enforce_booking_bookability() (20260821143821_emergency_booking_requests.sql)
-// — if the two ever disagree, the picker offers times the database then
-// rejects, which is exactly the dead-end this feature exists to remove.
-describe('resolveWeeklyEnvelope', () => {
-  it('spans the whole week, not just one day', () => {
-    // Mon-Fri 9-5, Saturday 10-2. Saturday's envelope is still 9-5, so a
-    // Saturday out-of-hours request can reach the provider's normal weekday
-    // hours without any extension at all.
-    const windows = [
-      { start_time: '09:00:00', end_time: '17:00:00' },
-      { start_time: '10:00:00', end_time: '14:00:00' },
-    ];
-    expect(resolveWeeklyEnvelope(windows, [])).toEqual({ openMins: 540, closeMins: 1020 });
+// There is deliberately NO bound on which hours an emergency request may
+// reach — the provider's working hours decide what is ordinarily bookable,
+// everything else is requestable once they opt in, and they answer each one.
+// An earlier version bounded requests to the provider's weekly envelope
+// widened by a fixed extension, which banned a 4am bridal call: the single
+// most common genuine out-of-hours booking in this industry, refused because
+// the bound was inferred from hours describing a NORMAL week.
+//
+// What survives every opt-in is the pair of time-relative rules below. They
+// mirror enforce_booking_bookability() exactly — if they drift, the picker
+// offers times the database then rejects.
+describe('resolveSlotOffer', () => {
+  const NOW = new Date('2026-08-26T15:00:00').getTime();
+  const at = (iso: string) => new Date(iso).getTime();
+
+  it('never offers a start that has already passed, opt-in or not', () => {
+    // Short notice allowed, no other restriction — still refused, because the
+    // trigger rejects an elapsed same-day time unconditionally.
+    expect(resolveSlotOffer([], at('2026-08-26T14:00:00'), NOW, NOW, true)).toBeNull();
+    expect(resolveSlotOffer(['outside_hours'], at('2026-08-26T09:00:00'), NOW, NOW, true)).toBeNull();
   });
 
-  it('takes the earliest start and latest end across split shifts', () => {
-    const windows = [
-      { start_time: '09:00:00', end_time: '12:00:00' },
-      { start_time: '14:00:00', end_time: '20:30:00' },
-      { start_time: '08:30:00', end_time: '11:00:00' },
-    ];
-    expect(resolveWeeklyEnvelope(windows, [])).toEqual({ openMins: 510, closeMins: 1230 });
+  it('offers a start past the notice window with exactly the reasons it came in with', () => {
+    const earliest = at('2026-08-26T19:00:00'); // 4h minimum notice
+    expect(resolveSlotOffer([], at('2026-08-26T20:00:00'), NOW, earliest, false)).toEqual([]);
+    expect(resolveSlotOffer(['outside_hours'], at('2026-08-26T22:00:00'), NOW, earliest, false))
+      .toEqual(['outside_hours']);
   });
 
-  it('falls back to the legacy single-period table only when there are no window rows', () => {
-    const legacy = [
-      { open_time: '10:00:00', close_time: '18:00:00', is_closed: false },
-      { open_time: '00:00:00', close_time: '00:00:00', is_closed: true },
-    ];
-    expect(resolveWeeklyEnvelope([], legacy)).toEqual({ openMins: 600, closeMins: 1080 });
-
-    // A window row wins outright — the legacy row is never blended in.
-    expect(resolveWeeklyEnvelope([{ start_time: '09:00:00', end_time: '17:00:00' }], legacy))
-      .toEqual({ openMins: 540, closeMins: 1020 });
+  it('refuses a start inside the notice window unless short notice is allowed', () => {
+    const earliest = at('2026-08-26T19:00:00');
+    const soon = at('2026-08-26T17:00:00'); // future, but inside the notice window
+    expect(resolveSlotOffer([], soon, NOW, earliest, false)).toBeNull();
+    expect(resolveSlotOffer([], soon, NOW, earliest, true)).toEqual(['short_notice']);
   });
 
-  it('ignores closed legacy days rather than reading them as a 00:00 open', () => {
-    // Without the is_closed filter this would return openMins 0, and the
-    // extension would then reach backwards from midnight.
-    const legacy = [
-      { open_time: '00:00:00', close_time: '00:00:00', is_closed: true },
-      { open_time: '11:00:00', close_time: '19:00:00', is_closed: false },
-    ];
-    expect(resolveWeeklyEnvelope([], legacy)).toEqual({ openMins: 660, closeMins: 1140 });
+  it('accumulates short notice on top of the reasons the date already carried', () => {
+    // A blocked date, beyond the booking window, at short notice — every one
+    // of those needs its own opt-in, and the confirmation names all three.
+    const earliest = at('2026-08-26T19:00:00');
+    expect(resolveSlotOffer(
+      ['blocked_date', 'beyond_window'], at('2026-08-26T17:00:00'), NOW, earliest, true,
+    )).toEqual(['blocked_date', 'beyond_window', 'short_notice']);
   });
 
-  it('has no envelope for a provider with no recurring schedule', () => {
-    // Deliberately null, not a 24h default: nothing bounds the request, so
-    // the trigger rejects it rather than opening the whole clock.
-    expect(resolveWeeklyEnvelope([], [])).toBeNull();
-    expect(resolveWeeklyEnvelope([], [{ open_time: '09:00:00', close_time: '17:00:00', is_closed: true }]))
-      .toBeNull();
+  it('treats a start exactly on the notice boundary as meeting it', () => {
+    const earliest = at('2026-08-26T19:00:00');
+    // Not short notice — so it must NOT pick up the reason, and must not
+    // depend on the short-notice opt-in to be offered at all.
+    expect(resolveSlotOffer([], earliest, NOW, earliest, false)).toEqual([]);
   });
 
-  it('rejects a degenerate envelope where nothing is actually open', () => {
-    expect(resolveWeeklyEnvelope([{ start_time: '12:00:00', end_time: '12:00:00' }], []))
-      .toBeNull();
+  it('offers a 4am start like any other, when the day is open to requests', () => {
+    // The case the removed envelope bound used to refuse outright.
+    const fourAm = at('2026-08-27T04:00:00');
+    expect(resolveSlotOffer(['outside_hours'], fourAm, NOW, NOW, false))
+      .toEqual(['outside_hours']);
   });
 });
 
 describe('describeEmergencyReason', () => {
   it('names the provider in every reason', () => {
-    const reasons = ['outside_hours', 'blocked_date', 'short_notice', 'beyond_window'] as const;
+    const reasons: EmergencyReason[] = ['outside_hours', 'blocked_date', 'short_notice', 'beyond_window'];
     for (const reason of reasons) {
       expect(describeEmergencyReason(reason, 'Ana')).toContain('Ana');
     }

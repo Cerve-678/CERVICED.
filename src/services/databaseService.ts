@@ -141,6 +141,7 @@ export interface NotificationInsertRow {
   message: string;
   type: string;
   booking_id: string | null;
+  provider_id: string | null;
   recipient_role: "provider" | "client";
 }
 
@@ -3616,7 +3617,7 @@ export async function getAvailabilityNoticeSettings(providerId: string): Promise
 export async function getAvailabilityEmergencyPolicyRow(providerId: string): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabase
     .from("providers")
-    .select("allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests, out_of_hours_extension_mins")
+    .select("allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests")
     .eq("id", providerId)
     .maybeSingle();
   if (error) throw error;
@@ -3632,7 +3633,6 @@ export interface AvailabilityProviderSettingsRow {
   allow_blocked_date_requests: boolean;
   allow_short_notice_requests: boolean;
   allow_beyond_window_requests: boolean;
-  out_of_hours_extension_mins: number;
 }
 
 export async function getAvailabilityProviderCore(providerId: string): Promise<{
@@ -3643,7 +3643,7 @@ export async function getAvailabilityProviderCore(providerId: string): Promise<{
   const [settingsResult, weeklyRows] = await Promise.all([
     supabase
       .from("providers")
-      .select("booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs, allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests, out_of_hours_extension_mins")
+      .select("booking_window_days, slot_interval_mins, buffer_mins, min_booking_notice_hrs, allow_out_of_hours_requests, allow_blocked_date_requests, allow_short_notice_requests, allow_beyond_window_requests")
       .eq("id", providerId)
       .maybeSingle(),
     getAvailabilityWeeklyScheduleRows(providerId),
@@ -4220,7 +4220,6 @@ export async function updateProviderRequestSettings(
     allow_blocked_date_requests: boolean;
     allow_short_notice_requests: boolean;
     allow_beyond_window_requests: boolean;
-    out_of_hours_extension_mins: number;
   },
 ): Promise<void> {
   const { error } = await supabase

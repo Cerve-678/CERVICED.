@@ -93,7 +93,6 @@ a provider can opt into being **asked** instead, one opt-in per rule:
 | `allow_blocked_date_requests` | *"Provider is unavailable on this date"* — both `provider_blocked_dates` and a one-off `is_closed` override |
 | `allow_short_notice_requests` | *"This appointment does not meet the provider's minimum notice"* |
 | `allow_beyond_window_requests` | *"Booking is outside this provider's booking window"* |
-| `out_of_hours_extension_mins` | Not an opt-in — the **bound** on the first two (default 120) |
 
 All four default `false`, so nothing changes for an existing provider until
 they turn one on in
@@ -104,20 +103,29 @@ already elapsed, and a genuinely taken slot (`bookings_no_overlap` + the
 trigger's own overlap check). Same three exclusions the provider-side manual
 override (§4, `p_override_scheduling`) already respects.
 
-**Bounded, not open-ended.** An out-of-hours request may only reach
-`out_of_hours_extension_mins` either side of the provider's *recurring weekly
-envelope* — the earliest start and latest end across their whole week, not a
-blank 24-hour clock. A provider with no recurring schedule has no envelope and
-gets no out-of-hours slots at all rather than an unbounded day. The envelope is
-computed identically in `resolveWeeklyEnvelope()`
-([AvailabilityService.ts](src/services/AvailabilityService.ts)) and in the
-trigger; if those two ever disagree, the picker offers times the database then
-rejects — which is the exact dead end this feature exists to remove.
+**No bound on the time of day, deliberately.** Working hours decide what is
+*ordinarily* bookable; everything outside them is requestable once the provider
+opts in, at any hour, and the provider answers each request — that approval is
+the filter. The first version bounded requests to the provider's recurring
+weekly envelope widened by an extension setting, and that refused a 4am bridal
+call: the most common genuine out-of-hours booking in this industry, rejected
+because the bound was inferred from hours describing a *normal* week. An
+emergency request is by definition not that. Removed in
+[20260826171244](supabase/migrations/20260826171244_emergency_requests_remove_derived_hour_bound.sql),
+which also drops the now-dead `out_of_hours_extension_mins` column.
+
+What still holds regardless of any opt-in, mirrored exactly between
+`resolveSlotOffer()` ([AvailabilityService.ts](src/services/AvailabilityService.ts))
+and the trigger: a past date, an already-elapsed same-day time, and a genuinely
+taken slot. A shut day answers to the blocked-date opt-in, not the out-of-hours
+one.
 
 **Client side.** Such times come back from `getAvailableSlots` as ordinary
 `TimeSlot`s with `isByRequest: true` and the rules they break in
-`requestReasons`. `ModernBeautyCalendar` renders them in their own dashed "By
-request" group below the real slots, and only when the caller opts in with
+`requestReasons`. `ModernBeautyCalendar` renders them in their own "By request"
+group below the real slots — **red-outlined, both the date pill and the time
+chip**, so the two read as one state and neither borrows the accent colour that
+every ordinarily-bookable control uses. Only when the caller opts in with
 `allowRequests` — which defaults to **false** precisely because a caller that
 shows them must be able to carry the resulting flag through to checkout.
 Picking one opens
@@ -313,8 +321,32 @@ provider who demands 72h notice to reschedule gets 72h to answer one, not
 forever. The hours mapping is copied verbatim from
 `request_reschedule_own_booking()` so the two cannot disagree about what `48h`
 means. Floored at **24h**, because `same_day` maps to 0 hours and would
-otherwise expire a request the instant it was made. Backstopped by the **start
-of the appointment day**, whichever comes first.
+otherwise expire a request the instant it was made.
+
+**Backstopped by the start of the appointment day**, and that backstop
+deliberately BEATS the provider's own window when the two disagree — a 72h
+provider does not get to spend 72h and reply as the client is walking in. The
+client should wake up on the day already knowing.
+
+Two guards sit around the backstop (added by `20260826094404`, correcting the
+original bare `LEAST`), rather than weakening it:
+
+- a **4-hour floor**, so a late request always leaves a real chance to answer;
+- a **hard cap at the appointment start time**, so a deadline can never sit
+  after the appointment it is about.
+
+Without the floor, `same_day` — which skips the notice check entirely, so a
+client can legitimately ask on the day — produced a deadline **8 hours in the
+past**, expiring the request on the next cron tick before the provider could
+ever see it. Worked examples:
+
+| Provider notice | Client asks | Provider must answer by | Window |
+|---|---|---|---|
+| 72h | 3 days out | midnight before the day | 58h |
+| 24h | 24h before | midnight before the day | 10h |
+| 24h | a week out | 24h after the ask | 24h |
+| same-day | 6h before | 4h after the ask | 4h |
+| same-day | 1h before | the appointment time | 1h |
 
 **Who is waiting is decided by status, never by `requested_by`:**
 
@@ -376,12 +408,18 @@ is what forced `a1b9c766`'s booking back to `UPCOMING`, and since
 never leave the Upcoming tab. Covered by
 [rescheduleTerminalBookingGuard.test.ts](src/tests/rescheduleTerminalBookingGuard.test.ts).
 
-**STILL OPEN, deliberately:** whether expiry of a `pending` request should also
-give the client a **no-penalty cancellation**, given the provider's
-non-response is what stranded them. That has real liability attached
-(`LEGAL-COMPLIANCE-NOTES.md` §12) and is a product/legal call, not an
-engineering one — the cancellation policy is untouched and the copy promises
-nothing about it.
+**STILL OPEN, deferred 2026-08-26:** expiry can leave the client unable to
+cancel either. Cancelling is governed by a separate window
+(`cancel_own_booking()` → `cancellation_notice_hours` / `cancelNotice`) and
+nothing connects the two, so a client who asked to reschedule in good time can
+find that by the time the provider's silence resolved, their cancellation right
+has lapsed — and a no-show inside 24h then increments `late_cancel_count`
+against *them*. Worse the longer the provider's notice period.
+
+Full analysis and the two candidate fixes are in `FUTURE_SCALE.md`. Not built:
+one of the options is a no-penalty cancellation, which has real liability
+attached (`LEGAL-COMPLIANCE-NOTES.md` §12) and is a product/legal call. The
+cancellation policy is untouched and the expiry copy promises nothing about it.
 
 ### 7b. Client-facing failure copy
 

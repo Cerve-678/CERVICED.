@@ -17,7 +17,7 @@
 `api`
 
 ### `src/services/AvailabilityService.ts`
-`AvailabilityService` · `describeEmergencyReason` · `earliestBookableStartMs` · `parseDurationToMinutes` · `resolveWeeklyEnvelope` · `resolveWorkingWindows` · `slotStartMs`
+`AvailabilityService` · `describeEmergencyReason` · `earliestBookableStartMs` · `parseDurationToMinutes` · `resolveSlotOffer` · `resolveWorkingWindows` · `slotStartMs`
 
 ### `src/services/becca/aiInterpreter.ts`
 _no named exports_

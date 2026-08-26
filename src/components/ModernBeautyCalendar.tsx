@@ -6,6 +6,14 @@ import type { EmergencyReason, EmergencyRequestPolicy } from '../services/Availa
 import { withAlpha } from '../constants/providerThemes';
 import { formatLongDateNoYear } from '../utils/dateUtils';
 
+/** Emergency/by-request outline. Deliberately NOT the caller's accent: every
+ *  other colour in this picker is derived from whatever sheet it's sitting in,
+ *  because those all mean "this is bookable". This one means the opposite —
+ *  it needs the same warning read on every backdrop, so it's fixed. Applied to
+ *  the DATE pill and the TIME chip alike, so a red-outlined day and a
+ *  red-outlined time are visibly the same fact. */
+const EMERGENCY_OUTLINE = '#FF3B30';
+
 // LayoutAnimation is opt-in on old-architecture Android; without this the
 // collapse/expand below snaps instead of animating there.
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -180,7 +188,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   // those dates greyed out. Starts fully closed and stays that way for any
   // provider that hasn't opted in.
   const [emergencyPolicy, setEmergencyPolicy] = useState<EmergencyRequestPolicy>({
-    outsideHours: false, blockedDates: false, shortNotice: false, beyondWindow: false, extensionMins: 0,
+    outsideHours: false, blockedDates: false, shortNotice: false, beyondWindow: false,
   });
   // Once the client has actively picked a time, the whole picker collapses to
   // a one-line summary — a week strip plus ~20 time chips is the single
@@ -300,6 +308,53 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
     const startOfWeek = getStartOfWeek(currentWeek);
     const slots: SlotsMap = {};
 
+    // Resolve ONE day. Pulled out of the loop below so the seven can run
+    // concurrently — this used to be a sequential `for` with an await inside,
+    // so opening the picker (or paging a week) cost seven round trips end to
+    // end and the spinner sat there for all of them. They don't depend on
+    // each other, and AvailabilityService de-dupes the provider-level reads
+    // they share, so the whole week now costs roughly what one day did.
+    const resolveDay = async (date: Date, dateString: string): Promise<DayData> => {
+      if (!providerName) {
+        return dayDataFrom(generateBeautyTimeSlots(dateString, date.getDay(), providerName));
+      }
+      try {
+        // A custom resolver only ever yields ordinary slots — it has no
+        // notion of the provider's emergency opt-ins, so nothing it
+        // returns may be presented as a request.
+        if (slotResolver) {
+          return dayDataFrom((await slotResolver(dateString)).map(time => ({ time, reasons: [] })));
+        }
+        // getAvailableSlots returns the day's WHOLE grid, taken times
+        // included and flagged — so an empty grid means the provider
+        // isn't working, while a grid where every entry is taken means
+        // they're booked out. Filtering first threw that away.
+        const grid = await AvailabilityService.getAvailableSlots(
+          providerName,
+          dateString,
+          serviceDuration,
+          serviceId
+        );
+        // Fullness is measured over ORDINARY slots only. By-request times
+        // must not answer it in either direction: they'd mask a genuinely
+        // booked-out day at an opted-in provider (there is always a free 4am),
+        // and their absence must not make a day the provider simply doesn't
+        // work look "booked", which would blame other clients for it.
+        const ordinary = grid.filter(slot => !slot.isByRequest);
+        const isFullyBooked = ordinary.length > 0 && ordinary.every(slot => slot.isBooked);
+
+        const openSlots = grid
+          .filter(slot => !slot.isBooked)
+          .filter(slot => allowRequests || !slot.isByRequest)
+          .map(slot => ({ time: slot.time, reasons: slot.requestReasons ?? [] }));
+        return dayDataFrom(openSlots, isFullyBooked);
+      } catch {
+        // Fallback to base schedule without booking filter
+        return dayDataFrom(generateBeautyTimeSlots(dateString, date.getDay(), providerName));
+      }
+    };
+
+    const pending: Promise<void>[] = [];
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
       date.setDate(startOfWeek.getDate() + i);
@@ -326,54 +381,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         }
       }
 
-      // Use AvailabilityService to get slots filtered by existing bookings —
-      // or the caller's own rule, when what counts as "bookable" is more than
-      // one service fitting (see slotResolver).
-      if (providerName) {
-        try {
-          // A custom resolver only ever yields ordinary slots — it has no
-          // notion of the provider's emergency opt-ins, so nothing it
-          // returns may be presented as a request.
-          let openSlots: TimeSlot[];
-          let isFullyBooked = false;
-          if (slotResolver) {
-            openSlots = (await slotResolver(dateString)).map(time => ({ time, reasons: [] }));
-          } else {
-            // getAvailableSlots returns the day's WHOLE grid, taken times
-            // included and flagged — so an empty grid means the provider
-            // isn't working, while a grid where every entry is taken means
-            // they're booked out. Filtering first threw that away.
-            const grid = await AvailabilityService.getAvailableSlots(
-              providerName,
-              dateString,
-              serviceDuration,
-              serviceId
-            );
-            const unbooked = grid.filter(slot => !slot.isBooked);
-            // Deliberately measured before the allowRequests filter below: a
-            // day whose only free times are by-request when requests are off
-            // is unbookable, but it is not BOOKED — calling it full would
-            // blame other clients for the provider's own opt-in setting.
-            isFullyBooked = grid.length > 0 && unbooked.length === 0;
-            openSlots = unbooked
-              .filter(slot => allowRequests || !slot.isByRequest)
-              .map(slot => ({ time: slot.time, reasons: slot.requestReasons ?? [] }));
-          }
-
-          slots[dateString] = dayDataFrom(openSlots, isFullyBooked);
-        } catch {
-          // Fallback to base schedule without booking filter
-          const dayOfWeek = date.getDay();
-          const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
-          slots[dateString] = dayDataFrom(times);
-        }
-      } else {
-        // No provider specified, use default slots
-        const dayOfWeek = date.getDay();
-        const times = generateBeautyTimeSlots(dateString, dayOfWeek, providerName);
-        slots[dateString] = dayDataFrom(times);
-      }
+      pending.push(resolveDay(date, dateString).then(day => { slots[dateString] = day; }));
     }
+
+    await Promise.all(pending);
 
     // A newer run started while this one was awaiting — its result is the
     // one that matches what's on screen, so drop this entirely (including
@@ -835,16 +846,24 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     style={[
                       styles.timeTab,
                       byRequest
-                        ? [styles.timeTabRequest, { borderColor: withAlpha(accentColor, 0.5) }]
+                        ? [styles.timeTabRequest, { borderColor: EMERGENCY_OUTLINE }]
                         : { backgroundColor: surfaceColor },
-                      timeSel && { borderWidth: 2, borderColor: accentColor },
+                      // Selecting a by-request time keeps it red rather than
+                      // switching to the accent — the accent is what every
+                      // ordinarily-bookable chip uses, so borrowing it here
+                      // would make the choice look confirmed at the exact
+                      // moment the client needs to know it isn't.
+                      timeSel && { borderWidth: 2, borderColor: byRequest ? EMERGENCY_OUTLINE : accentColor },
                     ]}
                     onPress={() => handleTimeClick(slot.time, slot.reasons)}
                     activeOpacity={0.75}
                     accessibilityRole="button"
                     accessibilityLabel={byRequest ? `${slot.time}, by request only` : slot.time}
                   >
-                    <Text style={[styles.timeText, { color: timeSel ? accentColor : textColor }]}>
+                    <Text style={[
+                      styles.timeText,
+                      { color: byRequest ? EMERGENCY_OUTLINE : timeSel ? accentColor : textColor },
+                    ]}>
                       {slot.time}
                     </Text>
                   </TouchableOpacity>
@@ -861,7 +880,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               <>
                 <View style={styles.requestDivider}>
                   <View style={[styles.requestRule, { backgroundColor: withAlpha(textColor, 0.12) }]} />
-                  <Text style={[styles.requestLabel, { color: subColor }]}>By request</Text>
+                  <Text style={[styles.requestLabel, { color: EMERGENCY_OUTLINE }]}>By request</Text>
                   <View style={[styles.requestRule, { backgroundColor: withAlpha(textColor, 0.12) }]} />
                 </View>
                 {renderGroup(requestTimes, true)}
@@ -940,8 +959,9 @@ const styles = StyleSheet.create({
   timeRow:       { flexDirection: 'row', justifyContent: 'center', marginBottom: 6, flexWrap: 'wrap' },
   timeTab:       { paddingVertical: 6, paddingHorizontal: 13, borderRadius: 12, marginHorizontal: 3, marginBottom: 4, minWidth: 68, alignItems: 'center' },
   // Outlined rather than filled — the same shape as a normal slot, visibly
-  // not the same offer.
-  timeTabRequest: { backgroundColor: 'transparent', borderWidth: 1, borderStyle: 'dashed' },
+  // not the same offer. Solid, not dashed: at this chip size a dashed 1px
+  // border reads as a rendering artefact rather than a deliberate state.
+  timeTabRequest: { backgroundColor: 'transparent', borderWidth: 1.5 },
   timeText:      { fontSize: 13, fontWeight: '500' },
   requestDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8, paddingHorizontal: 6 },
   requestRule:    { flex: 1, height: StyleSheet.hairlineWidth },

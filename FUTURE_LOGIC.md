@@ -299,24 +299,60 @@ Add the same `min_booking_notice_hrs` select + cutoff filter from `getAvailableS
 
 ---
 
-## Emergency / Same-Day Bookings
+## Emergency / Same-Day Bookings — BUILT 2026-08-21/26, conditions still open
 
-### What it means
+### Status
 
-Right now `min_booking_notice_hrs` is a hard wall — if a provider requires 24 hours' notice, a client who wants (and the provider would actually accept) a same-day slot has no path to book one in-app. There's no concept of a provider opting into "I'll take emergency/last-minute bookings under my normal notice window."
+The core of this shipped. What this section originally sketched (a provider
+opt-in, a request the provider approves rather than an instant book, a flag
+distinguishing an emergency booking from a normal one) all exists — see
+`BOOKINGS.md` §3a and the auto-memory `emergency-booking-requests`. Kept here
+only because the **conditions governing a request** are still unbuilt; those
+are the list below.
 
-### Rough shape of what's needed
+Two decisions went differently from the sketch above, deliberately:
 
-- A way for a provider to mark themselves as accepting emergency/same-day bookings at all (a new provider-level flag, e.g. `accepts_emergency_bookings boolean`), separate from their normal `min_booking_notice_hrs`.
-- A client-facing path to request one — likely not the normal calendar/time-picker (which should keep hiding times outside the provider's stated notice window, not surface them as if they were normal availability), but a distinct "Request Emergency Appointment" action on the provider's profile that goes through a different flow — a request the provider explicitly approves, rather than an instant-book slot the calendar just shows.
-- Provider-side: needs to see and act on incoming emergency requests (accept/decline), and the app needs a booking status or flag that distinguishes an emergency booking from a normal one, since it bypassed the normal notice-window check on purpose.
-- This is explicitly a provider-opt-in feature, not a client-side toggle — a provider who hasn't opted in should never show any emergency-booking path at all.
+- **It IS the normal calendar.** The sketch guessed a separate "Request
+  Emergency Appointment" action, on the reasoning that the picker should keep
+  hiding times outside the provider's stated availability. It's in the picker
+  instead, with by-request dates and times drawn as red outlines so they read
+  as a different offer without being a different flow. A second entry point
+  would have meant a client who can already see the day they want having to
+  leave and find another button.
+- **There is no bound on which hours can be asked for.** The first version
+  bounded requests to the provider's weekly envelope widened by a fixed
+  extension. That refused a 4am bridal call — the most common genuine
+  out-of-hours booking there is — because the bound was inferred from hours
+  describing a NORMAL week. Working hours decide what's ordinarily bookable;
+  everything else is requestable, and the provider's approval is the filter.
 
-### Not scoped yet
+It also went wider than "same-day": the notice window is one of **four**
+independent opt-ins (hours, blocked dates, short notice, booking window),
+because those were four separate hard walls, not one.
 
-No decision made on the request/approval flow's exact screens, whether emergency bookings carry different cancellation-policy terms, or how this interacts with the provider's normal calendar once approved (presumably it just becomes a normal confirmed booking at that point). This is a feature idea flagged from user feedback during 2026-08-04 cart-checkout testing, not a spec — needs product direction before implementation starts.
+### Still open — conditions on a request
 
----
+None of these are built. Right now an opted-in provider can be asked for any
+service, at any hour, with no lead time beyond their opt-ins and no ceiling on
+how many requests arrive.
+
+- **Per-service eligibility.** Which services may be requested out of hours.
+  A 5am bridal trial makes sense; a 5am gel infill does not. Probably the
+  biggest single gap — today opting in exposes the provider's *whole* service
+  list at *every* hour.
+- **Minimum lead time for requests specifically.** Separate from
+  `min_booking_notice_hrs`, so "can you do 5am tomorrow?" asked at 11pm isn't
+  possible unless the provider wants it.
+- **Cap on open requests.** A limit on how many unanswered requests can be
+  pending at once (or per week), so opting in doesn't bury a provider in
+  decisions.
+- **Auto-expire if unanswered.** A request nobody answers should decline
+  itself and tell the client, rather than sitting pending until the
+  appointment time passes. **Blocked on refunds**: the client has already paid
+  by this point and there is no refund path anywhere in the app — see
+  `LEGAL-COMPLIANCE-NOTES.md` and the auto-memory
+  `cancel-reschedule-policy-defaults-and-no-refunds`. Don't build the
+  auto-decline before the money can actually go back.
 
 ---
 

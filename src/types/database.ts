@@ -316,9 +316,6 @@ export interface DbProvider {
   allow_blocked_date_requests: boolean;
   allow_short_notice_requests: boolean;
   allow_beyond_window_requests: boolean;
-  /** How far either side of the provider's recurring weekly envelope an
-   *  out-of-hours request may reach. 0 disables the extension. */
-  out_of_hours_extension_mins: number;
   cancellation_notice_hours: number;
   /** Mirror of the provider's Automations screen settings — readable by
    *  client screens and pg_cron jobs (auth user_metadata is not). */

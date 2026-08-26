@@ -49,15 +49,21 @@ export interface TimeSlot {
   requestReasons?: EmergencyReason[] | undefined;
 }
 
-/** A provider's emergency-request opt-ins, as stored on their row. */
+/** A provider's emergency-request opt-ins, as stored on their row.
+ *
+ *  There is deliberately no bound on WHICH hours a request may reach. The
+ *  provider's working hours are what the client is shown as bookable;
+ *  everything outside them is requestable once the provider opts in, and the
+ *  provider answers each one. An earlier version bounded requests to the
+ *  provider's own weekly envelope widened by a fixed extension — which banned
+ *  a 4am bridal call, the single most common genuine out-of-hours booking in
+ *  this industry, because the bound was inferred from hours that describe a
+ *  NORMAL week. An emergency request is by definition not that. */
 export interface EmergencyRequestPolicy {
   outsideHours: boolean;
   blockedDates: boolean;
   shortNotice: boolean;
   beyondWindow: boolean;
-  /** How far either side of their recurring weekly envelope an out-of-hours
-   *  request may reach. 0 disables the extension. */
-  extensionMins: number;
 }
 
 /** Nothing allowed — the shape every provider starts on, and the safe answer
@@ -67,7 +73,6 @@ const NO_EMERGENCY_REQUESTS: EmergencyRequestPolicy = {
   blockedDates: false,
   shortNotice: false,
   beyondWindow: false,
-  extensionMins: 0,
 };
 
 const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequestPolicy => ({
@@ -75,8 +80,35 @@ const readEmergencyPolicy = (row: Record<string, unknown> | null): EmergencyRequ
   blockedDates: row?.['allow_blocked_date_requests'] === true,
   shortNotice:  row?.['allow_short_notice_requests'] === true,
   beyondWindow: row?.['allow_beyond_window_requests'] === true,
-  extensionMins: Math.max(0, Number(row?.['out_of_hours_extension_mins'] ?? 0) || 0),
 });
+
+/**
+ * Whether one candidate start is offerable, and under what reasons.
+ * Returns null when it must not be offered at all.
+ *
+ * `reasons` is what the DATE and the working hours already established
+ * (blocked / beyond-window / outside-hours). This adds the two time-relative
+ * rules on top:
+ *
+ *   - a start already in the past is never offered — no opt-in reaches past
+ *     that, and the trigger rejects an elapsed same-day time unconditionally;
+ *   - a start inside the provider's minimum notice is offered only if they
+ *     take short-notice requests, and then only AS one.
+ *
+ * Exported for its own test: the ordering here is easy to get subtly wrong,
+ * and getting it wrong means offering a time the database then rejects.
+ */
+export const resolveSlotOffer = (
+  reasons: EmergencyReason[],
+  startMs: number,
+  nowMs: number,
+  earliestStartMs: number,
+  allowShortNotice: boolean,
+): EmergencyReason[] | null => {
+  if (startMs < nowMs) return null;
+  if (startMs >= earliestStartMs) return reasons;
+  return allowShortNotice ? [...reasons, 'short_notice'] : null;
+};
 
 /** Human-readable reason, for the client-facing confirmation. */
 export const describeEmergencyReason = (reason: EmergencyReason, providerName: string): string => {
@@ -425,32 +457,6 @@ export const resolveWorkingWindows = (
   return legacy && !legacy.is_closed ? [{ start_time: legacy.open_time, end_time: legacy.close_time }] : [];
 };
 
-/**
- * The provider's recurring weekly envelope — earliest start and latest end
- * across their whole week, in minutes from midnight. This, widened by
- * out_of_hours_extension_mins, is what bounds an out-of-hours request:
- * "a bit either side of when you normally work" rather than any hour of the
- * day. A provider with no recurring schedule has no envelope, and gets no
- * out-of-hours slots at all rather than an unbounded 24 hours.
- *
- * Mirrors the identical calculation in enforce_booking_bookability()
- * (20260821143821_emergency_booking_requests.sql), including preferring
- * provider_availability_windows and only falling back to the legacy
- * single-period table when a provider has no window rows.
- */
-export const resolveWeeklyEnvelope = (
-  windowRows: { start_time: string; end_time: string }[],
-  legacyRows: { open_time: string; close_time: string; is_closed: boolean }[],
-): { openMins: number; closeMins: number } | null => {
-  const spans = windowRows.length > 0
-    ? windowRows.map(row => ({ open: row.start_time, close: row.end_time }))
-    : legacyRows.filter(row => !row.is_closed).map(row => ({ open: row.open_time, close: row.close_time }));
-  if (spans.length === 0) return null;
-  const openMins = Math.min(...spans.map(span => parse24HTimeToMinutes(span.open)));
-  const closeMins = Math.max(...spans.map(span => parse24HTimeToMinutes(span.close)));
-  return closeMins > openMins ? { openMins, closeMins } : null;
-};
-
 // Effective blocked span of a booking: [start - buffer_before, end + buffer_after).
 // A service's own buffer overrides the provider's global buffer_mins; NULL on
 // the service means "no override" (before -> 0, after -> providerBufferMins).
@@ -735,17 +741,23 @@ export const AvailabilityService = {
    * When the provider has opted into emergency requests (see
    * EmergencyRequestPolicy) those times come back instead with
    * isByRequest: true and the rules they break in requestReasons — bookable,
-   * but only ever as a request the provider accepts. Every bound applied
-   * here mirrors enforce_booking_bookability() exactly, so the picker never
-   * offers a time the database would then reject:
+   * but only ever as a request the provider accepts.
    *
-   *   - the extension is measured from the provider's RECURRING WEEKLY
-   *     envelope (earliest start, latest end across all their days), not
-   *     from a 24h clock, and a provider with no recurring schedule gets no
-   *     out-of-hours slots at all;
+   * The provider's WORKING HOURS are the only thing that decides what is
+   * ordinarily bookable. Everything outside them — the rest of the day, in
+   * either direction — is requestable once they opt in, with no further
+   * bound on the time of day. That is deliberate: any bound the app derives
+   * is derived from hours describing a normal week, and would rule out the
+   * 4am bridal call this feature exists to make possible. The provider
+   * answers each request; that IS the filter.
+   *
+   * Two rules still hold regardless of any opt-in, and mirror
+   * enforce_booking_bookability() exactly so the picker never offers a time
+   * the database would then reject:
+   *
    *   - a shut day (blocked, or a one-off closed override) answers to the
    *     blocked-date opt-in, not the out-of-hours one;
-   *   - a time that has already passed is never offered, opt-in or not.
+   *   - a time that has already passed is never offered.
    */
   async getAvailableSlots(
     providerName: string,
@@ -776,8 +788,8 @@ export const AvailabilityService = {
       // Fetch scheduling settings + blocked date + day schedule + this
       // service's own buffer override in parallel. The two schedule reads
       // deliberately fetch the WHOLE week rather than just this weekday:
-      // the out-of-hours envelope below is defined across all seven days,
-      // and at 7-14 rows that's cheaper than a second round trip.
+      // the working-hours resolution below needs the whole week's rows, and
+      // at 7-14 rows that's cheaper than a second round trip.
       const bundle = await getAvailabilityDateBundle(providerId, date, serviceId);
       const settings = bundle.settings;
       const policy = readEmergencyPolicy(settings as unknown as Record<string, unknown> | null);
@@ -847,21 +859,17 @@ export const AvailabilityService = {
         }
       }
 
-      // Out-of-hours (or whole-day, when the day is shut) request slots.
-      // Gated exactly as the trigger gates them: the out-of-hours opt-in
-      // normally, the blocked-date opt-in on a day with no hours of its own.
+      // Request slots: the whole rest of the day, either side of whatever the
+      // working windows above already cover. On a shut day that's all 24
+      // hours, since the day has no windows of its own. Gated exactly as the
+      // trigger gates them — the out-of-hours opt-in normally, the
+      // blocked-date opt-in on a day with no hours of its own.
+      //
+      // Generated on the same grid as the real slots (midnight + step), so an
+      // opened-up day reads 6:00/7:00/8:00 rather than an offset sequence.
       if (dayIsShut ? policy.blockedDates : policy.outsideHours) {
-        const envelope = resolveWeeklyEnvelope(allWindowRows, allLegacyRows);
-        if (envelope) {
-          const from = Math.max(0, envelope.openMins - policy.extensionMins);
-          const to = Math.min(24 * 60, envelope.closeMins + policy.extensionMins);
-          // Align the extension to the same grid as the real slots above, so
-          // an extended day reads as 8:00/9:00/10:00 rather than 7:43.
-          const gridStart = envelope.openMins - Math.ceil(policy.extensionMins / step) * step;
-          for (let mins = gridStart; mins + durationMinutes <= to; mins += step) {
-            if (mins < from) continue;
-            offer(mins, dayIsShut ? [...dateReasons] : [...dateReasons, 'outside_hours']);
-          }
+        for (let mins = 0; mins + durationMinutes <= 24 * 60; mins += step) {
+          offer(mins, dayIsShut ? [...dateReasons] : [...dateReasons, 'outside_hours']);
         }
       }
 
@@ -876,13 +884,9 @@ export const AvailabilityService = {
       return Array.from(candidates.entries())
         .sort(([a], [b]) => a - b)
         .flatMap(([startMins, reasons]): TimeSlot[] => {
-          const startMs = slotStartMs(date, startMins);
-          // Never offered, opt-in or not — the trigger rejects an elapsed
-          // same-day time unconditionally.
-          if (startMs < nowMs) return [];
-          const allReasons = startMs < earliestStart
-            ? (policy.shortNotice ? [...reasons, 'short_notice' as EmergencyReason] : null)
-            : reasons;
+          const allReasons = resolveSlotOffer(
+            reasons, slotStartMs(date, startMins), nowMs, earliestStart, policy.shortNotice,
+          );
           if (allReasons === null) return [];
 
           const slotEnd = startMins + durationMinutes;

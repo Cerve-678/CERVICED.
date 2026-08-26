@@ -23,13 +23,14 @@ Four of the trigger's rejections are no longer absolute. Since `20260821143821_e
 | `allow_blocked_date_requests` | blocked date, or a one-off `is_closed` override |
 | `allow_short_notice_requests` | under `min_booking_notice_hrs` |
 | `allow_beyond_window_requests` | beyond `booking_window_days` |
-| `out_of_hours_extension_mins` | the **bound**, not an opt-in (default 120) |
 
 Still hard for everyone: a past date, an already-elapsed same-day time, and a genuinely taken slot. The overlap rule above is untouched — no opt-in reaches past it.
 
-**The envelope is the bound.** An out-of-hours request may only reach `out_of_hours_extension_mins` either side of the provider's *recurring weekly envelope* (earliest start, latest end across the whole week) — never a blank 24h clock. No recurring schedule means no envelope, and no out-of-hours slots at all. `resolveWeeklyEnvelope()` and the trigger compute this identically; **if they drift, the picker offers times the DB rejects**, which is the dead end the feature exists to remove. Covered by `src/tests/emergencyRequestSlots.test.ts`.
+**There is no bound on the time of day.** Working hours decide what's *ordinarily* bookable; everything outside them is requestable once the provider opts in, at any hour, and their approval is the filter. An earlier version bounded requests to the provider's weekly envelope widened by an extension — which refused a **4am bridal call**, the most common genuine out-of-hours booking in this industry, because the bound was inferred from hours describing a NORMAL week. Removed 2026-08-26 (`20260826171244`), which also drops the dead `out_of_hours_extension_mins` column.
 
-**Slots carry their reason.** `getAvailableSlots` returns these as normal `TimeSlot`s with `isByRequest: true` + `requestReasons`. `ModernBeautyCalendar` shows them in a separate dashed "By request" group, and **only when the caller passes `allowRequests`** — default `false`, because a caller that shows them must be able to carry the flag to checkout. Everything else (consultation prerequisite, both reschedule pickers, provider AddBooking's Available tab, the grouped back-to-back chain picker, and `resolveNextAvailableSlot`) never sees them.
+What survives every opt-in, and must stay mirrored between `resolveSlotOffer()` and the trigger — **if they drift, the picker offers times the DB rejects**: a past date, an already-elapsed same-day time, a taken slot. Covered by `src/tests/emergencyRequestSlots.test.ts`.
+
+**Slots carry their reason.** `getAvailableSlots` returns these as normal `TimeSlot`s with `isByRequest: true` + `requestReasons`. `ModernBeautyCalendar` shows them in a separate "By request" group, **red-outlined on both the date pill and the time chip** (never the accent — that colour means "bookable"), and **only when the caller passes `allowRequests`** — default `false`, because a caller that shows them must be able to carry the flag to checkout. Everything else (consultation prerequisite, both reschedule pickers, provider AddBooking's Available tab, the grouped back-to-back chain picker, and `resolveNextAvailableSlot`) never sees them.
 
 **Always pending.** `finalize_checkout()` forces auto-accept off for `is_emergency_request`, so an opted-in provider with `auto_accept_bookings = true` is never silently committed. `emergency_ack_at` mirrors `safety_ack_at`, enforced inside `prepare_checkout`.
 
