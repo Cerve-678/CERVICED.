@@ -8,6 +8,7 @@ import {
   getAvailabilityNoticeSettings,
   getAvailabilityProviderCore,
   getAvailabilityServiceBufferRows,
+  getBookableServiceIds,
   getAvailabilityWeeklyScheduleRows,
   getProviderBusySpans,
   getProviderBookingWindowDays,
@@ -1040,7 +1041,44 @@ export const AvailabilityService = {
   }> {
     const conflicts: { cartItemId: string; message: string }[] = [];
 
+    // Does every item still point at something bookable? A cart persists
+    // across sessions, so an item can outlive the service it was added from —
+    // deleted, withdrawn, or its provider unpublished. Nothing downstream
+    // catches that kindly: hold_cart_booking_slots hits
+    // bookings_service_id_fkey and fails the WHOLE batch with a raw 23503,
+    // which the checkout error path can only report as "please try again" —
+    // advice that can never work, for an item the client can't identify.
+    // Checked here so the stale item is named and flagged like any other
+    // cart problem, in one batched query rather than per row.
+    const idsToCheck = Array.from(new Set(
+      bookings.map(b => b.serviceId).filter((id): id is string => !!id && UUID_RE.test(id))
+    ));
+    let bookableIds: Set<string> | null = null;
+    try {
+      bookableIds = await getBookableServiceIds(idsToCheck);
+    } catch (error) {
+      // Fail OPEN on a lookup failure: a network hiccup must not flag every
+      // service in the cart as withdrawn. The FK is still the real backstop.
+      logger.error('validateCartBookings: service existence check failed', error);
+    }
+    const staleItemIds = new Set<string>();
+    if (bookableIds) {
+      for (const booking of bookings) {
+        const id = booking.serviceId;
+        if (!id || !UUID_RE.test(id) || bookableIds.has(id)) continue;
+        staleItemIds.add(booking.cartItemId);
+        conflicts.push({
+          cartItemId: booking.cartItemId,
+          message: 'This service is no longer available from this provider. Please remove it to continue.',
+        });
+      }
+    }
+
     for (const booking of bookings) {
+      // Already reported as unbookable — a slot check on a service that no
+      // longer exists would only add a second, less useful reason.
+      if (staleItemIds.has(booking.cartItemId)) continue;
+
       // Check against existing bookings in storage
       const existingConflict = await this.isSlotAvailable(
         booking.providerName,

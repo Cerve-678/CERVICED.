@@ -17,6 +17,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCart, CartItem } from '../../contexts/CartContext';
@@ -101,6 +102,8 @@ function toCartIssue(serviceMessage: string): string {
     case 'This time is outside the provider\u2019s working hours.':        return CART_ISSUE.outsideHours;
     case 'Provider is not available on this date.':                    return CART_ISSUE.dayUnavailable;
     case "This provider isn't set up for booking yet.":                return CART_ISSUE.providerUnbookable;
+    case 'This service is no longer available from this provider. Please remove it to continue.':
+                                                                       return CART_ISSUE.serviceUnavailable;
     default:                                                           return serviceMessage;
   }
 }
@@ -2319,6 +2322,30 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     clearItemIssue(item.id);
   }, [clearItemIssue]);
 
+  // A flag from a network check describes the world at the moment it ran, so
+  // it must not outlive that moment. Editing and removing already clear one,
+  // and starting a fresh checkout clears them all — but a client who leaves
+  // to look at the provider's profile, sees the time is plainly still on
+  // offer, and comes back was stuck being told it was gone, with no way to
+  // dismiss it. Re-check on focus and take whatever comes back, including
+  // nothing.
+  //
+  // Only when something is actually flagged: with a clean cart this would be
+  // a Supabase round trip on every visit to buy nothing.
+  const revalidateRef = useRef<() => void>(() => {});
+  revalidateRef.current = () => {
+    if (itemIssues.size === 0) return;
+    let cancelled = false;
+    void identifyCartConflicts(items, getServiceBooking)
+      .then(found => { if (!cancelled) setItemIssues(found); })
+      // Leave the existing flags alone on a failed re-check. They may well be
+      // stale, but silently clearing them on a network blip would wave the
+      // client through to a checkout that fails again for the same reason.
+      .catch(e => logger.error('Could not re-check cart flags on focus:', e));
+    return () => { cancelled = true; };
+  };
+  useFocusEffect(useCallback(() => revalidateRef.current(), []));
+
   // Picking a single service out of the chooser. If that service is currently
   // part of a group, editing it means it no longer runs back-to-back with the
   // rest — so it leaves the group (bookingBatchId cleared) and becomes its own
@@ -3493,7 +3520,13 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           checkoutSnapshot.items,
                           itemId => checkoutSnapshot.bookings[itemId],
                         )
-                          .then(found => { if (found.size > 0) setItemIssues(found); })
+                          // Set unconditionally, including an empty result.
+                          // Guarding on found.size > 0 left the previous
+                          // attempt's flags on screen when the recheck came
+                          // back clean — the card kept saying a time was gone
+                          // while the picker still offered it, and only Edit
+                          // or Remove could clear it.
+                          .then(found => setItemIssues(found))
                           .catch(e => logger.error('Could not identify which cart item conflicts:', e));
                       } finally {
                         setIsReservingSlots(false);

@@ -65,6 +65,7 @@ export const CART_ISSUE = {
   outsideHours: "This time is outside the provider's working hours.",
   dayUnavailable: 'Provider is not available on this date.',
   providerUnbookable: "This provider isn't taking bookings right now",
+  serviceUnavailable: 'This service is no longer available from this provider. Please remove it to continue.',
   promoExpired: 'The promo code on this booking has expired — remove it or pick another',
   takenWhilePaying: 'This time was taken while you were paying — pick a new time',
   bookingFailed: "This service couldn't be booked — try again",

@@ -40,13 +40,13 @@ Curated: [[Address Release]] · **81 files**
 - … +51 more
 
 ## Availability & slots
-Curated: [[Availability & Slots]] · **145 files**
+Curated: [[Availability & Slots]] · **146 files**
 - `src/services/AvailabilityService.ts` _(307)_
 - `src/services/databaseService.ts` _(159)_
 - `src/components/ModernBeautyCalendar.tsx` _(150)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
-- `src/screens/client/SearchScreen.tsx` _(104)_
+- `src/screens/client/SearchScreen.tsx` _(102)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(85)_
 - `src/contexts/BookingContext.tsx` _(80)_
 - `src/services/becca/capabilities/client.ts` _(71)_
@@ -71,7 +71,7 @@ Curated: [[Availability & Slots]] · **145 files**
 - `supabase/security_audit_2026-08-02_rls_and_hardening.sql` _(20)_
 - `src/screens/client/BookingsScreen.tsx` _(19)_
 - `src/services/becca/capabilities/provider.ts` _(18)_
-- … +115 more
+- … +116 more
 
 ## Payments
 Curated: [[Payments]] · **108 files**
@@ -108,9 +108,9 @@ Curated: [[Payments]] · **108 files**
 - … +78 more
 
 ## Booking flow
-Curated: [[Booking Flow]] · **228 files**
+Curated: [[Booking Flow]] · **229 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
-- `src/contexts/BookingContext.tsx` _(700)_
+- `src/contexts/BookingContext.tsx` _(699)_
 - `src/services/databaseService.ts` _(553)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(505)_
 - `src/services/becca/capabilities/client.ts` _(502)_
@@ -130,21 +130,21 @@ Curated: [[Booking Flow]] · **228 files**
 - `src/screens/client/ProviderProfileScreen.tsx` _(113)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
+- `src/screens/shared/NotificationsScreen.tsx` _(109)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/screens/shared/NotificationsScreen.tsx` _(106)_
 - `src/services/AvailabilityService.ts` _(97)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
+- `src/types/booking.ts` _(89)_
 - `supabase/fix_reschedule_requests_orphaned_on_cancellation.sql` _(88)_
 - `src/utils/scheduleIssues.ts` _(87)_
-- `src/components/BookingSheet.tsx` _(86)_
-- … +198 more
+- … +199 more
 
 ## Notifications
 Curated: [[Notifications]] · **142 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
-- `src/screens/shared/NotificationsScreen.tsx` _(249)_
+- `src/screens/shared/NotificationsScreen.tsx` _(250)_
 - `src/services/databaseService.ts` _(151)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(100)_
@@ -245,7 +245,7 @@ Curated: [[Booking Flow]] · **53 files**
 
 ## Reschedule / cancel
 Curated: [[Booking Flow]] · **147 files**
-- `src/contexts/BookingContext.tsx` _(310)_
+- `src/contexts/BookingContext.tsx` _(317)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(263)_
 - `supabase/fix_reschedule_flow_completion.sql` _(195)_
 - `src/services/databaseService.ts` _(194)_
@@ -264,11 +264,11 @@ Curated: [[Booking Flow]] · **147 files**
 - `src/services/bookingService.ts` _(52)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(47)_
 - `src/screens/provider/PoliciesScreen.tsx` _(46)_
+- `src/screens/shared/NotificationsScreen.tsx` _(46)_
 - `src/screens/client/BookingsScreen.tsx` _(45)_
 - `src/screens/provider/ProviderBookingHistoryScreen.tsx` _(45)_
 - `supabase/fix_reschedule_notification_wrong_booking_id.sql` _(44)_
 - `supabase/fix_provider_no_show_status.sql` _(42)_
-- `src/screens/shared/NotificationsScreen.tsx` _(39)_
 - `supabase/fix_provider_status_transition_guard.sql` _(39)_
 - `supabase/fix_reschedule_requested_dates_type_mismatch.sql` _(39)_
 - `src/utils/policyDisplay.ts` _(37)_
@@ -278,7 +278,7 @@ Curated: [[Booking Flow]] · **147 files**
 - … +117 more
 
 ## Auth
-Curated: [[Contexts]] · **153 files**
+Curated: [[Contexts]] · **154 files**
 - `src/services/databaseService.ts` _(208)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(152)_
 - `src/contexts/AuthContext.tsx` _(134)_
@@ -309,7 +309,7 @@ Curated: [[Contexts]] · **153 files**
 - `supabase/fix_client_reliability_tracking.sql` _(12)_
 - `src/services/becca/capabilities/client.ts` _(11)_
 - `src/utils/validation.ts` _(11)_
-- … +123 more
+- … +124 more
 
 ## Becca / AI
 Curated: [[Services]] · **37 files**
