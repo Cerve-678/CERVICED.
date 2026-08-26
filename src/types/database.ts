@@ -76,6 +76,9 @@ export type NotificationType =
   | "reschedule_provider_response"
   | "reschedule_confirmed"
   | "reschedule_declined"
+  /** Nobody answered in time — distinct from _declined, which means somebody
+   *  decided. Inserted only by process_expire_stale_reschedule_requests(). */
+  | "reschedule_expired"
   | "review_request"
   | "review_received"
   | "promotion"

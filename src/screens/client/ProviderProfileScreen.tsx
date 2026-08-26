@@ -4596,9 +4596,15 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
                     bell wouldn't be true. The bell/notify-on-release-day
                     logic is unchanged — it was never tied to this text. */}
                 {(() => {
+                  // Headline only. The detail is a "Next free ..." line, and
+                  // this pill is about when a provider's diary opens, not
+                  // which individual slot is soonest — the date/time picker
+                  // is where that belongs. Appended here it also gave the
+                  // fallback two claims in one pill, the same doubling the
+                  // release-day text below deliberately avoids.
                   const pillText =
                     availability && availability.state !== "unpublished"
-                      ? `${availability.headline}${availability.detail ? ` · ${availability.detail}` : ""}`
+                      ? availability.headline
                       : "";
                   // A provider who publishes slots on a fixed day of the
                   // month says THAT and nothing else. Today's open/closed

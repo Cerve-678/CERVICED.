@@ -288,84 +288,100 @@ Postgres error ([RescheduleScreen.tsx](src/screens/client/RescheduleScreen.tsx)'
 submit `catch`, which is the single place client-facing reschedule copy is
 decided — see §7b).
 
-### 7a. Response deadlines — open requests currently never expire
+### 7a. Response deadlines — BUILT 2026-08-26
 
-**A `booking_reschedule_requests` row has no deadline and no expiry job.** It
-sits in `pending` (waiting on the provider) or `provider_responded` (waiting on
-the client) until somebody acts, forever. Verified live 2026-08-21: the status
-CHECK allows only `pending | provider_responded | confirmed | rejected |
-cancelled` — there is no `expired` — and `cron.job` has no expiry job for this
-table, only the *reminder* job `provider-stale-reschedule-reminders` (jobid 7,
-every 2h, nudges the provider 4h after a client request and re-nudges at most
-every 8h). Nudging forever is not a deadline.
+**A reschedule request now has a deadline.** Migration
+`20260826090555_reschedule_request_expiry.sql`, cron job `reschedule-request-expiry`
+(jobid 154, `17,47 * * * *`).
 
-Every other "waiting on someone" state in the app already has one:
+Before this, a `booking_reschedule_requests` row sat in `pending` (waiting on
+the provider) or `provider_responded` (waiting on the client) forever, and
+three things went wrong because of it, all against the client who asked:
 
-| State | Waiting on | Deadline today |
+1. `request_reschedule_own_booking()` refuses a second request while one is
+   open, so a provider who never replied blocked the client from asking again
+   — silence was a stronger veto than an outright refusal.
+2. `process_auto_complete_bookings()` flipped `confirmed` → `completed` purely
+   on the clock. Request `a1b9c766` was live proof: still `pending` on a
+   booking completed 2026-08-21.
+3. The provider's own `rescheduleNotice` window kept running while the request
+   sat there, so a request made in good time became un-actionable by both
+   sides with nothing telling either of them.
+
+**The answer window is the provider's own `rescheduleNotice` setting** — a
+provider who demands 72h notice to reschedule gets 72h to answer one, not
+forever. The hours mapping is copied verbatim from
+`request_reschedule_own_booking()` so the two cannot disagree about what `48h`
+means. Floored at **24h**, because `same_day` maps to 0 hours and would
+otherwise expire a request the instant it was made. Backstopped by the **start
+of the appointment day**, whichever comes first.
+
+**Who is waiting is decided by status, never by `requested_by`:**
+
+| Status | Waiting on | Why |
 |---|---|---|
-| Booking `pending` | Provider to accept | ✅ `process_expire_stale_pending_bookings()` (jobid 70, every 30m) → `cancelled` at 48h after creation, or once the appointment time passes |
-| Waitlist hold | Client to claim | ✅ `expire_waitlist_holds()` (jobid 146, every 15m) |
-| Cart checkout hold | Client to pay | ✅ `expire_cart_holds()` (jobid 147, every 5m), 10-minute TTL |
-| Booking `confirmed`/`in_progress` past its end | Nobody | ✅ `process_auto_complete_bookings()` (jobid 11, every 30m) → `completed` |
-| Reschedule `pending` | **Provider to offer dates** | ❌ none — reminders only |
-| Reschedule `provider_responded` | **Client to pick one** | ❌ none — not even a reminder |
-| Group reschedule batch | Either side | ❌ none (same rows, same gap) |
+| `pending` | Provider | Only `request_reschedule_own_booking()` creates it, always `requested_by = 'user'` |
+| `provider_responded` | Client | Including when the PROVIDER opened it — `provider_initiate_reschedule()` inserts straight into this state with `requested_by = 'provider'` |
 
-**Why this is a live defect, not just untidiness.** The three interactions all
-run the same direction — against the client who asked:
+**`expired` is a distinct terminal status**, not `rejected` or `cancelled`:
+those mean somebody decided, and the difference matters for the notification
+copy and for any later dispute. The status CHECK was widened to allow it.
 
-1. `process_auto_complete_bookings()` flips `confirmed` → `completed` purely on
-   the clock, with no check for an open reschedule request. A client who asked
-   to move an appointment, got no reply, and didn't attend ends up with a
-   booking recorded as **completed** — and the reschedule row still `pending`
-   underneath it.
-2. `request_reschedule_own_booking()` refuses a second request while one is
-   open ("A reschedule request is already in progress for this booking"). A
-   provider who simply never responds therefore blocks the client from asking
-   again — silence is a stronger veto than refusing.
-3. The provider's own `rescheduleNotice` window keeps running while the request
-   sits there. A request made in good time becomes un-actionable by both sides
-   once the window lapses, with nothing telling either of them that happened.
+**Notification (`reschedule_expired`, a new type):**
 
-**The rule to implement** (product decision made 2026-08-21, not yet built):
-an unanswered reschedule request expires, and expiry is *communicated as an
-outcome*, not left as silence.
+- `pending` expires → **client only**. The provider caused it by inaction and
+  has already had up to N nudges from
+  `process_provider_stale_reschedule_reminders()`; a fourth message is a nag,
+  not news.
+- `provider_responded` expires → **both**. The provider's held offer is dead
+  through no act of their own, and the client's app is still showing those
+  offered dates as live — leaving them to tap a slot that no longer exists is
+  the worse failure.
 
-- **Provider hasn't offered dates** (`pending`): expire at the earlier of
-  N days after the request and the start of the appointment day. The client is
-  told the provider couldn't meet the request, the booking stays exactly as
-  originally scheduled, and the client can ask again or cancel under the normal
-  policy.
-- **Client hasn't picked an offered date** (`provider_responded`): same shape —
-  expire at the earlier of N days after the offer and the appointment day, tell
-  the provider, release the offered slots, booking unchanged.
-- Expiry must be a **distinct terminal status** (`expired`), not `rejected` or
-  `cancelled`: those mean somebody decided, and the difference matters for both
-  the notification copy and any later dispute.
+Copy asserts only what is certainly true: *"…so your booking on DD Mon YYYY
+stays as originally scheduled."* It deliberately does **not** offer "ask again
+or cancel" — by that point the provider's notice window may have lapsed, which
+is exactly what would make both of those fail. Promising an action the next tap
+rejects is worse than silence.
 
-Decisions still to settle before building:
+**An expired request costs the client nothing.** Neither limit reads this
+table: the max-reschedules check reads `bookings.reschedule_count` and the 24h
+cooldown reads `bookings.last_rescheduled_at`, both written only when a
+reschedule actually completes. Re-requesting reuses the same row via the
+existing `ON CONFLICT (booking_id) DO UPDATE`, so the UNIQUE constraint is not
+in the way either.
 
-- **N.** "Before the appointment day" is the hard backstop; the softer
-  N-days-after-request limit is a separate number and hasn't been picked.
-  It should probably track the provider's own `rescheduleNotice` setting rather
-  than being a global constant, so a provider who demands 72h notice can't take
-  72h to answer.
-- Does an expired request count toward `maxReschedules` or restart the 24h
-  cooldown? It shouldn't — the client did nothing wrong — which means
-  `request_reschedule_own_booking()` needs to exclude `expired` rows from both
-  checks explicitly.
-- Should expiry of a `pending` request also give the client a no-penalty
-  cancellation, given the provider's non-response is what stranded them? This
-  is the part with actual liability attached — see
-  `LEGAL-COMPLIANCE-NOTES.md` §12.
-- `process_auto_complete_bookings()` needs to stop auto-completing a booking
-  with an open reschedule request regardless of which N is chosen.
+**Two further guards shipped with it:**
 
-Implementation shape (mirrors the pending-booking expiry that already works):
-migration to widen the status CHECK with `expired`, a
-`process_expire_stale_reschedule_requests()` SECURITY DEFINER function, one
-`cron.schedule` entry, and notification rows inserted by that function — **not**
-by the app, same as every other booking-lifecycle notification (§9).
+- `on_booking_terminal_close_reschedule` (trigger on `bookings`) closes any
+  open request as `cancelled` when its booking reaches `cancelled`/`completed`/
+  `no_show`. Deliberately a separate, narrowly-scoped trigger rather than an
+  edit to `handle_booking_status_change()` — that function owns every lifecycle
+  notification in the app, and redeploying it to add an unrelated concern is
+  what silently reverted the group-dedup fix on 2026-08-08. No notification: the
+  booking's own status change already tells both parties.
+- `process_auto_complete_bookings()` now skips a booking with an open request.
+  Defence in depth — the deadline already makes this unreachable — and safe
+  against stranding a booking forever precisely *because* expiry is guaranteed.
+
+Three already-stranded rows were closed by the migration's backfill (silently:
+telling someone their request expired days after the appointment happened is
+noise, not news).
+
+**App side:** `TERMINAL_BOOKING_STATUSES` / `pendingRescheduleStatusOverride()`
+in [src/types/booking.ts](src/types/booking.ts) replace the inline condition in
+`BookingContext` that named CANCELLED and NO_SHOW but omitted COMPLETED — which
+is what forced `a1b9c766`'s booking back to `UPCOMING`, and since
+`BookingsScreen` also filters pending-reschedule bookings out of Past, it could
+never leave the Upcoming tab. Covered by
+[rescheduleTerminalBookingGuard.test.ts](src/tests/rescheduleTerminalBookingGuard.test.ts).
+
+**STILL OPEN, deliberately:** whether expiry of a `pending` request should also
+give the client a **no-penalty cancellation**, given the provider's
+non-response is what stranded them. That has real liability attached
+(`LEGAL-COMPLIANCE-NOTES.md` §12) and is a product/legal call, not an
+engineering one — the cancellation policy is untouched and the copy promises
+nothing about it.
 
 ### 7b. Client-facing failure copy
 

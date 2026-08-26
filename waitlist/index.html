@@ -10,63 +10,66 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bakbak+One&family=Jura:wght@400;500;600;700&display=swap">
 <style>
 /* ── Tokens ─────────────────────────────────────────────────────────────
-   Values are the app's own client-hat palette (src/constants/theme.ts →
-   clientLightTheme / clientDarkTheme). Do not drift these by hand.       */
+   Values are the app's provider-hat palette (DESIGN_SYSTEM.md → L / D).
+   Do not drift these by hand.       */
 :root{
-  --bg:#FBF7F8;
-  --surface:#F3EEF0;
+  --bg:#F5F1EC;
+  --surface:#EDE8E2;
   --card:#FFFFFF;
-  --accent:#4A2340;
-  --accent-text:#4A2340;
+  --accent:#5C4033;
+  --accent-text:#5C4033;
   --on-accent:#FFFFFF;
-  --accent-dim:rgba(74,35,64,0.12);
-  --secondary:#E5ECF4;
-  --secondary-text:#4A6B8F;
+  --accent-dim:rgba(92,64,51,0.12);
+  --secondary:rgba(92,64,51,0.12);
+  --secondary-text:#5C4033;
   --text:#000000;
-  --sub:rgba(74,35,64,0.62);
-  --border:rgba(74,35,64,0.14);
-  --sep:rgba(74,35,64,0.08);
-  --shadow:0 1px 2px rgba(74,35,64,0.05), 0 12px 32px -12px rgba(74,35,64,0.18);
-  --ring:rgba(74,35,64,0.45);
+  --sub:#7E6667;
+  --border:rgba(126,102,103,0.14);
+  --sep:rgba(126,102,103,0.08);
+  --shadow:0 1px 2px rgba(92,64,51,0.05), 0 12px 32px -12px rgba(92,64,51,0.18);
+  --ring:rgba(92,64,51,0.55);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#17151A;
-    --surface:#1E1B21;
-    --card:#26222A;
-    --accent:#E5ECF4;
-    --accent-text:#E5ECF4;
-    --on-accent:#1B2740;
-    --accent-dim:rgba(229,236,244,0.14);
-    --secondary:#E5ECF4;
-    --secondary-text:#E5ECF4;
+    --bg:#1A1815;
+    --surface:#201D1A;
+    --card:#252220;
+    --accent:#AF9197;
+    --accent-text:#AF9197;
+    --on-accent:#FFFFFF;
+    --accent-dim:rgba(175,145,151,0.10);
+    --secondary:rgba(175,145,151,0.10);
+    --secondary-text:#AF9197;
     --text:#F0ECE7;
-    --sub:rgba(240,236,231,0.65);
-    --border:rgba(240,236,231,0.16);
-    --sep:rgba(240,236,231,0.10);
+    --sub:#7E6667;
+    --border:rgba(126,102,103,0.18);
+    --sep:rgba(126,102,103,0.10);
     --shadow:0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.6);
-    --ring:rgba(229,236,244,0.55);
+    --ring:rgba(175,145,151,0.6);
   }
 }
 :root[data-theme="dark"]{
-  --bg:#17151A;
-  --surface:#1E1B21;
-  --card:#26222A;
-  --accent:#E5ECF4;
-  --accent-text:#E5ECF4;
-  --on-accent:#1B2740;
-  --accent-dim:rgba(229,236,244,0.14);
-  --secondary:#E5ECF4;
-  --secondary-text:#E5ECF4;
+  --bg:#1A1815;
+  --surface:#201D1A;
+  --card:#252220;
+  --accent:#AF9197;
+  --accent-text:#AF9197;
+  --on-accent:#FFFFFF;
+  --accent-dim:rgba(175,145,151,0.10);
+  --secondary:rgba(175,145,151,0.10);
+  --secondary-text:#AF9197;
   --text:#F0ECE7;
-  --sub:rgba(240,236,231,0.65);
-  --border:rgba(240,236,231,0.16);
-  --sep:rgba(240,236,231,0.10);
+  --sub:#7E6667;
+  --border:rgba(126,102,103,0.18);
+  --sep:rgba(126,102,103,0.10);
   --shadow:0 1px 2px rgba(0,0,0,0.4), 0 16px 40px -16px rgba(0,0,0,0.6);
-  --ring:rgba(229,236,244,0.55);
+  --ring:rgba(175,145,151,0.6);
 }
 
 *{box-sizing:border-box;}
+/* An author `display` rule beats the UA stylesheet's [hidden]{display:none},
+   so .field{display:flex} would keep hidden fields visible without this. */
+[hidden]{display:none !important;}
 html{-webkit-text-size-adjust:100%;}
 body{
   margin:0;
@@ -156,15 +159,36 @@ a{color:var(--accent-text);}
   letter-spacing:0.14em;text-transform:uppercase;color:var(--secondary-text);
 }
 .row{
-  display:grid;grid-template-columns:38px 1fr auto;gap:14px;align-items:center;
+  display:grid;grid-template-columns:38px 1fr auto 24px;gap:14px;align-items:center;
   padding:13px 4px;
   border-top:1px solid var(--sep);
-  opacity:0;transform:translateY(10px);
-  animation:rise .55s cubic-bezier(.22,.68,.35,1) forwards;
+  transition:background .18s ease;
 }
-.row:nth-child(2){animation-delay:.15s;}
-.row:nth-child(3){animation-delay:.32s;}
-.row:nth-child(4){animation-delay:.49s;}
+.row.is-new{opacity:0;transform:translateY(10px);animation:rise .5s cubic-bezier(.22,.68,.35,1) forwards;}
+.row.is-going{animation:fall .28s ease forwards;}
+@keyframes fall{to{opacity:0;transform:translateY(-6px);}}
+.rm{
+  border:0;background:transparent;cursor:pointer;padding:0;
+  width:24px;height:24px;border-radius:50%;
+  color:var(--sub);font-family:'Jura',sans-serif;font-size:19px;line-height:1;
+  opacity:.45;transition:opacity .18s ease,background .18s ease,color .18s ease;
+}
+.rm:hover{opacity:1;background:var(--accent-dim);color:var(--accent-text);}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  padding:8px 13px;border-radius:999px;
+  background:transparent;border:1px dashed var(--border);color:var(--sub);
+  font-family:'Jura',sans-serif;font-size:13px;
+  transition:border-color .2s ease,color .2s ease,background .2s ease,transform .18s ease;
+}
+.chip:hover{border-style:solid;border-color:var(--accent);color:var(--accent-text);background:var(--accent-dim);transform:translateY(-1px);}
+.chip .plus{font-family:'Bakbak One',sans-serif;font-size:13px;color:var(--accent-text);}
+.chip .cp{font-variant-numeric:tabular-nums;opacity:.7;}
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .7s ease,transform .7s cubic-bezier(.22,.68,.35,1);}
+.reveal.is-in{opacity:1;transform:none;}
+.fields{transition:opacity .16s ease;}
+.fields.is-swapping{opacity:0;}
 .avatar{
   width:38px;height:38px;border-radius:12px;
   background:var(--secondary);color:var(--secondary-text);
@@ -201,7 +225,10 @@ a{color:var(--accent-text);}
 }
 @keyframes rise{to{opacity:1;transform:translateY(0);}}
 @media (prefers-reduced-motion: reduce){
-  .row,.cart-total,.cart-cta,.cart-note{animation:none;opacity:1;transform:none;}
+  .row,.row.is-new,.row.is-going,.cart-total,.cart-cta,.cart-note{animation:none;opacity:1;transform:none;}
+  .reveal{opacity:1;transform:none;transition:none;}
+  .chip:hover,.btn:hover{transform:none;}
+  .fields.is-swapping{opacity:1;}
   .btn:hover{transform:none;}
 }
 
@@ -316,82 +343,44 @@ footer{
   <!-- ── Hero ────────────────────────────────────────────────────── -->
   <div class="hero" id="top">
     <div class="hero-copy">
-      <span class="label">The waitlist is open</span>
-      <h1>Several providers.<br><span class="quiet">One cart.</span><br>One checkout.</h1>
-      <p class="lede">CERVICED is a beauty &amp; wellness marketplace built like a shopping
-        experience, not a calendar. Browse independent UK providers, add whatever you want
-        from as many of them as you like, and book it all in one go.</p>
-      <a class="btn" href="#join">Join the waitlist</a>
+      <span class="label">Coming soon</span>
+      <h1>Multiple cervices.<br>Multiple providers.<br><span class="quiet">One cart. One checkout.</span></h1>
+      <p class="lede">A new way to book beauty &amp; wellness across the UK.
+        We're not open yet — leave your email and we'll let you know the moment we are.</p>
+      <a class="btn" href="#join">Keep me posted</a>
     </div>
 
-    <div class="cart" role="img" aria-label="An illustration of the CERVICED cart: gel extensions £45, a lash lift and tint £38, and a cut and blow dry £55, from three different providers, totalling £138 in a single checkout.">
+    <div class="cart">
       <div class="cart-head">
         <span class="label">Your cart</span>
-        <span class="count">3 providers</span>
+        <span class="count" id="cart-count">3 providers</span>
       </div>
-      <div class="row">
-        <span class="avatar" aria-hidden="true">AN</span>
-        <span><span class="svc">Gel Extensions</span><br><span class="who">Amara Nails · Peckham</span></span>
-        <span class="price">£45</span>
+      <div id="cart-rows">
+        <div class="row"><span class="avatar">AN</span><span><span class="svc">Gel Extensions</span><br><span class="who">Amara Nails · Peckham</span></span><span class="price">£45</span><span></span></div>
+        <div class="row"><span class="avatar">SR</span><span><span class="svc">Lash Lift &amp; Tint</span><br><span class="who">Studio Ren · Camberwell</span></span><span class="price">£38</span><span></span></div>
+        <div class="row"><span class="avatar">NH</span><span><span class="svc">Cut &amp; Blow Dry</span><br><span class="who">Nia Hair · Brixton</span></span><span class="price">£55</span><span></span></div>
       </div>
-      <div class="row">
-        <span class="avatar" aria-hidden="true">SR</span>
-        <span><span class="svc">Lash Lift &amp; Tint</span><br><span class="who">Studio Ren · Camberwell</span></span>
-        <span class="price">£38</span>
+      <div class="cart-total">
+        <span class="k">Total</span>
+        <span class="v" id="cart-total" aria-live="polite">£138</span>
       </div>
-      <div class="row">
-        <span class="avatar" aria-hidden="true">NH</span>
-        <span><span class="svc">Cut &amp; Blow Dry</span><br><span class="who">Nia Hair · Brixton</span></span>
-        <span class="price">£55</span>
-      </div>
-      <div class="cart-total"><span class="k">Total</span><span class="v">£138</span></div>
       <div class="cart-cta">Checkout</div>
-      <p class="cart-note">Three appointments. One set of details. One payment.</p>
+      <div class="chips" id="cart-chips"></div>
+      <p class="cart-note">Add or remove what you like — it stays one checkout.</p>
     </div>
   </div>
 </div>
 
-<!-- ── Problem ───────────────────────────────────────────────────── -->
+<!-- ── What it is ────────────────────────────────────────────────── -->
 <section>
   <div class="wrap">
-    <div class="section-head">
-      <span class="label">Why we're building it</span>
-      <h2>Booking today isn't broken. It's just scattered.</h2>
-      <p>Most people find a provider through a social media link, then piece the rest
-        together by hand — working out what to actually book, retyping the same details
-        for every new provider, and keeping track of everyone's policies themselves.
-        It works. It's also the same manual effort, every single time. CERVICED puts
-        all of it in one place.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ── Three differences ─────────────────────────────────────────── -->
-<section>
-  <div class="wrap">
-    <div class="section-head">
-      <span class="label">What's different</span>
-      <h2>Three things, specifically</h2>
-    </div>
-    <div class="three">
-      <div class="point">
-        <span class="rule"></span>
-        <h3>The cart</h3>
-        <p>Add services from several different providers — or several services from one —
-          and check out once. Nothing else in this space works this way.</p>
-      </div>
-      <div class="point">
-        <span class="rule"></span>
-        <h3>Built for how you find people</h3>
-        <p>Discovery is visual and browsable, the way you already find providers online —
-          not a directory bolted onto a calendar.</p>
-      </div>
-      <div class="point">
-        <span class="rule"></span>
-        <h3>Your details, once</h3>
-        <p>Your profile travels with you. No re-typing the same information for every new
-          provider you try.</p>
-      </div>
+    <div class="section-head reveal">
+      <span class="label">What we're building</span>
+      <h2>Stay tuned</h2>
+      <p>CERVICED is a marketplace for independent beauty and wellness providers
+        across the UK. Browse, add what you like from whoever you like, and book
+        it all in one go. We're putting the finishing touches on it now — the
+        waitlist is where you'll hear about it first.</p>
     </div>
   </div>
 </section>
@@ -399,29 +388,25 @@ footer{
 <!-- ── Audiences ─────────────────────────────────────────────────── -->
 <section>
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head reveal">
       <span class="label">Two sides</span>
       <h2>Whichever side you're on</h2>
     </div>
     <div class="audiences">
-      <div class="aud">
+      <div class="aud reveal">
         <h3>For providers</h3>
-        <p style="color:var(--sub);font-size:15.5px;">A real business presence — not a link in a bio.</p>
         <ul>
-          <li>A profile with your services, pricing and portfolio</li>
-          <li>Your own availability, buffers and blocked dates</li>
-          <li>Deposits, cancellation and reschedule policies you set</li>
-          <li>A booking dashboard, client history and promotions</li>
+          <li>Your services, pricing and portfolio in one profile</li>
+          <li>Your own hours, policies and deposits</li>
+          <li>Bookings, clients and promotions in one place</li>
         </ul>
       </div>
-      <div class="aud">
+      <div class="aud reveal">
         <h3>For clients</h3>
-        <p style="color:var(--sub);font-size:15.5px;">Find someone, book them, get on with your day.</p>
         <ul>
-          <li>Browse and search independent providers near you</li>
-          <li>Save the ones you like and rebook in a tap</li>
-          <li>Manage, reschedule or cancel from one place</li>
-          <li>Reminders so nothing gets missed</li>
+          <li>Find independent providers near you</li>
+          <li>Book several in a single checkout</li>
+          <li>Manage or reschedule from one place</li>
         </ul>
       </div>
     </div>
@@ -431,13 +416,13 @@ footer{
 <!-- ── Signup ────────────────────────────────────────────────────── -->
 <section id="join">
   <div class="wrap">
-    <div class="section-head" style="text-align:center;align-items:center;margin-inline:auto;">
-      <span class="label">Join the waitlist</span>
-      <h2>Be there on day one</h2>
-      <p>Tell us where you are and we'll let you know when CERVICED opens in your area.</p>
+    <div class="section-head reveal" style="text-align:center;align-items:center;margin-inline:auto;">
+      <span class="label">The waitlist</span>
+      <h2>Be first to know</h2>
+      <p>Leave your email and where you are. That's it.</p>
     </div>
 
-    <form class="signup" id="waitlist-form" novalidate>
+    <form class="signup reveal" id="waitlist-form" novalidate>
       <div class="toggle" role="group" aria-label="Are you a provider or a client?">
         <button type="button" id="tab-provider" aria-pressed="true">I'm a provider</button>
         <button type="button" id="tab-client" aria-pressed="false">I'm looking to book</button>
@@ -490,7 +475,7 @@ footer{
             <a href="#privacy">privacy notice</a>.</span>
         </label>
 
-        <button type="submit" class="btn submit">Join the waitlist</button>
+        <button type="submit" class="btn submit">Keep me posted</button>
       </div>
 
       <p class="formnote">No spam, no sharing your details with anyone else.</p>
@@ -549,9 +534,15 @@ var WAITLIST = {
     role = next;
     tabProv.setAttribute('aria-pressed', String(next === 'provider'));
     tabClient.setAttribute('aria-pressed', String(next === 'client'));
-    document.querySelectorAll('[data-role]').forEach(function (el) {
-      el.hidden = el.getAttribute('data-role') !== next;
-    });
+    var group = form.querySelector('.fields');
+    var swap = function () {
+      document.querySelectorAll('[data-role]').forEach(function (el) {
+        el.hidden = el.getAttribute('data-role') !== next;
+      });
+    };
+    if (!group || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { swap(); return; }
+    group.classList.add('is-swapping');
+    setTimeout(function () { swap(); group.classList.remove('is-swapping'); }, 150);
   }
   tabProv.addEventListener('click', function () { setRole('provider'); });
   tabClient.addEventListener('click', function () { setRole('client'); });
@@ -630,6 +621,144 @@ var WAITLIST = {
       button.disabled = false;
     });
   });
+})();
+/* ──────────────────────────────────────────────────────────────────────
+   The hero cart is the one thing worth demonstrating rather than
+   describing: add and remove services from different providers and watch
+   it stay a single checkout. Everything else on the page stays still.
+   ────────────────────────────────────────────────────────────────────── */
+(function () {
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var CATALOGUE = [
+    { id:'gel',     svc:'Gel Extensions',      who:'Amara Nails',  area:'Peckham',    initials:'AN', price:45 },
+    { id:'lash',    svc:'Lash Lift & Tint',    who:'Studio Ren',   area:'Camberwell', initials:'SR', price:38 },
+    { id:'cut',     svc:'Cut & Blow Dry',      who:'Nia Hair',     area:'Brixton',    initials:'NH', price:55 },
+    { id:'brow',    svc:'Brow Lamination',     who:'Studio Ren',   area:'Camberwell', initials:'SR', price:30 },
+    { id:'massage', svc:'Deep Tissue Massage', who:'Kova Therapy', area:'Peckham',    initials:'KT', price:60 },
+    { id:'pedi',    svc:'Luxury Pedicure',     who:'Amara Nails',  area:'Peckham',    initials:'AN', price:42 }
+  ];
+  var inCart = ['gel', 'lash', 'cut'];
+
+  var rowsEl  = document.getElementById('cart-rows');
+  var chipsEl = document.getElementById('cart-chips');
+  var totalEl = document.getElementById('cart-total');
+  var countEl = document.getElementById('cart-count');
+  if (!rowsEl || !chipsEl || !totalEl || !countEl) return;
+
+  function find(id) {
+    for (var i = 0; i < CATALOGUE.length; i++) {
+      if (CATALOGUE[i].id === id) return CATALOGUE[i];
+    }
+    return null;
+  }
+  function items() { return inCart.map(find).filter(Boolean); }
+  function sum()   { return items().reduce(function (t, it) { return t + it.price; }, 0); }
+
+  function providerCount() {
+    var seen = {};
+    items().forEach(function (it) { seen[it.who] = true; });
+    return Object.keys(seen).length;
+  }
+
+  /* Count the total rather than snapping it — the number is the point. */
+  var tween = null, shown = sum();
+  function setTotal(to) {
+    if (tween) cancelAnimationFrame(tween);
+    if (reduced) { shown = to; totalEl.textContent = '£' + to; return; }
+    var from = shown, start = performance.now(), dur = 380;
+    (function step(now) {
+      var t = Math.min((now - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - t, 3);
+      shown = Math.round(from + (to - from) * eased);
+      totalEl.textContent = '£' + shown;
+      if (t < 1) tween = requestAnimationFrame(step);
+    })(start);
+  }
+
+  function rowHTML(it) {
+    return '<span class="avatar" aria-hidden="true">' + it.initials + '</span>' +
+           '<span><span class="svc">' + it.svc + '</span><br>' +
+           '<span class="who">' + it.who + ' · ' + it.area + '</span></span>' +
+           '<span class="price">£' + it.price + '</span>' +
+           '<button class="rm" type="button" data-remove="' + it.id +
+           '" aria-label="Remove ' + it.svc + ' from the cart">&times;</button>';
+  }
+
+  function renderChips() {
+    chipsEl.innerHTML = '';
+    CATALOGUE.forEach(function (it) {
+      if (inCart.indexOf(it.id) !== -1) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.setAttribute('data-add', it.id);
+      b.setAttribute('aria-label', 'Add ' + it.svc + ' from ' + it.who + ', £' + it.price);
+      b.innerHTML = '<span class="plus" aria-hidden="true">+</span>' + it.svc +
+                    '<span class="cp">£' + it.price + '</span>';
+      chipsEl.appendChild(b);
+    });
+  }
+
+  function renderMeta() {
+    var n = providerCount();
+    countEl.textContent = n + (n === 1 ? ' provider' : ' providers');
+    setTotal(sum());
+  }
+
+  function renderAll(newId, stagger) {
+    rowsEl.innerHTML = '';
+    items().forEach(function (it, i) {
+      var row = document.createElement('div');
+      row.className = 'row' + (!reduced && (stagger || it.id === newId) ? ' is-new' : '');
+      if (stagger) row.style.animationDelay = (i * 0.12) + 's';
+      row.setAttribute('data-id', it.id);
+      row.innerHTML = rowHTML(it);
+      rowsEl.appendChild(row);
+    });
+    renderChips();
+    renderMeta();
+  }
+
+  chipsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-add]');
+    if (!b) return;
+    var id = b.getAttribute('data-add');
+    if (inCart.indexOf(id) === -1) inCart.push(id);
+    renderAll(id, false);
+  });
+
+  rowsEl.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-remove]');
+    if (!b) return;
+    var id = b.getAttribute('data-remove');
+    if (inCart.length <= 1) return;          /* never leave an empty cart */
+    var row = rowsEl.querySelector('[data-id="' + id + '"]');
+    var drop = function () {
+      inCart = inCart.filter(function (x) { return x !== id; });
+      renderAll(null, false);
+    };
+    if (reduced || !row) { drop(); return; }
+    row.classList.add('is-going');
+    setTimeout(drop, 260);
+  });
+
+  renderAll(null, true);
+
+  /* Sections settle in once as they come into view. */
+  var targets = document.querySelectorAll('.reveal');
+  if (reduced || !('IntersectionObserver' in window)) {
+    targets.forEach(function (el) { el.classList.add('is-in'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-in');
+        io.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -12% 0px' });
+    targets.forEach(function (el) { io.observe(el); });
+  }
 })();
 </script>
 </body>

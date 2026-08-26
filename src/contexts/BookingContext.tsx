@@ -12,6 +12,7 @@ import { parseRescheduleRequestToken } from '../utils/rescheduleWindow';
 import {
   BookingStatus,
   PaymentStatus,
+  pendingRescheduleStatusOverride,
   type BookingCoordinates,
   type ConfirmedBooking,
   type BookingConflictResult,
@@ -621,10 +622,19 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
           // A booking mid-reschedule should not be auto-expired based on the
           // original appointment date — the date is being replaced, so treat
           // it as still upcoming until the reschedule is resolved.
-          if (booking.isPendingReschedule &&
-              booking.status !== BookingStatus.CANCELLED &&
-              booking.status !== BookingStatus.NO_SHOW) {
-            return { ...booking, status: BookingStatus.UPCOMING };
+          //
+          // Never out of a TERMINAL status, though: that state was reached
+          // server-side and the app doesn't get to overrule it. This guard
+          // used to name CANCELLED and NO_SHOW inline and omitted COMPLETED,
+          // so a completed booking still carrying an open reschedule request
+          // was forced back to UPCOMING — and since BookingsScreen also filters
+          // pending-reschedule bookings out of Past, it could never leave the
+          // Upcoming tab. Requests are now closed server-side when their
+          // booking goes terminal (on_booking_terminal_close_reschedule), so
+          // this is the second of two layers rather than the only one.
+          const rescheduleHold = pendingRescheduleStatusOverride(booking);
+          if (rescheduleHold) {
+            return { ...booking, status: rescheduleHold };
           }
           return {
             ...booking,
@@ -2125,6 +2135,17 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       if (error?.code === '23505' || error?.code === '23P01') {
         throw new BookingError("That time slot is no longer available. Please choose a different time.");
+      }
+      // bookings_service_id_fkey: a cart item outlived the service it was
+      // added from. validateCartBookings normally catches this first and
+      // flags the offending item by name; this is the backstop for the gap
+      // between that check and the hold (or for a lookup that failed open).
+      // It must NOT fall through to the generic "please try again" — the
+      // batch will fail identically every time until the item is removed.
+      if (error?.code === '23503' && /service_id/.test(error?.details ?? error?.message ?? '')) {
+        throw new BookingError(
+          "One of your services isn't offered any more. Pull down to refresh your cart, then remove the one that's flagged."
+        );
       }
       throw error;
     }

@@ -34,6 +34,10 @@ const BOOKING_TYPES = new Set([
   'reschedule_provider_response',
   'reschedule_confirmed',
   'reschedule_declined',
+  // Deep-links to the booking, NOT into the reschedule flow: the request this
+  // refers to is already closed, so openReschedule below deliberately excludes
+  // it. The booking itself is unchanged and is what the reader needs to see.
+  'reschedule_expired',
   'pending_booking_reminder',
   'intake_form_received',
   'info_pack_received',

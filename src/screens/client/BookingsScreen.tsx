@@ -107,12 +107,14 @@ const HiddenDevMenuTrigger = ({ navigation, theme }: { navigation: any; theme: T
  *
  * A mobile provider comes to the client, so the venue is the client's own
  * address — their provider's location is a private base, not somewhere to
- * send the client. Non-mobile bookings keep the release-gated provider
- * address (null until the policy unlocks it, hence the fallback).
+ * send the client. The client already knows their own address, so the card
+ * confirms it has gone to the provider rather than reading it back to them.
+ * Non-mobile bookings keep the release-gated provider address (null until
+ * the policy unlocks it, hence the fallback).
  */
 const bookingLocationLine = (b: ConfirmedBooking): string => {
   if (isMobileBooking(b)) {
-    return b.clientAddress?.trim() || 'Send your address in Messages';
+    return b.clientAddress?.trim() ? 'Address sent' : 'Send your address in Messages';
   }
   return b.address || 'Address to be confirmed';
 };

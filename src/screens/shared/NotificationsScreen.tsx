@@ -44,7 +44,8 @@ interface Notification {
       | 'booking_cancelled'  | 'booking_reminder'    | 'booking_in_progress'
       | 'no_show'            | 'provider_no_show'    | 'payment_success'     | 'new_provider'
       | 'reschedule_request' | 'reschedule_provider_response'
-      | 'reschedule_confirmed'| 'reschedule_declined' | 'review_request'    | 'review_received'
+      | 'reschedule_confirmed'| 'reschedule_declined' | 'reschedule_expired'
+      | 'review_request'    | 'review_received'
       | 'promotion'          | 'intake_form_reminder' | 'provider_message'
       | 'new_message'         | 'pending_booking_reminder'
       | 'announcement'       | 'intake_form_received' | 'waitlist_slot_available'
@@ -272,7 +273,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
            'booking_cancelled', 'booking_declined',
            'booking_in_progress', 'no_show', 'provider_no_show', 'payment_success',
            'reschedule_request', 'reschedule_provider_response',
-           'reschedule_confirmed', 'reschedule_declined',
+           'reschedule_confirmed', 'reschedule_declined', 'reschedule_expired',
            'rebooking_nudge', 'daily_recap'].includes(n.type)
         );
       case 'reviews':
@@ -397,6 +398,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         notification.type === 'reschedule_provider_response' ||
         notification.type === 'reschedule_confirmed' ||
         notification.type === 'reschedule_declined' ||
+        notification.type === 'reschedule_expired' ||
         notification.type === 'intake_form_received' ||
         notification.type === 'info_pack_received' ||
         notification.type === 'address_released' ||
@@ -599,7 +601,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
   const getBellColor = (type: string) => {
     if (['booking_cancelled', 'booking_declined', 'no_show', 'provider_no_show', 'reschedule_declined'].includes(type)) return '#FF1744';
     if (['booking_confirmed', 'payment_success', 'reschedule_confirmed', 'booking_in_progress', 'intake_form_completed', 'address_released'].includes(type)) return '#4CAF50';
-    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
+    // Amber, not the red used by _declined/_cancelled: nothing was decided and
+    // the booking itself is untouched, so red would read as "your appointment
+    // is off" when the appointment is exactly as it was.
+    if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
     if (['review_received', 'review_request'].includes(type)) return '#FFD700';
     if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in'].includes(type)) return P.accentText;
     return '#FF9800';
@@ -623,6 +628,10 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       case 'provider_no_show':
         return 'View Booking';
       case 'reschedule_declined':
+      // The request is closed and the booking is unchanged, so the only useful
+      // destination is the booking itself — not "Reschedule Now", which would
+      // point at a flow the provider's notice window may now refuse.
+      case 'reschedule_expired':
         return 'View Booking';
       case 'pending_booking_reminder':
         return 'Respond Now';

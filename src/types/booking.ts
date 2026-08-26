@@ -110,6 +110,47 @@ export function hasMapDestination(b: {
   );
 }
 
+/** Statuses a booking never leaves. Nothing may re-derive a booking out of one
+ *  of these on the client — the row reached this state server-side and the app
+ *  is not entitled to overrule it.
+ *
+ *  Exported as one list rather than spelled out at each call site because the
+ *  bug it exists to prevent was exactly an incomplete inline list: the
+ *  pending-reschedule exemption in BookingContext named CANCELLED and NO_SHOW
+ *  but not COMPLETED, so a completed booking with a stale open reschedule
+ *  request was forced back to UPCOMING and could never leave the client's
+ *  Upcoming tab. Add a new terminal status here and every guard picks it up. */
+export const TERMINAL_BOOKING_STATUSES: readonly BookingStatus[] = [
+  BookingStatus.COMPLETED,
+  BookingStatus.CANCELLED,
+  BookingStatus.NO_SHOW,
+  BookingStatus.PROVIDER_NO_SHOW,
+];
+
+export function isTerminalBookingStatus(status: BookingStatus): boolean {
+  return TERMINAL_BOOKING_STATUSES.includes(status);
+}
+
+/** Should a booking mid-reschedule be held at UPCOMING instead of being aged
+ *  out by its original appointment date?
+ *
+ *  Yes while the reschedule is genuinely open — the date is being replaced, so
+ *  judging the booking by the old one would expire it early. No once the
+ *  booking is terminal: that state was reached server-side and the app doesn't
+ *  get to overrule it.
+ *
+ *  Returns the status to force, or null to mean "fall through to the normal
+ *  date-based derivation". A named unit rather than an inline condition
+ *  because the defect it encodes was an inline list that omitted COMPLETED. */
+export function pendingRescheduleStatusOverride(booking: {
+  status: BookingStatus;
+  isPendingReschedule?: boolean | undefined;
+}): BookingStatus | null {
+  if (!booking.isPendingReschedule) return null;
+  if (isTerminalBookingStatus(booking.status)) return null;
+  return BookingStatus.UPCOMING;
+}
+
 export enum PaymentStatus {
   PENDING = 'pending',
   DEPOSIT_PAID = 'deposit_paid',
