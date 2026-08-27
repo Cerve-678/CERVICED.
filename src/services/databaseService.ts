@@ -1801,7 +1801,9 @@ export type CheckoutIntentItem = {
   safety_ack?: boolean;
   // This appointment is a request for a time the provider's own scheduling
   // rules exclude. enforce_booking_bookability() decides whether that
-  // provider permits it at all; finalize_checkout never auto-confirms one.
+  // provider permits it at all; neither claim_cart_booking_slots() nor
+  // finalize_checkout() ever auto-confirms one, whatever the provider's
+  // auto_accept_bookings says.
   // emergency_ack must be true whenever emergency is — prepare_checkout
   // rejects the item otherwise, the same shape as safety_ack above. See
   // supabase/migrations/20260821143821_emergency_booking_requests.sql.

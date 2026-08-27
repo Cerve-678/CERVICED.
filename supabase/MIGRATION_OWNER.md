@@ -82,6 +82,43 @@ Written but **not applied**, in the order they must run:
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
 
+### Applied 2026-08-27 (emergency requests never auto-confirm — the claim path)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260827200000 | `emergency_requests_never_auto_confirm_claim_path` | `claim_cart_booking_slots()` carries the `NOT COALESCE(is_emergency_request, FALSE)` guard on **both** the `status` and `confirmed_at` CASE arms, plus the emergency notification copy. Still `SECURITY DEFINER`, `LANGUAGE plpgsql`, `search_path=public`, grants `authenticated` + `service_role` EXECUTE. |
+
+`20260821144027` (part 5 of 5 of the emergency-request set) taught
+`finalize_checkout()` that an emergency request must ignore
+`providers.auto_accept_bookings`, and **missed its twin**. The Stripe
+prepare/finalize pair is not the live route — `claim_cart_booking_slots()` is —
+so for six days every emergency request to an auto-accepting provider was
+committed on their behalf the instant it was paid for. It never became a
+`pending` row, and the whole provider-side experience is gated on
+`isPendingConfirmation`: the inbox's Confirm/Decline, the swipe actions and the
+"Outside your availability" banner are all built correctly and simply never
+rendered. Two live bookings were created this way, one at **00:30** — precisely
+the case the opt-in exists to protect against.
+
+**Verified functionally, not just structurally**, in a `DO` block that ends in
+`RAISE EXCEPTION` so the whole thing aborts rather than relying on the caller
+to roll back. Two holds were claimed for the same auto-accept-ON provider in
+one batch: the emergency one came out `pending` with `confirmed_at` NULL, the
+ordinary one `confirmed` — so the fix does not quietly turn auto-accept off for
+everyone. The four notifications were the right two pairs, including
+"Booking Request — Outside Your Hours" to the provider. Nothing was left behind
+(re-checked after).
+
+**Applied out-of-band (SQL editor), so the ledger row was backfilled** rather
+than the file re-executed — its `statements` records that and how it was
+verified. Because `apply_migration` never ran, it never stamped a version of
+its own: the filename number stands, and the usual rename dance does not apply.
+
+`src/tests/emergencyRequestNeverAutoConfirms.test.ts` now holds this as a
+contract. It deliberately **scans for the newest migration** defining each
+function rather than naming these two files — the failure mode is a later
+reproduction dropping the rule, which a pinned test would never see.
+
 ### Applied 2026-08-27 (client area selection)
 
 | Recorded version | Name | Verified live |

@@ -30,9 +30,12 @@
  *
  * Whichever route is used, the time chosen here is a REQUEST: it carries its
  * reasons out through onPickTime, which is what eventually sets
- * bookings.is_emergency_request, and finalize_checkout() forces auto-accept
- * off whenever that flag is set. A provider always answers one of these by
- * hand, even one who has auto-accept switched on.
+ * bookings.is_emergency_request, and BOTH checkout paths — the live
+ * claim_cart_booking_slots() and the not-yet-live finalize_checkout() —
+ * force auto-accept off whenever that flag is set. A provider always answers
+ * one of these by hand, even one who has auto-accept switched on. (The claim
+ * path was the gap: it went unpatched until 20260827200000, so until then an
+ * auto-accepting provider was committed to these silently.)
  *
  * Colours come from the caller, never from the app's light/dark setting —
  * same rule as ModernBeautyCalendar and EmergencyBookingPrompt.

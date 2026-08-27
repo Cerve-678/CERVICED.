@@ -335,12 +335,12 @@ Curated: [[Services]] · **38 files**
 - `src/navigation/provider/ProviderTabNavigator.tsx` _(7)_
 - `src/navigation/client/ClientTabNavigator.tsx` _(6)_
 - `src/services/becca/capabilities/shared.ts` _(4)_
+- `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(3)_
 - `src/screens/shared/HelpCentreScreen.tsx` _(3)_
 - `src/services/becca/entityResolver.ts` _(3)_
 - `src/services/becca/matcher.ts` _(3)_
 - `src/services/userLearningService.ts` _(3)_
 - `src/types/database.ts` _(3)_
-- `src/navigation/provider/tabs/ProviderServicesNavigator.tsx` _(2)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(2)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(2)_
 - … +8 more
