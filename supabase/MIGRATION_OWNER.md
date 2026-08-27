@@ -22,9 +22,14 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  (none)
-SINCE:  --
-SCOPE:  --
+OWNER:  session applying the queued backlog (no-show disputes, cancel-window
+        warning, client address gating)
+SINCE:  2026-08-27
+SCOPE:  20260827140000_no_show_disputes, 20260827160000_cancel_window_closing_
+        warning, and 20260827130000_client_address_released_on_confirmation
+        (which must be renumbered above the frontier before it runs), plus a
+        send-push-notification redeploy that only matters once the
+        no_show_disputed type exists.
 ```
 
 Claim it by editing the block above — your session name/purpose, the date, and
@@ -77,7 +82,7 @@ Written but **not applied**, in the order they must run:
 
 | Version | File | Notes |
 |---|---|---|
-| 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. |
+| 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. **STEP 2 BELONGS TO WHOEVER APPLIES IT:** the file adds `cancel_notice_hours(INT, JSONB)` as the single definition of the cancellation-notice mapping and calls it, but `cancel_own_booking()` still carries its own inline copy. Rewrite it to call the helper in the same pass — with `pg_get_functiondef()` output in hand so `LANGUAGE`/`SECURITY DEFINER`/`SET search_path` survive the reproduction. It was left undone because the MCP connection was down when the file was written, and reproducing a live function from memory is exactly what stripped `SET search_path` off three functions earlier the same day. |
 | 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
 
 The queue is otherwise **empty as of 2026-08-27** — see below.

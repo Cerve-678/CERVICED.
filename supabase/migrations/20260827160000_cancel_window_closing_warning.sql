@@ -38,10 +38,25 @@
 -- the client has an answer in front of them and can act on it, so a warning
 -- there is a nag rather than news.
 --
--- THE NOTICE RESOLUTION IS COPIED VERBATIM from cancel_own_booking(), including
--- its COALESCE(hours, 0) = 0 fallback to the policy string. If the two ever
--- disagree, this function warns about a deadline that isn't the one enforced,
--- which is worse than not warning at all.
+-- THE NOTICE RESOLUTION IS SHARED, NOT COPIED. A warning about a deadline that
+-- isn't the one actually enforced is worse than no warning, and two copies of
+-- the same CASE expression is precisely how that happens — one gets edited.
+-- So the mapping moves into cancel_notice_hours() below and this function
+-- calls it.
+--
+-- !! STEP 2 IS NOT DONE YET, AND THIS IS NOT CLOSED UNTIL IT IS.
+-- cancel_own_booking() still carries its own inline copy. Until it is rewritten
+-- to call cancel_notice_hours() too, there are still two definitions and they
+-- can still drift — the difference is that there is now one obvious place to
+-- move it to, rather than a comment asking the next person to remember.
+--
+-- It is deliberately not rewritten in this file: doing that safely needs its
+-- live definition in hand (pg_get_functiondef), so the reproduction can be
+-- diffed clause by clause — LANGUAGE, SECURITY, SET search_path and all — and
+-- the Supabase connection was down when this was written. That exact shortcut
+-- stripped SET search_path off three SECURITY DEFINER functions on 2026-08-27
+-- (see MIGRATION_OWNER.md). Whoever applies this file has a live connection by
+-- definition; do step 2 then, in the same pass.
 --
 -- A provider with no cancellation notice at all (resolved to 0) is skipped:
 -- there is no window to lose, so there is nothing to warn about.
@@ -55,7 +70,7 @@
 -- APPENDED, not rewritten from a literal list. Every previous migration that
 -- touched this constraint dropped it and recreated it from a full hard-coded
 -- array, which is safe exactly once. Right now TWO unapplied migrations do
--- that at the same time: 20260827140000 (another session's no-show disputes)
+-- that at the same time: 20260827154500 (another session's no-show disputes)
 -- adds 'no_show_disputed', and this one adds 'cancel_window_closing'. Whichever
 -- ran second would silently DROP the other's value — no error, no conflict,
 -- and the loss only visible when a cron insert starts failing.
@@ -90,7 +105,44 @@ BEGIN
   );
 END $$;
 
--- ── 2. The sweep ───────────────────────────────────────────────────────────
+-- ── 2. The shared notice resolution ────────────────────────────────────────
+-- The single definition of "how long before this appointment does this
+-- provider's cancellation policy stop allowing a cancellation".
+--
+-- Takes the two columns rather than a provider id so it stays IMMUTABLE and
+-- inlinable, and can be used directly in a WHERE clause without a lookup per
+-- row. No SET search_path on purpose: it references no objects at all, and a
+-- SET clause would block inlining.
+--
+-- Returns 0 when the provider has no cancellation notice — meaning "no window",
+-- not "zero hours of window".
+CREATE OR REPLACE FUNCTION public.cancel_notice_hours(
+  p_notice_hours      INT,
+  p_booking_policies  JSONB
+)
+RETURNS INT
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $function$
+  SELECT CASE
+           WHEN COALESCE(p_notice_hours, 0) > 0 THEN p_notice_hours
+           ELSE CASE p_booking_policies->>'cancelNotice'
+                  WHEN '24h' THEN 24
+                  WHEN '48h' THEN 48
+                  WHEN '72h' THEN 72
+                  ELSE 0
+                END
+         END
+$function$;
+
+COMMENT ON FUNCTION public.cancel_notice_hours(INT, JSONB) IS
+  'Hours of notice a provider requires to cancel: providers.cancellation_notice_hours, '
+  'falling back to booking_policies->>''cancelNotice''. 0 means no notice period. '
+  'THE definition — cancel_own_booking() must be rewritten to call this rather '
+  'than carrying its own copy (see 20260827160000 header, step 2).';
+
+-- ── 3. The sweep ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.process_cancel_window_closing_warnings()
 RETURNS void
 LANGUAGE plpgsql
@@ -101,58 +153,37 @@ DECLARE
   r RECORD;
 BEGIN
   FOR r IN
-    SELECT rr.id                                          AS request_id,
+    SELECT rr.id                                        AS request_id,
            rr.booking_id,
-           b.user_id                                      AS client_user_id,
+           b.user_id                                    AS client_user_id,
            b.provider_id,
-           NULLIF(btrim(b.service_name_snapshot), '')     AS service_name_snapshot,
-           NULLIF(btrim(b.provider_name_snapshot), '')    AS provider_name_snapshot,
-           -- Resolved exactly as cancel_own_booking() resolves it.
-           ((b.booking_date + b.booking_time)::TIMESTAMP
-             - (CASE
-                  WHEN COALESCE(p.cancellation_notice_hours, 0) > 0
-                    THEN p.cancellation_notice_hours
-                  ELSE CASE p.booking_policies->>'cancelNotice'
-                         WHEN '24h' THEN 24
-                         WHEN '48h' THEN 48
-                         WHEN '72h' THEN 72
-                         ELSE 0
-                       END
-                END || ' hours')::INTERVAL)               AS cancel_cutoff
+           NULLIF(btrim(b.service_name_snapshot), '')   AS service_name_snapshot,
+           NULLIF(btrim(b.provider_name_snapshot), '')  AS provider_name_snapshot,
+           cc.cancel_cutoff
       FROM public.booking_reschedule_requests rr
       JOIN public.bookings  b ON b.id = rr.booking_id
       JOIN public.providers p ON p.id = b.provider_id
+      -- Computed once, named once, used three times below. The previous draft
+      -- of this function repeated the same CASE expression in the select list
+      -- and in both time bounds.
+      CROSS JOIN LATERAL (
+        SELECT public.cancel_notice_hours(p.cancellation_notice_hours,
+                                          p.booking_policies) AS notice_hours
+      ) nh
+      CROSS JOIN LATERAL (
+        SELECT (b.booking_date + b.booking_time)::TIMESTAMP
+                 - (nh.notice_hours || ' hours')::INTERVAL AS cancel_cutoff
+      ) cc
      WHERE rr.status = 'pending'
        -- Only a booking that could still be cancelled has a right to lose.
        AND b.status IN ('pending', 'confirmed')
        -- No notice period means no window to close.
-       AND (COALESCE(p.cancellation_notice_hours, 0) > 0
-            OR p.booking_policies->>'cancelNotice' IN ('24h', '48h', '72h'))
-       -- Inside the last 6 hours before the window shuts, and not after it.
-       -- A client who asks with less than 6h of window left is warned on the
-       -- next tick, which is the case that matters most.
-       AND NOW() >= ((b.booking_date + b.booking_time)::TIMESTAMP
-             - (CASE
-                  WHEN COALESCE(p.cancellation_notice_hours, 0) > 0
-                    THEN p.cancellation_notice_hours
-                  ELSE CASE p.booking_policies->>'cancelNotice'
-                         WHEN '24h' THEN 24
-                         WHEN '48h' THEN 48
-                         WHEN '72h' THEN 72
-                         ELSE 0
-                       END
-                END || ' hours')::INTERVAL) - INTERVAL '6 hours'
-       AND NOW() < ((b.booking_date + b.booking_time)::TIMESTAMP
-             - (CASE
-                  WHEN COALESCE(p.cancellation_notice_hours, 0) > 0
-                    THEN p.cancellation_notice_hours
-                  ELSE CASE p.booking_policies->>'cancelNotice'
-                         WHEN '24h' THEN 24
-                         WHEN '48h' THEN 48
-                         WHEN '72h' THEN 72
-                         ELSE 0
-                       END
-                END || ' hours')::INTERVAL)
+       AND nh.notice_hours > 0
+       -- Inside the last 6 hours before the window shuts, and not after it. A
+       -- client who asks with less than 6h of window left is warned on the next
+       -- tick, which is the case that matters most.
+       AND NOW() >= cc.cancel_cutoff - INTERVAL '6 hours'
+       AND NOW() <  cc.cancel_cutoff
        -- Once per request, not once per tick. Keyed on rr.updated_at rather
        -- than "ever", so a client who requests again later (the same row is
        -- reused via ON CONFLICT (booking_id) DO UPDATE) is warned again.
@@ -192,7 +223,7 @@ COMMENT ON FUNCTION public.process_cancel_window_closing_warnings() IS
   'a reschedule request they made is still unanswered. Restores the choice '
   'their provider''s silence would otherwise consume. See BOOKINGS.md §7a.';
 
--- ── 3. The schedule ────────────────────────────────────────────────────────
+-- ── 4. The schedule ────────────────────────────────────────────────────────
 -- Every 15 minutes. The window it guards is 6 hours wide, so this is precise
 -- enough; more frequent would only narrow an already-generous margin.
 -- Unscheduling first makes the migration safe to re-run.
