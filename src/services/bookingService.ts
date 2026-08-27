@@ -379,6 +379,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
   return {
     id: db.id,
     cartItemId: db.id,
+    bookingRef: db.booking_ref ?? undefined,
     serviceId: db.service_id ?? undefined,
     providerName: db.provider_name_snapshot,
     providerImage: db.provider_logo_snapshot ?? null,
@@ -415,9 +416,39 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     isEmergencyRequest: db.is_emergency_request ?? false,
     policyAcceptedAt: db.policy_accepted_at ?? undefined,
     policySnapshot: (db.policy_snapshot as Record<string, unknown>) ?? undefined,
-    clientAddress: (db as any).client_address ?? undefined,
+    // Two shapes, one field.
+    //
+    // TODAY only the first branch fires: bookings.client_address is still the
+    // real storage, and both the client_bookings view and the provider's own
+    // read expose it as a plain column.
+    //
+    // The second branch is for migration 20260827130000, which moves the
+    // address into its own RLS-gated row so a provider cannot read it before
+    // accepting. That migration is WRITTEN BUT NOT APPLIED, and the query-side
+    // change that embeds the new table was backed out after it took provider
+    // home down with a PGRST200 (the embed resolves against the live schema
+    // cache, and the table is not there). Kept because it costs nothing and is
+    // needed the moment the migration lands — restore the embed then, not
+    // before. See the skipped tests in clientAddressGating.test.ts.
+    clientAddress:
+      (db as any).client_address ??
+      (() => {
+        // booking_id is that table's PRIMARY KEY so PostgREST returns one
+        // object, but a to-one embed is indistinguishable from to-many by the
+        // foreign key alone — handle both rather than guess. Guessing wrong
+        // reads as "no address given" and sends a mobile provider nowhere.
+        const e = (db as any).booking_client_addresses;
+        if (!e) return undefined;
+        return (Array.isArray(e) ? e[0]?.address : e.address) ?? undefined;
+      })(),
     providerBusinessType: (db as any).provider_business_type ?? undefined,
     addressReleasedAt: db.address_released_at ?? undefined,
+    // Undefined rather than null on both counts: absent (migration
+    // 20260827140000 not applied / column not selected) and never-marked are
+    // the same thing to every caller — see canDisputeNoShow.
+    noShowMarkedAt: db.no_show_marked_at ?? undefined,
+    noShowDisputedAt: db.no_show_disputed_at ?? undefined,
+    noShowDisputeReason: db.no_show_dispute_reason ?? undefined,
     providerId: (db as any).provider_id ?? undefined,
     clientUserId: (db as any).user_id ?? undefined,
     addOns: (db.add_ons ?? []).map((a: any, idx: number) => ({

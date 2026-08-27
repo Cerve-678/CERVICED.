@@ -151,6 +151,43 @@ export function pendingRescheduleStatusOverride(booking: {
   return BookingStatus.UPCOMING;
 }
 
+/** How long after a no-show is recorded the accused party can dispute it.
+ *  Mirrors the same constant in dispute_no_show() and
+ *  settle_no_show_reliability() (migration 20260827140000) — the RPC is the
+ *  enforcement, this is only what decides whether to show the button. */
+export const NO_SHOW_DISPUTE_WINDOW_DAYS = 7;
+
+/**
+ * Whether this booking's no-show can still be disputed, from the point of
+ * view of the party it was recorded against.
+ *
+ * Deliberately does NOT check WHO is asking — the two hats reach this from
+ * opposite directions (a client disputes 'no_show', a provider disputes
+ * 'provider_no_show') and each screen only ever shows one of them. The RPC
+ * checks identity properly; this decides whether there is a button at all.
+ *
+ * A booking marked before the dispute columns existed has no
+ * noShowMarkedAt. Treat the window as open rather than hiding the button on
+ * a technicality of when the row happened to be written — dispute_no_show()
+ * makes the same allowance.
+ */
+export function canDisputeNoShow(
+  b: {
+    status?: BookingStatus | undefined;
+    noShowMarkedAt?: string | undefined;
+    noShowDisputedAt?: string | undefined;
+  },
+  status: BookingStatus.NO_SHOW | BookingStatus.PROVIDER_NO_SHOW,
+  nowMs: number = Date.now(),
+): boolean {
+  if (b.status !== status) return false;
+  if (b.noShowDisputedAt) return false;
+  if (!b.noShowMarkedAt) return true;
+  const markedMs = new Date(b.noShowMarkedAt).getTime();
+  if (Number.isNaN(markedMs)) return true;
+  return nowMs <= markedMs + NO_SHOW_DISPUTE_WINDOW_DAYS * 86400000;
+}
+
 export enum PaymentStatus {
   PENDING = 'pending',
   DEPOSIT_PAID = 'deposit_paid',
@@ -185,6 +222,10 @@ export interface AvailableDate {
 
 export interface ConfirmedBooking {
   id: string;
+  /** The stored, guaranteed-unique short code. Absent on rows written
+   *  before migration 20260827151000, which is why formatBookingRef still
+   *  falls back to truncating the id. */
+  bookingRef?: string | undefined;
   cartItemId: string;
   providerName: string;
   providerImage: any;
@@ -278,6 +319,18 @@ export interface ConfirmedBooking {
 
   // Address release tracking (for non-mobile providers)
   addressReleasedAt?: string | undefined;
+
+  // No-show dispute state. All four are undefined on any booking that was
+  // never marked as a no-show — and on every booking at all until migration
+  // 20260827140000 is applied, since the reads are select('*').
+  /** When the no-show was recorded, in either direction. Opens the dispute
+   *  window (see canDisputeNoShow). */
+  noShowMarkedAt?: string | undefined;
+  /** When the ACCUSED party said it was false. Records a disagreement — it
+   *  does not reverse the status, and nothing adjudicates it. */
+  noShowDisputedAt?: string | undefined;
+  /** The accused party's own words, shown to the other party. */
+  noShowDisputeReason?: string | undefined;
 
   // Metadata
   notes?: string | undefined;

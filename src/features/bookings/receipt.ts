@@ -1,6 +1,7 @@
 import type { ConfirmedBooking } from '../../contexts/BookingContext';
 import { formatLongDate, formatShortDate } from '../../utils/dateUtils';
 import { PAYMENT_METHOD_LABELS, calculateBookingPaymentBreakdown } from './paymentPresentation';
+import { formatBookingRef } from './presentation';
 
 const money = (amount: number) => `£${Math.max(0, amount).toFixed(2)}`;
 // Coerce to string first: a receipt is built from booking data that must never
@@ -81,7 +82,7 @@ export function buildClientReceiptHTML(booking: ConfirmedBooking): string {
     .footer-brand{color:#4A2340;font-weight:700;letter-spacing:1px}
     @media print{body{font-size:12px}.page{max-width:none}}
   </style></head><body><main class="page">
-    <header class="header"><div><div class="brand">CERVICED</div><div class="eyebrow">Booking payment receipt</div></div><div><div class="receipt-title">Receipt</div><div class="reference">#${escapeHtml((booking.id ?? '').slice(0, 8).toUpperCase())}</div></div></header>
+    <header class="header"><div><div class="brand">CERVICED</div><div class="eyebrow">Booking payment receipt</div></div><div><div class="receipt-title">Receipt</div><div class="reference">${escapeHtml(formatBookingRef(booking))}</div></div></header>
     <div class="accent-bar"></div>
     <div class="status-panel"><div><div class="status-label">${escapeHtml(statusLabel)}</div><div class="status-value">${money(paidAmount)}</div></div><div class="status-total"><div class="status-label">Booking total</div><div class="status-value">${money(bookingTotal)}</div></div></div>
     <div class="grid"><div><div class="block-title">Provider</div><div class="block-value">${escapeHtml(booking.providerName ?? '—')}</div></div><div><div class="block-title">Appointment</div><div class="block-value">${booking.bookingDate ? escapeHtml(formatLongDate(booking.bookingDate)) : '—'}</div><div class="block-note">${escapeHtml(booking.bookingTime ?? '—')}</div></div></div>

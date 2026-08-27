@@ -22,6 +22,9 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { BookingStatus, ConfirmedBooking, createBookingDateTime, mapDbBookingStatus } from '../../contexts/BookingContext';
+import { canDisputeNoShow } from '../../types/booking';
+import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { ProviderHomeScreenProps } from '../../navigation/types';
 import { mapDbBookingToConfirmed } from '../../services/bookingService';
 import { ModernBeautyCalendar } from '../../components/ModernBeautyCalendar';
@@ -68,6 +71,7 @@ import { bookingIsoToDate, dateToBookingIso, formatBookingDisplayDate } from '..
 import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATUS } from '../../features/bookings/statusPresentation';
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
 import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
+import { formatBookingRef } from '../../features/bookings/presentation';
 import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
 
@@ -204,7 +208,7 @@ function buildInvoiceHTML(booking: ProviderInvoiceBooking, totalPrice: number): 
 
   <div class="ref-block">
     <div class="ref-label">REFERENCE</div>
-    <div class="ref-value">${(booking.id ?? '').slice(0, 8).toUpperCase()}</div>
+    <div class="ref-value">${formatBookingRef(booking)}</div>
   </div>
 
   <div class="footer">cerviced.app</div>
@@ -226,7 +230,7 @@ const PENDING_RELEASE_COPY: Record<string, string> = {
 };
 
 export default function ProviderBookingDetailScreen({ route, navigation }: Props) {
-  const { user } = useAuth();
+  const { user, activeMode } = useAuth();
   const { bookingId, booking: passedBooking, groupSiblings: passedGroupSiblings, openReschedule } = route.params;
   const { isDarkMode } = useTheme();
   const P = isDarkMode ? DARK : LIGHT;
@@ -305,6 +309,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // "add multiple options" pattern for the single-booking flow) before
   // sending them all via providerInitiateGroupReschedule.
   const [showGroupRescheduleModal, setShowGroupRescheduleModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeBusy, setDisputeBusy] = useState(false);
   const [groupRescheduleDate, setGroupRescheduleDate] = useState('');
   const [groupRescheduleTime, setGroupRescheduleTime] = useState('');
   const [groupDateOptions, setGroupDateOptions] = useState<
@@ -923,9 +930,18 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     (newStatus: BookingStatus) => {
       if (!booking) return;
       const label = BOOKING_STATUS_LABELS[newStatus] || newStatus;
+      // A no-show is an accusation about someone who isn't in the room to
+      // answer it, and it's terminal (TERMINAL_BOOKING_STATUSES — no RPC can
+      // move a booking back out of it). So it gets its own copy rather than
+      // the neutral "the status will be updated" line every other transition
+      // uses: the accused gets a say, and there is no undo.
+      const isNoShow = newStatus === BookingStatus.NO_SHOW;
+      const clientName = booking.customerName?.trim() || 'The client';
       setPendingConfirm({
-        title: `Mark as ${label}`,
-        message: `The booking status will be updated to ${label}.${groupSuffix}`,
+        title: isNoShow ? 'Mark as No Show?' : `Mark as ${label}`,
+        message: isNoShow
+          ? `${clientName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone.${groupSuffix} Are you sure?`
+          : `The booking status will be updated to ${label}.${groupSuffix}`,
         confirmLabel: `Mark ${label}`,
         destructive: newStatus === BookingStatus.NO_SHOW,
         onConfirm: async () => {
@@ -939,6 +955,46 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     },
     [booking, updateBookingStatus, navigation, groupSuffix]
   );
+
+  // The mirror image of handleStatusChange's no-show branch: here the
+  // provider is the one who was accused (status 'provider_no_show', set by the
+  // client via client_mark_provider_no_show). Same rules, same window, same
+  // absence of any adjudication — dispute_no_show() decides who may call it.
+  const canDispute = useMemo(
+    () => !!booking && canDisputeNoShow(booking, BookingStatus.PROVIDER_NO_SHOW),
+    [booking],
+  );
+
+  const handleSubmitDispute = useCallback(async () => {
+    if (!booking || !disputeReason.trim()) return;
+    setDisputeBusy(true);
+    try {
+      const { ticketNumber } = await fileNoShowDispute(booking, disputeReason, 'provider', activeMode);
+      setShowDisputeModal(false);
+      setDisputeReason('');
+      // A null ticket means the dispute is recorded but the support ticket
+      // didn't file — don't quote a reference that doesn't exist, and don't
+      // call it a failure either (see fileNoShowDispute).
+      Alert.alert(
+        'Dispute Sent',
+        ticketNumber
+          ? `Your client has been told you dispute this, and support has a copy. Your reference is #${ticketNumber}.`
+          : `Your client has been told you dispute this. We couldn't reach support just now — email ${SUPPORT_EMAIL} if you don't hear back.`,
+      );
+      refreshBookingStatus();
+    } catch (err) {
+      Alert.alert(
+        "Couldn't Send Your Dispute",
+        toUserMessageAllowingDbGuard(
+          err,
+          'Please try again in a moment.',
+          'ProviderBookingDetail.handleSubmitDispute',
+        ),
+      );
+    } finally {
+      setDisputeBusy(false);
+    }
+  }, [booking, disputeReason, activeMode, refreshBookingStatus]);
 
   const handleConfirm = useCallback(() => {
     if (!booking) return;
@@ -1882,7 +1938,7 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               {/* ── Receipt Footer ── */}
               <View style={[styles.receiptFooter, { borderTopColor: perf }]}>
                 <Text style={[styles.footerText, { color: P.sub }]}>
-                  #{booking.id?.slice(0, 8).toUpperCase() ?? ''}
+                  {formatBookingRef(booking)}
                 </Text>
                 <Text style={[styles.footerText, { color: P.sub }]}>cerviced.app</Text>
               </View>
@@ -1959,6 +2015,26 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               <ActionButton color="#FF3B30" label="Cancel" onPress={handleCancel} ghost />
             </View>
           </View>
+        )}
+
+        {/* A no-show the CLIENT recorded against this provider. Terminal, so
+            it sits outside the isActive action block above — disputing does
+            not undo it, it records the disagreement, tells the client, and
+            puts it in front of a human at support. */}
+        {canDispute && (
+          <View style={styles.actions}>
+            <ActionButton
+              color="#FF9500"
+              label="This wasn't right — dispute it"
+              onPress={() => setShowDisputeModal(true)}
+              ghost
+            />
+          </View>
+        )}
+        {!!booking.noShowDisputedAt && (
+          <Text style={{ textAlign: 'center', fontSize: 13, color: P.sub, paddingHorizontal: 24, marginTop: 8 }}>
+            You disputed this. {booking.customerName || 'Your client'} has been told and support has a copy.
+          </Text>
         )}
 
         <View style={{ height: 56 }} />
@@ -2219,13 +2295,29 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   </View>
                 )}
 
-                {/* Escape hatch: propose a time outside the normal availability grid */}
-                <TouchableOpacity
-                  style={[styles.addSlotBtn, { borderColor: P.accent + '66', marginTop: 4 }]}
-                  onPress={() => { if (!initSlotDate) { setInitInputError('Pick a date first.'); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
-                >
-                  <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add custom time</Text>
-                </TouchableOpacity>
+                {/* Time-row actions. "+ Add custom time" (the escape hatch for a
+                    time outside the availability grid) and the commit action sit
+                    on ONE row: the commit used to be a full-width solid bar of its
+                    own, which read as the modal's primary submit when it only adds
+                    a row to the list below. Sized down and moved up beside the time
+                    control, it reads as what it is — finishing this one entry. */}
+                <View style={styles.addSlotRow}>
+                  <TouchableOpacity
+                    style={[styles.addSlotBtn, { borderColor: P.accent + '66' }]}
+                    onPress={() => { if (!initSlotDate) { setInitInputError('Pick a date first.'); return; } setInitInputError(''); setInitCustomTimePickerVisible(true); }}
+                  >
+                    <Text style={[styles.addSlotBtnText, { color: P.accent }]}>+ Add custom time</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.addSlotBtnPrimary, { backgroundColor: '#FF9500' }]}
+                    onPress={handleAddInitSlot}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add this date and time to your proposed times"
+                  >
+                    <Text style={styles.addSlotBtnPrimaryText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
                 {initCustomTimePickerVisible && (
                   Platform.OS === 'ios' ? (
                     <Modal transparent animationType="fade" visible={initCustomTimePickerVisible} onRequestClose={() => setInitCustomTimePickerVisible(false)}>
@@ -2262,17 +2354,6 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                   )
                 )}
 
-                {/* Primary "commit this slot" action — deliberately solid-fill
-                    to read as the primary action distinct from the outline
-                    "+ Add custom time" escape hatch above it. */}
-                <TouchableOpacity
-                  style={[styles.addSlotBtnPrimary, { backgroundColor: '#FF9500', marginTop: 10 }]}
-                  onPress={handleAddInitSlot}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.addSlotBtnPrimaryText}>+ Add date</Text>
-                </TouchableOpacity>
-
                 {initInputError ? <Text style={styles.inputErrorText}>{initInputError}</Text> : null}
 
                 {/* Accumulated slots — same slotChip row treatment as "CLIENT
@@ -2296,6 +2377,19 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                         </TouchableOpacity>
                       </View>
                     ))}
+                    {/* Offering a time reserves it. place_reschedule_holds_from_slots
+                        (supabase/migrations/20260827120337_reschedule_slot_holds.sql)
+                        writes an on_hold row per time, so the slot is still there
+                        when the client picks it — an offer that can't be honoured
+                        is worse than no offer. The cost lands on this provider's
+                        own diary, so it's stated rather than capped: nothing else
+                        on this screen would explain why those slots went quiet. */}
+                    <Text style={{ color: P.sub, fontSize: 11, lineHeight: 15, marginTop: 8 }}>
+                      {(() => {
+                        const n = initRescheduleSlots.reduce((sum, s) => sum + s.times.length, 0);
+                        return `${n} time${n === 1 ? '' : 's'} held for this client until they answer or the request expires. Nobody else can book ${n === 1 ? 'it' : 'them'} in the meantime.`;
+                      })()}
+                    </Text>
                   </View>
                 )}
 
@@ -2536,6 +2630,72 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </View>
             <Ionicons name="chevron-forward" size={14} color={P.text + '44'} />
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── Dispute dialog ──────────────────────────────────────────────
+          Same dialog shell as the confirm/decline one below, with a required
+          reason: that text is the entire content of the support ticket, and a
+          dispute that says nothing gives whoever reads it nothing to act on. */}
+      <Modal
+        visible={showDisputeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDisputeModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.dialogOverlay}
+          activeOpacity={1}
+          onPress={() => { if (!disputeBusy) { setShowDisputeModal(false); setDisputeReason(''); } }}
+        />
+        <View style={styles.dialogPositioner} pointerEvents="box-none">
+          <View style={[styles.dialog, { backgroundColor: P.card }]}>
+            <Text style={[styles.dialogTitle, { color: P.text }]}>Dispute this no-show</Text>
+            <Text style={[styles.dialogMessage, { color: P.text + '88' }]}>
+              {booking.customerName || 'Your client'} reported that you didn't show up. Tell us what actually happened — they'll see it, and so will Cerviced support.
+            </Text>
+            <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
+              <TextInput
+                style={[styles.respondInput, {
+                  color: P.text,
+                  borderColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)',
+                  minHeight: 92,
+                  textAlignVertical: 'top',
+                }]}
+                placeholder="What happened?"
+                placeholderTextColor={P.text + '44'}
+                value={disputeReason}
+                onChangeText={setDisputeReason}
+                multiline
+                maxLength={1000}
+                editable={!disputeBusy}
+              />
+            </View>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={disputeBusy || !disputeReason.trim()}
+              onPress={handleSubmitDispute}
+            >
+              {disputeBusy ? (
+                <ActivityIndicator size="small" color="#007AFF" />
+              ) : (
+                <Text style={[styles.dialogBtnText, { color: '#007AFF', fontWeight: '600', opacity: disputeReason.trim() ? 1 : 0.4 }]}>
+                  Send Dispute
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View style={[styles.dialogDivider, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+            <TouchableOpacity
+              style={styles.dialogBtn}
+              activeOpacity={0.65}
+              disabled={disputeBusy}
+              onPress={() => { setShowDisputeModal(false); setDisputeReason(''); }}
+            >
+              <Text style={[styles.dialogBtnText, { color: P.text + 'AA' }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
@@ -3369,12 +3529,23 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontStyle: 'italic',
   },
+  // The two time-row actions share this row so they read as one control pair.
+  addSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 16,
+  },
   addSlotBtn: {
+    // Takes the remaining width so the compact commit button keeps a fixed,
+    // deliberately smaller footprint beside it.
+    flex: 1,
     borderWidth: 1.5,
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
   },
   addSlotBtnText: {
     fontSize: 15,
@@ -3385,19 +3556,18 @@ const styles = StyleSheet.create({
   // the reschedule modal (e.g. "+ Add custom time") so it reads as the one
   // action that actually adds the date, not just another secondary control.
   addSlotBtnPrimary: {
+    // Compact: hugs its label instead of spanning the sheet, and the orange
+    // glow is gone — at full width with a shadow it out-shouted the modal's
+    // real submit button.
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#FF9500',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    justifyContent: 'center',
   },
   addSlotBtnPrimaryText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   slotsList: {

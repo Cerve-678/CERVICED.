@@ -60,6 +60,12 @@ import type {
 } from '../../types/database';
 import { formatTime12, formatSectionTitle, dateToYMD, ordinalSuffix, formatDurationMinutes } from '../../utils/dateUtils';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import { formatBookingRef } from '../../features/bookings/presentation';
+import {
+  buildGoLiveSteps,
+  type GoLiveStatus,
+  type GoLiveStepKey,
+} from '../../features/providers/goLiveStatus';
 
 type Props = ProviderHomeScreenProps<'ProviderHomeMain'>;
 
@@ -166,10 +172,6 @@ function getMonthDays(year: number, month: number) {
   return cells;
 }
 
-function getBookingRef(id: string) {
-  return id.replace(/-/g, '').substring(0, 10).toUpperCase();
-}
-
 function formatCreatedAt(iso: string): string {
   const d = new Date(iso);
   const date = d.getDate();
@@ -224,7 +226,7 @@ function BookingCard({ booking, issues, expansionState, onToggleExpand, onPress,
   const eta   = countdownLabel(booking.bookingDate, booking.bookingTime);
   const addOns = booking.addOns?.reduce((s, a) => s + a.price, 0) ?? 0;
   const total  = booking.price + addOns;
-  const ref    = getBookingRef(booking.id);
+  const ref    = formatBookingRef(booking);
   const pillBg = dark ? cfg.dbg : cfg.bg;
 
   const expandScale = useRef(new Animated.Value(1)).current;
@@ -365,6 +367,16 @@ function SummaryRow({ label, value, italic, P }: { label: string; value: string;
 
 // Same warning amber the go-live checklist uses for "this needs attention" —
 // a schedule problem is a warning, not an error state like a cancellation.
+/** Where each shared go-live step is fixed, from the Home stack. All four are
+ *  registered on this navigator so the tap pushes rather than bouncing to
+ *  another tab's root. */
+const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, string> = {
+  schedule: 'ProviderSchedule',
+  services: 'EditProfile',
+  address: 'EditProfile',
+  logo: 'Branding',
+};
+
 const ISSUE_COLOR = '#FF9500';
 
 /** Stable empty array, so a booking with no problems doesn't get a fresh
@@ -771,15 +783,12 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // private address WITH geocoded coordinates. Anything the server doesn't
   // gate on must not be counted towards "done" here (see brandingSet), or
   // the card contradicts the database in one direction or the other.
-  const [setupStatus, setSetupStatus] = useState<{
-    scheduleSet: boolean;
-    servicesSet: boolean;
-    addressSet: boolean;
-    /** Recommended, NOT a go-live requirement — the server never checks it. */
-    brandingSet: boolean;
-    /** The database's own answer, not our reconstruction of it. */
-    isLive: boolean;
-  } | null>(null);
+  // Shape and step labels come from features/providers/goLiveStatus so this
+  // card and the provider's own dashboard card state the same requirements in
+  // the same words. Only the fetch is local — this screen already reads the
+  // availability and service count for the day list, so refetching them
+  // through fetchGoLiveStatus() would double those queries on every focus.
+  const [setupStatus, setSetupStatus] = useState<GoLiveStatus | null>(null);
   const [setupDismissed, setSetupDismissed] = useState(false);
 
   // Fires the go-live celebration exactly once, on a genuine false->true
@@ -1268,6 +1277,29 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
     return rows;
   }, [bookingsWithServiceDuration, selectedDate]);
 
+  // Opening the list drops the next appointment down already. "What's next"
+  // is the provider's first question every time they switch to this view, and
+  // making them tap the top card to answer it is a step that buys nothing.
+  //
+  // Only the FIRST booking row (listRows is already sorted, and starts at
+  // selectedDate), only level 1, and never downgrading a card the provider
+  // deliberately opened to level 2. The ref resets when they leave list mode,
+  // so re-opening re-expands — while a collapse they make WHILE the list is
+  // open sticks, because the id is already marked as handled for this open.
+  const autoExpandedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (viewMode !== 'list') {
+      autoExpandedIdRef.current = null;
+      return;
+    }
+    const firstBookingRow = listRows.find(r => r.t === 'booking');
+    if (firstBookingRow?.t !== 'booking') return;
+    const id = firstBookingRow.booking.id;
+    if (autoExpandedIdRef.current === id) return;
+    autoExpandedIdRef.current = id;
+    setExpansionStates(prev => ((prev[id] ?? 0) >= 1 ? prev : { ...prev, [id]: 1 }));
+  }, [viewMode, listRows]);
+
   // Month calendar cells
   const monthCells = useMemo(
     () => getMonthDays(calMonth.getFullYear(), calMonth.getMonth()),
@@ -1400,39 +1432,16 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
                 Re-save it in Business Details and we'll publish you.
               </Text>
             )}
-            {([
-              {
-                done: setupStatus.scheduleSet,
-                label: 'Set your weekly schedule',
-                onPress: () => navigation.navigate('ProviderSchedule' as never),
-              },
-              // Push within THIS stack rather than jumping to the Profile tab.
-              // The cross-tab jump landed these at the Profile stack's root, so
-              // their back/save button dispatched a GO_BACK no navigator could
-              // handle; pushing leaves ProviderHomeMain underneath to return to.
-              {
-                done: setupStatus.servicesSet,
-                label: 'Add at least one service',
-                onPress: () => navigation.navigate('EditProfile' as never),
-              },
-              {
-                done: setupStatus.addressSet,
-                label: 'Add your business address',
-                onPress: () => navigation.navigate('EditProfile' as never),
-              },
-              // Recommended, not required: check_and_set_provider_live() never
-              // looks at logo_url, so a provider can be fully live without
-              // one. Labelled as optional rather than sitting unlabelled
-              // among three steps that genuinely do block go-live.
-              {
-                done: setupStatus.brandingSet,
-                label: 'Add your logo (optional)',
-                onPress: () => navigation.navigate('Branding' as never),
-              },
-            ]).map(step => (
+            {/* Labels and done-ness are the shared definition; only where each
+                tap goes is local. Push within THIS stack rather than jumping
+                to the Profile tab — the cross-tab jump landed these at the
+                Profile stack's root, so their back/save button dispatched a
+                GO_BACK no navigator could handle; pushing leaves
+                ProviderHomeMain underneath to return to. */}
+            {buildGoLiveSteps(setupStatus).map(step => (
               <TouchableOpacity
-                key={step.label}
-                onPress={step.onPress}
+                key={step.key}
+                onPress={() => navigation.navigate(GO_LIVE_STEP_SCREENS[step.key] as never)}
                 disabled={step.done}
                 activeOpacity={0.7}
                 style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}

@@ -17,7 +17,10 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import { useBooking, ConfirmedBooking, BookingStatus, createBookingDateTime } from '../../contexts/BookingContext';
-import { hasMapDestination, isAddressPending, isMobileBooking } from '../../types/booking';
+import { canDisputeNoShow, hasMapDestination, isAddressPending, isMobileBooking } from '../../types/booking';
+import { fileNoShowDispute } from '../../features/bookings/noShowDispute';
+import { SUPPORT_EMAIL } from '../../constants/support';
+import { toUserMessageAllowingDbGuard } from '../../utils/userFacingError';
 import { useCart } from '../../contexts/CartContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -34,7 +37,7 @@ import {
   getBookingTip,
 } from '../../services/databaseService';
 import { formatShortDate, formatTime12, formatTime12Safe } from '../../utils/dateUtils';
-import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
+import { buildPolicyDisplayRows, readProviderTermsSnapshot } from '../../utils/policyDisplay';
 import {
   calculateBookingPaymentBreakdown,
   PAYMENT_METHOD_LABELS,
@@ -45,6 +48,7 @@ import {
 } from '../../features/bookings/clientBookingPresentation';
 import { buildClientReceiptHTML } from '../../features/bookings/receipt';
 import { formatBookingDisplayDate } from '../../features/bookings/datePresentation';
+import { formatBookingRef } from '../../features/bookings/presentation';
 import { logger } from '../../utils/logger';
 
 if (Platform.OS === 'android') {
@@ -75,7 +79,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   useFont();
   const { bookingId } = route.params;
   const { isDarkMode, palette: C } = useTheme();
-  const { user } = useAuth();
+  const { user, activeMode } = useAuth();
   const { addToCart } = useCart();
   const {
     todayBookings, upcomingBookings, pastBookings,
@@ -140,6 +144,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const [successIcon, setSuccessIcon] = useState('✓');
   const [shouldNavigateToCart, setShouldNavigateToCart] = useState(false);
   const [showCooldownModal, setShowCooldownModal] = useState(false);
+  const [showProviderNoShowModal, setShowProviderNoShowModal] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeBusy, setDisputeBusy] = useState(false);
   const [cooldownMessage, setCooldownMessage] = useState('');
   const [viewingPack, setViewingPack] = useState<BookingInfoPack | null>(null);
   const [contactSheetVisible, setContactSheetVisible] = useState(false);
@@ -339,6 +347,15 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     [booking?.policySnapshot, livePolicyFallback],
   );
 
+  // Only ever from the frozen snapshot — never the live fallback. The point of
+  // showing these is that they are what THIS client agreed to; reading the
+  // provider's current terms instead would assert agreement to text the client
+  // may never have seen, which is the exact failure this records against.
+  const agreedTerms = useMemo(
+    () => readProviderTermsSnapshot(booking?.policySnapshot),
+    [booking?.policySnapshot],
+  );
+
   // Whether cancelling right now would fall inside the provider's notice
   // window — drives the cancel modal's copy/buttons directly (see the modal
   // render below) instead of a separate blocking alert after the fact, so
@@ -404,6 +421,44 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       Alert.alert("Couldn't Report", friendly ?? "We couldn't report this just now. Please try again.");
     } finally { setIsLoading(false); }
   }, [booking, canMarkProviderNoShow, markProviderNoShow]);
+
+  // Disputing a no-show the PROVIDER recorded against this client. The button
+  // that opens this is gated on canDisputeNoShow; dispute_no_show() re-checks
+  // identity and window server-side, so this is presentation, not enforcement.
+  const canDispute = useMemo(
+    () => !!booking && canDisputeNoShow(booking, BookingStatus.NO_SHOW),
+    [booking],
+  );
+
+  const handleSubmitDispute = useCallback(async () => {
+    if (!booking || !disputeReason.trim()) return;
+    setDisputeBusy(true);
+    try {
+      const { ticketNumber } = await fileNoShowDispute(booking, disputeReason, 'client', activeMode);
+      setShowDisputeModal(false);
+      setDisputeReason('');
+      // ticketNumber null means the dispute is recorded but the support
+      // ticket didn't file — don't hand them a reference that doesn't exist,
+      // and don't call it a failure either (see fileNoShowDispute).
+      setSuccessMessage(
+        ticketNumber
+          ? `${booking.providerName} has been told you dispute this, and support has a copy. Your reference is #${ticketNumber}.`
+          : `${booking.providerName} has been told you dispute this. We couldn't reach support just now — email ${SUPPORT_EMAIL} if you don't hear back.`,
+      );
+      setSuccessIcon('✓');
+      setShowSuccessModal(true);
+    } catch (error: unknown) {
+      logger.error('[BookingDetail] dispute no-show failed:', error);
+      Alert.alert(
+        "Couldn't Send Your Dispute",
+        // dispute_no_show()'s guards are written for the person reading
+        // them ("You have already disputed this no-show"), so let them through.
+        toUserMessageAllowingDbGuard(error, 'Please try again in a moment.', 'BookingDetailScreen.handleSubmitDispute'),
+      );
+    } finally {
+      setDisputeBusy(false);
+    }
+  }, [booking, disputeReason, activeMode]);
 
   const handleReschedulePress = useCallback(() => {
     if (!booking) return;
@@ -921,7 +976,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border, marginVertical: 8 }} />
 
                   <View style={{ alignItems: 'center' }}>
-                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>REF: {booking.id?.slice(0, 8).toUpperCase()}</Text>
+                    <Text style={{ color: C.sub, fontSize: 10, marginBottom: 2 }}>REF: {formatBookingRef(booking)}</Text>
                     <Text style={{ color: C.sub, fontSize: 10 }}>
                       {formatShortDate(new Date(booking.createdAt))}, {formatTime12(new Date(booking.createdAt))}
                     </Text>
@@ -964,6 +1019,25 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     </Text>
                   </View>
                 ))}
+              </View>
+            </View>
+          )}
+
+          {/* The provider's own written T&Cs, exactly as shown when this
+              client ticked "I agree" — frozen at booking time, so a provider
+              editing their terms afterwards cannot change what this booking
+              says was agreed. Absent on bookings made before 2026-08-26 and
+              on any where the provider had written no terms. */}
+          {agreedTerms && (
+            <View style={st.section}>
+              <Text style={[st.sectionTitle, { color: C.sub }]}>TERMS YOU AGREED TO</Text>
+              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
+                <Text style={{ color: C.text, fontSize: 14, fontWeight: '700', paddingHorizontal: 16, paddingTop: 16 }}>
+                  {agreedTerms.title}
+                </Text>
+                <Text style={{ color: C.text, fontSize: 14, lineHeight: 20, padding: 16 }}>
+                  {agreedTerms.body}
+                </Text>
               </View>
             </View>
           )}
@@ -1084,16 +1158,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {isUpcoming && canMarkProviderNoShow && (
               <TouchableOpacity
                 style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
-                onPress={() =>
-                  Alert.alert(
-                    "Provider didn't show up?",
-                    'This marks the appointment as a missed appointment and notifies the provider.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Confirm', style: 'destructive', onPress: handleMarkProviderNoShow },
-                    ],
-                  )
-                }
+                onPress={() => setShowProviderNoShowModal(true)}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
@@ -1146,6 +1211,25 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   {rebookBusy ? <ActivityIndicator size="small" color={C.text} /> : <Text style={[st.mapActionBtnText, { color: C.text }]}>Book Again</Text>}
                 </TouchableOpacity>
               </View>
+            )}
+            {/* A no-show recorded against this client. The status itself is
+                terminal and stays exactly as it is — disputing does not undo
+                it. What it does is stop the no-show hardening into a
+                permanent reliability count against them, tell the provider,
+                and put it in front of a human at support. */}
+            {canDispute && (
+              <TouchableOpacity
+                style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
+                onPress={() => setShowDisputeModal(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>This wasn't right — dispute it</Text>
+              </TouchableOpacity>
+            )}
+            {!!booking.noShowDisputedAt && (
+              <Text style={{ marginTop: 12, fontSize: 13, color: C.sub, textAlign: 'center' }}>
+                You disputed this no-show. {booking.providerName} has been told and support has a copy.
+              </Text>
             )}
           </View>
 
@@ -1236,6 +1320,84 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               </View>
             </View>
           </View>
+        </Modal>
+
+        {/* ─── Provider No-Show Modal ─────────────────────────────────────
+            Same in-app sheet as Cancel/Cooldown above, deliberately NOT a
+            system Alert: this is a consequential, irreversible accusation and
+            it should look like the app making it, not the OS. Copy mirrors
+            the provider's own no-show confirmation (see
+            ProviderBookingDetailScreen.handleStatusChange) — the accused
+            party isn't here to answer, and the status is terminal
+            (TERMINAL_BOOKING_STATUSES; the RPC refuses to write over it). */}
+        <Modal visible={showProviderNoShowModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowProviderNoShowModal(false)}>
+          <View style={st.overlay}>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Provider didn't show up?</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>
+                {booking.providerName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone. Are you sure?
+              </Text>
+              <View style={st.sheetBtns}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowProviderNoShowModal(false)} disabled={isLoading} activeOpacity={0.7}>
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Go Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: '#FF9800' }]}
+                  onPress={() => { setShowProviderNoShowModal(false); handleMarkProviderNoShow(); }}
+                  disabled={isLoading}
+                  activeOpacity={0.7}
+                >
+                  {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Confirm</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ─── Dispute Modal ──────────────────────────────────────────────
+            A reason is required and is not optional politeness: it is the
+            entire content of the support ticket, and a dispute that says
+            nothing gives whoever reads it nothing to act on. */}
+        <Modal visible={showDisputeModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowDisputeModal(false)}>
+          <KeyboardDismissView style={st.overlay} dismissOnTap>
+            <View style={[st.sheetContent, { backgroundColor: C.surfaceRaised }]}>
+              <Text style={[st.sheetTitle, { color: C.text }]}>Dispute this no-show</Text>
+              <Text style={[st.sheetSub, { color: C.sub }]}>
+                {booking.providerName} marked this appointment as missed. Tell us what actually happened — they'll see it, and so will Cerviced support.
+              </Text>
+              <TextInput
+                style={[st.disputeInput, { backgroundColor: C.card, borderColor: C.border, color: C.text }]}
+                placeholder="What happened?"
+                placeholderTextColor={C.sub}
+                value={disputeReason}
+                onChangeText={setDisputeReason}
+                multiline
+                maxLength={1000}
+                editable={!disputeBusy}
+              />
+              <View style={st.sheetBtns}>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]}
+                  onPress={() => { setShowDisputeModal(false); setDisputeReason(''); }}
+                  disabled={disputeBusy}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.sheetBtn, { backgroundColor: C.accent }, !disputeReason.trim() && { opacity: 0.5 }]}
+                  onPress={handleSubmitDispute}
+                  disabled={disputeBusy || !disputeReason.trim()}
+                  activeOpacity={0.7}
+                >
+                  {disputeBusy
+                    ? <ActivityIndicator size="small" color={C.onAccent} />
+                    : <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Send Dispute</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardDismissView>
         </Modal>
 
         {/* ─── Rating Modal ─── */}
@@ -1532,6 +1694,11 @@ const st = StyleSheet.create({
   // unconstrained row, and Yoga can collapse it to zero width so it never
   // renders/taps. Two-button rows fill 100% either way, so this is a no-op there.
   sheetBtns: { flexDirection: 'row', width: '100%', gap: 12, marginTop: 4 },
+  disputeInput: {
+    width: '100%', minHeight: 96, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, fontSize: 14,
+    textAlignVertical: 'top', marginBottom: 12,
+  },
   sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },
   reviewInput: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 12, minHeight: 80, fontSize: 14, marginBottom: 16 },
   tipChip: { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth },

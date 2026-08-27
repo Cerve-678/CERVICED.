@@ -23,3 +23,35 @@ export function resolveServiceCategory(serviceName: string, defaultCategory: str
   }
   return 'OTHER';
 }
+
+/** The single source of truth for a booking's human-quotable reference.
+ *
+ *  A client reading a reference off their screen and a provider looking at
+ *  the same appointment have to be saying the same string, or the reference
+ *  is worse than useless for support. Four screens derived it as
+ *  `id.slice(0, 8)` while ProviderHomeScreen used
+ *  `id.replace(/-/g,'').substring(0, 10)` — the same booking quoted two
+ *  different codes depending on who was looking.
+ *
+ *  Agreeing on a truncation does not make the truncation safe, though: eight
+ *  hex characters collide with 1% probability at ~9,300 bookings. So the
+ *  reference is now a real `booking_ref` column — 8 characters of a 30-symbol
+ *  alphabet with the ambiguous glyphs removed, behind a UNIQUE index (see
+ *  migration 20260827151000).
+ *
+ *  The fallback is deliberate and load-bearing rather than defensive
+ *  clutter: rows written before that migration have no stored ref, and the
+ *  old truncation is what was printed on their receipts. Recomputing it means
+ *  a client holding a receipt from last month still finds their booking.
+ *  Delete the fallback only once no such row can be read.
+ */
+export function formatBookingRef(
+  booking: { bookingRef?: string | null | undefined; id?: string | null | undefined } | null | undefined,
+): string {
+  const stored = booking?.bookingRef?.trim();
+  if (stored) return `${BOOKING_REF_PREFIX}${stored.toUpperCase()}`;
+  return (booking?.id ?? '').replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
+/** Display-only. Not stored, so the column stays a clean searchable token. */
+export const BOOKING_REF_PREFIX = 'CRV-';
