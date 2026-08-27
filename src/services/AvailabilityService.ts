@@ -1316,9 +1316,20 @@ export const AvailabilityService = {
       });
 
       if (clash) {
+        // "an upcoming <service> appointment", NOT "an <service> upcoming
+        // appointment": the article is fixed text but the service name is
+        // whatever the provider typed, so "an Balayage" is one consonant away
+        // at all times. Putting "upcoming" between them keeps "an" correct for
+        // every name. Each half is dropped rather than defaulted when its
+        // snapshot is null, so a missing one reads as a shorter sentence
+        // instead of "an upcoming an appointment appointment".
+        const clashService = clash.service_name_snapshot?.trim();
+        const clashProvider = clash.provider_name_snapshot?.trim();
         conflicts.push({
           cartItemId: booking.cartItemId,
-          message: `You already have ${clash.service_name_snapshot ?? 'an appointment'} with ${clash.provider_name_snapshot ?? 'another provider'} at this time.`,
+          message:
+            `You already have an upcoming ${clashService ? `${clashService} ` : ''}appointment` +
+            `${clashProvider ? ` with ${clashProvider}` : ''} at this time.`,
         });
       }
     }

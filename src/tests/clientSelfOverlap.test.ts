@@ -83,8 +83,34 @@ describe('two providers, one client, same hour', () => {
     ]);
 
     expect(result.isValid).toBe(false);
-    expect(result.conflicts[0].message).toContain('Lashes by Jo');
-    expect(result.conflicts[0].message).toContain('Infills');
+    // Named on both halves — "you're busy then" is unactionable when the cart
+    // collapses by provider and the clashing appointment isn't even in it.
+    expect(result.conflicts[0].message).toBe(
+      'You already have an upcoming Infills appointment with Lashes by Jo at this time.',
+    );
+  });
+
+  it('drops a half of the sentence rather than defaulting it', async () => {
+    const { db, AvailabilityService } = load();
+    db.getMyUpcomingBookedSpans.mockResolvedValue([
+      {
+        booking_date: DAY,
+        booking_time: '14:00:00',
+        end_time: '15:00:00',
+        provider_name_snapshot: null,
+        service_name_snapshot: null,
+      },
+    ]);
+
+    const result = await AvailabilityService.validateCartBookings([
+      { providerName: 'Nails by Mia', date: DAY, time: '2:30 PM', duration: '1h', cartItemId: 'a' },
+    ]);
+
+    // A shorter true sentence, not "an upcoming an appointment appointment
+    // with another provider".
+    expect(result.conflicts[0].message).toBe(
+      'You already have an upcoming appointment at this time.',
+    );
   });
 
   it('reads the span as a real time range, not as midnight', async () => {
