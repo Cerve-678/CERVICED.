@@ -1003,3 +1003,77 @@ doing *now* as a stopgap regardless, since the current copy is the untrue part.
 - Auto-memory `emergency-booking-requests` — the beyond-window opt-in.
 - `## Provider Deactivation / Pause Bookings` above — another case of provider
   availability needing a state the weekly template can't express.
+
+## No-Show Disputes — the two options NOT taken (2026-08-27)
+
+A no-show is an accusation about someone who isn't in the room to answer it,
+and it is terminal: `provider_update_booking_status()` and
+`client_mark_provider_no_show()` both refuse to write over `no_show` /
+`provider_no_show`, so nothing in the app moves a booking back out of one.
+
+**What was built** (migration `20260827154500_no_show_disputes.sql` + the
+dispute button on both booking detail screens): the accused party can record
+that they say it's false, within 7 days. That does three things — the other
+party is notified, a support ticket is filed with the booking reference and
+their own words, and the no-show stops on its way to becoming a permanent
+`client_provider_reliability.no_show_count`. `settle_no_show_reliability()`
+only counts a no-show after the window closes undisputed, so a contested
+accusation never quietly scores against someone.
+
+**What it deliberately is not:** an adjudication system. Cerviced does not
+decide who is right, and no code path reverses a no-show. Resolution today
+means a human reads the support ticket and, if warranted, edits the row by
+hand. That is the honest description of the current state.
+
+Two options were weighed against this one and deferred. Revisit when there is
+enough real dispute volume to know which failure actually costs more — false
+accusations, or honest mistakes nobody can take back.
+
+### Option 2 — reversal within a window
+
+Let whoever *marked* the no-show undo it themselves, within some window
+(the appointment day, or 24-48h). No one has to arbitrate: it just handles the
+honest-mistake case, which is probably the most common one — a provider marks
+the wrong booking of two that day, or marks it before the client walks in ten
+minutes late.
+
+- Needs an RPC that can write over a terminal status, which is the whole
+  reason the terminal guard exists. Scope it hard: only the actor who set it,
+  only back to the status it came from, only inside the window, and never
+  after `no_show_counted_at` is stamped.
+- Interacts with the settle job: a reversal after settlement would need to
+  decrement the counter, which the counter table has no per-booking record to
+  support. Simplest answer is to forbid reversal once counted — the 7-day
+  settle window is already longer than any sane reversal window.
+- Cheapest of the three to build, and complements rather than replaces what
+  was built: reversal handles mistakes, disputes handle disagreements.
+
+### Option 3 — real adjudication
+
+Someone at Cerviced reviews a dispute and rules on it, with the outcome
+written back to the booking and (for a client) to their reliability count.
+
+- Needs a real queue and an admin surface — there is no admin app at all
+  today, so this is the largest of the three by a wide margin. `support_requests`
+  has `status` and `resolved_at` columns but nothing reads or writes them.
+- Needs an evidence standard and a stated turnaround, both of which are
+  T&Cs questions, not engineering ones: who decides, on what basis, in what
+  time, and what a ruling actually changes. **Run this past
+  `cerviced-legal-flagger` before building anything** — the moment Cerviced
+  rules on a disagreement between two users it is taking a position it
+  currently disclaims (see the Terms' "not liable for disputes arising from
+  cancellations" clause).
+- Only worth it at volume. Below that, a person reading support email *is*
+  the adjudication system, and a queue would just be a worse inbox.
+
+### Also open
+
+- **`no_show_count` is per-provider, not global.** A client with ten no-shows
+  across ten providers looks clean to every one of them. Deliberate for now
+  (a provider seeing a stranger's history with someone else is its own
+  privacy question), but it means the counter is weaker evidence than it
+  looks — worth remembering before anything is ever gated on it.
+- **Nothing surfaces a dispute to the provider outside the notification and
+  the booking detail screen.** If disputes become common, the clientele
+  screen's reliability badge should probably say "1 no-show, 1 disputed"
+  rather than showing a bare count that a dispute silently held back.

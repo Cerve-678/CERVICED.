@@ -418,18 +418,17 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     policySnapshot: (db.policy_snapshot as Record<string, unknown>) ?? undefined,
     // Two shapes, one field.
     //
-    // TODAY only the first branch fires: bookings.client_address is still the
-    // real storage, and both the client_bookings view and the provider's own
-    // read expose it as a plain column.
+    // Since 20260827161000 was applied (2026-08-27) the SECOND branch is the
+    // live one: the address moved into booking_client_addresses, an RLS-gated
+    // row a provider cannot read before accepting, and bookings.client_address
+    // is a write-only funnel that is always NULL at rest.
     //
-    // The second branch is for migration 20260827130000, which moves the
-    // address into its own RLS-gated row so a provider cannot read it before
-    // accepting. That migration is WRITTEN BUT NOT APPLIED, and the query-side
-    // change that embeds the new table was backed out after it took provider
-    // home down with a PGRST200 (the embed resolves against the live schema
-    // cache, and the table is not there). Kept because it costs nothing and is
-    // needed the moment the migration lands — restore the embed then, not
-    // before. See the skipped tests in clientAddressGating.test.ts.
+    // The first branch is kept for the client_bookings view, which still
+    // exposes the address as a plain `client_address` column (sourced from the
+    // gated table via a join), and for any read that has not been moved to the
+    // embed. It costs nothing and reading it wrongly is the difference between
+    // an address and an empty field, not an error — which is exactly why the
+    // reader assertions in clientAddressGating.test.ts are not optional.
     clientAddress:
       (db as any).client_address ??
       (() => {
@@ -444,7 +443,7 @@ export const mapDbBookingToConfirmed = (db: BookingWithAddOns): ConfirmedBooking
     providerBusinessType: (db as any).provider_business_type ?? undefined,
     addressReleasedAt: db.address_released_at ?? undefined,
     // Undefined rather than null on both counts: absent (migration
-    // 20260827140000 not applied / column not selected) and never-marked are
+    // 20260827154500 not applied / column not selected) and never-marked are
     // the same thing to every caller — see canDisputeNoShow.
     noShowMarkedAt: db.no_show_marked_at ?? undefined,
     noShowDisputedAt: db.no_show_disputed_at ?? undefined,

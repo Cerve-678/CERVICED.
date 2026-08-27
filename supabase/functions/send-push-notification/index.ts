@@ -109,6 +109,74 @@ async function handlePushError(
   }
 }
 
+/**
+ * Which client-facing notification-settings toggle governs which notification
+ * type. Mirrors NotificationPreferences in databaseService.ts and the rows in
+ * NotificationsSettingsScreen.
+ *
+ * Scope is deliberately narrow, and the narrowness is the safety property:
+ *  - Only the PUSH is gated. The notifications row is always written, so the
+ *    in-app list stays a complete record and a toggle can never destroy
+ *    information the user may need later.
+ *  - Only recipient_role 'client' is gated. These toggles live on a client
+ *    screen; a provider's operational alerts are not theirs to switch off.
+ *  - Any type absent from this map always sends. Fail-open is the correct
+ *    default for a delivery gate: a missing mapping should mean "not covered
+ *    by a toggle", never "silently suppressed".
+ */
+const PREF_KEY_BY_TYPE: Record<string, string> = {
+  // "Booking Confirmed — Instant confirmation alerts"
+  booking_pending: 'bookingConfirm',
+  booking_confirmed: 'bookingConfirm',
+  payment_success: 'bookingConfirm',
+  // "Appointment Reminders — 24h and 1h before"
+  booking_reminder: 'bookingReminder',
+  pending_booking_reminder: 'bookingReminder',
+  rebooking_nudge: 'bookingReminder',
+  // "Booking Updates — Changes, cancellations"
+  booking_declined: 'bookingUpdates',
+  booking_cancelled: 'bookingUpdates',
+  booking_in_progress: 'bookingUpdates',
+  no_show: 'bookingUpdates',
+  provider_no_show: 'bookingUpdates',
+  no_show_disputed: 'bookingUpdates',
+  address_released: 'bookingUpdates',
+  reschedule_request: 'bookingUpdates',
+  reschedule_provider_response: 'bookingUpdates',
+  reschedule_confirmed: 'bookingUpdates',
+  reschedule_declined: 'bookingUpdates',
+  // "Offers & Promotions — Deals from your saved providers"
+  promotion: 'promotions',
+  announcement: 'promotions',
+  birthday_greeting: 'promotions',
+  post_appt_check_in: 'promotions',
+  // "New Providers — Professionals near you"
+  new_provider: 'newProviders',
+};
+
+// Must match DEFAULT_NOTIF_PREFS in databaseService.ts.
+const DEFAULT_PREFS: Record<string, boolean> = {
+  bookingConfirm: true,
+  bookingReminder: true,
+  bookingUpdates: true,
+  promotions: false,
+  newProviders: true,
+  weeklySummary: false,
+};
+
+/** True when this notification may be pushed to this user. */
+function pushAllowedByPrefs(
+  type: string | undefined,
+  recipientRole: string | undefined,
+  prefs: Record<string, boolean> | null,
+): boolean {
+  if (recipientRole !== 'client') return true;
+  const key = type ? PREF_KEY_BY_TYPE[type] : undefined;
+  if (!key) return true;
+  const effective = { ...DEFAULT_PREFS, ...(prefs ?? {}) };
+  return effective[key] !== false;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -166,15 +234,36 @@ serve(async (req) => {
       });
     }
 
+    // Preferences come back in the SAME row read as the token — they gate the
+    // send, so fetching them separately would be a second round trip per push.
     const { data: userRow, error } = await supabase
       .from('users')
-      .select('push_token')
+      .select('push_token, notification_preferences')
       .eq('id', user_id)
       .single();
 
     if (error || !userRow?.push_token) {
       // User has no push token — they haven't granted permission or never logged in on a device
       return new Response(JSON.stringify({ sent: false, reason: 'no_token' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // The user switched this category off in Notification Settings. Until now
+    // nothing on the send path read these toggles at all, so every switch on
+    // that screen was decorative. The notifications row itself is already
+    // written and untouched — only the push is suppressed.
+    if (
+      !pushAllowedByPrefs(
+        payload.record.type,
+        payload.record.recipient_role,
+        userRow.notification_preferences as Record<string, boolean> | null,
+      )
+    ) {
+      console.log(
+        `[push] suppressed by user preference notification=${payload.record.id} type=${payload.record.type}`,
+      );
+      return new Response(JSON.stringify({ sent: false, reason: 'preference_off' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -196,6 +285,10 @@ serve(async (req) => {
         priority: payload.record.priority === 'high' ? 'high' : 'normal',
         data: {
           booking_id: payload.record.booking_id,
+          // Without this, every notification whose destination is a provider
+          // rather than a booking (chat, provider profiles, broadcasts) could
+          // only dump the user on the notifications list to tap a second time.
+          provider_id: payload.record.provider_id,
           notification_id: payload.record.id,
           type: payload.record.type,
           recipient_role: payload.record.recipient_role,

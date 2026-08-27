@@ -1590,6 +1590,152 @@ export async function getMyProviderServices(): Promise<
   }));
 }
 
+// ─────────────────────────────────────────────────────────
+// SERVICE CATALOGUE — the owner's own read/write
+// ─────────────────────────────────────────────────────────
+//
+// Until now the only way to change a service was replaceProviderServiceCatalog
+// (replace_provider_services), which rewrites a provider's WHOLE catalogue from
+// InfoRegScreen's one-shot document save — and that save also re-geocodes their
+// address and re-uploads their logo. Editing one price meant reposting
+// everything. These four are the per-row alternative, so the My Services tab
+// can manage the catalogue directly.
+//
+// All of them rely on the `services_owner_all` RLS policy (FOR ALL, USING
+// provider_id IN (SELECT id FROM providers WHERE user_id = auth.uid())), which
+// is what scopes them to the caller's own rows. There is deliberately no
+// provider_id parameter on the by-id functions: passing one would imply this
+// code is the boundary, and it isn't — the database is.
+
+/** Everything the owner needs to see in their catalogue, INCLUDING hidden
+ *  rows. Deliberately not getMyProviderServices, which filters
+ *  `is_active = true` for booking purposes — a manager that hid inactive
+ *  services would give a provider no way to bring one back. */
+export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
+  providerId: string | null;
+  services: DbService[];
+}> {
+  // Callers holding their own provider row pass its id rather than making
+  // this re-resolve the same row from the auth session.
+  let providerId = knownProviderId;
+  if (!providerId) {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    if (!user) throw new Error("Not authenticated");
+
+    const { data: provider, error: providerError } = await supabase
+      .from("providers")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (providerError) throw providerError;
+    if (!provider) return { providerId: null, services: [] };
+    providerId = provider.id as string;
+  }
+
+  const { data, error } = await supabase
+    .from("services")
+    .select(
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type",
+    )
+    .eq("provider_id", providerId)
+    .order("category_name", { ascending: true })
+    .order("sort_order", { ascending: true })
+    .limit(DEFAULT_PROVIDER_QUERY_LIMIT);
+  if (error) throw error;
+
+  return { providerId, services: (data ?? []) as DbService[] };
+}
+
+/** The fields the My Services manager can set. Everything else on a service
+ *  row (safety flags, tags, buffers, add-ons) is still owned by the fuller
+ *  editor — this is the day-to-day set, not a second way to write all of it. */
+export interface MyServiceDraft {
+  name: string;
+  price: number;
+  durationMinutes: number;
+  description: string | null;
+}
+
+export async function createMyService(
+  providerId: string,
+  categoryName: string,
+  draft: MyServiceDraft,
+): Promise<DbService> {
+  // Appended, not inserted at the top: sort_order drives the client-facing
+  // order, so a new service must not silently jump ahead of the ones a
+  // provider already arranged.
+  const { data: last, error: lastError } = await supabase
+    .from("services")
+    .select("sort_order")
+    .eq("provider_id", providerId)
+    .eq("category_name", categoryName)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lastError) throw lastError;
+
+  const { data, error } = await supabase
+    .from("services")
+    .insert({
+      provider_id: providerId,
+      category_name: categoryName,
+      name: draft.name,
+      description: draft.description,
+      price: draft.price,
+      duration_minutes: draft.durationMinutes,
+      sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
+      is_active: true,
+    })
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type")
+    .single();
+  if (error) throw error;
+  return data as DbService;
+}
+
+export async function updateMyService(
+  serviceId: string,
+  draft: MyServiceDraft,
+): Promise<DbService> {
+  const { data, error } = await supabase
+    .from("services")
+    .update({
+      name: draft.name,
+      description: draft.description,
+      price: draft.price,
+      duration_minutes: draft.durationMinutes,
+    })
+    .eq("id", serviceId)
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type")
+    .single();
+  if (error) throw error;
+  return data as DbService;
+}
+
+/**
+ * Hide or show a service. This is the manager's destructive-looking action on
+ * purpose — there is no deleteMyService.
+ *
+ * A service row is referenced by every booking ever made from it
+ * (bookings_service_id_fkey), so deleting one either fails on the constraint
+ * or, worse, would orphan a provider's own history. `is_active = false` is
+ * already what the client-facing `services_public_read` policy filters on, so
+ * hiding genuinely removes it from sale without destroying the record.
+ */
+export async function setMyServiceActive(
+  serviceId: string,
+  isActive: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from("services")
+    .update({ is_active: isActive })
+    .eq("id", serviceId);
+  if (error) throw error;
+}
+
 /** Promotion manager core data with one auth/provider identity resolution. */
 export async function getMyPromotionManagerCore(): Promise<{
   promotions: DbPromotion[];
@@ -2317,6 +2463,61 @@ export async function getMyBookings(
   return (data ?? []) as BookingWithAddOns[];
 }
 
+/** One appointment the signed-in client already has, as the cart needs it:
+ *  when it is, and who it's with. No address, no money, no ids — this answers
+ *  "am I already busy then?" and nothing else. */
+export interface ClientBookedSpan {
+  booking_date: string;
+  booking_time: string;
+  end_time: string | null;
+  provider_name_snapshot: string | null;
+  service_name_snapshot: string | null;
+}
+
+/**
+ * The client's own upcoming appointments across ALL providers, for checking
+ * whether a new booking would double-book the client themselves.
+ *
+ * Nothing else in the app asks this question. bookings_no_overlap keys on
+ * provider_id, so it stops a PROVIDER being in two places at once and says
+ * nothing about the client. AvailabilityService checks whether the provider is
+ * free. The cart's own cross-check compares two items only when they share a
+ * provider. So a client could book two different providers for the same hour
+ * and no layer objected — they would find out on the day.
+ *
+ * Deliberately date-bounded and capped: this runs on every checkout
+ * validation, and an unbounded read of a client's whole history to answer a
+ * question about next week is the same mistake DEFAULT_PROVIDER_QUERY_LIMIT
+ * exists to prevent.
+ */
+export async function getMyUpcomingBookedSpans(
+  fromDate: string,
+  toDate: string,
+  limit = 200,
+): Promise<ClientBookedSpan[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("client_bookings") // gated view, client-side only — see getMyBookings
+    .select(
+      "booking_date, booking_time, end_time, provider_name_snapshot, service_name_snapshot",
+    )
+    .eq("user_id", user.id)
+    // Cancelled and no-showed appointments free the client up again, exactly
+    // as they free the provider's slot in bookings_no_overlap's own WHERE.
+    .not("status", "in", '("cancelled","no_show")')
+    .gte("booking_date", fromDate)
+    .lte("booking_date", toDate)
+    .order("booking_date", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []) as ClientBookedSpan[];
+}
+
 /**
  * Page further back than getMyBookings()'s default window. `beforeDate` should
  * be the oldest `booking_date` already loaded (YYYY-MM-DD) — since the initial
@@ -2620,6 +2821,33 @@ export async function cancelOwnBooking(bookingId: string): Promise<void> {
 export async function markProviderNoShow(bookingId: string): Promise<void> {
   const { error } = await supabase.rpc("client_mark_provider_no_show", {
     p_booking_id: bookingId,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Dispute a no-show recorded against you — in either direction. A client
+ * disputes a 'no_show'; a provider disputes a 'provider_no_show'.
+ *
+ * dispute_no_show() (SECURITY DEFINER, migration 20260827154500) derives WHO
+ * is disputing from auth.uid() against the booking and refuses anyone who
+ * isn't the accused party, so the hat this is called from is not what makes
+ * it safe. It also enforces the dispute window, refuses a second dispute, and
+ * notifies the other party — no app-side notification insert.
+ *
+ * This records a disagreement. It does NOT reverse the status and nothing in
+ * the app adjudicates it; what it does change is that the no-show stops on
+ * its way to becoming a permanent reliability count (see
+ * settle_no_show_reliability). Callers should file the support ticket too —
+ * that is the only route by which a human ever sees it.
+ */
+export async function disputeNoShow(
+  bookingId: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await supabase.rpc("dispute_no_show", {
+    p_booking_id: bookingId,
+    p_reason: reason,
   });
   if (error) throw error;
 }
@@ -5033,6 +5261,14 @@ export interface ProviderReschedulePolicy {
   maxReschedules: number | null;
   /** hours of notice required before the appointment; 0 = same day allowed */
   rescheduleNoticeHours: number;
+  /** Hours of notice the same provider requires to CANCEL; 0 = no window.
+   *  Carried here because the two windows interact: a provider whose
+   *  reschedule notice is shorter than their cancellation notice will accept a
+   *  request from a client who can no longer cancel, and the client should be
+   *  told that before they ask, not discover it afterwards. Resolved the same
+   *  way cancel_own_booking() resolves it — the column first, the policy
+   *  string as fallback. */
+  cancelNoticeHours: number;
 }
 
 /** Parse the provider's booking_policies reschedule settings.
@@ -5043,12 +5279,21 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   const fallback: ProviderReschedulePolicy = {
     maxReschedules: 1,
     rescheduleNoticeHours: 24,
+    cancelNoticeHours: 0,
   };
+  // Resolved before the early return: a provider can have a cancellation
+  // notice set on the column while booking_policies is still null.
+  const cancelNoticeMap: Record<string, number> = { "24h": 24, "48h": 48, "72h": 72 };
+  const cancelColumn = Number((data as any)?.cancellation_notice_hours ?? 0);
   const bp = (data as any)?.booking_policies as {
     rescheduleNotice?: string;
     maxReschedules?: string;
+    cancelNotice?: string;
   } | null;
-  if (!bp) return fallback;
+  const cancelNotice = cancelColumn > 0
+    ? cancelColumn
+    : (cancelNoticeMap[bp?.cancelNotice ?? ""] ?? 0);
+  if (!bp) return { ...fallback, cancelNoticeHours: cancelNotice };
 
   const max =
     bp.maxReschedules === "unlimited"
@@ -5061,7 +5306,7 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
     "72h": 72,
   };
   const notice = noticeMap[bp.rescheduleNotice ?? "24h"] ?? 24;
-  return { maxReschedules: max, rescheduleNoticeHours: notice };
+  return { maxReschedules: max, rescheduleNoticeHours: notice, cancelNoticeHours: cancelNotice };
 }
 
 export async function getProviderReschedulePolicyByDisplayName(
@@ -5069,7 +5314,7 @@ export async function getProviderReschedulePolicyByDisplayName(
 ): Promise<ProviderReschedulePolicy> {
   const { data } = await supabase
     .from("providers")
-    .select("booking_policies")
+    .select("booking_policies, cancellation_notice_hours")
     .eq("display_name", displayName)
     .maybeSingle();
   return mapReschedulePolicyRow(data);
@@ -5081,7 +5326,7 @@ export async function getProviderReschedulePolicyById(
 ): Promise<ProviderReschedulePolicy> {
   const { data } = await supabase
     .from("providers")
-    .select("booking_policies")
+    .select("booking_policies, cancellation_notice_hours")
     .eq("id", providerId)
     .maybeSingle();
   return mapReschedulePolicyRow(data);
@@ -5499,13 +5744,22 @@ export async function getMyProviderFullAddress(): Promise<string | null> {
  * and disappear while the database still refused to publish the provider,
  * leaving them with nothing on screen explaining why they weren't live.
  */
-export async function hasMyProviderGoLiveAddress(): Promise<boolean> {
-  const provider = await getMyProviderProfile();
-  if (!provider) return false;
+export async function hasMyProviderGoLiveAddress(
+  knownProviderId?: string,
+): Promise<boolean> {
+  // Callers that already hold the provider row pass its id straight through —
+  // re-resolving it here would mean a second auth lookup plus a second
+  // providers read for a caller that fetched both a moment ago.
+  let providerId = knownProviderId;
+  if (!providerId) {
+    const provider = await getMyProviderProfile();
+    if (!provider) return false;
+    providerId = provider.id;
+  }
   const { data, error } = await supabase
     .from("provider_private_details")
     .select("full_address, latitude, longitude")
-    .eq("provider_id", provider.id)
+    .eq("provider_id", providerId)
     .maybeSingle();
   if (error) throw error;
   const row = data as {
@@ -5584,17 +5838,39 @@ export interface ClientBookingSummary {
 export async function getClientBookingsForAddressShare(
   providerId: string,
 ): Promise<ClientBookingSummary[]> {
+  // The address lives in booking_client_addresses since 20260827161000 --
+  // bookings.client_address is a write-only funnel and is always NULL at rest,
+  // so selecting it here would hand every caller an empty field. The client
+  // owns their own address row outright (policy bca_client_all), so this embed
+  // resolves for the person picking which booking to send it to.
   const { data, error } = await supabase
     .from("bookings")
     .select(
-      "id, service_name_snapshot, booking_date, booking_time, client_address",
+      "id, service_name_snapshot, booking_date, booking_time, booking_client_addresses ( address )",
     )
     .eq("provider_id", providerId)
     .in("status", ["pending", "upcoming"])
     .order("booking_date", { ascending: true })
     .order("booking_time", { ascending: true });
   if (error) return [];
-  return (data ?? []) as ClientBookingSummary[];
+  // booking_id is that table's PRIMARY KEY so PostgREST returns one object,
+  // but a to-one embed is indistinguishable from to-many by the foreign key
+  // alone -- handle both rather than guess, exactly as bookingService does.
+  return (data ?? []).map((row): ClientBookingSummary => {
+    const embed: unknown = row.booking_client_addresses;
+    const first = Array.isArray(embed) ? (embed[0] as unknown) : embed;
+    const address =
+      typeof (first as { address?: unknown } | null)?.address === "string"
+        ? ((first as { address: string }).address)
+        : null;
+    return {
+      id: row.id,
+      service_name_snapshot: row.service_name_snapshot,
+      booking_date: row.booking_date,
+      booking_time: row.booking_time,
+      client_address: address,
+    };
+  });
 }
 
 /**

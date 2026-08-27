@@ -153,7 +153,7 @@ export function pendingRescheduleStatusOverride(booking: {
 
 /** How long after a no-show is recorded the accused party can dispute it.
  *  Mirrors the same constant in dispute_no_show() and
- *  settle_no_show_reliability() (migration 20260827140000) — the RPC is the
+ *  settle_no_show_reliability() (migration 20260827154500) — the RPC is the
  *  enforcement, this is only what decides whether to show the button. */
 export const NO_SHOW_DISPUTE_WINDOW_DAYS = 7;
 
@@ -322,7 +322,7 @@ export interface ConfirmedBooking {
 
   // No-show dispute state. All four are undefined on any booking that was
   // never marked as a no-show — and on every booking at all until migration
-  // 20260827140000 is applied, since the reads are select('*').
+  // 20260827154500 is applied, since the reads are select('*').
   /** When the no-show was recorded, in either direction. Opens the dispute
    *  window (see canDisputeNoShow). */
   noShowMarkedAt?: string | undefined;

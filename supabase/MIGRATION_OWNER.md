@@ -22,14 +22,9 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session applying the queued backlog (no-show disputes, cancel-window
-        warning, client address gating)
-SINCE:  2026-08-27
-SCOPE:  20260827140000_no_show_disputes, 20260827160000_cancel_window_closing_
-        warning, and 20260827130000_client_address_released_on_confirmation
-        (which must be renumbered above the frontier before it runs), plus a
-        send-push-notification redeploy that only matters once the
-        no_show_disputed type exists.
+OWNER:  (none)
+SINCE:  --
+SCOPE:  --
 ```
 
 Claim it by editing the block above — your session name/purpose, the date, and
@@ -86,6 +81,47 @@ Written but **not applied**, in the order they must run:
 | 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
+
+### Applied 2026-08-27 (queued backlog: disputes, cancel-window, client address)
+
+Applied with the **Supabase CLI, not the MCP** — the MCP connection dropped
+mid-pass and never came back. Each file was run as
+`supabase db query --linked --file`, wrapped in an explicit `BEGIN; ... COMMIT;`
+so a mid-file failure could not leave a half-applied migration, and each ledger
+row was inserted **in the same transaction** rather than backfilled afterwards.
+Because the CLI does not stamp a version of its own, these three keep their
+filename numbers — the usual rename dance does not apply.
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260827154500 | `no_show_disputes` | 3 columns, `dispute_no_show` + `settle_no_show_reliability`, settlement cron (jobid 156), `no_show_disputed` in the type constraint. Renumbered from `20260827140000`, which sat below the frontier. |
+| 20260827160000 | `cancel_window_closing_warning` | `process_cancel_window_closing_warnings()`, cron `cancel-window-closing-warnings` (jobid 157), `cancel_window_closing` in the constraint — **and `no_show_disputed` still present**, which is the check that matters here. |
+| 20260827161000 | `client_address_released_on_confirmation` | `booking_client_addresses` (5 rows), `bookings.client_area`, relocation trigger, `client_bookings` re-pointed at the gated table. `bookings.client_address` now 0 non-null. Renumbered from `20260827130000`. |
+
+`send-push-notification` redeployed to **v13** (`verify_jwt` still true) — its
+only delta from v12 was the `no_show_disputed` pref mapping, which is inert
+until the type exists.
+
+**`CREATE OR REPLACE VIEW` cannot drop or reorder a column, and that bit.**
+The address migration reproduced `client_bookings` as 44 columns, which was
+correct when it was written. Applying `no_show_disputes` an hour earlier had
+appended four no-show columns to that same view, so the replace failed outright
+with `42P16: cannot drop columns from view`. The transaction rolled back and
+nothing was applied — the wrapper earned its keep. The four columns were
+carried through in their existing positions and it applied cleanly.
+
+The lesson generalises past this pair: `client_bookings` is now a shared
+surface between at least three migrations. Anyone rewriting it must reproduce
+**every column already live, in order**, and append theirs at the end — check
+`information_schema` first rather than trusting the newest file's list.
+
+**The app-side half was not optional.** `clientAddressGating.test.ts` carried
+two skipped tests and an explicit instruction: restore the PostgREST embed in
+the same change that applies the migration, never before it, because the embed
+resolves against the live schema cache and had already taken provider home down
+once with `PGRST200`. `getClientBookingsForAddressShare` now embeds
+`booking_client_addresses ( address )` and maps it back to `client_address`, so
+callers are unchanged; both tests are unskipped and pass.
 
 ### Applied 2026-08-27 (cart holds + booking_ref)
 
@@ -194,7 +230,8 @@ that differ are all explained:
 |---|---|
 | `20260810180952_restore_legacy_booking_writes_pending_stripe` | **SUPERSEDED — never apply.** Adds a blanket `authenticated` INSERT policy on `bookings`, letting a client forge price/status/snapshot fields. Confirmed absent live. |
 | `20260826110000_atomic_provider_weekly_schedule` | Deliberately parked (see Queue above). |
-| `20260827130000_client_address_released_on_confirmation` | Another session's in-flight work, written 2026-08-27 15:06. Not mine to apply. |
+| `20260817110000_fix_pregnancy_safe_default 2.sql` | **iCloud fork, never apply.** Its `ALTER ... SET DEFAULT true` is already live; what remains is a blanket `UPDATE services SET is_pregnancy_safe = true WHERE false`. Its stated premise — "no screen lets a provider set this field" — is now FALSE (`InfoRegScreen.tsx` has a Switch). 20 services are flagged not-safe and they are Lip Filler, Anti-Wrinkle, Cheek Filler, Dermaplaning: real safety data, not default noise. Running it would tell pregnant clients filler and botox are safe. |
+| `20260817110500_waitlist_lapse_and_exhaustion_notifications 2.sql` | **iCloud fork, content already live** (verified: `invite_next_waitlist_entry` returns boolean, lapse + exhaustion notifications both present). Re-running would revert `expire_waitlist_holds()` to its pre-15-minute body, undoing 20260827120519. Needs a ledger row and fork resolution, not execution. |
 
 ### Ledger reconciliation, 2026-08-26
 

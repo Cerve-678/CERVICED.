@@ -3,7 +3,7 @@ import { join } from 'path';
 
 const REPO = join(__dirname, '..', '..');
 const MIGRATION = readFileSync(
-  join(REPO, 'supabase/migrations/20260827130000_client_address_released_on_confirmation.sql'),
+  join(REPO, 'supabase/migrations/20260827161000_client_address_released_on_confirmation.sql'),
   'utf8',
 );
 const DB = readFileSync(join(REPO, 'src/services/databaseService.ts'), 'utf8');
@@ -52,15 +52,18 @@ describe('the old column is a write funnel, not storage', () => {
 
   it('backfills and empties what was already stored', () => {
     expect(MIGRATION).toContain('INSERT INTO public.booking_client_addresses (booking_id, address)');
-    expect(MIGRATION).toContain('UPDATE public.bookings SET client_address = NULL WHERE client_address IS NOT NULL');
+    // Same statement sets the coarse area — see the area suite below.
+    expect(MIGRATION).toContain('client_address = NULL\n WHERE client_address IS NOT NULL');
   });
 });
 
 describe('readers were moved off the dead column', () => {
+  // UNSKIPPED 2026-08-27: 20260827161000 is applied live and the embed was
+  // restored in the same change, as the note that stood here required.
+  // bookings.client_address is now a write-only funnel, always NULL at rest,
+  // so a reader that still selects it off the base table gets an empty field
+  // rather than an error — which is why these are asserted, not assumed.
   it('provider booking reads embed the gated row', () => {
-    // Providers read `bookings` directly with select("*"), which now returns
-    // NULL for client_address — without the embed a mobile provider would see
-    // no address at all, for every booking, silently.
     expect(DB).toContain('booking_client_addresses ( address )');
   });
 
@@ -77,5 +80,70 @@ describe('readers were moved off the dead column', () => {
     const idx = DB.indexOf('.select("client_address")');
     expect(idx).toBeGreaterThan(-1);
     expect(DB.slice(Math.max(0, idx - 300), idx)).toContain('client_bookings');
+  });
+});
+
+describe('the coarse area is readable before accepting', () => {
+  // A mobile provider deciding whether to accept needs the distance — gating
+  // the address outright would make them accept blind and find out after.
+  // So it splits the way a provider's own address already does:
+  //   providers.location_text        <-> bookings.client_area        (coarse)
+  //   provider_private_details       <-> booking_client_addresses    (gated)
+  it('lives on bookings, not in the gated table', () => {
+    // Two TABLES, not two columns of one: RLS gates rows, never columns —
+    // the same constraint that forced the full address out in the first place.
+    expect(MIGRATION).toContain('ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS client_area');
+  });
+
+  it('is written in the same statement that blanks the full address', () => {
+    const fn = MIGRATION.slice(MIGRATION.indexOf('FUNCTION public.relocate_booking_client_address'));
+    const upd = fn.slice(fn.indexOf('UPDATE public.bookings'), fn.indexOf('RETURN NULL'));
+    // Split across two statements there would be an instant with neither the
+    // area nor the address visible to the provider.
+    expect(upd).toContain('client_address = NULL');
+    expect(upd).toContain('client_area = public.coarse_area_from_address');
+  });
+
+  it('never falls back to a guessed town or street', () => {
+    const fn = MIGRATION.slice(
+      MIGRATION.indexOf('FUNCTION public.coarse_area_from_address'),
+      MIGRATION.indexOf('REVOKE ALL ON FUNCTION public.coarse_area_from_address'),
+    );
+    // "the comma-separated part before the postcode" would return a STREET on
+    // any address the pattern missed — leaking the exact thing being
+    // protected, silently, and only for addresses that parsed badly.
+    expect(fn).not.toContain('split_part');
+    expect(fn).toContain('regexp_match');
+  });
+
+  it('backfills the area for addresses already stored', () => {
+    expect(MIGRATION).toContain('SET client_area = public.coarse_area_from_address(client_address)');
+  });
+});
+
+describe('UK outward-code extraction', () => {
+  // Mirrors the Postgres pattern in coarse_area_from_address(). \m and \M are
+  // Postgres word boundaries; \b is the JS equivalent.
+  const outward = (a: string): string | null =>
+    (/\b([A-Z]{1,2}[0-9][A-Z0-9]?)\s*[0-9][A-Z]{2}\b/.exec(a.toUpperCase()) ?? [])[1] ?? null;
+
+  it.each([
+    ['12 Bellenden Road, London SE15 4QA, UK', 'SE15'],
+    ['5 High Street, Manchester M1 1AE', 'M1'],
+    ['10 Downing Street, London SW1A 2AA', 'SW1A'],
+    ['221B Baker Street, London NW1 6XE', 'NW1'],
+    ['Unit 7, Estate Road, Leeds LS12 6JG, United Kingdom', 'LS12'],
+  ])('reads %s as %s', (addr, want) => {
+    expect(outward(addr as string)).toBe(want);
+  });
+
+  it('returns nothing rather than guessing when there is no postcode', () => {
+    expect(outward('no postcode here at all')).toBeNull();
+    expect(outward('')).toBeNull();
+  });
+
+  it('does not mistake a house number for an outward code', () => {
+    // 221B leads with digits, so it cannot match [A-Z]{1,2}[0-9]...
+    expect(outward('221B Baker Street, London NW1 6XE')).not.toBe('221B');
   });
 });

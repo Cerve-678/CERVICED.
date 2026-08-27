@@ -549,7 +549,7 @@ export interface DbBooking {
   // appointment's location (see isMobileBooking). Absent when a booking is
   // read straight from `bookings` rather than the view.
   provider_business_type?: BusinessType | null;
-  // No-show dispute bookkeeping (migration 20260827140000). Optional because
+  // No-show dispute bookkeeping (migration 20260827154500). Optional because
   // every booking read is a select('*'), so these are simply absent until
   // that migration is applied — and null on any booking never marked.
   no_show_marked_at?: string | null;
