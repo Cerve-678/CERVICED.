@@ -20,3 +20,26 @@ describe("BoundedTtlCache", () => {
     expect(cache.get("provider-c", 4)).toBe(3);
   });
 });
+
+describe("BoundedTtlCache.delete", () => {
+  it("forgets a key before its TTL would have lapsed", () => {
+    const cache = new BoundedTtlCache<string, number>(60_000, 4);
+    cache.set("a", 1);
+    expect(cache.get("a")).toBe(1);
+    cache.delete("a");
+    expect(cache.get("a")).toBeUndefined();
+  });
+
+  it("leaves other keys alone", () => {
+    const cache = new BoundedTtlCache<string, number>(60_000, 4);
+    cache.set("a", 1);
+    cache.set("b", 2);
+    cache.delete("a");
+    expect(cache.get("b")).toBe(2);
+  });
+
+  it("is a no-op for a key that was never there", () => {
+    const cache = new BoundedTtlCache<string, number>(60_000, 4);
+    expect(() => cache.delete("missing")).not.toThrow();
+  });
+});

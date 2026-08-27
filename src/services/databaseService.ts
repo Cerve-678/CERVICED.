@@ -3651,7 +3651,57 @@ export interface AvailabilityProviderSettingsRow {
   request_window_after_mins: number | null;
 }
 
-export async function getAvailabilityProviderCore(providerId: string): Promise<{
+/** A provider's scheduling settings + weekly hours, which every single-day
+ *  availability lookup needs and none of them change.
+ *
+ *  Opening the booking sheet asks for one week — seven independent day
+ *  lookups — and each one was re-reading this same settings row and the same
+ *  seven schedule rows, so a week cost fourteen queries that returned
+ *  identical data. Short TTL because a provider editing their own hours in
+ *  another session should see it within seconds, and in-flight de-duping so
+ *  the seven parallel day lookups that start together share ONE request
+ *  rather than all missing an empty cache at once. */
+const AVAILABILITY_CORE_CACHE_TTL_MS = 15_000;
+const AVAILABILITY_CORE_CACHE_MAX_ENTRIES = 40;
+
+type AvailabilityProviderCore = {
+  settings: AvailabilityProviderSettingsRow | null;
+  windowRows: { day_of_week: number; start_time: string; end_time: string }[];
+  legacyRows: { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
+};
+
+const availabilityCoreCache = new BoundedTtlCache<string, AvailabilityProviderCore>(
+  AVAILABILITY_CORE_CACHE_TTL_MS,
+  AVAILABILITY_CORE_CACHE_MAX_ENTRIES,
+);
+const availabilityCoreRequests = new Map<string, Promise<AvailabilityProviderCore>>();
+
+export async function getAvailabilityProviderCore(providerId: string): Promise<AvailabilityProviderCore> {
+  const cached = availabilityCoreCache.get(providerId);
+  if (cached) return cached;
+  const inFlight = availabilityCoreRequests.get(providerId);
+  if (inFlight) return inFlight;
+
+  const request = fetchAvailabilityProviderCore(providerId)
+    .then(core => {
+      availabilityCoreCache.set(providerId, core);
+      return core;
+    })
+    .finally(() => {
+      availabilityCoreRequests.delete(providerId);
+    });
+  availabilityCoreRequests.set(providerId, request);
+  return request;
+}
+
+/** Drop the cached hours for one provider. Call after writing their schedule,
+ *  so the picker doesn't keep serving the old week for the rest of the TTL. */
+export function invalidateAvailabilityProviderCore(providerId: string): void {
+  availabilityCoreCache.delete(providerId);
+  availabilityCoreRequests.delete(providerId);
+}
+
+async function fetchAvailabilityProviderCore(providerId: string): Promise<{
   settings: AvailabilityProviderSettingsRow | null;
   windowRows: { day_of_week: number; start_time: string; end_time: string }[];
   legacyRows: { day_of_week: number; open_time: string; close_time: string; is_closed: boolean }[];
@@ -4100,11 +4150,18 @@ export async function replaceProviderAvailabilityWindows(
     .delete()
     .eq("provider_id", providerId);
   if (removeError) throw removeError;
-  if (windows.length === 0) return;
+  // Both exits invalidate: clearing every window IS a schedule change, and
+  // this is the primitive every schedule write goes through, so putting it
+  // here covers the callers that don't go via saveProviderWeeklySchedule.
+  if (windows.length === 0) {
+    invalidateAvailabilityProviderCore(providerId);
+    return;
+  }
   const { error } = await supabase
     .from("provider_availability_windows")
     .insert(windows.map((w) => ({ provider_id: providerId, ...w })));
   if (error) throw error;
+  invalidateAvailabilityProviderCore(providerId);
 }
 
 /** Replace both legacy day rows and v2 working windows.
@@ -4147,6 +4204,9 @@ export async function saveProviderWeeklySchedule(
   // Windows second: the day rows are what check_and_set_provider_live() reads,
   // so if the second write fails the provider is at worst still gated the same
   // way they were before, never published against a schedule that isn't there.
+  // replaceProviderAvailabilityWindows invalidates the picker's cached copy
+  // of these hours on both its exits, so this provider won't be shown the
+  // previous week for the rest of the TTL.
   await replaceProviderAvailabilityWindows(providerId, windows);
 }
 

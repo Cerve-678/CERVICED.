@@ -26,6 +26,13 @@ export class BoundedTtlCache<Key, Value> {
     return entry.value;
   }
 
+  /** Forget one key now, rather than waiting out its TTL. For when the
+   *  underlying data is known to have changed — a provider saving their own
+   *  hours shouldn't be served the previous week until the TTL lapses. */
+  delete(key: Key): void {
+    this.entries.delete(key);
+  }
+
   set(key: Key, value: Value, now = Date.now()): void {
     this.entries.delete(key);
     this.entries.set(key, { value, cachedAt: now });

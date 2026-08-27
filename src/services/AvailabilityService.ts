@@ -1557,21 +1557,28 @@ export const AvailabilityService = {
         candidateDates.push(toLocalDateStr(cursor));
       }
 
-      // Four independent day lookups, so they go together rather than one
-      // after another. Sequentially this was up to four round trips stacked
-      // on top of findNextAvailableDate's, and the booking sheet renders no
-      // times at all until the whole chain returns.
-      const perDay = await Promise.all(
-        candidateDates.map(date => this.getAvailableSlots(providerIdOrName, date, serviceDuration, serviceId)),
+      // Never auto-resolves onto a by-request time: this picks FOR the client,
+      // and quietly handing them a slot that needs the provider's acceptance
+      // — without the confirmation that explains it — would misrepresent what
+      // they're booking.
+      const firstOpen = (slots: TimeSlot[]) => slots.find(s => !s.isBooked && !s.isByRequest);
+
+      // findNextAvailableDate has already done the hard part, and it is right
+      // about the day almost every time — so confirm THAT day on its own and
+      // return. The extra days exist only for the rare drift between the two
+      // checks, and fetching them up front made the common case pay for a
+      // rescue it doesn't need. They go together when they're needed at all.
+      const head = candidateDates[0]!;
+      const headOpen = firstOpen(await this.getAvailableSlots(providerIdOrName, head, serviceDuration, serviceId));
+      if (headOpen) return { date: head, time: headOpen.time };
+
+      const rest = candidateDates.slice(1);
+      const restSlots = await Promise.all(
+        rest.map(date => this.getAvailableSlots(providerIdOrName, date, serviceDuration, serviceId)),
       );
-      for (let i = 0; i < candidateDates.length; i++) {
-        const date = candidateDates[i]!;
-        // Never auto-resolves onto a by-request time: this picks FOR the
-        // client, and quietly handing them a slot that needs the provider's
-        // acceptance — without the confirmation that explains it — would
-        // misrepresent what they're booking.
-        const openSlot = (perDay[i] ?? []).find(s => !s.isBooked && !s.isByRequest);
-        if (openSlot) return { date, time: openSlot.time };
+      for (let i = 0; i < rest.length; i++) {
+        const openSlot = firstOpen(restSlots[i] ?? []);
+        if (openSlot) return { date: rest[i]!, time: openSlot.time };
       }
       return null;
     } catch (error) {
