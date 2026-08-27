@@ -848,6 +848,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           // bar below says exactly that, where an empty space would say the
           // provider doesn't work this day.
           const isFull = day.status === 'full' || day.status === 'over';
+          // A day the provider doesn't work reads as unavailable at a glance
+          // — greyed as heavily as a past day — but stays tappable, because
+          // it has something to say and, where they take requests, somewhere
+          // to go. Looking dead and being dead are different things here.
+          const isClosedDay = day.status === 'closed' || day.status === 'unavailable';
           return (
             <TouchableOpacity
               key={day.dateString}
@@ -856,6 +861,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 { backgroundColor: surfaceColor },
                 isSel && { borderWidth: 2, borderColor: accentColor },
                 isDisabled && styles.pastDayPill,
+                isClosedDay && !isSel && styles.closedDayPill,
                 // Dimmed, but less than a closed day and still tappable —
                 // it's a real day the client could have booked.
                 isFull && !isSel && styles.fullDayPill,
@@ -961,9 +967,18 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           return (
             <View style={styles.timeContainer}>
               <Text style={[styles.closedDayNotice, { color: subColor }]}>
-                {who} doesn't work this day.
+                {/* Beyond the booking window is a different fact from a day
+                    they don't work — the provider may well work it, just not
+                    this far out. A day that got here while they DO take
+                    beyond-window requests never reaches this branch, because
+                    it would have had request times of its own. */}
+                {currentSlots?.status === 'unavailable'
+                  ? `${who} isn't taking bookings this far ahead yet.`
+                  : canRequest
+                    ? `${who} doesn't work this day — but you can request a time.`
+                    : `${who} doesn't work this day.`}
               </Text>
-              {canRequest && (
+              {canRequest && currentSlots?.status !== 'unavailable' && (
                 <View style={styles.closedDayAction}>{requestLink}</View>
               )}
             </View>
@@ -1134,6 +1149,9 @@ const styles = StyleSheet.create({
   daysRowDimmed:   { opacity: 0.45 },
   dayPill:         { flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 8, marginHorizontal: 2 },
   pastDayPill:     { opacity: 0.38 },
+  // Same weight as a past day: both mean "nothing here". Unlike a past day
+  // this one still takes a tap.
+  closedDayPill:   { opacity: 0.38 },
   fullDayPill:     { opacity: 0.62 },
   dayText:         { fontSize: 10, fontWeight: '500', marginBottom: 3 },
   dayNumberText:   { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
