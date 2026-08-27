@@ -2972,7 +2972,15 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
         itemsToBook,
         appointmentData,
         hasMobileProvider && clientAddress.trim()
-          ? { address: clientAddress.trim(), providerNames: mobileProviderNames }
+          ? {
+              address: clientAddress.trim(),
+              // From the account, not this screen: the area is picked once in
+              // Account > Your Address and inherited by every booking, the
+              // same way the saved address already is. Undefined when they
+              // have never picked one, and the DB derives a fallback.
+              area: user?.clientArea ?? null,
+              providerNames: mobileProviderNames,
+            }
           : undefined,
         holdBatchId ?? undefined,
       );

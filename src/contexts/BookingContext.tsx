@@ -73,6 +73,18 @@ export { mapDbBookingToConfirmed };
  */
 export interface MobileClientAddress {
   address: string;
+  /**
+   * The coarse area the client chose in Account > Your Address ("Camden,
+   * London"). Travels with the address because it answers the same question
+   * at a different resolution — but it is NOT gated: the provider reads it
+   * the moment the request arrives, which is the whole point (they need to
+   * judge travel before accepting, and the address is hidden until they do).
+   *
+   * Optional because a client who has never picked one is the normal case;
+   * the DB then falls back to deriving a postcode district from the address,
+   * and to NULL when there is no postcode to read.
+   */
+  area?: string | null;
   providerNames: readonly string[];
 }
 
@@ -1503,6 +1515,7 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
       // them. Empty when nobody in the cart is mobile — which is exactly when
       // no booking here should carry a client address.
       const clientAddressText = mobileClientAddress?.address.trim() || null;
+      const clientAreaText = mobileClientAddress?.area?.trim() || null;
       const mobileProviderNames = new Set(mobileClientAddress?.providerNames ?? []);
 
       // Validate bookings before creating to prevent double-booking. Skipped
@@ -1840,6 +1853,12 @@ export const BookingProvider = ({ children }: { children: ReactNode }) => {
                     customer_email: apt.customerEmail,
                     customer_phone: apt.customerPhone,
                     client_address: isMobile ? clientAddressText : null,
+                    // Same gate as the address — only a mobile provider
+                    // travels, so only their booking carries either half.
+                    // relocate_booking_client_address() COALESCEs this over
+                    // its postcode derivation, so a chosen area wins and a
+                    // missing one still falls back.
+                    client_area: isMobile ? clientAreaText : null,
                     // policy_accepted_at is deliberately absent:
                     // hold_cart_booking_slots() stamps it from the DB clock
                     // before payment, and the claim no longer overwrites it.

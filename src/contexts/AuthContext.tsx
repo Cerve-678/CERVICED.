@@ -37,6 +37,11 @@ export interface UserData {
   // Saved default address for mobile bookings, prefilled at checkout. Client
   // side only — a provider's own address lives on their provider record.
   clientAddress?: string | null;
+  // The coarse half of the same answer: the area the client says they're in
+  // ("Camden, London"), shown to a mobile provider before they accept while
+  // clientAddress stays gated. Chosen, not derived — see migration
+  // 20260827162000.
+  clientArea?: string | null;
   needsEmailVerification?: boolean;
   hasClientProfile?: boolean;
   gender?: 'female' | 'male' | 'non-binary' | 'prefer-not-to-say' | null;
@@ -351,6 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           birth_year: (profile as any).birth_year ?? null,
           service_interests: profile.service_interests ?? null,
           clientAddress: profile.client_address ?? null,
+          clientArea: profile.client_area ?? null,
         };
         const savedMode = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_MODE).catch(() => null);
         const restoredMode = resolveRestoredMode(savedMode, role);
@@ -563,6 +569,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Only written when this call is actually changing it, so an unrelated
       // updateUser({ name }) can't wipe a saved address.
       ...(partial.clientAddress !== undefined ? { clientAddress: partial.clientAddress } : {}),
+      ...(partial.clientArea !== undefined ? { clientArea: partial.clientArea } : {}),
     });
     setUser(updated);
   }, [user, session]);

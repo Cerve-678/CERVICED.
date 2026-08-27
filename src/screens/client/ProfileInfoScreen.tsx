@@ -22,6 +22,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
 import { KeyboardDismissView } from '../../components/KeyboardDismissView';
 import AddressPicker from '../../components/AddressPicker';
+import AreaPicker from '../../components/AreaPicker';
 import { updateUserDob } from '../../services/databaseService';
 import { dateToYMD, formatShortDate } from '../../utils/dateUtils';
 import { toUserMessage } from '../../utils/userFacingError';
@@ -47,6 +48,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
   // AddressPicker providers use, instead of as free text under time pressure
   // at the point of paying.
   const [clientAddress, setClientAddress] = useState(user?.clientAddress ?? '');
+  const [clientArea, setClientArea] = useState(user?.clientArea ?? '');
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -66,7 +68,7 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       await Promise.all([
-        updateUser({ name: name.trim(), phone: phone.trim(), clientAddress: clientAddress.trim() || null }),
+        updateUser({ name: name.trim(), phone: phone.trim(), clientAddress: clientAddress.trim() || null, clientArea: clientArea.trim() || null }),
         user?.id ? updateUserDob(user.id, dob ? dateToYMD(dob) : null) : Promise.resolve(),
       ]);
     } catch {
@@ -196,6 +198,24 @@ export default function ProfileInfoScreen({ navigation, route }: any) {
             />
             <Text style={[styles.emailHint, { color: P.sub }]}>
               Only shared with a provider who travels to you, and only once your booking is confirmed.
+            </Text>
+          </View>
+
+          {/* Your area — the coarse half of the same question the address asks.
+              A mobile provider sees this the moment a request arrives, so they
+              can judge the travel before accepting; the street address above
+              stays hidden until they do. Kept as its own field rather than
+              derived from the address, because most addresses people type
+              carry no postcode to derive it from. */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: P.sub }]}>YOUR AREA</Text>
+            <AreaPicker
+              value={clientArea}
+              onChange={setClientArea}
+              accentColor={P.accent}
+            />
+            <Text style={[styles.emailHint, { color: P.sub }]}>
+              Shared with a provider who travels to you as soon as they get your request, so they can check the distance before accepting.
             </Text>
           </View>
 

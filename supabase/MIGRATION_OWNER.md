@@ -82,6 +82,37 @@ Written but **not applied**, in the order they must run:
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
 
+### Applied 2026-08-27 (client area selection)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260827162000 | `client_area_selection` | `users.client_area` added; `relocate_booking_client_address()` now COALESCEs a chosen area over its postcode derivation, still `SECURITY DEFINER` with `search_path=public, pg_temp` intact. |
+
+Closes the gap flagged when `20260827161000` went in: `client_area` was derived
+from the address by postcode, but checkout only requires the address to be
+non-empty, so **four of the five live addresses had no postcode and produced a
+NULL area** — the feature's whole purpose (a mobile provider judging travel
+before accepting) silently did not hold for most bookings.
+
+The area is now something the client **states** in Account > Your Address, via
+a new `AreaPicker` built on the same `CITY_AREAS` data the provider's own
+location picker uses, so both hats' coarse locations read identically.
+`LocationPicker` was deliberately not reused: it takes 22 style keys from
+InfoRegScreen's stylesheet as an untyped `styles` prop, so lifting it would
+drag a screen's styling across a feature boundary. The data is shared, which is
+the part that has to agree.
+
+`bookings.client_area` now holds **two shapes on purpose** — a chosen area
+("Camden, London") or a derived postcode district ("SE15"). Both answer the
+only question the column exists to answer, and a provider reads either the
+same way. The column comment says so.
+
+**Verified functionally, not just structurally.** A transaction (rolled back)
+inserted two bookings: one with a chosen area and a postcode-less address,
+one with no chosen area and a postcode. The first kept "Camden, London", the
+second derived "SE15". Structural checks alone would not have caught a COALESCE
+argument in the wrong order.
+
 ### Applied 2026-08-27 (queued backlog: disputes, cancel-window, client address)
 
 Applied with the **Supabase CLI, not the MCP** — the MCP connection dropped

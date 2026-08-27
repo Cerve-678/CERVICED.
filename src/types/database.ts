@@ -136,6 +136,10 @@ export interface DbUser {
   // per-booking snapshot in bookings.client_address, which the address-release
   // policy governs, never this.
   client_address: string | null;
+  // The coarse half the client CHOOSES (migration 20260827162000): "Camden,
+  // London". Stamped onto bookings.client_area at checkout, where — unlike
+  // client_address — a mobile provider may read it before accepting.
+  client_area: string | null;
   role: UserRole;
   login_method: string | null;
   business_name: string | null;
@@ -543,7 +547,14 @@ export interface DbBooking {
   customer_phone: string | null;
   confirmed_at: string | null;
   address_released_at: string | null;
+  // WRITE-ONLY FUNNEL since 20260827161000 — always NULL at rest. Read the
+  // address off the client_bookings view or the booking_client_addresses
+  // embed, never off this column.
   client_address: string | null;
+  // Coarse area, ungated: the provider reads it the moment the request lands.
+  // Either a chosen area ("Camden, London") or a postcode district derived
+  // from the address ("SE15"). See 20260827161000 / 20260827162000.
+  client_area?: string | null;
   // Read live off the joined providers row by the client_bookings view, not
   // snapshotted onto the booking — it decides whose address is the
   // appointment's location (see isMobileBooking). Absent when a booking is
