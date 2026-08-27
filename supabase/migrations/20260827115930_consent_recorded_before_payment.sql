@@ -65,7 +65,10 @@
 --     it and a fresh replay would produce a different database from production.
 -- Renumbered to 20260826110100 on 2026-08-26, above the then-live frontier of
 -- 20260826102218, and verified that nothing applied since touches either
--- hold_cart_booking_slots() or claim_cart_booking_slots().
+-- hold_cart_booking_slots() or claim_cart_booking_slots(). Overtaken a THIRD
+-- time before it ever ran, and finally APPLIED 2026-08-27 as version
+-- 20260827115930 -- the version apply_migration actually recorded, which this
+-- filename now matches.
 --
 -- The rule that stops a third time is in supabase/MIGRATION_OWNER.md: one
 -- session owns migrations at a time. File discipline cannot fix this — the

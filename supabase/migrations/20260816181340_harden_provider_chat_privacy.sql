@@ -2,8 +2,24 @@
 -- supabase_migrations.schema_migrations and does NOT appear in
 -- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
 -- migration-record reconciliation: public.send_provider_conversation_message exists live.
--- Left un-backfilled rather than hand-inserting a migration row; the
--- version above is this file's authored timestamp, not a recorded one.
+-- BACKFILLED 2026-08-27: it now HAS a schema_migrations row at the version
+-- above, so it no longer reads as unapplied to a ledger diff. Leaving it
+-- un-backfilled had cost three separate re-investigations (2026-08-20,
+-- 08-25, 08-27), which is what the missing row actually buys you. The row's
+-- `statements` records only a pointer back to this file plus how it was
+-- verified -- no SQL was re-executed to create it, because the text actually
+-- run out-of-band was never captured. THIS FILE remains the authoritative
+-- body; the ledger row is a record that it ran, not a copy of what ran.
+--
+-- RE-VERIFIED LIVE 2026-08-26, including the parts a "does the function exist"
+-- check would miss. All four functions: SECURITY DEFINER, search_path pinned to
+-- (public, pg_temp), EXECUTE revoked from anon, granted to authenticated, and
+-- each body derives the caller from auth.uid(). Nothing to apply.
+--
+-- Because it has no schema_migrations row it reads as "unapplied" to any audit
+-- that diffs supabase/migrations/ against that table -- it was re-flagged that
+-- way on 2026-08-25. It is not. Check the live grants before believing
+-- otherwise.
 
 -- Provider ↔ client chat privacy boundary
 --

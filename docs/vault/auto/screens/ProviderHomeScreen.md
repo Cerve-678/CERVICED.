@@ -9,9 +9,6 @@ tags: [screen, provider]
 ## → Navigates to
 - [[ProviderConversationScreen\|ProviderConversation]]
 - [[NotificationsScreen\|Notifications]]
-- [[ProviderScheduleScreen\|ProviderSchedule]]
-- [[InfoRegScreen\|EditProfile]]
-- [[BrandingScreen\|Branding]]
 - [[ProviderBookingDetailScreen\|BookingDetail]]
 
 ## Map

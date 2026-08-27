@@ -3497,7 +3497,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                       // the database clock inside hold_cart_booking_slots(),
                       // which also refuses the whole batch if the consent flags
                       // below are absent. See
-                      // 20260826110100_consent_recorded_before_payment.sql.
+                      // 20260827115930_consent_recorded_before_payment.sql.
                       // Reserve every item's slot as an on_hold booking
                       // BEFORE opening the payment sheet — closes the
                       // window between "committed to paying" and

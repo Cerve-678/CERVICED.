@@ -2,8 +2,14 @@
 -- supabase_migrations.schema_migrations and does NOT appear in
 -- supabase/remote-migrations/. Confirmed live 2026-08-20 during the
 -- migration-record reconciliation: provider_create_manual_booking() carries p_extra_minutes live.
--- Left un-backfilled rather than hand-inserting a migration row; the
--- version above is this file's authored timestamp, not a recorded one.
+-- BACKFILLED 2026-08-27: it now HAS a schema_migrations row at the version
+-- above, so it no longer reads as unapplied to a ledger diff. Leaving it
+-- un-backfilled had cost three separate re-investigations (2026-08-20,
+-- 08-25, 08-27), which is what the missing row actually buys you. The row's
+-- `statements` records only a pointer back to this file plus how it was
+-- verified -- no SQL was re-executed to create it, because the text actually
+-- run out-of-band was never captured. THIS FILE remains the authoritative
+-- body; the ledger row is a record that it ran, not a copy of what ran.
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- manual_booking_extra_minutes.sql

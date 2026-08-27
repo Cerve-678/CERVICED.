@@ -96,7 +96,7 @@ export interface CartItem {
    *  clock, because a cart-item field could only ever hold a value the client
    *  supplied — which is what let a second checkout attempt carry the first
    *  attempt's time. See
-   *  20260826110100_consent_recorded_before_payment.sql. */
+   *  20260827115930_consent_recorded_before_payment.sql. */
   policySnapshot?: Record<string, unknown>;
   /** Set when the picked time is only bookable as a request (see
    *  EmergencyRequest). Absent for every ordinary booking. Cleared and
