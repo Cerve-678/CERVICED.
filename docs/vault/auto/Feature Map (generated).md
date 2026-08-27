@@ -51,7 +51,7 @@ Curated: [[Availability & Slots]] · **150 files**
 - `src/screens/provider/InfoRegScreen.tsx` _(85)_
 - `src/contexts/BookingContext.tsx` _(80)_
 - `src/services/becca/capabilities/client.ts` _(71)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(66)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(67)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(61)_
 - `src/screens/client/RescheduleScreen.tsx` _(54)_
 - `supabase/availability_v2.sql` _(54)_
