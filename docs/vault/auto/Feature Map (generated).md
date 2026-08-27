@@ -126,14 +126,14 @@ Curated: [[Booking Flow]] · **236 files**
 - `supabase/waitlist_holds.sql` _(134)_
 - `supabase/phase1_schema.sql` _(125)_
 - `supabase/fix_group_booking_atomic_actions.sql` _(124)_
+- `src/services/AvailabilityService.ts` _(120)_
 - `src/screens/shared/NotificationsScreen.tsx` _(119)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(118)_
-- `src/services/AvailabilityService.ts` _(116)_
 - `supabase/booking_flow_fixes.sql` _(116)_
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/types/booking.ts` _(97)_
+- `src/types/booking.ts` _(99)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_
@@ -347,13 +347,13 @@ Curated: [[Services]] · **38 files**
 
 ## Cart & checkout
 Curated: [[Payments]] · **62 files**
-- `src/screens/client/CartScreen.tsx` _(264)_
+- `src/screens/client/CartScreen.tsx` _(265)_
 - `src/contexts/BookingContext.tsx` _(70)_
 - `src/services/databaseService.ts` _(66)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(62)_
 - `src/contexts/CartContext.tsx` _(32)_
 - `src/components/BookingSheet.tsx` _(31)_
-- `src/services/AvailabilityService.ts` _(26)_
+- `src/services/AvailabilityService.ts` _(27)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(23)_
 - `src/screens/client/BookingDetailScreen.tsx` _(15)_
 - `src/screens/client/BookingsScreen.tsx` _(15)_
@@ -363,11 +363,11 @@ Curated: [[Payments]] · **62 files**
 - `src/services/becca/capabilities/client.ts` _(13)_
 - `src/services/checkoutService.ts` _(8)_
 - `src/navigation/types.ts` _(7)_
+- `src/features/cart/presentation.ts` _(6)_
+- `src/types/booking.ts` _(6)_
 - `supabase/fix_claim_cart_booking_slots_missing_notifications.sql` _(6)_
 - `src/features/bookings/paymentPresentation.ts` _(5)_
 - `src/features/cart/platformFee.ts` _(5)_
-- `src/features/cart/presentation.ts` _(5)_
-- `src/types/booking.ts` _(5)_
 - `supabase/fix_cart_checkout_slot_hold.sql` _(5)_
 - `src/screens/client/ProfileInfoScreen.tsx` _(4)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(4)_
