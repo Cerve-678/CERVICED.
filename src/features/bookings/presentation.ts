@@ -37,7 +37,7 @@ export function resolveServiceCategory(serviceName: string, defaultCategory: str
  *  hex characters collide with 1% probability at ~9,300 bookings. So the
  *  reference is now a real `booking_ref` column — 8 characters of a 30-symbol
  *  alphabet with the ambiguous glyphs removed, behind a UNIQUE index (see
- *  migration 20260827151000).
+ *  migration 20260827153834).
  *
  *  The fallback is deliberate and load-bearing rather than defensive
  *  clutter: rows written before that migration have no stored ref, and the

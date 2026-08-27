@@ -223,7 +223,7 @@ export interface AvailableDate {
 export interface ConfirmedBooking {
   id: string;
   /** The stored, guaranteed-unique short code. Absent on rows written
-   *  before migration 20260827151000, which is why formatBookingRef still
+   *  before migration 20260827153834, which is why formatBookingRef still
    *  falls back to truncating the id. */
   bookingRef?: string | undefined;
   cartItemId: string;

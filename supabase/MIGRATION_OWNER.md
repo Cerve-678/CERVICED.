@@ -22,30 +22,10 @@ Neither was a git problem. Both sessions wrote correct SQL.
 ## Current owner
 
 ```
-OWNER:  session working on abandoned cart holds ("Reserving…" phantom bookings)
-SINCE:  2026-08-26
-SCOPE:  expire_cart_holds(), release_cart_booking_slots(), and a one-off
-        cleanup of the 16 live cancelled rows left behind by them
-        (20260827150000), plus the new bookings.booking_ref column and its
-        generator/trigger (20260827151000).
-        BOTH ARE WRITTEN BUT NOT APPLIED — the Supabase MCP connection was
-        down for this whole pass, so nothing was verified against live and
-        nothing was run. Renumbered from 202608262* to sort above the
-        20260827140000 frontier before anyone replays them.
-        NOT touching the four AFTER INSERT triggers on bookings — the other
-        active session owns those in
-        20260827120122_hold_rows_skip_booking_side_effects.sql.
+OWNER:  (none)
+SINCE:  --
+SCOPE:  --
 ```
-
-> **This claim was briefly overwritten on 2026-08-27 and has been restored.**
-> A third session, asked to "run all SQL files that aren't live", applied the
-> four queued migrations below **without taking the lock** — it read this
-> block, saw `SINCE` was a day old, and proceeded. That was the wrong call
-> even though nothing broke: the scopes did not overlap (verified function by
-> function before applying, which is the only reason this is a note and not an
-> incident), but "the scopes don't overlap" is a conclusion the lock exists to
-> stop people reaching on their own. The lock is still YOURS — the cart-hold
-> work above is not applied and this claim stands.
 
 Claim it by editing the block above — your session name/purpose, the date, and
 what you intend to change. Release it by setting it back to `(none)` when the
@@ -102,7 +82,40 @@ Written but **not applied**, in the order they must run:
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
 
-### Applied 2026-08-27
+### Applied 2026-08-27 (cart holds + booking_ref)
+
+The two files the lock above was held for, applied in order and verified
+against live afterwards. Recorded versions `20260827153730` and
+`20260827153834`; both files were renamed from their authored
+`20260827150000`/`20260827151000`, along with the three `src/` comments that
+cite the booking_ref migration by number.
+
+| Recorded version | Name | Result verified live |
+|---|---|---|
+| 20260827153730 | `abandoned_cart_holds_are_not_bookings` | Both functions now DELETE instead of promoting a hold to `cancelled`, keeping `SECURITY DEFINER` + `search_path=public`. Cancelled bookings 25 -> 9, total 79 -> 63: exactly the 16 phantoms, 0 placeholders left, 6 linked notifications removed. |
+| 20260827153834 | `booking_ref_unique_short_code` | `bookings.booking_ref` NOT NULL + unique index + BEFORE INSERT trigger. All 63 rows backfilled, 63 distinct, all length 8, zero ambiguous characters (`0/O/1/I/L/U`). |
+
+**Two defects were fixed before applying, both found by verifying rather than
+by reading the SQL.**
+
+1. Each of the three `notifications` deletes lacked the transactions/reviews
+   guards its accompanying `bookings` delete carried. In the two permanent
+   functions that meant a hold *preserved* because money was attached would
+   still have its notifications deleted -- stripping context from the one row
+   deliberately kept for a human to look at. The guards were added to all
+   three.
+2. The header claimed `transactions.booking_id is NOT NULL REFERENCES
+   bookings(id)`. Live, `transactions` has **no foreign keys at all** and
+   `booking_id` is nullable. The database therefore provides zero protection
+   against orphaning a payment row here; the `NOT EXISTS` guard is the only
+   thing that does. The migration was safe as written -- but anyone later
+   removing that guard on the strength of the comment would not have been.
+   The header now says so explicitly.
+
+Today `with_txn` was 0, so neither defect changed what this run deleted. Both
+would have mattered on a later run of the permanent sweep, which is the point.
+
+### Applied 2026-08-27 (four earlier migrations)
 
 Four migrations were applied in dependency order, each verified against the
 live schema afterwards rather than trusted to have run:
