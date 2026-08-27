@@ -9,6 +9,7 @@ import { CART_ISSUE } from '../features/cart/presentation';
 jest.mock('../services/databaseService', () => ({
   __esModule: true,
   getBookableServiceIds: jest.fn(),
+  getMyUpcomingBookedSpans: jest.fn(),
   getAvailabilityDateBundle: jest.fn(),
   getAvailabilityEmergencyPolicyRow: jest.fn(),
   getAvailabilityDateExceptions: jest.fn(),
