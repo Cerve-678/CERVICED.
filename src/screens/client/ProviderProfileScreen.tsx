@@ -330,8 +330,11 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                 onPress={onClose}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.successCloseText, { color: P.text }]}>
-                  Continue Shopping
+                <Text
+                  style={[styles.successCloseText, { color: P.text }]}
+                  numberOfLines={1}
+                >
+                  Keep browsing
                 </Text>
               </TouchableOpacity>
 
@@ -344,7 +347,9 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
                   onPress={onViewCart}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.successViewCartText}>View Cart</Text>
+                  <Text style={styles.successViewCartText} numberOfLines={1}>
+                    View cart
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -6128,13 +6133,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
+    // The card's side gap lives here, not on the card. With the gap as the
+    // card's own margin AND the overlay centring by alignItems, the card had
+    // no width to be a percentage OF — so everything inside it that asked for
+    // "100%" collapsed to its own content instead of filling the card.
+    paddingHorizontal: 24,
     zIndex: 2000,
   },
   successContainer: {
-    marginHorizontal: 30,
-    borderRadius: 25,
+    // Explicit width so the rows and the button pair inside have something
+    // real to divide up; capped so it doesn't sprawl on a tablet.
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 24,
     overflow: "hidden",
-    maxWidth: screenWidth * 0.85,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
@@ -6142,7 +6154,9 @@ const styles = StyleSheet.create({
     elevation: 15,
   },
   successBlur: {
-    padding: 30,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 20,
     alignItems: "center",
     position: "relative",
   },
@@ -6215,15 +6229,16 @@ const styles = StyleSheet.create({
   },
   successButtons: {
     flexDirection: "row",
-    gap: 15,
+    gap: 10,
     width: "100%",
   },
   successCloseButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 20,
-    borderWidth: 2,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
   successCloseText: {
     fontFamily: "BakbakOne-Regular",
@@ -6232,9 +6247,10 @@ const styles = StyleSheet.create({
   },
   successViewCartButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 20,
+    paddingVertical: 13,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
