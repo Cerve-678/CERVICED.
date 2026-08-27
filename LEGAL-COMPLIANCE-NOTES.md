@@ -229,10 +229,21 @@ document changes.
 As of 2026-08-10, clients now have a persisted counterpart too, but scoped
 narrower: `bookings.policy_accepted_at`/`policy_snapshot` record when a
 client agreed to the specific PROVIDER's cancellation/booking policy at
-checkout (`BookingSheet.tsx`/`MultiBookingSheet.tsx` — the general Cerviced
-Terms & Conditions checkbox on `CartScreen.tsx`'s cart summary is a separate,
-still-deferred item, deliberately left untouched; that one remains local UI
-state only, never persisted). Same versioning caveat as the provider side:
+checkout (`BookingSheet.tsx`/`MultiBookingSheet.tsx`).
+
+**Updated 2026-08-27 — the parenthetical that used to sit here is now wrong.**
+It said the general Cerviced Terms checkbox on `CartScreen.tsx` "remains local
+UI state only, never persisted". As of migration
+`20260827115930_consent_recorded_before_payment` it IS persisted:
+`hold_cart_booking_slots()` refuses a hold whose payload lacks
+`policy_accepted` and stamps `bookings.policy_accepted_at` from the database
+clock, before payment. See item 14 below for what that single checkbox is now
+being asked to cover.
+
+Separately, as of 2026-08-26 the PROVIDER's own written T&Cs are frozen onto
+the booking too (`policy_snapshot.providerTerms`), so the text a client agreed
+to survives the provider editing it afterwards. Previously the "I agree" tick
+gated Add to Cart and was then discarded. Same versioning caveat as the provider side:
 the snapshot freezes the policy text at booking time (by design — so a
 provider can't retroactively change what a client agreed to), but there's no
 equivalent record for the general Terms & Conditions on either side. A
@@ -288,9 +299,15 @@ Why it belongs on this list rather than being purely an engineering fix:
   entitle a client to anything, that entitlement lands in the same gap where
   no refund mechanism currently exists.
 
-Decisions needed from you (not to be guessed at): the response deadline itself,
-whether it varies per provider, whether expiry entitles the client to a
-no-penalty cancellation or refund, and the exact notice wording.
+Decisions needed from you (not to be guessed at): whether expiry entitles the
+client to a no-penalty cancellation or refund, and the exact notice wording.
+The deadline itself was decided and built 2026-08-26 (`BOOKINGS.md` §7a).
+
+**Update 2026-08-27:** a first-pass factual inventory of every deadline the app
+enforces, plus draft clause wording for a lawyer to correct, is in
+[LEGAL-DRAFT-RESPONSE-DEADLINES.md](LEGAL-DRAFT-RESPONSE-DEADLINES.md). That
+draft was written by an engineer at explicit request and is not reviewed copy —
+it exists so the review starts from something concrete.
 
 ## 13. The contact addresses in the legal copy don't exist (2026-08-24)
 
@@ -326,3 +343,49 @@ prints `cerviced.app` as the footer on both the HTML and in-app receipt.
 by guessing at correct legal language. Items 1–3 look like the highest
 priority (no Privacy Policy at all, health data handling, non-compliant
 payment collection).
+
+---
+
+## 14. One checkbox answers two different questions, one of them health-adjacent (2026-08-27)
+
+At checkout, `CartScreen.tsx` sends the **same** boolean as both consents:
+
+```ts
+{ policyAccepted: agreedToPolicy, safetyAcknowledged: agreedToPolicy }
+```
+
+So `bookings.policy_accepted_at` and `bookings.safety_ack_at` always carry the
+same value and the same timestamp. Two columns, one fact — they can never
+disagree, so the separate safety record evidences nothing the terms record
+doesn't already.
+
+The second of those is health-adjacent. `safety_ack_required` is derived
+server-side from the service row (patch-test required, or flagged not
+pregnancy-safe), and `hold_cart_booking_slots()` correctly refuses to proceed
+without an acknowledgement — that part is sound. The question is what the
+acknowledgement actually means.
+
+**Three things worth putting to counsel:**
+
+1. **The in-code justification overstates the mechanism.** The comment at
+   `CartScreen.tsx` says the box "can't be ticked while it's required and
+   unread, so `agreedToPolicy` IS the ack here." There is no read-tracking
+   anywhere in the flow. What actually happens is that a safety notice renders
+   directly above the checkbox — adjacency, not an unread gate.
+
+2. **The safety detail is not on screen at the moment of acknowledgement.**
+   The notice reads "...has flagged safety information for this treatment
+   (patch test and/or pregnancy) — **see the service page for details**." The
+   client is acknowledging information they are simultaneously being told to
+   go and find elsewhere.
+
+3. **No separate opt-in**, same criticism as item 10(a) for providers: a
+   single undifferentiated tick covers the Cerviced Terms, the provider's
+   cancellation policy, and a treatment-safety acknowledgement that may bear
+   on a pregnancy or an allergy.
+
+**Not changed unilaterally** — this is consent design on health-adjacent data,
+which is a product/legal call, not an engineering one. The engineering options,
+should counsel want them, are (a) a second, separate tick shown only when
+`needsSafetyAck`, and (b) rendering the actual flagged detail inline instead of
+linking away. Both are small; the decision is not.

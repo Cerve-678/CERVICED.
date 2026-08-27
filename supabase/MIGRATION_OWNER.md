@@ -25,7 +25,13 @@ Neither was a git problem. Both sessions wrote correct SQL.
 OWNER:  session working on abandoned cart holds ("Reserving…" phantom bookings)
 SINCE:  2026-08-26
 SCOPE:  expire_cart_holds(), release_cart_booking_slots(), and a one-off
-        cleanup of the 16 live cancelled rows left behind by them.
+        cleanup of the 16 live cancelled rows left behind by them
+        (20260827150000), plus the new bookings.booking_ref column and its
+        generator/trigger (20260827151000).
+        BOTH ARE WRITTEN BUT NOT APPLIED — the Supabase MCP connection was
+        down for this whole pass, so nothing was verified against live and
+        nothing was run. Renumbered from 202608262* to sort above the
+        20260827140000 frontier before anyone replays them.
         NOT touching the four AFTER INSERT triggers on bookings — the other
         active session owns those in
         20260827120122_hold_rows_skip_booking_side_effects.sql.
@@ -91,6 +97,7 @@ Written but **not applied**, in the order they must run:
 
 | Version | File | Notes |
 |---|---|---|
+| 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. |
 | 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
