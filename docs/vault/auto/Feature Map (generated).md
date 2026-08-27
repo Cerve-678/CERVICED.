@@ -6,9 +6,9 @@
 #generated
 
 ## Address release
-Curated: [[Address Release]] · **85 files**
+Curated: [[Address Release]] · **86 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(148)_
+- `src/services/databaseService.ts` _(147)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(108)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(74)_
@@ -37,7 +37,7 @@ Curated: [[Address Release]] · **85 files**
 - `supabase/fix_group_booking_notification_dedup.sql` _(17)_
 - `supabase/consolidate_address_release_notification_manual.sql` _(16)_
 - `src/features/providers/goLiveStatus.ts` _(15)_
-- … +55 more
+- … +56 more
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **149 files**
@@ -179,7 +179,7 @@ Curated: [[Notifications]] · **146 files**
 Curated: [[Provider Onboarding & Go-Live]] · **69 files**
 - `src/services/databaseService.ts` _(59)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(46)_
-- `src/screens/provider/ProviderMyProfileScreen.tsx` _(43)_
+- `src/screens/provider/ProviderMyProfileScreen.tsx` _(44)_
 - `src/contexts/RegistrationContext.tsx` _(27)_
 - `src/screens/provider/InfoRegScreen.tsx` _(27)_
 - `src/services/providerRegistrationService.ts` _(26)_

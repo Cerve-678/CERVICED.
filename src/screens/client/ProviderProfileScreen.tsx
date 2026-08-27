@@ -68,8 +68,8 @@ import {
   leaveWaitlist,
   type WaitlistEntry,
   setProviderFollowNotify,
-  VENUE_PORTFOLIO_CATEGORY,
 } from "../../services/databaseService";
+import { splitPortfolioByKind } from "../../features/providers/venuePhotos";
 import type { UnclaimedProviderDetail } from "../../services/providerClaimService";
 import { AvailabilityService } from "../../services/AvailabilityService";
 import { BookingSheet, type BookingSheetResult } from "../../components/BookingSheet";
@@ -1557,12 +1557,8 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   // Portfolio grid between finished results — same reasoning as the rest of
   // that card: facts about the business, not samples of the work. Explore
   // already excludes them from the discovery feed.
-  const venuePortfolio = useMemo(
-    () => portfolio.filter((item) => item.category === VENUE_PORTFOLIO_CATEGORY),
-    [portfolio],
-  );
-  const workPortfolio = useMemo(
-    () => portfolio.filter((item) => item.category !== VENUE_PORTFOLIO_CATEGORY),
+  const { work: workPortfolio, venue: venuePortfolio } = useMemo(
+    () => splitPortfolioByKind(portfolio),
     [portfolio],
   );
   const contactDetails = useMemo(() => ({

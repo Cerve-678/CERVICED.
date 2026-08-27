@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { VENUE_PORTFOLIO_CATEGORY } from "../features/providers/venuePhotos";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import type {
   DbProvider,
@@ -1125,15 +1126,6 @@ export async function deletePortfolioItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Portfolio rows a provider uploaded as photos of their venue/workspace
- *  rather than of their work (see InfoRegScreen's "Address & venue photos"
- *  uploader, which stamps this exact category). They belong on the
- *  provider's own profile — a client deciding between a salon and a home
- *  studio wants to see the room — but not in a browse/inspiration feed,
- *  where a picture of an empty treatment room sits oddly among photos of
- *  actual results. Stored lowercase, unlike every real service category. */
-export const VENUE_PORTFOLIO_CATEGORY = "venue";
-
 /** Fetch portfolio items, optionally filtered by category */
 export async function getPortfolioItems(
   category?: string,
@@ -1346,6 +1338,11 @@ export async function getSavedPortfolioDetails(ids: string[]): Promise<{
           .in("id", portfolioIds)
           .eq("provider.is_active", true)
           .eq("provider.has_gone_live", true)
+          // Same venue exclusion as getPortfolioItems: this is the Favourites
+          // tab of the same Explore feed, so a legacy saved id pointing at a
+          // venue shot must not put one back into a browse surface it can no
+          // longer be discovered in.
+          .or(`category.is.null,category.neq.${VENUE_PORTFOLIO_CATEGORY}`)
       : Promise.resolve({ data: [], error: null }),
     providerIds.length > 0
       ? supabase
