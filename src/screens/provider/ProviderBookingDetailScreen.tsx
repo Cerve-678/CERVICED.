@@ -1960,9 +1960,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               Outside your availability
             </Text>
             <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
-              {booking.customerName || 'This client'} asked for a time your scheduling rules
-              would normally rule out. You said you're open to being asked — confirming it
-              books it exactly as requested.
+              {booking.customerName || 'This client'} asked for a time your rules would
+              normally block. You opted into being asked — confirming books it as requested.
             </Text>
           </View>
         )}

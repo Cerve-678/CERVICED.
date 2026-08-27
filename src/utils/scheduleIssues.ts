@@ -28,7 +28,14 @@ export type ScheduleIssueKind =
   | 'needs_closing_out'
   /** No end time saved on the booking row and no service length to fall back
    *  on, so its real length is genuinely unrecoverable. */
-  | 'missing_end_time';
+  | 'missing_end_time'
+  /** Sits outside the provider's hours, day off or blocked date BY DESIGN:
+   *  the client asked for this exact time through the emergency-request
+   *  opt-in and the provider chose to be asked. Replaces whichever of
+   *  'time_unavailable' / 'not_working' / 'blocked_date' would otherwise
+   *  fire, because all three would be describing a fault where there isn't
+   *  one — nothing about the schedule changed. */
+  | 'emergency_request';
 
 export interface ScheduleIssue {
   kind: ScheduleIssueKind;
@@ -49,6 +56,10 @@ export interface ScheduleCheckBooking {
    *  batched lookup (getServiceDurationsByIds) for the rows that need it. */
   serviceDurationMinutes?: number | undefined;
   status: BookingStatus;
+  /** True for a booking the client raised through the emergency-request
+   *  opt-in. ConfirmedBooking already carries this, so callers pass their
+   *  existing rows unchanged. */
+  isEmergencyRequest?: boolean | undefined;
 }
 
 export interface ScheduleCheckContext {
@@ -173,6 +184,20 @@ function resolveSpan(booking: ScheduleCheckBooking): Span | null {
 }
 
 /**
+ * The one line an emergency request gets in place of the three "this doesn't
+ * fit your rules" findings. A fresh object each time: callers push these into
+ * arrays they own.
+ *
+ * Deliberately not phrased as a problem. "This time is no longer available"
+ * claims the schedule changed under a booking that was already taken, which is
+ * the opposite of what happened here — the provider was asked for this exact
+ * slot and said yes to being asked.
+ */
+function emergencyIssue(): ScheduleIssue {
+  return { kind: 'emergency_request', label: 'Outside your hours by request' };
+}
+
+/**
  * Every schedule problem on every booking, keyed by booking id. Bookings with
  * nothing wrong are absent from the map rather than present with an empty
  * array, so callers can treat a lookup miss as "fine".
@@ -221,14 +246,18 @@ export function findScheduleIssues(
     // "time unavailable" on top would be three ways of saying the same thing,
     // and the blocked date is the one the provider can act on.
     if (blocked.has(booking.bookingDate)) {
-      add(booking.id, { kind: 'blocked_date', label: "On a date you've blocked off" });
+      add(booking.id, booking.isEmergencyRequest
+        ? emergencyIssue()
+        : { kind: 'blocked_date', label: "On a date you've blocked off" });
     } else {
       const windows = context.windowsByDate.get(booking.bookingDate);
       // Absent (rather than empty) means this date was never resolved, so
       // there is nothing to compare against — stay quiet instead of guessing.
       if (windows) {
         if (windows.length === 0) {
-          add(booking.id, { kind: 'not_working', label: "On a day you're not working" });
+          add(booking.id, booking.isEmergencyRequest
+            ? emergencyIssue()
+            : { kind: 'not_working', label: "On a day you're not working" });
         } else {
           // Must fit ENTIRELY inside ONE window. Spanning the gap between two
           // windows is the break the provider deliberately left themselves.
@@ -238,10 +267,12 @@ export function findScheduleIssues(
             return open != null && close != null && span.start >= open && span.end <= close;
           });
           if (!fits) {
-            add(booking.id, {
-              kind: 'time_unavailable',
-              label: 'This time is no longer available in your schedule',
-            });
+            add(booking.id, booking.isEmergencyRequest
+              ? emergencyIssue()
+              : {
+                  kind: 'time_unavailable',
+                  label: 'This time is no longer available in your schedule',
+                });
           }
         }
       }
@@ -315,6 +346,9 @@ const SEVERITY: readonly ScheduleIssueKind[] = [
   'unconfirmed_past_start',
   'needs_closing_out',
   'missing_end_time',
+  // Last: it isn't a problem at all, just context. A real overlap or an
+  // unconfirmed request past its start still wins the single-line slot.
+  'emergency_request',
 ];
 
 export function primaryIssue(issues: readonly ScheduleIssue[]): ScheduleIssue | null {

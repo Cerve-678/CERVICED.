@@ -78,10 +78,30 @@ Written but **not applied**, in the order they must run:
 | Version | File | Notes |
 |---|---|---|
 | 20260827160000 | `cancel_window_closing_warning` | **Written 2026-08-27 by the session doing reschedule/legal work; NOT applied — the lock above is held.** New `process_cancel_window_closing_warnings()` + cron `cancel-window-closing-warnings` + the `cancel_window_closing` notification type. Numbered above the 20260827120519 frontier and above the two cart-hold files so it runs last. Touches nothing the lock holder touches (no cart-hold functions, no booking triggers). Its one shared surface is `notifications_type_check`, which it **appends to** rather than recreating from a literal list — so it is safe in either order against `20260827140000_no_show_disputes`, which also adds a type. App-side wiring (`database.ts`, `NotificationsScreen`, `notificationTapHandler`) is already committed, so the type union is ahead of the constraint until this runs. **STEP 2 BELONGS TO WHOEVER APPLIES IT:** the file adds `cancel_notice_hours(INT, JSONB)` as the single definition of the cancellation-notice mapping and calls it, but `cancel_own_booking()` still carries its own inline copy. Rewrite it to call the helper in the same pass — with `pg_get_functiondef()` output in hand so `LANGUAGE`/`SECURITY DEFINER`/`SET search_path` survive the reproduction. It was left undone because the MCP connection was down when the file was written, and reproducing a live function from memory is exactly what stripped `SET search_path` off three functions earlier the same day. |
-| 20260827210000 | `guard_generated_health_prefix_in_booking_notes` | **Written 2026-08-27; NOT applied — the session that wrote it could not run either `apply_migration` or the CLI (permission denied), so the lock was released rather than held over an unapplied file.** Re-strips the generated `Health info:` line from `bookings.notes` (5 rows, all written 2026-08-26 by an app build predating the 2026-08-20 removal) and adds a BEFORE INSERT OR UPDATE guard, `strip_generated_health_prefix()`, so a stale bundle still installed on a device cannot write another one. Numbered above the 20260827200000 frontier. Creates a new function and a new trigger; redefines nothing, so it is safe in any order against everything else queued. Until it runs, those 5 bookings keep showing text the client never typed under YOUR NOTES and as the provider's "Client note". |
 | 20260826110000 | `atomic_provider_weekly_schedule` | **DELIBERATELY PARKED, not a backlog item** — its own header says so. `replace_provider_weekly_schedule()` does not exist live and nothing calls it; `saveProviderWeeklySchedule()` does the two writes directly (non-atomically) instead. Schedule saving works. Do not apply until the provider terms & policy work ships. |
 
 The queue is otherwise **empty as of 2026-08-27** — see below.
+
+### Applied 2026-08-27 (booking notes: the generated health prefix, guarded)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260827210000 | `guard_generated_health_prefix_in_booking_notes` | `strip_generated_health_prefix()` present, **not** SECURITY DEFINER (it needs no privilege the writer lacks) with `search_path=public, pg_temp`; trigger `before_booking_strip_generated_health_prefix` is BEFORE INSERT OR UPDATE OF notes, FOR EACH ROW; 0 rows match `^Health info:`. |
+
+**Applied by the user out-of-band (SQL editor), so the ledger row was
+backfilled** — `apply_migration` and the CLI were both refused by the
+permission classifier in the session that wrote the file. Because
+`apply_migration` never ran it never stamped a version of its own: the filename
+number stands and the usual rename dance does not apply. Its `statements`
+records that it is a backfill and how it was verified, not a fabricated body.
+
+`20260825133014` had already stripped this prefix once and the app-side writer
+went on 2026-08-20 — but **five more rows arrived on 2026-08-26**, all one
+client, all from an app build compiled before the fix and still installed on a
+device. That is why this is a trigger and not a third UPDATE: the stale bundle
+is a caller that never receives an app-side fix, so the database has to be the
+thing that refuses. The pattern is anchored at the start of the note, so a
+client writing about their own health keeps every word.
 
 ### Applied 2026-08-27 (emergency requests never auto-confirm — the claim path)
 

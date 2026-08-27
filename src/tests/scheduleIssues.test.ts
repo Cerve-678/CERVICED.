@@ -193,6 +193,56 @@ describe('findScheduleIssues — availability', () => {
     expect(kinds(m, 'a')).toEqual(['not_working']);
   });
 
+  // An emergency request is a slot the client deliberately asked for through
+  // the opt-in, and the provider chose to be asked. Telling them the time is
+  // "no longer available" describes a change that never happened, and the same
+  // goes for the day-off and blocked-date wording — so all three collapse into
+  // one honest line.
+  describe('emergency requests', () => {
+    const emergency = (id: string, time: string, end: string) =>
+      booking(id, time, end, { isEmergencyRequest: true });
+
+    it('relabels an out-of-hours emergency request instead of calling it unavailable', () => {
+      const m = findScheduleIssues([emergency('a', '8:00 PM', '9:00 PM')], ctx());
+      expect(kinds(m, 'a')).toEqual(['emergency_request']);
+      expect(m.get('a')![0]!.label).toBe('Outside your hours by request');
+    });
+
+    it('relabels one on a day off and one on a blocked date the same way', () => {
+      const dayOff = findScheduleIssues(
+        [emergency('a', '10:00 AM', '11:00 AM')],
+        ctx({ windowsByDate: windows([DAY, []]) }),
+      );
+      expect(kinds(dayOff, 'a')).toEqual(['emergency_request']);
+
+      const blocked = findScheduleIssues(
+        [emergency('a', '10:00 AM', '11:00 AM')],
+        ctx({ blockedDates: [DAY] }),
+      );
+      expect(kinds(blocked, 'a')).toEqual(['emergency_request']);
+    });
+
+    it('stays silent when the requested time fits the day anyway', () => {
+      // Only the notice period made it a request; the slot itself is normal.
+      const m = findScheduleIssues([emergency('a', '10:00 AM', '11:00 AM')], ctx());
+      expect(m.size).toBe(0);
+    });
+
+    it('still reports a real clash, and ranks it above the request note', () => {
+      const m = findScheduleIssues(
+        [emergency('a', '8:00 PM', '10:00 PM'), emergency('b', '9:00 PM', '11:00 PM')],
+        ctx(),
+      );
+      expect(kinds(m, 'a')).toEqual(['emergency_request', 'overlap']);
+      expect(primaryIssue(m.get('a')!)!.kind).toBe('overlap');
+    });
+
+    it('leaves an ordinary booking untouched — same wording as before', () => {
+      const m = findScheduleIssues([booking('a', '8:00 PM', '9:00 PM')], ctx());
+      expect(m.get('a')![0]!.label).toBe('This time is no longer available in your schedule');
+    });
+  });
+
   it('flags a booking on a blocked date, and does not pile on other availability issues', () => {
     const m = findScheduleIssues(
       [booking('a', '8:00 AM', '9:30 AM')],
