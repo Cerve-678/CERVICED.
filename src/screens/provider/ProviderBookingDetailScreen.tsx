@@ -1984,8 +1984,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </Text>
             <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
               {booking.customerName || 'This client'} requested a time outside your working
-              hours. Confirming books them in as normal — to change what you're asked about,
-              go to Scheduling &amp; Availability.
+              hours. Confirming books them in as normal. To change this setting, go to
+              Scheduling &amp; Availability.
             </Text>
           </View>
         )}
