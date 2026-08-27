@@ -321,7 +321,7 @@ see memory `cart-checkout-slot-hold.md` for the full design record.
 
 ---
 
-## 8. Unresolved iCloud-duplicate files — 15 need a human call (2026-08-20)
+## 8. Unresolved iCloud-duplicate files — 7 need a human call (2026-08-26)
 
 This repo lives under `~/Desktop`, so iCloud resolves a conflicting write by
 forking a numbered copy — `shuffle 2.ts` next to `shuffle.ts`. A `Stop` hook
@@ -329,11 +329,16 @@ running `git add -A` on every turn had been committing them indiscriminately;
 that hook is now removed (see CLAUDE.md, "Committing").
 
 Commit `1c4eb19` deleted the 33 that were byte-identical to their counterpart
-and referenced by nothing. **These 15 were deliberately left tracked** — each
-needs someone to say which version is real. Do not resolve them by glob or by
+and referenced by nothing. 15 were then deliberately left tracked, each needing
+someone to say which version is real. Do not resolve them by glob or by
 filename heuristic; that is exactly what would destroy the legitimate ones.
 
-### 8a. Six differ from their counterpart — decide which is current
+**Update 2026-08-26: eight of the fifteen were migrations, and all eight are
+resolved.** The pairing below was wrong in the reassuring direction — see 8c.
+Seven were deleted then; the eighth (the waitlist fork) was held back on
+purpose — and was **deleted 2026-08-27 at the repo owner's direction**, see 8d.
+
+### 8a. Four differ from their counterpart — decide which is current
 
 | File | Counterpart |
 |---|---|
@@ -341,15 +346,21 @@ filename heuristic; that is exactly what would destroy the legitimate ones.
 | `src/features/business-details/options 2.ts` | `options.ts` |
 | `src/tests/addressReleasePolicy.test 2.ts` | `addressReleasePolicy.test.ts` |
 | `assets/images/background 2.png` | `background.png` |
-| `supabase/migrations/20260817160000_manual_booking_extra_minutes 2.sql` | same name, no ` 2` |
-| `supabase/migrations/20260819001800_deduplicate_push_delivery 2.sql` | same name, no ` 2` |
 
 The two source files are the *pre-edit* copies of files that were being changed
 when the fork happened (`options.ts` gained mobile address-release timings on
 2026-08-20), so the un-numbered file is almost certainly current — but confirm
-rather than assume. **The two migrations matter most:** two files claiming the
-same migration timestamp is a real deploy hazard. Diff each against the live
-schema (`cerviced-migration-drift`) before deleting either.
+rather than assume.
+
+The two migrations that used to sit in this table —
+`20260817160000_manual_booking_extra_minutes 2.sql` and
+`20260819001800_deduplicate_push_delivery 2.sql` — **are resolved and deleted
+(2026-08-26).** Each differed from its same-version counterpart by exactly one
+thing: a seven-line `PROVENANCE:` header the canonical file gained during the
+2026-08-20 reconciliation. SQL bodies byte-identical, so the un-numbered file
+was unambiguously current. Neither has a row in
+`supabase_migrations.schema_migrations`, which is what their own provenance
+header says (both applied out-of-band via the SQL editor) — verified live.
 
 ### 8b. Three are NOT duplicates — leave them alone
 
@@ -357,23 +368,81 @@ schema (`cerviced-migration-drift`) before deleting either.
 filenames that merely look like the collision pattern. This is why the
 `.gitignore` rule is scoped to source extensions and never covers assets.
 
-### 8c. Six migrations have no un-numbered counterpart
+### 8c. Six migrations that "have no un-numbered counterpart" — they all did
 
-```
-20260817110000_fix_pregnancy_safe_default 2.sql
-20260817110500_waitlist_lapse_and_exhaustion_notifications 2.sql
-20260817120000_replace_my_provider_specialties 2.sql
-20260817140000_manual_booking_category_snapshot_parity 2.sql
-20260817150000_manual_booking_scheduling_policy_override 2.sql
-20260818105725_prevent_self_booking 2.sql
-```
+**Resolved 2026-08-26. The claim in this section was wrong**, and wrong in the
+direction that makes you relax: it said the numbered file was the only copy of
+each, so deleting it would lose the migration outright.
 
-The numbered file is the **only** copy of each, so deleting it would lose the
-migration outright. Several look superseded by a later-timestamped file that
-does exist (e.g. `20260818105903_prevent_self_booking.sql`), but "looks
-superseded" is not evidence — reconcile against the live schema first. Same
-reason `supabase/migrations/` is excluded from the `.gitignore` rule: a real
-migration must never be silently untracked.
+That conclusion came from pairing on filename-minus-` 2`. Pair on the *stem*
+instead and every one has a byte-identical counterpart under a **different
+version prefix** — these are renumbering artifacts, the fork keeping the
+pre-renumber number. All six canonical versions are recorded live:
+
+| fork version (deleted) | identical canonical | recorded live |
+|---|---|---|
+| `20260817110000_fix_pregnancy_safe_default` | `20260817084930` | yes |
+| `20260817120000_replace_my_provider_specialties` | `20260817125241` | yes |
+| `20260817140000_manual_booking_category_snapshot_parity` | `20260817144603` | yes |
+| `20260817150000_manual_booking_scheduling_policy_override` | `20260817152938` | yes |
+| `20260818105725_prevent_self_booking` | `20260818105903` | yes |
+| `20260817110500_waitlist_lapse_and_exhaustion_notifications` | `20260817103049` | yes — **but see 8d** |
+
+Five deleted. Nothing was lost: each is byte-identical to a file that remains,
+and each is recorded exactly once live under the canonical version, verified by
+querying `supabase_migrations.schema_migrations` directly rather than reading
+files. No fork version has a row of its own.
+
+The general lesson is the one that made this worth writing down: a numbered
+copy of a *migration* can differ from its original by its version number alone,
+and that number is the entire payload. Pairing by filename hides it.
+
+### 8d. The waitlist fork was the dangerous one — deleted 2026-08-27
+
+`supabase/migrations/20260817110500_waitlist_lapse_and_exhaustion_notifications 2.sql`
+
+Byte-identical to `20260817103049_...`, like the other five — but it is the only
+one of the eight whose fork version sorts **after** a later migration that
+supersedes one of its functions.
+
+`invite_next_waitlist_entry()` is defined by `20260817103049`, then fixed nine
+minutes later by `20260817104009_fix_waitlist_selection_method_hook.sql`, which
+adds `v_selection_method` reading `booking_policies->>'waitlistSelectionMethod'`.
+The fork carries the **pre-fix** body under version `110500`, which replays
+*after* `104009` — silently reverting the selection-method plumbing with no
+error and no conflict. That is the exact `CREATE OR REPLACE` failure mode
+`supabase/MIGRATION_OWNER.md` exists to prevent, sitting in the tree armed.
+
+The other five forks all sort *before* whatever supersedes their functions, so
+an ordered replay overwrites them harmlessly. This one does not.
+
+Risk is fresh-environment replay only — nothing was wrong live. It was left in
+place at the repo owner's direction, with a note not to delete it without
+saying so.
+
+**Deleted 2026-08-27, at the repo owner's explicit direction** (they raised this
+exact file and asked for it to be fixed). Saying so here, as that note asked.
+Verified before removal rather than trusted: byte-identical to
+`20260817103049`, which contains no `v_selection_method` at all, while
+`20260817104009` adds it — so the fork's only possible effect on an ordered
+replay was to reinstate the pre-fix body. Nothing unique was lost.
+
+**A second fork turned out to be armed the same way, and worse.**
+`20260817110000_fix_pregnancy_safe_default 2.sql` was listed in 8c as a
+harmless earlier-sorting duplicate. It is not: it sorts **after** its canonical
+`20260817084930`, and its body is not a `CREATE OR REPLACE` but a data write —
+`UPDATE public.services SET is_pregnancy_safe = true WHERE is_pregnancy_safe =
+false`. The file's own comment claims "Safe to re-run"; it is not, because it
+flips every explicitly-false row to true. On a fresh ordered replay it runs
+last and silently marks every service a provider flagged as *not* safe during
+pregnancy as safe — health-adjacent data, inverted, with no error. Deleted
+2026-08-27 in the same pass.
+
+The correction to 8c's rule: "sorts earlier, therefore harmless" only holds for
+`CREATE OR REPLACE` bodies. A migration containing a **data write** is
+dangerous at *any* position, because replaying it re-applies the write to
+whatever the data looks like then — not to what it looked like when the
+migration was authored. Check what a fork *does*, not just where it sorts.
 
 ---
 
