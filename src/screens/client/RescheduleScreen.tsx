@@ -498,18 +498,6 @@ export default function RescheduleScreen({ navigation, route }: Props) {
   // offer those times, so this doesn't gate that path.
   const noticeHours = reschedulePolicy?.rescheduleNoticeHours ?? 0;
   const isPastNoticeWindow = !hasProviderResponse && noticeHours > 0 && hoursUntilBooking !== null && hoursUntilBooking < noticeHours;
-  // The two windows are separate and unrelated (BOOKINGS.md §7a): a provider
-  // whose reschedule notice is SHORTER than their cancellation notice will
-  // happily accept a request from a client who can no longer cancel. That is
-  // a legitimate state, not an error — but the client should hear it before
-  // they ask rather than discover it if the answer doesn't suit them. Stated
-  // plainly, without alarm: nothing has gone wrong and nothing is at risk.
-  const cancelNoticeHours = reschedulePolicy?.cancelNoticeHours ?? 0;
-  const cancelWindowAlreadyClosed =
-    !hasProviderResponse &&
-    cancelNoticeHours > 0 &&
-    hoursUntilBooking !== null &&
-    hoursUntilBooking < cancelNoticeHours;
   const selectedDateOption = dateOptions.find(d => d.date === selectedDate);
   // A request is already on file and the provider hasn't responded yet.
   // Previously this state wasn't checked here at all — the picker/submit UI
@@ -679,23 +667,6 @@ export default function RescheduleScreen({ navigation, route }: Props) {
               </View>
             )}
           </View>
-
-          {/* Says what is true now, not what might go wrong. No warning icon,
-              no red — this is context, and the client has done nothing
-              wrong. */}
-          {cancelWindowAlreadyClosed && (
-            <View style={st.section}>
-              <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
-                <Text style={[st.rowLabel, { color: C.sub, lineHeight: 20 }]}>
-                  Worth knowing: {booking.providerName} asks for {cancelNoticeHours} hours'
-                  notice to cancel, and this appointment is inside that now. You can still
-                  ask to move it — just bear in mind that if none of the times work out,
-                  the original booking stays as it is. {booking.providerName} is the best
-                  person to talk to if you need something else.
-                </Text>
-              </View>
-            </View>
-          )}
 
           {/* Reschedule policy info */}
           {reschedulePolicy && (

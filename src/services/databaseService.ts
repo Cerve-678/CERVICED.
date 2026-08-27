@@ -5261,14 +5261,6 @@ export interface ProviderReschedulePolicy {
   maxReschedules: number | null;
   /** hours of notice required before the appointment; 0 = same day allowed */
   rescheduleNoticeHours: number;
-  /** Hours of notice the same provider requires to CANCEL; 0 = no window.
-   *  Carried here because the two windows interact: a provider whose
-   *  reschedule notice is shorter than their cancellation notice will accept a
-   *  request from a client who can no longer cancel, and the client should be
-   *  told that before they ask, not discover it afterwards. Resolved the same
-   *  way cancel_own_booking() resolves it — the column first, the policy
-   *  string as fallback. */
-  cancelNoticeHours: number;
 }
 
 /** Parse the provider's booking_policies reschedule settings.
@@ -5279,21 +5271,12 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
   const fallback: ProviderReschedulePolicy = {
     maxReschedules: 1,
     rescheduleNoticeHours: 24,
-    cancelNoticeHours: 0,
   };
-  // Resolved before the early return: a provider can have a cancellation
-  // notice set on the column while booking_policies is still null.
-  const cancelNoticeMap: Record<string, number> = { "24h": 24, "48h": 48, "72h": 72 };
-  const cancelColumn = Number((data as any)?.cancellation_notice_hours ?? 0);
   const bp = (data as any)?.booking_policies as {
     rescheduleNotice?: string;
     maxReschedules?: string;
-    cancelNotice?: string;
   } | null;
-  const cancelNotice = cancelColumn > 0
-    ? cancelColumn
-    : (cancelNoticeMap[bp?.cancelNotice ?? ""] ?? 0);
-  if (!bp) return { ...fallback, cancelNoticeHours: cancelNotice };
+  if (!bp) return fallback;
 
   const max =
     bp.maxReschedules === "unlimited"
@@ -5306,7 +5289,7 @@ function mapReschedulePolicyRow(data: any): ProviderReschedulePolicy {
     "72h": 72,
   };
   const notice = noticeMap[bp.rescheduleNotice ?? "24h"] ?? 24;
-  return { maxReschedules: max, rescheduleNoticeHours: notice, cancelNoticeHours: cancelNotice };
+  return { maxReschedules: max, rescheduleNoticeHours: notice };
 }
 
 export async function getProviderReschedulePolicyByDisplayName(
@@ -5314,7 +5297,7 @@ export async function getProviderReschedulePolicyByDisplayName(
 ): Promise<ProviderReschedulePolicy> {
   const { data } = await supabase
     .from("providers")
-    .select("booking_policies, cancellation_notice_hours")
+    .select("booking_policies")
     .eq("display_name", displayName)
     .maybeSingle();
   return mapReschedulePolicyRow(data);
@@ -5326,7 +5309,7 @@ export async function getProviderReschedulePolicyById(
 ): Promise<ProviderReschedulePolicy> {
   const { data } = await supabase
     .from("providers")
-    .select("booking_policies, cancellation_notice_hours")
+    .select("booking_policies")
     .eq("id", providerId)
     .maybeSingle();
   return mapReschedulePolicyRow(data);
@@ -6815,17 +6798,24 @@ export async function updateClientProfileData(
  */
 export async function updateUserContactDetails(
   userId: string,
-  details: { name?: string; phone?: string; clientAddress?: string | null },
+  details: {
+    name?: string;
+    phone?: string;
+    clientAddress?: string | null;
+    clientArea?: string | null;
+  },
 ): Promise<void> {
   const patch: {
     name?: string;
     phone?: string;
     client_address?: string | null;
+    client_area?: string | null;
   } = {};
   if (details.name !== undefined) patch.name = details.name;
   if (details.phone !== undefined) patch.phone = details.phone;
   if (details.clientAddress !== undefined)
     patch.client_address = details.clientAddress;
+  if (details.clientArea !== undefined) patch.client_area = details.clientArea;
   if (Object.keys(patch).length === 0) return;
 
   const { error } = await supabase.from("users").update(patch).eq("id", userId);

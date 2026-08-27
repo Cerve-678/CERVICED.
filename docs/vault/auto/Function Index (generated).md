@@ -5,13 +5,14 @@
 
 #generated
 
-**1958 functions** across **253 files**.
+**1966 functions** across **254 files**.
 
-### `src/components/` (37)
+### `src/components/` (38)
 - `AddOnPickerModal.tsx` — **AddOnPickerModal** · content · toggle
 - `AddressPicker.tsx` — AddressPicker · formatAddress · handleUseCurrentLocation · search · selectAddress
 - `AppBackground.tsx` — AppBackground
 - `AppDialog.tsx` — ConfirmDialog · DialogHost · dismissConfirm · showAlert · showConfirm · showToast · Toast · **useAppDialog**
+- `AreaPicker.tsx` — AreaPicker · back · cities · close · open · pickArea · pickCity · pickRegion · regionData
 - `AvailabilityCard.tsx` — animatedStyle · handlePress · handlePressIn · handlePressOut · highlightColors
 - `BookingSheet.tsx` — **BookingSheet** · cancelEmergency · confirmEmergency · depositPolicyArg · goToStep · handleBack · handleLocalApplyPromo · handleLocalRemovePromo · handleNext · handleSelectDate · handleSelectTime · handleSubmit · localPromoDiscount · onAccentColor · stepBlocker · summaryRemaining · toggleAddOn · tokens · totalAddOnsPrice
 - `CartTabBadge.tsx` — **useCartBadge**
@@ -193,7 +194,7 @@
 - `ProviderInboxScreen.tsx` — ConversationRow · fetchBookings · fetchConversations · filtered · flatItems · fmtDate · fmtTime · handleConfirmBooking · handleDeclineBooking · handleMarkConversationRead · handleSendReply · InboxRow · initials · onRefresh · pendingIds · ProviderInboxScreen · renderRightActions · runConfirmAction · SectionHeader · SkeletonRow · timeAgo · timeAgoISO · unreadConversations
 - `ProviderInfoPackScreen.tsx` — fmtDate · handleDelete · handleEmail · handleSave · handleSMS · PackCard · ProviderInfoPackScreen · resetForm · SendSheet · serviceColor · toggleService
 - `ProviderIntakeFormScreen.tsx` — addOption · addQuestion · buildPolicyTemplate · detectTemplate · getRelevantTemplates · handleDeleteLibraryForm · handlePickBookingForSend · handleSaveAndSend · handleSaveToLibrary · handleSendToClient · init · LibraryFormCard · makeId · openBuilderBlank · openBuilderFromLibrary · openBuilderFromTemplate · ProviderIntakeFormScreen · QuestionCard · removeOption · removeQuestion · toggleService · updateOption · updateQuestion
-- `ProviderMyProfileScreen.tsx` — cardHighlightColors · catalogue · catalogueSummary · closeEditor · DashCard · DashEmpty · DashRow · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handlePress · handleRemovePhoto · handleSaveService · handleToggleActive · hasPolicyInfo · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ServiceRow · serviceType · themeName
+- `ProviderMyProfileScreen.tsx` — cardHighlightColors · catalogue · closeEditor · DashCard · DashEmpty · DashRow · handleAddPhotos · handleEditBranding · handleEditPolicies · handleEditProfile · handleEditSchedule · handleGoLiveStep · handlePress · handleRemovePhoto · handleSaveService · handleToggleActive · hasPolicyInfo · load · openEditService · openNewService · policyRows · PP · ProviderMyProfileScreen · ServiceRow · serviceType · themeName
 - `ProviderPromotionsScreen.tsx` — discountLabel · extendBy · formatDate · genCode · handleDelete · handleDuplicate · handleExtend · handleNotifySend · handleSave · handleSend · handleTemplateSelect · handleToggle · isExpired · isoDate · isUpcoming · load · NotifyModal · openEdit · pickImage · PromoCard · PromoFormModal · PromoTabBar · promoToForm · ProviderPromotionsScreen · showToast · TemplatePickerSheet · templateToForm · Toast · today · toggleServiceId · tomorrow9am · uploadPromoImage
 - `ProviderScheduleScreen.tsx` — addSplitPeriod · commitBlockDate · dateToYMD · formatTime · formatYMD · handleAddBlock · handleAddOverride · handleOverrideTimeChange · handleRemoveBlock · handleRemoveOverride · handleSaveHours · handleTimeChange · hhmmss · loadData · makeDefault · openOverrideTimePicker · openTimePicker · ProviderScheduleScreen · removeExtraPeriod · timeToDate · toggleDay · toTime
 - `SchedulingScreen.tsx` — flash · handleSave · SchedulingScreen · toggleChip
