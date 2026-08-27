@@ -284,10 +284,19 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
 
     // A week whose only openings are by-request still counts: jumping past
     // it would hide times the provider has explicitly offered to consider.
-    const thisWeekHasOpening = getWeekDaysRef.current()
-      .some(day => day.status === 'available' || day.status === 'request');
-    if (thisWeekHasOpening) {
+    const weekDaysNow = getWeekDaysRef.current();
+    const firstOpening = weekDaysNow
+      .find(day => day.status === 'available' || day.status === 'request');
+    if (firstOpening) {
       autoJumpedRef.current = true;
+      // Select it here rather than leaving the sheet's own slot resolver to
+      // do it. That resolver is several sequential round trips deep, and
+      // until SOMETHING sets a date this section renders nothing at all —
+      // so the whole time grid sat blank behind "Finding your earliest
+      // available time…" even though this week's slots had already arrived.
+      // It still runs, and still wins if it lands on something better; this
+      // just stops the grid waiting on it.
+      if (!selectedDate) onDateSelect(firstOpening.dateString);
       return;
     }
     autoJumpedRef.current = true;
@@ -301,7 +310,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       setCurrentWeek(new Date(nextDate + 'T00:00:00'));
       onDateSelect(nextDate);
     });
-  }, [availableSlots, isLoadingSlots, providerName, providerFound, providerUnpublished, serviceDuration, serviceId, onDateSelect, slotResolver]);
+  }, [availableSlots, isLoadingSlots, providerName, providerFound, providerUnpublished, serviceDuration, serviceId, onDateSelect, slotResolver, selectedDate]);
 
   useEffect(() => {
     // ✅ FIXED: Proper null check with early return
@@ -548,9 +557,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   };
 
   const handleDateClick = (dateString: string, dayData: DayData) => {
-    // 'full' is deliberately NOT here. A booked-out day has nothing to pick,
-    // but it does have something to say, and a dead tap says nothing.
-    if (dayData.status === 'past' || dayData.status === 'closed') return;
+    // Only 'past' is refused. Every other state has something to say —
+    // booked out, over, or "they don't work this day" — and a dead tap says
+    // none of it.
+    if (dayData.status === 'past') return;
     Haptics.selectionAsync().catch(() => {});
     selectDateFromTap(dateString);
   };
@@ -829,9 +839,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       <View style={[styles.daysRow, providerUnpublished && styles.daysRowDimmed]}>
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
-          const isDisabled = providerUnpublished || day.status === 'past' || day.status === 'closed';
-          // 'over' is deliberately NOT disabled: it has a greyed grid and a
-          // badge to show, and a dead tap would say none of it.
+          // Only a past day is truly dead. 'closed' now answers with "they
+          // don't work this day" plus, where the provider takes them, a way
+          // to ask anyway — and 'over' has a greyed grid and a badge. A dead
+          // tap says none of that.
+          const isDisabled = providerUnpublished || day.status === 'past';
           // Both mean "this day had times and none of them are open" — the
           // bar below says exactly that, where an empty space would say the
           // provider doesn't work this day.
@@ -938,7 +950,25 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
           />
         );
 
-        if (!currentSlots?.times || currentSlots.times.length === 0) return null;
+        // A day with no times at all is a day this provider doesn't work.
+        // Rendering nothing left the client tapping a dead pill with no idea
+        // whether the app had failed — and if the provider takes requests,
+        // this is exactly where someone wants to ask for one.
+        if (!currentSlots?.times || currentSlots.times.length === 0) {
+          if (showRequestPanel) {
+            return <View style={styles.timeContainer}>{requestPanel}</View>;
+          }
+          return (
+            <View style={styles.timeContainer}>
+              <Text style={[styles.closedDayNotice, { color: subColor }]}>
+                {who} doesn't work this day.
+              </Text>
+              {canRequest && (
+                <View style={styles.closedDayAction}>{requestLink}</View>
+              )}
+            </View>
+          );
+        }
 
         // Ordinary times keep their blocked entries so the day still shows
         // its shape; by-request ones don't, because the panel only ever
@@ -951,13 +981,18 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
         // nothing ordinary is left the grid alone can't say WHY — "all taken"
         // and "the day's simply over" look identical greyed out, and they want
         // opposite responses (wait for this provider vs. just pick tomorrow).
-        // Mixed causes report whichever accounts for most of the day.
+        //
+        // "Fully booked" is claimed ONLY when every one of the day's times was
+        // actually taken by someone. A day that ends up empty because some
+        // times were booked and the rest simply expired is not booked out —
+        // saying so would blame other clients for hours nobody ever wanted,
+        // and tell this one to join a waitlist that won't help them.
         const blockedTally = { booked: 0, past: 0, notice: 0 };
         openTimes.forEach(slot => { if (slot.blocked) blockedTally[slot.blocked] += 1; });
         const dayBadge = openTimes.length > 0 && bookableCount === 0
-          ? (blockedTally.booked >= blockedTally.past && blockedTally.booked >= blockedTally.notice
+          ? (blockedTally.past === 0 && blockedTally.notice === 0
               ? 'Fully booked'
-              : blockedTally.past >= blockedTally.notice
+              : blockedTally.past > 0
                 ? 'These times have passed'
                 : `Too soon — ${who} needs more notice`)
           : null;
@@ -1125,6 +1160,8 @@ const styles = StyleSheet.create({
   // is the exception beside it — not a second call to action competing with
   // the times themselves.
   timeHeaderRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
+  closedDayNotice:    { fontSize: 13, fontWeight: '600', textAlign: 'center', paddingTop: 6 },
+  closedDayAction:    { flexDirection: 'row', justifyContent: 'center', marginTop: 12 },
   dayBadge:           { borderWidth: 1, borderRadius: 20, paddingVertical: 3, paddingHorizontal: 9 },
   dayBadgeText:       { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.2 },
   // Greyed and inert, not removed: the day keeps its shape so "all taken"

@@ -41,8 +41,8 @@ Curated: [[Address Release]] · **81 files**
 
 ## Availability & slots
 Curated: [[Availability & Slots]] · **146 files**
-- `src/services/AvailabilityService.ts` _(314)_
-- `src/components/ModernBeautyCalendar.tsx` _(168)_
+- `src/services/AvailabilityService.ts` _(313)_
+- `src/components/ModernBeautyCalendar.tsx` _(171)_
 - `src/services/databaseService.ts` _(161)_
 - `src/screens/provider/AddBookingScreen.tsx` _(114)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
@@ -80,9 +80,9 @@ Curated: [[Payments]] · **108 files**
 - `src/services/databaseService.ts` _(126)_
 - `src/services/bookingService.ts` _(117)_
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(110)_
-- `src/components/BookingSheet.tsx` _(103)_
+- `src/components/BookingSheet.tsx` _(104)_
 - `src/contexts/BookingContext.tsx` _(100)_
-- `src/components/MultiBookingSheet.tsx` _(91)_
+- `src/components/MultiBookingSheet.tsx` _(92)_
 - `src/features/bookings/receipt.ts` _(64)_
 - `src/features/bookings/paymentPresentation.ts` _(50)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(44)_
@@ -132,7 +132,7 @@ Curated: [[Booking Flow]] · **230 files**
 - `supabase/fix_provider_no_show_status.sql` _(112)_
 - `src/screens/provider/ProviderInboxScreen.tsx` _(110)_
 - `supabase/automation_jobs.sql` _(107)_
-- `src/services/AvailabilityService.ts` _(101)_
+- `src/services/AvailabilityService.ts` _(102)_
 - `supabase/provider_reminder_jobs.sql` _(94)_
 - `src/services/becca/engine.ts` _(91)_
 - `supabase/fix_group_booking_notification_dedup.sql` _(90)_

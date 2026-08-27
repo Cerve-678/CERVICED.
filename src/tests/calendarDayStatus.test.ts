@@ -62,3 +62,34 @@ describe('dayDataFrom', () => {
     expect(day.status).toBe('over');
   });
 });
+
+// "Fully booked" is a claim about other clients having taken the day. A day
+// that emptied out because some times were booked and the rest simply expired
+// is not booked out — saying so blames other clients for hours nobody wanted,
+// and sends this one to a waitlist that can't help.
+describe('day status vs. why the day emptied', () => {
+  it('is full only when every time was actually taken', () => {
+    const allTaken = dayDataFrom(
+      [blocked('9:00 AM', 'booked'), blocked('9:30 AM', 'booked')], true,
+    );
+    expect(allTaken.status).toBe('full');
+  });
+
+  it('is not full when some of the day merely expired', () => {
+    // Two taken, one that nobody booked and which has now passed.
+    const mixed = dayDataFrom(
+      [blocked('9:00 AM', 'booked'), blocked('9:30 AM', 'booked'), blocked('10:00 AM', 'past')],
+      false,
+    );
+    expect(mixed.status).toBe('over');
+    expect(mixed.available).toBe(0);
+  });
+
+  it('still has something to render in every emptied case', () => {
+    // The grid is what shows the day's shape, so it must never come back
+    // empty just because nothing on it can be booked.
+    for (const why of ['booked', 'past', 'notice'] as const) {
+      expect(dayDataFrom([blocked('9:00 AM', why)]).times).toHaveLength(1);
+    }
+  });
+});

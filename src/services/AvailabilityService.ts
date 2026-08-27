@@ -1557,13 +1557,20 @@ export const AvailabilityService = {
         candidateDates.push(toLocalDateStr(cursor));
       }
 
-      for (const date of candidateDates) {
-        const slots = await this.getAvailableSlots(providerIdOrName, date, serviceDuration, serviceId);
+      // Four independent day lookups, so they go together rather than one
+      // after another. Sequentially this was up to four round trips stacked
+      // on top of findNextAvailableDate's, and the booking sheet renders no
+      // times at all until the whole chain returns.
+      const perDay = await Promise.all(
+        candidateDates.map(date => this.getAvailableSlots(providerIdOrName, date, serviceDuration, serviceId)),
+      );
+      for (let i = 0; i < candidateDates.length; i++) {
+        const date = candidateDates[i]!;
         // Never auto-resolves onto a by-request time: this picks FOR the
         // client, and quietly handing them a slot that needs the provider's
         // acceptance — without the confirmation that explains it — would
         // misrepresent what they're booking.
-        const openSlot = slots.find(s => !s.isBooked && !s.isByRequest);
+        const openSlot = (perDay[i] ?? []).find(s => !s.isBooked && !s.isByRequest);
         if (openSlot) return { date, time: openSlot.time };
       }
       return null;
