@@ -187,10 +187,25 @@ const MultiImagePill: React.FC<{
 MultiImagePill.displayName = "MultiImagePill";
 
 // Success Message Component
+/** The structured half of the cart confirmation. The service, when it is,
+ *  and what it costs are three different kinds of fact, and joining them with
+ *  newlines into one centred paragraph made the client re-read the whole block
+ *  to find any one of them. Optional: the "redirecting to checkout" variant
+ *  has no booking to summarise and still passes a plain message. */
+interface SuccessDetails {
+  service: string;
+  addOnCount: number;
+  when?: string | undefined;
+  total: string;
+  /** Out-of-hours: added to the cart, but the provider still has to accept. */
+  isRequest?: boolean | undefined;
+}
+
 interface SuccessMessageProps {
   isVisible: boolean;
   title: string;
   message: string;
+  details?: SuccessDetails | undefined;
   type: "cart" | "checkout";
   onClose: () => void;
   onViewCart?: (() => void) | undefined;
@@ -202,6 +217,7 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
     isVisible,
     title,
     message,
+    details,
     type,
     onClose,
     onViewCart,
@@ -251,19 +267,55 @@ const SuccessMessage: React.FC<SuccessMessageProps> = React.memo(
               style={styles.successGradient}
             />
 
-            {/* Success Icon */}
+            {/* A ring rather than a filled disc, and smaller. The old solid
+                60pt circle was the loudest thing on a card whose actual job
+                is to confirm three quiet facts. */}
             <View
-              style={[
-                styles.successIcon,
-                { backgroundColor: adaptiveAccentColor },
-              ]}
+              style={[styles.successIcon, { borderColor: adaptiveAccentColor }]}
             >
-              <Text style={styles.successIconText}>✓</Text>
+              <Text style={[styles.successIconText, { color: adaptiveAccentColor }]}>✓</Text>
             </View>
 
-            {/* Success Content */}
             <Text style={[styles.successTitle, { color: P.text }]}>{title}</Text>
-            <Text style={[styles.successMessage, { color: P.sub }]}>{message}</Text>
+
+            {details ? (
+              <View style={styles.successDetails}>
+                <Text style={[styles.successService, { color: P.text }]} numberOfLines={2}>
+                  {details.service}
+                </Text>
+                {details.addOnCount > 0 && (
+                  <Text style={[styles.successAddOns, { color: P.sub }]}>
+                    + {details.addOnCount} add-on{details.addOnCount > 1 ? "s" : ""}
+                  </Text>
+                )}
+
+                {details.when && (
+                  <View style={[styles.successRow, { borderTopColor: P.border }]}>
+                    <Text style={[styles.successRowLabel, { color: P.sub }]}>When</Text>
+                    <Text style={[styles.successRowValue, { color: P.text }]} numberOfLines={2}>
+                      {details.when}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={[styles.successRow, { borderTopColor: P.border }]}>
+                  <Text style={[styles.successRowLabel, { color: P.sub }]}>Total</Text>
+                  <Text style={[styles.successRowValue, { color: adaptiveAccentColor }]}>
+                    {details.total}
+                  </Text>
+                </View>
+
+                {/* Same amber the cart uses for a request, and for the same
+                    reason: this one isn't confirmed by being paid for. */}
+                {details.isRequest && (
+                  <Text style={styles.successRequestNote}>
+                    Outside their usual hours — they have to accept it before it's booked.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={[styles.successMessage, { color: P.sub }]}>{message}</Text>
+            )}
 
             {/* Action Buttons */}
             <View style={styles.successButtons}>
@@ -1397,6 +1449,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
   const [successMessageData, setSuccessMessageData] = useState<{
     title: string;
     message: string;
+    details?: SuccessDetails | undefined;
     type: "cart" | "checkout";
   } | null>(null);
   const [selectedService, setSelectedService] = useState<ServiceData | null>(
@@ -2341,8 +2394,13 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
 
   // Show success message with animation
   const showSuccessMessageWithAnimation = useCallback(
-    (title: string, message: string, type: "cart" | "checkout") => {
-      setSuccessMessageData({ title, message, type });
+    (
+      title: string,
+      message: string,
+      type: "cart" | "checkout",
+      details?: SuccessDetails,
+    ) => {
+      setSuccessMessageData({ title, message, type, ...(details ? { details } : {}) });
       setShowSuccessMessage(true);
 
       // Animate in
@@ -2938,20 +2996,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // Success copy, one fact per line rather than a single run-on
         // sentence — with long-form dates the old concatenated version read
         // as an unbroken wall of text.
-        const addOnsText =
-          result.selectedAddOns.length > 0
-            ? ` + ${result.selectedAddOns.length} add-on${result.selectedAddOns.length > 1 ? "s" : ""}`
-            : "";
-        const lines = [`${service.name}${addOnsText}`];
-        if (result.date) {
-          lines.push(`${formatLongDate(result.date)} at ${formatTime12(result.time)}`);
-        }
-        lines.push(`Total: £${totalPrice.toFixed(2)}`);
+        const when = result.date
+          ? `${formatLongDate(result.date)} at ${formatTime12(result.time)}`
+          : undefined;
 
         showSuccessMessageWithAnimation(
-          "Added to Cart!",
-          lines.join("\n"),
+          result.emergencyRequest ? "Request added" : "Added to cart",
+          // Kept only as the accessible/fallback reading of the card; the
+          // structured `details` below is what actually renders.
+          [service.name, when, `Total: £${totalPrice.toFixed(2)}`]
+            .filter(Boolean)
+            .join("\n"),
           "cart",
+          {
+            service: service.name,
+            addOnCount: result.selectedAddOns.length,
+            total: `£${totalPrice.toFixed(2)}`,
+            ...(when ? { when } : {}),
+            ...(result.emergencyRequest ? { isRequest: true } : {}),
+          },
         );
         setAddOnsBySelectedService({});
       } catch (error) {
@@ -3016,10 +3079,25 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
         // Match the single-service path: show the toast and let the user
         // tap "View Cart" (handleViewCart) themselves rather than
         // auto-navigating away after a timeout.
+        const requestCount = result.items.filter(i => i.emergencyRequest).length;
         showSuccessMessageWithAnimation(
-          "All Booked!",
+          "Added to cart",
           `${result.items.length} services scheduled and added to your cart.`,
           "cart",
+          {
+            service: `${result.items.length} services`,
+            addOnCount: result.items.reduce((n, i) => n + i.selectedAddOns.length, 0),
+            total: `£${result.items
+              .reduce(
+                (sum, i) =>
+                  sum + i.service.price + i.selectedAddOns.reduce((n, a) => n + a.price, 0),
+                0,
+              )
+              .toFixed(2)}`,
+            // Any one of them being a request is what the client needs to
+            // know — the cart card names which.
+            ...(requestCount > 0 ? { isRequest: true } : {}),
+          },
         );
       } catch (error) {
         logger.error("Error adding multi-booking to cart:", error);
@@ -3712,6 +3790,7 @@ const ProviderProfileScreen: React.FC<ProviderProfileScreenProps> = ({
             isVisible={showSuccessMessage}
             title={successMessageData.title}
             message={successMessageData.message}
+            {...(successMessageData.details ? { details: successMessageData.details } : {})}
             type={successMessageData.type}
             onClose={hideSuccessMessage}
             onViewCart={
@@ -6075,28 +6154,55 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   successIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    marginBottom: 14,
   },
   successIconText: {
-    color: "#fff",
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: "bold",
+  },
+  successDetails: { width: "100%", marginBottom: 22 },
+  successService: {
+    fontFamily: "Jura-VariableFont_wght",
+    fontWeight: "700",
+    fontSize: 16,
+    textAlign: "center",
+  },
+  successAddOns: { fontSize: 12.5, textAlign: "center", marginTop: 3 },
+  successRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  successRowLabel: {
+    fontSize: 10.5,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  successRowValue: { flex: 1, fontSize: 14, fontWeight: "700", textAlign: "right" },
+  successRequestNote: {
+    color: "#FF9500",
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 12,
   },
   // Colour for these comes from the theme at render time (see SuccessMessage).
   successTitle: {
     fontFamily: "BakbakOne-Regular",
-    fontSize: 22,
-    marginBottom: 12,
+    fontSize: 19,
+    marginBottom: 16,
     textAlign: "center",
   },
   successMessage: {
