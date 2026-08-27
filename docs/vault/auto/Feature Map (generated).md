@@ -8,8 +8,8 @@
 ## Address release
 Curated: [[Address Release]] · **86 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(186)_
-- `src/services/databaseService.ts` _(147)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(108)_
+- `src/services/databaseService.ts` _(158)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(123)_
 - `src/screens/client/ProviderChatScreen.tsx` _(89)_
 - `src/screens/provider/InfoRegScreen.tsx` _(74)_
 - `src/services/providerRegistrationService.ts` _(62)_
@@ -48,11 +48,11 @@ Curated: [[Availability & Slots]] · **150 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(106)_
 - `src/screens/client/SearchScreen.tsx` _(102)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(85)_
+- `src/screens/provider/InfoRegScreen.tsx` _(85)_
 - `src/contexts/BookingContext.tsx` _(80)_
 - `src/services/becca/capabilities/client.ts` _(71)_
 - `src/screens/provider/ProviderBookingDetailScreen.tsx` _(66)_
 - `src/screens/provider/ProviderHomeScreen.tsx` _(61)_
-- `src/screens/provider/InfoRegScreen.tsx` _(60)_
 - `src/screens/client/RescheduleScreen.tsx` _(54)_
 - `supabase/availability_v2.sql` _(54)_
 - `src/screens/provider/SchedulingScreen.tsx` _(44)_
@@ -111,8 +111,8 @@ Curated: [[Payments]] · **108 files**
 Curated: [[Booking Flow]] · **236 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(841)_
 - `src/contexts/BookingContext.tsx` _(694)_
-- `src/services/databaseService.ts` _(588)_
-- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(522)_
+- `src/services/databaseService.ts` _(596)_
+- `src/screens/provider/ProviderBookingDetailScreen.tsx` _(525)_
 - `src/services/becca/capabilities/client.ts` _(502)_
 - `src/screens/client/CartScreen.tsx` _(467)_
 - `src/screens/client/BookingDetailScreen.tsx` _(331)_
@@ -145,7 +145,7 @@ Curated: [[Booking Flow]] · **236 files**
 Curated: [[Notifications]] · **146 files**
 - `supabase/RUN_ALL_MIGRATIONS.sql` _(441)_
 - `src/screens/shared/NotificationsScreen.tsx` _(255)_
-- `src/services/databaseService.ts` _(153)_
+- `src/services/databaseService.ts` _(154)_
 - `supabase/RUN_ALL_NOTIFICATION_FIXES.sql` _(140)_
 - `src/screens/client/ProviderProfileScreen.tsx` _(100)_
 - `supabase/notification_recipient_role.sql` _(91)_
