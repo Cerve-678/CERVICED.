@@ -61,13 +61,18 @@ describe('two providers, one client, same hour', () => {
     expect(result.isValid).toBe(true);
   });
 
+  // booking_time/end_time are "HH:MM:SS" here, NOT "HH:MM" — that is what a
+  // Postgres `time` column actually serialises to, and mocking the shorter
+  // form is what let this check ship broken: parseTimeToMinutes returns 0 for
+  // anything that isn't exactly two colon-separated parts, so every real
+  // appointment collapsed to [0, 0) and overlapped nothing.
   it('flags a cart item that overlaps an appointment the client ALREADY has', async () => {
     const { db, AvailabilityService } = load();
     db.getMyUpcomingBookedSpans.mockResolvedValue([
       {
         booking_date: DAY,
-        booking_time: '14:00',
-        end_time: '15:00',
+        booking_time: '14:00:00',
+        end_time: '15:00:00',
         provider_name_snapshot: 'Lashes by Jo',
         service_name_snapshot: 'Infills',
       },
@@ -80,6 +85,55 @@ describe('two providers, one client, same hour', () => {
     expect(result.isValid).toBe(false);
     expect(result.conflicts[0].message).toContain('Lashes by Jo');
     expect(result.conflicts[0].message).toContain('Infills');
+  });
+
+  it('reads the span as a real time range, not as midnight', async () => {
+    const { db, AvailabilityService } = load();
+    db.getMyUpcomingBookedSpans.mockResolvedValue([
+      {
+        booking_date: DAY,
+        booking_time: '14:00:00',
+        end_time: '15:00:00',
+        provider_name_snapshot: 'Lashes by Jo',
+        service_name_snapshot: 'Infills',
+      },
+    ]);
+
+    // 4pm is genuinely clear. A parser that gave up on the seconds and
+    // returned 0 would place the existing appointment at midnight and pass
+    // this too — so it only proves anything alongside the overlap case above.
+    const clear = await AvailabilityService.validateCartBookings([
+      { providerName: 'Nails by Mia', date: DAY, time: '4:00 PM', duration: '1h', cartItemId: 'a' },
+    ]);
+    expect(clear.isValid).toBe(true);
+
+    // Butting straight up against the end is not an overlap either.
+    const adjacent = await AvailabilityService.validateCartBookings([
+      { providerName: 'Nails by Mia', date: DAY, time: '3:00 PM', duration: '1h', cartItemId: 'a' },
+    ]);
+    expect(adjacent.isValid).toBe(true);
+  });
+
+  it('flags an overlap when the existing appointment has no end_time', async () => {
+    const { db, AvailabilityService } = load();
+    db.getMyUpcomingBookedSpans.mockResolvedValue([
+      {
+        booking_date: DAY,
+        booking_time: '14:00:00',
+        end_time: null,
+        provider_name_snapshot: 'Lashes by Jo',
+        service_name_snapshot: 'Infills',
+      },
+    ]);
+
+    // Legacy rows written without an end fall back to a one-hour span, from
+    // the REAL start — not from midnight.
+    const result = await AvailabilityService.validateCartBookings([
+      { providerName: 'Nails by Mia', date: DAY, time: '2:30 PM', duration: '1h', cartItemId: 'a' },
+    ]);
+
+    expect(result.isValid).toBe(false);
+    expect(result.conflicts[0].message).toContain('Lashes by Jo');
   });
 
   it('fails OPEN when the diary lookup errors', async () => {

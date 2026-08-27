@@ -9,11 +9,13 @@ import {
   getAvailabilityProviderCore,
   getAvailabilityServiceBufferRows,
   getBookableServiceIds,
+  getMyUpcomingBookedSpans,
   getAvailabilityWeeklyScheduleRows,
   getProviderBusySpans,
   getProviderBookingWindowDays,
   resolveActiveProviderIdByDisplayName,
 } from './databaseService';
+import type { ClientBookedSpan } from './databaseService';
 import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
 
@@ -1213,6 +1215,29 @@ export const AvailabilityService = {
       }
     }
 
+    // The client's own diary, fetched ONCE for the whole cart rather than per
+    // item — one query bounded to the days the cart actually touches, not a
+    // per-row lookup inside the loop below.
+    const cartDates = bookings.map(b => b.date).filter(Boolean).sort();
+    let bookedSpans: ClientBookedSpan[] = [];
+    if (cartDates.length > 0) {
+      try {
+        // ?? [] because the catch below only covers a REJECTION. A resolved
+        // null/undefined sails straight past it and blows up the loop with
+        // "cannot read properties of undefined", taking the whole checkout
+        // validation down over a check that is meant to fail open.
+        bookedSpans =
+          (await getMyUpcomingBookedSpans(cartDates[0]!, cartDates[cartDates.length - 1]!)) ?? [];
+      } catch (error) {
+        // Fail OPEN, like the service-existence check above: a network hiccup
+        // must not invent a clash and block a legitimate checkout. Unlike that
+        // one there is no DB backstop here — bookings_no_overlap keys on
+        // provider_id and will never catch a client double-booking — so a
+        // failure genuinely means this check did not happen.
+        logger.error('validateCartBookings: client self-overlap check failed', error);
+      }
+    }
+
     for (const booking of bookings) {
       // Already reported as unbookable — a slot check on a service that no
       // longer exists would only add a second, less useful reason.
@@ -1236,10 +1261,17 @@ export const AvailabilityService = {
         continue;
       }
 
-      // Check against other items in the same cart (same provider, same date)
+      // Check against other items in the same cart.
+      //
+      // This deliberately does NOT filter on provider. It used to bail out on
+      // `other.providerName !== booking.providerName`, which meant the only
+      // double-booking it could see was one the DB would have caught anyway:
+      // bookings_no_overlap already rejects two overlapping rows for the same
+      // provider. The case nothing anywhere caught was the CLIENT being booked
+      // twice at once with two DIFFERENT providers — legal to every layer, and
+      // impossible in real life.
       const cartConflicts = bookings.filter(other => {
         if (other.cartItemId === booking.cartItemId) return false;
-        if (other.providerName !== booking.providerName) return false;
         if (other.date !== booking.date) return false;
 
         const thisStart = parseTimeToMinutes(booking.time);
@@ -1251,9 +1283,42 @@ export const AvailabilityService = {
       });
 
       if (cartConflicts.length > 0) {
+        const elsewhere = cartConflicts.find(c => c.providerName !== booking.providerName);
         conflicts.push({
           cartItemId: booking.cartItemId,
-          message: `This time slot conflicts with another service in your cart`,
+          // Named, because the cart collapses by provider: "conflicts with
+          // another service" is unactionable when the other service is behind
+          // a collapsed section belonging to a different provider.
+          message: elsewhere
+            ? `This overlaps your ${elsewhere.providerName} appointment in this cart — you can't be in both places at once.`
+            : `This time slot conflicts with another service in your cart`,
+        });
+        continue;
+      }
+
+      // Check against appointments the client ALREADY has, with anyone.
+      const clash = bookedSpans.find(span => {
+        if (span.booking_date !== booking.date) return false;
+        const thisStart = parseTimeToMinutes(booking.time);
+        const thisEnd = thisStart + parseDurationToMinutes(booking.duration);
+        // parse24HTimeToMinutes, NOT parseTimeToMinutes: these two come
+        // straight off a Postgres `time` column as "HH:MM:SS", and
+        // parseTimeToMinutes bails to 0 on anything that isn't exactly two
+        // colon-separated parts. That collapsed every existing appointment to
+        // the zero-length span [0, 0) at midnight, which overlaps nothing — so
+        // this check silently passed on every real clash while its unit test
+        // (which mocked "14:00") kept going green.
+        const otherStart = parse24HTimeToMinutes(span.booking_time);
+        const otherEnd = span.end_time
+          ? parse24HTimeToMinutes(span.end_time)
+          : otherStart + 60;
+        return doTimesOverlap(thisStart, thisEnd, otherStart, otherEnd);
+      });
+
+      if (clash) {
+        conflicts.push({
+          cartItemId: booking.cartItemId,
+          message: `You already have ${clash.service_name_snapshot ?? 'an appointment'} with ${clash.provider_name_snapshot ?? 'another provider'} at this time.`,
         });
       }
     }
