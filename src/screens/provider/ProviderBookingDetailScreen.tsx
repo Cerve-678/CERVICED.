@@ -322,6 +322,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   const groupChainsByStart = useRef<Map<string, BackToBackSlot[]>>(new Map());
 
   const [addressSettings, setAddressSettings] = useState<ProviderAddressPolicy | null>(null);
+  // Distinct from `addressSettings === null`, which cannot tell "not back yet"
+  // from "no policy set". Every branch of the Location row below depends on
+  // knowing this provider's business_type, so it has to wait for the answer —
+  // see addressKnown.
+  const [addressSettingsLoaded, setAddressSettingsLoaded] = useState(false);
   const [addressReleasedAt, setAddressReleasedAt] = useState<string | null>(null);
   const [releasingAddress, setReleasingAddress] = useState(false);
 
@@ -449,8 +454,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
     const providerId = passedProviderBooking?.providerId ?? fetchedBooking?.providerId;
     if (!providerId) return;
     getProviderAddressPolicy(providerId)
-      .then(s => setAddressSettings(s))
-      .catch((err) => logger.error('[ProviderBookingDetail] address policy load failed:', err));
+      .then(s => { setAddressSettings(s); setAddressSettingsLoaded(true); })
+      .catch((err) => {
+        logger.error('[ProviderBookingDetail] address policy load failed:', err);
+        // Mark it answered anyway. Holding the row forever on a failed fetch
+        // is worse than falling back to what the booking itself says, and the
+        // fallback is only reached for a provider whose business_type we could
+        // not read at all.
+        setAddressSettingsLoaded(true);
+      });
   }, [passedProviderBooking?.providerId, fetchedBooking?.providerId]);
 
   useEffect(() => {
@@ -915,6 +927,15 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
   // then answer "mobile?" with "did an address happen to arrive?", which is
   // the very question the Location row is trying to report on.
   const isMobileProvider = addressSettings?.business_type === 'mobile';
+  // Until getProviderAddressPolicy answers, this screen does not know whose
+  // address the venue is. Rendering anything in the meantime picks the
+  // non-mobile branch by default and falls through to `booking.address` —
+  // which on a mobile booking is provider_address_snapshot, i.e. the
+  // provider's OWN private street address, stamped on every row by
+  // claim_cart_booking_slots(). It flashed up as the appointment's Location
+  // and then vanished when the policy arrived and the row switched to
+  // "Waiting for client's address". Hold the row rather than guess.
+  const addressKnown = addressSettingsLoaded;
   const hasClientAddress = !!booking?.clientAddress?.trim();
 
   // Group-scoped copy for the confirm modal — shown whenever this booking is
@@ -1361,7 +1382,9 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
                     rendered for mobile at all. The address itself lives in
                     the ADDRESS section further down; this is the status line
                     for it. */}
-                {isMobileProvider ? (
+                {!addressKnown ? (
+                  <Row label="Location" value="—" textColor={P.sub} divColor={rowDiv} last />
+                ) : isMobileProvider ? (
                   <Row
                     label="Location"
                     value={hasClientAddress ? 'Client address received' : 'Waiting for client’s address'}
@@ -1960,8 +1983,8 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
               Outside your availability
             </Text>
             <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
-              {booking.customerName || 'This client'} asked for a time your rules would
-              normally block. You opted into being asked — confirming books it as requested.
+              {booking.customerName || 'This client'} requested a time outside your working
+              hours. You allow these requests; confirming books it exactly as asked.
             </Text>
           </View>
         )}

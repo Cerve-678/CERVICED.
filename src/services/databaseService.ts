@@ -2932,9 +2932,18 @@ export async function getProviderBookings(
     .select(
       `
       *,
-      add_ons: booking_add_ons ( * )
+      add_ons: booking_add_ons ( * ),
+      booking_client_addresses ( address )
     `,
     )
+    // The client's address is NOT on this row. Since 20260827161000 it lives
+    // in booking_client_addresses, and bookings.client_address is a
+    // write-only funnel that is always NULL at rest — so `*` alone returns a
+    // provider a booking with no address on it, forever, which is exactly
+    // what it did: the RLS policy releases the address the moment the
+    // provider accepts, and nothing ever asked for it. The embed is what
+    // makes bca_provider_read_after_accept mean anything on this side.
+    // mapDbBookingToConfirmed reads it back into clientAddress.
     .eq("provider_id", provider.id)
     // A not-yet-claimed waitlist hold isn't a real appointment yet — it
     // surfaces in the Waitlist tab instead (see getProviderWaitlist).
@@ -5831,7 +5840,14 @@ export async function getClientBookingsForAddressShare(
       "id, service_name_snapshot, booking_date, booking_time, booking_client_addresses ( address )",
     )
     .eq("provider_id", providerId)
-    .in("status", ["pending", "upcoming"])
+    // DB statuses, not app ones. 'upcoming' is a BookingStatus enum value
+    // (src/types/booking.ts) that mapDbBookingStatus PRODUCES from 'confirmed'
+    // — it is never a value in bookings.status, so this filter matched only
+    // 'pending' and silently dropped every accepted booking. A client whose
+    // provider had confirmed could no longer send them an address at all,
+    // which is the half of "I never got the address" that lives on the
+    // client's side.
+    .in("status", ["pending", "confirmed", "in_progress"])
     .order("booking_date", { ascending: true })
     .order("booking_time", { ascending: true });
   if (error) return [];
@@ -6200,6 +6216,44 @@ export async function getMyBookmarkCount(): Promise<number> {
     .eq("provider_id", providerRow.id);
   if (error) throw error;
   return count ?? 0;
+}
+
+/** The provider's own services ranked by how often they were actually booked
+ *  in the last `sinceDaysAgo` days, busiest first.
+ *
+ *  Reads the snapshot name only — a count per service, not the bookings
+ *  themselves — so a dashboard tile costs one narrow query rather than the
+ *  full booking history the analytics screen pulls. Counts confirmed and
+ *  completed appointments: a cancellation is not evidence of popularity. */
+export async function getMyTopServices(
+  sinceDaysAgo = 90,
+  limit = 3,
+): Promise<{ name: string; count: number }[]> {
+  const provider = await getMyProviderProfile();
+  if (!provider) return [];
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - sinceDaysAgo);
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("service_name_snapshot")
+    .eq("provider_id", provider.id)
+    .in("status", ["completed", "confirmed"])
+    .gte("booking_date", cutoff.toISOString().split("T")[0])
+    .limit(DEFAULT_LIFETIME_BOOKINGS_QUERY_LIMIT);
+  if (error) throw error;
+
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as { service_name_snapshot: string | null }[]) {
+    const name = row.service_name_snapshot?.trim();
+    if (!name) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+
+  return Array.from(counts, ([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
 /** Update the maximum number of confirmed bookings a provider accepts per day (0 = unlimited) */
@@ -7292,7 +7346,13 @@ export async function getBookingWithAddOnsById(
 ): Promise<BookingWithAddOns | null> {
   const { data, error } = await supabase
     .from("bookings")
-    .select("*, add_ons: booking_add_ons(*)")
+    // Embedded for the same reason as getProviderBookings above — this is the
+    // other read behind ProviderBookingDetailScreen, and a `*` here means a
+    // provider who opens a booking by id (a notification tap, a deep link)
+    // sees "waiting for the client's address" on a booking that has one.
+    // RLS still decides: before the provider accepts, the embed comes back
+    // empty rather than erroring, which is the gate working.
+    .select("*, add_ons: booking_add_ons(*), booking_client_addresses ( address )")
     .eq("id", bookingId)
     .single();
   if (error) return null;

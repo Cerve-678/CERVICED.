@@ -49,9 +49,29 @@ describe("provider booking surfaces show the client's side, not their own copy",
     expect(detail).toContain("Waiting for client’s address");
     // The release states below it are for a provider whose OWN address is the
     // venue — never reachable on a mobile booking.
-    const mobileBranch = detail.indexOf("{isMobileProvider ? (");
+    const mobileBranch = detail.indexOf(") : isMobileProvider ? (");
     const releaseBranch = detail.indexOf("Send address to client");
     expect(mobileBranch).toBeGreaterThan(-1);
     expect(releaseBranch).toBeGreaterThan(mobileBranch);
+  });
+
+  it("answers nothing about the venue until it knows the business type", () => {
+    // business_type arrives from an async fetch. While it was outstanding the
+    // ternary defaulted to the non-mobile branch and fell through to
+    // `booking.address` — provider_address_snapshot, which
+    // claim_cart_booking_slots() stamps with the provider's OWN private street
+    // address on every row, mobile included. It flashed up as the
+    // appointment's Location and vanished when the policy landed.
+    const guard = detail.indexOf("{!addressKnown ? (");
+    const mobileBranch = detail.indexOf(") : isMobileProvider ? (");
+    const ownAddressFallback = detail.indexOf("value={booking.address}");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(mobileBranch);
+    // The provider's own address stays reachable — for a provider whose venue
+    // genuinely is their own address — but only downstream of both gates.
+    expect(ownAddressFallback).toBeGreaterThan(mobileBranch);
+    // Loaded is tracked separately from the value: `addressSettings === null`
+    // cannot tell "not back yet" from "no policy set".
+    expect(detail).toContain("const [addressSettingsLoaded, setAddressSettingsLoaded]");
   });
 });

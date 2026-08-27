@@ -57,18 +57,52 @@ describe('the old column is a write funnel, not storage', () => {
   });
 });
 
+/** The body of one exported function in databaseService.ts. */
+function fn(name: string): string {
+  const start = DB.indexOf(`export async function ${name}(`);
+  if (start < 0) throw new Error(`${name} not found in databaseService.ts`);
+  const next = DB.indexOf('\nexport ', start + 1);
+  return DB.slice(start, next < 0 ? undefined : next);
+}
+
 describe('readers were moved off the dead column', () => {
   // UNSKIPPED 2026-08-27: 20260827161000 is applied live and the embed was
   // restored in the same change, as the note that stood here required.
   // bookings.client_address is now a write-only funnel, always NULL at rest,
   // so a reader that still selects it off the base table gets an empty field
   // rather than an error — which is why these are asserted, not assumed.
-  it('provider booking reads embed the gated row', () => {
-    expect(DB).toContain('booking_client_addresses ( address )');
+
+  // Named per reader rather than as one `expect(DB).toContain(...)` over the
+  // whole file. That weaker form is what stood here, it was already satisfied
+  // by getClientBookingsForAddressShare — a CLIENT read — and so it passed
+  // for a day while BOTH provider reads still selected `*` and showed every
+  // mobile provider "waiting for the client's address" on bookings that had
+  // one. A test that can be satisfied by a different caller than the one it
+  // names is not covering the thing it claims to.
+  it.each([
+    ['getProviderBookings'],
+    ['getBookingWithAddOnsById'],
+  ])('%s embeds the gated row', (name) => {
+    expect(fn(name)).toContain('booking_client_addresses ( address )');
+  });
+
+  it('the client-side address-share read embeds it too', () => {
+    expect(fn('getClientBookingsForAddressShare')).toContain('booking_client_addresses ( address )');
   });
 
   it('no reader still selects the dead column off the base table', () => {
     expect(DB).not.toContain('booking_date, booking_time, client_address');
+  });
+
+  it('filters the address-share picker by DB statuses, never app ones', () => {
+    // 'upcoming' is a BookingStatus enum value that mapDbBookingStatus
+    // PRODUCES from 'confirmed'; bookings.status never holds it. Sending it
+    // to PostgREST matches nothing and fails silently, so the picker showed
+    // only `pending` bookings and a client whose provider had already
+    // accepted could not send their address at all.
+    const share = fn('getClientBookingsForAddressShare');
+    expect(share).not.toContain('"upcoming"');
+    expect(share).toContain('.in("status", ["pending", "confirmed", "in_progress"])');
   });
 
   it('the one remaining client_address select reads the VIEW, not bookings', () => {

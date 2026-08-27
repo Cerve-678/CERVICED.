@@ -32,13 +32,33 @@ type AddressPickerProps = {
 type AddressResult = AddressSelection & { key: string };
 
 function formatAddress(result: Location.LocationGeocodedAddress): string {
-  const street = [result.name, result.streetNumber, result.street]
+  // iOS routinely returns the SAME street line twice: once whole in `name`
+  // ("207A Saint John's Road", sometimes "Wellspring House, 11 Seagull Lane")
+  // and again split across `streetNumber` + `street`. The old dedupe compared
+  // the three parts for exact equality, which never matches a whole line
+  // against its own halves — so addresses were stored doubled
+  // ("207A Saint John's Road 207A Saint John's Road") and shown that way to
+  // whoever the release policy eventually hands them to.
+  const name = (result.name ?? '').trim();
+  const numbered = [result.streetNumber, result.street]
     .filter((part, index, parts) => Boolean(part) && parts.indexOf(part) === index)
-    .join(' ');
+    .join(' ')
+    .trim();
+  const street = !numbered
+    ? name
+    : !name
+      ? numbered
+      // A `name` that already contains the split form is the whole line; a
+      // name that doesn't is a genuine building name and still leads it.
+      : name.toLowerCase().includes(numbered.toLowerCase())
+        ? name
+        : `${name} ${numbered}`;
   return [street, result.district, result.city, result.region, result.postalCode, result.country]
     .filter(Boolean)
     .join(', ');
 }
+
+export const __formatAddressForTest = formatAddress;
 
 /**
  * Native address search backed by Expo's geocoder. It deliberately saves the
