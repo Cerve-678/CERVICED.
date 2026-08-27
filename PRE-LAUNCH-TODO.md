@@ -379,16 +379,17 @@ instead and every one has a byte-identical counterpart under a **different
 version prefix** — these are renumbering artifacts, the fork keeping the
 pre-renumber number. All six canonical versions are recorded live:
 
-| fork version (deleted) | identical canonical | recorded live |
+| fork version | identical canonical | recorded live |
 |---|---|---|
-| `20260817110000_fix_pregnancy_safe_default` | `20260817084930` | yes |
+| `20260817110000_fix_pregnancy_safe_default` | `20260817084930` | yes — **RESTORED, see 8d** |
 | `20260817120000_replace_my_provider_specialties` | `20260817125241` | yes |
 | `20260817140000_manual_booking_category_snapshot_parity` | `20260817144603` | yes |
 | `20260817150000_manual_booking_scheduling_policy_override` | `20260817152938` | yes |
 | `20260818105725_prevent_self_booking` | `20260818105903` | yes |
-| `20260817110500_waitlist_lapse_and_exhaustion_notifications` | `20260817103049` | yes — **but see 8d** |
+| `20260817110500_waitlist_lapse_and_exhaustion_notifications` | `20260817103049` | yes — **RESTORED, see 8d** |
 
-Five deleted. Nothing was lost: each is byte-identical to a file that remains,
+Four deleted (the two named above were restored 2026-08-27 — see 8d).
+Nothing was lost: each is byte-identical to a file that remains,
 and each is recorded exactly once live under the canonical version, verified by
 querying `supabase_migrations.schema_migrations` directly rather than reading
 files. No fork version has a row of its own.
@@ -397,7 +398,7 @@ The general lesson is the one that made this worth writing down: a numbered
 copy of a *migration* can differ from its original by its version number alone,
 and that number is the entire payload. Pairing by filename hides it.
 
-### 8d. The waitlist fork was the dangerous one — deleted 2026-08-27
+### 8d. The two armed forks — deleted, then RESTORED 2026-08-27
 
 `supabase/migrations/20260817110500_waitlist_lapse_and_exhaustion_notifications 2.sql`
 
@@ -443,6 +444,26 @@ The correction to 8c's rule: "sorts earlier, therefore harmless" only holds for
 dangerous at *any* position, because replaying it re-applies the write to
 whatever the data looks like then — not to what it looked like when the
 migration was authored. Check what a fork *does*, not just where it sorts.
+
+**Status: both were RESTORED on 2026-08-27, at the repo owner's direction
+("restore all"), and both are tracked again.** The analysis above stands
+unchanged and is why this is flagged rather than closed — restoring them puts
+both hazards back in the tree:
+
+  * the waitlist fork replays a pre-fix `invite_next_waitlist_entry()` after
+    the migration that fixes it;
+  * the pregnancy fork re-applies `UPDATE public.services SET
+    is_pregnancy_safe = true WHERE is_pregnancy_safe = false` at a position
+    *after* its own canonical. Its header comment claims "Safe to re-run",
+    which is exactly wrong: re-running it flips to TRUE any row a provider has
+    since set to FALSE. Verified by reading the restored file, not from this
+    note.
+
+Neither affects the live database as it stands — the risk is an ordered
+replay into a fresh environment. Both files being present is a deliberate,
+recorded choice, not an oversight. Do not "tidy" either away without asking,
+and do not replay this directory into a new environment without deciding what
+to do about them first.
 
 ---
 
