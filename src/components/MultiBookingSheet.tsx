@@ -1130,15 +1130,22 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
             </ScrollView>
 
             <View style={[styles.footer, { borderTopColor: tokens.border, backgroundColor: sheetBackground }]}>
-              {/* Rides along on every step so the price is never a surprise
-                  revealed only at the end. On a deposit booking this is the
-                  deposit, not the service total, so it isn't called "Total". */}
-              <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: tokens.text }]}>
-                  {isDepositOnly ? 'Deposit due now' : 'Total'}
-                </Text>
-                <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-              </View>
+              {/* Deliberately NOT on the "when" step — same rule as
+                  BookingSheet. Picking a time is a question about the diary,
+                  and "Deposit due now" under it reads as though choosing a
+                  time is what charges them. From "pay" onward, which is the
+                  step that actually asks how they want to pay, so the number
+                  still never arrives as a surprise at the end. On a deposit
+                  booking this is the deposit, not the service total, so it
+                  isn't called "Total". */}
+              {step !== 'when' && (
+                <View style={styles.totalRow}>
+                  <Text style={[styles.totalLabel, { color: tokens.text }]}>
+                    {isDepositOnly ? 'Deposit due now' : 'Total'}
+                  </Text>
+                  <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={[styles.submitButton, { backgroundColor: adaptiveAccentColor }, !!stepBlocker && styles.submitButtonDisabled]}
                 onPress={

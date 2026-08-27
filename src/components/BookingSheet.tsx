@@ -1040,17 +1040,25 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
             </TouchableOpacity>
           ) : (
             <>
-              {/* The running total rides along on every step so the price is
-                  never a surprise revealed only at the end. On a deposit
-                  booking this is the deposit, not the service total, so it
-                  must not be labelled "Total" — the rest is still owed to
-                  the provider at the appointment. */}
-              <View style={styles.totalRow}>
-                <Text style={[styles.totalLabel, { color: tokens.text }]}>
-                  {isDepositOnly ? 'Deposit due now' : 'Total'}
-                </Text>
-                <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
-              </View>
+              {/* Deliberately NOT on the "when" step. Picking a time is a
+                  question about the diary, and a price — "Deposit due now"
+                  most of all — sitting under it answers a question nobody
+                  asked yet, and reads as though choosing a time is what
+                  charges them. It appears from "pay" onward, which is the
+                  step that actually asks how they want to pay, so the number
+                  still never arrives as a surprise at the end.
+
+                  On a deposit booking this is the deposit, not the service
+                  total, so it must not be labelled "Total" — the rest is
+                  still owed to the provider at the appointment. */}
+              {step !== 'when' && (
+                <View style={styles.totalRow}>
+                  <Text style={[styles.totalLabel, { color: tokens.text }]}>
+                    {isDepositOnly ? 'Deposit due now' : 'Total'}
+                  </Text>
+                  <Text style={[styles.totalPrice, { color: adaptiveAccentColor }]}>£{effectivePrice.toFixed(2)}</Text>
+                </View>
+              )}
 
               {/* On the last step this commits the booking; before that it
                   just advances. Either way the label says what will happen,
