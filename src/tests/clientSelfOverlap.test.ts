@@ -85,9 +85,13 @@ describe('two providers, one client, same hour', () => {
     expect(result.isValid).toBe(false);
     // Named on both halves — "you're busy then" is unactionable when the cart
     // collapses by provider and the clashing appointment isn't even in it.
+    // That's the DIALOG's wording; the card shows CART_ISSUE.clientClash.
     expect(result.conflicts[0].message).toBe(
       'You already have an upcoming Infills appointment with Lashes by Jo at this time.',
     );
+    // The cart picks its short card label off this code, not off the sentence
+    // — which it couldn't match anyway, since the sentence carries names.
+    expect(result.conflicts[0].code).toBe('clientClash');
   });
 
   it('drops a half of the sentence rather than defaulting it', async () => {

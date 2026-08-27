@@ -61,6 +61,10 @@ export interface CartIssueEntry {
 export const CART_ISSUE = {
   noSchedule: 'Pick a date and time for this service',
   overlap: 'This time slot conflicts with another service in your cart',
+  // The card says only THAT it clashes; the dialog names the service and
+  // provider it clashes with. A card is a label, not a sentence — and the
+  // appointment being clashed with usually isn't even in the cart to look at.
+  clientClash: 'Clashes with one of your upcoming bookings',
   slotTaken: 'This time slot is no longer available.',
   outsideHours: "This time is outside the provider's working hours.",
   dayUnavailable: 'Provider is not available on this date.',

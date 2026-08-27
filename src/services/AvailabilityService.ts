@@ -16,6 +16,7 @@ import {
   resolveActiveProviderIdByDisplayName,
 } from './databaseService';
 import type { ClientBookedSpan } from './databaseService';
+import type { BookingConflictResult } from '../types/booking';
 import { logger } from '../utils/logger';
 import { formatTime12, formatShortDate } from '../utils/dateUtils';
 
@@ -1173,14 +1174,8 @@ export const AvailabilityService = {
       /** See isSlotAvailable — set from CartItem.emergencyRequest. */
       isEmergencyRequest?: boolean | undefined;
     }[]
-  ): Promise<{
-    isValid: boolean;
-    conflicts: {
-      cartItemId: string;
-      message: string;
-    }[];
-  }> {
-    const conflicts: { cartItemId: string; message: string }[] = [];
+  ): Promise<BookingConflictResult> {
+    const conflicts: BookingConflictResult['conflicts'] = [];
 
     // Does every item still point at something bookable? A cart persists
     // across sessions, so an item can outlive the service it was added from —
@@ -1327,6 +1322,10 @@ export const AvailabilityService = {
         const clashProvider = clash.provider_name_snapshot?.trim();
         conflicts.push({
           cartItemId: booking.cartItemId,
+          // Tagged: this sentence names a provider and a service, so the cart
+          // can't recognise it by its text the way it recognises the fixed
+          // ones. The card wants a short label, the dialog wants this.
+          code: 'clientClash',
           message:
             `You already have an upcoming ${clashService ? `${clashService} ` : ''}appointment` +
             `${clashProvider ? ` with ${clashProvider}` : ''} at this time.`,

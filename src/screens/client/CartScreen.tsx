@@ -1837,7 +1837,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
   const identifyCartConflicts = useCallback(async (
     cartItems: CartItem[],
     getBooking: (itemId: string) => ServiceBooking | undefined,
-  ): Promise<Map<string, string>> => {
+  ): Promise<{ flags: Map<string, string>; messages: string[] }> => {
     const check = await AvailabilityService.validateCartBookings(
       cartItems.map(item => {
         const booking = getBooking(item.id);
@@ -1854,11 +1854,19 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
         };
       })
     );
-    const issues = new Map<string, string>();
+    // Two readings of the same findings. `flags` is what goes on a card: a
+    // short label in the cart's own vocabulary. `messages` is what goes in the
+    // dialog, where there is room to name what actually clashed. They differ
+    // only for a coded conflict; for the fixed ones the label IS the sentence.
+    const flags = new Map<string, string>();
+    const messages: string[] = [];
     check.conflicts.forEach(c => {
-      if (!issues.has(c.cartItemId)) issues.set(c.cartItemId, toCartIssue(c.message));
+      const label = c.code === 'clientClash' ? CART_ISSUE.clientClash : toCartIssue(c.message);
+      if (!flags.has(c.cartItemId)) flags.set(c.cartItemId, label);
+      const detail = c.code === 'clientClash' ? c.message : label;
+      if (!messages.includes(detail)) messages.push(detail);
     });
-    return issues;
+    return { flags, messages };
   }, []);
 
   // Removing an item takes its flag with it, so a stale reason can never
@@ -2406,7 +2414,7 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     if (itemIssues.size === 0) return;
     let cancelled = false;
     void identifyCartConflicts(items, getServiceBooking)
-      .then(found => { if (!cancelled) setItemIssues(found); })
+      .then(found => { if (!cancelled) setItemIssues(found.flags); })
       // Leave the existing flags alone on a failed re-check. They may well be
       // stale, but silently clearing them on a network blip would wave the
       // client through to a checkout that fails again for the same reason.
@@ -2704,9 +2712,9 @@ const CartScreen: React.FC<CartScreenProps<'CartMain'>> = ({ navigation }) => {
     // that item's own card rather than being flattened into one de-duplicated
     // blob of text with nothing tying a line back to a service.
     const issues = await identifyCartConflicts(items, getServiceBooking);
-    if (issues.size > 0) {
-      setItemIssues(issues);
-      showAlert('Scheduling Conflict', [...new Set(issues.values())].join('\n'));
+    if (issues.flags.size > 0) {
+      setItemIssues(issues.flags);
+      showAlert('Scheduling Conflict', issues.messages.join('\n'));
       return;
     }
 
@@ -3614,7 +3622,7 @@ const handlePaymentSuccess = useCallback(async (paymentMethod: string, paymentIn
                           // back clean — the card kept saying a time was gone
                           // while the picker still offered it, and only Edit
                           // or Remove could clear it.
-                          .then(found => setItemIssues(found))
+                          .then(found => setItemIssues(found.flags))
                           .catch(e => logger.error('Could not identify which cart item conflicts:', e));
                       } finally {
                         setIsReservingSlots(false);

@@ -362,11 +362,19 @@ export interface BookingsByDate {
   [date: string]: ConfirmedBooking[];
 }
 
+/** Why a cart item can't be booked, as one of a fixed set of reasons.
+ *  `message` is a full sentence built for a dialog and can carry names, so it
+ *  is no good for deciding anything — this is what a caller switches on when
+ *  it needs its OWN shorter wording (see CartScreen's CART_ISSUE vocabulary,
+ *  which used to have to string-match the sentence to recognise it). */
+export type BookingConflictCode = 'clientClash';
+
 export interface BookingConflictResult {
   isValid: boolean;
   conflicts: {
     cartItemId: string;
     message: string;
+    code?: BookingConflictCode;
   }[];
 }
 
