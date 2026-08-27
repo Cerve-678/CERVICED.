@@ -205,7 +205,7 @@ describe('findScheduleIssues — availability', () => {
     it('relabels an out-of-hours emergency request instead of calling it unavailable', () => {
       const m = findScheduleIssues([emergency('a', '8:00 PM', '9:00 PM')], ctx());
       expect(kinds(m, 'a')).toEqual(['emergency_request']);
-      expect(m.get('a')![0]!.label).toBe('Client requested outside your working hours');
+      expect(m.get('a')![0]!.label).toBe('Outside your hours by request');
     });
 
     it('relabels one on a day off and one on a blocked date the same way', () => {

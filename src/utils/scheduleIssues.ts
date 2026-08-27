@@ -194,7 +194,7 @@ function resolveSpan(booking: ScheduleCheckBooking): Span | null {
  * slot and said yes to being asked.
  */
 function emergencyIssue(): ScheduleIssue {
-  return { kind: 'emergency_request', label: 'Client requested outside your working hours' };
+  return { kind: 'emergency_request', label: 'Outside your hours by request' };
 }
 
 /**
