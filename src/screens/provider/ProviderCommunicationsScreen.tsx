@@ -30,6 +30,10 @@ const CP_DARK = {
   surface: '#201D1A',
   card:    '#252220',
   accent:  '#AF9197',
+  // Lighter than `accent` for standalone text (e.g. the "Add" template
+  // label) — the muted dusty rose reads as faint at small sizes against
+  // near-black cards.
+  accentText: '#D9AEB6',
   ice:     '#FFFFFF',
   text:    '#F0ECE7',
   sub:     '#7E6667',
@@ -42,6 +46,7 @@ const CP_LIGHT = {
   surface: '#EDE8E2',
   card:    '#FFFFFF',
   accent:  '#5C4033',
+  accentText: '#5C4033',
   ice:     '#FFFFFF',
   text:    '#1C1A18',
   sub:     '#8A8680',
@@ -315,7 +320,7 @@ export default function ProviderCommunicationsScreen({ navigation }: any) {
                 </View>
                 <TouchableOpacity style={[s.addTemplateBtn, { borderColor: C.accent }]} onPress={addTemplate} disabled={messageTemplates.length >= 12}>
                   <Ionicons name="add" size={16} color={C.accent} />
-                  <Text style={[s.addTemplateText, { color: C.accent }]}>Add</Text>
+                  <Text style={[s.addTemplateText, { color: C.accentText }]}>Add</Text>
                 </TouchableOpacity>
               </View>
               {messageTemplates.length === 0 ? (
@@ -402,7 +407,7 @@ const s = StyleSheet.create({
 
   templateHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   addTemplateBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7 },
-  addTemplateText: { fontSize: 12, fontWeight: '700' },
+  addTemplateText: { fontSize: 13, fontWeight: '700' },
   templateEmpty: { fontSize: 12, lineHeight: 17, marginTop: 14 },
   templateItem: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 14 },
   templateLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

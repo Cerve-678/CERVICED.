@@ -26,12 +26,21 @@ import { useTheme } from '../../contexts/ThemeContext';
 // the split is a pure restructure with no visual drift.
 export const CP_DARK = {
   bg: '#1A1815', surface: '#201D1A', card: '#252220',
-  accent: '#AF9197', ice: '#FFFFFF', text: '#F0ECE7',
-  sub: '#7E6667', border: 'rgba(255,255,255,0.08)', danger: '#FF6868',
+  accent: '#AF9197',
+  // Lighter than `accent` — that muted dusty rose reads as faint/hard to
+  // read as the color of standalone TEXT (e.g. the selected RadioGroup
+  // label) against near-black cards, even though it's fine as an icon,
+  // fill, or border color.
+  accentText: '#D9AEB6',
+  ice: '#FFFFFF', text: '#F0ECE7',
+  // Was #7E6667 — under 3:1 against the near-black card/surface, which is
+  // why field notes, toggle/radio descriptions, and card subtitles (all
+  // small Jura body text) read as too faint to use for real info text.
+  sub: '#9C8788', border: 'rgba(255,255,255,0.08)', danger: '#FF6868',
 };
 export const CP_LIGHT = {
   bg: '#F5F1EC', surface: '#EDE8E2', card: '#FFFFFF',
-  accent: '#5C4033', ice: '#FFFFFF', text: '#1C1A18',
+  accent: '#5C4033', accentText: '#5C4033', ice: '#FFFFFF', text: '#1C1A18',
   sub: '#8A8680', border: 'rgba(0,0,0,0.08)', danger: '#FF6868',
 };
 const CP = CP_DARK; // static fallback for StyleSheet.create
@@ -108,7 +117,7 @@ const fSt = StyleSheet.create({
   boxMulti:   { alignItems: 'flex-start' },
   input:      { flex: 1, fontFamily: FONT_BODY, fontSize: 15, color: CP.text, paddingHorizontal: 14, paddingVertical: 13 },
   inputMulti: { paddingTop: 13, textAlignVertical: 'top', minHeight: 80 },
-  note:       { fontFamily: FONT_BODY, fontSize: 11, color: CP.sub, marginTop: 6, lineHeight: 16 },
+  note:       { fontFamily: FONT_BODY, fontWeight: '500', fontSize: 11, color: CP.sub, marginTop: 6, lineHeight: 16 },
 });
 
 // ─── ToggleRow ────────────────────────────────────────────────────────────────
@@ -134,7 +143,7 @@ export function ToggleRow({ label, sub, value, onChange }: { label: string; sub?
 const tgSt = StyleSheet.create({
   row:   { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   label: { fontFamily: FONT_HEAD, fontSize: 14, fontWeight: '600', color: CP.text },
-  sub:   { fontFamily: FONT_BODY, fontSize: 12, color: CP.sub, marginTop: 2, lineHeight: 16 },
+  sub:   { fontFamily: FONT_BODY, fontWeight: '500', fontSize: 12, color: CP.sub, marginTop: 2, lineHeight: 16 },
 });
 
 // ─── RadioGroup ───────────────────────────────────────────────────────────────
@@ -156,7 +165,7 @@ export function RadioGroup({ options, value, onChange }: { options: { value: str
               {active && <View style={[rdSt.dotFill, { backgroundColor: C.accent }]} />}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[rdSt.label, { color: active ? C.accent : C.text }]}>{opt.label}</Text>
+              <Text style={[rdSt.label, { color: active ? C.accentText : C.text }]}>{opt.label}</Text>
               {opt.sub ? <Text style={[rdSt.sub, { color: C.sub }]}>{opt.sub}</Text> : null}
             </View>
           </TouchableOpacity>
@@ -171,7 +180,7 @@ const rdSt = StyleSheet.create({
   dot:     { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: CP.sub, alignItems: 'center', justifyContent: 'center' },
   dotFill: { width: 9, height: 9, borderRadius: 5, backgroundColor: CP.ice },
   label:   { fontFamily: FONT_HEAD, fontSize: 14, fontWeight: '600', color: CP.text },
-  sub:     { fontFamily: FONT_BODY, fontSize: 12, color: CP.sub, marginTop: 2 },
+  sub:     { fontFamily: FONT_BODY, fontWeight: '500', fontSize: 12, color: CP.sub, marginTop: 2 },
 });
 
 // ─── ChipGroup ────────────────────────────────────────────────────────────────
@@ -262,7 +271,7 @@ export const s = StyleSheet.create({
 
   card:      { backgroundColor: CP.card, borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: CP.border },
   cardTitle: { fontFamily: FONT_HEAD, fontSize: 15, color: CP.text, marginBottom: 4, letterSpacing: 0.3 },
-  cardSub:   { fontFamily: FONT_BODY, fontSize: 12, color: CP.sub, lineHeight: 17, marginBottom: 16 },
+  cardSub:   { fontFamily: FONT_BODY, fontWeight: '500', fontSize: 12, color: CP.sub, lineHeight: 17, marginBottom: 16 },
 
   saveBtn:    { backgroundColor: CP.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: CP.ice + '30', marginTop: 6, marginBottom: 8 },
   saveBtnDim: { opacity: 0.6 },

@@ -30,6 +30,9 @@ const C_DARK = {
   surface: '#201D1A',
   card:    '#252220',
   accent:  '#AF9197',
+  // Lighter than `accent` for standalone text (section labels, "Done" links) —
+  // the muted dusty rose reads as faint at small sizes against near-black cards.
+  accentText: '#D9AEB6',
   text:    '#F0ECE7',
   sub:     '#7E6667',
   border:  'rgba(255,255,255,0.08)',
@@ -41,6 +44,7 @@ const C_LIGHT = {
   surface: '#EDE8E2',
   card:    '#FFFFFF',
   accent:  '#5C4033',
+  accentText: '#5C4033',
   text:    '#1C1A18',
   sub:     '#8A8680',
   border:  'rgba(0,0,0,0.08)',
@@ -93,7 +97,7 @@ function SectionHeader({ icon, label, sub, C }: { icon: string; label: string; s
     <View style={{ marginBottom: 12, marginTop: 28 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 4 }}>
         <Ionicons name={icon as any} size={13} color={C.accent} />
-        <Text style={[st.sectionLabel, { color: C.accent }]}>{label}</Text>
+        <Text style={[st.sectionLabel, { color: C.accentText }]}>{label}</Text>
       </View>
       <Text style={[st.sectionSub, { color: C.sub }]}>{sub}</Text>
     </View>
@@ -558,7 +562,7 @@ export default function ProviderAutomationsScreen({ navigation }: any) {
                 <View style={[st.pickerHeader, { borderBottomColor: C.border }]}>
                   <Text style={[st.pickerLabel, { color: C.text }]}>Release Day</Text>
                   <TouchableOpacity onPress={() => setReleaseDayPickerVisible(false)}>
-                    <Text style={[st.pickerDone, { color: C.accent }]}>Done</Text>
+                    <Text style={[st.pickerDone, { color: C.accentText }]}>Done</Text>
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
@@ -612,7 +616,7 @@ const st = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 4 },
 
-  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+  sectionLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1.5 },
   sectionSub:   { fontSize: 13, lineHeight: 19 },
 
   card: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, padding: 16 },

@@ -139,7 +139,7 @@ const st = StyleSheet.create({
   closeBtn:    { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
 
   scroll: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 40 },
-  intro:  { fontFamily: 'Jura-VariableFont_wght', fontSize: 13, lineHeight: 19, marginBottom: 18, paddingHorizontal: 2 },
+  intro:  { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 13, lineHeight: 19, marginBottom: 18, paddingHorizontal: 2 },
 
   row: {
     flexDirection: 'row',
@@ -152,7 +152,9 @@ const st = StyleSheet.create({
   },
   iconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontFamily: 'BakbakOne-Regular', fontSize: 15, letterSpacing: 0.3 },
-  rowSub:   { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  rowSub:   { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, marginTop: 2, lineHeight: 16 },
 
-  footnote: { fontFamily: 'Jura-VariableFont_wght', fontSize: 12, lineHeight: 17, marginTop: 14, paddingHorizontal: 2, opacity: 0.8 },
+  // No extra opacity here — that was fading an already-muted C.sub color
+  // twice over, which is exactly the "too faint" info-text problem.
+  footnote: { fontFamily: 'Jura-VariableFont_wght', fontWeight: '500', fontSize: 12, lineHeight: 17, marginTop: 14, paddingHorizontal: 2 },
 });

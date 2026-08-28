@@ -39,6 +39,7 @@ const LIGHT = {
   surface:   '#EDE8E2',
   card:      '#FFFFFF',
   accent:    '#5C4033',
+  accentText:'#5C4033',
   ice:       '#FFFFFF',
   text:      '#000000',
   sub:       '#7E6667',
@@ -52,6 +53,10 @@ const DARK = {
   surface:   '#201D1A',
   card:      '#252220',
   accent:    '#AF9197',
+  // Lighter than `accent` — that muted dusty rose reads as faint/hard to read
+  // when it's the color of small TEXT (rowTitle, ring-badge initials) against
+  // the near-black dark cards, even though it's fine as an icon/fill color.
+  accentText:'#D9AEB6',
   ice:       '#FFFFFF',
   text:      '#F0ECE7',
   sub:       '#7E6667',
@@ -84,7 +89,7 @@ const SettingsOption = React.memo(({ icon, title, subtitle, onPress, P, danger }
         <Icon name={icon} size={17} color={danger ? P.accent : P.sub} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.rowTitle, { color: danger ? P.accent : P.text }]}>{title}</Text>
+        <Text style={[styles.rowTitle, { color: danger ? P.accentText : P.text }]}>{title}</Text>
         <Text style={[styles.rowSub, { color: P.sub }]}>{subtitle}</Text>
       </View>
     </View>
@@ -344,7 +349,7 @@ export default function ProviderAccountScreen({ navigation }: any) {
                     originY={RING_SIZE / 2}
                   />
                 </Svg>
-                <Text style={[styles.ringBadgeText, { color: P.accent }]}>{initials}</Text>
+                <Text style={[styles.ringBadgeText, { color: P.accentText }]}>{initials}</Text>
               </View>
               <View style={styles.ringInlineText}>
                 <Text style={[styles.ringInlineTitle, { color: P.text }]}>Business Profile</Text>
@@ -755,7 +760,7 @@ const styles = StyleSheet.create({
   },
   ringBadgeText: {
     position: 'absolute',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
   },
   ringInlineText: { flex: 1, minWidth: 0 },
