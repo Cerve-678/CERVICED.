@@ -257,12 +257,19 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       AvailabilityService.getAvailabilitySummary(providerName).then(summary => {
         if (!cancelled && summary?.state === 'unpublished') setProviderUnpublished(true);
       });
-      AvailabilityService.getEmergencyRequestPolicy(providerName).then(policy => {
-        if (!cancelled) setEmergencyPolicy(policy);
-      });
+      // The emergency-request opt-ins only ever change what this picker shows
+      // when it's allowed to offer request slots at all. When it isn't (the
+      // common case — the feature flag is off), skip the round trip: fetching
+      // it would land as a state change that re-runs the whole weekly slot
+      // fetch a second time for nothing, which is the lag on first open.
+      if (allowRequests) {
+        AvailabilityService.getEmergencyRequestPolicy(providerName).then(policy => {
+          if (!cancelled) setEmergencyPolicy(policy);
+        });
+      }
     });
     return () => { cancelled = true; };
-  }, [providerName]);
+  }, [providerName, allowRequests]);
 
   useEffect(() => {
     generateWeeklyAvailabilityRef.current();
@@ -397,6 +404,21 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                 ? { blocked: slot.unbookable }
                 : {}),
           }));
+
+        // The filter above can leave nothing when every slot the day has is
+        // by-request (a beyond-window or blocked day at a provider who takes
+        // requests) — but if any of those were BOOKED, the day still has real
+        // activity on it. Falling through to dayDataFrom([]) would call it
+        // 'closed' ("provider doesn't work this day"), which is both wrong and,
+        // since that state is untappable, hides a genuinely booked-out day.
+        // Keep the booked ones visible so it reads as full instead.
+        if (slots.length === 0 && grid.some(slot => slot.isBooked)) {
+          const bookedOnly: TimeSlot[] = grid
+            .filter(slot => slot.isBooked)
+            .map(slot => ({ time: slot.time, reasons: [], blocked: 'booked' as const }));
+          return dayDataFrom(bookedOnly, true);
+        }
+
         return dayDataFrom(slots, isFullyBooked);
       } catch {
         // Fallback to base schedule without booking filter
@@ -548,6 +570,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       if (date > maxDateMidnight) return;
     }
 
+    // A day the provider doesn't work is a dead end here too — only refuse it
+    // once its slots have actually loaded and come back empty, so a date whose
+    // week hasn't been fetched yet still opens (fetching it is the point).
+    if (availableSlots[dateString]?.status === 'closed') return;
+
     // Set the week to contain this date
     setCurrentWeek(date);
     selectDateFromTap(dateString);
@@ -557,10 +584,10 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
   };
 
   const handleDateClick = (dateString: string, dayData: DayData) => {
-    // Only 'past' is refused. Every other state has something to say —
-    // booked out, over, or "they don't work this day" — and a dead tap says
-    // none of it.
-    if (dayData.status === 'past') return;
+    // 'past' and 'closed' are dead ends and the pill is already disabled for
+    // them — this is the backstop. Every other state has something to say
+    // (booked out, over, or "not this far ahead yet"), so it takes the tap.
+    if (dayData.status === 'past' || dayData.status === 'closed') return;
     Haptics.selectionAsync().catch(() => {});
     selectDateFromTap(dateString);
   };
@@ -738,7 +765,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                   maxMidnight.setHours(23, 59, 59, 999);
                   return date > maxMidnight;
                 })();
-                const isDisabled = isPast || isBeyondMax;
+                // Only once this date's week has been fetched and come back as
+                // a non-working day — an un-fetched future date stays tappable
+                // so picking it can load its week.
+                const isKnownClosed = availableSlots[dateString]?.status === 'closed';
+                const isDisabled = isPast || isBeyondMax || isKnownClosed;
 
                 return (
                   <TouchableOpacity
@@ -839,19 +870,20 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
       <View style={[styles.daysRow, providerUnpublished && styles.daysRowDimmed]}>
         {weekDays.map(day => {
           const isSel = selectedDate === day.dateString;
-          // Only a past day is truly dead. 'closed' now answers with "they
-          // don't work this day" plus, where the provider takes them, a way
-          // to ask anyway — and 'over' has a greyed grid and a badge. A dead
-          // tap says none of that.
-          const isDisabled = providerUnpublished || day.status === 'past';
+          // A past day and a day the provider simply doesn't work are both
+          // dead ends — nothing to pick, nowhere to go (requests are off) —
+          // so neither takes a tap. 'over' still has a greyed grid and a
+          // badge worth showing, and 'unavailable' (too far ahead) has its
+          // own one-line explanation, so those stay tappable.
+          const isDisabled = providerUnpublished || day.status === 'past' || day.status === 'closed';
           // Both mean "this day had times and none of them are open" — the
           // bar below says exactly that, where an empty space would say the
           // provider doesn't work this day.
           const isFull = day.status === 'full' || day.status === 'over';
-          // A day the provider doesn't work reads as unavailable at a glance
-          // — greyed as heavily as a past day — but stays tappable, because
-          // it has something to say and, where they take requests, somewhere
-          // to go. Looking dead and being dead are different things here.
+          // A day the provider doesn't work, or one too far ahead to book,
+          // reads as unavailable at a glance — greyed as heavily as a past
+          // day. 'closed' is also inert (see isDisabled); 'unavailable'
+          // stays tappable so its "not this far ahead yet" note can show.
           const isClosedDay = day.status === 'closed' || day.status === 'unavailable';
           return (
             <TouchableOpacity
@@ -1019,6 +1051,11 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
               {timeRow.map(slot => {
                 const timeSel = selectedTime === slot.time;
                 const blocked = !!slot.blocked;
+                // Strike-through means "someone has this" — only a booked slot
+                // earns it. A time that simply passed (or is inside the notice
+                // window) was never taken; it's greyed and inert, but crossing
+                // it out would wrongly read as another client having claimed it.
+                const taken = slot.blocked === 'booked';
                 return (
                   <TouchableOpacity
                     key={slot.time}
@@ -1043,7 +1080,7 @@ export const ModernBeautyCalendar: React.FC<ModernBeautyCalendarProps> = ({
                     <Text style={[
                       styles.timeText,
                       { color: blocked ? subColor : timeSel ? accentColor : textColor },
-                      blocked && styles.timeTextBlocked,
+                      taken && styles.timeTextBlocked,
                     ]}>
                       {slot.time}
                     </Text>

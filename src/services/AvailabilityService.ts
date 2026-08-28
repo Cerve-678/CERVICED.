@@ -975,7 +975,21 @@ export const AvailabilityService = {
         }
       }
 
-      if (candidates.size === 0) return [];
+      if (candidates.size === 0) {
+        if (!includeUnbookable) return [];
+        // No bookable candidate on this day — either the provider doesn't
+        // normally work it, or the service is longer than the day's window.
+        // But a manual squeeze-in (provider_create_manual_booking bypasses the
+        // working-hours check) or an out-of-hours request can still have put a
+        // booking here. Surface those as taken slots so the day reads as
+        // booked-out — tappable, "Fully booked" — rather than as one the
+        // provider never works, which is what an empty result signals.
+        const taken = await fetchBusySpans(providerId, date, date);
+        return taken
+          .slice()
+          .sort((a, b) => a.start - b.start)
+          .map((span): TimeSlot => ({ time: formatMinutesTo12h(span.start), isBooked: true }));
+      }
 
       // Taken intervals via the RPC — each already padded by ITS OWN
       // service's buffer (a 3-hour colour's cleanup gap still applies even
@@ -987,6 +1001,30 @@ export const AvailabilityService = {
         .sort(([a], [b]) => a - b)
         .flatMap(([startMins, reasons]): TimeSlot[] => {
           const startMs = slotStartMs(date, startMins);
+          const slotEnd = startMins + durationMinutes;
+          const newEffStart = startMins - newBuffer.before;
+          const newEffEnd = slotEnd + newBuffer.after;
+          const conflict = busySpans.find(span =>
+            doTimesOverlap(newEffStart, newEffEnd, span.start, span.end),
+          );
+
+          // A slot that was actually booked stays booked even once its start
+          // time has gone by — the appointment happened (or is happening); it
+          // doesn't retroactively read as merely "the time went by" just
+          // because nobody would try to book it now. Checked BEFORE the
+          // past/notice gate below, which otherwise wins first and masks a
+          // real booking as plain lateness — the exact bug that made a fully
+          // booked day's earlier times quietly stop showing as booked once
+          // the day moved on.
+          if (conflict) {
+            return [{
+              time: formatMinutesTo12h(startMins),
+              isBooked: true,
+              isByRequest: reasons.length > 0,
+              requestReasons: reasons.length > 0 ? reasons : undefined,
+            }];
+          }
+
           const allReasons = resolveSlotOffer(
             reasons, startMs, nowMs, earliestStart, policy.shortNotice,
           );
@@ -1002,16 +1040,9 @@ export const AvailabilityService = {
             }];
           }
 
-          const slotEnd = startMins + durationMinutes;
-          const newEffStart = startMins - newBuffer.before;
-          const newEffEnd = slotEnd + newBuffer.after;
-          const conflict = busySpans.find(span =>
-            doTimesOverlap(newEffStart, newEffEnd, span.start, span.end),
-          );
-
           return [{
             time: formatMinutesTo12h(startMins),
-            isBooked: !!conflict,
+            isBooked: false,
             isByRequest: allReasons.length > 0,
             requestReasons: allReasons.length > 0 ? allReasons : undefined,
           }];

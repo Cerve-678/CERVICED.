@@ -560,6 +560,37 @@ export async function getProviderHairTypeMatches(
   return matches;
 }
 
+/**
+ * Of the given provider ids, which have at least one active service tagged
+ * services.audience === `audience`. Scoped to `providerIds` (the candidate
+ * set Search already server-searched/paginated to) rather than a global
+ * lookup, mirroring getProviderHairTypeMatches's shape — except this is a
+ * per-SERVICE tag, not a provider-level column, so it queries `services`
+ * with a providers!inner gate instead of `providers` directly.
+ */
+export async function getProviderAudienceMatches(
+  providerIds: string[],
+  audience: "women" | "men" | "kids" | "everyone",
+): Promise<Set<string>> {
+  const matches = new Set<string>();
+  if (providerIds.length === 0) return matches;
+
+  const { data, error } = await supabase
+    .from("services")
+    .select("provider_id, provider:providers!inner ( id )")
+    .eq("is_active", true)
+    .eq("audience", audience)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .in("provider_id", providerIds);
+  if (error) throw error;
+
+  for (const row of data ?? []) {
+    matches.add(row.provider_id as string);
+  }
+  return matches;
+}
+
 /** Coarse near-term availability status for a provider, as surfaced on
  *  search/browse cards. NOT a booking gate — the real slot simulation in
  *  AvailabilityService owns anything that actually reserves time. */
@@ -1267,10 +1298,17 @@ export async function getDiscoverUnclaimedProviders(
  * Fetch services that have at least one photo, with provider info, for the
  * mixed Explore discovery feed. The !inner join on service_images excludes
  * services with no photo.
+ *
+ * `audience` filters on the per-service services.audience column ('women' |
+ * 'men' | 'kids' | 'everyone') — distinct from `category`, which filters on
+ * the provider's whole-business service_category. Powers HomeScreen's Male/
+ * Kids Services sections, which need the actual matching service listings
+ * (not just providers whose entire business is registered as MALE/KIDS).
  */
 export async function getDiscoverServices(
   category?: string,
   limit = 40,
+  audience?: "women" | "men" | "kids" | "everyone",
 ): Promise<DiscoverServiceWithProvider[]> {
   let query = supabase
     .from("services")
@@ -1289,10 +1327,39 @@ export async function getDiscoverServices(
   if (category && category !== "All") {
     query = query.eq("provider.service_category", category.toUpperCase());
   }
+  if (audience) {
+    query = query.eq("audience", audience);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as unknown as DiscoverServiceWithProvider[];
+}
+
+/**
+ * Provider ids with at least one active service tagged `audience`, WITHOUT
+ * requiring a photo. Deliberately separate from getDiscoverServices (which
+ * !inner-joins service_images for its photo feed): a provider whose new
+ * "Men's Cut" has no photo yet must still qualify for HomeScreen's Male/Kids
+ * sections — the photo requirement should only gate whether a service CARD
+ * can render for it, not whether the provider appears at all. Mirrors
+ * getProviderHairTypeMatches's broad/narrow split (provider-level match here,
+ * per-service refinement elsewhere), just scoped to services.audience.
+ */
+export async function getProviderIdsByServiceAudience(
+  audience: "women" | "men" | "kids" | "everyone",
+  limit = 200,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("services")
+    .select("provider_id, provider:providers!inner ( id )")
+    .eq("is_active", true)
+    .eq("audience", audience)
+    .eq("provider.is_active", true)
+    .eq("provider.has_gone_live", true)
+    .limit(limit);
+  if (error) throw error;
+  return [...new Set((data ?? []).map((row) => row.provider_id as string))];
 }
 
 /**
@@ -1571,7 +1638,7 @@ export async function getMyProviderServices(): Promise<
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
     )
     .eq("provider_id", provider.id)
     .eq("is_active", true)
@@ -1636,7 +1703,7 @@ export async function getMyServiceCatalogue(knownProviderId?: string): Promise<{
   const { data, error } = await supabase
     .from("services")
     .select(
-      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type",
+      "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type",
     )
     .eq("provider_id", providerId)
     .order("category_name", { ascending: true })
@@ -1687,7 +1754,7 @@ export async function createMyService(
       sort_order: ((last?.sort_order as number | undefined) ?? -1) + 1,
       is_active: true,
     })
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -1706,7 +1773,7 @@ export async function updateMyService(
       duration_minutes: draft.durationMinutes,
     })
     .eq("id", serviceId)
-    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type")
+    .select("id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type")
     .single();
   if (error) throw error;
   return data as DbService;
@@ -1764,7 +1831,7 @@ export async function getMyPromotionManagerCore(): Promise<{
     supabase
       .from("services")
       .select(
-        "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
+        "id, provider_id, category_name, category_description, name, description, price, price_max, duration_minutes, buffer_before_mins, buffer_after_mins, is_active, sort_order, created_at, tags, technique_tags, outcome_tags, occasion_tags, trend_names, is_pregnancy_safe, patch_test_required, min_age, contraindications, hair_types_suitable, audience, aftercare_notes, service_type, service_add_ons ( id, service_id, name, price, description, is_active )",
       )
       .eq("provider_id", provider.id)
       .eq("is_active", true)
@@ -3802,18 +3869,50 @@ export async function getAvailabilityWeeklyScheduleRows(providerId: string): Pro
   return { windowRows: windows.data ?? [], legacyRows: legacy.data ?? [] };
 }
 
-export async function getAvailabilityServiceBufferRows(serviceIds: string[]): Promise<{
+type ServiceBufferRow = {
   id: string;
   buffer_before_mins: number | null;
   buffer_after_mins: number | null;
-}[]> {
+};
+
+// Every one of the week's seven day lookups asks for the SAME service's buffer
+// row, and paging weeks asks again — one short-lived cache per id list collapses
+// that. Buffers are edited on the provider's own service form; 15s of staleness
+// there is invisible to a client mid-booking. (Literals, not the
+// AVAILABILITY_RANGE_* consts below — those are declared further down the file.)
+const serviceBufferRowsCache = new BoundedTtlCache<string, ServiceBufferRow[]>(
+  15_000,
+  40,
+);
+const serviceBufferRowsRequests = new Map<string, Promise<ServiceBufferRow[]>>();
+
+export async function getAvailabilityServiceBufferRows(
+  serviceIds: string[],
+): Promise<ServiceBufferRow[]> {
   if (serviceIds.length === 0) return [];
-  const { data, error } = await supabase
-    .from("services")
-    .select("id, buffer_before_mins, buffer_after_mins")
-    .in("id", serviceIds);
-  if (error) throw error;
-  return data ?? [];
+  const key = [...new Set(serviceIds)].sort().join(",");
+  const cached = serviceBufferRowsCache.get(key);
+  if (cached) return cached;
+  const inFlight = serviceBufferRowsRequests.get(key);
+  if (inFlight) return inFlight;
+
+  const request = (async () => {
+    const { data, error } = await supabase
+      .from("services")
+      .select("id, buffer_before_mins, buffer_after_mins")
+      .in("id", serviceIds);
+    if (error) throw error;
+    return (data ?? []) as ServiceBufferRow[];
+  })()
+    .then(rows => {
+      serviceBufferRowsCache.set(key, rows);
+      return rows;
+    })
+    .finally(() => {
+      serviceBufferRowsRequests.delete(key);
+    });
+  serviceBufferRowsRequests.set(key, request);
+  return request;
 }
 
 /** Which of these service ids a client can still actually book.
@@ -3953,11 +4052,46 @@ async function fetchAvailabilityProviderCore(providerId: string): Promise<{
   };
 }
 
-export async function getAvailabilityDateExceptions(
-  providerId: string,
-  fromDate: string,
-  toDate: string,
-): Promise<{
+/**
+ * Blocked dates, overrides and busy spans, cached per provider across the whole
+ * booking horizon in one read and sliced in memory for whatever narrower range
+ * a caller asks for.
+ *
+ * Same rationale as availabilityCoreCache one screen up: opening the booking
+ * sheet fans out into a week of per-day slot lookups, plus a ~60-day "find the
+ * next available date" scan, plus the parent sheet's own earliest-slot resolve
+ * — and paging to the next week does the seven day lookups all over again. Each
+ * of those was independently re-hitting provider_blocked_dates,
+ * provider_availability_overrides and the get_provider_busy_spans RPC. None of
+ * that data varies by the sub-range asked for, and it's small, so one
+ * horizon-wide read per provider serves every caller until its TTL lapses.
+ * Ranges that fall outside the horizon (history, or dates past the booking
+ * window) skip the cache and query directly — uncommon, and correctness wins.
+ */
+const AVAILABILITY_RANGE_CACHE_TTL_MS = 15_000;
+const AVAILABILITY_RANGE_CACHE_MAX_ENTRIES = 40;
+// Booking windows cap at 60 days (getProviderBookingWindowDays' default); the
+// slack covers resolveNextAvailableSlot's "+1..+3 day" rescue scan past that.
+const AVAILABILITY_RANGE_HORIZON_DAYS = 66;
+
+const toIsoDate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** [today, today + horizon] in local YYYY-MM-DD — the span the caches hold. */
+function availabilityHorizonRange(): { from: string; to: string } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setDate(end.getDate() + AVAILABILITY_RANGE_HORIZON_DAYS);
+  return { from: toIsoDate(today), to: toIsoDate(end) };
+}
+
+function rangeWithinAvailabilityHorizon(fromDate: string, toDate: string): boolean {
+  const h = availabilityHorizonRange();
+  return fromDate >= h.from && toDate <= h.to && fromDate <= toDate;
+}
+
+type AvailabilityExceptionsPayload = {
   blockedDates: string[];
   overrides: {
     availability_date: string;
@@ -3965,7 +4099,35 @@ export async function getAvailabilityDateExceptions(
     start_time: string | null;
     end_time: string | null;
   }[];
-}> {
+};
+
+const availabilityExceptionsCache = new BoundedTtlCache<string, AvailabilityExceptionsPayload>(
+  AVAILABILITY_RANGE_CACHE_TTL_MS,
+  AVAILABILITY_RANGE_CACHE_MAX_ENTRIES,
+);
+const availabilityExceptionsRequests = new Map<string, Promise<AvailabilityExceptionsPayload>>();
+
+const providerBusySpansCache = new BoundedTtlCache<string, ProviderBusySpan[]>(
+  AVAILABILITY_RANGE_CACHE_TTL_MS,
+  AVAILABILITY_RANGE_CACHE_MAX_ENTRIES,
+);
+const providerBusySpansRequests = new Map<string, Promise<ProviderBusySpan[]>>();
+
+/** Drop the per-provider horizon caches — call after the app itself writes a
+ *  blocked date, an override, or a booking for this provider, so the picker
+ *  doesn't keep serving the pre-write horizon for the rest of the TTL. */
+export function invalidateProviderAvailabilityRanges(providerId: string): void {
+  availabilityExceptionsCache.delete(providerId);
+  availabilityExceptionsRequests.delete(providerId);
+  providerBusySpansCache.delete(providerId);
+  providerBusySpansRequests.delete(providerId);
+}
+
+async function fetchAvailabilityDateExceptionsRange(
+  providerId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<AvailabilityExceptionsPayload> {
   const [blocked, overrides] = await Promise.all([
     supabase
       .from("provider_blocked_dates")
@@ -3987,6 +4149,46 @@ export async function getAvailabilityDateExceptions(
     blockedDates: (blocked.data ?? []).map(row => row.blocked_date),
     overrides: overrides.data ?? [],
   };
+}
+
+/** The whole horizon's exceptions for one provider, cached + in-flight-deduped
+ *  so the seven parallel day lookups that open together share one request. */
+async function getAvailabilityExceptionsHorizon(
+  providerId: string,
+): Promise<AvailabilityExceptionsPayload> {
+  const cached = availabilityExceptionsCache.get(providerId);
+  if (cached) return cached;
+  const inFlight = availabilityExceptionsRequests.get(providerId);
+  if (inFlight) return inFlight;
+
+  const { from, to } = availabilityHorizonRange();
+  const request = fetchAvailabilityDateExceptionsRange(providerId, from, to)
+    .then(payload => {
+      availabilityExceptionsCache.set(providerId, payload);
+      return payload;
+    })
+    .finally(() => {
+      availabilityExceptionsRequests.delete(providerId);
+    });
+  availabilityExceptionsRequests.set(providerId, request);
+  return request;
+}
+
+export async function getAvailabilityDateExceptions(
+  providerId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<AvailabilityExceptionsPayload> {
+  if (rangeWithinAvailabilityHorizon(fromDate, toDate)) {
+    const all = await getAvailabilityExceptionsHorizon(providerId);
+    return {
+      blockedDates: all.blockedDates.filter(d => d >= fromDate && d <= toDate),
+      overrides: all.overrides.filter(
+        o => o.availability_date >= fromDate && o.availability_date <= toDate,
+      ),
+    };
+  }
+  return fetchAvailabilityDateExceptionsRange(providerId, fromDate, toDate);
 }
 
 /**
@@ -4058,7 +4260,7 @@ export interface ProviderBusySpan {
  *
  * Requires supabase/provider_busy_spans_rpc.sql to be deployed.
  */
-export async function getProviderBusySpans(
+async function fetchProviderBusySpansRange(
   providerId: string,
   fromDate: string,
   toDate: string,
@@ -4070,6 +4272,42 @@ export async function getProviderBusySpans(
   });
   if (error) throw error;
   return (data ?? []) as ProviderBusySpan[];
+}
+
+/** The whole horizon's busy spans for one provider, cached + in-flight-deduped.
+ *  Stale for at most the TTL after a booking lands elsewhere — the server-side
+ *  overlap constraint and the checkout slot hold are what actually prevent a
+ *  double-book, so a briefly-stale free slot is caught at submit, not offered
+ *  through. */
+async function getProviderBusySpansHorizon(providerId: string): Promise<ProviderBusySpan[]> {
+  const cached = providerBusySpansCache.get(providerId);
+  if (cached) return cached;
+  const inFlight = providerBusySpansRequests.get(providerId);
+  if (inFlight) return inFlight;
+
+  const { from, to } = availabilityHorizonRange();
+  const request = fetchProviderBusySpansRange(providerId, from, to)
+    .then(spans => {
+      providerBusySpansCache.set(providerId, spans);
+      return spans;
+    })
+    .finally(() => {
+      providerBusySpansRequests.delete(providerId);
+    });
+  providerBusySpansRequests.set(providerId, request);
+  return request;
+}
+
+export async function getProviderBusySpans(
+  providerId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<ProviderBusySpan[]> {
+  if (rangeWithinAvailabilityHorizon(fromDate, toDate)) {
+    const all = await getProviderBusySpansHorizon(providerId);
+    return all.filter(s => s.booking_date >= fromDate && s.booking_date <= toDate);
+  }
+  return fetchProviderBusySpansRange(providerId, fromDate, toDate);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -4476,16 +4714,21 @@ export async function addProviderAvailabilityOverride(
     .from("provider_availability_overrides")
     .insert({ provider_id: providerId, ...override });
   if (error) throw error;
+  invalidateProviderAvailabilityRanges(providerId);
 }
 
 export async function removeProviderAvailabilityOverride(
   id: string,
+  /** Pass it when the caller has it, so the picker's cached horizon for this
+   *  provider is dropped now rather than after the TTL. */
+  providerId?: string,
 ): Promise<void> {
   const { error } = await supabase
     .from("provider_availability_overrides")
     .delete()
     .eq("id", id);
   if (error) throw error;
+  if (providerId) invalidateProviderAvailabilityRanges(providerId);
 }
 
 export async function updateProviderAutoAccept(
@@ -4653,14 +4896,21 @@ export async function addProviderBlockedDate(
     .from("provider_blocked_dates")
     .insert({ provider_id: providerId, blocked_date: date, reason });
   if (error) throw error;
+  invalidateProviderAvailabilityRanges(providerId);
 }
 
-export async function removeProviderBlockedDate(id: string): Promise<void> {
+export async function removeProviderBlockedDate(
+  id: string,
+  /** Pass it when the caller has it, so the picker's cached horizon for this
+   *  provider is dropped now rather than after the TTL. */
+  providerId?: string,
+): Promise<void> {
   const { error } = await supabase
     .from("provider_blocked_dates")
     .delete()
     .eq("id", id);
   if (error) throw error;
+  if (providerId) invalidateProviderAvailabilityRanges(providerId);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -8353,6 +8603,7 @@ export async function getProviderRegistrationDetails(providerId: string): Promis
         aftercare_notes,
         service_type,
         hair_types_suitable,
+        audience,
         service_images ( url, sort_order ),
         service_add_ons ( name, price )
       `)

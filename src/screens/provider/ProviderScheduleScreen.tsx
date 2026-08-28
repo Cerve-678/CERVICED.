@@ -360,7 +360,7 @@ export default function ProviderScheduleScreen() {
 
   async function handleRemoveBlock(id: string) {
     try {
-      await removeProviderBlockedDate(id);
+      await removeProviderBlockedDate(id, providerId ?? undefined);
       setBlockedDates(prev => prev.filter(b => b.id !== id));
     } catch {
       showToast('Could not remove blocked date.', 'error');
@@ -405,7 +405,7 @@ export default function ProviderScheduleScreen() {
 
   async function handleRemoveOverride(id: string) {
     try {
-      await removeProviderAvailabilityOverride(id);
+      await removeProviderAvailabilityOverride(id, providerId ?? undefined);
       setOverrides(prev => prev.filter(o => o.id !== id));
     } catch {
       showToast('Could not remove custom hours.', 'error');
