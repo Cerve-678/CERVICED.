@@ -27,6 +27,35 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-08-28 (client loyalty points — earning side)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260828185349 | `client_loyalty_points` | `client_points_ledger` table live, RLS enabled, one `SELECT` policy (`client_id = auth.uid()`); all three partial unique indexes present (`..._one_per_completed_booking`, `..._one_per_review`, `..._one_first_booking_per_client`); all 5 functions `SECURITY DEFINER` with `search_path=public, pg_temp` (confirmed via `pg_proc.proconfig`); triggers `on_booking_award_points`/`on_review_award_points` present; cron `award-birthday-points` active, `0 6 * * *`. Renamed from its authored `20260828120000` to the version `apply_migration` actually recorded. |
+
+**Verified functionally, not just structurally**, in a rolled-back transaction
+(bookability trigger temporarily disabled for the test only, restored by the
+`ROLLBACK`): a booking completed then bounced back to `confirmed` and
+completed again produced exactly one `booking_completed` (50) + one
+`first_booking` (200) row — the re-completion did not double-award, both by
+the trigger's own `OLD.status IS DISTINCT FROM 'completed'` guard and the
+partial unique index as a second backstop. A second booking for the same
+client awarded only the 50, no second `first_booking`. A review insert
+awarded 20; a duplicate review on the same booking was rejected by
+`reviews_booking_id_key` before the trigger could even run. Final balance
+matched the predicted 50+200+50+20=320 exactly. No rows were left behind
+(`client_points_ledger` count 0 immediately after).
+
+New table only — does not touch `bookings`/`reviews` columns or the body of
+any pre-existing function (deliberately did **not** edit
+`process_birthday_greetings()`; birthday points are a new, separate cron).
+
+### Applied 2026-08-28 (per-service audience field)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260827231438 | `service_audience` | `services.audience` TEXT, nullable, live; `services_audience_check` allows NULL or one of `women`/`men`/`kids`/`everyone` (confirmed via `pg_get_constraintdef`); `replace_provider_services` INSERT column list carries `audience` through from the jsonb payload (confirmed with a rolled-back direct INSERT of `audience='kids'`, since the RPC itself requires an authenticated owner `execute_sql` can't satisfy). NULL means "not stated", read as "everyone" by the app — same convention as `services.hair_types_suitable`'s "suits all" empty case. Renamed from its authored `20260828120000` to the version `apply_migration` actually recorded.
+
 Claim it by editing the block above — your session name/purpose, the date, and
 what you intend to change. Release it by setting it back to `(none)` when the
 work is **applied**, not when the file is written. An unapplied migration is

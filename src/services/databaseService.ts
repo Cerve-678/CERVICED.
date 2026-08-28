@@ -344,6 +344,33 @@ export async function deleteProviderAccountProfile(): Promise<AccountDeletionRes
   return (data ?? {}) as AccountDeletionResult;
 }
 
+/** Current signed-in client's loyalty points balance (sum of client_points_ledger). */
+export async function getClientPointsBalance(): Promise<number> {
+  const { data, error } = await supabase.rpc("get_client_points_balance");
+  if (error) throw error;
+  return (data ?? 0) as number;
+}
+
+export type ClientPointsReason =
+  | "booking_completed"
+  | "review_left"
+  | "first_booking"
+  | "birthday_bonus";
+
+export interface ClientPointsLedgerEntry {
+  id: string;
+  delta: number;
+  reason: ClientPointsReason;
+  created_at: string;
+}
+
+/** Current signed-in client's points history, most recent first. */
+export async function getClientPointsHistory(limit = 50): Promise<ClientPointsLedgerEntry[]> {
+  const { data, error } = await supabase.rpc("get_client_points_history", { p_limit: limit });
+  if (error) throw error;
+  return (data ?? []) as ClientPointsLedgerEntry[];
+}
+
 /**
  * DATABASE SERVICE — SINGLE ACCESS POINT
  *
