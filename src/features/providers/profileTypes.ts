@@ -89,6 +89,9 @@ export interface ProviderProfileData {
     depositAmount?: string;
     noShowAction?: string;
     policyImageUrl?: string;
+    // Read by EmergencyBookingPrompt (via BookingSheet/MultiBookingSheet) while
+    // EMERGENCY_BOOKINGS_ENABLED is on. Authored on PoliciesScreen.
+    emergencyBookingPolicy?: string;
   } | null;
   cancellationNoticeHours: number;
   waitlistEnabled: boolean;

@@ -33,12 +33,12 @@ interface EmergencyBookingPromptProps {
   time: string;
   /** Every rule this time breaks, from the slot itself. */
   reasons: EmergencyReason[];
-  /** Whether this provider has written any terms to send the client to. When
-   *  false the policy link is hidden and the acknowledgement drops its
-   *  reference to reading one, rather than pointing at nothing. */
+  /** Whether this provider has written an Emergency Booking Policy to send the
+   *  client to. When false the policy link is hidden and the acknowledgement
+   *  drops its reference to reading one, rather than pointing at nothing. */
   hasPolicy: boolean;
-  /** Opens the provider's terms. The caller owns that modal (both sheets
-   *  already render one), so this prompt stays open underneath it. */
+  /** Opens the provider's Emergency Booking Policy. The caller owns that modal
+   *  (both sheets render one), so this prompt stays open underneath it. */
   onReadPolicy: () => void;
   /** Ticked-and-confirmed. */
   onConfirm: () => void;
@@ -113,10 +113,10 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
                 onPress={onReadPolicy}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Read ${providerName}'s terms and conditions`}
+                accessibilityLabel={`Read ${providerName}'s emergency booking policy`}
               >
                 <Text style={[styles.policyText, { color: accentColor }]}>
-                  Read {providerName}'s policy first
+                  Read {providerName}'s Emergency Booking Policy first
                 </Text>
                 <Text style={[styles.policyChevron, { color: accentColor }]}>›</Text>
               </TouchableOpacity>
@@ -143,7 +143,7 @@ export const EmergencyBookingPrompt: React.FC<EmergencyBookingPromptProps> = ({
               </View>
               <Text style={[styles.ackText, { color: textColor }]}>
                 {hasPolicy
-                  ? `I've read ${providerName}'s policy and want to request this time.`
+                  ? `I've read ${providerName}'s Emergency Booking Policy and want to request this time.`
                   : `I understand this is outside ${providerName}'s normal availability and they have to accept it.`}
               </Text>
             </TouchableOpacity>

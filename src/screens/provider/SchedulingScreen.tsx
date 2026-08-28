@@ -47,6 +47,7 @@ import {
   BUFFER_OPTS, BOOKING_WINDOW_OPTS, MIN_NOTICE_OPTS, SLOT_INTERVAL_OPTS, MAX_PER_DAY_OPTS,
   REQUEST_WINDOW_OPTS,
 } from '../../features/business-details/options';
+import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 export default function SchedulingScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
@@ -305,6 +306,11 @@ export default function SchedulingScreen({ navigation }: any) {
             <RadioGroup options={MAX_PER_DAY_OPTS} value={maxBookingsPerDay} onChange={setMaxPerDay} />
           </Card>
 
+          {/* Emergency / out-of-hours requests are pulled from the client app
+              for now (EMERGENCY_BOOKINGS_ENABLED — see FUTURE_LOGIC.md). The
+              opt-ins keep round-tripping through load/save so a provider's
+              stored choices survive; the control is just hidden meanwhile. */}
+          {EMERGENCY_BOOKINGS_ENABLED && (
           <Card
             title="Requests Outside Your Availability"
             sub="Every rule above normally stops a client dead. Turn one on here and they can ask instead — you decide each time, and nothing is ever booked automatically."
@@ -356,6 +362,7 @@ export default function SchedulingScreen({ navigation }: any) {
               </>
             )}
           </Card>
+          )}
 
           <SaveButton saving={saving} onPress={handleSave} />
         </ScrollView>

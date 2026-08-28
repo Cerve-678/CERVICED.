@@ -29,6 +29,7 @@ import type { EmergencyReason } from '../services/AvailabilityService';
 import type { EmergencyRequest } from '../contexts/CartContext';
 import { BookingService, DepositPolicy } from '../services/bookingService';
 import {
+  getProviderBookingPoliciesById,
   getProviderDepositPoliciesByDisplayNames,
   getProviderIdByDisplayName,
   getProviderTerms,
@@ -37,6 +38,7 @@ import {
 } from '../services/databaseService';
 import { PromoCodeRow } from './PromoCodeRow';
 import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
+import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import type { DbPromotion } from '../types/database';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
@@ -273,6 +275,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const resolvedOnce = useRef(false);
   const depositFetched = useRef(false);
   const termsFetched = useRef(false);
+  const fetchedPoliciesRef = useRef(false);
   const [providerTerms, setProviderTerms] = useState<{ title: string; body: string } | null>(null);
   const [showProviderTerms, setShowProviderTerms] = useState(false);
   // Agreement to the provider's OWN terms, gating add-to-cart. Separate from
@@ -290,6 +293,25 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
   const [pendingEmergency, setPendingEmergency] = useState<{ time: string; reasons: EmergencyReason[] } | null>(null);
   const [emergencyAck, setEmergencyAck] = useState(false);
   const [emergencyRequest, setEmergencyRequest] = useState<EmergencyRequest | null>(null);
+  const [showEmergencyPolicy, setShowEmergencyPolicy] = useState(false);
+  // The provider's Emergency Booking Policy — a free-text field on
+  // booking_policies, authored on PoliciesScreen. Its own document, distinct
+  // from `providerTerms` (the add-to-cart T&Cs form); the client reads it in
+  // the "scheduling conflict" prompt before asking for a time outside the
+  // provider's normal availability. Only surfaced while EMERGENCY_BOOKINGS_
+  // ENABLED is on — the prompt can't open otherwise.
+  //
+  // Prefer the caller's `bookingPolicies` prop; fall back to a self-fetch
+  // (below) so the cart's edit-mode invocation — which passes no
+  // bookingPolicies — still resolves it, the same way this sheet already
+  // self-fetches `providerTerms` regardless of caller.
+  const [fetchedBookingPolicies, setFetchedBookingPolicies] =
+    useState<Record<string, unknown> | null>(null);
+  const effectiveBookingPolicies = bookingPolicies ?? fetchedBookingPolicies;
+  const emergencyPolicyText =
+    typeof effectiveBookingPolicies?.['emergencyBookingPolicy'] === 'string'
+      ? (effectiveBookingPolicies['emergencyBookingPolicy'] as string).trim()
+      : '';
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset/seed local state each time the sheet opens for a (possibly new) service.
@@ -307,9 +329,19 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
     resolvedOnce.current = false;
     depositFetched.current = false;
     termsFetched.current = false;
+    // Clear the resolved values too, not just the "fetched" refs — the sheet
+    // is reused across providers (editingItem stays mounted), so without this
+    // the previous provider's deposit label and T&Cs render until the refetch
+    // for the new one lands, and depositPolicy?.depositOnly can force
+    // isDepositOnly off a stale policy.
+    setDepositPolicy(undefined);
+    setProviderTerms(null);
     setAgreedToProviderTerms(false);
     setPendingEmergency(null);
     setEmergencyAck(false);
+    setShowEmergencyPolicy(false);
+    fetchedPoliciesRef.current = false;
+    setFetchedBookingPolicies(null);
     setEmergencyRequest(initial?.emergencyRequest ?? null);
     consultationResolvedOnce.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -382,6 +414,24 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       .then(setProviderTerms)
       .catch(() => setProviderTerms(null));
   }, [isVisible, providerIdentifier, providerDisplayName]);
+
+  // Self-fetch booking_policies only when the caller didn't supply them (the
+  // cart's edit-mode sheet) AND the emergency flow is live — the only reader
+  // of the fetched blob is the Emergency Booking Policy modal. Keeps
+  // `emergencyPolicyText` correct on every path without threading a third prop
+  // through two call sites.
+  useEffect(() => {
+    if (!EMERGENCY_BOOKINGS_ENABLED) return;
+    if (!isVisible || bookingPolicies || fetchedPoliciesRef.current) return;
+    fetchedPoliciesRef.current = true;
+    const resolveProviderId = UUID_RE.test(providerIdentifier)
+      ? Promise.resolve(providerIdentifier)
+      : getProviderIdByDisplayName(providerDisplayName);
+    resolveProviderId
+      .then(id => (id ? getProviderBookingPoliciesById(id) : null))
+      .then(setFetchedBookingPolicies)
+      .catch(() => setFetchedBookingPolicies(null));
+  }, [isVisible, bookingPolicies, providerIdentifier, providerDisplayName]);
 
   // Provider requires deposit-only (set in their business details) — the
   // client has no "pay in full" choice, so force it regardless of whatever
@@ -597,8 +647,11 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       // then discarded, so a provider editing their terms afterwards left the
       // agreed version unrecoverable.
       ...(() => {
+        // effectiveBookingPolicies, not the raw prop — so the self-fetched
+        // blob (cart edit mode passes no bookingPolicies prop) reaches the
+        // snapshot rather than being silently dropped.
         const snapshot = buildPolicySnapshot(
-          bookingPolicies,
+          effectiveBookingPolicies,
           agreedToProviderTerms ? providerTerms : null,
         );
         return snapshot ? { policySnapshot: snapshot } : {};
@@ -608,7 +661,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
       ...(emergencyRequest ? { emergencyRequest } : {}),
     });
     onClose();
-  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, bookingPolicies, agreedToProviderTerms, providerTerms, emergencyRequest, onSubmit, onClose]);
+  }, [service, consultationScheduleMissing, providerTermsGateUnmet, selectedAddOns, selectedDate, selectedTime, notes, isDepositOnly, mode, localPromo, consultationRequired, consultationDate, consultationTime, effectiveBookingPolicies, agreedToProviderTerms, providerTerms, emergencyRequest, onSubmit, onClose]);
 
   if (!service) return null;
 
@@ -772,7 +825,7 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                   onDateSelect={handleSelectDate}
                   onTimeSelect={handleSelectTime}
                   selectedTime={selectedTime}
-                  allowRequests
+                  allowRequests={EMERGENCY_BOOKINGS_ENABLED}
                   providerLabel={providerDisplayName}
                   providerName={providerIdentifier}
                   serviceDuration={service.duration}
@@ -1128,8 +1181,8 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
           date={selectedDate}
           time={pendingEmergency.time}
           reasons={pendingEmergency.reasons}
-          hasPolicy={!!providerTerms}
-          onReadPolicy={() => setShowProviderTerms(true)}
+          hasPolicy={!!emergencyPolicyText}
+          onReadPolicy={() => setShowEmergencyPolicy(true)}
           acknowledged={emergencyAck}
           onToggleAcknowledged={() => setEmergencyAck(prev => !prev)}
           onConfirm={confirmEmergency}
@@ -1172,6 +1225,44 @@ export const BookingSheet: React.FC<BookingSheetProps> = ({
                 </Text>
                 <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
                   Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* The provider's Emergency Booking Policy — a separate document from
+          their Terms & Conditions above. Opened from the "scheduling conflict"
+          prompt, so it lands on top of both the sheet and that prompt. */}
+      <Modal
+        visible={showEmergencyPolicy}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEmergencyPolicy(false)}
+      >
+        <View style={styles.termsOverlay}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+              <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
+                  Emergency Booking Policy
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowEmergencyPolicy(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close emergency booking policy"
+                >
+                  <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.termsBody}>
+                <Text style={[styles.termsBodyText, { color: tokens.text }]}>
+                  {emergencyPolicyText}
+                </Text>
+                <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
+                  Written by {providerDisplayName}, for times outside their normal availability.
                 </Text>
               </ScrollView>
             </SafeAreaView>

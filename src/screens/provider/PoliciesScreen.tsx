@@ -373,11 +373,18 @@ export default function PoliciesScreen({ navigation }: any) {
                 title="Emergency Booking Policy"
                 sub="Shown to a client before they ask for a time outside your normal availability (optional). Separate from your Terms & Conditions."
               >
+                {/* Placeholder deliberately does NOT exemplify a surcharge or
+                    any off-app payment term — the checkout flow doesn't read
+                    this field, so a money term written here would be an
+                    undisclosed off-app charge (see the deposit/balance
+                    liability boundary in CLAUDE.md and FUTURE_LOGIC.md's
+                    emergency-surcharge note). Keep examples to availability
+                    and process. */}
                 <Field
                   label="Your emergency booking policy"
                   value={policies.emergencyBookingPolicy}
                   onChange={v => setPolicy('emergencyBookingPolicy', v)}
-                  placeholder='e.g. "Out-of-hours requests carry a £15 surcharge and are confirmed by message only"'
+                  placeholder="e.g. I only take out-of-hours requests from existing clients, and I need at least a day's notice to say yes"
                   multiline
                 />
               </Card>

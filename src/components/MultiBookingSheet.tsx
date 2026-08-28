@@ -51,6 +51,7 @@ import {
   ProviderDepositPolicy,
 } from '../services/databaseService';
 import { buildThemeTokens, withAlpha, isDarkColor } from '../constants/providerThemes';
+import { EMERGENCY_BOOKINGS_ENABLED } from '../constants/featureFlags';
 import { buildPolicySnapshot } from '../utils/policyDisplay';
 import { logger } from '../utils/logger';
 import * as Haptics from 'expo-haptics';
@@ -247,6 +248,15 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
   // policy_accepted_at server-side. This sheet is add-only, so it always
   // applies.
   const [agreedToProviderTerms, setAgreedToProviderTerms] = useState(false);
+  const [showEmergencyPolicy, setShowEmergencyPolicy] = useState(false);
+  // The provider's Emergency Booking Policy — a free-text field on
+  // booking_policies (PoliciesScreen), a distinct document from `providerTerms`
+  // (the add-to-cart T&Cs form). Read in the "scheduling conflict" prompt.
+  // Mirrors BookingSheet. Only reachable while EMERGENCY_BOOKINGS_ENABLED is on.
+  const emergencyPolicyText =
+    typeof bookingPolicies?.['emergencyBookingPolicy'] === 'string'
+      ? (bookingPolicies['emergencyBookingPolicy'] as string).trim()
+      : '';
   const scrollRef = useRef<ScrollView>(null);
 
   // Reset local state each time the sheet OPENS — keyed on `isVisible` alone.
@@ -276,6 +286,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
     setSeparateTimes({});
     setPendingSeparateEmergency(null);
     setSeparateEmergencyAck(false);
+    setShowEmergencyPolicy(false);
     setEmergencyByKey({});
     setResolvingSeparate({});
     separateResolvedRef.current = new Set();
@@ -827,7 +838,7 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                       onDateSelect={d => handleSeparateDate(key, d)}
                       onTimeSelect={(t, reasons) => handleSeparateTime(key, service.name, t, reasons)}
                       selectedTime={separateTimes[key] ?? ''}
-                      allowRequests
+                      allowRequests={EMERGENCY_BOOKINGS_ENABLED}
                       providerLabel={providerDisplayName}
                       providerName={providerIdentifier}
                       serviceDuration={service.duration}
@@ -1208,8 +1219,8 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
           date={pendingSeparateEmergency.date}
           time={pendingSeparateEmergency.time}
           reasons={pendingSeparateEmergency.reasons}
-          hasPolicy={!!providerTerms}
-          onReadPolicy={() => setShowProviderTerms(true)}
+          hasPolicy={!!emergencyPolicyText}
+          onReadPolicy={() => setShowEmergencyPolicy(true)}
           acknowledged={separateEmergencyAck}
           onToggleAcknowledged={() => setSeparateEmergencyAck(prev => !prev)}
           onConfirm={confirmSeparateEmergency}
@@ -1252,6 +1263,44 @@ export const MultiBookingSheet: React.FC<MultiBookingSheetProps> = ({
                 </Text>
                 <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
                   Written by {providerDisplayName}. These are their own terms, not CERVICED's.
+                </Text>
+              </ScrollView>
+            </SafeAreaView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* The provider's Emergency Booking Policy — separate from their Terms &
+          Conditions above. Opened from the "scheduling conflict" prompt.
+          Mirrors BookingSheet's. */}
+      <Modal
+        visible={showEmergencyPolicy}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEmergencyPolicy(false)}
+      >
+        <View style={styles.termsOverlay}>
+          <View style={[styles.termsSheet, { backgroundColor: sheetBackground }]}>
+            <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+              <View style={[styles.termsHeader, { borderBottomColor: tokens.border }]}>
+                <Text style={[styles.termsTitle, { color: tokens.text }]} numberOfLines={1}>
+                  Emergency Booking Policy
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowEmergencyPolicy(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close emergency booking policy"
+                >
+                  <Text style={[styles.termsClose, { color: tokens.sub }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.termsBody}>
+                <Text style={[styles.termsBodyText, { color: tokens.text }]}>
+                  {emergencyPolicyText}
+                </Text>
+                <Text style={[styles.termsFootnote, { color: tokens.sub }]}>
+                  Written by {providerDisplayName}, for times outside their normal availability.
                 </Text>
               </ScrollView>
             </SafeAreaView>
