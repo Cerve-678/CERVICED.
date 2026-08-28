@@ -27,6 +27,17 @@ SINCE:  --
 SCOPE:  --
 ```
 
+### Applied 2026-08-28 (client loyalty points round 2 — more earn ways, birthday tied to a booking, points_earned notification)
+
+| Recorded version | Name | Verified live |
+|---|---|---|
+| 20260828192536 | `client_loyalty_points_expansion` | `client_points_ledger.provider_id` column live; `client_points_ledger_reason_check` widened to include `profile_completed`/`returning_client`; both new partial unique indexes present; `notifications_type_check` widened to include `points_earned` (reproduced all 37 prior values from `pg_get_constraintdef`, verified none dropped); `award-birthday-points` cron and `award_birthday_points()` function both confirmed gone. **Applied with a real bug**: `award_points_on_booking_completed()`'s `v_lines || 'literal'` is invalid plpgsql (raises `malformed array literal`) — live-but-broken until the very next migration replaced it. |
+| 20260828192643 | `client_loyalty_points_fix_array_append` | Same function rebuilt with `array_append()` in place of `||`. Caught by a functional test in a rolled-back transaction — never reached by a real booking. |
+
+**Verified functionally, not just structurally**, in a rolled-back transaction (bookability trigger disabled for the test only): four completed bookings across two providers plus a review plus a profile-photo add produced balance 300 → 380 → 430 → 480 → 500 → 530, matching the predicted total exactly — booking1 (dated to match a test birthday) awarded `booking_completed`+`first_booking`+`birthday_bonus` in ONE notification; booking2 (2nd with the same provider) awarded `booking_completed`+`returning_client`; booking3 (1st with a different provider) awarded only `booking_completed` (no false `returning_client`); booking4 (3rd with the original provider) again awarded only `booking_completed` — the `returning_client` unique index correctly blocked a second award. Checked all 5 `points_earned` notification messages individually (not just the count), each attributing the right combination of reasons to the right `booking_id`. Setting `avatar_url` a second time did not re-award `profile_completed` (`OLD.avatar_url IS NULL` guard). No rows were left behind after `ROLLBACK`.
+
+Reproducing this from the migration files: `20260828192536` alone reproduces the broken function on purpose — it's an honest record of what was actually applied at that version, not a cleaned-up rewrite. `20260828192643` must run immediately after it, same as it did live, before it's safe to complete a real booking.
+
 ### Applied 2026-08-28 (client loyalty points — earning side)
 
 | Recorded version | Name | Verified live |

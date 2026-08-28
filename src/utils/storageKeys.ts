@@ -21,6 +21,9 @@ export const STORAGE_KEYS = {
   USER_LEARNING:      '@cerviced_learning',
   /** Cart items — survives app close/kill so an in-progress checkout isn't lost */
   CART_ITEMS:          '@cerviced_cart',
+  /** Prefix (suffix with user id) — the points balance PointsScreen last showed
+   *  this client, so it can highlight what changed since their last visit. */
+  POINTS_LAST_SEEN_BALANCE_PREFIX: '@points_last_seen_balance_',
 } as const;
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

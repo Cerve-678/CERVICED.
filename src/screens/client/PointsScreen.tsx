@@ -10,9 +10,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
+import { FLOATING_TAB_BAR_CLEARANCE } from '../../components/IslandPillTabBar';
 import Icon from '../../components/IconLibrary';
 import {
   getClientPointsBalance,
@@ -22,19 +25,22 @@ import {
 } from '../../services/databaseService';
 import { timeAgo } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
+import { STORAGE_KEYS } from '../../utils/storageKeys';
 
 const EARN_WAYS = [
-  { icon: 'event-available', label: 'Complete a Booking', points: '+50 pts', desc: 'Every completed appointment', live: true },
+  { icon: 'calendar-today', label: 'Complete a Booking', points: '+50 pts', desc: 'Every completed appointment', live: true },
   { icon: 'star', label: 'Leave a Review', points: '+20 pts', desc: 'After each booking', live: true },
   { icon: 'emoji-events', label: 'First Booking', points: '+200 pts', desc: 'One-time welcome bonus', live: true },
-  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'On your birthday', live: true },
+  { icon: 'user', label: 'Complete Your Profile', points: '+30 pts', desc: 'One-time, once you add a photo', live: true },
+  { icon: 'heart', label: 'Book With a Provider Again', points: '+30 pts', desc: 'Once per provider you return to', live: true },
+  { icon: 'cake', label: 'Birthday Bonus', points: '+50 pts', desc: 'Book an appointment on your birthday', live: true },
   { icon: 'person-add', label: 'Refer a Friend', points: '', desc: 'Coming soon', live: false },
 ];
 
 const REDEEM_WAYS = [
   { icon: 'local-offer', label: '£5 Off a Booking', points: '500 pts' },
   { icon: 'card-giftcard', label: 'Gift a Provider', points: '300 pts' },
-  { icon: 'loyalty', label: 'Upgrade Trial', points: '1,000 pts' },
+  { icon: 'auto-awesome', label: 'Upgrade Trial', points: '1,000 pts' },
 ];
 
 const REASON_LABEL: Record<ClientPointsReason, string> = {
@@ -42,16 +48,20 @@ const REASON_LABEL: Record<ClientPointsReason, string> = {
   review_left: 'Left a review',
   first_booking: 'First booking bonus',
   birthday_bonus: 'Birthday bonus',
+  profile_completed: 'Completed your profile',
+  returning_client: 'Booked with a provider again',
 };
 
 export default function PointsScreen({ navigation }: any) {
-  const { theme, palette: P } = useTheme();
+  const { theme, palette: P, isDarkMode } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [balance, setBalance] = useState(0);
   const [history, setHistory] = useState<ClientPointsLedgerEntry[]>([]);
+  const [newSinceLastVisit, setNewSinceLastVisit] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -67,6 +77,21 @@ export default function PointsScreen({ navigation }: any) {
           setBalance(balanceResult);
           setHistory(historyResult);
           setLoadError(false);
+
+          // Compare against the balance this client last saw on this screen,
+          // per-account (device may have more than one account sign in over
+          // time) — a first-ever visit has nothing to compare against, so it
+          // just records the starting point rather than "celebrating" the
+          // client's whole lifetime balance.
+          if (user?.id) {
+            const key = `${STORAGE_KEYS.POINTS_LAST_SEEN_BALANCE_PREFIX}${user.id}`;
+            const stored = await AsyncStorage.getItem(key).catch(() => null);
+            const lastSeen = stored !== null ? parseInt(stored, 10) : null;
+            if (lastSeen !== null && balanceResult > lastSeen) {
+              setNewSinceLastVisit(balanceResult - lastSeen);
+            }
+            await AsyncStorage.setItem(key, String(balanceResult)).catch(() => {});
+          }
         } catch (error) {
           if (cancelled) return;
           logger.error('Failed to load points balance/history:', error);
@@ -77,14 +102,14 @@ export default function PointsScreen({ navigation }: any) {
       };
       load();
       return () => { cancelled = true; };
-    }, [])
+    }, [user?.id])
   );
 
   return (
     <ThemedBackground style={styles.bg}>
       <StatusBar barStyle={theme.statusBar} translucent />
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 40 + FLOATING_TAB_BAR_CLEARANCE }]}
         showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity
@@ -99,6 +124,15 @@ export default function PointsScreen({ navigation }: any) {
         <Text style={[styles.subtitle, { color: P.sub }]}>
           Earn points for every booking and interaction
         </Text>
+
+        {newSinceLastVisit > 0 && (
+          <View style={[styles.celebrateBanner, { backgroundColor: P.accentText }]}>
+            <Icon name="emoji-events" size={18} color={isDarkMode ? '#1A1815' : '#FFF'} />
+            <Text style={[styles.celebrateText, { color: isDarkMode ? '#1A1815' : '#FFF' }]}>
+              +{newSinceLastVisit} points since you were last here! 🎉
+            </Text>
+          </View>
+        )}
 
         {/* Balance card */}
         <View style={[styles.balanceCard, {
@@ -184,6 +218,16 @@ const styles = StyleSheet.create({
   backArrow: { fontSize: 22, fontWeight: '900' },
   title: { fontFamily: 'BakbakOne-Regular', fontSize: 28, letterSpacing: 1, marginBottom: 6 },
   subtitle: { fontSize: 14, marginBottom: 24, lineHeight: 20 },
+  celebrateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  celebrateText: { fontSize: 13, fontWeight: '700', flex: 1 },
   balanceCard: {
     borderRadius: 20,
     borderWidth: 1,

@@ -355,7 +355,9 @@ export type ClientPointsReason =
   | "booking_completed"
   | "review_left"
   | "first_booking"
-  | "birthday_bonus";
+  | "birthday_bonus"
+  | "profile_completed"
+  | "returning_client";
 
 export interface ClientPointsLedgerEntry {
   id: string;

@@ -400,6 +400,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       'birthday_greeting',
       'post_appt_check_in',
       'rebooking_nudge',
+      'points_earned',
     ]);
     if (isProviderRef.current && CLIENT_ONLY_TYPES.has(notification.type)) {
       logger.log('[NotificationsScreen] Ignoring client-only notification in provider mode:', notification.type);
@@ -593,6 +594,12 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
       defer(() => {
         navigateProviderHome('ProviderSchedule');
       }, 300);
+    } else if (notification.type === 'points_earned') {
+      // Client-only (guarded by CLIENT_ONLY_TYPES above) — the Rewards screen
+      // is nested under the Profile tab, not Home.
+      defer(() => {
+        dismissThenNavigate(() => navigateNested('Profile', 'Points'));
+      }, 300);
     }
   }, [navigation, navigateProviderHome, defer, dismissThenNavigate, dismissOnly]);
 
@@ -650,7 +657,7 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
     // the booking itself is untouched, so red would read as "your appointment
     // is off" when the appointment is exactly as it was.
     if (['booking_pending', 'reschedule_request', 'reschedule_provider_response', 'reschedule_expired', 'cancel_window_closing', 'intake_form_reminder', 'intake_form_received', 'info_pack_received', 'pending_booking_reminder', 'booking_reminder', 'rebooking_nudge', 'daily_recap', 'schedule_fully_booked', 'waitlist_slot_available'].includes(type)) return '#FF9500';
-    if (['review_received', 'review_request'].includes(type)) return '#FFD700';
+    if (['review_received', 'review_request', 'points_earned'].includes(type)) return '#FFD700';
     if (['promotion', 'new_provider', 'provider_message', 'new_message', 'announcement', 'birthday_greeting', 'post_appt_check_in'].includes(type)) return P.accentText;
     return '#FF9800';
   };
@@ -720,6 +727,8 @@ export default function NotificationsScreen({ navigation }: HomeScreenProps<'Not
         return 'View Address';
       case 'schedule_fully_booked':
         return 'View Schedule';
+      case 'points_earned':
+        return 'View Rewards';
       default:
         return 'View';
     }

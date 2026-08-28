@@ -222,6 +222,16 @@ export async function handleNotificationTap(data: NotificationTapData): Promise<
     return;
   }
 
+  // ── Points earned (client-only) ──────────────────────────────────────────────
+  if (type === 'points_earned') {
+    if (!isProvider) {
+      navigateNested('Profile', 'Points');
+    } else {
+      openNotifications();
+    }
+    return;
+  }
+
   // ── Everything else → Notifications screen ───────────────────────────────────
   // (promotion, daily_recap, schedule_fully_booked, etc.) Either they have no
   // specific destination, or the in-app handler covers them.
