@@ -1,5 +1,9 @@
 export type ProviderServiceType = 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
 
+// '' = not stated, read as "everyone" by the app — mirrors the live
+// services_audience_check constraint (NULL or one of these three values).
+export type ProviderServiceAudience = 'women' | 'men' | 'kids' | 'everyone' | '';
+
 export interface ServiceTemplateSeed {
   name?: string;
   duration?: string;
@@ -34,6 +38,7 @@ export interface ProviderServiceDraft {
   aftercareNotes: string;
   serviceType: ProviderServiceType;
   hairTypesSuitable: string[];
+  audience: ProviderServiceAudience;
 }
 
 // Date.now() alone can return the same millisecond for two drafts created in
@@ -72,5 +77,6 @@ export function createServiceDraft(template?: ServiceTemplateSeed | null): Provi
     aftercareNotes: '',
     serviceType: template?.serviceType ?? '',
     hairTypesSuitable: [],
+    audience: '',
   };
 }

@@ -44,7 +44,7 @@ import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
-import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import { OFFERS_ENABLED, AUDIENCE_SERVICE_PHOTOS_ENABLED } from '../../constants/featureFlags';
 import { PortfolioCard } from '../../components/PortfolioCard';
 import type { PortfolioItem, ServiceCategory } from '../../types/providers';
 
@@ -525,12 +525,16 @@ export default function HomeScreen() {
     getProviderIdsByServiceAudience('kids').then(ids => {
       setKidsServiceProviderIds(new Set(ids));
     }).catch(() => {});
-    getDiscoverServices(undefined, 15, 'men').then(data => {
-      setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
-    }).catch(() => {});
-    getDiscoverServices(undefined, 15, 'kids').then(data => {
-      setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
-    }).catch(() => {});
+    // Photo rail fetch skipped while AUDIENCE_SERVICE_PHOTOS_ENABLED is off,
+    // see FUTURE_LOGIC.md — the provider-tile widening above is unaffected.
+    if (AUDIENCE_SERVICE_PHOTOS_ENABLED) {
+      getDiscoverServices(undefined, 15, 'men').then(data => {
+        setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
+      }).catch(() => {});
+      getDiscoverServices(undefined, 15, 'kids').then(data => {
+        setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
+      }).catch(() => {});
+    }
     return () => { locationRunCancelled = true; };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself
@@ -699,17 +703,22 @@ export default function HomeScreen() {
     return providersData.kidsProviders.slice(0, 15);
   }, [providersData.kidsProviders]);
 
-  // Phase 5.2 — profile-aware gating for MALE and KIDS sections
+  // Phase 5.2 — profile-aware POSITIONING for MALE and KIDS sections (not
+  // visibility — a service tagged for an audience should stay discoverable
+  // by everyone, just deprioritized for viewers it isn't aimed at). See the
+  // updated comment on homeSections.ts's showWhen for the full rationale.
+  const hasMaleSectionData = providersData.maleProviders.length > 0;
   // § config-driven — see src/config/homeSections.ts (id: 'male-services')
-  const showMaleSection = useMemo(() => {
+  const maleSectionRelevant = useMemo(() => {
     const config = HOME_SECTIONS.find(s => s.id === 'male-services');
-    return config?.showWhen?.(user, providersData) ?? (providersData.maleProviders.length > 0);
+    return config?.showWhen?.(user, providersData) ?? true;
   }, [user, providersData]);
 
+  const hasKidsSectionData = providersData.kidsProviders.length > 0;
   // § config-driven — see src/config/homeSections.ts (id: 'kids-services')
-  const showKidsSection = useMemo(() => {
+  const kidsSectionRelevant = useMemo(() => {
     const config = HOME_SECTIONS.find(s => s.id === 'kids-services');
-    return config?.showWhen?.(user, providersData) ?? (providersData.kidsProviders.length > 0);
+    return config?.showWhen?.(user, providersData) ?? true;
   }, [user, providersData]);
 
   const serviceProviders = useMemo(() => {
@@ -906,6 +915,154 @@ export default function HomeScreen() {
     });
   }, []);
 
+  // Rendered at one of two JSX positions depending on maleSectionRelevant /
+  // kidsSectionRelevant (see above) — the normal early slot, or pushed down
+  // to just above Book Again. Plain closures (not components) so calling
+  // one twice in the same render never double-mounts it — only one of the
+  // two call sites is ever reached, since the surrounding && conditions are
+  // mutually exclusive.
+  const renderMaleSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
+        <TouchableOpacity
+          onPress={toggleViewAllMaleServices}
+          style={styles.viewAllButton}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.viewAll, { color: P.sub }]}>
+            {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {viewAllMaleServices ? (
+        <View style={styles.expandedGrid}>
+          {maleProvidersDisplay.map((provider) => (
+            <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
+              <ProviderCard
+                provider={provider}
+                onPress={() => navigateToProvider(provider)}
+                style={styles.gridCard}
+                blurStyle={styles.gridCardBlur}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryScroll}
+          nestedScrollEnabled={true}
+        >
+          {maleProvidersDisplay.map(provider => (
+            <ProviderCard
+              key={`male-${provider.id}`}
+              provider={provider}
+              onPress={() => navigateToProvider(provider)}
+              style={styles.brandCard}
+              blurStyle={styles.brandCardBlur}
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Actual matching service listings (services.audience =
+          'men'), not just provider tiles — a HAIR provider with one
+          "Men's Cut" service shows that specific service here even
+          though their whole business isn't registered as MALE. Pulled
+          while AUDIENCE_SERVICE_PHOTOS_ENABLED is off, see FUTURE_LOGIC.md. */}
+      {AUDIENCE_SERVICE_PHOTOS_ENABLED && maleServiceCards.length > 0 && (
+        <>
+          <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
+            POPULAR MEN'S SERVICES
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
+            nestedScrollEnabled={true}
+          >
+            {maleServiceCards.map((item, index) => (
+              <View key={item.id} style={{ width: 130, marginRight: 12 }}>
+                <PortfolioCard
+                  item={item}
+                  columnWidth={130}
+                  imageHeight={170}
+                  onPress={navigateToAudienceService}
+                  index={index}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </>
+      )}
+    </View>
+  );
+
+  const renderKidsSection = () => (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>
+        <TouchableOpacity
+          onPress={toggleViewAllKidsServices}
+          style={styles.viewAllButton}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.viewAll, { color: P.sub }]}>
+            {viewAllKidsServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {viewAllKidsServices ? (
+        <View style={styles.expandedGrid}>
+          {kidsProvidersDisplay.map((provider) => (
+            <View key={`kids-expanded-${provider.id}`} style={styles.gridItem}>
+              <ProviderCard
+                provider={provider}
+                onPress={() => navigateToProvider(provider)}
+                style={styles.gridCard}
+                blurStyle={styles.gridCardBlur}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
+      )}
+
+      {/* Actual matching service listings (services.audience =
+          'kids'), same reasoning as the Male section above. Pulled while
+          AUDIENCE_SERVICE_PHOTOS_ENABLED is off, see FUTURE_LOGIC.md. */}
+      {AUDIENCE_SERVICE_PHOTOS_ENABLED && kidsServiceCards.length > 0 && (
+        <>
+          <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
+            POPULAR KIDS' SERVICES
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
+            nestedScrollEnabled={true}
+          >
+            {kidsServiceCards.map((item, index) => (
+              <View key={item.id} style={{ width: 130, marginRight: 12 }}>
+                <PortfolioCard
+                  item={item}
+                  columnWidth={130}
+                  imageHeight={170}
+                  onPress={navigateToAudienceService}
+                  index={index}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </>
+      )}
+    </View>
+  );
 
   return (
     <View style={[styles.background, { backgroundColor: P.bg }]}>
@@ -1642,152 +1799,13 @@ export default function HomeScreen() {
             />
 
             {/* § config-driven — see src/config/homeSections.ts (id: 'male-services').
-                Placed between Near You and Book Again — grouped with Kids
-                Services right after it, so both demographic sections sit
-                together in the same neighborhood of the feed. */}
-            {/* Male Services Section */}
-            {showMaleSection && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
-                  <TouchableOpacity
-                    onPress={toggleViewAllMaleServices}
-                    style={styles.viewAllButton}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.viewAll, { color: P.sub }]}>
-                      {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                Normal early slot only when relevant to this viewer — when
+                it isn't, the same section still renders, just pushed down
+                to just above Book Again (see below), never hidden outright. */}
+            {hasMaleSectionData && maleSectionRelevant && renderMaleSection()}
 
-                {viewAllMaleServices ? (
-                  <View style={styles.expandedGrid}>
-                    {maleProvidersDisplay.map((provider) => (
-                      <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
-                        <ProviderCard
-                          provider={provider}
-                          onPress={() => navigateToProvider(provider)}
-                          style={styles.gridCard}
-                          blurStyle={styles.gridCardBlur}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoryScroll}
-                    nestedScrollEnabled={true}
-                  >
-                    {maleProvidersDisplay.map(provider => (
-                      <ProviderCard
-                        key={`male-${provider.id}`}
-                        provider={provider}
-                        onPress={() => navigateToProvider(provider)}
-                        style={styles.brandCard}
-                        blurStyle={styles.brandCardBlur}
-                      />
-                    ))}
-                  </ScrollView>
-                )}
-
-                {/* Actual matching service listings (services.audience =
-                    'men'), not just provider tiles — a HAIR provider with one
-                    "Men's Cut" service shows that specific service here even
-                    though their whole business isn't registered as MALE. */}
-                {maleServiceCards.length > 0 && (
-                  <>
-                    <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
-                      POPULAR MEN'S SERVICES
-                    </Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.categoryScroll}
-                      nestedScrollEnabled={true}
-                    >
-                      {maleServiceCards.map((item, index) => (
-                        <View key={item.id} style={{ width: 130, marginRight: 12 }}>
-                          <PortfolioCard
-                            item={item}
-                            columnWidth={130}
-                            imageHeight={170}
-                            onPress={navigateToAudienceService}
-                            index={index}
-                          />
-                        </View>
-                      ))}
-                    </ScrollView>
-                  </>
-                )}
-              </View>
-            )}
-
-            {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') */}
-            {/* Kids Services Section */}
-            {showKidsSection && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>KIDS SERVICES</Text>
-                  <TouchableOpacity
-                    onPress={toggleViewAllKidsServices}
-                    style={styles.viewAllButton}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.viewAll, { color: P.sub }]}>
-                      {viewAllKidsServices ? 'VIEW LESS <' : 'VIEW ALL >'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {viewAllKidsServices ? (
-                  <View style={styles.expandedGrid}>
-                    {kidsProvidersDisplay.map((provider) => (
-                      <View key={`kids-expanded-${provider.id}`} style={styles.gridItem}>
-                        <ProviderCard
-                          provider={provider}
-                          onPress={() => navigateToProvider(provider)}
-                          style={styles.gridCard}
-                          blurStyle={styles.gridCardBlur}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
-                )}
-
-                {/* Actual matching service listings (services.audience =
-                    'kids'), same reasoning as the Male section above. */}
-                {kidsServiceCards.length > 0 && (
-                  <>
-                    <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
-                      POPULAR KIDS' SERVICES
-                    </Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={styles.categoryScroll}
-                      nestedScrollEnabled={true}
-                    >
-                      {kidsServiceCards.map((item, index) => (
-                        <View key={item.id} style={{ width: 130, marginRight: 12 }}>
-                          <PortfolioCard
-                            item={item}
-                            columnWidth={130}
-                            imageHeight={170}
-                            onPress={navigateToAudienceService}
-                            index={index}
-                          />
-                        </View>
-                      ))}
-                    </ScrollView>
-                  </>
-                )}
-              </View>
-            )}
+            {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') — same rule as above. */}
+            {hasKidsSectionData && kidsSectionRelevant && renderKidsSection()}
 
             {/* Current Offers Section — only rendered when there are live promotions.
                 Temporarily pulled entirely via OFFERS_ENABLED, see FUTURE_LOGIC.md. */}
@@ -1837,6 +1855,15 @@ export default function HomeScreen() {
                 ))}
               </ScrollView>
             </View>}
+
+            {/* Deprioritized position for Male/Kids Services — same
+                sections as above, rendered here instead when they aren't
+                relevant to this viewer's gender/interests. Still visible
+                (so a tagged service stays discoverable to everyone), just
+                pushed to the bottom of the feed rather than sitting in the
+                early slot. */}
+            {hasMaleSectionData && !maleSectionRelevant && renderMaleSection()}
+            {hasKidsSectionData && !kidsSectionRelevant && renderKidsSection()}
 
             {/* Book Again Section - Only show if user has previous bookings */}
             {previouslyBookedProviders.length > 0 && (

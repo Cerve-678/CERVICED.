@@ -97,7 +97,8 @@ export type NotificationType =
   | "rebooking_nudge" // "it's been a while" nudge to rebook (client-facing)
   | "daily_recap" // provider's automated today's-schedule summary (provider-facing)
   | "schedule_fully_booked" // provider's whole calendar has no openings in their alert window (provider-facing)
-  | "pending_booking_reminder"; // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
+  | "pending_booking_reminder" // booking still pending at T-24h, nudging the provider to confirm/decline (provider-facing)
+  | "points_earned"; // client earned loyalty points (client-facing)
 
 export type NotificationPriority = "high" | "medium" | "low";
 
@@ -407,6 +408,10 @@ export interface DbService {
   // Hair types this service suits (HAIR_TYPES vocabulary — Straight, Wavy,
   // Curly, Coily, 4A, 4B, 4C). NULL/empty = suits all hair types.
   hair_types_suitable: string[] | null;
+  // Who this specific service is for. NULL = not stated, read as "everyone" —
+  // same convention as hair_types_suitable's "suits all" empty case. Mirrors
+  // the live services_audience_check constraint.
+  audience: "women" | "men" | "kids" | "everyone" | null;
   // Context
   aftercare_notes: string | null;
   service_type:

@@ -8,17 +8,16 @@ import {
   TouchableOpacity,
   Pressable,
   FlatList,
-  Image,
   Modal,
   StatusBar,
   RefreshControl,
   Animated,
-  ImageSourcePropType,
   ListRenderItem,
   TextInput,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import ReAnimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -30,7 +29,7 @@ import TabIcon from '../../components/TabIcon';
 import { BUSINESS_TYPE_LABEL, BUSINESS_TYPE_ICON } from '../../features/providers/profilePresentation';
 import SlidingTabs from '../../components/SlidingTabs';
 import { resolveClientLocation } from '../../services/clientLocationService';
-import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, prefetchProviderBySlug } from '../../services/databaseService';
+import { getProviders, searchProviders, logSearchEvent, getProvidersAvailability, getProviderPriceRanges, getProviderHairTypeMatches, getProviderAudienceMatches, prefetchProviderBySlug } from '../../services/databaseService';
 import type { ProviderAvailabilityStatus } from '../../services/databaseService';
 import type { PublicProviderSummary, BusinessType } from '../../types/database';
 import { BUSINESS_TYPE_OPTS } from '../../features/business-details/options';
@@ -51,7 +50,7 @@ interface ProviderCardData {
   providerId: string;
   name: string;
   service: string;
-  logo: ImageSourcePropType;
+  logo: { uri: string } | number;
   distanceMiles: number | null;
   latitude: number | null;
   longitude: number | null;
@@ -110,6 +109,13 @@ interface FilterOptions {
   // "does this provider cater to X at all" level — services.hair_types_
   // suitable is the per-service refinement shown once a service is picked.
   hairType?: string;
+  // Matches against the per-service services.audience column via a batched
+  // lookup (getProviderAudienceMatches) — a provider qualifies if ANY of
+  // their active services is tagged for this audience, same "provider
+  // qualifies via any matching service" rule HomeScreen's Male/Kids sections
+  // use. 'everyone' is deliberately not offered as a filter value here — it
+  // isn't a narrowing choice, it's what an untagged service already means.
+  audience?: 'women' | 'men' | 'kids';
   // Straightforward provider-level boolean matches — no batched lookup
   // needed since these already ride along on the same DbProvider row
   // mapDbToCardData reads everything else from.
@@ -187,7 +193,7 @@ const KM_TO_MILES = 0.621371;
 // ── Quick-filter pill bar — each filter is its own small dropdown pill;
 // tapping one opens just that filter's popover (Airbnb/Skyscanner style)
 // instead of one big panel covering every filter at once. ──────────────────
-type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'practice';
+type FilterKey = 'sort' | 'price' | 'rating' | 'distance' | 'type' | 'availability' | 'city' | 'hairType' | 'audience' | 'practice';
 
 const SORT_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
@@ -235,8 +241,15 @@ const FILTER_PILL_LABEL: Record<FilterKey, string> = {
   availability: 'Availability',
   city: 'City',
   hairType: 'Hair Type',
+  audience: "Who It's For",
   practice: 'How They Work',
 };
+
+const AUDIENCE_OPTIONS: { label: string; value: 'women' | 'men' | 'kids' }[] = [
+  { label: 'Women', value: 'women' },
+  { label: 'Men', value: 'men' },
+  { label: 'Kids', value: 'kids' },
+];
 
 type Props = NativeStackScreenProps<ExploreStackParamList, 'Search'>;
 
@@ -282,7 +295,7 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
 
         {/* Provider image */}
         <View style={styles.imageWrap}>
-          <Image source={provider.logo} style={styles.cardImage} resizeMode="cover" fadeDuration={0} />
+          <Image source={provider.logo} style={styles.cardImage} contentFit="cover" transition={0} />
         </View>
 
         {/* Info column */}
@@ -325,11 +338,19 @@ const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, index, P }) =
             ) : null}
           </View>
 
-          {availInfo && (
-            <View style={[styles.availBadge, { backgroundColor: `${availInfo.color}22` }]}>
-              <Text style={[styles.availBadgeText, { color: availInfo.color }]} numberOfLines={1}>{availInfo.label}</Text>
-            </View>
-          )}
+          {/* Fixed-height slot, always present — availability resolves after
+              the card has already rendered (see providersWithAvailability),
+              so a conditionally-MOUNTED badge here made every card grow the
+              moment it landed, reflowing the whole grid mid stagger-in
+              animation. Reserving the space up front means the badge fading
+              into an existing slot instead. */}
+          <View style={styles.availBadgeSlot}>
+            {availInfo && (
+              <View style={[styles.availBadge, { backgroundColor: `${availInfo.color}22` }]}>
+                <Text style={[styles.availBadgeText, { color: availInfo.color }]} numberOfLines={1}>{availInfo.label}</Text>
+              </View>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -348,7 +369,13 @@ export default function SearchScreen({ navigation, route }: Props) {
   const { user } = useAuth();
 
 
-  const [searchQuery, setSearchQuery]     = useState('');
+  // Resolved synchronously from the route param at mount, same reasoning as
+  // selectedFilter below — resolving it later via an effect meant the first
+  // fetch always ran once as "every provider" before a second, correctly
+  // scoped fetch landed a beat later, which is what caused badges (and the
+  // whole grid) to visibly wipe and re-pop when Search was opened with a
+  // query already in hand (e.g. from Home's search bar).
+  const [searchQuery, setSearchQuery]     = useState(() => route?.params?.initialQuery ?? '');
   const [refreshing, setRefreshing]       = useState(false);
   // Device location, for the Distance filter + "Nearest" sort — mirrors
   // HomeScreen's Near You section. Stays null (and those two controls just
@@ -594,7 +621,13 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
     let cancelled = false;
     setAvailabilityLoading(true);
-    setAvailabilityBySlug(new Map());
+    // Deliberately NOT cleared to an empty map here — a category change or
+    // pull-to-refresh used to wipe every badge the instant this effect
+    // re-ran, so already-settled cards visibly lost their badge and then
+    // regained it (or a different one) once the new fetch resolved. Existing
+    // entries for providers no longer in the result set are simply never
+    // looked up again (providersWithAvailability only reads by the current
+    // provider's own slug), so leaving them is harmless.
     getProvidersAvailability(slugs)
       .then(map => { if (!cancelled) setAvailabilityBySlug(map); })
       .catch(() => { if (!cancelled) setAvailabilityBySlug(new Map()); })
@@ -662,6 +695,27 @@ export default function SearchScreen({ navigation, route }: Props) {
     return () => { cancelled = true; };
   }, [providerData, activeFilters.hairType]);
 
+  // Audience matches — same "only fetch while active" rule as hair type.
+  const [audienceMatchIds, setAudienceMatchIds] = useState<Set<string> | null>(null);
+
+  React.useEffect(() => {
+    const audience = activeFilters.audience;
+    if (!audience) {
+      setAudienceMatchIds(null);
+      return;
+    }
+    const ids = providerData.map(p => p.providerId);
+    if (ids.length === 0) {
+      setAudienceMatchIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    getProviderAudienceMatches(ids, audience)
+      .then(set => { if (!cancelled) setAudienceMatchIds(set); })
+      .catch(() => { if (!cancelled) setAudienceMatchIds(new Set()); });
+    return () => { cancelled = true; };
+  }, [providerData, activeFilters.audience]);
+
   // ── Client-side filter/sort on top of the server-searched set — category
   // and text query are already applied server-side (see the debounced effect
   // above); rating/price/distance/service-type/availability/sort narrow that
@@ -706,6 +760,10 @@ export default function SearchScreen({ navigation, route }: Props) {
       if (!hairTypeMatchIds) return [];
       list = list.filter(p => hairTypeMatchIds.has(p.providerId));
     }
+    if (activeFilters.audience) {
+      if (!audienceMatchIds) return [];
+      list = list.filter(p => audienceMatchIds.has(p.providerId));
+    }
     if (activeFilters.walkInsWelcome) {
       list = list.filter(p => p.walkInsWelcome);
     }
@@ -727,7 +785,7 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
 
     return list;
-  }, [providersWithPriceRange, activeFilters, availabilityLoading, hairTypeMatchIds]);
+  }, [providersWithPriceRange, activeFilters, availabilityLoading, hairTypeMatchIds, audienceMatchIds]);
 
   // DEFAULT_FILTER_OPTIONS holds what each key resets to when the user taps an
   // already-active option — sortBy/serviceType always have a concrete
@@ -850,6 +908,10 @@ export default function SearchScreen({ navigation, route }: Props) {
     }
     if (activeFilters.hairType) {
       chips.push({ key: 'hairType', label: activeFilters.hairType });
+    }
+    if (activeFilters.audience) {
+      const opt = AUDIENCE_OPTIONS.find(o => o.value === activeFilters.audience);
+      chips.push({ key: 'audience', label: opt?.label ?? 'For' });
     }
     if (activeFilters.walkInsWelcome) {
       chips.push({ key: 'walkInsWelcome', label: 'Walk-ins welcome' });
@@ -1183,6 +1245,25 @@ export default function SearchScreen({ navigation, route }: Props) {
                       activeOpacity={0.75}
                     >
                       <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{type}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <View style={styles.filterSectionHead}>
+                <Text style={[styles.filterSectionTitle, { color: P.sub }]}>{FILTER_PILL_LABEL.audience}</Text>
+              </View>
+              <View style={styles.pillGrid}>
+                {AUDIENCE_OPTIONS.map(({ label, value }) => {
+                  const isActive = activeFilters.audience === value;
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.filterPill, { borderColor: P.border, backgroundColor: P.surface }, isActive && { backgroundColor: P.accent, borderColor: P.accent }]}
+                      onPress={() => updateFilter('audience', value)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.filterPillText, { color: isActive ? P.onAccent : P.text }]}>{label}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -1613,6 +1694,12 @@ const styles = StyleSheet.create({
   },
   businessTypeIcon: {
     marginLeft: 4,
+  },
+  // Fixed height reserved up front so the badge landing (or not landing)
+  // never changes card height — see the comment at its usage above.
+  availBadgeSlot: {
+    height: 18,
+    justifyContent: 'center',
   },
   availBadge: {
     flexDirection: 'row',

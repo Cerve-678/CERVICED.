@@ -38,9 +38,9 @@ import { SERVICE_CATALOGUE } from "./serviceCatalogue";
  * "men" is already in the catalogue as an ordinary keyword and still resolves
  * normally when nothing else matches.
  */
-const AUDIENCE_OVERRIDES: { pattern: RegExp; category: string }[] = [
-  { pattern: /\b(?:my (?:son|daughter|kid|child|little one)|for (?:my )?(?:kids?|children|a child)|toddler|childrens?|children's)\b/i, category: "KIDS" },
-  { pattern: /\b(?:my (?:husband|boyfriend|partner|son)'?s? (?:hair|cut|beard)|for (?:my )?(?:husband|boyfriend)|mens?|men's|for men)\b/i, category: "MALE" },
+const AUDIENCE_OVERRIDES: { pattern: RegExp; category: string; audience: "men" | "kids" }[] = [
+  { pattern: /\b(?:my (?:son|daughter|kid|child|little one)|for (?:my )?(?:kids?|children|a child)|toddler|childrens?|children's)\b/i, category: "KIDS", audience: "kids" },
+  { pattern: /\b(?:my (?:husband|boyfriend|partner|son)'?s? (?:hair|cut|beard)|for (?:my )?(?:husband|boyfriend)|mens?|men's|for men)\b/i, category: "MALE", audience: "men" },
 ];
 
 /**
@@ -72,21 +72,28 @@ export function resolveService(
   // "my son needs a haircut" — the audience decides the category, not the
   // longest service word. Applied after matching so a message with no service
   // word at all ("something for my son") still resolves to the category.
-  const audience = AUDIENCE_OVERRIDES.find((a) => a.pattern.test(lower));
-  if (audience && best?.cat !== audience.category) {
+  const audienceMatch = AUDIENCE_OVERRIDES.find((a) => a.pattern.test(lower));
+  if (audienceMatch && best?.cat !== audienceMatch.category) {
     // The specific service was matched under a DIFFERENT category ("haircut"
     // under HAIR), so it doesn't describe anything in the audience's own list.
     // Keep the category only — "kids haircut" is the honest resolution, and
     // claiming a specific that isn't in that category would search for a
     // service row that can't exist.
-    best = { kw: audience.category.toLowerCase(), cat: audience.category };
+    best = { kw: audienceMatch.category.toLowerCase(), cat: audienceMatch.category };
   }
 
   if (!best) return undefined;
 
-  const value: ServiceRef = best.specific
-    ? { category: best.cat, specific: best.specific }
-    : { category: best.cat };
+  // audience is attached whenever the phrase was detected, independent of
+  // whether it also drove the category override above — a HAIR provider's
+  // individual audience='men' service ("men's haircut" staying under HAIR
+  // because "haircut" resolved there first) still needs this signal to
+  // narrow by services.audience downstream.
+  const value: ServiceRef = {
+    category: best.cat,
+    ...(best.specific ? { specific: best.specific } : {}),
+    ...(audienceMatch ? { audience: audienceMatch.audience } : {}),
+  };
 
   return {
     kind: "service",

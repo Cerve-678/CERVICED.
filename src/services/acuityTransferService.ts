@@ -61,6 +61,7 @@ export async function transferFromAcuity(url: string): Promise<ProviderRegistrat
       aftercareNotes: '',
       serviceType: '' as const,
       hairTypesSuitable: [],
+      audience: '' as const,
     }));
   }
 

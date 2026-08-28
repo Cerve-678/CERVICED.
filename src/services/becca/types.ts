@@ -178,6 +178,14 @@ export interface ServiceRef {
   category: string;
   /** e.g. "gel manicure" — present when the user was specific. */
   specific?: string;
+  /**
+   * Detected from an audience phrase ("men's haircut", "for my daughter") —
+   * mirrors services.audience. Set independently of whether the phrase also
+   * drove `category` to MALE/KIDS (see AUDIENCE_OVERRIDES in
+   * entityResolver.ts), so a HAIR provider's individual audience='men'
+   * service can be preferred without discarding a resolved `specific`.
+   */
+  audience?: 'women' | 'men' | 'kids';
 }
 
 export interface DateRef {

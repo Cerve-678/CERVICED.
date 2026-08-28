@@ -43,6 +43,7 @@ import {
   getProviderBySlug,
   getProviderCancellationPolicy,
   getProviderIdByDisplayName,
+  getProviderAudienceMatches,
   getProviderLocationsByDisplayNames,
   getMobileProviderDisplayNames,
   getProviderDepositPoliciesByDisplayNames,
@@ -849,6 +850,18 @@ const findProviders: Capability = {
 
     let dbProviders = await getProviders(service.category);
 
+    // "men's haircut" / "for my daughter" — narrow to providers with at
+    // least one active service tagged services.audience for that audience,
+    // same "provider qualifies via any matching service" rule HomeScreen's
+    // Male/Kids sections and the Search filter use. Distinct from the
+    // category override above (MALE/KIDS as a whole-business category,
+    // which almost no provider registers as) — this catches a HAIR
+    // provider's individual "Men's Cut" service instead.
+    if (service.audience && dbProviders.length > 0) {
+      const audienceMatches = await getProviderAudienceMatches(dbProviders.map((p) => p.id), service.audience);
+      dbProviders = dbProviders.filter((p) => audienceMatches.has(p.id));
+    }
+
     // Simple keyword → provider-column matching, same ad-hoc shape as the
     // price filter above rather than a new entity-resolver abstraction —
     // these are plain provider-level booleans, not a general concept that
@@ -890,13 +903,15 @@ const findProviders: Capability = {
     const practiceSuffix = activePracticeFilters.length > 0
       ? ` that ${activePracticeFilters.length === 1 ? "is" : "are"} ${activePracticeFilters.map((f) => f.label).join(" and ")}`
       : "";
+    const audienceSuffix = service.audience ? ` for ${service.audience}` : "";
 
     if (providers.length === 0) {
       return {
-        text: `I couldn't find any ${label} providers${priceSuffix}${practiceSuffix}. Want to try a different angle?`,
+        text: `I couldn't find any ${label} providers${priceSuffix}${practiceSuffix}${audienceSuffix}. Want to try a different angle?`,
         suggestions: [
           ...(priceFilter ? [askChip("nofilter", "Try without the budget", `Find ${label}`)] : []),
           ...(activePracticeFilters.length > 0 ? [askChip("noPractice", "Try without that filter", `Find ${label}`)] : []),
+          ...(service.audience ? [askChip("noAudience", `Try any ${label}`, `Find ${label}`)] : []),
           askChip("browse", "Browse everything", "Show me all services"),
         ],
       };
@@ -1944,6 +1959,7 @@ const inspiration: Capability = {
     );
     const category = namesService ? entities.service?.value.category : undefined;
     const specific = namesService ? entities.service?.value.specific : undefined;
+    const audience = namesService ? entities.service?.value.audience : undefined;
     // Style phrases are search terms, not service categories. Keep them intact
     // so "show me soft glam" searches for soft-glam work rather than falling
     // back to an unrelated all-category gallery.
@@ -1963,7 +1979,7 @@ const inspiration: Capability = {
     // what makes the service-image side able to match a style term at all.
     const [portfolioResult, serviceResult] = await Promise.allSettled([
       term ? searchPortfolio(term) : getPortfolioItems(category),
-      getDiscoverServices(category),
+      getDiscoverServices(category, 40, audience),
     ]);
 
     const portfolioItems = portfolioResult.status === "fulfilled" ? portfolioResult.value : [];

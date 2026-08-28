@@ -54,6 +54,19 @@ export const HOME_SECTIONS: HomeSectionConfig[] = [
   {
     id: 'male-services',
     title: 'MALE SERVICES',
+    // maleProviders is providers with service_category === 'MALE' widened by
+    // any provider with at least one service tagged services.audience ===
+    // 'men' — see HomeScreen.tsx's maleServiceProviderIds. Not gated here on
+    // that widening directly since data.maleProviders already reflects it.
+    //
+    // showWhen no longer decides whether the section renders at all — a
+    // provider who's tagged a service for this audience should still be
+    // discoverable by every client, not just ones who happen to match its
+    // gender. It now decides POSITION: true = the section's normal early
+    // slot (relevant to this viewer, or gender/interests unknown), false =
+    // pushed to the bottom of the feed, just above Book Again (present, but
+    // deprioritized rather than hidden). See HomeScreen.tsx's
+    // maleSectionRelevant / hasMaleSectionData.
     dataKey: 'maleProviders',
     cardStyle: 'brand',
     showWhen: (user, data) => {
@@ -66,6 +79,7 @@ export const HOME_SECTIONS: HomeSectionConfig[] = [
   {
     id: 'kids-services',
     title: 'KIDS SERVICES',
+    // Same "position, not visibility" meaning as male-services above.
     dataKey: 'kidsProviders',
     cardStyle: 'brand',
     showWhen: (user, data) => {
