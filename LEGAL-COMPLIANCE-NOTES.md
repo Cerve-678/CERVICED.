@@ -389,3 +389,39 @@ which is a product/legal call, not an engineering one. The engineering options,
 should counsel want them, are (a) a second, separate tick shown only when
 `needsSafetyAck`, and (b) rendering the actual flagged detail inline instead of
 linking away. Both are small; the decision is not.
+
+## 15. Emergency Booking Policy is a third provider-authored document (2026-08-28)
+
+On 2026-08-28 the provider's single client-facing "Terms & Conditions" was split
+into two: the T&Cs (the `is_terms` intake form, still the add-to-basket gate,
+unchanged), and a new **Emergency Booking Policy** — a free-text
+`emergencyBookingPolicy` key on `providers.booking_policies`, authored on
+`PoliciesScreen`, that `EmergencyBookingPrompt` sends the client to read before
+requesting an out-of-hours / blocked-date / short-notice / beyond-window time.
+The whole emergency-request feature is currently gated **off**
+(`EMERGENCY_BOOKINGS_ENABLED = false`), so none of the below is live exposure —
+they are re-enable blockers.
+
+1. **Snapshot exists but is inert.** `buildPolicySnapshot()` already spreads the
+   whole `booking_policies` blob into `policy_snapshot`, so the emergency
+   policy's value at checkout *is* frozen — but nothing reads it back
+   (`readProviderTermsSnapshot` only pulls `providerTerms`, added 2026-08-26 per
+   item 10) and `bookings.emergency_ack_at` is a bare timestamp with no
+   reference to which text the client saw. A provider rewriting the policy after
+   acknowledgement leaves no surfaced record of the prior version.
+2. **Free text, single boolean.** It is the "text box nobody signs" pattern
+   that the T&Cs deliberately avoid by being a `policy`-type form
+   (per-question, timestamped). The emergency acknowledgement folds into
+   `EmergencyBookingPrompt`'s one tick, which also covers "I understand this is
+   out-of-hours" — same undifferentiated-tick criticism as items 10(a) and 14.
+3. **No Cerviced Terms language.** `TermsScreen` says nothing about out-of-hours
+   times being *requests* a provider can decline, or what happens to a payment
+   taken when a request is declined or goes unanswered — ties into items 6 and
+   12 (no refund path).
+4. The `PoliciesScreen` placeholder was scrubbed of its original surcharge /
+   message-only-confirmation example, which would have coached providers into an
+   undisclosed off-app money term (item 4). Keep it non-monetary; the emergency
+   surcharge question is parked in `FUTURE_LOGIC.md`.
+
+**Not changed unilaterally** — consent design and Terms wording are product/legal
+calls. Flagging for the re-enable checklist, not resolving.

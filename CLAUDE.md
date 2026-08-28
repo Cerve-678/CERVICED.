@@ -244,6 +244,47 @@ agent — these are the standing rules of thumb for every session.
   version), or, if both must coexist for a migration window, name both for
   what they *are* (`stripeService.ts` vs. the mock flow it's replacing), not
   for their age.
+- **CERVICED's git workflow runs like a professional engineering org's, not
+  like whatever's fastest in the moment — this is a standing decision, not a
+  per-session judgment call.** Concretely, in order:
+  1. **One branch is one reviewable, mergeable unit of work.** Before
+     committing, check whether the currently-checked-out branch's own name and
+     purpose actually describe the work about to go into it. If they don't,
+     that work does not belong on this branch, full stop — not "it's a small
+     fix, it's fine here." This holds even though nothing about the branch
+     being non-`main` forces a new one: a session inherits whatever branch was
+     checked out when it started, and "that's what was already checked out"
+     is not a reason to bundle unrelated work onto it. On 2026-08-28 three
+     unrelated fixes (a booking-calendar bug, a query-caching pass, a
+     coach-mark-tour race) landed on `inforeg/guided-steps-redesign` — a
+     branch named for, and meant to hold only, the InfoReg guided-steps
+     redesign — for exactly that reason. Don't repeat it: branch off `main`
+     for anything the current branch's name doesn't cover
+     (`git checkout main && git pull && git checkout -b fix/<short-name>`),
+     commit and push there, and leave the other branch untouched. This is
+     *on top of*, not a replacement for, "branch first if the repo is on
+     `main`" — that covers the default-branch case; this covers the far more
+     common case of an existing, differently-scoped feature branch already
+     being checked out.
+  2. **Commit messages are `type(scope): a real sentence describing what
+     changed`**, not a terse Conventional-Commits fragment — `git log` is
+     this repo's actual practiced convention, just not written down until
+     now: `fix(bookings): tell the provider where to change what they get
+     asked about`, `feat(reschedule): say plainly when the cancellation
+     window has already passed`, `revert(schedule): put back "Outside your
+     hours by request"`. Types in use: `feat`, `fix`, `refactor`, `style`,
+     `copy`, `chore`, `docs`, `revert`. Keep using it exactly as-is — the
+     rules below (stage only your own paths, disclose a mixed file) still
+     apply underneath it.
+  3. **Each small branch gets its own push and, where the workflow calls for
+     one, its own PR/squash-merge into `main`** — independently of whatever
+     else is in flight, per point 1. Don't hold a finished, unrelated fix
+     hostage to a bigger branch's review timeline just because that's where
+     it happened to get written.
+
+  If you're ever unsure whether something belongs on the current branch, ask
+  rather than default to "it's already checked out" — that default is
+  exactly the failure mode this rule exists to close off.
 - **Commit intentionally; never `git add -A`.** There is no auto-checkpoint
   hook any more — a `Stop` hook that ran
   `git add -A && git commit -m "checkpoint: WIP <date>"` on every turn was
