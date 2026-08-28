@@ -26,6 +26,55 @@ export interface PolicyDisplayData {
   refundPolicyNote?: string;
 }
 
+/** The provider's own written Terms & Conditions, frozen at booking time.
+ *
+ *  Stored inside `policy_snapshot` rather than in a column of its own so it
+ *  travels the existing cart -> hold -> claim plumbing untouched. Readers must
+ *  treat it as optional: bookings made before 2026-08-26 have no copy, and a
+ *  provider can have a structured policy without any written terms. */
+export interface ProviderTermsSnapshot {
+  title: string;
+  body: string;
+}
+
+/** Freeze what the client actually agreed to on this booking.
+ *
+ *  Until 2026-08-26 the "I agree to {provider}'s Terms & Conditions" tick in
+ *  BookingSheet/MultiBookingSheet gated Add to Cart and was then thrown away —
+ *  nothing anywhere recorded which terms were shown. A provider editing their
+ *  T&Cs afterwards left the agreed version unrecoverable, which is precisely
+ *  the thing a record of agreement exists to prevent.
+ *
+ *  Emits a snapshot when EITHER a structured policy or written terms exist —
+ *  a provider can have written terms without ever filling in a policy, and the
+ *  old `bookingPolicies ? ... : {}` condition dropped their terms on the floor.
+ *
+ *  Content of record, not proof of consent: the moment of agreement is
+ *  `bookings.policy_accepted_at`, which is the checkout checkbox's job. Lives
+ *  beside buildPolicyDisplayRows so writer and reader cannot drift apart. */
+export function buildPolicySnapshot(
+  bookingPolicies: Record<string, unknown> | null | undefined,
+  agreedProviderTerms: ProviderTermsSnapshot | null | undefined,
+): Record<string, unknown> | undefined {
+  if (!bookingPolicies && !agreedProviderTerms) return undefined;
+  return {
+    ...(bookingPolicies ?? {}),
+    ...(agreedProviderTerms ? { providerTerms: agreedProviderTerms } : {}),
+  };
+}
+
+/** Read back what buildPolicySnapshot froze. Tolerates the shape being absent
+ *  or malformed — an older booking simply has no terms to show. */
+export function readProviderTermsSnapshot(
+  snapshot: Record<string, unknown> | null | undefined,
+): ProviderTermsSnapshot | null {
+  const terms = snapshot?.['providerTerms'];
+  if (!terms || typeof terms !== 'object') return null;
+  const { title, body } = terms as Record<string, unknown>;
+  if (typeof body !== 'string' || body.trim().length === 0) return null;
+  return { title: typeof title === 'string' ? title : 'Terms & Conditions', body };
+}
+
 export interface PolicyDisplayRow {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;

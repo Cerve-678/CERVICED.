@@ -30,9 +30,10 @@ describe('provider management performance contracts', () => {
     expect(read('screens/provider/BusinessInfoScreen.tsx')).toContain(
       'getMyProviderProfileContext()',
     );
-    expect(read('screens/provider/BusinessInfoScreen.tsx')).toContain(
-      'hasMyProviderTermsForm().catch(() => null)',
-    );
+    // The "Your Terms & Conditions" card (and its hasMyProviderTermsForm
+    // check) moved out of Business Info to the end of the InfoReg profile
+    // document on 2026-08-28 — see FUTURE_LOGIC.md "Emergency / out-of-hours
+    // booking requests — deferred".
     expect(read('screens/provider/ProviderAutomationsScreen.tsx')).toContain(
       'getMyProviderProfileContext()',
     );

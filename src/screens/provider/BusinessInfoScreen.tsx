@@ -28,7 +28,6 @@ import {
   getUserBusinessInfo,
   updateUserBusinessInfo,
   updateProviderContactDetails,
-  hasMyProviderTermsForm,
 } from '../../services/databaseService';
 import {
   Card, Field, RadioGroup, Toast, SaveButton, useBusinessPalette, s,
@@ -67,10 +66,6 @@ export default function BusinessInfoScreen({ navigation }: any) {
   const [website, setWebsite]             = useState('');
   const [externalBookingUrl, setExternalBookingUrl] = useState('');
   const [yearsExperience, setYearsExperience] = useState('');
-  // Drives "Set up" vs "Update" below. null = not answered yet (still loading,
-  // or the query failed) — the card falls back to the neutral wording rather
-  // than telling a provider to write terms they may already have.
-  const [hasTerms, setHasTerms] = useState<boolean | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -83,11 +78,7 @@ export default function BusinessInfoScreen({ navigation }: any) {
         if (!context) return;
         setUserId(context.userId);
         const providerData = context.profile;
-        const [userBizInfo, termsExist] = await Promise.all([
-          getUserBusinessInfo(context.userId),
-          hasMyProviderTermsForm().catch(() => null),
-        ]);
-        setHasTerms(termsExist);
+        const userBizInfo = await getUserBusinessInfo(context.userId);
 
         if (userBizInfo) {
           setBusinessEmail(userBizInfo.business_email ?? '');
@@ -317,31 +308,13 @@ export default function BusinessInfoScreen({ navigation }: any) {
               />
             </Card>
 
-            {/* Terms & Conditions — a provider's own terms are authored as a
-                FORM, not as a free-text field here. Forms are the only path in
-                the app that captures a client actually agreeing to something
-                (per-question responses, timestamped against a booking), and
-                the Forms builder already ships a "Policy Agreement" template
-                pre-filled from this provider's saved policies. A text box here
-                would be terms nobody ever signed. Cerviced's own Terms are a
-                separate document and are not editable by providers. */}
-            <TouchableOpacity
-              style={[s.card, { backgroundColor: C.surface, borderColor: C.border, flexDirection: 'row', alignItems: 'center' }]}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); navigation.navigate('ProviderIntakeForm', { openTerms: true }); }}
-              activeOpacity={0.75}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[s.cardTitle, { color: C.text }]}>
-                  {hasTerms ? 'Update your Terms & Conditions' : hasTerms === false ? 'Set up your Terms & Conditions' : 'Your Terms & Conditions'}
-                </Text>
-                <Text style={[s.cardSub, { color: C.sub, marginBottom: 0 }]}>
-                  {hasTerms
-                    ? 'Clients read these when they book. Tap to edit them.'
-                    : 'Written as a form clients read when they book. Tap to write them.'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={C.sub} />
-            </TouchableOpacity>
+            {/* A provider's own client-facing Terms & Conditions are authored
+                as a FORM (booking_intake_forms, is_terms) via the
+                ProviderIntakeForm builder, and their only entry point is now
+                the "Your Terms & Conditions" card near the end of Edit Profile
+                (InfoRegScreen) — kept next to first-publish setup rather than
+                buried in this hub. Cerviced's own Terms are a separate document
+                and are not editable by providers. */}
 
             {/* Contact preferences live in Communications, which owns the
                 canonical lowercase preferred_contact_methods write path. This
