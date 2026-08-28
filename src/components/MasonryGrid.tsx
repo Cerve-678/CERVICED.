@@ -15,10 +15,6 @@ const SEAM_TARGET_RATIO = 0.25;
 // means something — an earlier version compared a capped separation against
 // an uncapped overshoot, which made the balance term dominate completely and
 // silently degraded the whole thing back to plain shortest-column packing.
-//
-// Tuned by simulating the live feed: 0.15 leaves 2 of 48 cards level with a
-// neighbour (vs 10 for plain shortest-column) while keeping the columns
-// within ~82px of each other, i.e. under half a card of ragged tail.
 const BALANCE_WEIGHT = 0.15;
 
 // Exposed so a filter/category change can explicitly reset scroll to the
@@ -92,19 +88,17 @@ function MasonryGridInner<T>(
       () => ({ items: [], height: 0 })
     );
 
-    // Plain shortest-column packing is a height-EQUALIZING algorithm: its
-    // whole job is to keep the columns level, so any card that gets ahead is
-    // immediately corrected by the next one going to the other column. With
-    // two columns that makes neighbours keep re-converging on the same
-    // y-offsets — on the live feed, 18 of 24 cards ended up within 20px of a
-    // card across the gap, with the first rows landing at pixel-identical
-    // tops. Mathematically ideal, but it doesn't read as Pinterest.
+    // Plain shortest-column packing keeps dropping a card next to whatever
+    // card is already beside the shortest column — since short cards keep
+    // that column "winning", a run of short cards in the data clusters into
+    // a run of short cards sitting beside each other on screen (short
+    // surrounded by short), which reads as gridlike rather than Pinterest.
     //
-    // So placement optimises for a different thing: the card's bottom edge
-    // should land far from the bottom edge of whatever is currently beside it
-    // in the other columns. A short card dropped next to another short card
-    // is what produces a visible shared seam, so we score every column and
-    // take the best rather than blindly taking the shortest.
+    // So placement instead optimises for the card's bottom edge landing far
+    // from the bottom edge of whatever is currently beside it in the other
+    // columns — a short card next to another short card is exactly what
+    // produces a visible shared seam, so every column is scored and the best
+    // one is taken rather than blindly the shortest.
     //
     // Balance is kept as a weighted term instead of an absolute rule, so the
     // columns still finish at comparable lengths (no long ragged tail) while

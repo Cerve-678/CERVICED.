@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image } from 'react-native';
+import { Image, LayoutAnimation, Platform, UIManager } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Real aspect ratios for remote images, measured from the files themselves.
 //
@@ -64,6 +68,15 @@ export function useMeasuredAspectRatios(uris: (string | undefined)[]): {
     const settle = () => {
       landed++;
       if (mountedRef.current && landed === pending.length) {
+        // A batch landing swaps the placeholder aspect ratio every affected
+        // card was reserving space with for its real one, which reflows the
+        // whole masonry grid in one commit — every card whose height
+        // changed jumps to its new size/position instantly. Wrapping the
+        // state update that triggers that reflow in LayoutAnimation turns
+        // the jump into a smooth resize instead, so it reads as the grid
+        // settling rather than visibly "re-leveling" after it's already on
+        // screen.
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setVersion(v => v + 1);
       }
     };
