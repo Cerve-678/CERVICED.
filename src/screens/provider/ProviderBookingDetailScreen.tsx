@@ -72,7 +72,7 @@ import { BOOKING_STATUS_COLORS, BOOKING_STATUS_LABELS, PROVIDER_BOOKING_DB_STATU
 import { SERVICE_PROFILE_FIELDS } from '../../features/provider-bookings/profileFields';
 import { PAYMENT_METHOD_LABELS } from '../../features/bookings/paymentPresentation';
 import { formatBookingRef } from '../../features/bookings/presentation';
-import { MULTI_SERVICE_BOOKING_ENABLED } from '../../constants/featureFlags';
+import { MULTI_SERVICE_BOOKING_ENABLED, EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 import { supportMailtoUrl } from '../../constants/support';
 
 type Props = ProviderHomeScreenProps<'BookingDetail'>;
@@ -1984,8 +1984,11 @@ export default function ProviderBookingDetailScreen({ route, navigation }: Props
             </Text>
             <Text style={[styles.emergencyBannerText, { color: P.sub }]}>
               {booking.customerName || 'This client'} requested a time outside your working
-              hours. Confirming books them in as normal. To change this setting, go to
-              Scheduling &amp; Availability.
+              hours. Confirming books them in as normal.
+              {/* The opt-in this points at is hidden while EMERGENCY_BOOKINGS_ENABLED
+                  is off (SchedulingScreen), so don't send the provider to a screen
+                  where the setting no longer appears. */}
+              {EMERGENCY_BOOKINGS_ENABLED ? ' To change this setting, go to Scheduling & Availability.' : ''}
             </Text>
           </View>
         )}

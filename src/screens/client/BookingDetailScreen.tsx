@@ -2,16 +2,18 @@
 // Full-screen booking detail view extracted from BookingsScreen modal.
 import React, { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Linking, Platform, Modal, Pressable, ActivityIndicator, TextInput,
   Keyboard, TouchableWithoutFeedback,
   LayoutAnimation, UIManager,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as Haptics from 'expo-haptics';
 import { useFont } from '../../contexts/FontContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { ThemedBackground } from '../../components/ThemedBackground';
@@ -178,12 +180,25 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       getInfoPacksByBooking(bookingId),
     ]).then(([intakeResult, packsResult]) => {
       if (!active) return;
-      if (intakeResult.status === 'fulfilled') setBookingIntakeForm(intakeResult.value);
-      if (packsResult.status === 'fulfilled') setBookingInfoPacks(packsResult.value);
-      setTodoLoadError(intakeResult.status === 'rejected' || packsResult.status === 'rejected');
-    }).finally(() => {
-      if (!active) return;
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      const form = intakeResult.status === 'fulfilled' ? intakeResult.value : null;
+      const packs = packsResult.status === 'fulfilled' ? packsResult.value : [];
+      if (intakeResult.status === 'fulfilled') setBookingIntakeForm(form);
+      if (packsResult.status === 'fulfilled') setBookingInfoPacks(packs);
+      const hadError = intakeResult.status === 'rejected' || packsResult.status === 'rejected';
+      setTodoLoadError(hadError);
+      // Only animate when the section is actually about to appear (there's a
+      // form, a pack, or an error card). Most bookings have none of these, and
+      // firing configureNext then left a stray easeInEaseOut to land on the
+      // next unrelated commit (the policy/countdown metadata resolving a beat
+      // later) — which is the "glitch" where the whole screen twitched. A
+      // fade, not the position-animating preset, so siblings don't slide.
+      if (form || packs.length > 0 || hadError) {
+        LayoutAnimation.configureNext({
+          duration: 220,
+          create: { type: 'easeInEaseOut', property: 'opacity' },
+          update: { type: 'easeInEaseOut' },
+        });
+      }
       setTodoLoaded(true);
     });
 
@@ -335,8 +350,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     } finally { setContactSheetLoading(false); }
   }, []);
 
-  const noticeWindowText = useMemo(() => formatNoticeWindow(cancellationNoticeHrs), [cancellationNoticeHrs]);
-
   // Prefer the frozen snapshot (what the client actually agreed to at
   // booking time) over the live fallback (today's policy, for older bookings
   // that predate policy_snapshot). No enforced-hours override here — that
@@ -356,10 +369,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
     [booking?.policySnapshot],
   );
 
+  const noticeWindowText = useMemo(() => formatNoticeWindow(cancellationNoticeHrs), [cancellationNoticeHrs]);
+
   // Whether cancelling right now would fall inside the provider's notice
-  // window — drives the cancel modal's copy/buttons directly (see the modal
-  // render below) instead of a separate blocking alert after the fact, so
-  // the client sees this before they even decide to cancel.
+  // window — purely informational (drives the modal's warning copy below).
+  // It does NOT block the attempt: cancel_own_booking() enforces the notice
+  // window server-side, so the Cancel button always calls handleCancelBooking
+  // and lets the RPC's own guard message surface if it's actually rejected.
   const isPastCancellationWindow = useMemo(() => {
     if (!booking || booking.status === BookingStatus.PENDING || cancellationNoticeHrs <= 0) return false;
     if (!booking.bookingDate || !booking.bookingTime) return false;
@@ -370,7 +386,6 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
   const handleCancelBooking = useCallback(async () => {
     if (!booking) return;
-    if (isPastCancellationWindow) return;
     setIsLoading(true);
     try {
       await cancelBooking(booking.id);
@@ -380,10 +395,17 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       setShowSuccessModal(true);
     } catch (err) {
       logger.error('[BookingDetail] cancel failed:', err);
-      Alert.alert('Cancellation Failed', "We couldn't cancel this booking just now. Please try again.");
+      Alert.alert(
+        'Cancellation Failed',
+        // cancel_own_booking() enforces the provider's notice window
+        // server-side and throws a guard message written for the client
+        // reading it ("requires 24 hours notice to cancel") — let it
+        // through rather than masking it with a generic line.
+        toUserMessageAllowingDbGuard(err, "We couldn't cancel this booking just now. Please try again.", 'BookingDetailScreen.handleCancelBooking'),
+      );
     }
     finally { setIsLoading(false); }
-  }, [booking, cancelBooking, isPastCancellationWindow]);
+  }, [booking, cancelBooking]);
 
   // "Provider didn't show up" — client-side mirror of the RPC's guardrails
   // (client_mark_provider_no_show / fix_provider_no_show_status.sql), used
@@ -688,7 +710,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
       <ThemedBackground>
         <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} edges={['bottom', 'left', 'right']}>
           <Text style={{ color: C.sub, fontSize: 16 }}>Booking not found.</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+          <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.goBack(); }} style={{ marginTop: 16 }}>
             <Text style={{ color: C.accent, fontSize: 16 }}>Go Back</Text>
           </TouchableOpacity>
         </SafeAreaView>
@@ -714,7 +736,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Header */}
           <View style={st.header}>
             {booking.providerImage ? (
-              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} resizeMode="cover" />
+              <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={st.providerImg} contentFit="cover" />
             ) : (
               <View style={[st.providerImg, { backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }]}>
                 <Text style={{ color: C.onAccent, fontSize: 22, fontWeight: '800' }}>
@@ -793,7 +815,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   <Text style={{ color: C.sub, fontSize: 12, marginTop: 3 }}>Retry to make sure you don’t miss a required form or provider information.</Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => setTodoRetryNonce(value => value + 1)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setTodoRetryNonce(value => value + 1); }}
                   style={{ marginLeft: 12, paddingHorizontal: 12, paddingVertical: 8 }}
                   activeOpacity={0.7}
                 >
@@ -807,7 +829,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={[st.sectionTitle, { color: C.sub }]}>TO DO</Text>
               {bookingIntakeForm && (
                 <TouchableOpacity style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: bookingIntakeForm.status === 'completed' ? 0.72 : 1 }]} activeOpacity={0.8}
-                  onPress={() => navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName })}>
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); navigation.navigate('ClientIntakeForm', { formId: bookingIntakeForm.id, bookingId: bookingIntakeForm.bookingId, serviceName: booking.serviceName }); }}>
                   <Text style={{ fontSize: 20 }}>📋</Text>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={[{ fontSize: 14, fontWeight: '700', color: C.text }]}>{bookingIntakeForm.title}</Text>
@@ -823,6 +845,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               {bookingInfoPacks.map(pack => (
                 <TouchableOpacity key={pack.id} style={[st.todoCard, { backgroundColor: C.card, borderColor: C.border, opacity: pack.viewedAt ? 0.72 : 1 }]} activeOpacity={0.8}
                   onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     setViewingPack(pack);
                     if (!pack.viewedAt) {
                       markInfoPackViewed(pack.id).catch(() => {});
@@ -859,7 +882,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           <View style={st.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Text style={[st.sectionTitle, { color: C.sub }]}>PAYMENT STATUS</Text>
-              <TouchableOpacity onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowReceipt(v => !v); }} activeOpacity={0.7}>
+              <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowReceipt(v => !v); }} activeOpacity={0.7}>
                 <Text style={{ color: C.accent, fontSize: 13, fontWeight: '600' }}>{showReceipt ? 'Hide' : 'View Receipt'}</Text>
               </TouchableOpacity>
             </View>
@@ -884,6 +907,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: 1, color: C.text, textAlign: 'center' }}>PAYMENT RECEIPT</Text>
                     <TouchableOpacity
                       onPress={async () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                         try {
                           const shared = await shareReceipt(booking);
                           if (!shared) Alert.alert('Sharing Unavailable', "Your receipt is ready, but this device can't open a share sheet.");
@@ -1065,7 +1089,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={[st.card, { backgroundColor: C.card, borderColor: C.border }]}>
                 <View style={[st.row, { borderBottomColor: C.border }]}>
                   <Text style={[st.rowLabel, { color: C.sub }]}>Contact Provider</Text>
-                  <TouchableOpacity onPress={() => openContactSheet(booking)} style={[st.actionChip, { backgroundColor: C.accent }]} activeOpacity={0.7}>
+                  <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openContactSheet(booking); }} style={[st.actionChip, { backgroundColor: C.accent }]} activeOpacity={0.7}>
                     <Text style={{ color: C.onAccent, fontSize: 12, fontWeight: '600' }}>Contact</Text>
                   </TouchableOpacity>
                 </View>
@@ -1083,8 +1107,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       </Text>
                     )
                   ) : hasMapDestination(booking) ? (
-                    <TouchableOpacity onPress={() => openInMaps(booking)} activeOpacity={0.7}>
-                      <Text style={[st.rowValue, { color: C.accent }]}>{booking.address}</Text>
+                    <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); openInMaps(booking); }} activeOpacity={0.7} style={{ flex: 0.6 }}>
+                      <Text style={[st.rowValue, { color: C.accent, flex: undefined }]}>{booking.address}</Text>
                     </TouchableOpacity>
                   ) : !isAddressPending(booking.address) ? (
                     // A real address the provider never geocoded — show it as
@@ -1136,16 +1160,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
           {/* Action Buttons */}
           <View style={st.actions}>
             {isPending && (
-              <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border }]} onPress={() => setShowCancelModal(true)} activeOpacity={0.7}>
+              <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                 <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Decline Request</Text>
               </TouchableOpacity>
             )}
             {isUpcoming && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => setShowCancelModal(true)} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                   <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={handleReschedulePress} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleReschedulePress(); }} activeOpacity={0.7}>
                   <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule</Text>
                 </TouchableOpacity>
               </View>
@@ -1158,7 +1182,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {isUpcoming && canMarkProviderNoShow && (
               <TouchableOpacity
                 style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
-                onPress={() => setShowProviderNoShowModal(true)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(true); }}
                 disabled={isLoading}
                 activeOpacity={0.7}
               >
@@ -1167,11 +1191,11 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             )}
             {booking.isPendingReschedule && (
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => setShowCancelModal(true)} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.cancelBtn, { borderColor: C.border, flex: 1 }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(true); }} activeOpacity={0.7}>
                   <Text style={[st.cancelBtnText, { color: '#F44336' }]}>Cancel Booking</Text>
                 </TouchableOpacity>
                 {(booking as any).rescheduleRequest?.providerAvailableDates && (
-                  <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => navigation.navigate('Reschedule', { bookingId: booking.id })} activeOpacity={0.7}>
+                  <TouchableOpacity style={[st.primaryBtn, { flex: 1, backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); navigation.navigate('Reschedule', { bookingId: booking.id }); }} activeOpacity={0.7}>
                     <Text style={[st.primaryBtnText, { color: C.onAccent }]}>Reschedule Now</Text>
                   </TouchableOpacity>
                 )}
@@ -1189,7 +1213,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <TouchableOpacity
                   style={[st.mapActionBtn, { backgroundColor: C.accentDim, borderColor: C.accent }, hasBeenRated && st.mapActionBtnDisabled, hasBeenRated && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
                   disabled={hasBeenRated}
-                  onPress={() => setShowRatingModal(true)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(true); }}
                   activeOpacity={0.7}
                 >
                   <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenRated ? 'Rated ✓' : 'Rate'}</Text>
@@ -1197,7 +1221,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <TouchableOpacity
                   style={[st.mapActionBtn, { backgroundColor: '#4CAF5050', borderColor: '#2b6a2eff' }, hasBeenTipped && st.mapActionBtnDisabled, hasBeenTipped && { backgroundColor: isDarkMode ? '#48484A' : '#E0E0E0' }]}
                   disabled={hasBeenTipped}
-                  onPress={() => setShowTipModal(true)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(true); }}
                   activeOpacity={0.7}
                 >
                   <Text style={[st.mapActionBtnText, { color: C.text }]}>{hasBeenTipped ? 'Tipped ✓' : 'Tip'}</Text>
@@ -1205,7 +1229,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <TouchableOpacity
                   style={[st.mapActionBtn, { backgroundColor: '#f28f0c58', borderColor: '#b9550dff' }, rebookBusy && st.mapActionBtnDisabled]}
                   disabled={rebookBusy}
-                  onPress={() => handleRebook(booking)}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); handleRebook(booking); }}
                   activeOpacity={0.7}
                 >
                   {rebookBusy ? <ActivityIndicator size="small" color={C.text} /> : <Text style={[st.mapActionBtnText, { color: C.text }]}>Book Again</Text>}
@@ -1220,7 +1244,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {canDispute && (
               <TouchableOpacity
                 style={[st.cancelBtn, { borderColor: C.border, marginTop: 12 }]}
-                onPress={() => setShowDisputeModal(true)}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowDisputeModal(true); }}
                 activeOpacity={0.7}
               >
                 <Text style={[st.cancelBtnText, { color: '#FF9800' }]}>This wasn't right — dispute it</Text>
@@ -1238,9 +1262,13 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
 
         {/* ─── Cancel Modal ───────────────────────────────────────────────
             Same modal handles both states: the normal "are you sure" ask,
-            and — when isPastCancellationWindow is true — a plain-language
-            explanation of why cancelling isn't allowed right now, with
-            "Message Provider" as the way forward instead of a dead end. */}
+            and — when isPastCancellationWindow is true — a heads-up that the
+            provider's notice window hasn't passed yet. Either way the Cancel
+            button always calls handleCancelBooking: cancel_own_booking()
+            enforces the notice window server-side (see BookingContext.
+            cancelBooking), so a rejection surfaces as the RPC's own guard
+            message via handleCancelBooking's catch, rather than this modal
+            silently blocking the attempt itself. */}
         <Modal visible={showCancelModal} animationType="fade" transparent statusBarTranslucent onRequestClose={() => setShowCancelModal(false)}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={st.overlay}>
@@ -1248,17 +1276,16 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 {isPastCancellationWindow ? (
                   <>
                     <Text style={{ fontSize: 40, textAlign: 'center', marginBottom: 12 }}>⚠️</Text>
-                    <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cannot Cancel</Text>
+                    <Text style={[st.sheetTitle, { color: C.text, textAlign: 'center' }]}>Cancelling Now</Text>
                     <Text style={[st.sheetSub, { color: C.sub, textAlign: 'center' }]}>
-                      {booking.providerName} requires {noticeWindowText} notice to cancel.
-                      {'\n\n'}Message them directly if something's come up.
+                      {booking.providerName} requires {noticeWindowText} notice to cancel — cancelling now may be subject to their policy.
                     </Text>
                     <View style={[st.sheetBtns, { marginTop: 16 }]}>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowCancelModal(false)} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
                         <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { setShowCancelModal(false); openContactSheet(booking); }} activeOpacity={0.7}>
-                        <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Message Provider</Text>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleCancelBooking(); }} disabled={isLoading} activeOpacity={0.7}>
+                        {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600', textAlign: 'center' }}>Cancel</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
@@ -1269,10 +1296,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       Cancel "{booking.serviceName}"? This can't be undone.
                     </Text>
                     <View style={st.sheetBtns}>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowCancelModal(false)} disabled={isLoading} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCancelModal(false); }} disabled={isLoading} activeOpacity={0.7}>
                         <Text style={{ color: C.text, fontWeight: '600' }}>Keep Booking</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={handleCancelBooking} disabled={isLoading} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: '#F44336' }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleCancelBooking(); }} disabled={isLoading} activeOpacity={0.7}>
                         {isLoading ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ color: '#FFF', fontWeight: '600' }}>Yes, Cancel</Text>}
                       </TouchableOpacity>
                     </View>
@@ -1298,7 +1325,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                   gives flex:1 something to fill again. */}
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
                 <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]}
-                  onPress={() => { setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowSuccessModal(false); if (shouldNavigateToCart) { setShouldNavigateToCart(false); navigation.getParent()?.navigate('Cart'); } }} activeOpacity={0.7}>
                   <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
@@ -1314,7 +1341,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={[st.sheetTitle, { color: C.text }]}>Cannot Reschedule</Text>
               <Text style={[st.sheetSub, { color: C.sub }]}>{cooldownMessage}</Text>
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => setShowCooldownModal(false)} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowCooldownModal(false); }} activeOpacity={0.7}>
                   <Text style={{ color: C.onAccent, fontWeight: '600', textAlign: 'center' }}>Got It</Text>
                 </TouchableOpacity>
               </View>
@@ -1339,12 +1366,12 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 {booking.providerName} will have a chance to dispute and escalate the no-show if it's false. This can't be undone. Are you sure?
               </Text>
               <View style={st.sheetBtns}>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => setShowProviderNoShowModal(false)} disabled={isLoading} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowProviderNoShowModal(false); }} disabled={isLoading} activeOpacity={0.7}>
                   <Text style={{ color: C.text, fontWeight: '600', textAlign: 'center' }}>Go Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[st.sheetBtn, { backgroundColor: '#FF9800' }]}
-                  onPress={() => { setShowProviderNoShowModal(false); handleMarkProviderNoShow(); }}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); setShowProviderNoShowModal(false); handleMarkProviderNoShow(); }}
                   disabled={isLoading}
                   activeOpacity={0.7}
                 >
@@ -1379,7 +1406,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <View style={st.sheetBtns}>
                 <TouchableOpacity
                   style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]}
-                  onPress={() => { setShowDisputeModal(false); setDisputeReason(''); }}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowDisputeModal(false); setDisputeReason(''); }}
                   disabled={disputeBusy}
                   activeOpacity={0.7}
                 >
@@ -1387,7 +1414,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[st.sheetBtn, { backgroundColor: C.accent }, !disputeReason.trim() && { opacity: 0.5 }]}
-                  onPress={handleSubmitDispute}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleSubmitDispute(); }}
                   disabled={disputeBusy || !disputeReason.trim()}
                   activeOpacity={0.7}
                 >
@@ -1410,7 +1437,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     <Text style={[st.sheetSub, { color: C.sub }]}>How was your appointment with {booking.providerName}?</Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 16 }}>
                       {[1,2,3,4,5].map(s => (
-                        <TouchableOpacity key={s} onPress={() => setRating(s)}>
+                        <TouchableOpacity key={s} onPress={() => { Haptics.selectionAsync().catch(() => {}); setRating(s); }}>
                           <Text style={{ fontSize: 32, color: s <= rating ? '#FFD700' : (isDarkMode ? '#555' : '#CCC') }}>★</Text>
                         </TouchableOpacity>
                       ))}
@@ -1421,10 +1448,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                       placeholderTextColor={C.sub} value={reviewText} onChangeText={setReviewText} maxLength={500}
                     />
                     <View style={st.sheetBtns}>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowRatingModal(false); setRating(0); setReviewText(''); }} activeOpacity={0.7}>
                         <Text style={{ color: C.text }}>Skip</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={handleRatingSubmit} activeOpacity={0.7}>
+                      <TouchableOpacity style={[st.sheetBtn, { backgroundColor: rating === 0 ? C.border : C.accent }]} disabled={rating === 0 || isLoading} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleRatingSubmit(); }} activeOpacity={0.7}>
                         {isLoading ? <ActivityIndicator size="small" color={rating === 0 ? C.text : C.onAccent} /> : <Text style={{ color: rating === 0 ? C.text : C.onAccent, fontWeight: '600' }}>Submit</Text>}
                       </TouchableOpacity>
                     </View>
@@ -1448,7 +1475,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 <Text style={[st.sheetSub, { color: C.sub }]}>Show your appreciation for {booking.providerName}</Text>
                 <View style={{ flexDirection: 'row', gap: 8, marginVertical: 16 }}>
                   {[5, 10, 15, 20].map(amt => (
-                    <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => setTipAmount(amt)} activeOpacity={0.7}>
+                    <TouchableOpacity key={amt} style={[st.tipChip, { backgroundColor: tipAmount === amt ? C.accent : C.card, borderColor: tipAmount === amt ? C.accent : C.border }]} onPress={() => { Haptics.selectionAsync().catch(() => {}); setTipAmount(amt); }} activeOpacity={0.7}>
                       <Text style={{ color: tipAmount === amt ? C.onAccent : C.text, fontWeight: '600' }}>£{amt}</Text>
                     </TouchableOpacity>
                   ))}
@@ -1459,10 +1486,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     value={tipAmount > 0 ? tipAmount.toString() : ''} onChangeText={t => setTipAmount(isNaN(parseFloat(t)) ? 0 : parseFloat(t))} />
                 </View>
                 <View style={st.sheetBtns}>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
+                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowTipModal(false); setTipAmount(0); }} activeOpacity={0.7}>
                     <Text style={{ color: C.text }}>Skip</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: tipAmount <= 0 ? C.border : C.accent }]} disabled={tipAmount <= 0} onPress={handleTipSubmit} activeOpacity={0.7}>
+                  <TouchableOpacity style={[st.sheetBtn, { backgroundColor: tipAmount <= 0 ? C.border : C.accent }]} disabled={tipAmount <= 0} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {}); handleTipSubmit(); }} activeOpacity={0.7}>
                     <Text style={{ color: tipAmount <= 0 ? C.text : C.onAccent, fontWeight: '600' }}>Send Tip</Text>
                   </TouchableOpacity>
                 </View>
@@ -1483,10 +1510,10 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 </View>
               ))}
               <View style={[st.sheetBtns, { marginTop: 16 }]}>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => confirmRebook('without')} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.card, borderColor: C.border }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); confirmRebook('without'); }} activeOpacity={0.7}>
                   <Text style={{ color: C.text }}>Without Add-Ons</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => confirmRebook('with')} activeOpacity={0.7}>
+                <TouchableOpacity style={[st.sheetBtn, { backgroundColor: C.accent }]} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); confirmRebook('with'); }} activeOpacity={0.7}>
                   <Text style={{ color: C.onAccent, fontWeight: '600' }}>With Add-Ons</Text>
                 </TouchableOpacity>
               </View>
@@ -1503,27 +1530,27 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               {contactSheetLoading ? <ActivityIndicator color={C.accent} style={{ marginVertical: 24 }} /> : (
                 <View style={{ gap: 8, marginTop: 8 }}>
                   <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7}
-                    onPress={() => { setContactSheetVisible(false); openProviderChat(booking); }}>
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); openProviderChat(booking); }}>
                     <View style={[st.contactIcon, { backgroundColor: '#5B1E32' }]}><Text>💬</Text></View>
                     <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>In-app message</Text><Text style={{ color: C.sub, fontSize: 12 }}>Chat directly inside Cerviced</Text></View>
                     <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                   </TouchableOpacity>
                   {contactSheetInfo?.preferred_contact_methods?.includes('email') && contactSheetInfo.email && (
-                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}>
+                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`mailto:${contactSheetInfo!.email}`); }}>
                       <View style={[st.contactIcon, { backgroundColor: '#1C3A5B' }]}><Text>✉️</Text></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>Email</Text><Text style={{ color: C.sub, fontSize: 12 }} numberOfLines={1}>{contactSheetInfo.email}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('whatsapp') && contactSheetInfo.whatsapp_number && (
-                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}>
+                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`https://wa.me/${contactSheetInfo!.whatsapp_number!.replace(/\D/g, '')}`); }}>
                       <View style={[st.contactIcon, { backgroundColor: '#1A3D2B' }]}><Text>💚</Text></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>WhatsApp</Text><Text style={{ color: C.sub, fontSize: 12 }}>{contactSheetInfo.whatsapp_number}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
                     </TouchableOpacity>
                   )}
                   {contactSheetInfo?.preferred_contact_methods?.includes('phone') && contactSheetInfo.phone && (
-                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}>
+                    <TouchableOpacity style={[st.contactOption, { backgroundColor: C.card, borderColor: C.border }]} activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setContactSheetVisible(false); Linking.openURL(`tel:${contactSheetInfo!.phone}`); }}>
                       <View style={[st.contactIcon, { backgroundColor: '#2B2B1A' }]}><Text>📞</Text></View>
                       <View style={{ flex: 1 }}><Text style={[{ fontWeight: '600', color: C.text }]}>Phone call</Text><Text style={{ color: C.sub, fontSize: 12 }}>{contactSheetInfo.phone}</Text></View>
                       <Text style={{ color: C.sub, fontSize: 20 }}>›</Text>
@@ -1553,7 +1580,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                 paddingHorizontal: 16, paddingVertical: 12,
                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
               }}>
-                <TouchableOpacity onPress={() => setViewingPack(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
+                <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setViewingPack(null); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
                   <Ionicons name="chevron-back" size={26} color={C.accent} />
                 </TouchableOpacity>
                 <View style={{ flex: 1, alignItems: 'center' }}>
@@ -1622,7 +1649,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
                     {viewingPack.content}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setViewingPack(null)}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setViewingPack(null); }}
                     activeOpacity={0.8}
                     style={{ marginTop: 18, alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: C.accent }}
                   >
