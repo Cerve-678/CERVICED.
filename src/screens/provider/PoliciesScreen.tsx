@@ -59,6 +59,7 @@ import {
   Card, Field, SectionLabel, Toast, SaveButton,
   useBusinessPalette, s,
 } from '../../features/business-details/BusinessDetailsKit';
+import { EMERGENCY_BOOKINGS_ENABLED } from '../../constants/featureFlags';
 
 type CancelNotice     = 'none' | '24h' | '48h' | '72h';
 type CancelPenalty    = 'none' | 'deposit' | 'full';
@@ -79,6 +80,12 @@ interface PolicyState {
   refundPolicyNote: string;
   bookingInstructions: string;
   policyImageUrl:   string;
+  // Shown to a client in the "scheduling conflict" prompt before they ask for
+  // a time outside this provider's normal availability. A distinct document
+  // from the provider's Terms & Conditions (the add-to-cart form, edited from
+  // InfoReg). Only surfaced while EMERGENCY_BOOKINGS_ENABLED is on, but it
+  // round-trips through save regardless so a stored value is never lost.
+  emergencyBookingPolicy: string;
 }
 
 const DEFAULT_POLICIES: PolicyState = {
@@ -94,6 +101,7 @@ const DEFAULT_POLICIES: PolicyState = {
   refundPolicyNote: '',
   bookingInstructions: '',
   policyImageUrl:   '',
+  emergencyBookingPolicy: '',
 };
 
 function Pills<T extends string>({ options, value, onChange }: {
@@ -150,6 +158,11 @@ export default function PoliciesScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // Saving is a full REPLACE of booking_policies, so it's only safe once the
+  // existing blob has actually been read. If the load failed we're sitting on
+  // DEFAULT_POLICIES and an empty carriedPolicies — saving that would wipe the
+  // deposit keys PaymentsScreen owns along with this screen's own settings.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   function flash(message: string, type: 'success' | 'error') {
     setToast({ message, type });
@@ -160,7 +173,7 @@ export default function PoliciesScreen({ navigation }: any) {
     (async () => {
       try {
         const profile = await getMyProviderProfile();
-        if (!profile?.user_id) { setLoading(false); return; }
+        if (!profile?.user_id) { setLoadFailed(true); setLoading(false); return; }
         setUserId(profile.user_id);
         const saved = ((await loadProviderPolicies(profile.user_id)) ?? profile.booking_policies ?? {}) as Record<string, unknown>;
         setPolicies({ ...DEFAULT_POLICIES, ...(saved as Partial<PolicyState>) });
@@ -169,6 +182,7 @@ export default function PoliciesScreen({ navigation }: any) {
         );
         setCarriedPolicies(carried);
       } catch {
+        setLoadFailed(true);
         flash('Could not load your policies', 'error');
       } finally {
         setLoading(false);
@@ -212,6 +226,9 @@ export default function PoliciesScreen({ navigation }: any) {
 
   const handleSave = useCallback(async () => {
     if (!userId) { flash('No provider profile found', 'error'); return; }
+    // See loadFailed above: writing without a successful read would replace
+    // the stored blob with defaults.
+    if (loadFailed) { flash('Your policies could not be loaded — reopen this screen before saving', 'error'); return; }
 
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -230,7 +247,7 @@ export default function PoliciesScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [userId, policies, carriedPolicies, navigation]);
+  }, [userId, policies, carriedPolicies, loadFailed, navigation]);
 
   if (loading) {
     return (
@@ -345,6 +362,26 @@ export default function PoliciesScreen({ navigation }: any) {
                 multiline
               />
             </Card>
+
+            {/* Emergency / out-of-hours requests are pulled from the client app
+                for now (EMERGENCY_BOOKINGS_ENABLED — see FUTURE_LOGIC.md), so
+                nothing reads this field yet and there's nothing to write it
+                for. The key still round-trips through save, so a value written
+                once the feature returns is safe meanwhile. */}
+            {EMERGENCY_BOOKINGS_ENABLED && (
+              <Card
+                title="Emergency Booking Policy"
+                sub="Shown to a client before they ask for a time outside your normal availability (optional). Separate from your Terms & Conditions."
+              >
+                <Field
+                  label="Your emergency booking policy"
+                  value={policies.emergencyBookingPolicy}
+                  onChange={v => setPolicy('emergencyBookingPolicy', v)}
+                  placeholder='e.g. "Out-of-hours requests carry a £15 surcharge and are confirmed by message only"'
+                  multiline
+                />
+              </Card>
+            )}
 
             <Card title="Detailed Policy Image" sub="Optional — shown as a pop-up on your profile, for anything too specific for the fields above (a full house-rules sheet, a consent form, etc).">
               <View style={imgSt.grid}>

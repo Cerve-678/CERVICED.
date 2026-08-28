@@ -231,14 +231,21 @@ the file's only intended change (an `on_hold` early-return guard) on top of
 the actual current function body; everything else in the file deployed as
 written.
 
-**Before launch:** test the new waitlist-hold flow end to end — join a
+**Before launch:** test the waitlist invite path end to end — join a
 waitlist, cancel the matching confirmed booking, confirm the waitlisted
 client gets a real held (`on_hold`) booking (not just a notification),
-confirm it expires and cascades to the next candidate after 3 hours (or
-force it via `select public.expire_waitlist_holds();`), and confirm
-claim/decline both work. Also update `supabase/waitlist_holds.sql` itself
-to match what's actually live, so the file isn't misleading for the next
-person who reads it.
+confirm it expires and cascades to the next candidate, and confirm
+claim/decline both work. **The full procedure, the four silent
+preconditions and the watch query are in section 18 below** — written up
+2026-08-27 after a static pass, and still not run.
+
+Two details above were stale and are corrected there: the hold is **15
+minutes**, not 3 hours (`20260827120519_waitlist_hold_fifteen_minutes`),
+and `expire_waitlist_holds()` already runs every minute on cron jobid 155,
+so forcing it by hand is rarely necessary.
+
+Also update `supabase/waitlist_holds.sql` itself to match what's actually
+live, so the file isn't misleading for the next person who reads it.
 
 ---
 
@@ -779,3 +786,204 @@ provider against a schedule that isn't there.
 policy work and restore the RPC call — the signature is unchanged, so it is a
 one-line revert. Do not apply it on its own to "tidy up the drift"; the file
 carries a header saying the same.
+
+---
+
+## 16. Consultation-before-first-booking is built but unreachable (2026-08-28)
+
+`providers.consultation_required_new_clients` is live (`NOT NULL DEFAULT
+false`), it is **read** by `databaseService.ts` (~line 5596) to decide which
+providers require a consultation, and `BookingSheet.tsx` (~line 732) has the
+whole client-facing flow already built: it tells the client *"This provider
+requires a consultation before your first booking with them"*, resolves the
+next available slot for it, and adds it to the booking **as a charged line
+item**.
+
+**No screen anywhere writes the column.** `updateProviderContactDetails`
+already accepts the key (`databaseService.ts` ~line 7162) — nothing ever
+passes it. `AboutYouScreen` edits `online_consultations_available`, which is a
+different column, and stops there. The only SQL reference is the original
+`supabase/consultation_settings.sql` that added it.
+
+Live as of 2026-08-28: **0 of 6 providers have it true**, and no provider has
+any way to turn it on. The feature has never been reachable.
+
+**To close this out:** add a toggle to `AboutYouScreen` beside the existing
+online-consultations toggle, writing `consultation_required_new_clients`
+through `updateProviderContactDetails` (the patch type already allows it).
+Before shipping it, confirm what the charged consultation does to the deposit
+and cancellation maths in the cart — this adds a second paid service to a
+first-time booking, and that interaction has never run in production.
+
+---
+
+## 17. No provider has a recorded T&C acceptance, and the Policies tick box is decorative (2026-08-28)
+
+Two halves of the same gap.
+
+**The tick box records nothing.** `PoliciesScreen`'s "I agree to the Terms &
+Conditions" checkbox is local `useState` only (`termsAcknowledged`). It is
+never persisted and never read, so it resets to unchecked on every visit and
+ticking it has no effect. The in-code comment says this is deliberate — it is
+a re-affirmation, not a gate, and Save works either way — so this is only a
+problem in combination with the second half.
+
+**Nothing else recorded one either.** `providers.terms_accepted_at` is
+stamped once, on first publish, inside `saveProviderToSupabase` (insert path
+only, gated on `InfoRegScreen`'s own checkbox). That design is correct — an
+edit-save never overwrites or clears an existing acceptance. But live as of
+2026-08-28, **0 of 6 providers have a non-null `terms_accepted_at`**, so there
+is currently no stored evidence that any provider on the platform accepted the
+terms.
+
+**This is a legal question, not an engineering one** — per `CLAUDE.md`, flag
+rather than draft. Decisions needed before anything is built:
+- Does an acceptance need to be recorded per T&C *version*, rather than once
+  ever? If the terms change, a single first-publish timestamp says nothing
+  about the current wording.
+- Should the existing 6 providers be asked to accept on next launch, or is a
+  backfill acceptable?
+- Should the Policies re-affirmation write a timestamp (making it meaningful),
+  or be removed (making it honest)? Right now it is neither.
+
+See `LEGAL-COMPLIANCE-NOTES.md` — this belongs on that punch list too.
+---
+
+## 18. The waitlist has never fired, and its one failure mode is silent (2026-08-27)
+
+Static read complete, **live test not run.** Nothing here is known to be
+broken — the point is that nothing here is known to *work* either, and the
+code is written so those two look identical from the outside.
+
+### 18a. Zero invites ever sent, and that is explained
+
+Live as of 2026-08-27: **3 `provider_waitlist` rows have ever existed**, all
+now `cancelled`, newest 8 July. **0 currently `waiting`**, 0 bookings have
+ever carried a `waitlist_entry_id`, and 0 `waitlist_slot_available`
+notifications have ever been sent.
+
+The wiring itself is complete — `joinWaitlist()` is reachable from
+`ProviderProfileScreen` and Becca's `joinWaitlistAction`, and the invite
+inserts an `on_hold` booking plus its own notification. So the zero is
+**non-exercise, not breakage**: nothing has ever been eligible to invite.
+
+The obvious suspect was ruled out: `waitlist_slot_available` **is** present
+in `notifications_type_check`, so this is *not* a repeat of the
+`reschedule_expired` break, where the type was missing and every insert was
+rejected.
+
+### 18b. The real defect — `EXCEPTION WHEN OTHERS THEN CONTINUE`
+
+Each loop iteration of `invite_next_waitlist_entry()` ends with a bare
+`EXCEPTION WHEN OTHERS THEN CONTINUE`. Any failure inside — a rejected
+notification insert, a constraint violation, anything — rolls that iteration
+back, moves silently to the next entry, and eventually returns `FALSE`.
+
+No error, no log, no row. **If the waitlist ever fails in production, the
+only symptom is that nobody was invited** — which is byte-for-byte
+indistinguishable from nobody being eligible, i.e. from the state it is in
+right now. That is exactly why 18a's zero could not be read either way until
+`provider_waitlist` itself was checked.
+
+Worth fixing regardless of the test: at minimum re-raise, or record the
+failure somewhere, rather than swallowing.
+
+### 18c. How to test it (not yet done)
+
+`invite_next_waitlist_entry()` is **never called by app code.** It fires only
+from the `handle_booking_status_change` trigger, at two sites:
+
+- a **pending** booking → `cancelled` (provider declines it)
+- a **confirmed** booking → `cancelled` (either side cancels)
+
+The second site explicitly excludes `OLD.status = 'on_hold'`, so an expiring
+hold does not re-invite from there — `expire_waitlist_holds()` (cron jobid
+155, every minute) owns that cascade separately.
+
+**Four preconditions, all of which fail silently:**
+
+1. Provider's `automation_settings->>'waitlistEnabled'` must not be `false`
+   (defaults true).
+2. The cancelled booking must have non-null `booking_date` **and**
+   `booking_time`.
+3. The waitlist entry must be `status = 'waiting'`, and its `service_id`
+   must either match the cancelled booking's service or be `NULL`.
+4. If the entry has `preferred_dates`, the cancelled booking's date must
+   fall inside that range. **Join with "Anytime"** so this can't be the
+   thing that fails.
+
+**Setup.** The client-side Waitlist button only renders once a service is
+confirmed to have nothing bookable within 14 days. `DEBUG_FORCE_FULLY_BOOKED`
+in `src/screens/client/ProviderProfileScreen.tsx` (currently `false`) forces
+every service into the fully-booked state for exactly this purpose. Set it
+back afterwards.
+
+**Steps.**
+
+1. Client A → provider profile → **Waitlist** on a service → **Anytime** → join.
+2. Client B holds a *confirmed* booking with the **same provider and service**,
+   any future date.
+3. Cancel that booking.
+4. Client A should get the "A slot opened up!" push and a hold in Bookings
+   with Confirm / Decline (`claimWaitlistHold` / `declineWaitlistHold`).
+5. **The hold is 15 minutes** — do step 4 promptly or the cron reclaims it
+   and cascades to the next person.
+
+If the provider has `autoAcceptWaitlist` on, the flow differs by design:
+client A gets a `pending` booking outright and **no notification at all**.
+
+**Watch query** — run before step 3 and again after:
+
+```sql
+select
+  (select count(*) from provider_waitlist where status='waiting')  as waiting,
+  (select count(*) from provider_waitlist where status='notified') as notified,
+  (select count(*) from bookings where status='on_hold'
+      and hold_expires_at is not null)                             as live_holds,
+  (select count(*) from notifications
+      where type='waitlist_slot_available')                        as invites_sent;
+```
+
+`invites_sent` going 0 → 1 is the pass condition. If `waiting` drops but
+`invites_sent` does not move, that is 18b catching something real.
+
+---
+
+## 19. `cancel_notice_hours()` does not exist live — the applied migration is an older draft (2026-08-27)
+
+Drift, not breakage, but it silently defeats the point of the migration that
+introduced it and it makes `MIGRATION_OWNER.md`'s record wrong.
+
+`supabase/migrations/20260827160000_cancel_window_closing_warning.sql` (committed)
+defines `public.cancel_notice_hours(INT, JSONB)` as **the** single definition of
+the cancellation-notice mapping, and rewrites
+`process_cancel_window_closing_warnings()` to call it via two `CROSS JOIN
+LATERAL`s — its own comment describes the previous draft as one that "repeated
+the same CASE expression in the select list and in both time bounds."
+
+**Live, that previous draft is what is running.** `cancel_notice_hours()` does
+not exist in the database at all, and the live
+`process_cancel_window_closing_warnings()` inlines the identical `CASE` four
+times. An older version of the file was applied, and the file was improved
+afterwards without being re-applied.
+
+Nothing is down: cron `cancel-window-closing-warnings` (jobid 157) succeeds on
+schedule and the two versions are functionally equivalent. But:
+
+- The mapping is currently duplicated **five** times live (4× in the warning
+  function, 1× in `cancel_own_booking()`), which is the opposite of what the
+  migration was for.
+- `MIGRATION_OWNER.md` marks this migration "verified live." That check
+  confirmed the function *name*, the cron job and the constraint type — all
+  genuinely present — but never diffed the function **body**. This is the same
+  class of miss the file warns about two sections lower, arriving from a
+  direction the warning doesn't name.
+
+**So "step 2" is now three pieces, not one:** create the helper, re-apply the
+refactored sweep, *then* rewire `cancel_own_booking()` to call it. Do it with
+`pg_get_functiondef()` output in hand so `LANGUAGE` / `SECURITY DEFINER` /
+`SET search_path` survive the reproduction.
+
+**Blocked on the migration lock** — held by the client-area session as of
+2026-08-27, and that is live work, not an abandoned claim. Do not apply
+around it; see `supabase/MIGRATION_OWNER.md`.

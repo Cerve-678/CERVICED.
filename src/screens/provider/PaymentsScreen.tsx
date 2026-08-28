@@ -99,11 +99,18 @@ export default function PaymentsScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [toast, setToast]     = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // Both writes below (booking_policies and automation_settings) are full
+  // REPLACEs, and the keys this screen doesn't own are only preserved via the
+  // otherPolicies/otherAutomation copies read on load. If that read failed
+  // they're empty, so saving would delete PoliciesScreen's cancellation,
+  // reschedule and no-show settings outright.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
         const profile = await getMyProviderProfile();
+        if (!profile) setLoadFailed(true);
         if (profile) {
           setProviderId(profile.id ?? null);
           setUserId(profile.user_id ?? null);
@@ -142,6 +149,7 @@ export default function PaymentsScreen({ navigation }: any) {
           setRefundPolicyNote(typeof refund === 'string' ? refund : '');
         }
       } catch {
+        setLoadFailed(true);
         flash('Could not load your payment settings', 'error');
       } finally {
         setLoading(false);
@@ -156,6 +164,9 @@ export default function PaymentsScreen({ navigation }: any) {
 
   const handleSave = useCallback(async () => {
     if (!providerId) { flash('No provider profile found', 'error'); return; }
+    // See loadFailed above: writing without a successful read would delete the
+    // policy keys this screen carries but doesn't edit.
+    if (loadFailed) { flash('Your payment settings could not be loaded — reopen this screen before saving', 'error'); return; }
     // Without an amount the client booking sheet falls back to a 20% deposit
     // this provider never agreed to, so an empty amount can't be saved.
     if (depositMode !== 'full_only' && !(Number(depositAmount) > 0)) {
@@ -200,7 +211,7 @@ export default function PaymentsScreen({ navigation }: any) {
     } finally {
       setSaving(false);
     }
-  }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, navigation]);
+  }, [providerId, userId, paymentMethods, depositRequiredNew, otherAutomation, depositMode, depositType, depositAmount, depositNote, otherPolicies, loadFailed, navigation]);
 
   if (loading) {
     return (

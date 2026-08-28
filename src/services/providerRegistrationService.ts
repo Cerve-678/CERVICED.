@@ -61,6 +61,9 @@ export interface ServiceData {
   serviceType: 'treatment' | 'enhancement' | 'maintenance' | 'restorative' | 'consultation' | '';
   // Hair types this service suits (HAIR_TYPES vocabulary). Empty = suits all.
   hairTypesSuitable: string[];
+  // Who this specific service is for. '' = not stated, read as "everyone" —
+  // mirrors the live services_audience_check constraint.
+  audience: 'women' | 'men' | 'kids' | 'everyone' | '';
 }
 
 export interface ProviderRegistrationData {
@@ -635,6 +638,7 @@ export async function saveProviderToSupabase(
         aftercare_notes: svc.aftercareNotes || null,
         service_type: svc.serviceType || null,
         hair_types_suitable: svc.hairTypesSuitable?.length ? svc.hairTypesSuitable : null,
+        audience: svc.audience || null,
         images,
         add_ons: svc.addOns.map((a) => ({ name: a.name, price: a.price })),
       });
@@ -730,6 +734,7 @@ export async function loadProviderFromSupabase(
       aftercareNotes: svc.aftercare_notes || '',
       serviceType: svc.service_type || '',
       hairTypesSuitable: svc.hair_types_suitable || [],
+      audience: svc.audience || '',
     });
   }
 
@@ -781,22 +786,33 @@ export async function loadProviderFromSupabase(
 
 export async function saveProviderPolicies(userId: string, policies: Record<string, unknown>): Promise<void> {
   const saved = await saveProviderBookingPolicies(userId, policies);
-  if (!saved) return;
+  // `false` means no providers row was visible for this user, so the update
+  // matched nothing and the policies were NOT stored. Returning quietly here
+  // let PoliciesScreen/PaymentsScreen fire their success haptic and navigate
+  // back having saved nothing. Callers decide how to degrade — so throw.
+  if (!saved) {
+    throw new Error('Could not find your provider profile to save these policies to.');
+  }
   // Keep local copy in sync
   await AsyncStorage.setItem(`provider_policies_${userId}`, JSON.stringify(policies));
 }
 
+/**
+ * The DB is the only source of truth for policies.
+ *
+ * This used to fall back to a device-local AsyncStorage copy whenever the read
+ * threw, which is worse than failing: both editors of this blob (PoliciesScreen
+ * and PaymentsScreen) carry the keys they don't own straight back through their
+ * next save, so one transient read failure meant a stale cached blob got
+ * written over live data — silently reverting deposit settings saved from
+ * another device. A read failure now propagates and the screen shows its
+ * "could not load" state instead.
+ *
+ * The cache write in saveProviderPolicies is kept: it costs nothing and other
+ * call sites still read it, but it is no longer a fallback for this path.
+ */
 export async function loadProviderPolicies(userId: string): Promise<Record<string, unknown> | null> {
-  try {
-    const policies = await getProviderBookingPolicies(userId);
-    if (policies) return policies;
-  } catch {}
-  // Fallback to local cache
-  try {
-    const raw = await AsyncStorage.getItem(`provider_policies_${userId}`);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return null;
+  return await getProviderBookingPolicies(userId);
 }
 
 // ── AsyncStorage cache helpers ───────────────────────────────────────────────

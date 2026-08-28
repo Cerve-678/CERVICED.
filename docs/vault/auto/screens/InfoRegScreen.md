@@ -7,7 +7,7 @@ tags: [screen, provider]
 **Registered route(s):** `EditProfile`, `InfoReg`
 
 ## → Navigates to
-- _— none —_
+- [[ProviderIntakeFormScreen\|ProviderIntakeForm]]
 
 ## Map
 [[Screens & Navigation]] · [[Screen Flow (generated)]]
