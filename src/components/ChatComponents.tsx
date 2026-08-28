@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, TextInput, Platform, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, Animated, Easing } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { BeccaInspiration, ChatMessage, ChatSuggestion } from '../services/becca/types';
@@ -309,7 +310,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
       <View style={styles.row}>
         <View style={[styles.card, styles.userCard, { backgroundColor: P.accent }]}>
           {message.imageUri && (
-            <Image source={{ uri: message.imageUri }} style={styles.messageImage} resizeMode="cover" fadeDuration={0} />
+            <Image source={{ uri: message.imageUri }} style={styles.messageImage} contentFit="cover" transition={0} />
           )}
           <Text style={[styles.cardText, { color: P.onAccent }]}>{renderRichText(message.content)}</Text>
         </View>
@@ -328,7 +329,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
         ]}
       >
         {message.imageUri && (
-          <Image source={{ uri: message.imageUri }} style={styles.messageImage} resizeMode="cover" fadeDuration={0} />
+          <Image source={{ uri: message.imageUri }} style={styles.messageImage} contentFit="cover" transition={0} />
         )}
         {editorialCopy?.takeaway ? (
           <>
@@ -434,7 +435,7 @@ function ActionCard({
         ]}
       >
         {suggestion.icon && (
-          <Image source={suggestion.icon} style={styles.choiceIcon} resizeMode="contain" fadeDuration={0} />
+          <Image source={suggestion.icon} style={styles.choiceIcon} contentFit="contain" transition={0} />
         )}
         <View style={styles.actionCopy}>
           <Text style={[styles.actionText, { color: P.text }]}>{suggestion.text}</Text>
@@ -569,7 +570,7 @@ export function ProviderRecommendations({ providers, onProviderPress, indented =
                 // `cover`, not `contain` — the image now fills the circle
                 // edge-to-edge, and `contain` would letterbox any non-square
                 // logo with bands of container colour inside the round crop.
-                <Image source={provider.logo} style={styles.providerLogo} resizeMode="cover" fadeDuration={0} />
+                <Image source={provider.logo} style={styles.providerLogo} contentFit="cover" transition={0} />
               ) : (
                 <Text style={[styles.providerLogoFallback, { color: P.accentText }]}>
                   {provider.name?.trim().charAt(0).toUpperCase() || '?'}
@@ -633,11 +634,11 @@ export function InspirationGallery({
             }}
             activeOpacity={0.7}
           >
-            {/* fadeDuration={0} is mandatory (CLAUDE.md / DESIGN_SYSTEM.md):
+            {/* transition={0} is mandatory (CLAUDE.md / DESIGN_SYSTEM.md):
                 without it ANY re-render — not just a new URI — retriggers the
                 default fade-in, which reads as a flicker across a grid that
                 re-renders every time a new message lands in the thread. */}
-            <Image source={{ uri: item.imageUrl }} style={[styles.inspirationImage, { height: layout.imageHeight }]} resizeMode="cover" fadeDuration={0} />
+            <Image source={{ uri: item.imageUrl }} style={[styles.inspirationImage, { height: layout.imageHeight }]} contentFit="cover" transition={0} />
             <Text style={[styles.inspirationProvider, { color: P.text }]} numberOfLines={1}>
               {item.providerName}
             </Text>

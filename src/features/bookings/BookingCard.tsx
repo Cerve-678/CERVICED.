@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { BookingStatus } from '../../contexts/BookingContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -70,7 +71,7 @@ export const BookingCard = React.memo<BookingCardProps>(
           <Animated.View style={[styles.card, { borderColor: highlightBorderColor, backgroundColor: highlightBackgroundColor }]}>
             <View style={styles.imageWrapper}>
               {booking.providerImage ? (
-                <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.logo} resizeMode="cover" fadeDuration={0} />
+                <Image source={typeof booking.providerImage === 'string' ? { uri: booking.providerImage } : booking.providerImage} style={styles.logo} contentFit="cover" transition={0} />
               ) : (
                 <View style={[styles.logo, styles.fallbackLogo, { backgroundColor: P.accent }]}>
                   <Text style={[styles.fallbackLogoText, { color: P.onAccent }]}>

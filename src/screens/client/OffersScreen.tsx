@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image,
   Modal,
   StatusBar,
   Animated,
@@ -14,6 +13,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -100,7 +100,7 @@ const OfferCard = React.memo<OfferCardProps>(({ offer, index, P, onPress }) => {
       >
         {/* Provider logo */}
         {offer.logo ? (
-          <Image source={offer.logo} style={styles.logo} resizeMode="cover" />
+          <Image source={offer.logo} style={styles.logo} contentFit="cover" />
         ) : (
           <View style={[styles.logo, styles.logoPlaceholder, { backgroundColor: P.surface }]}>
             <Text style={[styles.logoPlaceholderText, { color: P.sub }]}>

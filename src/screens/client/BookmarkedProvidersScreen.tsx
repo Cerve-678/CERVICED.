@@ -6,12 +6,12 @@ import {
   FlatList,
   type ListRenderItem,
   TouchableOpacity,
-  Image,
   StatusBar,
   Platform,
   Animated,
   Easing,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -335,7 +335,7 @@ const BookmarkGridCard = React.memo(function BookmarkGridCard({ provider, index,
       >
         <View style={styles.imageWrap}>
           {provider.logo ? (
-            <Image source={provider.logo} style={styles.image} resizeMode="cover" />
+            <Image source={provider.logo} style={styles.image} contentFit="cover" />
           ) : (
             <View style={[styles.imagePlaceholder, { backgroundColor: P.surface }]}>
               <Text style={[styles.imagePlaceholderInitial, { color: P.sub }]}>

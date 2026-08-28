@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
   StatusBar,
   StyleSheet,
   Text,
@@ -19,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRegistration } from '../../contexts/RegistrationContext';

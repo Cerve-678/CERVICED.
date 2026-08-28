@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { FlatList, Image, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 
 interface ServiceImageCarouselProps {
@@ -37,7 +38,7 @@ export function ServiceImageCarousel({ images, onAddImage, onRemoveImage, size =
           </TouchableOpacity>
         ) : (
           <View style={[styles.carouselImageContainer, { width: size, height: size }]}>
-            <Image source={{ uri: item }} style={[styles.carouselImage, { width: size, height: size }]} resizeMode="cover" />
+            <Image source={{ uri: item }} style={[styles.carouselImage, { width: size, height: size }]} contentFit="cover" />
             <TouchableOpacity style={styles.removeImageButton} onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}); onRemoveImage(index); }}>
               <Text style={styles.removeImageIcon}>×</Text>
             </TouchableOpacity>

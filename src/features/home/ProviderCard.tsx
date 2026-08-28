@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface ProviderCardProps {
@@ -15,7 +16,7 @@ export const ProviderCard = memo<ProviderCardProps>(({ provider, onPress, style,
   return (
     <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.75}>
       <View style={[blurStyle, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-        {provider.logo ? <Image source={provider.logo} style={styles.providerImage} resizeMode="cover" fadeDuration={0} /> : (
+        {provider.logo ? <Image source={provider.logo} style={styles.providerImage} contentFit="cover" transition={0} /> : (
           <View style={[styles.placeholderCard, { backgroundColor: P.surface }]}><Text style={[styles.placeholderText, { color: P.sub }]}>{provider.service}</Text></View>
         )}
       </View>
