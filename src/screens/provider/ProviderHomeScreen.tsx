@@ -23,7 +23,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AppTheme } from '../../constants/theme';
 import {
@@ -813,6 +813,10 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
   // First-run coach-mark tour for brand-new providers.
   const { user } = useAuth();
   const [showTour, setShowTour] = useState(false);
+  // Home stays mounted as a tab; CoachMarkTour is a full-screen Modal. Gate it
+  // on focus so an armed tour never spotlights over a screen pushed on top
+  // while its start timer was pending — it just waits for the return to Home.
+  const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
   const viewModeBtnRef = useRef<View>(null);
   const fabRef = useRef<View>(null);
@@ -1670,7 +1674,7 @@ export default function ProviderHomeScreen({ navigation, route }: Props) {
         <Ionicons name="add" size={26} color={P.ice} />
       </TouchableOpacity>
 
-      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
 
       {/* ── Go-live celebration ──────────────────────────────────── */}
       <Modal visible={showGoLiveCelebration} transparent animationType="fade" onRequestClose={() => setShowGoLiveCelebration(false)}>

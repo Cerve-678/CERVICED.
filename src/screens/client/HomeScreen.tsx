@@ -8,14 +8,14 @@ import {
   ScrollView,
   FlatList,
   TouchableOpacity,
-  Image,
   Dimensions,
   LayoutAnimation,
   Platform,
   UIManager,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 
@@ -38,13 +38,15 @@ import { useBookmarkStore } from '../../stores/useBookmarkStore';
 import { storage, STORAGE_KEYS } from '../../utils/storage';
 import { resolveClientLocation } from '../../services/clientLocationService';
 import { TOUR_SEEN_PREFIXES, tourSeenKey } from '../../utils/storageKeys';
-import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, prefetchProviderBySlug } from '../../services/databaseService';
-import type { PublicProviderSummary, PublicPromotionWithProvider } from '../../types/database';
+import { getProviders, getActivePromotions, getUnreadNotificationCount, getNewProviders, getTopRatedProviders, getTrendingProviders, getDiscoverServices, getProviderIdsByServiceAudience, prefetchProviderBySlug } from '../../services/databaseService';
+import type { PublicProviderSummary, PublicPromotionWithProvider, DiscoverServiceWithProvider } from '../../types/database';
 import { HOME_SECTIONS } from '../../config/homeSections';
 import { logger } from '../../utils/logger';
 import { getDistanceKm } from '../../utils/distance';
 import { CoachMarkTour, CoachMarkStep } from '../../components/CoachMarkTour';
 import { OFFERS_ENABLED } from '../../constants/featureFlags';
+import { PortfolioCard } from '../../components/PortfolioCard';
+import type { PortfolioItem, ServiceCategory } from '../../types/providers';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -168,7 +170,7 @@ const RoundProviderRail = React.memo(function RoundProviderRail({
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.roundCard} onPress={() => onProviderPress(item)} activeOpacity={0.7}>
           <View style={[styles.roundCardBlur, { backgroundColor: surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }]}>
-            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} resizeMode="cover" fadeDuration={0} /> : null}
+            {item.logo ? <Image source={item.logo} style={styles.roundCardImage} contentFit="cover" transition={0} /> : null}
           </View>
           <Text style={[styles.roundCardName, { color: text }]} numberOfLines={1}>{item.name}</Text>
         </TouchableOpacity>
@@ -190,6 +192,10 @@ export default function HomeScreen() {
 
   // First-run coach-mark tour for brand-new clients.
   const [showTour, setShowTour] = useState(false);
+  // Home stays mounted as a tab; CoachMarkTour is a full-screen Modal. Gate it
+  // on focus so an armed tour never spotlights over a screen pushed on top
+  // while its start timer was pending — it just waits for the return to Home.
+  const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
   const searchIconRef = useRef<View>(null);
   const bellIconRef = useRef<View>(null);
@@ -378,6 +384,18 @@ export default function HomeScreen() {
   const [recentlyViewed,  setRecentlyViewed]  = useState<Provider[]>([]);
   const [trending,        setTrending]        = useState<Provider[]>([]);
 
+  // Per-service audience refinement (services.audience) for the Male/Kids
+  // sections — a provider whose whole business isn't registered as MALE/KIDS
+  // can still have one service tagged for that audience (e.g. a hair salon
+  // with a "Men's Cut"). providerIds widens which providers qualify for the
+  // section below; the card list shows the actual matching service photos,
+  // not just the provider tile. Empty until a provider tags a service this
+  // way — see MEMORY service-audience-field.md.
+  const [maleServiceProviderIds, setMaleServiceProviderIds] = useState<Set<string>>(new Set());
+  const [kidsServiceProviderIds, setKidsServiceProviderIds] = useState<Set<string>>(new Set());
+  const [maleServiceCards, setMaleServiceCards] = useState<PortfolioItem[]>([]);
+  const [kidsServiceCards, setKidsServiceCards] = useState<PortfolioItem[]>([]);
+
   // Load bookmarks from storage on mount only; also try to fetch live providers from Supabase
   useEffect(() => {
     loadBookmarks();
@@ -417,6 +435,33 @@ export default function HomeScreen() {
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
     });
+
+    // One card per service (cover photo only, not one per carousel photo —
+    // unlike Explore's mapDbServiceToCards, this is a compact rail, not a
+    // save-everything grid). Null when a matching service somehow has no
+    // photo (shouldn't happen — getDiscoverServices !inner-joins service_images).
+    const mapAudienceServiceToCard = (s: DiscoverServiceWithProvider): PortfolioItem | null => {
+      const cover = [...s.service_images].sort((a, b) => a.sort_order - b.sort_order)[0];
+      if (!cover) return null;
+      const p = s.provider;
+      return {
+        id: `service-${s.id}`,
+        image: { uri: cover.url },
+        caption: s.description ?? '',
+        serviceName: s.name,
+        category: p.service_category as unknown as ServiceCategory,
+        aspectRatio: cover.aspect_ratio ?? 0.8,
+        providerId: p.slug,
+        price: `£${s.price}`,
+        providerName: p.display_name,
+        providerSlug: p.slug,
+        providerRating: p.rating,
+        providerReviewCount: p.review_count,
+        kind: 'service' as const,
+        serviceId: s.id,
+        ...(p.logo_url ? { providerLogoUri: p.logo_url } : {}),
+      };
+    };
 
     // Fetch live providers — shows empty state if DB has no data
     getProviders().then(data => {
@@ -463,6 +508,29 @@ export default function HomeScreen() {
     getNewProviders(15).then(data => setNewProviders(data.map(mapDbProvider))).catch(() => {});
     getTopRatedProviders(15).then(data => setTopRated(data.map(mapDbProvider))).catch(() => {});
     getTrendingProviders(15).then(data => setTrending(data.map(mapDbProvider))).catch(() => {});
+
+    // Per-service audience refinement for the Male/Kids sections — see the
+    // state declarations above. Widens qualification beyond providers whose
+    // whole business is registered as service_category MALE/KIDS.
+    //
+    // Two separate fetches on purpose: getProviderIdsByServiceAudience
+    // doesn't require a photo, so a provider whose new "Men's Cut" has no
+    // photo YET still makes their provider tile qualify. getDiscoverServices
+    // does require one (it's the same photo feed Explore uses) — that one
+    // only decides whether an actual service CARD can render, which
+    // legitimately needs a photo to show.
+    getProviderIdsByServiceAudience('men').then(ids => {
+      setMaleServiceProviderIds(new Set(ids));
+    }).catch(() => {});
+    getProviderIdsByServiceAudience('kids').then(ids => {
+      setKidsServiceProviderIds(new Set(ids));
+    }).catch(() => {});
+    getDiscoverServices(undefined, 15, 'men').then(data => {
+      setMaleServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
+    }).catch(() => {});
+    getDiscoverServices(undefined, 15, 'kids').then(data => {
+      setKidsServiceCards(data.map(mapAudienceServiceToCard).filter((c): c is PortfolioItem => c !== null));
+    }).catch(() => {});
     return () => { locationRunCancelled = true; };
     // Keyed on the id, not the object — the rest of this screen's effects
     // already do (see the `user?.id` deps above). Depending on `user` itself
@@ -498,10 +566,12 @@ export default function HomeScreen() {
           muaProviders: liveProviders.filter(p => p.service === 'MUA'),
           browProviders: liveProviders.filter(p => p.service === 'BROWS'),
           aestheticsProviders: liveProviders.filter(p => p.service === 'AESTHETICS'),
-          // Male providers
-          maleProviders: liveProviders.filter(p => p.service === 'MALE'),
-          // Kids providers
-          kidsProviders: liveProviders.filter(p => p.service === 'KIDS'),
+          // Male providers — whole-business MALE category, widened by any
+          // provider that has at least one service tagged audience='men'
+          // (see maleServiceProviderIds above).
+          maleProviders: liveProviders.filter(p => p.service === 'MALE' || maleServiceProviderIds.has(p.id)),
+          // Kids providers — same widening via audience='kids'.
+          kidsProviders: liveProviders.filter(p => p.service === 'KIDS' || kidsServiceProviderIds.has(p.id)),
         });
 
         // Phase 5.4 — recently viewed from userLearningService interaction log.
@@ -523,7 +593,7 @@ export default function HomeScreen() {
     };
 
     updateProviderData();
-  }, [bookmarkedIds, liveProviders]); // React to both bookmark changes and live data updates
+  }, [bookmarkedIds, liveProviders, maleServiceProviderIds, kidsServiceProviderIds]); // React to bookmark changes, live data updates, and audience-tagged services resolving
 
   // "Near You" — nearest-first, not "every active provider" in arbitrary DB
   // order. Elastic radius (mirrors how delivery apps like Uber Eats widen a
@@ -740,6 +810,25 @@ export default function HomeScreen() {
       navigation.navigate('ProviderProfile', {
         providerId: provider.slug,
         source: 'home',
+      });
+    },
+    [navigation]
+  );
+
+  // Tapping an audience-tagged service card (Male/Kids sections) — jumps
+  // straight to that exact service's booking modal via openServiceId, same
+  // as Explore's "Book Now" on a service card, rather than a bare profile
+  // visit that leaves the client to find the service themselves.
+  const navigateToAudienceService = useCallback(
+    (item: PortfolioItem) => {
+      if (!item.providerSlug) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      prefetchProviderBySlug(item.providerSlug);
+      navigation.navigate('ProviderProfile', {
+        providerId: item.providerSlug,
+        source: 'home',
+        bookIntent: true,
+        ...(item.serviceId ? { openServiceId: item.serviceId } : {}),
       });
     },
     [navigation]
@@ -1499,57 +1588,6 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* § config-driven — see src/config/homeSections.ts (id: 'male-services') */}
-            {/* Male Services Section */}
-            {showMaleSection && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
-                  <TouchableOpacity
-                    onPress={toggleViewAllMaleServices}
-                    style={styles.viewAllButton}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.viewAll, { color: P.sub }]}>
-                      {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {viewAllMaleServices ? (
-                  <View style={styles.expandedGrid}>
-                    {maleProvidersDisplay.map((provider) => (
-                      <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
-                        <ProviderCard
-                          provider={provider}
-                          onPress={() => navigateToProvider(provider)}
-                          style={styles.gridCard}
-                          blurStyle={styles.gridCardBlur}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoryScroll}
-                    nestedScrollEnabled={true}
-                  >
-                    {maleProvidersDisplay.map(provider => (
-                      <ProviderCard
-                        key={`male-${provider.id}`}
-                        provider={provider}
-                        onPress={() => navigateToProvider(provider)}
-                        style={styles.brandCard}
-                        blurStyle={styles.brandCardBlur}
-                      />
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-            )}
-
             {/* Near You Section — sorted by real distance once we have a
                 location fix, from GPS or a manually-chosen city. Never
                 falls back to the plain unsorted "every provider" list —
@@ -1603,6 +1641,90 @@ export default function HomeScreen() {
               onRadiusChange={setLocationRadius}
             />
 
+            {/* § config-driven — see src/config/homeSections.ts (id: 'male-services').
+                Placed between Near You and Book Again — grouped with Kids
+                Services right after it, so both demographic sections sit
+                together in the same neighborhood of the feed. */}
+            {/* Male Services Section */}
+            {showMaleSection && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: P.text }]}>MALE SERVICES</Text>
+                  <TouchableOpacity
+                    onPress={toggleViewAllMaleServices}
+                    style={styles.viewAllButton}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.viewAll, { color: P.sub }]}>
+                      {viewAllMaleServices ? 'VIEW LESS <' : 'VIEW ALL >'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {viewAllMaleServices ? (
+                  <View style={styles.expandedGrid}>
+                    {maleProvidersDisplay.map((provider) => (
+                      <View key={`male-expanded-${provider.id}`} style={styles.gridItem}>
+                        <ProviderCard
+                          provider={provider}
+                          onPress={() => navigateToProvider(provider)}
+                          style={styles.gridCard}
+                          blurStyle={styles.gridCardBlur}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.categoryScroll}
+                    nestedScrollEnabled={true}
+                  >
+                    {maleProvidersDisplay.map(provider => (
+                      <ProviderCard
+                        key={`male-${provider.id}`}
+                        provider={provider}
+                        onPress={() => navigateToProvider(provider)}
+                        style={styles.brandCard}
+                        blurStyle={styles.brandCardBlur}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+
+                {/* Actual matching service listings (services.audience =
+                    'men'), not just provider tiles — a HAIR provider with one
+                    "Men's Cut" service shows that specific service here even
+                    though their whole business isn't registered as MALE. */}
+                {maleServiceCards.length > 0 && (
+                  <>
+                    <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
+                      POPULAR MEN'S SERVICES
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.categoryScroll}
+                      nestedScrollEnabled={true}
+                    >
+                      {maleServiceCards.map((item, index) => (
+                        <View key={item.id} style={{ width: 130, marginRight: 12 }}>
+                          <PortfolioCard
+                            item={item}
+                            columnWidth={130}
+                            imageHeight={170}
+                            onPress={navigateToAudienceService}
+                            index={index}
+                          />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+              </View>
+            )}
+
             {/* § config-driven — see src/config/homeSections.ts (id: 'kids-services') */}
             {/* Kids Services Section */}
             {showKidsSection && (
@@ -1636,6 +1758,34 @@ export default function HomeScreen() {
                 ) : (
                   <ProviderRail providers={kidsProvidersDisplay} keyPrefix="kids" onProviderPress={navigateToProvider} cardStyle={styles.brandCard} blurStyle={styles.brandCardBlur} />
                 )}
+
+                {/* Actual matching service listings (services.audience =
+                    'kids'), same reasoning as the Male section above. */}
+                {kidsServiceCards.length > 0 && (
+                  <>
+                    <Text style={[styles.viewAll, { color: P.sub, marginTop: 12, marginBottom: 8 }]}>
+                      POPULAR KIDS' SERVICES
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.categoryScroll}
+                      nestedScrollEnabled={true}
+                    >
+                      {kidsServiceCards.map((item, index) => (
+                        <View key={item.id} style={{ width: 130, marginRight: 12 }}>
+                          <PortfolioCard
+                            item={item}
+                            columnWidth={130}
+                            imageHeight={170}
+                            onPress={navigateToAudienceService}
+                            index={index}
+                          />
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
               </View>
             )}
 
@@ -1663,7 +1813,7 @@ export default function HomeScreen() {
                     onPress={() => navigation.navigate('Offers' as any)}
                   >
                     <View style={[styles.offerCardBlur, { backgroundColor: P.card, borderColor: P.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} resizeMode="cover" fadeDuration={0} /> : <View style={styles.offerLogo} />}
+                      {offer.logo ? <Image source={offer.logo} style={styles.offerLogo} contentFit="cover" transition={0} /> : <View style={styles.offerLogo} />}
                       <View style={styles.offerContent}>
                         {/* In normal flow (not floating over the title) so a
                             long custom label — a provider can type anything
@@ -1704,7 +1854,7 @@ export default function HomeScreen() {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
     </View>
   );
 }

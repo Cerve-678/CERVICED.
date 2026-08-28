@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useIsFocused, NavigationProp } from '@react-navigation/native';
 import { useExploreFocusStore } from '../../stores/useExploreFocusStore';
 import { exploreScrollHandler, resetExplorePillTracking, settleExplorePillTracking } from '../../utils/exploreTabBarScroll';
 import { getMasonryItemHeight } from '../../utils/masonryHeight';
@@ -53,19 +53,13 @@ import { logger } from '../../utils/logger';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Mixes portfolio photos with provider and service cards for a Pinterest-style
-// feed, instead of stacking every source back-to-back. Picks each next card
-// by weighted random choice among whichever types still have cards left,
-// rather than a fixed cadence (the old version emitted exactly 4 portfolio
-// cards then 1 service then 1 provider, on a loop) — a fixed cadence is a
-// pattern a user's eye locks onto just as easily as same-provider runs are,
-// even once the rows within each type are themselves shuffled. Weights bias
-// toward portfolio (the bulk of real content) while still giving service/
-// provider cards a real, non-deterministic chance to appear back-to-back or
-// several-apart, rather than always landing exactly on schedule.
-const PORTFOLIO_WEIGHT = 4;
-const SERVICE_WEIGHT = 1;
-const PROVIDER_WEIGHT = 1;
+// Mixes portfolio photos with provider and service ("bookable") cards for a
+// Pinterest-style feed, instead of stacking every source back-to-back or
+// front-loading bookable cards near the top. Portfolio cards vastly
+// outnumber bookable ones, so a random weighted draw exhausts the bookable
+// pool early and leaves the rest of the scroll portfolio-only — instead,
+// bookable cards are spread at even intervals across the FULL feed length
+// (see interleaveDiscoverFeed), so every stretch of scrolling has some.
 
 // The four discover sources are queried independently and share no dedupe,
 // so the same photo file can legitimately arrive from more than one of them:
@@ -106,30 +100,31 @@ function interleaveDiscoverFeed(
   serviceCards: PortfolioItem[],
   providerCards: PortfolioItem[]
 ): PortfolioItem[] {
+  // Service and provider cards are both "bookable" — merged and reshuffled
+  // together so neither type clusters ahead of the other within this pool.
+  const bookable = shuffle([...serviceCards, ...providerCards]);
+  const total = portfolioCards.length + bookable.length;
+  if (total === 0) return [];
+
   const result: PortfolioItem[] = [];
   let pIdx = 0;
-  let sIdx = 0;
-  let vIdx = 0;
+  let bIdx = 0;
 
-  while (pIdx < portfolioCards.length || sIdx < serviceCards.length || vIdx < providerCards.length) {
-    const lanes: { weight: number; take: () => PortfolioItem | undefined }[] = [];
-    if (pIdx < portfolioCards.length) lanes.push({ weight: PORTFOLIO_WEIGHT, take: () => portfolioCards[pIdx++] });
-    if (sIdx < serviceCards.length) lanes.push({ weight: SERVICE_WEIGHT, take: () => serviceCards[sIdx++] });
-    if (vIdx < providerCards.length) lanes.push({ weight: PROVIDER_WEIGHT, take: () => providerCards[vIdx++] });
+  for (let i = 0; i < total; i++) {
+    // A bookable card belongs here if, by this point in the feed, fewer
+    // bookable cards have been placed than its fair share of the whole
+    // feed's length — that's what spreads it evenly instead of letting it
+    // all land near the top.
+    const fairShareSoFar = ((i + 1) * bookable.length) / total;
+    const wantsBookable = bIdx < fairShareSoFar;
 
-    const totalWeight = lanes.reduce((sum, lane) => sum + lane.weight, 0);
-    let roll = Math.random() * totalWeight;
-    let chosen = lanes[0]!;
-    for (const lane of lanes) {
-      if (roll < lane.weight) {
-        chosen = lane;
-        break;
-      }
-      roll -= lane.weight;
+    if (wantsBookable && bIdx < bookable.length) {
+      result.push(bookable[bIdx++]!);
+    } else if (pIdx < portfolioCards.length) {
+      result.push(portfolioCards[pIdx++]!);
+    } else if (bIdx < bookable.length) {
+      result.push(bookable[bIdx++]!);
     }
-
-    const card = chosen.take();
-    if (card) result.push(card);
   }
 
   return result;
@@ -274,6 +269,13 @@ const ExploreScreen = memo(() => {
   // ---------------------------------------------------------------------
   const { user } = useAuth();
   const [showTour, setShowTour] = useState(false);
+  // Explore is a tab screen — it stays mounted after you tap a card through to
+  // a provider profile, and CoachMarkTour is a full-screen Modal. Without this
+  // gate, an armed tour (700ms timer, or one that was mid-show) pops the
+  // spotlight over whatever screen is now on top. Only present it while Explore
+  // is actually the focused screen; a still-pending tour just waits for you to
+  // come back.
+  const isFocused = useIsFocused();
   const tourCheckedRef = useRef(false);
   const tourHeartRef = useRef<View>(null);
   const tourPriceRef = useRef<View>(null);
@@ -882,7 +884,7 @@ const ExploreScreen = memo(() => {
 
       {/* First-visit walkthrough of the grid's own affordances. Rendered
           outside SafeAreaView so its scrim covers the full window. */}
-      <CoachMarkTour visible={showTour} steps={tourSteps} onFinish={finishTour} />
+      <CoachMarkTour visible={showTour && isFocused} steps={tourSteps} onFinish={finishTour} />
     </ThemedBackground>
   );
 });
