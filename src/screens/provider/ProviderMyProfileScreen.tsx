@@ -1,3 +1,32 @@
+/**
+ * My Services — where a provider manages their catalogue and their work.
+ *
+ * This screen has been two wrong things already. It started as a near-1:1
+ * replica of the client-facing profile, which was redundant the moment you
+ * notice InfoRegScreen's editor already has a real PREVIEW modal. It was then
+ * a grid of status tiles — which read like a dashboard but wasn't one, because
+ * every tile's tap landed in the same 7,254-line InfoReg document. A screen
+ * whose only verb is "open the big form" has no reason to exist.
+ *
+ * So it manages things directly now. Services are listed by category and
+ * edited in place: change a price, add a service, hide one that isn't on offer
+ * this month — without reposting the whole profile. Portfolio photos are added
+ * and removed here too. Those are the two things a provider touches weekly.
+ *
+ * The remaining links are links because their destinations are already real,
+ * focused screens rather than sections of the big form: Schedule
+ * (ProviderScheduleScreen), Policies (PoliciesScreen, in the Business Details
+ * hub) and Branding (BrandingScreen).
+ *
+ * Deliberately NOT analytics. No revenue, no charts, no trends — that's
+ * ProviderAnalyticsScreen's job.
+ *
+ * Status comes from the shared features/providers/goLiveStatus module, which
+ * ProviderHomeScreen's setup card also uses. That sharing is the point: the
+ * old "Profile Health 5/7" card scored a different, softer list with no
+ * schedule item at all, so a provider could be told they were ready for
+ * clients while the server was still refusing to publish them.
+ */
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
@@ -7,53 +36,121 @@ import {
   Image,
   StyleSheet,
   Dimensions,
-  FlatList,
   ActivityIndicator,
-  Modal,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { loadProviderFromSupabase } from '../../services/providerRegistrationService';
+import {
+  loadProviderFromSupabase,
+  uploadToStorage,
+} from '../../services/providerRegistrationService';
 import type { ProviderRegistrationData } from '../../services/providerRegistrationService';
-import { getProviderPortfolio, getProviderReviews, getProviderIdForUserId, hasMyProviderTermsForm } from '../../services/databaseService';
-import type { DbPortfolioItem } from '../../types/database';
+import {
+  addPortfolioItem,
+  createMyService,
+  deletePortfolioItem,
+  getMyBookmarkCount,
+  getMyProviderProfile,
+  getMyTopServices,
+  getMyServiceCatalogue,
+  getProviderPortfolio,
+  getProviderReviews,
+  setMyServiceActive,
+  updateMyService,
+  type MyServiceDraft,
+} from '../../services/databaseService';
+import type { DbPortfolioItem, DbService } from '../../types/database';
+import type { ProviderServicesStackParamList } from '../../navigation/types';
 import { resolveProviderTheme, withAlpha, isDarkColor } from '../../constants/providerThemes';
 import { AvailabilityService } from '../../services/AvailabilityService';
 import type { AvailabilitySummary } from '../../services/AvailabilityService';
 import AvailabilityCard from '../../components/AvailabilityCard';
-import CategoryTabPill from '../../components/CategoryTabPill';
-import SlidingTabs from '../../components/SlidingTabs';
-import AppBackground from '../../components/AppBackground';
+import { ThemedBackground } from '../../components/ThemedBackground';
 import { logger } from '../../utils/logger';
+import { toUserMessage } from '../../utils/userFacingError';
 import { buildPolicyDisplayRows } from '../../utils/policyDisplay';
-import { ProviderPortfolioSection } from '../../features/providers/ProviderProfileSections';
+import ServiceEditorSheet, {
+  EMPTY_SERVICE_VALUE,
+  toEditorValue,
+  type ServiceEditorPalette,
+  type ServiceEditorValue,
+} from '../../features/providers/ServiceEditorSheet';
+import {
+  fetchGoLiveStatus,
+  buildGoLiveSteps,
+  buildGoLiveHeadline,
+  type GoLiveStatus,
+  type GoLiveStepKey,
+} from '../../features/providers/goLiveStatus';
+import { splitPortfolioByKind } from '../../features/providers/venuePhotos';
 
-const { height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-// Hero → content transition, copied from ProviderProfileScreen: the logo/name/
-// rating/slots float directly over the hero photo/gradient, then the content
-// sheet rises over it with a rounded lip. Keep this in sync with that screen.
+// Hero → content transition, inherited from the client-facing profile.
 const SHEET_LIP_RADIUS = 36;
 
-const INFO_TABS = [
-  { key: 'about' as const,  label: 'About' },
-  { key: 'policy' as const, label: 'Policy' },
+// Portfolio rail: portrait tiles, sized so a third one peeks past the card's
+// right edge and the strip reads as scrollable without a scrollbar.
+const PHOTO_GAP = 10;
+const PHOTO_W = 108;
+const PHOTO_H = 136;
+
+// Half-width cards, two to a row, same padding.
+const HALF_GAP = 12;
+const HALF_W = (screenWidth - 40 - HALF_GAP) / 2;
+
+// Setup ring on the status card. Radius is inset by half the stroke so the
+// band sits fully inside the SVG box rather than clipping at its edge.
+const RING_SIZE = 118;
+const RING_STROKE = 11;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRC = 2 * Math.PI * RING_RADIUS;
+
+/** Where each shared go-live step is fixed, from the MyServices stack. All
+ *  three destinations are registered on this navigator, so each tap pushes
+ *  with this screen underneath rather than bouncing to another tab's root and
+ *  leaving its back button with nothing to return to. */
+const GO_LIVE_STEP_SCREENS: Record<GoLiveStepKey, keyof ProviderServicesStackParamList> = {
+  schedule: 'ProviderSchedule',
+  services: 'EditProfile',
+  address: 'EditProfile',
+  logo: 'Branding',
+};
+
+/** Attention colours. Only the two "something's outstanding" tones are fixed:
+ *  amber has to read as amber whatever accent a provider picks, same reasoning
+ *  as AvailabilityCard's dots. A healthy profile is drawn in the provider's own
+ *  accent instead of a success green — nothing on this screen is a traffic
+ *  light, and the green read as an alert of its own. */
+const TONE_COLOR = {
+  blocked: '#FF9500',
+  stalled: '#FF9500',
+} as const;
+
+/** The two halves of this screen: how the profile is doing, and the service
+ *  catalogue itself. Everything service-related lives under 'services'. */
+type ProfileTab = 'dashboard' | 'services';
+
+const PROFILE_TABS: { key: ProfileTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'dashboard', label: 'DASHBOARD', icon: 'grid-outline' },
+  { key: 'services', label: 'SERVICES', icon: 'pricetags-outline' },
 ];
 
-const StarIcon = ({ size, color }: { size: number; color: string }) => (
-  <Text style={{ fontSize: size, color }}>★</Text>
-);
-const NOOP_OPEN_IMAGE = () => {};
+const MAX_POLICY_ROWS = 4;
+const MAX_REVIEW_PREVIEWS = 2;
+const MAX_PORTFOLIO_TILES = 9;
 
-/** True when there's anything worth showing on the Policy tab — either
- *  descriptive booking_policies or the enforced cancellation window. Mirrors
- *  ProviderProfileScreen's hasPolicyInfo exactly. */
+/** True when there's anything worth showing about the booking policy — either
+ *  descriptive booking_policies or the enforced cancellation window. */
 function hasPolicyInfo(providerData: ProviderRegistrationData): boolean {
   const bp = providerData.bookingPolicies;
   return (
@@ -66,115 +163,328 @@ function hasPolicyInfo(providerData: ProviderRegistrationData): boolean {
   );
 }
 
+interface DashPalette {
+  text: string;
+  sub: string;
+  border: string;
+  sep: string;
+  cardBg: string;
+  blurTint: 'light' | 'dark';
+  blurIntensity: number;
+  highlight: [string, string];
+  accent: string;
+}
+
+/** A full-width card: eyebrow, title, optional headline value, and whatever
+ *  detail belongs underneath. Tappable as a whole when `onPress` is given. */
+const DashCard = React.memo(function DashCard({
+  palette,
+  eyebrow,
+  title,
+  value,
+  onPress,
+  children,
+}: {
+  palette: DashPalette;
+  eyebrow: string;
+  title: string;
+  value?: string | undefined;
+  onPress?: (() => void) | undefined;
+  children?: React.ReactNode;
+}) {
+  const handlePress = useCallback(() => {
+    if (!onPress) return;
+    Haptics.selectionAsync().catch(() => {});
+    onPress();
+  }, [onPress]);
+
+  const body = (
+    <BlurView
+      intensity={palette.blurIntensity}
+      tint={palette.blurTint}
+      style={[
+        styles.dashCard,
+        { backgroundColor: palette.cardBg, borderColor: palette.border },
+      ]}
+    >
+      <LinearGradient
+        colors={palette.highlight}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.cardHighlight}
+      />
+      <View style={styles.dashHeader}>
+        <View style={styles.dashHeaderText}>
+          <Text style={[styles.dashEyebrow, { color: palette.sub }]} numberOfLines={1}>
+            {eyebrow}
+          </Text>
+          <Text
+            style={[styles.dashTitle, { color: palette.text }]}
+          >
+            {title}
+          </Text>
+        </View>
+        {value ? <Text style={[styles.dashValue, { color: palette.accent }]}>{value}</Text> : null}
+        {onPress ? (
+          <Ionicons name="chevron-forward" size={16} color={palette.sub} />
+        ) : null}
+      </View>
+      {children}
+    </BlurView>
+  );
+
+  if (!onPress) return <View style={styles.dashCardShadow}>{body}</View>;
+  return (
+    <View style={styles.dashCardShadow}>
+      <TouchableOpacity activeOpacity={0.75} onPress={handlePress}>
+        {body}
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+/** Nothing here yet — said as the consequence for clients, not as a scold. */
+const DashEmpty = React.memo(function DashEmpty({
+  palette,
+  text,
+}: {
+  palette: DashPalette;
+  text: string;
+}) {
+  return <Text style={[styles.dashEmpty, { color: palette.sub }]}>{text}</Text>;
+});
+
+/** One service in the catalogue. The tile body opens the editor; the eye is a
+ *  separate hit target that hides/shows without opening anything. */
+const ServiceTile = React.memo(function ServiceTile({
+  service,
+  palette,
+  busy,
+  onEdit,
+  onToggleActive,
+}: {
+  service: DbService;
+  palette: DashPalette;
+  busy: boolean;
+  onEdit: (service: DbService) => void;
+  onToggleActive: (service: DbService) => void;
+}) {
+  const hidden = !service.is_active;
+  return (
+    <TouchableOpacity
+      style={[
+        styles.serviceTile,
+        { backgroundColor: palette.cardBg, borderColor: palette.border },
+        hidden && styles.serviceTileHidden,
+      ]}
+      activeOpacity={0.75}
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onEdit(service);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`Edit ${service.name}`}
+    >
+      <Text style={[styles.serviceTileName, { color: palette.text }]} numberOfLines={2}>
+        {service.name}
+      </Text>
+      <Text style={[styles.serviceTileMeta, { color: palette.sub }]} numberOfLines={1}>
+        {service.duration_minutes} min{hidden ? ' · hidden' : ''}
+      </Text>
+
+      <View style={styles.serviceTileFooter}>
+        <Text
+          style={[styles.serviceTilePrice, { color: hidden ? palette.sub : palette.text }]}
+          numberOfLines={1}
+        >
+          £{service.price}
+          {service.price_max ? `–£${service.price_max}` : ''}
+        </Text>
+        <TouchableOpacity
+          style={styles.serviceToggle}
+          activeOpacity={0.6}
+          disabled={busy}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            service.is_active
+              ? `Hide ${service.name} from clients`
+              : `Show ${service.name} to clients`
+          }
+          onPress={() => {
+            Haptics.selectionAsync().catch(() => {});
+            onToggleActive(service);
+          }}
+        >
+          {busy ? (
+            <ActivityIndicator size="small" color={palette.sub} />
+          ) : (
+            <Ionicons
+              name={service.is_active ? 'eye-outline' : 'eye-off-outline'}
+              size={18}
+              color={service.is_active ? palette.accent : palette.sub}
+            />
+          )}
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 interface Props {
   navigation: any;
 }
 
-// Mirrors ProviderProfileScreen's live design (hero photo/gradient, floating
-// logo+info, the rounded BlurView "sheet" of cards, typography, section set)
-// so a provider's own view of their profile is what a client sees.
-// Rebuild this whenever that screen changes.
 export default function ProviderMyProfileScreen({ navigation }: Props) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const [providerData, setProviderData] = useState<ProviderRegistrationData | null>(null);
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [services, setServices] = useState<DbService[]>([]);
   const [portfolio, setPortfolio] = useState<DbPortfolioItem[]>([]);
-  const [reviews, setReviews] = useState<{ id: string; name: string; rating: number; comment: string; date: string }[]>([]);
+  // getProviderPortfolio returns the provider's venue/workspace shots in the
+  // same list as their work. They aren't portfolio photos to a client — they
+  // render inside Additional Information on the profile and never appear in
+  // Explore — and they're added and removed in Business Profile's "Address
+  // photos" grid, not here, so this screen's PORTFOLIO card counts and shows
+  // the work half only. Counting them here read as photos a client would
+  // browse, and the rail offered a delete for a photo this screen never
+  // explained.
+  const workPhotos = useMemo(() => splitPortfolioByKind(portfolio).work, [portfolio]);
+  const [reviews, setReviews] = useState<
+    { id: string; name: string; rating: number; comment: string; date: string }[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [showFullAbout, setShowFullAbout] = useState(false);
-  const [infoTab, setInfoTab] = useState<'about' | 'policy'>('about');
-  const [showPolicyImage, setShowPolicyImage] = useState(false);
   const [availability, setAvailability] = useState<AvailabilitySummary | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
-  // A provider's own T&Cs are the one library form flagged is_terms — the
-  // Terms & Conditions template in Forms sets it, and it's what
-  // get_provider_terms serves to the booking sheet. Checking "has a policy
-  // question" instead would also match the Policy Agreement form, which is a
-  // different document.
-  const [hasTermsForm, setHasTermsForm] = useState<boolean | null>(null);
+  // null means "not answered yet" — a failed read must never render as an
+  // all-false checklist telling a live provider they've done nothing.
+  const [goLive, setGoLive] = useState<GoLiveStatus | null>(null);
+  // providers.review_count, not reviews.length: the reviews query is capped at
+  // a page, so counting the rows we happened to fetch would tell a provider
+  // with 40 reviews that they have 20. This is also the exact number clients
+  // see on their card in search, which is the number worth reporting back.
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+  // How many clients have saved this provider — the cheapest real performance
+  // number on the screen, and the way into the full analytics.
+  const [bookmarkCount, setBookmarkCount] = useState<number | null>(null);
+  // What clients actually book, busiest first — the one thing on this screen
+  // that reports back on the catalogue rather than describing it.
+  const [topServices, setTopServices] = useState<{ name: string; count: number }[] | null>(null);
 
-  // Reload data every time screen comes into focus
+  // Editor state. editingId is the row being changed, or null for a new
+  // service in editingCategory.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string>('');
+  const [editorInitial, setEditorInitial] = useState<ServiceEditorValue>(EMPTY_SERVICE_VALUE);
+  const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  // Which half of the sheet is showing. Not navigation state: both halves read
+  // the same already-loaded data, so switching must not refetch or reset the
+  // scroll position the way pushing a screen would.
+  const [tab, setTab] = useState<ProfileTab>('dashboard');
+  // null = "hasn't been touched", which reads as open for a provider who isn't
+  // live yet and closed for one who is. An initial `false` would hide the only
+  // instructions an unpublished provider has.
+  const [stepsOpen, setStepsOpen] = useState<boolean | null>(null);
+
+  // Reload data every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       const load = async () => {
-        // Don't blank the screen on refocus — isLoading is only true on the very
-        // first mount (useState(true)). On later focuses we keep the current
-        // profile on screen and refresh in the background instead of flashing a
-        // spinner every time you tab back.
+        // Don't blank the screen on refocus — isLoading is only true on the
+        // very first mount (useState(true)). On later focuses we keep what's
+        // on screen and refresh behind it instead of flashing a spinner every
+        // time you tab back.
         try {
           let parsed: ProviderRegistrationData | null = null;
 
           if (user?.id) {
-            // Two independent lookups — run them together, not one after the other.
-            const [loaded, providerId] = await Promise.all([
+            // Two independent lookups — run them together, not one after the
+            // other. The whole provider row is read here rather than just its
+            // id: it costs the same single row but carries logo_url,
+            // has_gone_live and review_count too, so everything below reuses
+            // it instead of re-reading the same provider once per consumer.
+            const [loaded, profile] = await Promise.all([
               loadProviderFromSupabase(user.id),
-              getProviderIdForUserId(user.id),
+              getMyProviderProfile(),
             ]);
             parsed = loaded;
-            if (providerId) {
-              getProviderPortfolio(providerId).then(setPortfolio).catch(() => {});
-              // Live availability for the header card. Fire-and-forget like the
-              // portfolio/reviews fetches above so the profile paints without
-              // waiting on it; a failure leaves the card hidden rather than
-              // showing a stale or invented schedule.
+
+            if (profile) {
+              setProviderId(profile.id);
+              setReviewCount(profile.review_count ?? 0);
+
+              // The catalogue is what this screen is for, so it's awaited
+              // rather than fired and forgotten — everything else can arrive
+              // late without the screen looking broken.
+              const catalogue = await getMyServiceCatalogue(profile.id);
+              setServices(catalogue.services);
+
+              getProviderPortfolio(profile.id).then(setPortfolio).catch(() => {});
+
+              getMyBookmarkCount()
+                .then(setBookmarkCount)
+                .catch(err => {
+                  logger.error('[MyServices] bookmark count load failed:', err);
+                });
+
+              getMyTopServices(90, 1)
+                .then(setTopServices)
+                .catch(err => {
+                  logger.error('[MyServices] top services load failed:', err);
+                });
+
               setAvailabilityLoading(true);
-              AvailabilityService.getAvailabilitySummary(providerId, {
+              AvailabilityService.getAvailabilitySummary(profile.id, {
                 includeExtendedSearch: false,
               })
                 .then(setAvailability)
                 .catch(() => setAvailability(null))
                 .finally(() => setAvailabilityLoading(false));
-              // Already have providerId from getProviderIdForUserId above —
-              // call getProviderReviews directly instead of
-              // getMyProviderReviews(), which would re-resolve the same
-              // provider row from scratch via a second, heavier query.
-              getProviderReviews(providerId, { limit: 20 })
-                .then(dbReviews => setReviews(dbReviews.map(r => ({
-                  id: r.id,
-                  name: r.user?.name ?? 'Anonymous',
-                  rating: r.rating,
-                  comment: r.comment ?? '',
-                  date: new Date(r.created_at).toLocaleDateString('en-GB', {
-                    day: 'numeric', month: 'short', year: 'numeric',
-                  }),
-                }))))
+
+              getProviderReviews(profile.id, { limit: 20 })
+                .then(dbReviews =>
+                  setReviews(
+                    dbReviews.map(r => ({
+                      id: r.id,
+                      name: r.user?.name ?? 'Anonymous',
+                      rating: r.rating,
+                      comment: r.comment ?? '',
+                      date: new Date(r.created_at).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      }),
+                    })),
+                  ),
+                )
                 .catch(() => {});
-              // Fire-and-forget alongside the others. Left as null on failure
-              // so the readiness list omits the item entirely rather than
-              // telling a provider to write terms they may already have.
-              hasMyProviderTermsForm()
-                .then(setHasTermsForm)
-                .catch(() => setHasTermsForm(null));
+
+              // Passed the profile we already hold, so this costs the three
+              // status reads and not a fourth lookup of the same row.
+              fetchGoLiveStatus(profile)
+                .then(setGoLive)
+                .catch(err => {
+                  logger.error('[MyServices] go-live status load failed:', err);
+                  setGoLive(null);
+                });
             }
           }
 
           setProviderData(parsed);
-          if (parsed) {
-            const cats = Object.keys(parsed.categories);
-            setSelectedCategory(current =>
-              cats.length > 0 && !cats.includes(current) ? (cats[0] ?? '') : current,
-            );
-          }
         } catch (e) {
-          logger.error('Error loading provider data:', e);
+          logger.error('[MyServices] load failed:', e);
         } finally {
           setIsLoading(false);
         }
       };
       load();
-    }, [user?.id])
+    }, [user?.id]),
   );
-
-  const categoryNames = useMemo(() => {
-    if (!providerData) return [];
-    return Object.keys(providerData.categories);
-  }, [providerData]);
-
-  const currentServices = useMemo(() => {
-    if (!providerData || !selectedCategory) return [];
-    return providerData.categories[selectedCategory] || [];
-  }, [providerData, selectedCategory]);
 
   const serviceType = useMemo(() => {
     if (!providerData) return '';
@@ -183,53 +493,75 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       : providerData.providerService;
   }, [providerData]);
 
-  // This screen is the provider's home for their public presence, not only a
-  // mirror of what clients see. Keep the signal deliberately practical: these
-  // are the pieces that make a profile bookable and trustworthy. Each item
-  // carries the screen it's fixed on (InfoReg's own editor for the original
-  // five, Business Details' sub-screens for the rest) so the missing-items
-  // list can navigate there directly instead of just naming the gap.
-  const profileReadiness = useMemo(() => {
-    type ReadinessItem = {
-      done: boolean; label: string; screen: string;
-      tab?: string; params?: Record<string, unknown>;
-    };
-    if (!providerData) return { complete: 0, total: 6, services: 0, missing: [] as ReadinessItem[] };
-    const services = Object.values(providerData.categories).reduce((count, category) => count + category.length, 0);
-    const items: ReadinessItem[] = [
-      { done: Boolean(providerData.logo), label: 'add a logo', screen: 'EditProfile' },
-      { done: Boolean(providerData.aboutText.trim()), label: 'write an introduction', screen: 'EditProfile' },
-      { done: Boolean(providerData.location.trim()), label: 'add your location', screen: 'EditProfile' },
-      { done: services > 0, label: 'add services and prices', screen: 'EditProfile' },
-      { done: portfolio.length > 0, label: 'add portfolio photos', screen: 'EditProfile' },
-      // Booking policies live in Business Details, not InfoReg's editor —
-      // see hasPolicyInfo above (mirrors ProviderProfileScreen's own check).
-      // `tab` because these sit on the Profile tab's stack, not this one:
-      // a bare navigate() for a screen this navigator doesn't own throws an
-      // unhandled-action error rather than going anywhere.
-      { done: hasPolicyInfo(providerData), label: 'set your booking policies', screen: 'Policies', tab: 'Profile' },
-    ];
-    // Only counted once the library query has actually answered — a failed
-    // fetch must not tell a provider to write terms they already have.
-    if (hasTermsForm !== null) {
-      items.push({
-        done: hasTermsForm,
-        label: hasTermsForm ? 'review your terms & conditions' : 'set up your terms & conditions',
-        screen: 'ProviderIntakeForm',
-        tab: 'Profile',
-        // Straight into writing them — the checklist already named the
-        // document, so dropping the provider on the form library would make
-        // them find it a second time.
-        params: { openTerms: true },
-      });
+  /** Services grouped for display, plus the real breakdown of what's in the
+   *  catalogue. Live and hidden are counted separately: a provider with eight
+   *  services, three of them switched off, is not offering eight things — and
+   *  a single total would hide exactly the fact they came here to check. */
+  const catalogue = useMemo(() => {
+    const groups = new Map<string, DbService[]>();
+    for (const service of services) {
+      const list = groups.get(service.category_name);
+      if (list) list.push(service);
+      else groups.set(service.category_name, [service]);
     }
+    const live = services.filter(service => service.is_active);
+    const prices = live.map(service => service.price).filter(p => Number.isFinite(p) && p > 0);
+    const priceLabel =
+      prices.length === 0
+        ? null
+        : (() => {
+            const min = Math.min(...prices);
+            const max = Math.max(...prices);
+            return min === max ? `£${min}` : `£${min}–£${max}`;
+          })();
+
     return {
-      complete: items.filter(item => item.done).length,
-      total: items.length,
-      services,
-      missing: items.filter(item => !item.done),
+      groups: Array.from(groups, ([name, items]) => ({ name, items })),
+      liveCount: live.length,
+      hiddenCount: services.length - live.length,
+      priceLabel,
     };
-  }, [providerData, portfolio.length, hasTermsForm]);
+  }, [services]);
+
+  const policyRows = useMemo(() => {
+    if (!providerData) return [];
+    return buildPolicyDisplayRows(
+      providerData.bookingPolicies,
+      providerData.cancellationNoticeHours,
+    );
+  }, [providerData]);
+
+  /** What the ring reads. All four steps count, the optional logo included:
+   *  it isn't a blocker, but a live provider without one genuinely hasn't
+   *  finished. Whether clients can actually book is the headline's job, taken
+   *  straight from has_gone_live — never re-derived from this number. */
+  const setup = useMemo(() => {
+    const steps = goLive ? buildGoLiveSteps(goLive) : [];
+    const total = steps.length;
+    const done = steps.filter(step => step.done).length;
+    const ratio = total === 0 ? 0 : done / total;
+    const word = !goLive
+      ? '—'
+      : goLive.isLive
+        ? ratio === 1
+          ? 'Excellent'
+          : 'Live'
+        : steps.some(step => step.required && !step.done)
+          ? 'Setup'
+          : 'Almost';
+    return { done, total, ratio, percent: Math.round(ratio * 100), word };
+  }, [goLive]);
+
+  const showSteps = stepsOpen ?? !(goLive?.isLive ?? false);
+  const topService = topServices?.[0] ?? null;
+  // Every step ticked, the optional logo included — the one state where the
+  // card has nothing left to ask for and can move out of the way.
+  const setupComplete = setup.percent === 100;
+
+  const averageRating = providerData?.rating ?? 0;
+  // Falls back to the rows in hand only while the count hasn't arrived, so an
+  // in-flight load never briefly claims "0 reviews" under a visible one.
+  const totalReviews = reviewCount ?? reviews.length;
 
   const handleEditProfile = useCallback(() => {
     navigation.navigate('EditProfile');
@@ -239,64 +571,306 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
     navigation.navigate('ProviderSchedule');
   }, [navigation]);
 
+  const handleEditBranding = useCallback(() => {
+    navigation.navigate('Branding');
+  }, [navigation]);
+
+  const handleOpenAnalytics = useCallback(() => {
+    navigation.navigate('Analytics');
+  }, [navigation]);
+
+  const handleEditPolicies = useCallback(() => {
+    navigation.navigate('Policies');
+  }, [navigation]);
+
+  const handleSelectTab = useCallback((next: ProfileTab) => {
+    Haptics.selectionAsync().catch(() => {});
+    setTab(next);
+  }, []);
+
+  const handleToggleSteps = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    setStepsOpen(!showSteps);
+  }, [showSteps]);
+
+  /** The reference's routine row. Every tile pushes on THIS stack (or switches
+   *  tab), so nothing here lands at a bare tab root with a dead back button. */
+  const quickActions = useMemo<
+    { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void }[]
+  >(
+    () => [
+      {
+        key: 'services',
+        label: 'Services',
+        icon: 'sparkles-outline',
+        onPress: () => handleSelectTab('services'),
+      },
+      {
+        key: 'schedule',
+        label: 'Schedule',
+        icon: 'calendar-outline',
+        onPress: () => navigation.navigate('ProviderSchedule'),
+      },
+      {
+        key: 'clients',
+        label: 'Clients',
+        icon: 'people-outline',
+        onPress: () => navigation.navigate('Clientele'),
+      },
+      {
+        key: 'offers',
+        label: 'Offers',
+        icon: 'gift-outline',
+        onPress: () => navigation.navigate('Promotions'),
+      },
+      {
+        key: 'packs',
+        label: 'Info packs',
+        icon: 'documents-outline',
+        onPress: () => navigation.navigate('InfoPacks'),
+      },
+    ],
+    [handleSelectTab, navigation],
+  );
+
+  const handleGoLiveStep = useCallback(
+    (key: GoLiveStepKey) => {
+      Haptics.selectionAsync().catch(() => {});
+      navigation.navigate(GO_LIVE_STEP_SCREENS[key]);
+    },
+    [navigation],
+  );
+
+  // ── Service editing ─────────────────────────────────────────────────────
+
+  const openNewService = useCallback((categoryName: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    setEditingId(null);
+    setEditingCategory(categoryName);
+    setEditorInitial(EMPTY_SERVICE_VALUE);
+    setEditorOpen(true);
+  }, []);
+
+  const openEditService = useCallback((service: DbService) => {
+    setEditingId(service.id);
+    setEditingCategory(service.category_name);
+    setEditorInitial(toEditorValue(service));
+    setEditorOpen(true);
+  }, []);
+
+  const closeEditor = useCallback(() => setEditorOpen(false), []);
+
+  const handleSaveService = useCallback(
+    async (draft: MyServiceDraft) => {
+      if (!providerId) return;
+      setSaving(true);
+      try {
+        if (editingId) {
+          const updated = await updateMyService(editingId, draft);
+          setServices(prev => prev.map(s => (s.id === updated.id ? { ...s, ...updated } : s)));
+        } else {
+          const created = await createMyService(providerId, editingCategory, draft);
+          setServices(prev => [...prev, created]);
+        }
+        setEditorOpen(false);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } catch (e) {
+        logger.error('[MyServices] save service failed:', e);
+        Alert.alert(
+          'Could not save',
+          toUserMessage(e, "That didn't save. Please try again.", 'MyServices.saveService'),
+        );
+      } finally {
+        setSaving(false);
+      }
+    },
+    [providerId, editingId, editingCategory],
+  );
+
+  const handleToggleActive = useCallback(async (service: DbService) => {
+    const next = !service.is_active;
+    setTogglingId(service.id);
+    // Optimistic: the eye flips immediately and reverts if the write fails,
+    // rather than sitting unchanged while a provider taps it again.
+    setServices(prev => prev.map(s => (s.id === service.id ? { ...s, is_active: next } : s)));
+    try {
+      await setMyServiceActive(service.id, next);
+    } catch (e) {
+      setServices(prev =>
+        prev.map(s => (s.id === service.id ? { ...s, is_active: service.is_active } : s)),
+      );
+      logger.error('[MyServices] toggle service failed:', e);
+      Alert.alert(
+        'Could not update',
+        toUserMessage(e, "That didn't save. Please try again.", 'MyServices.toggleService'),
+      );
+    } finally {
+      setTogglingId(null);
+    }
+  }, []);
+
+  // ── Portfolio ───────────────────────────────────────────────────────────
+
+  const handleAddPhotos = useCallback(async () => {
+    if (!user?.id || !providerId) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: 10,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) return;
+
+    setPhotoUploading(true);
+    // Each photo uploads independently so one failure in a multi-select
+    // doesn't silently drop the rest — same shape as the InfoReg uploader.
+    await Promise.all(
+      result.assets.map(async asset => {
+        try {
+          const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          // fetch(localUri).blob() is unreliable for file:// URIs in React
+          // Native — uploadToStorage reads via expo-file-system instead.
+          const publicUrl = await uploadToStorage('portfolio', path, asset.uri);
+          const ratio = asset.width && asset.height ? asset.width / asset.height : 1;
+          const item = await addPortfolioItem(providerId, publicUrl, ratio);
+          setPortfolio(prev => [item, ...prev]);
+        } catch (e) {
+          logger.error('[MyServices] portfolio upload failed:', e);
+          Alert.alert(
+            'Upload failed',
+            toUserMessage(e, 'Could not upload one of those photos.', 'MyServices.addPhotos'),
+          );
+        }
+      }),
+    );
+    setPhotoUploading(false);
+  }, [user?.id, providerId]);
+
+  const handleRemovePhoto = useCallback((item: DbPortfolioItem) => {
+    Alert.alert('Remove photo?', 'Clients will no longer see it on your profile.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setPortfolio(prev => prev.filter(p => p.id !== item.id));
+          try {
+            await deletePortfolioItem(item.id);
+          } catch (e) {
+            setPortfolio(prev => [item, ...prev]);
+            logger.error('[MyServices] portfolio delete failed:', e);
+            Alert.alert(
+              'Could not remove',
+              toUserMessage(e, "That didn't save. Please try again.", 'MyServices.removePhoto'),
+            );
+          }
+        },
+      },
+    ]);
+  }, []);
+
+  // ── Theme ───────────────────────────────────────────────────────────────
+
   const PP = useMemo(
     () => resolveProviderTheme(providerData?.profileTheme),
-    [providerData?.profileTheme]
+    [providerData?.profileTheme],
   );
   const cardBg = withAlpha(PP.card, PP.isDark ? 0.82 : 0.98);
   const cardBlurTint = PP.isDark ? ('dark' as const) : ('light' as const);
   const cardBlurIntensity = PP.isDark ? 35 : 25;
-  const cardHighlightColors = useMemo(() => (
-    PP.isDark
-      ? ['rgba(255,255,255,0.08)', 'transparent']
-      : ['rgba(255,255,255,0.3)', 'transparent']
-  ) as [string, string], [PP.isDark]);
+  const cardHighlightColors = useMemo(
+    () =>
+      (PP.isDark
+        ? ['rgba(255,255,255,0.08)', 'transparent']
+        : ['rgba(255,255,255,0.3)', 'transparent']) as [string, string],
+    [PP.isDark],
+  );
   const accentColor = providerData?.accentColor || PP.accent;
-  const portfolioPalette = useMemo(() => ({
-    text: PP.text,
-    sub: PP.sub,
-    border: PP.border,
-    separator: PP.sep,
-    background: PP.bg,
-    cardBackground: cardBg,
-    accent: accentColor,
-    blurTint: cardBlurTint,
-    blurIntensity: cardBlurIntensity,
-    highlightColors: cardHighlightColors,
-  }), [PP.text, PP.sub, PP.border, PP.sep, PP.bg, cardBg, accentColor, cardBlurTint, cardBlurIntensity, cardHighlightColors]);
-  // Mirror ProviderProfileScreen's hero logic EXACTLY for visual parity:
-  //   hasCustomGradient = providers.gradient was genuinely saved; else the
-  //   theme's own hero colour. A background photo always forces the dark
-  //   (white-text) treatment, since the dark overlay under it guarantees
-  //   contrast regardless of the photo's own brightness.
+  // The reference's black pill, flipped on dark themes so it stays the
+  // highest-contrast thing on the card instead of sinking into it.
+  const inkBg = PP.isDark ? '#F2F0F0' : '#101010';
+  const inkText = PP.isDark ? '#101010' : '#FFFFFF';
+  // Two washes of the provider's own accent rather than the reference's fixed
+  // lilac/peach — this screen wears the provider's branding, not ours.
+  const tintStrong = withAlpha(accentColor, PP.isDark ? 0.24 : 0.16);
+  const tintSoft = withAlpha(accentColor, PP.isDark ? 0.12 : 0.07);
+
+  const dashPalette = useMemo<DashPalette>(
+    () => ({
+      text: PP.text,
+      sub: PP.sub,
+      border: PP.border,
+      sep: PP.sep,
+      cardBg,
+      blurTint: cardBlurTint,
+      blurIntensity: cardBlurIntensity,
+      highlight: cardHighlightColors,
+      accent: accentColor,
+    }),
+    [
+      PP.text,
+      PP.sub,
+      PP.border,
+      PP.sep,
+      cardBg,
+      cardBlurTint,
+      cardBlurIntensity,
+      cardHighlightColors,
+      accentColor,
+    ],
+  );
+
+  const editorPalette = useMemo<ServiceEditorPalette>(
+    () => ({
+      bg: PP.bg,
+      card: cardBg,
+      text: PP.text,
+      sub: PP.sub,
+      border: PP.border,
+      accent: accentColor,
+    }),
+    [PP.bg, cardBg, PP.text, PP.sub, PP.border, accentColor],
+  );
+
+  // Mirror the client-facing hero logic exactly for visual parity: a
+  // background photo always forces the dark (white-text) treatment, since the
+  // overlay under it guarantees contrast regardless of the photo's brightness.
   const heroBgColor = providerData?.hasCustomGradient ? providerData?.gradient[0] : PP.hero;
-  const heroIsDark = !!providerData?.backgroundImage || (heroBgColor ? isDarkColor(heroBgColor) : true);
+  const heroIsDark =
+    !!providerData?.backgroundImage || (heroBgColor ? isDarkColor(heroBgColor) : true);
   const heroText = heroIsDark ? '#FFFFFF' : '#26201E';
   const heroSub = heroIsDark ? 'rgba(255,255,255,0.96)' : 'rgba(38,32,30,0.78)';
 
-  // Loading state — waiting for Supabase / fonts
   if (isLoading) {
     return (
-      <AppBackground>
+      <ThemedBackground>
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color="#a342c3" />
           </View>
         </SafeAreaView>
-      </AppBackground>
+      </ThemedBackground>
     );
   }
 
-  // Empty state — no profile submitted yet
   if (!providerData) {
     return (
-      <AppBackground>
+      <ThemedBackground>
         <SafeAreaView style={styles.container} edges={['top']}>
           <View style={styles.emptyState}>
-            <Ionicons name="storefront-outline" size={72} color={theme.text + '30'} style={{ marginBottom: 16 }} />
-            <Text style={[styles.emptyTitle, { color: theme.text }]}>
-              Set Up Your Profile
-            </Text>
+            <Ionicons
+              name="storefront-outline"
+              size={72}
+              color={theme.text + '30'}
+              style={{ marginBottom: 16 }}
+            />
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>Set Up Your Profile</Text>
             <Text style={[styles.emptySubtitle, { color: theme.text + '66' }]}>
               Create your provider profile so clients can discover and book your services.
             </Text>
@@ -308,22 +882,164 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
-      </AppBackground>
+      </ThemedBackground>
     );
   }
 
+  const headline = goLive ? buildGoLiveHeadline(goLive) : null;
+  const toneColor =
+    headline && headline.tone !== 'live' ? TONE_COLOR[headline.tone] : accentColor;
+
+  /* The go-live card. It leads the dashboard while anything is still
+     outstanding and drops to the bottom once the profile is finished —
+     at that point it's a receipt, not an instruction. */
+  const statusSection = (
+    <>
+      {/* ── Status hero ────────────────────────────────────────
+          A ring instead of a bare checklist: the headline answers
+          "am I bookable", the ring answers "how far off", and the
+          steps stay one tap away rather than always occupying the
+          top of the screen for a provider who's already live. */}
+      {headline && goLive ? (
+        <View style={styles.dashCardShadow}>
+          <BlurView
+            intensity={cardBlurIntensity}
+            tint={cardBlurTint}
+            style={[styles.statusCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+          >
+            <LinearGradient
+              colors={cardHighlightColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.cardHighlight}
+            />
+            <View style={styles.statusHeader}>
+              <View style={[styles.statusDot, { backgroundColor: toneColor }]} />
+              <Text style={[styles.dashEyebrow, { color: PP.sub }]}>YOUR PROFILE TODAY</Text>
+            </View>
+
+            <View style={styles.statusBody}>
+              <View style={styles.ringWrap}>
+                <Svg width={RING_SIZE} height={RING_SIZE}>
+                  <SvgCircle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RING_RADIUS}
+                    fill="none"
+                    stroke={withAlpha(toneColor, PP.isDark ? 0.22 : 0.16)}
+                    strokeWidth={RING_STROKE}
+                  />
+                  <SvgCircle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RING_RADIUS}
+                    fill="none"
+                    stroke={toneColor}
+                    strokeWidth={RING_STROKE}
+                    strokeDasharray={`${RING_CIRC} ${RING_CIRC}`}
+                    strokeDashoffset={RING_CIRC * (1 - setup.ratio)}
+                    strokeLinecap="round"
+                    rotation={-90}
+                    originX={RING_SIZE / 2}
+                    originY={RING_SIZE / 2}
+                  />
+                </Svg>
+                <View style={styles.ringLabel} pointerEvents="none">
+                  <Text style={[styles.ringValue, { color: PP.text }]}>{setup.percent}%</Text>
+                  <Text style={[styles.ringUnit, { color: PP.sub }]}>/100%</Text>
+                  <Text style={[styles.ringWord, { color: toneColor }]}>{setup.word}</Text>
+                </View>
+              </View>
+
+              <View style={styles.statusText}>
+                <Text style={[styles.statusTitle, { color: PP.text }]}>{headline.title}</Text>
+                <Text style={[styles.statusDetail, { color: PP.sub }]} numberOfLines={4}>
+                  {headline.detail ??
+                    (goLive.isLive
+                      ? 'Clients can find you in search and book your services.'
+                      : 'Finish the steps below and your profile publishes itself.')}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.inkPill, { backgroundColor: inkBg }]}
+                  onPress={handleToggleSteps}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showSteps }}
+                >
+                  <Text style={[styles.inkPillText, { color: inkText }]}>
+                    {showSteps ? 'HIDE DETAILS' : 'VIEW DETAILS'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {showSteps ? (
+              <View style={styles.stepList}>
+                {/* Same shape as the reference's "4/5 completed"
+                    strip, over the steps the database actually
+                    gates on. */}
+                <View style={styles.stepListHeader}>
+                  <Text style={[styles.dashEyebrow, { color: PP.sub }]}>
+                    SETUP · {setup.total} STEPS
+                  </Text>
+                  <Text style={[styles.stepCount, { color: PP.sub }]}>
+                    Completed {setup.done}/{setup.total}
+                  </Text>
+                </View>
+                <View style={[styles.progressTrack, { backgroundColor: withAlpha(toneColor, 0.16) }]}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { backgroundColor: toneColor, width: `${setup.percent}%` },
+                    ]}
+                  />
+                </View>
+                {buildGoLiveSteps(goLive).map(step => (
+                  <TouchableOpacity
+                    key={step.key}
+                    onPress={() => handleGoLiveStep(step.key)}
+                    disabled={step.done}
+                    activeOpacity={0.7}
+                    style={styles.stepRow}
+                  >
+                    <Ionicons
+                      name={step.done ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={18}
+                      color={step.done ? accentColor : PP.sub}
+                    />
+                    <Text
+                      style={[
+                        styles.stepLabel,
+                        {
+                          color: step.done ? PP.sub : PP.text,
+                          textDecorationLine: step.done ? 'line-through' : 'none',
+                        },
+                      ]}
+                    >
+                      {step.label}
+                    </Text>
+                    {step.done ? null : (
+                      <Ionicons name="chevron-forward" size={14} color={PP.sub} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </BlurView>
+        </View>
+      ) : null}
+    </>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: PP.bg }]}>
-      {/* Hero photo/gradient backdrop — mirror ProviderProfileScreen: a real
-          cover photo (with a dark gradient overlay for legible text) when
-          set via Branding, else the full custom gradient or the resolved
-          theme's [hero → bg] for preset themes. */}
       {providerData.backgroundImage ? (
         <>
           <Image
             source={{ uri: providerData.backgroundImage }}
             style={[styles.heroImage, { opacity: 0.88 }]}
             resizeMode="cover"
+            fadeDuration={0}
           />
           <LinearGradient
             colors={['rgba(0,0,0,0.38)', 'rgba(0,0,0,0.18)', 'transparent']}
@@ -341,371 +1057,336 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
       )}
 
       <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Profile hub action — the public-profile editor is still one tap
-            away, but this screen now leads with the useful operational view. */}
-        <View style={styles.topBar}>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity
-            style={[styles.editButton, { backgroundColor: 'rgba(255,255,255,0.25)' }]}
-            onPress={handleEditProfile}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.editButtonText}>Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo + profile info — floats directly over the hero photo/gradient */}
-          <View style={styles.heroInfoWrap}>
-            <View style={styles.logoContainer}>
-              <View style={styles.logoWrapper}>
-                {providerData.logo ? (
-                  <Image
-                    source={{ uri: providerData.logo }}
-                    style={styles.providerLogo}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.providerLogo,
-                      { backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' },
-                    ]}
+          {/* Identity header. Scrolls with the content rather than being
+              pinned: it carries stats and actions now, so holding it on screen
+              would cost the working area most of the top of the phone. */}
+          <View style={styles.profileHeader}>
+            <View style={styles.identityRow}>
+              <View style={styles.identityText}>
+                <View style={styles.nameRow}>
+                  <Text
+                    style={[styles.displayName, { color: heroText }, heroIsDark && styles.heroTextShadow]}
+                    numberOfLines={2}
                   >
-                    <Text style={{ color: '#fff', fontSize: 28, fontWeight: '800' }}>
-                      {providerData.providerName
-                        .split(' ')
-                        .map(w => w[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.3)', 'transparent'] as [string, string, ...string[]]}
-                  style={styles.logoGloss}
-                />
+                    {providerData.providerName || 'Your Business Name'}
+                  </Text>
+                  {providerData.isVerified && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={19}
+                      color={heroIsDark ? '#FFFFFF' : '#007AFF'}
+                      style={styles.verifiedTick}
+                    />
+                  )}
+                </View>
+                <Text
+                  style={[styles.handle, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                  numberOfLines={1}
+                >
+                  {[
+                    (serviceType || 'SERVICE').toLowerCase(),
+                    providerData.location ? providerData.location.toLowerCase() : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
               </View>
+
+              {providerData.logo ? (
+                <Image
+                  source={{ uri: providerData.logo }}
+                  style={styles.avatar}
+                  resizeMode="cover"
+                  fadeDuration={0}
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: accentColor }]}>
+                  <Text style={styles.avatarInitials}>
+                    {providerData.providerName
+                      .split(' ')
+                      .map(w => w[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase()}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {/* Provider Info — editorial strip */}
-            <View style={styles.providerInfoCenter}>
-              {/* Name + verified */}
-              <View style={styles.providerNameRow}>
+            {/* Counts live here rather than in a sentence under the Services
+                heading. Same numbers, read at a glance instead of parsed. */}
+            <View style={styles.statRow}>
+              {[
+                { value: String(catalogue.liveCount), label: catalogue.liveCount === 1 ? 'Service' : 'Services' },
+                { value: String(workPhotos.length), label: workPhotos.length === 1 ? 'Photo' : 'Photos' },
+                {
+                  value: totalReviews > 0 ? String(averageRating) : '—',
+                  label: totalReviews === 1 ? 'Review' : 'Reviews',
+                },
+              ].map(stat => (
+                <View key={stat.label} style={styles.stat}>
+                  <Text
+                    style={[styles.statValue, { color: heroText }, heroIsDark && styles.heroTextShadow]}
+                  >
+                    {stat.value}
+                  </Text>
+                  <Text
+                    style={[styles.statLabel, { color: heroSub }, heroIsDark && styles.heroTextShadow]}
+                  >
+                    {stat.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Primary action plus two shortcuts, same shape as the reference.
+                All three go somewhere real — the circles are Schedule and
+                Branding, which own themselves rather than being sections of
+                the profile form. */}
+            <View style={styles.actionRow}>
+              {/* Ink pill, like every CTA in the reference — and it has to
+                  invert over a dark hero photo to stay the loud one. */}
+              <TouchableOpacity
+                style={[styles.primaryAction, { backgroundColor: heroIsDark ? '#FFFFFF' : '#101010' }]}
+                onPress={handleEditProfile}
+                activeOpacity={0.85}
+              >
                 <Text
-                  style={[styles.providerDisplayName, { color: heroText }, heroIsDark && styles.heroTextShadow]}
+                  style={[styles.primaryActionText, { color: heroIsDark ? '#101010' : '#FFFFFF' }]}
                 >
-                  {providerData.providerName || 'Your Business Name'}
+                  EDIT PROFILE
                 </Text>
-                {providerData.isVerified && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={18}
-                    color={heroIsDark ? '#FFFFFF' : '#007AFF'}
-                  />
-                )}
-              </View>
-
-              <Text style={[styles.providerMeta, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
-                {(serviceType || 'SERVICE').toUpperCase()}
-                {providerData.location ? ` · ${providerData.location.toUpperCase()}` : ''}
-              </Text>
-
-              {/* Rating inline — real average, same as clients see */}
-              <View style={styles.ratingRow}>
-                {[1, 2, 3, 4, 5].map(star => (
-                  <StarIcon key={star} size={12} color="#FFD700" />
-                ))}
-                <Text style={[styles.ratingInline, { color: heroText }, heroIsDark && styles.heroTextShadow]}>
-                  {providerData.rating}
-                </Text>
-              </View>
-
-              {providerData.yearsExperience ? (
-                <Text style={[styles.yearsExp, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
-                  {providerData.yearsExperience} years experience
-                </Text>
-              ) : null}
-
-              {/* Catalogue size — categories and services as two square stat
-                  tiles. Both counts reuse values already derived above
-                  (categoryNames / profileReadiness.services, the same figure
-                  the readiness card counts) rather than re-deriving them, so
-                  they can't drift apart. */}
-              <View style={styles.statBoxRow}>
-                <View style={[styles.statBox, { borderColor: heroSub, backgroundColor: heroIsDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.28)' }]}>
-                  <Text style={[styles.statBoxValue, { color: heroText }, heroIsDark && styles.heroTextShadow]}>
-                    {categoryNames.length}
-                  </Text>
-                  <Text style={[styles.statBoxLabel, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
-                    {categoryNames.length === 1 ? 'CATEGORY' : 'CATEGORIES'}
-                  </Text>
-                </View>
-                <View style={[styles.statBox, { borderColor: heroSub, backgroundColor: heroIsDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.28)' }]}>
-                  <Text style={[styles.statBoxValue, { color: heroText }, heroIsDark && styles.heroTextShadow]}>
-                    {profileReadiness.services}
-                  </Text>
-                  <Text style={[styles.statBoxLabel, { color: heroSub }, heroIsDark && styles.heroTextShadow]}>
-                    {profileReadiness.services === 1 ? 'SERVICE' : 'SERVICES'}
-                  </Text>
-                </View>
-              </View>
-
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
+                onPress={handleEditSchedule}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Edit your schedule"
+              >
+                <Ionicons name="calendar-outline" size={19} color={PP.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.circleAction, { backgroundColor: withAlpha(PP.card, 0.9), borderColor: PP.border }]}
+                onPress={handleEditBranding}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Edit your branding"
+              >
+                <Ionicons name="color-palette-outline" size={19} color={PP.text} />
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* The content sheet rises over the hero photo with its own large
-              top corners — same floating-card-over-photo composition as
-              ProviderProfileScreen. */}
           <View style={[styles.contentSheet, { backgroundColor: PP.bg }]}>
             <View style={[styles.contentSheetClip, { backgroundColor: PP.bg }]}>
-            <View style={styles.profileHubCardShadow}>
-            <BlurView
-              intensity={cardBlurIntensity}
-              tint={cardBlurTint}
-              style={[styles.profileHubCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-            >
-              <LinearGradient
-                colors={cardHighlightColors}
-                start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <View style={styles.profileHubHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.profileHubEyebrow, { color: PP.sub }]}>PROFILE HEALTH</Text>
-                  <Text style={[styles.profileHubTitle, { color: PP.text }]}>
-                    {profileReadiness.complete === profileReadiness.total ? 'Ready for clients' : 'Keep building your profile'}
-                  </Text>
-                </View>
-                <View style={[styles.readinessBadge, { backgroundColor: accentColor + '22' }]}>
-                  <Text style={[styles.readinessBadgeText, { color: accentColor }]}>
-                    {profileReadiness.complete}/{profileReadiness.total}
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.profileHubSubtext, { color: PP.sub }]}>
-                {profileReadiness.services} service{profileReadiness.services === 1 ? '' : 's'} and {portfolio.length} portfolio photo{portfolio.length === 1 ? '' : 's'} live.
-              </Text>
-
-              {/* Each unfinished item is its own tappable row — jumps
-                  straight to wherever it's fixed (InfoReg's editor for
-                  profile basics, Business Details for policies) instead of
-                  just naming the gap and leaving the provider to find it. */}
-              {profileReadiness.missing.length > 0 && (
-                <View style={styles.readinessChecklist}>
-                  {profileReadiness.missing.map(item => (
+              {/* Dashboard vs Services. Two different jobs — how the
+                  profile is doing, and the catalogue itself — so each gets a
+                  tab rather than one scroll that buries the services under
+                  status cards. */}
+              <View
+                style={[
+                  styles.tabBar,
+                  { backgroundColor: withAlpha(PP.card, PP.isDark ? 0.6 : 0.75), borderColor: PP.border },
+                ]}
+              >
+                {PROFILE_TABS.map(item => {
+                  const selected = tab === item.key;
+                  return (
                     <TouchableOpacity
-                      key={item.label}
-                      style={styles.readinessChecklistRow}
-                      onPress={() => {
-                        Haptics.selectionAsync().catch(() => {});
-                        if (item.tab) {
-                          navigation.getParent()?.navigate(item.tab, {
-                            screen: item.screen,
-                            ...(item.params ? { params: item.params } : {}),
-                            initial: false,
-                          });
-                        } else {
-                          navigation.navigate(item.screen);
-                        }
-                      }}
-                      activeOpacity={0.65}
+                      key={item.key}
+                      style={[styles.tab, selected && { backgroundColor: accentColor }]}
+                      onPress={() => handleSelectTab(item.key)}
+                      activeOpacity={0.75}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={item.label}
                     >
-                      <Ionicons name="ellipse-outline" size={14} color={accentColor} />
-                      <Text style={[styles.readinessChecklistText, { color: PP.text }]}>
+                      <Ionicons
+                        name={item.icon}
+                        size={15}
+                        color={selected ? '#FFFFFF' : PP.sub}
+                      />
+                      <Text style={[styles.tabLabel, { color: selected ? '#FFFFFF' : PP.sub }]}>
                         {item.label}
                       </Text>
-                      <Ionicons name="chevron-forward" size={14} color={PP.sub} />
                     </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </BlurView>
-            </View>
+                  );
+                })}
+              </View>
 
-            <Text style={[styles.clientViewLabel, { color: PP.sub }]}>YOUR CLIENT-FACING PROFILE</Text>
-            {/* Live availability — replaces the old hand-typed slotsText pill.
-                Sits in the sheet rather than over the hero so the status
-                colours stay legible against any provider theme or cover
-                photo. Tapping goes to ProviderSchedule, which owns editing. */}
-            <View style={styles.availabilityWrap}>
-              <AvailabilityCard
-                summary={availability}
-                loading={availabilityLoading}
-                cardBg={cardBg}
-                blurIntensity={cardBlurIntensity}
-                blurTint={cardBlurTint}
-                borderColor={PP.border}
-                textColor={PP.text}
-                subTextColor={PP.sub}
-                accentColor={accentColor}
-                onEditSchedule={handleEditSchedule}
-              />
-            </View>
-
-            {/* About / Policy tabbed card */}
-            <View style={styles.aboutCardShadow}>
-            <BlurView
-              intensity={cardBlurIntensity}
-              tint={cardBlurTint}
-              style={[styles.aboutCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-            >
-              <LinearGradient
-                colors={cardHighlightColors}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              {/* Tab switcher — only show if there are policy rows */}
-              {hasPolicyInfo(providerData) && (
-                <View style={[styles.infoTabRow, { borderBottomColor: PP.border }]}>
-                  <SlidingTabs
-                    tabs={INFO_TABS}
-                    activeKey={infoTab}
-                    onPress={setInfoTab}
-                    accentColor={accentColor}
-                    inactiveTextColor={PP.sub}
-                    scrollable={false}
-                  />
-                </View>
-              )}
-
-              {infoTab === 'about' || !hasPolicyInfo(providerData) ? (
+              {tab === 'dashboard' ? (
                 <>
-                  {!hasPolicyInfo(providerData) && (
-                    <Text style={[styles.sectionTitle, { color: PP.text }]}>About</Text>
-                  )}
-                  <Text style={[styles.aboutText, { color: PP.sub }]}>
-                    {showFullAbout
-                      ? providerData.aboutText
-                      : `${providerData.aboutText.substring(0, 150)}...`}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowFullAbout(!showFullAbout)}
-                    style={styles.moreButton}
-                    activeOpacity={0.6}
+                  {setupComplete ? null : statusSection}
+
+                  {/* ── What clients say ───────────────────────────────────── */}
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>WHAT CLIENTS SAY</Text>
+
+                  {/* No onPress: there's no review-management screen to send them
+                      to, and a card that looks tappable but isn't is worse than
+                      one that plainly isn't. */}
+                  <DashCard
+                    palette={dashPalette}
+                    eyebrow="REVIEWS"
+                    title={totalReviews === 1 ? '1 review' : `${totalReviews} reviews`}
+                    value={totalReviews > 0 ? `★ ${averageRating}` : undefined}
                   >
-                    <Text style={[styles.moreButtonText, { color: PP.text }]}>
-                      {showFullAbout ? 'Show Less' : 'More'}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                /* Policy tab content. This used to be a hand-copied clone of
-                   buildPolicyDisplayRows "mirroring ProviderProfileScreen
-                   exactly" — which it stopped doing the moment deposits gained
-                   a third mode and the clone kept saying "required" for an
-                   optional one. Same source of truth as the client-facing tab
-                   now, so it can't drift again. */
-                (() => {
-                  const rows = buildPolicyDisplayRows(
-                    providerData.bookingPolicies,
-                    providerData.cancellationNoticeHours,
-                  );
-                  return (
-                    <View style={{ paddingTop: 8 }}>
-                      {rows.map((row, i) => (
-                        <View
-                          key={i}
-                          style={[styles.policyRow, i < rows.length - 1 && { borderBottomColor: PP.sep, borderBottomWidth: StyleSheet.hairlineWidth }]}
-                        >
-                          <View style={styles.policyIcon}>
-                            <Ionicons name={row.icon} size={18} color={PP.sub} />
-                          </View>
-                          <View style={styles.policyRowText}>
-                            <View style={styles.policyLabelRow}>
-                              <Text style={[styles.policyLabel, { color: PP.sub }]}>{row.label}</Text>
+                    {totalReviews === 0 ? (
+                      <DashEmpty
+                        palette={dashPalette}
+                        text="No reviews yet — they appear here once clients leave them."
+                      />
+                    ) : (
+                      <View style={styles.dashBody}>
+                        {reviews.slice(0, MAX_REVIEW_PREVIEWS).map(review => (
+                          <View
+                            key={review.id}
+                            style={[styles.reviewItem, { borderBottomColor: PP.sep }]}
+                          >
+                            <View style={styles.reviewHeader}>
+                              <Text style={[styles.reviewerName, { color: PP.text }]} numberOfLines={1}>
+                                {review.name}
+                              </Text>
+                              <View style={styles.reviewRating}>
+                                {[1, 2, 3, 4, 5].map(star => (
+                                  <Ionicons
+                                    key={star}
+                                    name="star"
+                                    size={11}
+                                    color={star <= review.rating ? '#FFD700' : PP.border}
+                                  />
+                                ))}
+                              </View>
+                              <Text style={[styles.reviewDate, { color: PP.sub }]}>{review.date}</Text>
                             </View>
-                            <Text style={[styles.policyValue, { color: PP.text }]}>{row.value}</Text>
+                            {review.comment ? (
+                              <Text style={[styles.reviewComment, { color: PP.sub }]} numberOfLines={3}>
+                                {review.comment}
+                              </Text>
+                            ) : null}
                           </View>
+                        ))}
+                        {totalReviews > MAX_REVIEW_PREVIEWS ? (
+                          <Text style={[styles.dashMore, { color: PP.sub }]}>
+                            +{totalReviews - MAX_REVIEW_PREVIEWS} more
+                          </Text>
+                        ) : null}
+                      </View>
+                    )}
+                  </DashCard>
+
+                  {/* ── Deposits & rules ──────────────────────────────────── */}
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>DEPOSITS &amp; RULES</Text>
+
+                  {/* Paired tinted tiles, the mode-select pair from the
+                      reference. Portrait rather than letterboxed: the policies
+                      tile has to show the actual rules, not a truncated
+                      sentence claiming there are some. */}
+                  <View style={styles.halfRow}>
+                    <TouchableOpacity
+                      style={[styles.tintCard, { backgroundColor: tintStrong, borderColor: PP.border }]}
+                      onPress={handleEditPolicies}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit your booking policies"
+                    >
+                      <View style={styles.tintHead}>
+                        <Ionicons name="shield-checkmark-outline" size={14} color={accentColor} />
+                        <Text style={[styles.tintEyebrow, { color: PP.sub }]}>Booking policies</Text>
+                      </View>
+
+                      <Text style={[styles.tintTitle, { color: PP.text }]} numberOfLines={1}>
+                        {hasPolicyInfo(providerData) ? 'DEPOSITS & RULES' : 'NOTHING SET YET'}
+                      </Text>
+
+                      {policyRows.length === 0 ? (
+                        <Text style={[styles.halfSub, { color: PP.sub }]} numberOfLines={4}>
+                          Clients see nothing about deposits or cancellations.
+                        </Text>
+                      ) : (
+                        <View style={styles.policyList}>
+                          {policyRows.slice(0, MAX_POLICY_ROWS - 1).map(row => (
+                            <View key={row.label} style={styles.policyItem}>
+                              <Ionicons name={row.icon} size={13} color={accentColor} />
+                              <View style={styles.policyItemText}>
+                                <Text style={[styles.policyLabel, { color: PP.sub }]} numberOfLines={1}>
+                                  {row.label}
+                                </Text>
+                                <Text style={[styles.policyValue, { color: PP.text }]} numberOfLines={2}>
+                                  {row.value}
+                                </Text>
+                              </View>
+                            </View>
+                          ))}
                         </View>
-                      ))}
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Branding moved out: it's already the palette button on
+                        the header, and a second door to it was worth less than
+                        two numbers nothing else on this screen reports. Both
+                        open the analytics screen that owns the detail. */}
+                    <View style={styles.tintColumn}>
+                      <TouchableOpacity
+                        style={[styles.tintCardShort, { backgroundColor: tintSoft, borderColor: PP.border }]}
+                        onPress={handleOpenAnalytics}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open your analytics"
+                      >
+                        <View style={styles.tintHead}>
+                          <Ionicons name="bookmark-outline" size={13} color={accentColor} />
+                          <Text style={[styles.tintEyebrow, { color: PP.sub }]}>Saved by</Text>
+                        </View>
+                        <View style={styles.shortBody}>
+                          <Text style={[styles.shortValue, { color: PP.text }]}>
+                            {bookmarkCount === null ? '—' : bookmarkCount}
+                          </Text>
+                          <Text style={[styles.shortSub, { color: PP.sub }]} numberOfLines={2}>
+                            {bookmarkCount === 1 ? 'client' : 'clients'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.tintCardShort, { backgroundColor: tintStrong, borderColor: PP.border }]}
+                        onPress={handleOpenAnalytics}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open your analytics"
+                      >
+                        <View style={styles.tintHead}>
+                          <Ionicons name="flame-outline" size={13} color={accentColor} />
+                          <Text style={[styles.tintEyebrow, { color: PP.sub }]}>Most booked</Text>
+                        </View>
+                        {/* 90 days, and only confirmed or completed — an empty
+                            state here means nobody booked, not that the tile
+                            failed to load. */}
+                        <Text style={[styles.shortTitle, { color: PP.text }]} numberOfLines={2}>
+                          {topServices === null ? '—' : (topService?.name ?? 'No bookings yet')}
+                        </Text>
+                        {topService ? (
+                          <Text style={[styles.shortSub, { color: PP.sub }]} numberOfLines={1}>
+                            {topService.count} in 90 days
+                          </Text>
+                        ) : null}
+                      </TouchableOpacity>
                     </View>
-                  );
-                })()
-              )}
+                  </View>
 
-              {/* Floating policy-photo button — the only way in for a provider
-                  who uploaded this photo but filled in none of the structured
-                  fields (which is why the tab switcher doesn't gate on it). */}
-              {providerData.bookingPolicies?.policyImageUrl ? (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => setShowPolicyImage(true)}
-                  style={[styles.policyImageFab, { backgroundColor: accentColor }]}
-                  accessibilityLabel="View full policy details"
-                  accessibilityRole="button"
-                >
-                  <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              ) : null}
-            </BlurView>
-            </View>
+                  {/* ── Portfolio ──────────────────────────────────────────── */}
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>YOUR WORK</Text>
 
-            {providerData.bookingPolicies?.policyImageUrl ? (
-              <Modal visible={showPolicyImage} transparent animationType="fade" onRequestClose={() => setShowPolicyImage(false)}>
-                <TouchableOpacity
-                  style={styles.policyImageModalOverlay}
-                  activeOpacity={1}
-                  onPress={() => setShowPolicyImage(false)}
-                >
-                  <Image
-                    source={{ uri: providerData.bookingPolicies.policyImageUrl }}
-                    style={styles.policyImageModalFull}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
-              </Modal>
-            ) : null}
-
-            {/* Services Section */}
-            {categoryNames.length > 0 && (
-              <View style={styles.servicesSection}>
-                <Text style={[styles.sectionTitleNoCard, { color: PP.text }]}>Services</Text>
-
-                {/* Category Tabs — shared frosted-glass pill, same as clients see */}
-                <FlatList
-                  data={categoryNames}
-                  renderItem={({ item: category }) => (
-                    <CategoryTabPill
-                      category={category}
-                      isSelected={selectedCategory === category}
-                      onPress={() => setSelectedCategory(category)}
-                      cardBg={selectedCategory === category ? accentColor : cardBg}
-                      blurIntensity={cardBlurIntensity}
-                      blurTint={cardBlurTint}
-                      borderColor={selectedCategory === category ? 'transparent' : PP.border}
-                      textColor={selectedCategory === category ? '#FFFFFF' : PP.text}
-                    />
-                  )}
-                  keyExtractor={(item) => item}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoryTabs}
-                  contentContainerStyle={styles.categoryTabsContent}
-                />
-
-                {/* Selected category's client-facing description — same text
-                    clients see under this tab on the public profile. */}
-                {providerData?.categoryDescriptions?.[selectedCategory] ? (
-                  <Text style={[styles.categoryDescriptionText, { color: PP.sub }]}>
-                    {providerData.categoryDescriptions[selectedCategory]}
-                  </Text>
-                ) : null}
-
-                {/* Service Cards */}
-                <View style={styles.categoryServicesContainer}>
-                  {currentServices.map((service) => (
-                    <View key={service.id} style={styles.serviceItemCardShadow}>
+                  <View style={styles.dashCardShadow}>
                     <BlurView
                       intensity={cardBlurIntensity}
                       tint={cardBlurTint}
-                      style={[styles.serviceItemCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                      style={[styles.dashCard, { backgroundColor: cardBg, borderColor: PP.border }]}
                     >
                       <LinearGradient
                         colors={cardHighlightColors}
@@ -713,160 +1394,236 @@ export default function ProviderMyProfileScreen({ navigation }: Props) {
                         end={{ x: 0, y: 1 }}
                         style={styles.cardHighlight}
                       />
-                      <View style={styles.serviceItem}>
-                        {/* Service Image — accent-tinted initial when no photo, so
-                            description text starts at the same x on every card */}
-                        {service.images && service.images.length > 0 ? (
-                          <Image
-                            source={{ uri: service.images[0] }}
-                            style={styles.serviceImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={[styles.serviceImage, styles.serviceImagePlaceholder, { backgroundColor: accentColor + '1C' }]}>
-                            <Text style={[styles.serviceImagePlaceholderText, { color: accentColor }]}>
-                              {service.name.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                        )}
-
-                        {/* Service Info */}
-                        <View style={styles.serviceInfo}>
-                          <Text style={[styles.serviceName, { color: PP.text }]}>{service.name}</Text>
-                          {service.description ? (
-                            <Text style={[styles.serviceDescription, { color: PP.sub }]} numberOfLines={2}>
-                              {service.description}
-                            </Text>
-                          ) : null}
-                          <View style={styles.serviceDetails}>
-                            <Text style={[styles.serviceDuration, { color: PP.sub }]}>{service.duration}</Text>
-                            <Text style={[styles.servicePrice, { color: PP.text }]}>
-                              {'£'}{service.price}
-                            </Text>
-                          </View>
+                      <View style={styles.dashHeader}>
+                        <View style={styles.dashHeaderText}>
+                          <Text style={[styles.dashEyebrow, { color: PP.sub }]}>PORTFOLIO</Text>
+                          <Text style={[styles.dashBigValue, { color: PP.text }]}>
+                            {workPhotos.length === 1 ? '1 photo' : `${workPhotos.length} photos`}
+                          </Text>
+                          <Text style={[styles.dashBigSub, { color: PP.sub }]}>
+                            {workPhotos.length === 0
+                              ? 'Clients have nothing of your work to browse.'
+                              : 'The first thing clients look at on your profile.'}
+                          </Text>
                         </View>
+                        <TouchableOpacity
+                          style={[styles.addChip, { borderColor: PP.border }]}
+                          onPress={handleAddPhotos}
+                          disabled={photoUploading}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="Add portfolio photos"
+                        >
+                          {photoUploading ? (
+                            <ActivityIndicator size="small" color={accentColor} />
+                          ) : (
+                            <>
+                              <Ionicons name="add" size={15} color={accentColor} />
+                              <Text style={[styles.addChipText, { color: accentColor }]}>Add</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
                       </View>
-                      {/* Add-ons — itemized name + price, same detail level as the Preview */}
-                      {service.addOns && service.addOns.length > 0 && (
-                        <View style={[styles.serviceAddOns, { borderTopColor: PP.border }]}>
-                          <Text style={[styles.addOnsLabel, { color: PP.sub }]}>Add-ons available:</Text>
-                          {service.addOns.map(addOn => (
-                            <View key={addOn.id} style={styles.addOnRow}>
-                              <Text style={[styles.addOnName, { color: PP.sub }]}>+ {addOn.name}</Text>
-                              <Text style={[styles.addOnPrice, { color: accentColor }]}>+£{addOn.price}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-                    </BlurView>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
 
-            {/* Reviews — same card always shows (matching ProviderProfileScreen),
-                just with nothing under the title when there are none yet. */}
-            <View style={styles.reviewsCardShadow}>
-            <BlurView
-              intensity={cardBlurIntensity}
-              tint={cardBlurTint}
-              style={[styles.reviewsCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-            >
-              <LinearGradient
-                colors={cardHighlightColors}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <Text style={[styles.sectionTitle, { color: PP.text }]}>Reviews</Text>
-              {reviews.slice(0, 5).map(review => (
-                  <View key={review.id} style={[styles.reviewItem, { borderBottomColor: PP.sep }]}>
-                    <View style={styles.reviewHeader}>
-                      <Text style={[styles.reviewerName, { color: PP.text }]}>{review.name}</Text>
-                      <View style={styles.reviewRating}>
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <Ionicons
-                            key={star}
-                            name="star"
-                            size={12}
-                            color={star <= review.rating ? '#FFD700' : PP.border}
-                          />
+                      {/* A rail, not a 3-across grid: portrait tiles at the
+                          size clients actually see them, bleeding off the card
+                          edge so it reads as a strip you scroll rather than a
+                          form field. The add tile leads it, so the first thing
+                          an empty portfolio offers is the way to fill it. */}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.photoRail}
+                        contentContainerStyle={styles.photoRailContent}
+                      >
+                        {workPhotos.slice(0, MAX_PORTFOLIO_TILES).map(item => (
+                          <View key={item.id} style={styles.photoWrap}>
+                            <Image
+                              source={{ uri: item.image_url }}
+                              style={[styles.photo, { borderColor: PP.border }]}
+                              resizeMode="cover"
+                              fadeDuration={0}
+                            />
+                            <TouchableOpacity
+                              style={styles.photoRemove}
+                              onPress={() => handleRemovePhoto(item)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              accessibilityRole="button"
+                              accessibilityLabel="Remove this photo"
+                            >
+                              <Ionicons name="close" size={13} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+
+                        {workPhotos.length > MAX_PORTFOLIO_TILES ? (
+                          <View style={[styles.photoMore, { borderColor: PP.border }]}>
+                            <Text style={[styles.photoMoreText, { color: PP.sub }]}>
+                              +{workPhotos.length - MAX_PORTFOLIO_TILES}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </ScrollView>
+                    </BlurView>
+                  </View>
+
+                  {/* ── Manage ─────────────────────────────────────────────── */}
+                  <View style={styles.rowHeader}>
+                    <Text style={[styles.sectionLabel, { color: PP.sub }]}>MANAGE</Text>
+                    <TouchableOpacity onPress={handleEditProfile} activeOpacity={0.7}>
+                      <Text style={[styles.rowHeaderLink, { color: accentColor }]}>Edit profile</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.dashCardShadow}>
+                    <BlurView
+                      intensity={cardBlurIntensity}
+                      tint={cardBlurTint}
+                      style={[styles.dashCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                    >
+                      <LinearGradient
+                        colors={cardHighlightColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 0, y: 1 }}
+                        style={styles.cardHighlight}
+                      />
+                      <View style={styles.quickRow}>
+                        {quickActions.map(action => (
+                          <TouchableOpacity
+                            key={action.key}
+                            style={styles.quickItem}
+                            onPress={action.onPress}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={action.label}
+                          >
+                            <View
+                              style={[
+                                styles.quickCircle,
+                                { backgroundColor: tintStrong, borderColor: PP.border },
+                              ]}
+                            >
+                              <Ionicons name={action.icon} size={18} color={accentColor} />
+                            </View>
+                            <Text style={[styles.quickLabel, { color: PP.sub }]} numberOfLines={1}>
+                              {action.label}
+                            </Text>
+                          </TouchableOpacity>
                         ))}
                       </View>
-                      <Text style={[styles.reviewDate, { color: PP.sub }]}>{review.date}</Text>
-                    </View>
-                    {review.comment ? (
-                      <Text style={[styles.reviewComment, { color: PP.sub }]}>{review.comment}</Text>
-                    ) : null}
+                    </BlurView>
                   </View>
-                ))}
-            </BlurView>
-            </View>
 
-            {/* Contact Info */}
-            <View style={styles.contactCardShadow}>
-            <BlurView
-              intensity={cardBlurIntensity}
-              tint={cardBlurTint}
-              style={[styles.contactCard, { backgroundColor: cardBg, borderColor: PP.border }]}
-            >
-              <LinearGradient
-                colors={cardHighlightColors}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.cardHighlight}
-              />
-              <Text style={[styles.sectionTitle, { color: PP.text }]}>Contact</Text>
-              {providerData.location ? (
-                <View style={[styles.contactRow, { borderBottomColor: PP.sep }]}>
-                  <Text style={[styles.contactRowLabel, { color: PP.sub }]}>Location</Text>
-                  <Text style={[styles.contactRowText, { color: PP.text }]} numberOfLines={1}>{providerData.location}</Text>
-                </View>
-              ) : null}
-              {providerData.phone && providerData.preferredContactMethods.includes('phone') ? (
-                <View style={[styles.contactRow, { borderBottomColor: PP.sep }]}>
-                  <Text style={[styles.contactRowLabel, { color: PP.sub }]}>Phone</Text>
-                  <Text style={[styles.contactRowText, { color: PP.text }]}>{providerData.phone}</Text>
-                </View>
-              ) : null}
-              {providerData.whatsapp && providerData.preferredContactMethods.includes('whatsapp') ? (
-                <View style={[styles.contactRow, { borderBottomColor: PP.sep }]}>
-                  <Text style={[styles.contactRowLabel, { color: PP.sub }]}>WhatsApp</Text>
-                  <Text style={[styles.contactRowText, { color: PP.text }]}>{providerData.whatsapp}</Text>
-                </View>
-              ) : null}
-              {providerData.email && providerData.preferredContactMethods.includes('email') ? (
-                <View style={[styles.contactRow, { borderBottomColor: PP.sep }]}>
-                  <Text style={[styles.contactRowLabel, { color: PP.sub }]}>Email</Text>
-                  <Text style={[styles.contactRowText, { color: PP.text }]} numberOfLines={1}>{providerData.email}</Text>
-                </View>
-              ) : null}
-              {providerData.instagram ? (
-                <View style={[styles.contactRow, { borderBottomColor: PP.sep }]}>
-                  <Text style={[styles.contactRowLabel, { color: PP.sub }]}>Instagram</Text>
-                  <Text style={[styles.contactRowText, { color: PP.text }]} numberOfLines={1}>@{providerData.instagram}</Text>
-                </View>
-              ) : null}
-              {providerData.website ? (
-                <View style={styles.contactRow}>
-                  <Text style={[styles.contactRowLabel, { color: PP.sub }]}>Website</Text>
-                  <Text style={[styles.contactRowText, { color: PP.text }]} numberOfLines={1}>{providerData.website}</Text>
-                </View>
-              ) : null}
-            </BlurView>
-            </View>
+                  {/* ── How you take bookings ──────────────────────────────── */}
+                  <Text style={[styles.sectionLabel, { color: PP.sub }]}>HOW YOU TAKE BOOKINGS</Text>
 
-            <ProviderPortfolioSection
-              items={portfolio}
-              palette={portfolioPalette}
-              onOpenImage={NOOP_OPEN_IMAGE}
-              interactiveImages={false}
-            />
+                  <View style={styles.availabilityWrap}>
+                    <AvailabilityCard
+                      summary={availability}
+                      loading={availabilityLoading}
+                      cardBg={cardBg}
+                      blurIntensity={cardBlurIntensity}
+                      blurTint={cardBlurTint}
+                      borderColor={PP.border}
+                      textColor={PP.text}
+                      subTextColor={PP.sub}
+                      accentColor={accentColor}
+                      onEditSchedule={handleEditSchedule}
+                    />
+                  </View>
+
+                  {setupComplete ? statusSection : null}
+                </>
+              ) : (
+                <>
+                  {/* ── Services ───────────────────────────────────────────── */}
+                  {catalogue.groups.length === 0 ? (
+                    <View style={styles.dashCardShadow}>
+                      <BlurView
+                        intensity={cardBlurIntensity}
+                        tint={cardBlurTint}
+                        style={[styles.dashCard, { backgroundColor: cardBg, borderColor: PP.border }]}
+                      >
+                        <LinearGradient
+                          colors={cardHighlightColors}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 0, y: 1 }}
+                          style={styles.cardHighlight}
+                        />
+                        <Text style={[styles.dashTitle, { color: PP.text }]}>No services yet</Text>
+                        {/* Categories are created with the rest of the profile, so
+                            the very first one still starts there — there's nothing
+                            for an "add a service" button here to add it to yet. */}
+                        <DashEmpty
+                          palette={dashPalette}
+                          text="Set up your first category and service in your profile, then manage them here."
+                        />
+                        <TouchableOpacity
+                          style={[styles.primaryButton, { backgroundColor: accentColor }]}
+                          onPress={handleEditProfile}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.primaryButtonText}>Set up services</Text>
+                        </TouchableOpacity>
+                      </BlurView>
+                    </View>
+                  ) : (
+                    /* Every category on screen at once, as tiles: switching
+                       categories to change one price was a hop that earned
+                       nothing, and a tile shows the two things being managed —
+                       the price and whether clients can see it — without
+                       reading a row left to right. */
+                    catalogue.groups.map(group => (
+                      <View key={group.name} style={styles.serviceGroup}>
+                        <View style={styles.rowHeader}>
+                          <Text style={[styles.sectionLabel, { color: PP.sub }]}>
+                            {group.name.toUpperCase()} · {group.items.length}{' '}
+                            {group.items.length === 1 ? 'SERVICE' : 'SERVICES'}
+                          </Text>
+                          <TouchableOpacity
+                            style={[styles.addChip, { borderColor: PP.border, marginBottom: 10 }]}
+                            onPress={() => openNewService(group.name)}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Add a service to ${group.name}`}
+                          >
+                            <Ionicons name="add" size={15} color={accentColor} />
+                            <Text style={[styles.addChipText, { color: accentColor }]}>Add</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.tileGrid}>
+                          {group.items.map(service => (
+                            <ServiceTile
+                              key={service.id}
+                              service={service}
+                              palette={dashPalette}
+                              busy={togglingId === service.id}
+                              onEdit={openEditService}
+                              onToggleActive={handleToggleActive}
+                            />
+                          ))}
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </>
+              )}
             </View>
           </View>
         </ScrollView>
       </SafeAreaView>
+
+      <ServiceEditorSheet
+        visible={editorOpen}
+        initial={editorInitial}
+        categoryName={editingCategory}
+        isNew={editingId == null}
+        saving={saving}
+        palette={editorPalette}
+        onSave={handleSaveService}
+        onClose={closeEditor}
+      />
     </View>
   );
 }
@@ -919,29 +1676,113 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Top bar — this screen has its own real "Edit Profile" affordance where
-  // clients get a transparent nav bar with back/bookmark/share, so it isn't
-  // mirrored 1:1; heroInfoWrap below doesn't need the client screen's 100px
-  // clearance since this bar already reserves its own layout space.
-  topBar: {
+  // Identity header, laid out like the reference: the name is the loudest
+  // thing on screen, the avatar is pushed to the right rather than centred,
+  // and the counts sit under both as columns instead of a sentence.
+  profileHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 26,
+    paddingBottom: 22,
+  },
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    gap: 16,
   },
-  editButton: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  identityText: {
+    flex: 1,
   },
-  editButtonText: {
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  // The reference's headline treatment: heavy, uppercase, tight, and the
+  // loudest thing above the fold — not a serif nameplate.
+  displayName: {
+    flexShrink: 1,
     fontFamily: 'BakbakOne-Regular',
-    color: '#fff',
-    fontSize: 13,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.2,
+    textTransform: 'uppercase',
   },
-
-  heroInfoWrap: {
-    paddingTop: 10,
+  // Sits on the first line's cap height rather than centring between two
+  // wrapped lines of a 34pt title.
+  verifiedTick: {
+    marginTop: 6,
+  },
+  handle: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.4,
+    marginTop: 4,
+  },
+  // Demoted to a top-right chip, the size of the reference's bell/avatar
+  // pair, so the name owns the width instead of splitting it.
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 253, 251, 0.9)',
+  },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    color: '#FFFFFF',
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 18,
+  },
+  statRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
+  // Fixed-width columns, not flex: the reference's stats are left-aligned in a
+  // row that stops well before the right edge, and spreading them edge to edge
+  // reads as a table instead.
+  stat: {
+    width: 92,
+  },
+  statValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 21,
+    lineHeight: 25,
+  },
+  statLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    marginTop: 1,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 20,
+  },
+  primaryAction: {
+    flex: 1,
+    height: 48,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryActionText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    letterSpacing: 0.4,
+  },
+  circleAction: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   heroTextShadow: {
     textShadowColor: 'rgba(0,0,0,0.55)',
@@ -958,10 +1799,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   // Radius + overflow live on this INNER view, separate from contentSheet's
-  // shadow — iOS silently drops a view's shadow when overflow:'hidden' is
-  // set on that same view, so clip and shadow must be on different layers.
-  // This also guarantees the rounded top corners are clipped from the very
-  // first frame instead of only after a scroll-triggered relayout.
+  // shadow — iOS silently drops a view's shadow when overflow:'hidden' is set
+  // on that same view, so clip and shadow must be on different layers.
   contentSheetClip: {
     minHeight: screenHeight,
     paddingHorizontal: 20,
@@ -972,130 +1811,57 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Logo
-  logoContainer: {
+  // Dashboard / Services switch, sitting above everything in the sheet.
+  tabBar: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    marginBottom: 18,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 10,
+    borderRadius: 18,
   },
-  logoWrapper: {
-    position: 'relative',
-    width: 148,
-    height: 148,
-  },
-  providerLogo: {
-    width: 148,
-    height: 148,
-    borderRadius: 74,
-    borderWidth: 4,
-    borderColor: 'rgba(255, 253, 251, 0.9)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 10,
-  },
-  logoGloss: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 148,
-    height: 148,
-    borderRadius: 74,
+  tabLabel: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 12,
+    letterSpacing: 0.9,
   },
 
-  // Provider info — hero text, matches ProviderProfileScreen typography
-  providerInfoCenter: {
-    alignItems: 'center',
-    marginBottom: 30,
-    paddingHorizontal: 20,
-  },
-  providerNameRow: {
+  // Section headings
+  rowHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    justifyContent: 'space-between',
   },
-  providerDisplayName: {
-    fontFamily: 'Prata-Regular',
-    fontSize: 30,
-    lineHeight: 40,
-    textAlign: 'center',
-  },
-  providerMeta: {
+  rowHeaderLink: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textAlign: 'center',
+    fontSize: 11,
     marginBottom: 10,
+    marginTop: 6,
   },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
-    marginBottom: 8,
-  },
-  ratingInline: {
+  sectionLabel: {
     fontFamily: 'Jura-VariableFont_wght',
     fontWeight: '800',
-    fontSize: 13,
-    marginLeft: 4,
-  },
-  yearsExp: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 12,
-    textAlign: 'center',
+    fontSize: 10,
+    letterSpacing: 1.4,
     marginBottom: 10,
-    opacity: 0.9,
-    letterSpacing: 0.4,
+    marginTop: 6,
   },
-  statBoxRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  // Square, not a pill: fixed equal width/height with a small corner radius.
-  statBox: {
-    width: 72,
-    height: 72,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  statBoxValue: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 22,
-    lineHeight: 26,
-  },
-  statBoxLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 9,
-    letterSpacing: 0.6,
-  },
-  availabilityWrap: {
-    marginBottom: 20,
-  },
-  // Provider-only profile hub. This sits above the client-facing preview so
-  // the tab earns its place as a working surface, while keeping the useful
-  // "what clients see" preview immediately below it.
-  profileHubCard: {
-    padding: 20,
-    borderRadius: 26,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  // Shadow lives on this outer wrapper, separate from profileHubCard's
-  // overflow:'hidden' — iOS silently drops a view's shadow when
-  // overflow:'hidden' is set on that same view, so clip and shadow must be
-  // on different layers (same fix as contentSheet/contentSheetClip above).
-  profileHubCardShadow: {
-    marginBottom: 18,
+
+  // Shared card chrome. Shadow lives on the outer wrapper, separate from the
+  // card's own overflow:'hidden' — iOS silently drops a view's shadow when
+  // overflow:'hidden' is set on that same view.
+  dashCardShadow: {
+    marginBottom: 14,
     borderRadius: 26,
     shadowColor: '#B87E92',
     shadowOffset: { width: 0, height: 6 },
@@ -1103,210 +1869,468 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 3,
   },
-  profileHubHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  profileHubEyebrow: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1.1,
-    marginBottom: 4,
-  },
-  profileHubTitle: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-  },
-  readinessBadge: {
-    minWidth: 46,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  readinessBadgeText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-  },
-  readinessChecklist: {
-    marginTop: 10,
-    gap: 2,
-  },
-  readinessChecklistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 7,
-  },
-  readinessChecklistText: {
-    flex: 1,
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  profileHubSubtext: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 12,
-  },
-  clientViewLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 1.1,
-    marginBottom: 10,
-    marginLeft: 2,
-  },
-
-  // Generic frosted card
-  aboutCard: {
-    padding: 22,
+  dashCard: {
+    padding: 18,
     borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  // Shadow lives on this outer wrapper, separate from aboutCard's
-  // overflow:'hidden' — see profileHubCardShadow above for why.
-  aboutCardShadow: {
-    marginBottom: 20,
-    borderRadius: 26,
-    shadowColor: '#B87E92',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 3,
+  halfRow: {
+    flexDirection: 'row',
+    gap: HALF_GAP,
+    marginBottom: 14,
+  },
+  halfSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 8,
   },
   cardHighlight: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 40,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    height: 60,
   },
-  sectionTitle: {
+  dashHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dashHeaderText: {
+    flex: 1,
+  },
+  dashEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
+  dashTitle: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 18,
-    marginBottom: 15,
+    lineHeight: 22,
   },
-  aboutText: {
+  // The reference's headline number: the count is the loudest thing in the
+  // card, with the sentence demoted underneath it.
+  dashBigValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 30,
+    lineHeight: 35,
+  },
+  dashBigSub: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 10,
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
   },
-  moreButton: {
-    alignSelf: 'flex-start',
+  dashValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
   },
-  moreButtonText: {
+  dashBody: {
+    marginTop: 12,
+  },
+  dashMore: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.3,
+    marginTop: 10,
+  },
+  dashEmpty: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 12,
+    opacity: 0.85,
+  },
+
+  // Buttons
+  addChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    minWidth: 62,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  addChipText: {
     fontFamily: 'BakbakOne-Regular',
     fontSize: 12,
-    fontWeight: 'bold',
   },
-
-  // About/Policy tab switcher
-  infoTabRow: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 12,
-    marginHorizontal: -4,
-  },
-  // Policy tab rows
-  policyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  primaryButton: {
+    borderRadius: 14,
     paddingVertical: 12,
-    gap: 14,
-  },
-  policyIcon: {
-    width: 28,
     alignItems: 'center',
+    marginTop: 16,
   },
-  policyRowText: {
-    flex: 1,
-  },
-  policyLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  policyLabel: {
+  primaryButtonText: {
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 10,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  policyValue: {
-    fontFamily: 'Jura-VariableFont_wght',
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700',
-  },
-  // Floating circular button, bottom-right of the About/Policy card — opens
-  // the provider's uploaded policy photo.
-  policyImageFab: {
-    position: 'absolute',
-    bottom: 14,
-    right: 14,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  policyImageModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  policyImageModalFull: {
-    width: '100%',
-    height: '80%',
   },
 
-  // Reviews
-  reviewsCard: {
-    padding: 22,
+  // Service tiles
+  serviceGroup: {
+    marginBottom: 8,
+  },
+  tileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: HALF_GAP,
+    marginBottom: 14,
+  },
+  serviceTile: {
+    width: HALF_W,
+    height: 124,
+    padding: 14,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  // Hidden services stay legible rather than being greyed to nothing — the
+  // provider still has to read them to decide what to switch back on.
+  serviceTileHidden: {
+    opacity: 0.62,
+  },
+  serviceTileName: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    lineHeight: 19,
+  },
+  serviceTileMeta: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.2,
+    marginTop: 3,
+  },
+  serviceTileFooter: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
+  },
+  serviceTilePrice: {
+    flex: 1,
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  serviceToggle: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Portfolio grid
+  // Negative margins cancel the card's own padding so the rail runs to both
+  // edges, then the content padding puts the first tile back on the grid.
+  photoRail: {
+    marginTop: 16,
+    marginHorizontal: -18,
+  },
+  photoRailContent: {
+    paddingHorizontal: 18,
+    gap: PHOTO_GAP,
+  },
+  photoWrap: {
+    width: PHOTO_W,
+    height: PHOTO_H,
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoMore: {
+    width: PHOTO_W,
+    height: PHOTO_H,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoMoreText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 18,
+  },
+
+
+  // Live status card
+  statusCard: {
+    padding: 20,
     borderRadius: 26,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  // Shadow lives on this outer wrapper, separate from reviewsCard's
-  // overflow:'hidden' — see profileHubCardShadow above for why.
-  reviewsCardShadow: {
-    marginBottom: 20,
-    borderRadius: 26,
-    shadowColor: '#B87E92',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 3,
+  statusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  statusTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 22,
+    lineHeight: 27,
+  },
+  statusDetail: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  stepLabel: {
+    flex: 1,
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  statusBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 14,
+  },
+  ringWrap: {
+    width: RING_SIZE,
+    height: RING_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Absolute so the readout centres on the ring rather than pushing it.
+  ringLabel: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 31,
+    lineHeight: 35,
+  },
+  ringUnit: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 9,
+    letterSpacing: 0.6,
+  },
+  ringWord: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 9,
+    letterSpacing: 1,
+    marginTop: 3,
+    textTransform: 'uppercase',
+  },
+  statusText: {
+    flex: 1,
+  },
+  inkPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 18,
+    marginTop: 12,
+  },
+  inkPillText: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 11,
+    letterSpacing: 0.8,
+  },
+  stepList: {
+    marginTop: 16,
+  },
+  stepListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  stepCount: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+
+  // Quick actions — the reference's routine row.
+  quickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickItem: {
+    alignItems: 'center',
+    gap: 8,
+    width: (screenWidth - 76) / 5,
+  },
+  quickCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  quickLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    letterSpacing: 0.2,
+  },
+
+  // Paired tinted tiles. Fixed height so the two agree on a baseline even when
+  // one carries swatches and the other doesn't.
+  tintCard: {
+    width: HALF_W,
+    height: 214,
+    padding: 16,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  tintHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tintEyebrow: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 0.4,
+  },
+  tintTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 18,
+    lineHeight: 22,
+    marginTop: 10,
+  },
+  // The actual rules, stacked — the whole reason this tile got taller.
+  policyList: {
+    marginTop: 12,
+    gap: 10,
+  },
+  policyItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  policyItemText: {
+    flex: 1,
+  },
+  policyLabel: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  policyValue: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  // Two landscape tiles stacked beside the tall policies tile, summing to its
+  // height so the row stays square-cornered rather than ragged.
+  tintColumn: {
+    width: HALF_W,
+    gap: HALF_GAP,
+  },
+  tintCardShort: {
+    height: (214 - HALF_GAP) / 2,
+    padding: 14,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  shortBody: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginTop: 4,
+  },
+  shortValue: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 34,
+    lineHeight: 39,
+  },
+  shortTitle: {
+    fontFamily: 'BakbakOne-Regular',
+    fontSize: 15,
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  shortSub: {
+    fontFamily: 'Jura-VariableFont_wght',
+    fontWeight: '800',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+
+  availabilityWrap: {
+    marginBottom: 14,
+  },
+
+  // Reviews
   reviewItem: {
-    marginBottom: 15,
-    paddingBottom: 15,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   reviewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    marginBottom: 4,
   },
   reviewerName: {
+    flex: 1,
     fontFamily: 'BakbakOne-Regular',
-    fontSize: 12,
+    fontSize: 13,
   },
   reviewRating: {
     flexDirection: 'row',
@@ -1314,222 +2338,13 @@ const styles = StyleSheet.create({
   },
   reviewDate: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 10,
-    marginLeft: 'auto',
   },
   reviewComment: {
     fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 8,
-  },
-
-  // Services section
-  servicesSection: {
-    marginBottom: 20,
-  },
-  sectionTitleNoCard: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 18,
-    marginBottom: 15,
-  },
-
-  // Category tabs
-  categoryTabs: {
-    marginBottom: 20,
-    maxHeight: 60,
-  },
-  categoryTabsContent: {
-    paddingRight: 20,
-    gap: 12,
-    paddingVertical: 8,
-  },
-  categoryDescriptionText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: -12,
-    marginBottom: 14,
-  },
-
-  // Service cards
-  categoryServicesContainer: {
-    gap: 15,
-  },
-  serviceItemCard: {
-    borderRadius: 26,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-    padding: 15,
-  },
-  // Shadow lives on this outer wrapper, separate from serviceItemCard's
-  // overflow:'hidden' — see profileHubCardShadow above for why. No
-  // marginBottom to carry — card-to-card spacing here comes from
-  // categoryServicesContainer's gap, not a per-card margin.
-  serviceItemCardShadow: {
-    borderRadius: 26,
-    shadowColor: '#B87E92',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  serviceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  serviceImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 15,
-  },
-  serviceImagePlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  serviceImagePlaceholderText: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 22,
-  },
-  serviceInfo: {
-    flex: 1,
-  },
-  serviceName: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  serviceDescription: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  serviceDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  serviceDuration: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 11,
-  },
-  servicePrice: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  // Add-ons — itemized list under the service card, matching Preview's detail level
-  serviceAddOns: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: 8,
-    paddingTop: 8,
-  },
-  addOnsLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 10,
-    marginBottom: 4,
-  },
-  addOnRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 3,
-  },
-  addOnName: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 11,
-  },
-  addOnPrice: {
-    fontFamily: 'BakbakOne-Regular',
-    fontSize: 11,
-  },
-
-  // Contact rows — matches ProviderProfileScreen's contactRow layout
-  contactCard: {
-    padding: 22,
-    borderRadius: 26,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  // Shadow lives on this outer wrapper, separate from contactCard's
-  // overflow:'hidden' — see profileHubCardShadow above for why.
-  contactCardShadow: {
-    marginBottom: 20,
-    borderRadius: 26,
-    shadowColor: '#B87E92',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginTop: 4,
-  },
-  contactRowLabel: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
     fontWeight: '800',
-  },
-  contactRowText: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontSize: 13,
-    fontWeight: '700',
-    flex: 1,
-    textAlign: 'right',
-    paddingLeft: 16,
-  },
-
-  // Portfolio — two-column masonry
-  portfolioSection: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  portfolioColumns: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  portfolioColumn: {
-    flex: 1,
-    gap: 12,
-  },
-  // Shadow lives on this outer wrapper, separate from portfolioTileClip's
-  // overflow:'hidden' — see contentSheet/contentSheetClip above for why.
-  portfolioTileShadow: {
-    borderRadius: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  portfolioTile: {
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  portfolioCaptionWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 10,
-    paddingTop: 14,
-    paddingBottom: 8,
-    backgroundColor: 'rgba(0,0,0,0.32)',
-  },
-  portfolioCaption: {
-    fontFamily: 'Jura-VariableFont_wght',
-    fontWeight: '700',
-    fontSize: 11,
-    color: '#fff',
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
