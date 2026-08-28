@@ -164,6 +164,17 @@ const DEFAULT_PREFS: Record<string, boolean> = {
   weeklySummary: false,
 };
 
+/**
+ * A few notification titles are written for the in-app list row, where there's
+ * room, but read better as a short headline on a lock screen. Only the PUSH
+ * copy is swapped — the notifications row keeps its original title as the
+ * canonical record, so the in-app list is unchanged. Keyed on the exact title
+ * the DB trigger writes; anything not listed is pushed as-is.
+ */
+const PUSH_TITLE_OVERRIDES: Record<string, string> = {
+  'Booking Request — Outside Your Hours': 'Outside Hours Request',
+};
+
 /** True when this notification may be pushed to this user. */
 function pushAllowedByPrefs(
   type: string | undefined,
@@ -270,15 +281,17 @@ serve(async (req) => {
 
     const pushToken = userRow.push_token;
 
-    // Send to Expo Push Service. The notification title is sent as-is — provider
-    // vs client is already clear from the title/message, and prefixing the
-    // business name clipped long titles like "You have a new booking".
+    // Send to Expo Push Service. The notification title is sent as-is (bar the
+    // per-title push headline swaps above) — provider vs client is already
+    // clear from the title/message, and prefixing the business name clipped
+    // long titles like "You have a new booking".
+    const pushTitle = PUSH_TITLE_OVERRIDES[title] ?? title;
     const expoPushRes = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: expoHeaders(),
       body: JSON.stringify({
         to: pushToken,
-        title,
+        title: pushTitle,
         body: message,
         sound: 'default',
         channelId: 'default', // matches the Android channel created in the app
