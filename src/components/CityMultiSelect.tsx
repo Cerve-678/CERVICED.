@@ -36,9 +36,9 @@ interface CityMultiSelectProps {
  * Each entry can be either a whole city ("Manchester") or, for cities with
  * structured data (see src/data/cityAreas.ts — now all of UK_CITIES),
  * drilled down to one specific area within it ("Chorlton, Manchester") —
- * expanding a row inline shows the same region → area chip flow
- * LocationPicker uses for the single-location field, just appending to this
- * array instead of composing one string.
+ * expanding a row inline shows the same region → area drill-down over
+ * CITY_AREAS that AreaPicker uses for the single-location field, just
+ * appending to this array instead of composing one string.
  */
 export function CityMultiSelect({ selected, onChange, palette: t, placeholder }: CityMultiSelectProps) {
   const [visible, setVisible] = useState(false);
